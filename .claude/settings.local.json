@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx next *)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(cp \"/c/Users/Ali/.claude/projects/c--Users-Ali-Work-Code-Repos-academic-planner/a6423d10-2bc2-427a-9fba-a9e24290b0c8/tool-results/webfetch-1777232323667-p8jupq.bin\" /tmp/design.gz)",
+      "Read(//tmp/**)",
+      "Bash(mkdir -p /tmp/design)",
+      "Bash(gunzip -c /tmp/design.gz)"
+    ]
+  }
+}

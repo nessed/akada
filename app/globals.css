@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: #FAFAF6;
+  --bg-tint: #F4F2EC;
+  --paper: #FFFFFF;
+  --line: #E8E5DC;
+  --line-strong: #DDD8CB;
+  --ink: #1A1915;
+  --ink-soft: #4B4943;
+  --muted: #8C887E;
+  --muted-soft: #B5B1A4;
+}
+
+html,
+body {
+  background-color: #FAFAF6;
+  color: #1A1915;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(180, 170, 140, 0.10), transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(160, 150, 130, 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.app-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.app-scroll {
+  scrollbar-width: none;
+}
+
+button,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Range slider — notebook style */
+input[type='range'].pl-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  outline: none;
+}
+input[type='range'].pl-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 1.5px solid currentColor;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+}
+input[type='range'].pl-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 1.5px solid currentColor;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted-soft);
+}
+
+/* Date input chrome */
+input[type='date']::-webkit-calendar-picker-indicator {
+  filter: opacity(0.5);
+  cursor: pointer;
+}
