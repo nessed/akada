@@ -331,7 +331,7 @@ export class SupabaseAdapter implements DataProvider {
     const uid = await this.userId();
     const { data, error } = await this.supabase
       .from('user_settings')
-      .select('display_name, daily_goal_hours')
+      .select('display_name, daily_goal_hours, avatar_url')
       .eq('user_id', uid)
       .maybeSingle();
     if (error) throw error;
@@ -339,6 +339,7 @@ export class SupabaseAdapter implements DataProvider {
     return {
       displayName: data.display_name ?? '',
       dailyGoalHours: Number(data.daily_goal_hours ?? 4),
+      avatarUrl: data.avatar_url ?? '',
     };
   }
 
@@ -347,6 +348,7 @@ export class SupabaseAdapter implements DataProvider {
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (settings.displayName !== undefined) patch.display_name = settings.displayName;
     if (settings.dailyGoalHours !== undefined) patch.daily_goal_hours = settings.dailyGoalHours;
+    if (settings.avatarUrl !== undefined) patch.avatar_url = settings.avatarUrl;
 
     const { error } = await this.supabase.from('user_settings').upsert(
       { user_id: uid, ...patch },

@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
 
   const [addingTaskFor, setAddingTaskFor] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -34,13 +35,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     (async () => {
-      const onboarded = await db.isOnboardingComplete();
-      if (!onboarded) {
-        router.replace('/onboarding');
-        return;
+      try {
+        const onboarded = await db.isOnboardingComplete();
+        if (!onboarded) {
+          router.replace('/onboarding');
+          return;
+        }
+        await refresh();
+        setLoading(false);
+      } catch {
+        router.replace('/auth');
       }
-      await refresh();
-      setLoading(false);
     })();
   }, [router]);
 
@@ -55,6 +60,7 @@ export default function DashboardPage() {
     setSessions(s);
     setTasks(t);
     if (settings?.displayName) setDisplayName(settings.displayName);
+    if (settings?.avatarUrl) setAvatarUrl(settings.avatarUrl);
   }
 
   function handleStartTimer(courseId: string) {
@@ -135,8 +141,8 @@ export default function DashboardPage() {
   return (
     <PageShell>
       {/* Journal header */}
-      <header className="mb-[22px] flex items-end justify-between gap-3">
-        <div>
+      <header className="mb-[22px] flex items-center justify-between gap-3">
+        <div className="flex-1">
           {displayName ? (
             <>
               <p className="m-0 text-[11px] tracking-[0.18em] uppercase text-muted font-semibold">
@@ -157,19 +163,30 @@ export default function DashboardPage() {
             </>
           )}
         </div>
-        {active && (
-          <button
-            type="button"
-            onClick={() => router.push('/timer')}
-            className="flex items-center gap-2 px-3 py-2 rounded-full bg-paper border border-line text-xs font-medium hover:bg-bg-tint"
-          >
-            <span className="relative flex w-2 h-2">
-              <span className="absolute inset-0 rounded-full bg-priority animate-ping opacity-60" />
-              <span className="relative rounded-full bg-priority w-2 h-2" />
-            </span>
-            Timer running
-          </button>
-        )}
+        <div className="flex items-center gap-2.5">
+          {active && (
+            <button
+              type="button"
+              onClick={() => router.push('/timer')}
+              className="flex items-center gap-2 px-3 py-2 rounded-full bg-paper border border-line text-xs font-medium hover:bg-bg-tint"
+            >
+              <span className="relative flex w-2 h-2">
+                <span className="absolute inset-0 rounded-full bg-priority animate-ping opacity-60" />
+                <span className="relative rounded-full bg-priority w-2 h-2" />
+              </span>
+              Timer
+            </button>
+          )}
+          <div className="w-10 h-10 rounded-full bg-bg-tint border border-line overflow-hidden flex items-center justify-center shrink-0">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="font-serif italic text-[16px] text-muted">
+                {displayName ? displayName.charAt(0).toUpperCase() : 'A'}
+              </span>
+            )}
+          </div>
+        </div>
       </header>
 
       {/* Daily summary */}

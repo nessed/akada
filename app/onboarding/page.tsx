@@ -34,6 +34,7 @@ export default function OnboardingPage() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [dailyGoal, setDailyGoal] = useState(4);
+  const [avatarPreview, setAvatarPreview] = useState('');
 
   const editing = courses[editIdx];
   function update(patch: Partial<DraftCourse>) {
@@ -62,10 +63,11 @@ export default function OnboardingPage() {
   const canFinishSemester = !!start && !!end && end >= start;
 
   async function finish() {
-    // Save user settings (name + daily goal)
+    // Save user settings (name + daily goal + avatar)
     await db.updateUserSettings({
       displayName: displayName.trim(),
       dailyGoalHours: dailyGoal,
+      avatarUrl: avatarPreview,
     });
     // Save courses
     for (const c of courses.filter((x) => x.code.trim() && x.name.trim())) {
@@ -105,6 +107,8 @@ export default function OnboardingPage() {
           <NameStep
             name={displayName}
             setName={setDisplayName}
+            avatarPreview={avatarPreview}
+            setAvatarPreview={setAvatarPreview}
             onBack={() => setStep('welcome')}
             onNext={() => setStep('courses')}
           />
@@ -166,7 +170,7 @@ function Welcome({ onNext }: { onNext: () => void }) {
             fontStyle="italic"
             fill="#1A1915"
           >
-            P
+            A
           </text>
         </svg>
       </div>
@@ -196,14 +200,28 @@ function Welcome({ onNext }: { onNext: () => void }) {
 function NameStep({
   name,
   setName,
+  avatarPreview,
+  setAvatarPreview,
   onBack,
   onNext,
 }: {
   name: string;
   setName: (v: string) => void;
+  avatarPreview: string;
+  setAvatarPreview: (v: string) => void;
   onBack: () => void;
   onNext: () => void;
 }) {
+  function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setAvatarPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  const initials = name.trim() ? name.trim().charAt(0).toUpperCase() : '?';
+
   return (
     <div className="flex-1 flex flex-col animate-fade-in">
       <div className="px-7 pt-2">
@@ -211,41 +229,52 @@ function NameStep({
           ← Back
         </button>
         <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
-          What should we
+          Set up your
           <br />
-          <span className="italic font-normal">call you?</span>
+          <span className="italic font-normal">profile</span>
         </h2>
         <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
-          Just a first name — we&apos;ll use it to greet you.
+          Add a photo and your name.
         </p>
       </div>
 
-      <div className="px-7 pt-8">
-        <Field label="Your name">
-          <input
-            autoFocus
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Ali"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && name.trim()) onNext();
-            }}
-            className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink rounded-none"
-          />
-        </Field>
-
-        {name.trim() && (
-          <div className="mt-8 py-5 px-[22px] bg-paper rounded-[14px] border border-line animate-fade-in">
-            <p className="m-0 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted">
-              Preview
-            </p>
-            <p className="mt-1.5 mb-0 font-serif font-medium text-[22px] tracking-[-0.01em]">
-              Good morning,{' '}
-              <span className="italic">{name.trim()}</span>
-            </p>
+      <div className="px-7 pt-8 flex flex-col items-center">
+        {/* Avatar upload */}
+        <label className="relative cursor-pointer group mb-6">
+          <div
+            className="w-24 h-24 rounded-full border-2 border-dashed border-line-strong flex items-center justify-center overflow-hidden transition-colors group-hover:border-ink"
+            style={avatarPreview ? { borderStyle: 'solid', borderColor: 'var(--line)' } : {}}
+          >
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <span className="font-serif italic text-[32px] text-muted-soft">{initials}</span>
+            )}
           </div>
-        )}
+          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-ink text-bg flex items-center justify-center text-sm shadow-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </div>
+          <input type="file" accept="image/*" onChange={handleAvatar} className="hidden" />
+        </label>
+
+        <div className="w-full">
+          <Field label="Your name">
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Ali"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && name.trim()) onNext();
+              }}
+              className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink rounded-none"
+            />
+          </Field>
+        </div>
       </div>
 
       <div className="px-7 pt-8 pb-7 mt-auto">

@@ -9,8 +9,12 @@ export default function RootPage() {
 
   useEffect(() => {
     (async () => {
-      const onboarded = await db.isOnboardingComplete();
-      router.replace(onboarded ? '/dashboard' : '/onboarding');
+      try {
+        const onboarded = await db.isOnboardingComplete();
+        router.replace(onboarded ? '/dashboard' : '/onboarding');
+      } catch {
+        router.replace('/auth');
+      }
     })();
   }, [router]);
 

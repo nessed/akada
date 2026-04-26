@@ -90,6 +90,7 @@ create table if not exists user_settings (
   onboarding_complete boolean not null default false,
   display_name        text not null default '',
   daily_goal_hours    numeric not null default 4,
+  avatar_url          text not null default '',
   updated_at          timestamptz not null default now()
 );
 
@@ -105,3 +106,4 @@ create policy "Users manage own settings"
 -- ============================================================
 -- alter table user_settings add column if not exists display_name text not null default '';
 -- alter table user_settings add column if not exists daily_goal_hours numeric not null default 4;
+-- alter table user_settings add column if not exists avatar_url text not null default '';

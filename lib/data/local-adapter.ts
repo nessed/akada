@@ -173,7 +173,7 @@ export class LocalAdapter implements DataProvider {
   }
 
   async updateUserSettings(settings: Partial<UserSettings>): Promise<void> {
-    const current = read<UserSettings>(KEYS.userSettings, { displayName: '', dailyGoalHours: 4 });
+    const current = read<UserSettings>(KEYS.userSettings, { displayName: '', dailyGoalHours: 4, avatarUrl: '' });
     write(KEYS.userSettings, { ...current, ...settings });
   }
 }

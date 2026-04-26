@@ -49,4 +49,5 @@ export interface TaskFilters {
 export interface UserSettings {
   displayName: string;
   dailyGoalHours: number;
+  avatarUrl: string;
 }

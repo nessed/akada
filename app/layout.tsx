@@ -26,7 +26,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: 'Planner — Study Timer',
+  title: 'Akada — Study Planner',
   description: 'A quiet place to study.',
 };
 
