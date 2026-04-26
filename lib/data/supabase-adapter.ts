@@ -84,9 +84,10 @@ export class SupabaseAdapter implements DataProvider {
   private supabase = createClient();
 
   private async userId(): Promise<string> {
-    const {
-      data: { user },
-    } = await this.supabase.auth.getUser();
+    const { data: { session } } = await this.supabase.auth.getSession();
+    if (session?.user) return session.user.id;
+    
+    const { data: { user } } = await this.supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
     return user.id;
   }

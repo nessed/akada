@@ -21,6 +21,40 @@ export default function DashboardPage() {
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
 
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsName, setSettingsName] = useState('');
+  const [settingsAvatar, setSettingsAvatar] = useState('');
+  const [updatingSettings, setUpdatingSettings] = useState(false);
+
+  function resizeImage(base64: string, maxWidth = 160, maxHeight = 160): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => resolve(base64);
+    });
+  }
+
   const [addingTaskFor, setAddingTaskFor] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDue, setNewTaskDue] = useState('');
@@ -32,6 +66,26 @@ export default function DashboardPage() {
   const [newCourseColor, setNewCourseColor] = useState(PASTEL_PALETTE[0].value);
   const [newCourseTint, setNewCourseTint] = useState(PASTEL_PALETTE[0].tint);
   const [newCourseGoal, setNewCourseGoal] = useState(8);
+
+  async function refresh() {
+    const [c, s, t, settings] = await Promise.all([
+      db.getCourses(),
+      db.getSessions(),
+      db.getTasks(),
+      db.getUserSettings(),
+    ]);
+    setCourses(c);
+    setSessions(s);
+    setTasks(t);
+    if (settings?.displayName) {
+      setDisplayName(settings.displayName);
+      setSettingsName(settings.displayName);
+    }
+    if (settings?.avatarUrl) {
+      setAvatarUrl(settings.avatarUrl);
+      setSettingsAvatar(settings.avatarUrl);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -49,18 +103,27 @@ export default function DashboardPage() {
     })();
   }, [router]);
 
-  async function refresh() {
-    const [c, s, t, settings] = await Promise.all([
-      db.getCourses(),
-      db.getSessions(),
-      db.getTasks(),
-      db.getUserSettings(),
-    ]);
-    setCourses(c);
-    setSessions(s);
-    setTasks(t);
-    if (settings?.displayName) setDisplayName(settings.displayName);
-    if (settings?.avatarUrl) setAvatarUrl(settings.avatarUrl);
+  async function handleUpdateSettings() {
+    setUpdatingSettings(true);
+    try {
+      let finalAvatar = settingsAvatar;
+      if (settingsAvatar && !settingsAvatar.startsWith('https://')) {
+        // It's a new base64 upload, resize it first
+        finalAvatar = await resizeImage(settingsAvatar);
+      }
+      await db.updateUserSettings({
+        displayName: settingsName.trim(),
+        avatarUrl: finalAvatar,
+      });
+      setDisplayName(settingsName.trim());
+      setAvatarUrl(finalAvatar);
+      setShowSettings(false);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update settings');
+    } finally {
+      setUpdatingSettings(false);
+    }
   }
 
   function handleStartTimer(courseId: string) {
@@ -177,15 +240,19 @@ export default function DashboardPage() {
               Timer
             </button>
           )}
-          <div className="w-10 h-10 rounded-full bg-bg-tint border border-line overflow-hidden flex items-center justify-center shrink-0">
+          <button 
+            type="button" 
+            onClick={() => setShowSettings(true)}
+            className="w-10 h-10 rounded-full bg-bg-tint border border-line overflow-hidden flex items-center justify-center shrink-0 hover:border-ink transition-colors"
+          >
             {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              <img src={avatarUrl} alt="Settings" className="w-full h-full object-cover" />
             ) : (
               <span className="font-serif italic text-[16px] text-muted">
                 {displayName ? displayName.charAt(0).toUpperCase() : 'A'}
               </span>
             )}
-          </div>
+          </button>
         </div>
       </header>
 
@@ -392,6 +459,77 @@ export default function DashboardPage() {
                 className="flex-1 py-3.5 rounded-[10px] bg-ink text-bg text-sm font-medium disabled:opacity-30"
               >
                 Add course
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-6 animate-fade-in">
+          <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={() => !updatingSettings && setShowSettings(false)} />
+          <div className="relative bg-bg border border-line rounded-2xl w-full max-w-sm p-6 shadow-xl animate-scale-up">
+            <h3 className="font-serif font-medium text-xl m-0 mb-5">Profile Settings</h3>
+            
+            <div className="flex flex-col items-center gap-4 mb-5">
+              <label className="relative cursor-pointer group">
+                <div className="w-20 h-20 rounded-full border border-line overflow-hidden bg-bg-tint flex items-center justify-center transition-colors group-hover:border-ink">
+                  {settingsAvatar ? (
+                    <img src={settingsAvatar} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="font-serif italic text-2xl text-muted">
+                      {settingsName ? settingsName.charAt(0).toUpperCase() : 'A'}
+                    </span>
+                  )}
+                </div>
+                <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-ink text-bg flex items-center justify-center shadow-md">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => setSettingsAvatar(reader.result as string);
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-[10px] font-semibold tracking-[0.12em] uppercase text-muted mb-2">Display Name</label>
+              <input
+                type="text"
+                value={settingsName}
+                onChange={(e) => setSettingsName(e.target.value)}
+                className="w-full bg-bg-tint border border-line rounded-lg px-3.5 py-2.5 text-sm text-ink outline-none focus:border-line-strong transition-colors"
+                placeholder="Your name"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                disabled={updatingSettings}
+                onClick={() => setShowSettings(false)}
+                className="flex-1 py-2.5 text-center text-sm font-medium border border-line rounded-xl text-muted hover:text-ink transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={updatingSettings || !settingsName.trim()}
+                onClick={handleUpdateSettings}
+                className="flex-1 py-2.5 text-center text-sm font-medium bg-ink text-bg rounded-xl transition-opacity disabled:opacity-50"
+              >
+                {updatingSettings ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>

@@ -62,13 +62,47 @@ export default function OnboardingPage() {
   const valid = courses.filter((c) => c.code.trim() && c.name.trim()).length >= 1;
   const canFinishSemester = !!start && !!end && end >= start;
 
+  function resizeImage(base64: string, maxWidth = 160, maxHeight = 160): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => resolve(base64);
+    });
+  }
+
   async function finish() {
     try {
+      let finalAvatar = avatarPreview;
+      if (avatarPreview) {
+        finalAvatar = await resizeImage(avatarPreview);
+      }
+
       // Save user settings (name + daily goal + avatar)
       await db.updateUserSettings({
         displayName: displayName.trim(),
         dailyGoalHours: dailyGoal,
-        avatarUrl: avatarPreview,
+        avatarUrl: finalAvatar,
       });
       // Save courses
       for (const c of courses.filter((x) => x.code.trim() && x.name.trim())) {
@@ -84,13 +118,14 @@ export default function OnboardingPage() {
       await db.setOnboardingComplete();
       router.replace('/dashboard');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong';
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      console.error('Onboarding setup failed:', err);
       alert('Setup failed: ' + msg);
     }
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden">
+    <div className="min-h-[100dvh] flex flex-col">
       {/* Step dots */}
       <div className="flex gap-1.5 px-6 pt-[max(env(safe-area-inset-top),3.5rem)]">
         {STEPS.map((s, i) => {
