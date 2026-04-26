@@ -5,7 +5,9 @@ import { useState } from 'react';
 import { db } from '@/lib/data';
 import { PASTEL_PALETTE } from '@/lib/utils';
 
-type Step = 'welcome' | 'courses' | 'semester';
+type Step = 'welcome' | 'name' | 'courses' | 'semester' | 'routine';
+
+const STEPS: Step[] = ['welcome', 'name', 'courses', 'semester', 'routine'];
 
 interface DraftCourse {
   code: string;
@@ -26,10 +28,12 @@ const emptyDraft = (): DraftCourse => ({
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>('welcome');
+  const [displayName, setDisplayName] = useState('');
   const [courses, setCourses] = useState<DraftCourse[]>([emptyDraft()]);
   const [editIdx, setEditIdx] = useState(0);
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [dailyGoal, setDailyGoal] = useState(4);
 
   const editing = courses[editIdx];
   function update(patch: Partial<DraftCourse>) {
@@ -55,9 +59,15 @@ export default function OnboardingPage() {
   }
 
   const valid = courses.filter((c) => c.code.trim() && c.name.trim()).length >= 1;
-  const canFinish = !!start && !!end && end >= start;
+  const canFinishSemester = !!start && !!end && end >= start;
 
   async function finish() {
+    // Save user settings (name + daily goal)
+    await db.updateUserSettings({
+      displayName: displayName.trim(),
+      dailyGoalHours: dailyGoal,
+    });
+    // Save courses
     for (const c of courses.filter((x) => x.code.trim() && x.name.trim())) {
       await db.addCourse({
         code: c.code.trim(),
@@ -76,9 +86,8 @@ export default function OnboardingPage() {
     <div className="h-[100dvh] flex flex-col overflow-hidden">
       {/* Step dots */}
       <div className="flex gap-1.5 px-6 pt-[max(env(safe-area-inset-top),3.5rem)]">
-        {(['welcome', 'courses', 'semester'] as const).map((s, i) => {
-          const order: Step[] = ['welcome', 'courses', 'semester'];
-          const active = i <= order.indexOf(step);
+        {STEPS.map((s, i) => {
+          const active = i <= STEPS.indexOf(step);
           return (
             <span
               key={s}
@@ -91,7 +100,15 @@ export default function OnboardingPage() {
       </div>
 
       <div className="flex-1 flex flex-col mx-auto w-full max-w-xl">
-        {step === 'welcome' && <Welcome onNext={() => setStep('courses')} />}
+        {step === 'welcome' && <Welcome onNext={() => setStep('name')} />}
+        {step === 'name' && (
+          <NameStep
+            name={displayName}
+            setName={setDisplayName}
+            onBack={() => setStep('welcome')}
+            onNext={() => setStep('courses')}
+          />
+        )}
         {step === 'courses' && (
           <CoursesStep
             courses={courses}
@@ -102,7 +119,7 @@ export default function OnboardingPage() {
             addAnother={addAnother}
             removeCourse={removeCourse}
             valid={valid}
-            onBack={() => setStep('welcome')}
+            onBack={() => setStep('name')}
             onNext={() => setStep('semester')}
           />
         )}
@@ -112,8 +129,20 @@ export default function OnboardingPage() {
             end={end}
             setStart={setStart}
             setEnd={setEnd}
-            canFinish={canFinish}
+            canFinish={canFinishSemester}
             onBack={() => setStep('courses')}
+            onNext={() => setStep('routine')}
+          />
+        )}
+        {step === 'routine' && (
+          <RoutineStep
+            dailyGoal={dailyGoal}
+            setDailyGoal={setDailyGoal}
+            displayName={displayName}
+            totalWeeklyGoal={courses
+              .filter((c) => c.code.trim() && c.name.trim())
+              .reduce((sum, c) => sum + c.weeklyGoalHours, 0)}
+            onBack={() => setStep('semester')}
             onFinish={finish}
           />
         )}
@@ -157,8 +186,88 @@ function Welcome({ onNext }: { onNext: () => void }) {
         Open notebook
       </button>
       <p className="mt-4 text-xs italic text-muted font-serif">
-        Takes a minute. No account needed.
+        Takes a minute to set up.
       </p>
+    </div>
+  );
+}
+
+/* ─── Name step ─── */
+function NameStep({
+  name,
+  setName,
+  onBack,
+  onNext,
+}: {
+  name: string;
+  setName: (v: string) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex-1 flex flex-col animate-fade-in">
+      <div className="px-7 pt-2">
+        <button type="button" onClick={onBack} className="text-[13px] text-muted mb-[18px]">
+          ← Back
+        </button>
+        <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
+          What should we
+          <br />
+          <span className="italic font-normal">call you?</span>
+        </h2>
+        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
+          Just a first name — we&apos;ll use it to greet you.
+        </p>
+      </div>
+
+      <div className="px-7 pt-8">
+        <Field label="Your name">
+          <input
+            autoFocus
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Ali"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && name.trim()) onNext();
+            }}
+            className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink rounded-none"
+          />
+        </Field>
+
+        {name.trim() && (
+          <div className="mt-8 py-5 px-[22px] bg-paper rounded-[14px] border border-line animate-fade-in">
+            <p className="m-0 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted">
+              Preview
+            </p>
+            <p className="mt-1.5 mb-0 font-serif font-medium text-[22px] tracking-[-0.01em]">
+              Good morning,{' '}
+              <span className="italic">{name.trim()}</span>
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="px-7 pt-8 pb-7 mt-auto">
+        <button
+          type="button"
+          disabled={!name.trim()}
+          onClick={onNext}
+          className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          Continue
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setName('');
+            onNext();
+          }}
+          className="w-full mt-2 py-3 text-[13px] text-muted font-serif italic"
+        >
+          Skip for now
+        </button>
+      </div>
     </div>
   );
 }
@@ -368,7 +477,7 @@ interface SemesterStepProps {
   setEnd: (s: string) => void;
   canFinish: boolean;
   onBack: () => void;
-  onFinish: () => void;
+  onNext: () => void;
 }
 
 function SemesterStep({
@@ -378,7 +487,7 @@ function SemesterStep({
   setEnd,
   canFinish,
   onBack,
-  onFinish,
+  onNext,
 }: SemesterStepProps) {
   const weeks = canFinish
     ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000 / 7)
@@ -393,7 +502,7 @@ function SemesterStep({
           The semester
         </h2>
         <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
-          We'll use these dates for countdowns and stats.
+          We&apos;ll use these dates for countdowns and stats.
         </p>
       </div>
 
@@ -419,10 +528,136 @@ function SemesterStep({
         <button
           type="button"
           disabled={!canFinish}
-          onClick={onFinish}
+          onClick={onNext}
           className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          Begin
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Routine step (daily goal) ─── */
+function RoutineStep({
+  dailyGoal,
+  setDailyGoal,
+  displayName,
+  totalWeeklyGoal,
+  onBack,
+  onFinish,
+}: {
+  dailyGoal: number;
+  setDailyGoal: (v: number) => void;
+  displayName: string;
+  totalWeeklyGoal: number;
+  onBack: () => void;
+  onFinish: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  async function handleFinish() {
+    setSaving(true);
+    await onFinish();
+  }
+
+  // Compute a helpful comparison
+  const weeklyFromDaily = dailyGoal * 7;
+  const surplus = weeklyFromDaily - totalWeeklyGoal;
+
+  return (
+    <div className="flex-1 flex flex-col animate-fade-in">
+      <div className="px-7 pt-2">
+        <button type="button" onClick={onBack} className="text-[13px] text-muted mb-[18px]">
+          ← Back
+        </button>
+        <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
+          Your daily rhythm
+        </h2>
+        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
+          How much study time feels right each day?
+        </p>
+      </div>
+
+      <div className="px-7 pt-8 flex flex-col gap-6">
+        <Field label="Daily study target">
+          <div className="flex items-center gap-4">
+            <input
+              type="range"
+              min="1"
+              max="12"
+              step="0.5"
+              value={dailyGoal}
+              onChange={(e) => setDailyGoal(parseFloat(e.target.value))}
+              className="pl-range flex-1"
+              style={{ color: 'var(--ink)' }}
+            />
+            <div className="font-mono font-semibold text-sm text-ink w-14 text-right">
+              {dailyGoal}
+              <span className="text-muted ml-1">h</span>
+            </div>
+          </div>
+        </Field>
+
+        {/* Tier indicators */}
+        <div className="flex gap-2">
+          {[
+            { label: 'Light', range: '1–3h', note: 'easy days' },
+            { label: 'Focused', range: '4–6h', note: 'most students' },
+            { label: 'Deep', range: '7+h', note: 'exam season' },
+          ].map((t, i) => {
+            const tier = dailyGoal >= 7 ? 2 : dailyGoal >= 4 ? 1 : 0;
+            const active = tier === i;
+            return (
+              <div
+                key={t.label}
+                className="flex-1 px-2.5 py-2 rounded-[8px] text-center transition-all duration-150"
+                style={{
+                  background: active ? 'var(--bg-tint)' : 'transparent',
+                  outline: active ? '1.5px solid var(--line-strong)' : '1.5px solid transparent',
+                }}
+              >
+                <p
+                  className="m-0 text-[9px] font-semibold tracking-[0.08em] uppercase leading-none"
+                  style={{ color: active ? 'var(--ink)' : 'var(--muted-soft)' }}
+                >
+                  {t.label}
+                </p>
+                <p className="m-0 font-mono font-semibold text-[12px] text-ink mt-1">{t.range}</p>
+                <p className="m-0 text-[9px] text-muted font-serif italic mt-0.5 leading-[1.3]">
+                  {t.note}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Summary card */}
+        <div className="py-5 px-[22px] bg-paper rounded-[14px] border border-line">
+          <p className="m-0 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted">
+            Your plan
+          </p>
+          <p className="mt-1.5 mb-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
+            {dailyGoal}h daily · {totalWeeklyGoal}h weekly
+          </p>
+          <p className="mt-2 mb-0 text-[12px] text-ink-soft leading-[1.5] font-serif italic">
+            {surplus >= 2
+              ? `That's ${surplus.toFixed(0)}h buffer above your course goals — great for review.`
+              : surplus >= 0
+              ? 'Right on track with your course goals.'
+              : `You'll need to prioritize — ${Math.abs(surplus).toFixed(0)}h short of course goals per week.`}
+          </p>
+        </div>
+      </div>
+
+      <div className="px-7 pt-8 pb-7 mt-auto">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={handleFinish}
+          className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? 'Setting up…' : displayName ? `Let's go, ${displayName}` : 'Begin'}
         </button>
       </div>
     </div>

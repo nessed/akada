@@ -7,7 +7,7 @@ import DailySummary from '@/components/DailySummary';
 import CourseCard from '@/components/CourseCard';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import { db } from '@/lib/data';
-import type { Course, Session, Task } from '@/lib/data';
+import type { Course, Session, Task, UserSettings } from '@/lib/data';
 import { isoDate, sessionsForDate, PASTEL_PALETTE } from '@/lib/utils';
 import { useTimer } from '@/lib/timer-context';
 
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [displayName, setDisplayName] = useState('');
 
   const [addingTaskFor, setAddingTaskFor] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -44,14 +45,16 @@ export default function DashboardPage() {
   }, [router]);
 
   async function refresh() {
-    const [c, s, t] = await Promise.all([
+    const [c, s, t, settings] = await Promise.all([
       db.getCourses(),
       db.getSessions(),
       db.getTasks(),
+      db.getUserSettings(),
     ]);
     setCourses(c);
     setSessions(s);
     setTasks(t);
+    if (settings?.displayName) setDisplayName(settings.displayName);
   }
 
   function handleStartTimer(courseId: string) {
@@ -114,6 +117,13 @@ export default function DashboardPage() {
     );
   }
 
+  function greeting() {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   const today = isoDate();
   const todaysSessions = sessionsForDate(sessions, today);
   const dateLabel = new Date().toLocaleDateString(undefined, {
@@ -127,12 +137,25 @@ export default function DashboardPage() {
       {/* Journal header */}
       <header className="mb-[22px] flex items-end justify-between gap-3">
         <div>
-          <p className="m-0 text-[11px] tracking-[0.18em] uppercase text-muted font-semibold">
-            Today
-          </p>
-          <h1 className="mt-1.5 mb-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1]">
-            {dateLabel}
-          </h1>
+          {displayName ? (
+            <>
+              <p className="m-0 text-[11px] tracking-[0.18em] uppercase text-muted font-semibold">
+                {greeting()}
+              </p>
+              <h1 className="mt-1.5 mb-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1]">
+                {displayName}
+              </h1>
+            </>
+          ) : (
+            <>
+              <p className="m-0 text-[11px] tracking-[0.18em] uppercase text-muted font-semibold">
+                Today
+              </p>
+              <h1 className="mt-1.5 mb-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1]">
+                {dateLabel}
+              </h1>
+            </>
+          )}
         </div>
         {active && (
           <button

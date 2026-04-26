@@ -1,9 +1,10 @@
 import type { DataProvider } from './data-provider';
 import { LocalAdapter } from './local-adapter';
-// import { SupabaseAdapter } from './supabase-adapter'; // uncomment when migrating
+import { SupabaseAdapter } from './supabase-adapter';
 
-export const db: DataProvider = new LocalAdapter();
-// export const db: DataProvider = new SupabaseAdapter(); // one-line swap
+export const db: DataProvider = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new SupabaseAdapter()
+  : new LocalAdapter();
 
 export type { DataProvider } from './data-provider';
 export type {
@@ -14,4 +15,5 @@ export type {
   TaskPriority,
   SessionFilters,
   TaskFilters,
+  UserSettings,
 } from './types';

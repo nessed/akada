@@ -6,6 +6,7 @@ import type {
   Semester,
   SessionFilters,
   TaskFilters,
+  UserSettings,
 } from './types';
 
 const KEYS = {
@@ -14,6 +15,7 @@ const KEYS = {
   tasks: 'lums.tasks',
   semester: 'lums.semester',
   onboarding: 'lums.onboardingComplete',
+  userSettings: 'lums.userSettings',
 } as const;
 
 function isBrowser(): boolean {
@@ -163,5 +165,15 @@ export class LocalAdapter implements DataProvider {
 
   async resetAll(): Promise<void> {
     Object.values(KEYS).forEach(remove);
+  }
+
+  // ---- User settings
+  async getUserSettings(): Promise<UserSettings | null> {
+    return read<UserSettings | null>(KEYS.userSettings, null);
+  }
+
+  async updateUserSettings(settings: Partial<UserSettings>): Promise<void> {
+    const current = read<UserSettings>(KEYS.userSettings, { displayName: '', dailyGoalHours: 4 });
+    write(KEYS.userSettings, { ...current, ...settings });
   }
 }

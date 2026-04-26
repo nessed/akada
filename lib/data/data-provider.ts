@@ -5,6 +5,7 @@ import type {
   Semester,
   SessionFilters,
   TaskFilters,
+  UserSettings,
 } from './types';
 
 export interface DataProvider {
@@ -31,6 +32,10 @@ export interface DataProvider {
   // Onboarding
   isOnboardingComplete(): Promise<boolean>;
   setOnboardingComplete(): Promise<void>;
+
+  // User settings
+  getUserSettings(): Promise<UserSettings | null>;
+  updateUserSettings(settings: Partial<UserSettings>): Promise<void>;
 
   // Dev / debugging
   resetAll(): Promise<void>;

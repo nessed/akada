@@ -45,3 +45,8 @@ export interface TaskFilters {
   courseId?: string;
   completed?: boolean;
 }
+
+export interface UserSettings {
+  displayName: string;
+  dailyGoalHours: number;
+}
