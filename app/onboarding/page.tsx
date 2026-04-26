@@ -63,25 +63,30 @@ export default function OnboardingPage() {
   const canFinishSemester = !!start && !!end && end >= start;
 
   async function finish() {
-    // Save user settings (name + daily goal + avatar)
-    await db.updateUserSettings({
-      displayName: displayName.trim(),
-      dailyGoalHours: dailyGoal,
-      avatarUrl: avatarPreview,
-    });
-    // Save courses
-    for (const c of courses.filter((x) => x.code.trim() && x.name.trim())) {
-      await db.addCourse({
-        code: c.code.trim(),
-        name: c.name.trim(),
-        color: c.color,
-        tint: c.tint,
-        weeklyGoalHours: c.weeklyGoalHours,
+    try {
+      // Save user settings (name + daily goal + avatar)
+      await db.updateUserSettings({
+        displayName: displayName.trim(),
+        dailyGoalHours: dailyGoal,
+        avatarUrl: avatarPreview,
       });
+      // Save courses
+      for (const c of courses.filter((x) => x.code.trim() && x.name.trim())) {
+        await db.addCourse({
+          code: c.code.trim(),
+          name: c.name.trim(),
+          color: c.color,
+          tint: c.tint,
+          weeklyGoalHours: c.weeklyGoalHours,
+        });
+      }
+      await db.setSemester({ startDate: start, endDate: end });
+      await db.setOnboardingComplete();
+      router.replace('/dashboard');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Something went wrong';
+      alert('Setup failed: ' + msg);
     }
-    await db.setSemester({ startDate: start, endDate: end });
-    await db.setOnboardingComplete();
-    router.replace('/dashboard');
   }
 
   return (
@@ -587,7 +592,11 @@ function RoutineStep({
 
   async function handleFinish() {
     setSaving(true);
-    await onFinish();
+    try {
+      await onFinish();
+    } finally {
+      setSaving(false);
+    }
   }
 
   // Compute a helpful comparison
