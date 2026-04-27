@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
@@ -17,7 +18,7 @@ export default function AuthPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const isUp = mode === 'signup';
+  const isSignUp = mode === 'signup';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,7 +28,7 @@ export default function AuthPage() {
 
     const supabase = createClient();
 
-    if (isUp) {
+    if (isSignUp) {
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -60,7 +61,7 @@ export default function AuthPage() {
   }
 
   function switchMode() {
-    setMode(isUp ? 'signin' : 'signup');
+    setMode(isSignUp ? 'signin' : 'signup');
     setState('idle');
     setErrorMsg('');
   }
@@ -70,7 +71,7 @@ export default function AuthPage() {
       <div className="min-h-[100dvh] flex flex-col items-center justify-center px-8 animate-fade-in">
         <div className="w-full max-w-[340px] text-center">
           <div className="mx-auto mb-7">
-            <Bookmark letter="A" size={56} />
+            <Mark size={56} />
           </div>
           <h1 className="font-serif font-medium text-[28px] tracking-[-0.02em] mb-3">
             Check your email
@@ -79,7 +80,7 @@ export default function AuthPage() {
             We sent a confirmation link to{' '}
             <span className="font-medium text-ink">{successMsg}</span>.
             <br />
-            Click it to open your notebook.
+            Click it to finish setting up Akada.
           </p>
           <button
             type="button"
@@ -89,7 +90,7 @@ export default function AuthPage() {
             }}
             className="mt-8 text-[13px] text-muted font-serif italic hover:text-ink transition-colors"
           >
-            ← Back to sign in
+            Back to sign in
           </button>
         </div>
       </div>
@@ -98,7 +99,6 @@ export default function AuthPage() {
 
   return (
     <div className="relative min-h-[100dvh] flex flex-col px-7 animate-fade-in">
-      {/* Faint ruled lines */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-50"
@@ -113,9 +113,11 @@ export default function AuthPage() {
       />
 
       <div className="relative mx-auto w-full max-w-[360px] flex flex-col flex-1">
-        {/* Bookmark + wordmark */}
-        <div className="pt-[max(env(safe-area-inset-top),88px)] mb-9 flex items-center gap-3.5">
-          <Bookmark letter="A" size={34} />
+        <Link
+          href="/"
+          className="pt-[max(env(safe-area-inset-top),88px)] mb-9 flex items-center gap-3.5"
+        >
+          <Mark size={34} />
           <div>
             <p className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em] leading-none">
               Akada
@@ -124,23 +126,21 @@ export default function AuthPage() {
               Study Planner
             </p>
           </div>
-        </div>
+        </Link>
 
-        {/* Editorial intro */}
         <div className="mb-8">
           <h1 className="m-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1] whitespace-pre-line">
-            {isUp ? 'Open a fresh\nnotebook.' : 'Welcome back to\nyour notebook.'}
+            {isSignUp ? 'Create your\nstudy plan.' : 'Welcome back\nto Akada.'}
           </h1>
           <p className="mt-3 mb-0 text-[14px] text-ink-soft leading-[1.55] max-w-[300px]">
-            {isUp
-              ? 'A quiet place to track your hours, stay close to the work that matters.'
-              : 'Pick up where you left off. Your pages are waiting.'}
+            {isSignUp
+              ? 'Track courses, tasks, and focused study sessions in one calm workspace.'
+              : 'Sign in to manage your courses, tasks, timer, and progress.'}
           </p>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]">
-          {isUp && (
+          {isSignUp && (
             <Field label="Name">
               <UnderlineInput
                 value={name}
@@ -156,14 +156,14 @@ export default function AuthPage() {
               onChange={setEmail}
               placeholder="you@school.edu"
               type="email"
-              autoFocus={!isUp}
+              autoFocus={!isSignUp}
             />
           </Field>
           <Field label="Password">
             <UnderlineInput
               value={password}
               onChange={setPassword}
-              placeholder="••••••••"
+              placeholder="Password"
               type="password"
             />
           </Field>
@@ -174,17 +174,17 @@ export default function AuthPage() {
               state === 'loading' ||
               !email.trim() ||
               password.length < 6 ||
-              (isUp && !name.trim())
+              (isSignUp && !name.trim())
             }
             className="mt-2.5 w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
           >
             {state === 'loading'
-              ? isUp
-                ? 'Creating notebook…'
-                : 'Opening notebook…'
-              : isUp
-                ? 'Create notebook'
-                : 'Open notebook'}
+              ? isSignUp
+                ? 'Creating account...'
+                : 'Signing in...'
+              : isSignUp
+                ? 'Create account'
+                : 'Sign in'}
           </button>
         </form>
 
@@ -194,17 +194,16 @@ export default function AuthPage() {
           </p>
         )}
 
-        {/* Switcher pinned to bottom */}
         <div className="mt-auto py-7 text-center">
           <span className="text-[13px] text-muted">
-            {isUp ? 'Already keeping a notebook? ' : 'New here? '}
+            {isSignUp ? 'Already have an account? ' : 'New here? '}
           </span>
           <button
             type="button"
             onClick={switchMode}
             className="bg-transparent border-0 cursor-pointer font-serif italic text-[14px] text-ink underline underline-offset-4 decoration-line-strong"
           >
-            {isUp ? 'Sign in' : 'Start one'}
+            {isSignUp ? 'Sign in' : 'Start planning'}
           </button>
         </div>
       </div>
@@ -212,7 +211,7 @@ export default function AuthPage() {
   );
 }
 
-function Bookmark({ letter, size = 34 }: { letter: string; size?: number }) {
+function Mark({ size = 34 }: { size?: number }) {
   const w = size;
   const h = Math.round(size * (68 / 56));
   return (
@@ -233,7 +232,7 @@ function Bookmark({ letter, size = 34 }: { letter: string; size?: number }) {
         fontWeight="500"
         fill="currentColor"
       >
-        {letter}
+        A
       </text>
     </svg>
   );

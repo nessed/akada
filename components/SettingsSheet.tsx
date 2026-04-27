@@ -125,7 +125,7 @@ export default function SettingsSheet({
         <header className="flex items-center justify-between px-[22px] pt-[18px]">
           <div>
             <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-              The notebook
+              Study planner
             </p>
             <h2 className="mt-1 mb-0 font-serif text-[26px] font-medium tracking-[-0.02em]">
               Settings
@@ -189,7 +189,7 @@ export default function SettingsSheet({
                 {shownName}
               </p>
               <p className="mt-0.5 mb-0 truncate text-xs text-muted">
-                A quiet place to study.
+                Courses, tasks, sessions, and progress.
               </p>
             </div>
             <button
@@ -203,14 +203,14 @@ export default function SettingsSheet({
 
           <div className="mt-3 grid grid-cols-3 gap-2">
             <StatChip label="Hours kept" value={`${totalHours.toFixed(1)}h`} />
-            <StatChip label="Days written" value={dayCount.toString()} />
+            <StatChip label="Active days" value={dayCount.toString()} />
             <StatChip label="Courses" value={courses.length.toString()} />
           </div>
         </div>
 
         {section === 'overview' && (
           <div className="px-[22px] pt-6 pb-10 animate-fade-in">
-            <SettingGroup label="The notebook">
+            <SettingGroup label="Planner">
               <SettingRow
                 label="Profile"
                 sub="Name, avatar"
@@ -248,7 +248,7 @@ export default function SettingsSheet({
               />
             </SettingGroup>
 
-            <SettingGroup label="Notebook">
+            <SettingGroup label="Data">
               <SettingRow
                 label="Export sessions"
                 sub="Download as CSV"
@@ -256,7 +256,7 @@ export default function SettingsSheet({
               />
               <SettingRow
                 label="Reset data"
-                sub="Start a fresh notebook"
+                sub="Start with a clean planner"
                 tone="warn"
                 last
                 onClick={() => {

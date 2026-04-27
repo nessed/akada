@@ -220,14 +220,14 @@ function Welcome({ onNext }: { onNext: () => void }) {
         <span className="italic font-normal">to study.</span>
       </h1>
       <p className="mt-5 text-[15px] text-ink-soft max-w-[280px] leading-[1.5]">
-        Track your hours like pages in a notebook. Stay close to the work that matters.
+        Track courses, tasks, and study sessions. Stay close to the work that matters.
       </p>
       <button
         type="button"
         onClick={onNext}
         className="mt-12 w-full max-w-[280px] py-4 px-6 rounded-xl bg-ink text-bg text-[15px] font-medium tracking-[0.01em]"
       >
-        Open notebook
+        Start planning
       </button>
       <p className="mt-4 text-xs italic text-muted font-serif">
         Takes a minute to set up.
