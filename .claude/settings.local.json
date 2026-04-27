@@ -27,7 +27,8 @@
       "Bash(curl -s -o /dev/null -w \"dashboard=%{http_code}\\\\n\" http://localhost:3002/dashboard)",
       "Bash(curl -s -o /dev/null -w \"tasks=%{http_code}\\\\n\" http://localhost:3002/tasks)",
       "Bash(curl -s -o /dev/null -w \"stats=%{http_code}\\\\n\" http://localhost:3002/stats)",
-      "Bash(curl -s -o /dev/null -w \"onboarding=%{http_code}\\\\n\" http://localhost:3002/onboarding)"
+      "Bash(curl -s -o /dev/null -w \"onboarding=%{http_code}\\\\n\" http://localhost:3002/onboarding)",
+      "Bash(kill 767)"
     ]
   }
 }
