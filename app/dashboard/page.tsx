@@ -338,6 +338,7 @@ export default function DashboardPage() {
               <>
                 <b className="text-ink">{todayTasks.length}</b>{' '}
                 {todayTasks.length === 1 ? 'task' : 'tasks'} on the page today.
+
               </>
             ) : totalToday > 0 ? (
               <>
@@ -350,19 +351,6 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2.5">
-          {active && (
-            <button
-              type="button"
-              onClick={() => router.push('/timer')}
-              className="flex items-center gap-2 px-3 py-2 rounded-full bg-paper border border-line text-xs font-medium hover:bg-bg-tint"
-            >
-              <span className="relative flex w-2 h-2">
-                <span className="absolute inset-0 rounded-full bg-priority animate-ping opacity-60" />
-                <span className="relative rounded-full bg-priority w-2 h-2" />
-              </span>
-              Timer
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setShowSettings(true)}
