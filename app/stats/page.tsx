@@ -7,7 +7,7 @@ import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
 import { db } from '@/lib/data';
 import type { Course, Semester, Session } from '@/lib/data';
-import { studyStreakDays, totalSeconds } from '@/lib/utils';
+import { formatHM, formatRelativeDate, studyStreakDays, totalSeconds } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
 
 export default function StatsPage() {
@@ -26,17 +26,26 @@ export default function StatsPage() {
         router.replace('/onboarding');
         return;
       }
-      const [c, s, sem] = await Promise.all([
-        db.getCourses(),
-        db.getSessions(),
-        db.getSemester(),
-      ]);
-      setCourses(c);
-      setSessions(s);
-      setSemester(sem);
+      await refresh();
       setLoading(false);
     })();
   }, [router]);
+
+  async function refresh() {
+    const [c, s, sem] = await Promise.all([
+      db.getCourses(),
+      db.getSessions(),
+      db.getSemester(),
+    ]);
+    setCourses(c);
+    setSessions(s);
+    setSemester(sem);
+  }
+
+  async function deleteSession(id: string) {
+    await db.deleteSession(id);
+    refresh();
+  }
 
   const filteredSessions = useMemo(
     () => (filter === 'all' ? sessions : sessions.filter((s) => s.courseId === filter)),
@@ -101,6 +110,13 @@ export default function StatsPage() {
         <Kpi label="Streak" value={streak.toString()} unit="d" />
         <Kpi label="Avg / day" value={(avgPerDay / 60).toFixed(0)} unit="m" />
       </div>
+
+      {sessions.length === 0 && (
+        <EmptyState
+          title="No sessions logged"
+          text="Start a timer from a course or task to begin building your study history."
+        />
+      )}
 
       {/* Heatmap */}
       <section className="bg-paper rounded-[14px] border border-line py-5 px-[22px] mb-4">
@@ -197,6 +213,68 @@ export default function StatsPage() {
           ))}
         </div>
       </section>
+
+      <section className="mt-4 bg-paper rounded-[14px] border border-line px-[22px]">
+        <h2 className="my-4 font-serif font-medium text-[17px]">Session history</h2>
+        {sessions.length === 0 ? (
+          <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
+            Your logged study sessions will appear here.
+          </p>
+        ) : (
+          <div>
+            {sessions.slice(0, 12).map((session) => {
+              const course = courses.find((c) => c.id === session.courseId);
+              return (
+                <div
+                  key={session.id}
+                  className="group flex items-start justify-between gap-3 border-b border-line py-3.5 last:border-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: course?.color || 'var(--muted)' }}
+                      />
+                      <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                        {course?.code || 'Course'} · {formatRelativeDate(session.date)}
+                      </p>
+                    </div>
+                    <p className="mt-1 mb-0 font-serif text-[15px] font-medium text-ink">
+                      {course?.name || 'Study session'}
+                    </p>
+                    {session.note && (
+                      <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-ink-soft">
+                        {session.note}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
+                      {formatHM(session.durationSeconds)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => deleteSession(session.id)}
+                      aria-label="Delete session"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-0 transition-opacity hover:text-warn group-hover:opacity-100"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </PageShell>
   );
 }
@@ -212,6 +290,19 @@ function Kpi({ label, value, unit }: { label: string; value: string; unit: strin
         <span className="ml-[3px] text-[11px] font-medium text-muted">{unit}</span>
       </p>
     </div>
+  );
+}
+
+function EmptyState({ title, text }: { title: string; text: string }) {
+  return (
+    <section className="mb-4 rounded-[14px] border border-dashed border-line-strong bg-paper px-5 py-7 text-center">
+      <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">
+        {title}
+      </h2>
+      <p className="mx-auto mt-2 mb-0 max-w-[280px] text-[13px] leading-[1.55] text-muted">
+        {text}
+      </p>
+    </section>
   );
 }
 

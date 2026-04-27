@@ -43,8 +43,30 @@ const merriweather = Merriweather({
 });
 
 export const metadata: Metadata = {
-  title: 'Akada — Study Planner',
-  description: 'A quiet place to study.',
+  metadataBase: new URL('http://localhost:3000'),
+  title: {
+    default: 'Akada - Study Planner',
+    template: '%s - Akada',
+  },
+  description:
+    'Plan courses, manage assignments, log focused study sessions, and track academic progress.',
+  applicationName: 'Akada',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'Akada',
+    statusBarStyle: 'default',
+  },
+  openGraph: {
+    title: 'Akada - Study Planner',
+    description:
+      'A calm academic planner for courses, tasks, study timers, and progress tracking.',
+    type: 'website',
+  },
+  icons: {
+    icon: '/icon.svg',
+    apple: '/apple-icon.svg',
+  },
 };
 
 export const viewport: Viewport = {

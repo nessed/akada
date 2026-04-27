@@ -9,9 +9,10 @@ interface Props {
   onToggle: (id: string) => void;
   onStartTimer: (task: Task) => void;
   onDelete: (id: string) => void;
+  onEdit?: (task: Task) => void;
 }
 
-export default function TaskItem({ task, course, onToggle, onStartTimer, onDelete }: Props) {
+export default function TaskItem({ task, course, onToggle, onStartTimer, onDelete, onEdit }: Props) {
   const due = dueLabel(task.dueDate);
 
   return (
@@ -79,6 +80,25 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
             <path d="M7 5l12 7-12 7V5z" />
           </svg>
           Start
+        </button>
+      )}
+
+      {onEdit && (
+        <button
+          type="button"
+          onClick={() => onEdit(task)}
+          aria-label="Edit task"
+          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-0 group-hover:opacity-100 hover:text-ink transition-opacity"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3zM14 8l2 2"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
       )}
 

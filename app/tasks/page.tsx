@@ -27,6 +27,11 @@ export default function TasksPage() {
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDue, setDraftDue] = useState('');
   const [draftHigh, setDraftHigh] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editCourseId, setEditCourseId] = useState('');
+  const [editDue, setEditDue] = useState('');
+  const [editHigh, setEditHigh] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -69,6 +74,26 @@ export default function TasksPage() {
 
   async function deleteTask(id: string) {
     await db.deleteTask(id);
+    refresh();
+  }
+
+  function openEditTask(task: Task) {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditCourseId(task.courseId);
+    setEditDue(task.dueDate || '');
+    setEditHigh(task.priority === 'high');
+  }
+
+  async function saveEditTask() {
+    if (!editingTask || !editTitle.trim() || !editCourseId) return;
+    await db.updateTask(editingTask.id, {
+      title: editTitle.trim(),
+      courseId: editCourseId,
+      dueDate: editDue || null,
+      priority: editHigh ? 'high' : 'normal',
+    });
+    setEditingTask(null);
     refresh();
   }
 
@@ -145,8 +170,23 @@ export default function TasksPage() {
       </div>
 
       {/* Sections */}
-      <div className="flex flex-col gap-[22px]">
-        {courses.map((course) => {
+      {courses.length === 0 ? (
+        <EmptyState
+          title="No courses yet"
+          text="Add courses during setup or from Settings before creating tasks."
+        />
+      ) : visibleTasks.length === 0 ? (
+        <EmptyState
+          title={filter === 'all' ? 'No tasks yet' : `No ${filter} tasks`}
+          text={
+            filter === 'all'
+              ? 'Add a task under a course and it will show up here.'
+              : 'Nothing matches this filter right now.'
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-[22px]">
+          {courses.map((course) => {
           const list = visibleTasks
             .filter((t) => t.courseId === course.id)
             .sort((a, b) => {
@@ -194,6 +234,7 @@ export default function TasksPage() {
                       onToggle={toggleTask}
                       onStartTimer={handleStartTimerForTask}
                       onDelete={deleteTask}
+                      onEdit={openEditTask}
                     />
                   ))}
 
@@ -262,7 +303,97 @@ export default function TasksPage() {
             </section>
           );
         })}
-      </div>
+        </div>
+      )}
+
+      {editingTask && (
+        <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+          <button
+            type="button"
+            aria-label="Cancel editing"
+            onClick={() => setEditingTask(null)}
+            className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+          />
+          <div className="relative w-full bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
+            <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
+            <h3 className="mt-0 mb-1.5 font-serif font-medium text-[22px] tracking-[-0.01em]">
+              Edit task
+            </h3>
+            <p className="mt-0 mb-4 text-[13px] text-muted font-serif italic">
+              Keep the assignment details current.
+            </p>
+
+            <input
+              autoFocus
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="Task title"
+              className="w-full bg-paper border border-line rounded-[10px] px-4 py-3 text-sm text-ink outline-none focus:border-line-strong"
+            />
+
+            <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-2">
+              <select
+                value={editCourseId}
+                onChange={(e) => setEditCourseId(e.target.value)}
+                className="min-w-0 bg-bg-tint border border-line rounded-lg px-3 py-2.5 text-xs text-ink-soft outline-none"
+              >
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.code} - {course.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setEditHigh((v) => !v)}
+                className="px-3 py-2 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase"
+                style={{
+                  background: editHigh ? '#F4DCD2' : 'var(--bg-tint)',
+                  color: editHigh ? '#A85C42' : 'var(--muted)',
+                }}
+              >
+                {editHigh ? 'High' : 'Normal'}
+              </button>
+            </div>
+
+            <div className="mt-2.5">
+              <DatePicker value={editDue} onChange={setEditDue} placeholder="Due date" />
+            </div>
+
+            <div className="mt-4 flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setEditingTask(null)}
+                className="flex-1 py-3.5 rounded-[10px] bg-transparent border border-line-strong text-ink-soft text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!editTitle.trim() || !editCourseId}
+                onClick={saveEditTask}
+                className="flex-1 py-3.5 rounded-[10px] bg-ink text-bg text-sm font-medium disabled:opacity-30"
+              >
+                Save task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
+  );
+}
+
+function EmptyState({ title, text }: { title: string; text: string }) {
+  return (
+    <section className="rounded-[14px] border border-dashed border-line-strong bg-paper px-5 py-8 text-center">
+      <h2 className="m-0 font-serif text-[21px] font-medium tracking-[-0.01em]">
+        {title}
+      </h2>
+      <p className="mx-auto mt-2 mb-0 max-w-[280px] text-[13px] leading-[1.55] text-muted">
+        {text}
+      </p>
+    </section>
   );
 }

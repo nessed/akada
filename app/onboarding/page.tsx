@@ -1,8 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { db } from '@/lib/data';
+import { createClient } from '@/lib/supabase';
 import { PASTEL_PALETTE } from '@/lib/utils';
 
 type Step = 'welcome' | 'name' | 'courses' | 'semester' | 'routine';
@@ -35,6 +36,27 @@ export default function OnboardingPage() {
   const [end, setEnd] = useState('');
   const [dailyGoal, setDailyGoal] = useState(4);
   const [avatarPreview, setAvatarPreview] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [settings, auth] = await Promise.all([
+          db.getUserSettings(),
+          createClient().auth.getUser(),
+        ]);
+        const metadataName =
+          typeof auth.data.user?.user_metadata?.display_name === 'string'
+            ? auth.data.user.user_metadata.display_name
+            : '';
+        if (!displayName) {
+          setDisplayName(settings?.displayName || metadataName || '');
+        }
+        if (!avatarPreview && settings?.avatarUrl) setAvatarPreview(settings.avatarUrl);
+      } catch {
+        // Local mode or unauthenticated edge: keep the form empty.
+      }
+    })();
+  }, []);
 
   const editing = courses[editIdx];
   function update(patch: Partial<DraftCourse>) {

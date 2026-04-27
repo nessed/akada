@@ -47,6 +47,21 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (user) {
+    const displayName =
+      typeof user.user_metadata?.display_name === 'string'
+        ? user.user_metadata.display_name
+        : '';
+    if (displayName) {
+      await supabase.from('user_settings').upsert(
+        {
+          user_id: user.id,
+          display_name: displayName,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' },
+      );
+    }
+
     const { data: settings } = await supabase
       .from('user_settings')
       .select('onboarding_complete')

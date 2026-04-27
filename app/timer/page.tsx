@@ -154,7 +154,7 @@ export default function TimerPage() {
               </p>
             )}
 
-            <div className="relative mt-[38px] h-[min(284px,calc(100vw-56px))] w-[min(284px,calc(100vw-56px))]">
+            <div className="relative mt-[34px] aspect-square w-full max-w-[284px]">
               <svg
                 width="100%"
                 height="100%"
@@ -184,7 +184,7 @@ export default function TimerPage() {
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <div
-                  className="font-mono font-semibold text-[56px] leading-none tracking-[-0.02em] text-ink tabular-nums transition-opacity duration-200"
+                  className="font-mono font-semibold text-[clamp(34px,12vw,54px)] leading-none tracking-[-0.02em] text-ink tabular-nums transition-opacity duration-200"
                   style={{ opacity: isPaused ? 0.55 : 1 }}
                 >
                   {formatHHMMSS(elapsedSeconds)}

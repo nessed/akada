@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Akada">
+  <rect width="512" height="512" fill="#FAFAF6"/>
+  <rect x="18" y="18" width="476" height="476" rx="48" fill="#F0ECE1"/>
+  <path d="M166 96H346V386L256 339L166 386V96Z" fill="#FFFFFF" stroke="#1A1915" stroke-width="18" stroke-linejoin="round"/>
+  <text x="256" y="277" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="148" font-style="italic" fill="#1A1915">A</text>
+</svg>

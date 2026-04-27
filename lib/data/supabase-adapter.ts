@@ -195,6 +195,36 @@ export class SupabaseAdapter implements DataProvider {
     return rowToSession(data as SessionRow);
   }
 
+  async updateSession(id: string, updates: Partial<Session>): Promise<Session> {
+    const uid = await this.userId();
+    const patch: Record<string, unknown> = {};
+    if (updates.courseId !== undefined) patch.course_id = updates.courseId;
+    if (updates.taskId !== undefined) patch.task_id = updates.taskId;
+    if (updates.date !== undefined) patch.date = updates.date;
+    if (updates.durationSeconds !== undefined) patch.duration_seconds = updates.durationSeconds;
+    if (updates.note !== undefined) patch.note = updates.note;
+
+    const { data, error } = await this.supabase
+      .from('sessions')
+      .update(patch)
+      .eq('id', id)
+      .eq('user_id', uid)
+      .select()
+      .single();
+    if (error) throw error;
+    return rowToSession(data as SessionRow);
+  }
+
+  async deleteSession(id: string): Promise<void> {
+    const uid = await this.userId();
+    const { error } = await this.supabase
+      .from('sessions')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', uid);
+    if (error) throw error;
+  }
+
   // ---- Tasks ----
 
   async getTasks(filters?: TaskFilters): Promise<Task[]> {
@@ -239,6 +269,7 @@ export class SupabaseAdapter implements DataProvider {
   async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
     const uid = await this.userId();
     const patch: Record<string, unknown> = {};
+    if (updates.courseId !== undefined) patch.course_id = updates.courseId;
     if (updates.title !== undefined) patch.title = updates.title;
     if (updates.dueDate !== undefined) patch.due_date = updates.dueDate;
     if (updates.priority !== undefined) patch.priority = updates.priority;

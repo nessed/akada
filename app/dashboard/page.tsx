@@ -9,10 +9,11 @@ import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
 import { db } from '@/lib/data';
-import type { Course, Session, Task } from '@/lib/data';
+import type { Course, Semester, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import {
   formatHM,
+  daysBetween,
   isoDate,
   isoWeekNumber,
   sessionsForDate,
@@ -28,6 +29,7 @@ export default function DashboardPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [semester, setSemester] = useState<Semester | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
 
@@ -78,15 +80,17 @@ export default function DashboardPage() {
   const [newCourseGoal, setNewCourseGoal] = useState(8);
 
   async function refresh() {
-    const [c, s, t, settings] = await Promise.all([
+    const [c, s, t, settings, sem] = await Promise.all([
       db.getCourses(),
       db.getSessions(),
       db.getTasks(),
       db.getUserSettings(),
+      db.getSemester(),
     ]);
     setCourses(c);
     setSessions(s);
     setTasks(t);
+    setSemester(sem);
     if (settings?.displayName) {
       setDisplayName(settings.displayName);
       setSettingsName(settings.displayName);
@@ -250,6 +254,20 @@ export default function DashboardPage() {
   const dayNum = now.getDate();
   const yearLabel = String(now.getFullYear()).slice(-2);
   const weekOfYear = isoWeekNumber(now);
+  const openTasks = tasks.filter((t) => !t.completed);
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowIso = isoDate(tomorrow);
+  const tomorrowCount = openTasks.filter((t) => t.dueDate === tomorrowIso).length;
+  const semesterInfo = semester ? getSemesterInfo(semester, today) : null;
+  const smartPrompts = getSmartPrompts({
+    courses,
+    sessions,
+    tasks,
+    today,
+    overdueCount,
+    tomorrowCount,
+  });
 
   return (
     <PageShell>
@@ -328,6 +346,43 @@ export default function DashboardPage() {
       {/* Daily summary */}
       <DailySummary todaysSessions={todaysSessions} courses={courses} />
 
+      {semesterInfo && (
+        <section className="mt-4 rounded-[14px] border border-line bg-paper px-[22px] py-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <div>
+              <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                Semester
+              </p>
+              <h2 className="mt-1 mb-0 font-serif text-[18px] font-medium tracking-[-0.01em]">
+                Week {semesterInfo.currentWeek} of {semesterInfo.totalWeeks}
+              </h2>
+            </div>
+            <span className="font-mono text-[13px] font-semibold text-ink-soft">
+              {semesterInfo.daysRemaining}d left
+            </span>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-bg-tint">
+            <div
+              className="h-full rounded-full bg-ink"
+              style={{ width: `${semesterInfo.percent}%` }}
+            />
+          </div>
+        </section>
+      )}
+
+      {smartPrompts.length > 0 && (
+        <section className="mt-4 grid gap-2">
+          {smartPrompts.map((prompt) => (
+            <div
+              key={prompt}
+              className="rounded-xl border border-line bg-bg-tint px-4 py-3 text-[13px] leading-[1.45] text-ink-soft"
+            >
+              {prompt}
+            </div>
+          ))}
+        </section>
+      )}
+
       {(todayTasks.length > 0 || overdueCount > 0) && (
         <section className="mt-5 mb-[22px]">
           <div className="mb-2.5 flex items-baseline justify-between">
@@ -401,17 +456,26 @@ export default function DashboardPage() {
       </div>
 
       {/* Course cards */}
-      <div className="flex flex-col gap-3">
-        {courses.map((course) => (
-          <CourseCard
-            key={course.id}
-            course={course}
-            sessions={sessions.filter((s) => s.courseId === course.id)}
-            tasks={tasks.filter((t) => t.courseId === course.id)}
-            onStartTimer={handleStartTimer}
-          />
-        ))}
-      </div>
+      {courses.length === 0 ? (
+        <EmptyPanel
+          title="No courses yet"
+          text="Add your classes and weekly goals to make the dashboard useful."
+          action="Add a course"
+          onAction={openAddCourse}
+        />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {courses.map((course) => (
+            <CourseCard
+              key={course.id}
+              course={course}
+              sessions={sessions.filter((s) => s.courseId === course.id)}
+              tasks={tasks.filter((t) => t.courseId === course.id)}
+              onStartTimer={handleStartTimer}
+            />
+          ))}
+        </div>
+      )}
 
       <FloatingActionButton
         courses={courses}
@@ -608,5 +672,96 @@ export default function DashboardPage() {
         onResetData={handleResetData}
       />
     </PageShell>
+  );
+}
+
+function getSemesterInfo(semester: Semester, today: string) {
+  const totalDays = Math.max(1, daysBetween(semester.startDate, semester.endDate) + 1);
+  const elapsedDays = Math.min(Math.max(0, daysBetween(semester.startDate, today) + 1), totalDays);
+  const totalWeeks = Math.max(1, Math.ceil(totalDays / 7));
+  const currentWeek = Math.min(totalWeeks, Math.max(1, Math.ceil(elapsedDays / 7)));
+  const daysRemaining = Math.max(0, daysBetween(today, semester.endDate));
+  return {
+    totalWeeks,
+    currentWeek,
+    daysRemaining,
+    percent: Math.round((elapsedDays / totalDays) * 100),
+  };
+}
+
+function getSmartPrompts({
+  courses,
+  sessions,
+  tasks,
+  today,
+  overdueCount,
+  tomorrowCount,
+}: {
+  courses: Course[];
+  sessions: Session[];
+  tasks: Task[];
+  today: string;
+  overdueCount: number;
+  tomorrowCount: number;
+}) {
+  const prompts: string[] = [];
+  const openTasks = tasks.filter((t) => !t.completed);
+
+  if (overdueCount > 0) {
+    prompts.push(`${overdueCount} overdue ${overdueCount === 1 ? 'task needs' : 'tasks need'} attention.`);
+  } else if (tomorrowCount > 0) {
+    prompts.push(`${tomorrowCount} ${tomorrowCount === 1 ? 'task is' : 'tasks are'} due tomorrow.`);
+  }
+
+  for (const course of courses) {
+    const courseSessions = sessions.filter((s) => s.courseId === course.id);
+    const last = courseSessions[0]?.date;
+    const lastDate = courseSessions.reduce<string | null>(
+      (latest, session) => (!latest || session.date > latest ? session.date : latest),
+      last || null,
+    );
+    const quietDays = lastDate ? daysBetween(lastDate, today) : Infinity;
+    if (quietDays >= 5) {
+      prompts.push(
+        `${course.code} has been quiet ${quietDays === Infinity ? 'all term' : `for ${quietDays} days`}.`,
+      );
+      break;
+    }
+  }
+
+  if (prompts.length === 0 && openTasks.length === 0 && courses.length > 0) {
+    prompts.push('No open tasks. This is a good time to start a focused session.');
+  }
+
+  return prompts.slice(0, 2);
+}
+
+function EmptyPanel({
+  title,
+  text,
+  action,
+  onAction,
+}: {
+  title: string;
+  text: string;
+  action: string;
+  onAction: () => void;
+}) {
+  return (
+    <section className="rounded-[14px] border border-dashed border-line-strong bg-paper px-5 py-6 text-center">
+      <h3 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">
+        {title}
+      </h3>
+      <p className="mx-auto mt-2 mb-0 max-w-[280px] text-[13px] leading-[1.55] text-muted">
+        {text}
+      </p>
+      <button
+        type="button"
+        onClick={onAction}
+        className="mt-4 rounded-full bg-ink px-4 py-2 text-xs font-medium text-bg"
+      >
+        {action}
+      </button>
+    </section>
   );
 }

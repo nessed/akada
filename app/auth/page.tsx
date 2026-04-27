@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
+import { db } from '@/lib/data';
 
 type Mode = 'signin' | 'signup';
 type State = 'idle' | 'loading' | 'success' | 'error';
@@ -55,7 +56,12 @@ export default function AuthPage() {
         setErrorMsg(error.message);
         setState('error');
       } else {
-        router.push('/dashboard');
+        try {
+          const onboarded = await db.isOnboardingComplete();
+          router.replace(onboarded ? '/dashboard' : '/onboarding');
+        } catch {
+          router.replace('/onboarding');
+        }
       }
     }
   }

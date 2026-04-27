@@ -105,6 +105,20 @@ export class LocalAdapter implements DataProvider {
     return session;
   }
 
+  async updateSession(id: string, updates: Partial<Session>): Promise<Session> {
+    const sessions = read<Session[]>(KEYS.sessions, []);
+    const idx = sessions.findIndex((s) => s.id === id);
+    if (idx === -1) throw new Error(`Session ${id} not found`);
+    sessions[idx] = { ...sessions[idx], ...updates, id, createdAt: sessions[idx].createdAt };
+    write(KEYS.sessions, sessions);
+    return sessions[idx];
+  }
+
+  async deleteSession(id: string): Promise<void> {
+    const sessions = read<Session[]>(KEYS.sessions, []).filter((s) => s.id !== id);
+    write(KEYS.sessions, sessions);
+  }
+
   // ---- Tasks
   async getTasks(filters?: TaskFilters): Promise<Task[]> {
     let list = read<Task[]>(KEYS.tasks, []);

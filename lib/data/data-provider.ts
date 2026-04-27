@@ -18,6 +18,8 @@ export interface DataProvider {
   // Sessions
   getSessions(filters?: SessionFilters): Promise<Session[]>;
   addSession(session: Omit<Session, 'id' | 'createdAt'>): Promise<Session>;
+  updateSession(id: string, updates: Partial<Session>): Promise<Session>;
+  deleteSession(id: string): Promise<void>;
 
   // Tasks
   getTasks(filters?: TaskFilters): Promise<Task[]>;
