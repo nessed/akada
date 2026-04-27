@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import type { Course, Session } from '@/lib/data';
-import { isoDate } from '@/lib/utils';
+import { formatHours, isoDate } from '@/lib/utils';
 
 interface Props {
   sessions: Session[];
@@ -37,12 +37,15 @@ export default function WeeklyChart({ sessions, courses }: Props) {
   const max = Math.max(3600, ...totals.map((t) => t.total));
 
   return (
-    <div className="flex items-end gap-2 h-[120px]">
+    <div className="flex h-[130px] items-end gap-2">
       {totals.map((t, idx) => (
         <div key={idx} className="flex-1 flex flex-col items-center gap-2">
+          <span className="h-3 font-mono text-[9px] text-muted-soft">
+            {t.total > 0 ? formatHours(t.total, 1) : ''}
+          </span>
           <div
             className="w-full relative flex flex-col-reverse rounded overflow-hidden bg-bg-tint"
-            style={{ height: 90 }}
+            style={{ height: 86 }}
           >
             {t.total > 0 &&
               courses.map((c) => {

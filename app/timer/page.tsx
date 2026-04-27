@@ -15,6 +15,7 @@ export default function TimerPage() {
   const [course, setCourse] = useState<Course | null>(null);
   const [task, setTask] = useState<Task | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  const [goalMin, setGoalMin] = useState(50);
   const [pendingLog, setPendingLog] = useState<{
     courseId: string;
     taskId: string | null;
@@ -79,6 +80,11 @@ export default function TimerPage() {
 
   const isPaused = active?.isPaused ?? false;
   const tint = course ? resolveTint(course.color, course.tint) : 'var(--bg-tint)';
+  const goalSec = goalMin * 60;
+  const pct = Math.min(1, elapsedSeconds / goalSec);
+  const ringRadius = 132;
+  const stroke = 2.5;
+  const circumference = 2 * Math.PI * ringRadius;
 
   return (
     <div
@@ -89,7 +95,7 @@ export default function TimerPage() {
           : 'var(--bg)',
       }}
     >
-      <div className="flex justify-start px-[22px] pt-[max(env(safe-area-inset-top),60px)]">
+      <div className="flex items-center justify-between px-[22px] pt-[max(env(safe-area-inset-top),60px)]">
         <button
           type="button"
           onClick={() => router.push('/dashboard')}
@@ -106,6 +112,28 @@ export default function TimerPage() {
             />
           </svg>
         </button>
+
+        {course && (
+          <div className="flex items-center gap-1.5 rounded-full border border-line bg-paper py-1.5 pl-3 pr-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+              Goal
+            </span>
+            {[25, 50, 90].map((goal) => (
+              <button
+                key={goal}
+                type="button"
+                onClick={() => setGoalMin(goal)}
+                className="rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold"
+                style={{
+                  background: goalMin === goal ? course.color : 'transparent',
+                  color: goalMin === goal ? 'var(--ink)' : 'var(--muted)',
+                }}
+              >
+                {goal}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center text-center px-7">
@@ -126,23 +154,55 @@ export default function TimerPage() {
               </p>
             )}
 
-            <div className="mt-14">
-              <div
-                className="font-mono font-semibold text-[64px] tracking-[-0.02em] text-ink tabular-nums transition-opacity duration-200"
-                style={{ opacity: isPaused ? 0.55 : 1 }}
+            <div className="relative mt-[38px] h-[min(284px,calc(100vw-56px))] w-[min(284px,calc(100vw-56px))]">
+              <svg
+                width="100%"
+                height="100%"
+                viewBox="0 0 284 284"
+                className="absolute inset-0 -rotate-90"
               >
-                {formatHHMMSS(elapsedSeconds)}
+                <circle
+                  cx="142"
+                  cy="142"
+                  r={ringRadius}
+                  fill="none"
+                  stroke="var(--line)"
+                  strokeWidth={stroke}
+                />
+                <circle
+                  cx="142"
+                  cy="142"
+                  r={ringRadius}
+                  fill="none"
+                  stroke={course.color}
+                  strokeWidth={stroke * 1.4}
+                  strokeDasharray={circumference}
+                  strokeDashoffset={circumference * (1 - pct)}
+                  strokeLinecap="round"
+                  className="transition-[stroke-dashoffset] duration-700 ease-out"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div
+                  className="font-mono font-semibold text-[56px] leading-none tracking-[-0.02em] text-ink tabular-nums transition-opacity duration-200"
+                  style={{ opacity: isPaused ? 0.55 : 1 }}
+                >
+                  {formatHHMMSS(elapsedSeconds)}
+                </div>
+                <p
+                  className={`mt-3.5 mb-0 text-[11px] tracking-[0.24em] uppercase text-muted font-semibold ${
+                    isPaused ? '' : 'animate-tick'
+                  }`}
+                >
+                  {isPaused ? 'Paused' : 'In session'}
+                </p>
+                <p className="mt-1.5 mb-0 font-mono text-[11px] text-muted-soft tabular-nums">
+                  {Math.round(pct * 100)}% of {goalMin}m
+                </p>
               </div>
-              <p
-                className={`mt-3.5 mb-0 text-[11px] tracking-[0.24em] uppercase text-muted font-semibold ${
-                  isPaused ? '' : 'animate-tick'
-                }`}
-              >
-                {isPaused ? 'Paused' : 'In session'}
-              </p>
             </div>
 
-            <p className="mt-14 max-w-[280px] font-serif italic text-sm text-muted leading-[1.6]">
+            <p className="mt-9 max-w-[280px] font-serif italic text-sm text-muted leading-[1.6]">
               {isPaused
                 ? '"The pause is part of the page."'
                 : '"Slow is smooth. Smooth is steady."'}

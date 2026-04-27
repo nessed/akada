@@ -8,9 +8,10 @@ interface Props {
   sessions: Session[];
   accent: string;
   weeks?: number;
+  hideWeekends?: boolean;
 }
 
-export default function Heatmap({ sessions, accent, weeks = 13 }: Props) {
+export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: Props) {
   const cells = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -27,14 +28,20 @@ export default function Heatmap({ sessions, accent, weeks = 13 }: Props) {
     let max = 0;
     for (const v of Object.values(byDate)) if (v > max) max = v;
 
-    const out: { iso: string; sec: number; intensity: number; future: boolean }[] = [];
+    const out: {
+      iso: string;
+      sec: number;
+      intensity: number;
+      future: boolean;
+      dow: number;
+    }[] = [];
     for (let i = 0; i < days; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
       const iso = isoDate(d);
       const sec = byDate[iso] || 0;
       const intensity = max > 0 ? sec / max : 0;
-      out.push({ iso, sec, intensity, future: d > today });
+      out.push({ iso, sec, intensity, future: d > today, dow: (d.getDay() + 6) % 7 });
     }
     return out;
   }, [sessions, weeks]);
@@ -46,6 +53,10 @@ export default function Heatmap({ sessions, accent, weeks = 13 }: Props) {
           {Array.from({ length: 7 }).map((_, d) => {
             const cell = cells[w * 7 + d];
             if (!cell) return <span key={d} style={{ width: 14, height: 14 }} />;
+            const isWeekend = cell.dow >= 5;
+            if (hideWeekends && isWeekend) {
+              return <span key={d} style={{ width: 14, height: 14 }} />;
+            }
             const op = cell.future
               ? 0
               : cell.sec === 0

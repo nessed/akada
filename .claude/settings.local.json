@@ -7,7 +7,27 @@
       "Bash(cp \"/c/Users/Ali/.claude/projects/c--Users-Ali-Work-Code-Repos-academic-planner/a6423d10-2bc2-427a-9fba-a9e24290b0c8/tool-results/webfetch-1777232323667-p8jupq.bin\" /tmp/design.gz)",
       "Read(//tmp/**)",
       "Bash(mkdir -p /tmp/design)",
-      "Bash(gunzip -c /tmp/design.gz)"
+      "Bash(gunzip -c /tmp/design.gz)",
+      "WebFetch(domain:claude.ai)",
+      "WebFetch(domain:design.anthropic.com)",
+      "WebFetch(domain:anthropic.com)",
+      "Bash(cp \"/c/Users/Ali/.claude/projects/c--Users-Ali-Work-Code-Repos-academic-planner/f8d5881d-e340-47e1-aa3b-0b562e35773f/tool-results/webfetch-1777250002256-m16jv0.bin\" design.gz)",
+      "Bash(gunzip -k design.gz)",
+      "Bash(rm -f /tmp/design /tmp/design.gz)",
+      "Bash(cp \"/c/Users/Ali/.claude/projects/c--Users-Ali-Work-Code-Repos-academic-planner/f8d5881d-e340-47e1-aa3b-0b562e35773f/tool-results/webfetch-1777250002256-m16jv0.bin\" /tmp/design.gz)",
+      "Bash(gunzip /tmp/design.gz)",
+      "Bash(rm -rf /tmp/design /tmp/design.gz)",
+      "Bash(mkdir -p /tmp/design_extract)",
+      "Bash(tar -xf /tmp/design -C /tmp/design_extract)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(npm run *)",
+      "Bash(echo \"PID=$!\")",
+      "Bash(curl -s -o /dev/null -w \"auth=%{http_code}\\\\n\" http://localhost:3002/auth)",
+      "Bash(curl -s -o /dev/null -w \"dashboard=%{http_code}\\\\n\" http://localhost:3002/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"tasks=%{http_code}\\\\n\" http://localhost:3002/tasks)",
+      "Bash(curl -s -o /dev/null -w \"stats=%{http_code}\\\\n\" http://localhost:3002/stats)",
+      "Bash(curl -s -o /dev/null -w \"onboarding=%{http_code}\\\\n\" http://localhost:3002/onboarding)"
     ]
   }
 }

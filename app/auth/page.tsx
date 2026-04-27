@@ -10,11 +10,14 @@ type State = 'idle' | 'loading' | 'success' | 'error';
 export default function AuthPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('signin');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [state, setState] = useState<State>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  const isUp = mode === 'signup';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,12 +27,13 @@ export default function AuthPage() {
 
     const supabase = createClient();
 
-    if (mode === 'signup') {
+    if (isUp) {
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           emailRedirectTo: window.location.origin + '/auth/callback',
+          data: name.trim() ? { display_name: name.trim() } : undefined,
         },
       });
 
@@ -55,129 +59,218 @@ export default function AuthPage() {
     }
   }
 
+  function switchMode() {
+    setMode(isUp ? 'signin' : 'signup');
+    setState('idle');
+    setErrorMsg('');
+  }
+
+  if (state === 'success') {
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center px-8 animate-fade-in">
+        <div className="w-full max-w-[340px] text-center">
+          <div className="mx-auto mb-7">
+            <Bookmark letter="A" size={56} />
+          </div>
+          <h1 className="font-serif font-medium text-[28px] tracking-[-0.02em] mb-3">
+            Check your email
+          </h1>
+          <p className="text-[15px] text-ink-soft leading-[1.6] max-w-[300px] mx-auto">
+            We sent a confirmation link to{' '}
+            <span className="font-medium text-ink">{successMsg}</span>.
+            <br />
+            Click it to open your notebook.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setState('idle');
+              setMode('signin');
+            }}
+            className="mt-8 text-[13px] text-muted font-serif italic hover:text-ink transition-colors"
+          >
+            ← Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-[100dvh] flex flex-col items-center justify-center px-8">
-      <div className="w-full max-w-[340px] animate-fade-in">
-        {/* Logo */}
-        <div className="flex justify-center mb-7">
-          <svg width="56" height="68" viewBox="0 0 56 68" fill="none">
-            <path
-              d="M6 4 H50 V60 L28 48 L6 60 Z"
-              stroke="#1A1915"
-              strokeWidth="1.4"
-              fill="#FAFAF6"
-            />
-            <text
-              x="28"
-              y="32"
-              textAnchor="middle"
-              fontFamily="var(--font-serif), Georgia, serif"
-              fontSize="22"
-              fontStyle="italic"
-              fill="#1A1915"
-            >
-              A
-            </text>
-          </svg>
+    <div className="relative min-h-[100dvh] flex flex-col px-7 animate-fade-in">
+      {/* Faint ruled lines */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-50"
+        style={{
+          backgroundImage:
+            'repeating-linear-gradient(to bottom, transparent 0, transparent 31px, var(--line) 31px, var(--line) 32px)',
+          maskImage:
+            'linear-gradient(to bottom, transparent, black 20%, black 80%, transparent)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, transparent, black 20%, black 80%, transparent)',
+        }}
+      />
+
+      <div className="relative mx-auto w-full max-w-[360px] flex flex-col flex-1">
+        {/* Bookmark + wordmark */}
+        <div className="pt-[max(env(safe-area-inset-top),88px)] mb-9 flex items-center gap-3.5">
+          <Bookmark letter="A" size={34} />
+          <div>
+            <p className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em] leading-none">
+              Akada
+            </p>
+            <p className="mt-1 mb-0 text-[10px] tracking-[0.22em] uppercase text-muted font-semibold">
+              Study Planner
+            </p>
+          </div>
         </div>
 
-        {state === 'success' ? (
-          <div className="text-center">
-            <h1 className="font-serif font-medium text-[28px] tracking-[-0.02em] mb-3">
-              Check your email
-            </h1>
-            <p className="text-[15px] text-ink-soft leading-[1.6] max-w-[300px] mx-auto">
-              We sent a confirmation link to{' '}
-              <span className="font-medium text-ink">{successMsg}</span>.
-              <br />
-              Click it to activate your account.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setState('idle');
-                setMode('signin');
-              }}
-              className="mt-8 text-[13px] text-muted font-serif italic hover:text-ink transition-colors"
-            >
-              ← Back to sign in
-            </button>
-          </div>
-        ) : (
-          <>
-            <h1 className="font-serif font-medium text-[32px] tracking-[-0.02em] text-center mb-2">
-              {mode === 'signin' ? 'Welcome back' : 'Create account'}
-            </h1>
-            <p className="text-center text-[14px] text-ink-soft leading-[1.5] mb-8">
-              {mode === 'signin'
-                ? 'Sign in to pick up where you left off.'
-                : 'Start tracking your study hours.'}
-            </p>
+        {/* Editorial intro */}
+        <div className="mb-8">
+          <h1 className="m-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1] whitespace-pre-line">
+            {isUp ? 'Open a fresh\nnotebook.' : 'Welcome back to\nyour notebook.'}
+          </h1>
+          <p className="mt-3 mb-0 text-[14px] text-ink-soft leading-[1.55] max-w-[300px]">
+            {isUp
+              ? 'A quiet place to track your hours, stay close to the work that matters.'
+              : 'Pick up where you left off. Your pages are waiting.'}
+          </p>
+        </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]">
+          {isUp && (
+            <Field label="Name">
+              <UnderlineInput
+                value={name}
+                onChange={setName}
+                placeholder="Your name"
                 autoFocus
-                required
-                className="w-full bg-paper border border-line rounded-xl px-4 py-3.5 text-[15px] text-ink outline-none focus:border-ink transition-colors placeholder:text-muted-soft"
               />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                required
-                minLength={6}
-                className="w-full bg-paper border border-line rounded-xl px-4 py-3.5 text-[15px] text-ink outline-none focus:border-ink transition-colors placeholder:text-muted-soft"
-              />
-              <button
-                type="submit"
-                disabled={state === 'loading' || !email.trim() || !password}
-                className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-opacity mt-1"
-              >
-                {state === 'loading'
-                  ? (mode === 'signin' ? 'Signing in…' : 'Creating account…')
-                  : (mode === 'signin' ? 'Sign in' : 'Sign up')}
-              </button>
-            </form>
+            </Field>
+          )}
+          <Field label="Email">
+            <UnderlineInput
+              value={email}
+              onChange={setEmail}
+              placeholder="you@school.edu"
+              type="email"
+              autoFocus={!isUp}
+            />
+          </Field>
+          <Field label="Password">
+            <UnderlineInput
+              value={password}
+              onChange={setPassword}
+              placeholder="••••••••"
+              type="password"
+            />
+          </Field>
 
-            {state === 'error' && errorMsg && (
-              <p className="mt-4 text-center text-[13px] text-priority font-serif italic">
-                {errorMsg}
-              </p>
-            )}
+          <button
+            type="submit"
+            disabled={
+              state === 'loading' ||
+              !email.trim() ||
+              password.length < 6 ||
+              (isUp && !name.trim())
+            }
+            className="mt-2.5 w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+          >
+            {state === 'loading'
+              ? isUp
+                ? 'Creating notebook…'
+                : 'Opening notebook…'
+              : isUp
+                ? 'Create notebook'
+                : 'Open notebook'}
+          </button>
+        </form>
 
-            <p className="mt-6 text-center text-[13px] text-muted">
-              {mode === 'signin' ? (
-                <>
-                  Don&apos;t have an account?{' '}
-                  <button
-                    type="button"
-                    onClick={() => { setMode('signup'); setState('idle'); setErrorMsg(''); }}
-                    className="text-ink font-medium hover:underline"
-                  >
-                    Sign up
-                  </button>
-                </>
-              ) : (
-                <>
-                  Already have an account?{' '}
-                  <button
-                    type="button"
-                    onClick={() => { setMode('signin'); setState('idle'); setErrorMsg(''); }}
-                    className="text-ink font-medium hover:underline"
-                  >
-                    Sign in
-                  </button>
-                </>
-              )}
-            </p>
-          </>
+        {state === 'error' && errorMsg && (
+          <p className="mt-3 text-center text-[13px] text-priority font-serif italic">
+            {errorMsg}
+          </p>
         )}
+
+        {/* Switcher pinned to bottom */}
+        <div className="mt-auto py-7 text-center">
+          <span className="text-[13px] text-muted">
+            {isUp ? 'Already keeping a notebook? ' : 'New here? '}
+          </span>
+          <button
+            type="button"
+            onClick={switchMode}
+            className="bg-transparent border-0 cursor-pointer font-serif italic text-[14px] text-ink underline underline-offset-4 decoration-line-strong"
+          >
+            {isUp ? 'Sign in' : 'Start one'}
+          </button>
+        </div>
       </div>
     </div>
+  );
+}
+
+function Bookmark({ letter, size = 34 }: { letter: string; size?: number }) {
+  const w = size;
+  const h = Math.round(size * (68 / 56));
+  return (
+    <svg width={w} height={h} viewBox="0 0 56 68" fill="none" aria-hidden>
+      <path
+        d="M6 4 H50 V60 L28 48 L6 60 Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        fill="var(--paper)"
+      />
+      <text
+        x="28"
+        y="33"
+        textAnchor="middle"
+        fontFamily="var(--font-serif), Georgia, serif"
+        fontSize="22"
+        fontStyle="italic"
+        fontWeight="500"
+        fill="currentColor"
+      >
+        {letter}
+      </text>
+    </svg>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function UnderlineInput({
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  type?: string;
+  autoFocus?: boolean;
+}) {
+  return (
+    <input
+      type={type}
+      value={value}
+      autoFocus={autoFocus}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink transition-colors placeholder:text-muted-soft"
+    />
   );
 }
