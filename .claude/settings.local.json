@@ -19,7 +19,15 @@
       "Bash(rm -rf /tmp/design /tmp/design.gz)",
       "Bash(mkdir -p /tmp/design_extract)",
       "Bash(tar -xf /tmp/design -C /tmp/design_extract)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(npm run *)",
+      "Bash(echo \"PID=$!\")",
+      "Bash(curl -s -o /dev/null -w \"auth=%{http_code}\\\\n\" http://localhost:3002/auth)",
+      "Bash(curl -s -o /dev/null -w \"dashboard=%{http_code}\\\\n\" http://localhost:3002/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"tasks=%{http_code}\\\\n\" http://localhost:3002/tasks)",
+      "Bash(curl -s -o /dev/null -w \"stats=%{http_code}\\\\n\" http://localhost:3002/stats)",
+      "Bash(curl -s -o /dev/null -w \"onboarding=%{http_code}\\\\n\" http://localhost:3002/onboarding)"
     ]
   }
 }
