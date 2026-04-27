@@ -70,6 +70,14 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((db - da) / (1000 * 60 * 60 * 24));
 }
 
+export function isoWeekNumber(d: Date = new Date()): number {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNo = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNo);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
 // "Today" / "Tomorrow" / "Xd overdue" / "In Xd" / "Apr 27"
 export interface DueLabel {
   text: string;
@@ -167,4 +175,27 @@ export function lastSeenByCourse(sessions: Session[]): Record<string, string> {
     if (!map[s.courseId] || s.date > map[s.courseId]) map[s.courseId] = s.date;
   }
   return map;
+}
+
+export function studyStreakDays(sessions: Session[], today: Date = new Date()): number {
+  const dates = new Set(sessions.map((s) => s.date));
+  let streak = 0;
+  const cursor = new Date(today);
+  cursor.setHours(0, 0, 0, 0);
+  const todayIso = isoDate(cursor);
+
+  while (true) {
+    const currentIso = isoDate(cursor);
+    if (!dates.has(currentIso)) {
+      if (streak === 0 && currentIso === todayIso) {
+        cursor.setDate(cursor.getDate() - 1);
+        continue;
+      }
+      break;
+    }
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
 }

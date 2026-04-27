@@ -549,6 +549,12 @@ interface SemesterStepProps {
   onNext: () => void;
 }
 
+const SEMESTERS = [
+  { label: 'Spring 2026', range: 'Jan 19 – May 20', start: '2026-01-19', end: '2026-05-20' },
+  { label: 'Summer 2026', range: 'Jun 1 – Aug 13', start: '2026-06-01', end: '2026-08-13' },
+  { label: 'Fall 2026', range: 'Aug 31 – Dec 18', start: '2026-08-31', end: '2026-12-18' },
+];
+
 function SemesterStep({
   start,
   end,
@@ -571,24 +577,59 @@ function SemesterStep({
           The semester
         </h2>
         <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
-          We&apos;ll use these dates for countdowns and stats.
+          Select your upcoming term for countdowns and stats.
         </p>
       </div>
 
-      <div className="px-7 pt-8 flex flex-col gap-[22px]">
-        <Field label="Start date">
-          <DateInput value={start} onChange={setStart} />
-        </Field>
-        <Field label="End date">
-          <DateInput value={end} onChange={setEnd} />
-        </Field>
+      <div className="px-7 pt-8 flex flex-col gap-3">
+        {SEMESTERS.map((sem) => {
+          const active = start === sem.start && end === sem.end;
+          return (
+            <button
+              key={sem.label}
+              type="button"
+              onClick={() => {
+                setStart(sem.start);
+                setEnd(sem.end);
+              }}
+              className="flex items-center justify-between p-5 rounded-[14px] transition-all duration-150 text-left border"
+              style={{
+                background: active ? 'var(--bg-tint)' : 'var(--paper)',
+                borderColor: active ? 'var(--ink)' : 'var(--line)',
+                outline: active ? '1px solid var(--ink)' : 'none',
+              }}
+            >
+              <div>
+                <p className="m-0 font-serif font-medium text-[20px] text-ink tracking-[-0.01em]">
+                  {sem.label}
+                </p>
+                <p className="m-0 text-[13px] text-ink-soft mt-1 leading-[1.5]">
+                  {sem.range}
+                </p>
+              </div>
+              <div
+                className="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-colors border"
+                style={{
+                  borderColor: active ? 'var(--ink)' : 'var(--line-strong)',
+                  background: active ? 'var(--ink)' : 'transparent',
+                }}
+              >
+                {active && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bg)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </div>
+            </button>
+          );
+        })}
 
-        <div className="mt-2 py-5 px-[22px] bg-paper rounded-[14px] border border-line">
+        <div className="mt-4 py-5 px-[22px] bg-paper rounded-[14px] border border-line">
           <p className="m-0 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted">
             Term length
           </p>
           <p className="mt-1.5 mb-0 font-serif font-medium italic text-[22px]">
-            {weeks !== null ? `${weeks} weeks ahead` : 'Pick two dates'}
+            {weeks !== null ? `${weeks} weeks ahead` : 'Select a term'}
           </p>
         </div>
       </div>

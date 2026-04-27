@@ -7,7 +7,7 @@ import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
 import { db } from '@/lib/data';
 import type { Course, Semester, Session } from '@/lib/data';
-import { totalSeconds } from '@/lib/utils';
+import { studyStreakDays, totalSeconds } from '@/lib/utils';
 
 export default function StatsPage() {
   const router = useRouter();
@@ -68,6 +68,11 @@ export default function StatsPage() {
     });
   }, [courses, sessions, semester]);
 
+  const totalSec = totalSeconds(sessions);
+  const dayCount = new Set(sessions.map((s) => s.date)).size;
+  const avgPerDay = dayCount ? totalSec / dayCount : 0;
+  const streak = studyStreakDays(sessions);
+
   if (loading) {
     return (
       <PageShell>
@@ -88,6 +93,12 @@ export default function StatsPage() {
           Stats
         </h1>
       </header>
+
+      <div className="mb-[18px] grid grid-cols-3 gap-2">
+        <Kpi label="Total" value={(totalSec / 3600).toFixed(1)} unit="h" />
+        <Kpi label="Streak" value={streak.toString()} unit="d" />
+        <Kpi label="Avg / day" value={(avgPerDay / 60).toFixed(0)} unit="m" />
+      </div>
 
       {/* Heatmap */}
       <section className="bg-paper rounded-[14px] border border-line py-5 px-[22px] mb-4">
@@ -180,6 +191,20 @@ export default function StatsPage() {
         </div>
       </section>
     </PageShell>
+  );
+}
+
+function Kpi({ label, value, unit }: { label: string; value: string; unit: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-paper px-3.5 py-3.5">
+      <p className="m-0 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted">
+        {label}
+      </p>
+      <p className="mt-1.5 mb-0 font-mono text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums">
+        {value}
+        <span className="ml-[3px] text-[11px] font-medium text-muted">{unit}</span>
+      </p>
+    </div>
   );
 }
 

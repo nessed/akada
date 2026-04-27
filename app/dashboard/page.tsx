@@ -5,10 +5,19 @@ import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import DailySummary from '@/components/DailySummary';
 import CourseCard from '@/components/CourseCard';
+import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
+import SettingsSheet from '@/components/SettingsSheet';
 import { db } from '@/lib/data';
 import type { Course, Session, Task, UserSettings } from '@/lib/data';
-import { isoDate, sessionsForDate, PASTEL_PALETTE } from '@/lib/utils';
+import {
+  formatHM,
+  isoDate,
+  isoWeekNumber,
+  sessionsForDate,
+  studyStreakDays,
+  PASTEL_PALETTE,
+} from '@/lib/utils';
 import { useTimer } from '@/lib/timer-context';
 
 export default function DashboardPage() {
@@ -135,6 +144,25 @@ export default function DashboardPage() {
     router.push('/timer');
   }
 
+  function handleStartTimerForTask(task: Task) {
+    if (active) {
+      router.push('/timer');
+      return;
+    }
+    start(task.courseId, task.id);
+    router.push('/timer');
+  }
+
+  async function handleToggleTask(id: string) {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    await db.updateTask(id, {
+      completed: !task.completed,
+      completedAt: !task.completed ? new Date().toISOString() : null,
+    });
+    refresh();
+  }
+
   async function handleAddTask() {
     if (!addingTaskFor || !newTaskTitle.trim()) return;
     await db.addTask({
@@ -186,45 +214,57 @@ export default function DashboardPage() {
     );
   }
 
-  function greeting() {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
   const today = isoDate();
   const todaysSessions = sessionsForDate(sessions, today);
-  const dateLabel = new Date().toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
+  const totalToday = todaysSessions.reduce((sum, session) => sum + session.durationSeconds, 0);
+  const todayTasks = tasks.filter((t) => !t.completed && t.dueDate === today).slice(0, 3);
+  const overdueCount = tasks.filter(
+    (t) => !t.completed && t.dueDate && t.dueDate < today,
+  ).length;
+  const streak = studyStreakDays(sessions);
+  const now = new Date();
+  const weekdayLabel = now.toLocaleDateString(undefined, { weekday: 'long' });
+  const monthLabel = now.toLocaleDateString(undefined, { month: 'long' });
+  const dayNum = now.getDate();
+  const yearLabel = String(now.getFullYear()).slice(-2);
+  const weekOfYear = isoWeekNumber(now);
 
   return (
     <PageShell>
       {/* Journal header */}
-      <header className="mb-[22px] flex items-center justify-between gap-3">
-        <div className="flex-1">
-          {displayName ? (
-            <>
-              <p className="m-0 text-[11px] tracking-[0.18em] uppercase text-muted font-semibold">
-                {greeting()}
-              </p>
-              <h1 className="mt-1.5 mb-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1]">
-                {displayName}
-              </h1>
-            </>
-          ) : (
-            <>
-              <p className="m-0 text-[11px] tracking-[0.18em] uppercase text-muted font-semibold">
-                Today
-              </p>
-              <h1 className="mt-1.5 mb-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1]">
-                {dateLabel}
-              </h1>
-            </>
-          )}
+      <header className="mb-[22px] flex items-start justify-between gap-3.5">
+        <div className="min-w-0 flex-1">
+          <p className="m-0 flex items-baseline gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+            <span>Wk {String(weekOfYear).padStart(2, '0')}</span>
+            <span className="opacity-45">·</span>
+            <span>{weekdayLabel}</span>
+          </p>
+          <h1 className="mt-1.5 mb-0 font-serif text-[32px] font-normal leading-[1.05] tracking-[-0.02em]">
+            {monthLabel} <span className="italic">{dayNum}</span>
+            <span className="ml-1.5 text-[18px] text-muted tracking-normal">
+              &apos;{yearLabel}
+            </span>
+          </h1>
+          <p className="mt-2 mb-0 max-w-[260px] text-[13px] leading-[1.5] text-ink-soft">
+            {overdueCount > 0 ? (
+              <>
+                You have <b className="text-ink">{overdueCount} overdue</b>{' '}
+                {overdueCount === 1 ? 'task' : 'tasks'} waiting.
+              </>
+            ) : todayTasks.length > 0 ? (
+              <>
+                <b className="text-ink">{todayTasks.length}</b>{' '}
+                {todayTasks.length === 1 ? 'task' : 'tasks'} on the page today.
+              </>
+            ) : totalToday > 0 ? (
+              <>
+                Already <b className="text-ink">{formatHM(totalToday)}</b> in. Keep it
+                going.
+              </>
+            ) : (
+              <>Nothing pressing. A clean page to fill.</>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-2.5">
           {active && (
@@ -240,16 +280,23 @@ export default function DashboardPage() {
               Timer
             </button>
           )}
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => setShowSettings(true)}
-            className="w-10 h-10 rounded-full bg-bg-tint border border-line overflow-hidden flex items-center justify-center shrink-0 hover:border-ink transition-colors"
+            className="relative w-[42px] h-[42px] rounded-full bg-bg-tint border border-line overflow-visible flex items-center justify-center shrink-0 hover:border-ink transition-colors"
           >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="Settings" className="w-full h-full object-cover" />
-            ) : (
-              <span className="font-serif italic text-[16px] text-muted">
-                {displayName ? displayName.charAt(0).toUpperCase() : 'A'}
+            <span className="block h-full w-full overflow-hidden rounded-full">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Settings" className="w-full h-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-[#E2B594] font-serif text-[17px] font-medium text-ink">
+                  {displayName ? displayName.charAt(0).toUpperCase() : 'A'}
+                </span>
+              )}
+            </span>
+            {streak > 0 && (
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-bg bg-ink px-1 font-mono text-[9px] font-bold text-bg">
+                {streak}
               </span>
             )}
           </button>
@@ -259,8 +306,65 @@ export default function DashboardPage() {
       {/* Daily summary */}
       <DailySummary todaysSessions={todaysSessions} courses={courses} />
 
+      {(todayTasks.length > 0 || overdueCount > 0) && (
+        <section className="mt-5 mb-[22px]">
+          <div className="mb-2.5 flex items-baseline justify-between">
+            <h2 className="m-0 font-serif text-[17px] font-medium tracking-[-0.01em]">
+              Due today
+            </h2>
+            {overdueCount > 0 && (
+              <span className="rounded-full bg-priorityTint px-2 py-[3px] text-[10px] font-semibold uppercase tracking-[0.06em] text-prioritySoft">
+                {overdueCount} overdue
+              </span>
+            )}
+          </div>
+          <div className="overflow-hidden rounded-xl border border-line bg-paper">
+            {todayTasks.length === 0 ? (
+              <p className="m-0 px-4 py-3.5 font-serif text-[13px] italic text-muted">
+                Nothing due today. A clean page.
+              </p>
+            ) : (
+              todayTasks.map((task, index) => {
+                const course = courses.find((c) => c.id === task.courseId);
+                return (
+                  <div
+                    key={task.id}
+                    className={`flex items-center gap-3 px-3.5 py-[11px] ${
+                      index < todayTasks.length - 1 ? 'border-b border-dashed border-line' : ''
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTask(task.id)}
+                      aria-label="Mark complete"
+                      className="h-[18px] w-[18px] shrink-0 rounded-[5px] border-[1.5px] border-line-strong"
+                    />
+                    <p className="m-0 min-w-0 flex-1 text-[13px] leading-[1.4] text-ink">
+                      {task.title}
+                    </p>
+                    {course && (
+                      <button
+                        type="button"
+                        onClick={() => handleStartTimerForTask(task)}
+                        className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.04em]"
+                        style={{
+                          background: course.tint || 'var(--bg-tint)',
+                          color: 'var(--ink)',
+                        }}
+                      >
+                        {course.code}
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Section header */}
-      <div className="mt-[26px] mb-3.5 flex items-baseline justify-between">
+      <div className={`${todayTasks.length > 0 || overdueCount > 0 ? '' : 'mt-[26px]'} mb-3.5 flex items-baseline justify-between`}>
         <h2 className="m-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
           Courses
         </h2>
@@ -333,11 +437,11 @@ export default function DashboardPage() {
               }}
             />
             <div className="mt-2.5 flex items-center gap-2">
-              <input
-                type="date"
+              <DatePicker
                 value={newTaskDue}
-                onChange={(e) => setNewTaskDue(e.target.value)}
-                className="flex-1 bg-bg-tint border-0 rounded-lg px-3 py-2.5 text-xs text-ink-soft outline-none"
+                onChange={setNewTaskDue}
+                placeholder="Due date"
+                className="flex-1"
               />
               <button
                 type="button"
@@ -464,8 +568,23 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      <SettingsSheet
+        open={showSettings}
+        updating={updatingSettings}
+        displayName={displayName}
+        avatarUrl={avatarUrl}
+        settingsName={settingsName}
+        settingsAvatar={settingsAvatar}
+        courses={courses}
+        sessions={sessions}
+        onNameChange={setSettingsName}
+        onAvatarChange={setSettingsAvatar}
+        onClose={() => !updatingSettings && setShowSettings(false)}
+        onSave={handleUpdateSettings}
+      />
+
       {/* Settings Modal */}
-      {showSettings && (
+      {false && showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-6 animate-fade-in">
           <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={() => !updatingSettings && setShowSettings(false)} />
           <div className="relative bg-bg border border-line rounded-2xl w-full max-w-sm p-6 shadow-xl animate-scale-up">

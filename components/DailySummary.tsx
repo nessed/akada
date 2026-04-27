@@ -19,14 +19,21 @@ export default function DailySummary({ todaysSessions, courses }: Props) {
   }
 
   return (
-    <section className="bg-paper rounded-[14px] border border-line py-[22px] px-6">
+    <section className="relative bg-paper rounded-[14px] border border-line py-5 px-[22px] overflow-hidden">
+      <div
+        aria-hidden
+        className="absolute right-0 top-0 h-[22px] w-[22px]"
+        style={{
+          background: 'linear-gradient(225deg, var(--bg-tint) 50%, transparent 50%)',
+        }}
+      />
       {total === 0 ? (
         <>
           <p className="m-0 font-serif italic text-[18px] text-ink-soft">
             A blank page.
           </p>
           <p className="mt-1.5 mb-0 text-[13px] text-muted leading-[1.5]">
-            Start a timer to log your first session today.
+            Pick a course below to begin today&apos;s first session.
           </p>
         </>
       ) : (

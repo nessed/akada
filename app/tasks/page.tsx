@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
+import DatePicker from '@/components/DatePicker';
 import TaskItem from '@/components/TaskItem';
 import { db } from '@/lib/data';
 import type { Course, Task } from '@/lib/data';
@@ -215,11 +216,12 @@ export default function TasksPage() {
                           }}
                         />
                         <div className="flex gap-2 mt-2 items-center">
-                          <input
-                            type="date"
+                          <DatePicker
                             value={draftDue}
-                            onChange={(e) => setDraftDue(e.target.value)}
-                            className="bg-bg-tint border-0 rounded-md px-2 py-1 text-[11px] text-ink-soft outline-none"
+                            onChange={setDraftDue}
+                            placeholder="Due"
+                            compact
+                            className="w-[132px]"
                           />
                           <button
                             type="button"
