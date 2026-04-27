@@ -9,7 +9,8 @@ import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
 import { db } from '@/lib/data';
-import type { Course, Session, Task, UserSettings } from '@/lib/data';
+import type { Course, Session, Task } from '@/lib/data';
+import { createClient } from '@/lib/supabase';
 import {
   formatHM,
   isoDate,
@@ -133,6 +134,27 @@ export default function DashboardPage() {
     } finally {
       setUpdatingSettings(false);
     }
+  }
+
+  async function handleSignOut() {
+    setShowSettings(false);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {
+      // ignore — fall through to redirect either way
+    }
+    router.replace('/auth');
+  }
+
+  async function handleResetData() {
+    setShowSettings(false);
+    try {
+      await db.resetAll();
+    } catch (err) {
+      console.error('Failed to reset data:', err);
+    }
+    router.replace('/onboarding');
   }
 
   function handleStartTimer(courseId: string) {
@@ -581,79 +603,10 @@ export default function DashboardPage() {
         onAvatarChange={setSettingsAvatar}
         onClose={() => !updatingSettings && setShowSettings(false)}
         onSave={handleUpdateSettings}
+        onCoursesChanged={refresh}
+        onSignOut={handleSignOut}
+        onResetData={handleResetData}
       />
-
-      {/* Settings Modal */}
-      {false && showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-6 animate-fade-in">
-          <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={() => !updatingSettings && setShowSettings(false)} />
-          <div className="relative bg-bg border border-line rounded-2xl w-full max-w-sm p-6 shadow-xl animate-scale-up">
-            <h3 className="font-serif font-medium text-xl m-0 mb-5">Profile Settings</h3>
-            
-            <div className="flex flex-col items-center gap-4 mb-5">
-              <label className="relative cursor-pointer group">
-                <div className="w-20 h-20 rounded-full border border-line overflow-hidden bg-bg-tint flex items-center justify-center transition-colors group-hover:border-ink">
-                  {settingsAvatar ? (
-                    <img src={settingsAvatar} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="font-serif italic text-2xl text-muted">
-                      {settingsName ? settingsName.charAt(0).toUpperCase() : 'A'}
-                    </span>
-                  )}
-                </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-ink text-bg flex items-center justify-center shadow-md">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
-                </div>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  className="hidden" 
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => setSettingsAvatar(reader.result as string);
-                    reader.readAsDataURL(file);
-                  }}
-                />
-              </label>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-[10px] font-semibold tracking-[0.12em] uppercase text-muted mb-2">Display Name</label>
-              <input
-                type="text"
-                value={settingsName}
-                onChange={(e) => setSettingsName(e.target.value)}
-                className="w-full bg-bg-tint border border-line rounded-lg px-3.5 py-2.5 text-sm text-ink outline-none focus:border-line-strong transition-colors"
-                placeholder="Your name"
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                disabled={updatingSettings}
-                onClick={() => setShowSettings(false)}
-                className="flex-1 py-2.5 text-center text-sm font-medium border border-line rounded-xl text-muted hover:text-ink transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={updatingSettings || !settingsName.trim()}
-                onClick={handleUpdateSettings}
-                className="flex-1 py-2.5 text-center text-sm font-medium bg-ink text-bg rounded-xl transition-opacity disabled:opacity-50"
-              >
-                {updatingSettings ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </PageShell>
   );
 }

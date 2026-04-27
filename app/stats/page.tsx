@@ -8,6 +8,7 @@ import WeeklyChart from '@/components/WeeklyChart';
 import { db } from '@/lib/data';
 import type { Course, Semester, Session } from '@/lib/data';
 import { studyStreakDays, totalSeconds } from '@/lib/utils';
+import { usePreferences } from '@/lib/preferences';
 
 export default function StatsPage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function StatsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [semester, setSemester] = useState<Semester | null>(null);
   const [filter, setFilter] = useState<string>('all');
+  const [prefs] = usePreferences();
 
   useEffect(() => {
     (async () => {
@@ -123,7 +125,12 @@ export default function StatsPage() {
           </div>
         </div>
         <div className="overflow-x-auto app-scroll">
-          <Heatmap sessions={filteredSessions} accent={accent} weeks={13} />
+          <Heatmap
+            sessions={filteredSessions}
+            accent={accent}
+            weeks={13}
+            hideWeekends={prefs.hideWeekends}
+          />
         </div>
         <div className="flex items-center gap-2 mt-3.5">
           <span className="text-[10px] text-muted italic font-serif">less</span>
