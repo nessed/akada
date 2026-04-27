@@ -113,11 +113,11 @@ export default function FloatingActionButton({ courses, onStartTimer, onAddTask 
           type="button"
           aria-label={open ? 'Close quick actions' : 'Open quick actions'}
           onClick={() => setMode(open ? 'closed' : 'menu')}
-          className="w-13 h-13 rounded-full bg-ink text-bg flex items-center justify-center transition-transform"
+          className="flex items-center justify-center rounded-full bg-paper border border-line text-ink transition-transform hover:border-line-strong"
           style={{
             width: 52,
             height: 52,
-            boxShadow: '0 4px 12px rgba(26,25,21,0.18)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
           }}
         >
           <svg

@@ -99,12 +99,16 @@ export default function CourseCard({
           <button
             type="button"
             onClick={() => onStartTimer(course.id)}
-            className="bg-ink text-bg px-3.5 py-2 rounded-full text-xs font-medium inline-flex items-center gap-1.5"
+            aria-label={`Start timer for ${course.code}`}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95"
+            style={{
+              background: course.tint || 'var(--bg-tint)',
+              color: course.color || 'var(--ink)',
+            }}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M7 5l12 7-12 7V5z" />
             </svg>
-            Start timer
           </button>
         </div>
       </div>
