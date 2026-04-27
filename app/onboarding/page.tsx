@@ -908,3 +908,4 @@ function DateInput({ value, onChange }: { value: string; onChange: (v: string) =
     />
   );
 }
+\n              <img src={avatarPreview || '/default-avatar.png'} alt="Avatar" className="w-full h-full object-cover" />
