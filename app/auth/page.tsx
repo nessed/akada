@@ -27,42 +27,47 @@ export default function AuthPage() {
     setState('loading');
     setErrorMsg('');
 
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          emailRedirectTo: window.location.origin + '/auth/callback',
-          data: name.trim() ? { display_name: name.trim() } : undefined,
-        },
-      });
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: window.location.origin + '/auth/callback',
+            data: name.trim() ? { display_name: name.trim() } : undefined,
+          },
+        });
 
-      if (error) {
-        setErrorMsg(error.message);
-        setState('error');
+        if (error) {
+          setErrorMsg(error.message);
+          setState('error');
+        } else {
+          setSuccessMsg(email.trim());
+          setState('success');
+        }
       } else {
-        setSuccessMsg(email.trim());
-        setState('success');
-      }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
 
-      if (error) {
-        setErrorMsg(error.message);
-        setState('error');
-      } else {
-        try {
-          const onboarded = await db.isOnboardingComplete();
-          router.replace(onboarded ? '/dashboard' : '/onboarding');
-        } catch {
-          router.replace('/onboarding');
+        if (error) {
+          setErrorMsg(error.message);
+          setState('error');
+        } else {
+          try {
+            const onboarded = await db.isOnboardingComplete();
+            router.replace(onboarded ? '/dashboard' : '/onboarding');
+          } catch {
+            router.replace('/onboarding');
+          }
         }
       }
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Could not sign in. Please try again.');
+      setState('error');
     }
   }
 
@@ -70,6 +75,7 @@ export default function AuthPage() {
     setMode(isSignUp ? 'signin' : 'signup');
     setState('idle');
     setErrorMsg('');
+    setSuccessMsg('');
   }
 
   if (state === 'success') {

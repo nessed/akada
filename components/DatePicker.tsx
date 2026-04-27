@@ -52,7 +52,7 @@ export default function DatePicker({
   const [viewMonth, setViewMonth] = useState(() => monthStart(selectedDate || new Date()));
 
   useEffect(() => {
-    if (open) setViewMonth(monthStart(selectedDate || new Date()));
+    if (open) setViewMonth(monthStart(parseIso(value) || new Date()));
   }, [open, value]);
 
   useEffect(() => {

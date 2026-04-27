@@ -84,7 +84,7 @@ export interface DueLabel {
   tone: 'warn' | 'now' | 'soon' | 'far';
 }
 export function dueLabel(dueDate: string | null, today = isoDate()): DueLabel | null {
-  if (!dueDate) return null;
+  if (!dueDate || !isIsoDate(dueDate)) return null;
   const days = daysBetween(today, dueDate);
   if (days < 0) return { text: `${-days}d overdue`, tone: 'warn' };
   if (days === 0) return { text: 'Today', tone: 'now' };
@@ -151,6 +151,7 @@ export function resolveTint(color: string, fallbackTint?: string | null): string
 
 import type { Course, Session } from './data';
 import { clampSessionSeconds, isLoggableDuration } from './session-safety';
+import { isIsoDate } from './planner-safety';
 
 export function totalSeconds(sessions: Session[]): number {
   return sessions.reduce((acc, s) => acc + clampSessionSeconds(s.durationSeconds), 0);

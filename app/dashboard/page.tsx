@@ -19,8 +19,15 @@ import {
   sessionsForDate,
   studyStreakDays,
   PASTEL_PALETTE,
+  totalSeconds,
 } from '@/lib/utils';
 import { isLoggableDuration } from '@/lib/session-safety';
+import {
+  clampWeeklyGoalHours,
+  cleanCourseCode,
+  cleanCourseName,
+  cleanTaskTitle,
+} from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
 
 export default function DashboardPage() {
@@ -183,26 +190,37 @@ export default function DashboardPage() {
   async function handleToggleTask(id: string) {
     const task = tasks.find((t) => t.id === id);
     if (!task) return;
-    await db.updateTask(id, {
-      completed: !task.completed,
-      completedAt: !task.completed ? new Date().toISOString() : null,
-    });
-    refresh();
+    try {
+      await db.updateTask(id, {
+        completed: !task.completed,
+        completedAt: !task.completed ? new Date().toISOString() : null,
+      });
+      refresh();
+    } catch (error) {
+      console.error('Failed to update task:', error);
+      alert('Could not update that task.');
+    }
   }
 
   async function handleAddTask() {
-    if (!addingTaskFor || !newTaskTitle.trim()) return;
-    await db.addTask({
-      courseId: addingTaskFor,
-      title: newTaskTitle.trim(),
-      dueDate: newTaskDue || null,
-      priority: newTaskHigh ? 'high' : 'normal',
-    });
-    setAddingTaskFor(null);
-    setNewTaskTitle('');
-    setNewTaskDue('');
-    setNewTaskHigh(false);
-    refresh();
+    const title = cleanTaskTitle(newTaskTitle);
+    if (!addingTaskFor || !title) return;
+    try {
+      await db.addTask({
+        courseId: addingTaskFor,
+        title,
+        dueDate: newTaskDue || null,
+        priority: newTaskHigh ? 'high' : 'normal',
+      });
+      setAddingTaskFor(null);
+      setNewTaskTitle('');
+      setNewTaskDue('');
+      setNewTaskHigh(false);
+      refresh();
+    } catch (error) {
+      console.error('Failed to add task:', error);
+      alert('Could not add that task.');
+    }
   }
 
   function openAddCourse() {
@@ -219,16 +237,27 @@ export default function DashboardPage() {
   }
 
   async function handleAddCourse() {
-    if (!newCourseCode.trim() || !newCourseName.trim()) return;
-    await db.addCourse({
-      code: newCourseCode.trim().toUpperCase(),
-      name: newCourseName.trim(),
-      color: newCourseColor,
-      tint: newCourseTint,
-      weeklyGoalHours: newCourseGoal,
-    });
-    setAddingCourse(false);
-    refresh();
+    const code = cleanCourseCode(newCourseCode);
+    const name = cleanCourseName(newCourseName);
+    if (!code || !name) return;
+    if (courses.some((course) => cleanCourseCode(course.code) === code)) {
+      alert('That course code already exists.');
+      return;
+    }
+    try {
+      await db.addCourse({
+        code,
+        name,
+        color: newCourseColor,
+        tint: newCourseTint,
+        weeklyGoalHours: clampWeeklyGoalHours(newCourseGoal),
+      });
+      setAddingCourse(false);
+      refresh();
+    } catch (error) {
+      console.error('Failed to add course:', error);
+      alert('Could not add that course.');
+    }
   }
 
   if (loading) {
@@ -243,7 +272,7 @@ export default function DashboardPage() {
 
   const today = isoDate();
   const todaysSessions = sessionsForDate(sessions, today);
-  const totalToday = todaysSessions.reduce((sum, session) => sum + session.durationSeconds, 0);
+  const totalToday = totalSeconds(todaysSessions);
   const todayTasks = tasks.filter((t) => !t.completed && t.dueDate === today).slice(0, 3);
   const overdueCount = tasks.filter(
     (t) => !t.completed && t.dueDate && t.dueDate < today,
@@ -328,6 +357,7 @@ export default function DashboardPage() {
           >
             <span className="block h-full w-full overflow-hidden rounded-full">
               {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={avatarUrl} alt="Settings" className="w-full h-full object-cover" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center bg-[#E2B594] font-serif text-[17px] font-medium text-ink">
@@ -626,7 +656,7 @@ export default function DashboardPage() {
                 max="20"
                 step="0.5"
                 value={newCourseGoal}
-                onChange={(e) => setNewCourseGoal(parseFloat(e.target.value))}
+                onChange={(e) => setNewCourseGoal(clampWeeklyGoalHours(e.target.value))}
                 className="pl-range flex-1"
                 style={{ color: newCourseColor }}
               />

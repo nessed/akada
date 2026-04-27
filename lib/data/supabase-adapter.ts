@@ -10,6 +10,19 @@ import type {
   UserSettings,
 } from './types';
 import { clampSessionSeconds, isLoggableDuration, sanitizeSession } from '@/lib/session-safety';
+import {
+  clampDailyGoalHours,
+  clampWeeklyGoalHours,
+  cleanAvatarUrl,
+  cleanCourseCode,
+  cleanCourseName,
+  cleanDisplayName,
+  cleanOptionalDate,
+  cleanSessionNote,
+  cleanTaskTitle,
+  cleanText,
+  requireIsoDate,
+} from '@/lib/planner-safety';
 
 // ---- Row → model mappers ----
 
@@ -47,11 +60,11 @@ interface TaskRow {
 function rowToCourse(r: CourseRow): Course {
   return {
     id: r.id,
-    code: r.code,
-    name: r.name,
-    color: r.color,
-    tint: r.tint ?? undefined,
-    weeklyGoalHours: Number(r.weekly_goal_hours),
+    code: cleanCourseCode(r.code),
+    name: cleanCourseName(r.name),
+    color: cleanText(r.color, 32) || '#A8B89B',
+    tint: r.tint ? cleanText(r.tint, 32) : undefined,
+    weeklyGoalHours: clampWeeklyGoalHours(r.weekly_goal_hours),
     createdAt: r.created_at,
   };
 }
@@ -71,11 +84,11 @@ function rowToSession(r: SessionRow): Session {
 function rowToTask(r: TaskRow): Task {
   return {
     id: r.id,
-    courseId: r.course_id,
-    title: r.title,
-    dueDate: r.due_date,
-    priority: r.priority,
-    completed: r.completed,
+    courseId: cleanText(r.course_id, 80),
+    title: cleanTaskTitle(r.title),
+    dueDate: cleanOptionalDate(r.due_date),
+    priority: r.priority === 'high' ? 'high' : 'normal',
+    completed: Boolean(r.completed),
     completedAt: r.completed_at,
     createdAt: r.created_at,
   };
@@ -108,15 +121,18 @@ export class SupabaseAdapter implements DataProvider {
 
   async addCourse(input: Omit<Course, 'id' | 'createdAt'>): Promise<Course> {
     const uid = await this.userId();
+    const code = cleanCourseCode(input.code);
+    const name = cleanCourseName(input.name);
+    if (!code || !name) throw new Error('Course code and name are required');
     const { data, error } = await this.supabase
       .from('courses')
       .insert({
         user_id: uid,
-        code: input.code,
-        name: input.name,
-        color: input.color,
-        tint: input.tint ?? null,
-        weekly_goal_hours: input.weeklyGoalHours,
+        code,
+        name,
+        color: cleanText(input.color, 32) || '#A8B89B',
+        tint: input.tint ? cleanText(input.tint, 32) : null,
+        weekly_goal_hours: clampWeeklyGoalHours(input.weeklyGoalHours),
       })
       .select()
       .single();
@@ -128,11 +144,21 @@ export class SupabaseAdapter implements DataProvider {
     const uid = await this.userId();
     // Build a snake_case patch
     const patch: Record<string, unknown> = {};
-    if (updates.code !== undefined) patch.code = updates.code;
-    if (updates.name !== undefined) patch.name = updates.name;
-    if (updates.color !== undefined) patch.color = updates.color;
-    if (updates.tint !== undefined) patch.tint = updates.tint;
-    if (updates.weeklyGoalHours !== undefined) patch.weekly_goal_hours = updates.weeklyGoalHours;
+    if (updates.code !== undefined) {
+      const code = cleanCourseCode(updates.code);
+      if (!code) throw new Error('Course code is required');
+      patch.code = code;
+    }
+    if (updates.name !== undefined) {
+      const name = cleanCourseName(updates.name);
+      if (!name) throw new Error('Course name is required');
+      patch.name = name;
+    }
+    if (updates.color !== undefined) patch.color = cleanText(updates.color, 32) || '#A8B89B';
+    if (updates.tint !== undefined) patch.tint = updates.tint ? cleanText(updates.tint, 32) : null;
+    if (updates.weeklyGoalHours !== undefined) {
+      patch.weekly_goal_hours = clampWeeklyGoalHours(updates.weeklyGoalHours);
+    }
 
     const { data, error } = await this.supabase
       .from('courses')
@@ -182,16 +208,18 @@ export class SupabaseAdapter implements DataProvider {
     if (!isLoggableDuration(input.durationSeconds)) {
       throw new Error('Session duration must be greater than zero');
     }
+    const courseId = cleanText(input.courseId, 80);
+    if (!courseId) throw new Error('Course is required');
     const uid = await this.userId();
     const { data, error } = await this.supabase
       .from('sessions')
       .insert({
         user_id: uid,
-        course_id: input.courseId,
-        task_id: input.taskId ?? null,
-        date: input.date,
+        course_id: courseId,
+        task_id: input.taskId ? cleanText(input.taskId, 80) : null,
+        date: requireIsoDate(input.date, 'Session date'),
         duration_seconds: clampSessionSeconds(input.durationSeconds),
-        note: input.note,
+        note: cleanSessionNote(input.note),
       })
       .select()
       .single();
@@ -202,16 +230,20 @@ export class SupabaseAdapter implements DataProvider {
   async updateSession(id: string, updates: Partial<Session>): Promise<Session> {
     const uid = await this.userId();
     const patch: Record<string, unknown> = {};
-    if (updates.courseId !== undefined) patch.course_id = updates.courseId;
-    if (updates.taskId !== undefined) patch.task_id = updates.taskId;
-    if (updates.date !== undefined) patch.date = updates.date;
+    if (updates.courseId !== undefined) {
+      const courseId = cleanText(updates.courseId, 80);
+      if (!courseId) throw new Error('Course is required');
+      patch.course_id = courseId;
+    }
+    if (updates.taskId !== undefined) patch.task_id = updates.taskId ? cleanText(updates.taskId, 80) : null;
+    if (updates.date !== undefined) patch.date = requireIsoDate(updates.date, 'Session date');
     if (updates.durationSeconds !== undefined) {
       if (!isLoggableDuration(updates.durationSeconds)) {
         throw new Error('Session duration must be greater than zero');
       }
       patch.duration_seconds = clampSessionSeconds(updates.durationSeconds);
     }
-    if (updates.note !== undefined) patch.note = updates.note;
+    if (updates.note !== undefined) patch.note = cleanSessionNote(updates.note);
 
     const { data, error } = await this.supabase
       .from('sessions')
@@ -260,14 +292,18 @@ export class SupabaseAdapter implements DataProvider {
     input: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>,
   ): Promise<Task> {
     const uid = await this.userId();
+    const courseId = cleanText(input.courseId, 80);
+    const title = cleanTaskTitle(input.title);
+    if (!courseId) throw new Error('Course is required');
+    if (!title) throw new Error('Task title is required');
     const { data, error } = await this.supabase
       .from('tasks')
       .insert({
         user_id: uid,
-        course_id: input.courseId,
-        title: input.title,
-        due_date: input.dueDate ?? null,
-        priority: input.priority,
+        course_id: courseId,
+        title,
+        due_date: cleanOptionalDate(input.dueDate),
+        priority: input.priority === 'high' ? 'high' : 'normal',
       })
       .select()
       .single();
@@ -278,10 +314,18 @@ export class SupabaseAdapter implements DataProvider {
   async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
     const uid = await this.userId();
     const patch: Record<string, unknown> = {};
-    if (updates.courseId !== undefined) patch.course_id = updates.courseId;
-    if (updates.title !== undefined) patch.title = updates.title;
-    if (updates.dueDate !== undefined) patch.due_date = updates.dueDate;
-    if (updates.priority !== undefined) patch.priority = updates.priority;
+    if (updates.courseId !== undefined) {
+      const courseId = cleanText(updates.courseId, 80);
+      if (!courseId) throw new Error('Course is required');
+      patch.course_id = courseId;
+    }
+    if (updates.title !== undefined) {
+      const title = cleanTaskTitle(updates.title);
+      if (!title) throw new Error('Task title is required');
+      patch.title = title;
+    }
+    if (updates.dueDate !== undefined) patch.due_date = cleanOptionalDate(updates.dueDate);
+    if (updates.priority !== undefined) patch.priority = updates.priority === 'high' ? 'high' : 'normal';
     if (updates.completed !== undefined) {
       patch.completed = updates.completed;
       patch.completed_at = updates.completed ? new Date().toISOString() : null;
@@ -378,18 +422,20 @@ export class SupabaseAdapter implements DataProvider {
     if (error) throw error;
     if (!data) return null;
     return {
-      displayName: data.display_name ?? '',
-      dailyGoalHours: Number(data.daily_goal_hours ?? 4),
-      avatarUrl: data.avatar_url ?? '',
+      displayName: cleanDisplayName(data.display_name ?? ''),
+      dailyGoalHours: clampDailyGoalHours(data.daily_goal_hours ?? 4),
+      avatarUrl: cleanAvatarUrl(data.avatar_url ?? ''),
     };
   }
 
   async updateUserSettings(settings: Partial<UserSettings>): Promise<void> {
     const uid = await this.userId();
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (settings.displayName !== undefined) patch.display_name = settings.displayName;
-    if (settings.dailyGoalHours !== undefined) patch.daily_goal_hours = settings.dailyGoalHours;
-    if (settings.avatarUrl !== undefined) patch.avatar_url = settings.avatarUrl;
+    if (settings.displayName !== undefined) patch.display_name = cleanDisplayName(settings.displayName);
+    if (settings.dailyGoalHours !== undefined) {
+      patch.daily_goal_hours = clampDailyGoalHours(settings.dailyGoalHours);
+    }
+    if (settings.avatarUrl !== undefined) patch.avatar_url = cleanAvatarUrl(settings.avatarUrl);
 
     const { error } = await this.supabase.from('user_settings').upsert(
       { user_id: uid, ...patch },

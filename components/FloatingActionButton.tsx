@@ -24,6 +24,7 @@ export default function FloatingActionButton({ courses, onStartTimer, onAddTask 
   }, [mode]);
 
   const open = mode !== 'closed';
+  if (courses.length === 0) return null;
 
   return (
     <>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Course } from '@/lib/data';
 import { formatHM } from '@/lib/utils';
-import { isLoggableDuration } from '@/lib/session-safety';
+import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 
 interface Props {
   open: boolean;
@@ -30,6 +30,8 @@ export default function SessionLogModal({
 
   if (!open || !course) return null;
   const canSave = isLoggableDuration(durationSeconds) && !saving;
+  const safeSeconds = clampSessionSeconds(durationSeconds);
+  const durationLabel = safeSeconds < 60 ? `${safeSeconds}s` : formatHM(safeSeconds);
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
@@ -50,7 +52,7 @@ export default function SessionLogModal({
           {course.code}
         </p>
         <h3 className="mt-1 mb-0 font-serif font-medium text-[22px] tracking-[-0.01em]">
-          Logged {formatHM(durationSeconds)}
+          Logged {durationLabel}
         </h3>
         <p className="mt-1.5 mb-[18px] text-[13px] text-muted font-serif italic">
           A small note for your future self?

@@ -8,6 +8,7 @@ import TaskItem from '@/components/TaskItem';
 import { db } from '@/lib/data';
 import type { Course, Task } from '@/lib/data';
 import { isoDate } from '@/lib/utils';
+import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
 
 type Filter = 'all' | 'today' | 'overdue';
@@ -35,13 +36,17 @@ export default function TasksPage() {
 
   useEffect(() => {
     (async () => {
-      const onboarded = await db.isOnboardingComplete();
-      if (!onboarded) {
-        router.replace('/onboarding');
-        return;
+      try {
+        const onboarded = await db.isOnboardingComplete();
+        if (!onboarded) {
+          router.replace('/onboarding');
+          return;
+        }
+        await refresh();
+        setLoading(false);
+      } catch {
+        router.replace('/auth');
       }
-      await refresh();
-      setLoading(false);
     })();
   }, [router]);
 
@@ -65,16 +70,26 @@ export default function TasksPage() {
   async function toggleTask(id: string) {
     const t = tasks.find((x) => x.id === id);
     if (!t) return;
-    await db.updateTask(id, {
-      completed: !t.completed,
-      completedAt: !t.completed ? new Date().toISOString() : null,
-    });
-    refresh();
+    try {
+      await db.updateTask(id, {
+        completed: !t.completed,
+        completedAt: !t.completed ? new Date().toISOString() : null,
+      });
+      refresh();
+    } catch (error) {
+      console.error('Failed to update task:', error);
+      alert('Could not update that task.');
+    }
   }
 
   async function deleteTask(id: string) {
-    await db.deleteTask(id);
-    refresh();
+    try {
+      await db.deleteTask(id);
+      refresh();
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+      alert('Could not delete that task.');
+    }
   }
 
   function openEditTask(task: Task) {
@@ -86,15 +101,21 @@ export default function TasksPage() {
   }
 
   async function saveEditTask() {
-    if (!editingTask || !editTitle.trim() || !editCourseId) return;
-    await db.updateTask(editingTask.id, {
-      title: editTitle.trim(),
-      courseId: editCourseId,
-      dueDate: editDue || null,
-      priority: editHigh ? 'high' : 'normal',
-    });
-    setEditingTask(null);
-    refresh();
+    const title = cleanTaskTitle(editTitle);
+    if (!editingTask || !title || !editCourseId) return;
+    try {
+      await db.updateTask(editingTask.id, {
+        title,
+        courseId: editCourseId,
+        dueDate: editDue || null,
+        priority: editHigh ? 'high' : 'normal',
+      });
+      setEditingTask(null);
+      refresh();
+    } catch (error) {
+      console.error('Failed to save task:', error);
+      alert('Could not save that task.');
+    }
   }
 
   function handleStartTimerForTask(t: Task) {
@@ -107,21 +128,27 @@ export default function TasksPage() {
   }
 
   async function commitDraft(courseId: string) {
-    if (!draftTitle.trim()) {
+    const title = cleanTaskTitle(draftTitle);
+    if (!title) {
       setAddingFor(null);
       return;
     }
-    await db.addTask({
-      courseId,
-      title: draftTitle.trim(),
-      dueDate: draftDue || null,
-      priority: draftHigh ? 'high' : 'normal',
-    });
-    setDraftTitle('');
-    setDraftDue('');
-    setDraftHigh(false);
-    setAddingFor(null);
-    refresh();
+    try {
+      await db.addTask({
+        courseId,
+        title,
+        dueDate: draftDue || null,
+        priority: draftHigh ? 'high' : 'normal',
+      });
+      setDraftTitle('');
+      setDraftDue('');
+      setDraftHigh(false);
+      setAddingFor(null);
+      refresh();
+    } catch (error) {
+      console.error('Failed to add task:', error);
+      alert('Could not add that task.');
+    }
   }
 
   if (loading) {

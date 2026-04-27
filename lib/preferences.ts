@@ -26,6 +26,33 @@ const DEFAULTS: Preferences = {
 
 const STORAGE_KEY = 'akada.preferences.v1';
 
+const PAPER_TONE_VALUES: PaperTone[] = ['warm', 'paper', 'stone', 'white'];
+const HEADING_FONT_VALUES: HeadingFont[] = ['fraunces', 'lora', 'merriweather'];
+const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
+
+function sanitizePreferences(value: unknown): Preferences {
+  const parsed = value && typeof value === 'object' ? (value as Partial<Preferences>) : {};
+  return {
+    paperTone: PAPER_TONE_VALUES.includes(parsed.paperTone as PaperTone)
+      ? (parsed.paperTone as PaperTone)
+      : DEFAULTS.paperTone,
+    headingFont: HEADING_FONT_VALUES.includes(parsed.headingFont as HeadingFont)
+      ? (parsed.headingFont as HeadingFont)
+      : DEFAULTS.headingFont,
+    density: DENSITY_VALUES.includes(parsed.density as Density)
+      ? (parsed.density as Density)
+      : DEFAULTS.density,
+    dailyReminder:
+      typeof parsed.dailyReminder === 'boolean'
+        ? parsed.dailyReminder
+        : DEFAULTS.dailyReminder,
+    sessionSound:
+      typeof parsed.sessionSound === 'boolean' ? parsed.sessionSound : DEFAULTS.sessionSound,
+    hideWeekends:
+      typeof parsed.hideWeekends === 'boolean' ? parsed.hideWeekends : DEFAULTS.hideWeekends,
+  };
+}
+
 const PAPER_TONES: Record<
   PaperTone,
   { bg: string; tint: string; paper: string; line: string; lineStrong: string }
@@ -75,7 +102,7 @@ function readFromStorage(): Preferences {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw);
-    return { ...DEFAULTS, ...parsed };
+    return sanitizePreferences(parsed);
   } catch {
     return DEFAULTS;
   }
@@ -113,7 +140,7 @@ export function usePreferences(): [Preferences, (patch: Partial<Preferences>) =>
 
   const update = useCallback((patch: Partial<Preferences>) => {
     setPrefs((current) => {
-      const next = { ...current, ...patch };
+      const next = sanitizePreferences({ ...current, ...patch });
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       } catch {

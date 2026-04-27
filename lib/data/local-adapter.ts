@@ -9,6 +9,19 @@ import type {
   UserSettings,
 } from './types';
 import { clampSessionSeconds, isLoggableDuration, sanitizeSession } from '@/lib/session-safety';
+import {
+  clampDailyGoalHours,
+  clampWeeklyGoalHours,
+  cleanAvatarUrl,
+  cleanCourseCode,
+  cleanCourseName,
+  cleanDisplayName,
+  cleanOptionalDate,
+  cleanSessionNote,
+  cleanTaskTitle,
+  cleanText,
+  requireIsoDate,
+} from '@/lib/planner-safety';
 
 const KEYS = {
   courses: 'lums.courses',
@@ -57,16 +70,46 @@ function inDateRange(dateStr: string, range?: [string, string]): boolean {
   return dateStr >= range[0] && dateStr <= range[1];
 }
 
+function sanitizeCourse(course: Course): Course {
+  return {
+    ...course,
+    code: cleanCourseCode(course.code),
+    name: cleanCourseName(course.name),
+    color: cleanText(course.color, 32) || '#A8B89B',
+    tint: course.tint ? cleanText(course.tint, 32) : undefined,
+    weeklyGoalHours: clampWeeklyGoalHours(course.weeklyGoalHours),
+  };
+}
+
+function sanitizeTask(task: Task): Task {
+  return {
+    ...task,
+    courseId: cleanText(task.courseId, 80),
+    title: cleanTaskTitle(task.title),
+    dueDate: cleanOptionalDate(task.dueDate),
+    priority: task.priority === 'high' ? 'high' : 'normal',
+    completed: Boolean(task.completed),
+    completedAt: task.completed ? task.completedAt : null,
+  };
+}
+
 export class LocalAdapter implements DataProvider {
   // ---- Courses
   async getCourses(): Promise<Course[]> {
-    const list = read<Course[]>(KEYS.courses, []);
+    const list = read<Course[]>(KEYS.courses, [])
+      .map(sanitizeCourse)
+      .filter((course) => course.code && course.name);
     return [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   async addCourse(input: Omit<Course, 'id' | 'createdAt'>): Promise<Course> {
     const courses = read<Course[]>(KEYS.courses, []);
-    const course: Course = { ...input, id: uid(), createdAt: nowIso() };
+    const course: Course = sanitizeCourse({
+      ...input,
+      id: uid(),
+      createdAt: nowIso(),
+    });
+    if (!course.code || !course.name) throw new Error('Course code and name are required');
     courses.push(course);
     write(KEYS.courses, courses);
     return course;
@@ -76,7 +119,15 @@ export class LocalAdapter implements DataProvider {
     const courses = read<Course[]>(KEYS.courses, []);
     const idx = courses.findIndex((c) => c.id === id);
     if (idx === -1) throw new Error(`Course ${id} not found`);
-    courses[idx] = { ...courses[idx], ...updates, id, createdAt: courses[idx].createdAt };
+    courses[idx] = sanitizeCourse({
+      ...courses[idx],
+      ...updates,
+      id,
+      createdAt: courses[idx].createdAt,
+    });
+    if (!courses[idx].code || !courses[idx].name) {
+      throw new Error('Course code and name are required');
+    }
     write(KEYS.courses, courses);
     return courses[idx];
   }
@@ -102,10 +153,16 @@ export class LocalAdapter implements DataProvider {
     if (!isLoggableDuration(input.durationSeconds)) {
       throw new Error('Session duration must be greater than zero');
     }
+    const courseId = cleanText(input.courseId, 80);
+    if (!courseId) throw new Error('Course is required');
     const sessions = read<Session[]>(KEYS.sessions, []);
     const session: Session = {
       ...input,
+      courseId,
+      taskId: input.taskId ? cleanText(input.taskId, 80) : null,
+      date: requireIsoDate(input.date, 'Session date'),
       durationSeconds: clampSessionSeconds(input.durationSeconds),
+      note: cleanSessionNote(input.note),
       id: uid(),
       createdAt: nowIso(),
     };
@@ -125,6 +182,13 @@ export class LocalAdapter implements DataProvider {
       }
       safeUpdates.durationSeconds = clampSessionSeconds(updates.durationSeconds);
     }
+    if (updates.courseId !== undefined) {
+      safeUpdates.courseId = cleanText(updates.courseId, 80);
+      if (!safeUpdates.courseId) throw new Error('Course is required');
+    }
+    if (updates.taskId !== undefined) safeUpdates.taskId = updates.taskId ? cleanText(updates.taskId, 80) : null;
+    if (updates.date !== undefined) safeUpdates.date = requireIsoDate(updates.date, 'Session date');
+    if (updates.note !== undefined) safeUpdates.note = cleanSessionNote(updates.note);
     sessions[idx] = { ...sessions[idx], ...safeUpdates, id, createdAt: sessions[idx].createdAt };
     write(KEYS.sessions, sessions);
     return sessions[idx];
@@ -137,7 +201,9 @@ export class LocalAdapter implements DataProvider {
 
   // ---- Tasks
   async getTasks(filters?: TaskFilters): Promise<Task[]> {
-    let list = read<Task[]>(KEYS.tasks, []);
+    let list = read<Task[]>(KEYS.tasks, [])
+      .map(sanitizeTask)
+      .filter((task) => task.courseId && task.title);
     if (filters?.courseId) list = list.filter((t) => t.courseId === filters.courseId);
     if (typeof filters?.completed === 'boolean') {
       list = list.filter((t) => t.completed === filters.completed);
@@ -148,9 +214,17 @@ export class LocalAdapter implements DataProvider {
   async addTask(
     input: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>
   ): Promise<Task> {
+    const courseId = cleanText(input.courseId, 80);
+    const title = cleanTaskTitle(input.title);
+    if (!courseId) throw new Error('Course is required');
+    if (!title) throw new Error('Task title is required');
     const tasks = read<Task[]>(KEYS.tasks, []);
     const task: Task = {
       ...input,
+      courseId,
+      title,
+      dueDate: cleanOptionalDate(input.dueDate),
+      priority: input.priority === 'high' ? 'high' : 'normal',
       id: uid(),
       createdAt: nowIso(),
       completed: false,
@@ -165,7 +239,20 @@ export class LocalAdapter implements DataProvider {
     const tasks = read<Task[]>(KEYS.tasks, []);
     const idx = tasks.findIndex((t) => t.id === id);
     if (idx === -1) throw new Error(`Task ${id} not found`);
-    tasks[idx] = { ...tasks[idx], ...updates, id, createdAt: tasks[idx].createdAt };
+    const safeUpdates = { ...updates };
+    if (updates.courseId !== undefined) {
+      safeUpdates.courseId = cleanText(updates.courseId, 80);
+      if (!safeUpdates.courseId) throw new Error('Course is required');
+    }
+    if (updates.title !== undefined) {
+      safeUpdates.title = cleanTaskTitle(updates.title);
+      if (!safeUpdates.title) throw new Error('Task title is required');
+    }
+    if (updates.dueDate !== undefined) safeUpdates.dueDate = cleanOptionalDate(updates.dueDate);
+    if (updates.priority !== undefined) {
+      safeUpdates.priority = updates.priority === 'high' ? 'high' : 'normal';
+    }
+    tasks[idx] = sanitizeTask({ ...tasks[idx], ...safeUpdates, id, createdAt: tasks[idx].createdAt });
     write(KEYS.tasks, tasks);
     return tasks[idx];
   }
@@ -199,11 +286,32 @@ export class LocalAdapter implements DataProvider {
 
   // ---- User settings
   async getUserSettings(): Promise<UserSettings | null> {
-    return read<UserSettings | null>(KEYS.userSettings, null);
+    const settings = read<UserSettings | null>(KEYS.userSettings, null);
+    if (!settings) return null;
+    return {
+      displayName: cleanDisplayName(settings.displayName),
+      dailyGoalHours: clampDailyGoalHours(settings.dailyGoalHours),
+      avatarUrl: cleanAvatarUrl(settings.avatarUrl),
+    };
   }
 
   async updateUserSettings(settings: Partial<UserSettings>): Promise<void> {
     const current = read<UserSettings>(KEYS.userSettings, { displayName: '', dailyGoalHours: 4, avatarUrl: '' });
-    write(KEYS.userSettings, { ...current, ...settings });
+    write(KEYS.userSettings, {
+      ...current,
+      ...settings,
+      displayName:
+        settings.displayName !== undefined
+          ? cleanDisplayName(settings.displayName)
+          : cleanDisplayName(current.displayName),
+      dailyGoalHours:
+        settings.dailyGoalHours !== undefined
+          ? clampDailyGoalHours(settings.dailyGoalHours)
+          : clampDailyGoalHours(current.dailyGoalHours),
+      avatarUrl:
+        settings.avatarUrl !== undefined
+          ? cleanAvatarUrl(settings.avatarUrl)
+          : cleanAvatarUrl(current.avatarUrl),
+    });
   }
 }

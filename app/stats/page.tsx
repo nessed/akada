@@ -22,13 +22,17 @@ export default function StatsPage() {
 
   useEffect(() => {
     (async () => {
-      const onboarded = await db.isOnboardingComplete();
-      if (!onboarded) {
-        router.replace('/onboarding');
-        return;
+      try {
+        const onboarded = await db.isOnboardingComplete();
+        if (!onboarded) {
+          router.replace('/onboarding');
+          return;
+        }
+        await refresh();
+        setLoading(false);
+      } catch {
+        router.replace('/auth');
       }
-      await refresh();
-      setLoading(false);
     })();
   }, [router]);
 
@@ -44,8 +48,13 @@ export default function StatsPage() {
   }
 
   async function deleteSession(id: string) {
-    await db.deleteSession(id);
-    refresh();
+    try {
+      await db.deleteSession(id);
+      refresh();
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+      alert('Could not delete that session.');
+    }
   }
 
   const filteredSessions = useMemo(
@@ -257,7 +266,7 @@ export default function StatsPage() {
                       type="button"
                       onClick={() => deleteSession(session.id)}
                       aria-label="Delete session"
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-0 transition-opacity hover:text-warn group-hover:opacity-100"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-warn sm:opacity-0 sm:group-hover:opacity-100"
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                         <path

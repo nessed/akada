@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { cleanDisplayName } from '@/lib/planner-safety';
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
@@ -8,6 +9,9 @@ export async function GET(request: NextRequest) {
 
   if (!code) {
     return NextResponse.redirect(`${origin}/auth?error=missing_code`);
+  }
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return NextResponse.redirect(`${origin}/auth?error=supabase_not_configured`);
   }
 
   const cookieStore = request.cookies;
@@ -49,7 +53,7 @@ export async function GET(request: NextRequest) {
   if (user) {
     const displayName =
       typeof user.user_metadata?.display_name === 'string'
-        ? user.user_metadata.display_name
+        ? cleanDisplayName(user.user_metadata.display_name)
         : '';
     if (displayName) {
       await supabase.from('user_settings').upsert(

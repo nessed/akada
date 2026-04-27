@@ -88,7 +88,7 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
           type="button"
           onClick={() => onEdit(task)}
           aria-label="Edit task"
-          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-0 group-hover:opacity-100 hover:text-ink transition-opacity"
+          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-70 transition-opacity hover:text-ink sm:opacity-0 sm:group-hover:opacity-100"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
             <path
@@ -106,7 +106,7 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
         type="button"
         onClick={() => onDelete(task.id)}
         aria-label="Delete task"
-        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-0 group-hover:opacity-100 hover:text-warn transition-opacity"
+        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-70 transition-opacity hover:text-warn sm:opacity-0 sm:group-hover:opacity-100"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
           <path

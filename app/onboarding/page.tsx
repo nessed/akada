@@ -5,6 +5,15 @@ import { useEffect, useState } from 'react';
 import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { PASTEL_PALETTE } from '@/lib/utils';
+import {
+  clampDailyGoalHours,
+  clampWeeklyGoalHours,
+  cleanCourseCode,
+  cleanCourseName,
+  cleanDisplayName,
+  hasDuplicateCourseCodes,
+  isIsoDate,
+} from '@/lib/planner-safety';
 
 type Step = 'welcome' | 'name' | 'courses' | 'semester' | 'routine';
 
@@ -48,10 +57,8 @@ export default function OnboardingPage() {
           typeof auth.data.user?.user_metadata?.display_name === 'string'
             ? auth.data.user.user_metadata.display_name
             : '';
-        if (!displayName) {
-          setDisplayName(settings?.displayName || metadataName || '');
-        }
-        if (!avatarPreview && settings?.avatarUrl) setAvatarPreview(settings.avatarUrl);
+        setDisplayName((current) => current || settings?.displayName || metadataName || '');
+        setAvatarPreview((current) => current || settings?.avatarUrl || '');
       } catch {
         // Local mode or unauthenticated edge: keep the form empty.
       }
@@ -81,8 +88,16 @@ export default function OnboardingPage() {
     setEditIdx(Math.max(0, editIdx - (i <= editIdx ? 1 : 0)));
   }
 
-  const valid = courses.filter((c) => c.code.trim() && c.name.trim()).length >= 1;
-  const canFinishSemester = !!start && !!end && end >= start;
+  const validCourses = courses
+    .map((course) => ({
+      ...course,
+      code: cleanCourseCode(course.code),
+      name: cleanCourseName(course.name),
+      weeklyGoalHours: clampWeeklyGoalHours(course.weeklyGoalHours),
+    }))
+    .filter((course) => course.code && course.name);
+  const valid = validCourses.length >= 1 && !hasDuplicateCourseCodes(validCourses);
+  const canFinishSemester = isIsoDate(start) && isIsoDate(end) && end >= start;
 
   function resizeImage(base64: string, maxWidth = 160, maxHeight = 160): Promise<string> {
     return new Promise((resolve) => {
@@ -114,6 +129,7 @@ export default function OnboardingPage() {
   }
 
   async function finish() {
+    if (!valid || !canFinishSemester) return;
     try {
       let finalAvatar = avatarPreview;
       if (avatarPreview) {
@@ -122,15 +138,15 @@ export default function OnboardingPage() {
 
       // Save user settings (name + daily goal + avatar)
       await db.updateUserSettings({
-        displayName: displayName.trim(),
-        dailyGoalHours: dailyGoal,
+        displayName: cleanDisplayName(displayName),
+        dailyGoalHours: clampDailyGoalHours(dailyGoal),
         avatarUrl: finalAvatar,
       });
       // Save courses
-      for (const c of courses.filter((x) => x.code.trim() && x.name.trim())) {
+      for (const c of validCourses) {
         await db.addCourse({
-          code: c.code.trim(),
-          name: c.name.trim(),
+          code: c.code,
+          name: c.name,
           color: c.color,
           tint: c.tint,
           weeklyGoalHours: c.weeklyGoalHours,
@@ -207,7 +223,7 @@ export default function OnboardingPage() {
             displayName={displayName}
             totalWeeklyGoal={courses
               .filter((c) => c.code.trim() && c.name.trim())
-              .reduce((sum, c) => sum + c.weeklyGoalHours, 0)}
+              .reduce((sum, c) => sum + clampWeeklyGoalHours(c.weeklyGoalHours), 0)}
             onBack={() => setStep('semester')}
             onFinish={finish}
           />
@@ -277,6 +293,14 @@ function NameStep({
   function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file.');
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      alert('Please choose an image under 6 MB.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setAvatarPreview(reader.result as string);
     reader.readAsDataURL(file);
@@ -308,6 +332,7 @@ function NameStep({
             style={avatarPreview ? { borderStyle: 'solid', borderColor: 'var(--line)' } : {}}
           >
             {avatarPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
               <span className="font-serif italic text-[32px] text-muted-soft">{initials}</span>
@@ -487,7 +512,7 @@ function CoursesStep({
               max="20"
               step="0.5"
               value={editing.weeklyGoalHours}
-              onChange={(e) => update({ weeklyGoalHours: parseFloat(e.target.value) })}
+              onChange={(e) => update({ weeklyGoalHours: clampWeeklyGoalHours(e.target.value) })}
               className="pl-range flex-1"
               style={{ color: editing.color }}
             />
@@ -724,7 +749,7 @@ function RoutineStep({
               max="12"
               step="0.5"
               value={dailyGoal}
-              onChange={(e) => setDailyGoal(parseFloat(e.target.value))}
+              onChange={(e) => setDailyGoal(clampDailyGoalHours(e.target.value))}
               className="pl-range flex-1"
               style={{ color: 'var(--ink)' }}
             />
@@ -793,7 +818,7 @@ function RoutineStep({
           onClick={handleFinish}
           className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {saving ? 'Setting up…' : displayName ? `Let's go, ${displayName}` : 'Begin'}
+          {saving ? 'Setting up…' : displayName ? `Let's go, ${cleanDisplayName(displayName)}` : 'Begin'}
         </button>
       </div>
     </div>

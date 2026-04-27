@@ -4,7 +4,15 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import type { ChangeEvent } from 'react';
 import type { Course, Session } from '@/lib/data';
 import { db } from '@/lib/data';
-import { PASTEL_PALETTE } from '@/lib/utils';
+import { PASTEL_PALETTE, totalSeconds } from '@/lib/utils';
+import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
+import {
+  clampWeeklyGoalHours,
+  cleanCourseCode,
+  cleanCourseName,
+  cleanSessionNote,
+  hasDuplicateCourseCodes,
+} from '@/lib/planner-safety';
 import {
   usePreferences,
   type PaperTone,
@@ -59,9 +67,9 @@ export default function SettingsSheet({
 
   if (!open) return null;
 
-  const totalHours =
-    sessions.reduce((sum, session) => sum + session.durationSeconds, 0) / 3600;
-  const dayCount = new Set(sessions.map((session) => session.date)).size;
+  const safeSessions = sessions.filter((session) => isLoggableDuration(session.durationSeconds));
+  const totalHours = totalSeconds(safeSessions) / 3600;
+  const dayCount = new Set(safeSessions.map((session) => session.date)).size;
   const shownAvatar = settingsAvatar || avatarUrl;
   const shownName = settingsName || displayName || 'Akada';
   const initials =
@@ -76,6 +84,14 @@ export default function SettingsSheet({
   function handleAvatar(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file.');
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      alert('Please choose an image under 6 MB.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => onAvatarChange(reader.result as string);
     reader.readAsDataURL(file);
@@ -84,13 +100,13 @@ export default function SettingsSheet({
   function exportSessions() {
     const lines = [
       ['date', 'course', 'duration_minutes', 'note'].join(','),
-      ...sessions.map((s) => {
+      ...safeSessions.map((s) => {
         const c = courses.find((x) => x.id === s.courseId);
-        const note = (s.note || '').replace(/"/g, '""');
+        const note = cleanSessionNote(s.note).replace(/"/g, '""');
         return [
           s.date,
           c ? `"${c.code}"` : '',
-          Math.round(s.durationSeconds / 60).toString(),
+          Math.round(clampSessionSeconds(s.durationSeconds) / 60).toString(),
           `"${note}"`,
         ].join(',');
       }),
@@ -559,7 +575,7 @@ function CoursesEditor({
         name: c.name,
         color: c.color,
         tint: c.tint || PASTEL_PALETTE[0].tint,
-        weeklyGoalHours: c.weeklyGoalHours,
+        weeklyGoalHours: clampWeeklyGoalHours(c.weeklyGoalHours),
       })),
     [courses],
   );
@@ -606,6 +622,19 @@ function CoursesEditor({
       const validDrafts = drafts.filter(
         (d) => d.code.trim() && d.name.trim(),
       );
+      const incompleteDraft = drafts.some(
+        (d) =>
+          (Boolean(d.id) || Boolean(d.code.trim()) || Boolean(d.name.trim())) &&
+          (!d.code.trim() || !d.name.trim()),
+      );
+      if (incompleteDraft) {
+        setError('Every course needs both a code and a name.');
+        return;
+      }
+      if (hasDuplicateCourseCodes(validDrafts)) {
+        setError('Course codes must be unique.');
+        return;
+      }
       const draftIds = new Set(validDrafts.map((d) => d.id).filter(Boolean));
 
       // Delete removed
@@ -617,11 +646,11 @@ function CoursesEditor({
       // Add new + update existing
       for (const d of validDrafts) {
         const payload = {
-          code: d.code.trim().toUpperCase(),
-          name: d.name.trim(),
+          code: cleanCourseCode(d.code),
+          name: cleanCourseName(d.name),
           color: d.color,
           tint: d.tint,
-          weeklyGoalHours: d.weeklyGoalHours,
+          weeklyGoalHours: clampWeeklyGoalHours(d.weeklyGoalHours),
         };
         if (d.id) {
           await db.updateCourse(d.id, payload);
@@ -718,7 +747,7 @@ function CoursesEditor({
                 step="0.5"
                 value={c.weeklyGoalHours}
                 onChange={(e) =>
-                  update(i, { weeklyGoalHours: parseFloat(e.target.value) })
+                  update(i, { weeklyGoalHours: clampWeeklyGoalHours(e.target.value) })
                 }
                 className="pl-range flex-1"
                 style={{ color: c.color }}

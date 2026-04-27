@@ -132,7 +132,10 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       if (!prev || prev.isPaused) return prev;
       const next: TimerState = {
         ...prev,
-        accumulatedMs: prev.accumulatedMs + (Date.now() - prev.startedAt),
+        accumulatedMs: Math.min(
+          MAX_TIMER_MS,
+          Math.max(0, prev.accumulatedMs) + Math.max(0, Date.now() - prev.startedAt),
+        ),
         isPaused: true,
       };
       saveActive(next);
