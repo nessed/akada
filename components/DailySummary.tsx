@@ -2,6 +2,7 @@
 
 import type { Course, Session } from '@/lib/data';
 import { formatHM } from '@/lib/utils';
+import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 
 interface Props {
   todaysSessions: Session[];
@@ -9,13 +10,14 @@ interface Props {
 }
 
 export default function DailySummary({ todaysSessions, courses }: Props) {
-  const total = todaysSessions.reduce((a, s) => a + s.durationSeconds, 0);
-  const sessionCount = todaysSessions.length;
+  const safeSessions = todaysSessions.filter((s) => isLoggableDuration(s.durationSeconds));
+  const total = safeSessions.reduce((a, s) => a + clampSessionSeconds(s.durationSeconds), 0);
+  const sessionCount = safeSessions.length;
 
   // Per-course totals
   const perCourse: Record<string, number> = {};
-  for (const s of todaysSessions) {
-    perCourse[s.courseId] = (perCourse[s.courseId] || 0) + s.durationSeconds;
+  for (const s of safeSessions) {
+    perCourse[s.courseId] = (perCourse[s.courseId] || 0) + clampSessionSeconds(s.durationSeconds);
   }
 
   return (
@@ -49,9 +51,9 @@ export default function DailySummary({ todaysSessions, courses }: Props) {
 
           {/* Sparkline ribbon */}
           <div className="mt-3.5 flex gap-[3px] h-1.5 rounded-full overflow-hidden bg-bg-tint">
-            {todaysSessions.map((s) => {
+            {safeSessions.map((s) => {
               const c = courses.find((c) => c.id === s.courseId);
-              const pct = (s.durationSeconds / total) * 100;
+              const pct = (clampSessionSeconds(s.durationSeconds) / total) * 100;
               return (
                 <div
                   key={s.id}

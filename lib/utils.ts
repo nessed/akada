@@ -150,19 +150,22 @@ export function resolveTint(color: string, fallbackTint?: string | null): string
 // ---- Aggregation helpers
 
 import type { Course, Session } from './data';
+import { clampSessionSeconds, isLoggableDuration } from './session-safety';
 
 export function totalSeconds(sessions: Session[]): number {
-  return sessions.reduce((acc, s) => acc + s.durationSeconds, 0);
+  return sessions.reduce((acc, s) => acc + clampSessionSeconds(s.durationSeconds), 0);
 }
 
 export function sessionsForDate(sessions: Session[], date: string): Session[] {
-  return sessions.filter((s) => s.date === date);
+  return sessions.filter((s) => s.date === date && isLoggableDuration(s.durationSeconds));
 }
 
 export function sessionsThisWeek(sessions: Session[]): Session[] {
   const start = isoDate(startOfWeek());
   const end = isoDate(endOfWeek());
-  return sessions.filter((s) => s.date >= start && s.date <= end);
+  return sessions.filter(
+    (s) => s.date >= start && s.date <= end && isLoggableDuration(s.durationSeconds),
+  );
 }
 
 export function findCourse(courses: Course[], id: string): Course | undefined {
@@ -171,14 +174,16 @@ export function findCourse(courses: Course[], id: string): Course | undefined {
 
 export function lastSeenByCourse(sessions: Session[]): Record<string, string> {
   const map: Record<string, string> = {};
-  for (const s of sessions) {
+  for (const s of sessions.filter((session) => isLoggableDuration(session.durationSeconds))) {
     if (!map[s.courseId] || s.date > map[s.courseId]) map[s.courseId] = s.date;
   }
   return map;
 }
 
 export function studyStreakDays(sessions: Session[], today: Date = new Date()): number {
-  const dates = new Set(sessions.map((s) => s.date));
+  const dates = new Set(
+    sessions.filter((s) => isLoggableDuration(s.durationSeconds)).map((s) => s.date),
+  );
   let streak = 0;
   const cursor = new Date(today);
   cursor.setHours(0, 0, 0, 0);

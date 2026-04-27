@@ -6,16 +6,18 @@ import { useTimer } from '@/lib/timer-context';
 import { db } from '@/lib/data';
 import type { Course, Task } from '@/lib/data';
 import { formatHHMMSS, isoDate, resolveTint } from '@/lib/utils';
+import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from '@/components/SessionLogModal';
 
 export default function TimerPage() {
   const router = useRouter();
-  const { active, elapsedSeconds, pause, resume, stop } = useTimer();
+  const { active, elapsedSeconds, pause, resume, cancel, stop } = useTimer();
 
   const [course, setCourse] = useState<Course | null>(null);
   const [task, setTask] = useState<Task | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [goalMin, setGoalMin] = useState(50);
+  const [saving, setSaving] = useState(false);
   const [pendingLog, setPendingLog] = useState<{
     courseId: string;
     taskId: string | null;
@@ -28,17 +30,29 @@ export default function TimerPage() {
       return;
     }
     if (!active) return;
+    let cancelled = false;
     (async () => {
       const courses = await db.getCourses();
-      setCourse(courses.find((x) => x.id === active.courseId) || null);
+      if (cancelled) return;
+      const timerCourse = courses.find((x) => x.id === active.courseId) || null;
+      if (!timerCourse) {
+        cancel();
+        router.replace('/dashboard');
+        return;
+      }
+      setCourse(timerCourse);
       if (active.taskId) {
         const tasks = await db.getTasks();
+        if (cancelled) return;
         setTask(tasks.find((t) => t.id === active.taskId) || null);
       } else {
         setTask(null);
       }
     })();
-  }, [active, pendingLog, router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [active, cancel, pendingLog, router]);
 
   function handleStop() {
     const result = stop();
@@ -46,22 +60,41 @@ export default function TimerPage() {
       router.replace('/dashboard');
       return;
     }
-    setPendingLog(result);
+    const durationSeconds = clampSessionSeconds(result.durationSeconds);
+    if (!isLoggableDuration(durationSeconds)) {
+      setPendingLog(null);
+      router.replace('/dashboard');
+      return;
+    }
+    setPendingLog({ ...result, durationSeconds });
     setLogOpen(true);
   }
 
   async function handleSave(note: string) {
     if (!pendingLog) return;
-    await db.addSession({
-      courseId: pendingLog.courseId,
-      taskId: pendingLog.taskId,
-      date: isoDate(),
-      durationSeconds: pendingLog.durationSeconds,
-      note,
-    });
-    setLogOpen(false);
-    setPendingLog(null);
-    router.replace('/dashboard');
+    const durationSeconds = clampSessionSeconds(pendingLog.durationSeconds);
+    if (!isLoggableDuration(durationSeconds)) {
+      handleDiscard();
+      return;
+    }
+    setSaving(true);
+    try {
+      await db.addSession({
+        courseId: pendingLog.courseId,
+        taskId: pendingLog.taskId,
+        date: isoDate(),
+        durationSeconds,
+        note,
+      });
+      setLogOpen(false);
+      setPendingLog(null);
+      router.replace('/dashboard');
+    } catch (error) {
+      console.error('Failed to save session:', error);
+      alert('Could not save that session. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleDiscard() {
@@ -80,8 +113,9 @@ export default function TimerPage() {
 
   const isPaused = active?.isPaused ?? false;
   const tint = course ? resolveTint(course.color, course.tint) : 'var(--bg-tint)';
-  const goalSec = goalMin * 60;
-  const pct = Math.min(1, elapsedSeconds / goalSec);
+  const actualSeconds = clampSessionSeconds(elapsedSeconds);
+  const goalSec = Math.max(60, goalMin * 60);
+  const pct = Math.min(1, actualSeconds / goalSec);
   const ringRadius = 132;
   const stroke = 2.5;
   const circumference = 2 * Math.PI * ringRadius;
@@ -187,7 +221,7 @@ export default function TimerPage() {
                   className="font-mono font-semibold text-[clamp(34px,12vw,54px)] leading-none tracking-[-0.02em] text-ink tabular-nums transition-opacity duration-200"
                   style={{ opacity: isPaused ? 0.55 : 1 }}
                 >
-                  {formatHHMMSS(elapsedSeconds)}
+                  {formatHHMMSS(actualSeconds)}
                 </div>
                 <p
                   className={`mt-3.5 mb-0 text-[11px] tracking-[0.24em] uppercase text-muted font-semibold ${
@@ -252,6 +286,7 @@ export default function TimerPage() {
         open={logOpen}
         course={course}
         durationSeconds={pendingLog?.durationSeconds ?? 0}
+        saving={saving}
         onCancel={handleDiscard}
         onSave={handleSave}
       />

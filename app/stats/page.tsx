@@ -9,6 +9,7 @@ import { db } from '@/lib/data';
 import type { Course, Semester, Session } from '@/lib/data';
 import { formatHM, formatRelativeDate, studyStreakDays, totalSeconds } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
+import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 
 export default function StatsPage() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function StatsPage() {
       db.getSemester(),
     ]);
     setCourses(c);
-    setSessions(s);
+    setSessions(s.filter((session) => isLoggableDuration(session.durationSeconds)));
     setSemester(sem);
   }
 
@@ -250,7 +251,7 @@ export default function StatsPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
-                      {formatHM(session.durationSeconds)}
+                      {formatHM(clampSessionSeconds(session.durationSeconds))}
                     </span>
                     <button
                       type="button"

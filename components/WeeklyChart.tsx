@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import type { Course, Session } from '@/lib/data';
 import { formatHours, isoDate } from '@/lib/utils';
+import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 
 interface Props {
   sessions: Session[];
@@ -21,7 +22,9 @@ export default function WeeklyChart({ sessions, courses }: Props) {
       const iso = isoDate(d);
       const byC: Record<string, number> = {};
       for (const s of sessions) {
-        if (s.date === iso) byC[s.courseId] = (byC[s.courseId] || 0) + s.durationSeconds;
+        if (s.date === iso && isLoggableDuration(s.durationSeconds)) {
+          byC[s.courseId] = (byC[s.courseId] || 0) + clampSessionSeconds(s.durationSeconds);
+        }
       }
       const total = Object.values(byC).reduce((a, b) => a + b, 0);
       days.push({

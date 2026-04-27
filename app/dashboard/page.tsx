@@ -20,6 +20,7 @@ import {
   studyStreakDays,
   PASTEL_PALETTE,
 } from '@/lib/utils';
+import { isLoggableDuration } from '@/lib/session-safety';
 import { useTimer } from '@/lib/timer-context';
 
 export default function DashboardPage() {
@@ -88,7 +89,7 @@ export default function DashboardPage() {
       db.getSemester(),
     ]);
     setCourses(c);
-    setSessions(s);
+    setSessions(s.filter((session) => isLoggableDuration(session.durationSeconds)));
     setTasks(t);
     setSemester(sem);
     if (settings?.displayName) {

@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import type { Session } from '@/lib/data';
 import { isoDate, formatHM } from '@/lib/utils';
+import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 
 interface Props {
   sessions: Session[];
@@ -23,7 +24,9 @@ export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: 
 
     const byDate: Record<string, number> = {};
     for (const s of sessions) {
-      byDate[s.date] = (byDate[s.date] || 0) + s.durationSeconds;
+      if (isLoggableDuration(s.durationSeconds)) {
+        byDate[s.date] = (byDate[s.date] || 0) + clampSessionSeconds(s.durationSeconds);
+      }
     }
     let max = 0;
     for (const v of Object.values(byDate)) if (v > max) max = v;

@@ -9,6 +9,7 @@ import type {
   TaskFilters,
   UserSettings,
 } from './types';
+import { clampSessionSeconds, isLoggableDuration, sanitizeSession } from '@/lib/session-safety';
 
 // ---- Row → model mappers ----
 
@@ -56,7 +57,7 @@ function rowToCourse(r: CourseRow): Course {
 }
 
 function rowToSession(r: SessionRow): Session {
-  return {
+  return sanitizeSession({
     id: r.id,
     courseId: r.course_id,
     taskId: r.task_id,
@@ -64,7 +65,7 @@ function rowToSession(r: SessionRow): Session {
     durationSeconds: r.duration_seconds,
     note: r.note,
     createdAt: r.created_at,
-  };
+  });
 }
 
 function rowToTask(r: TaskRow): Task {
@@ -178,6 +179,9 @@ export class SupabaseAdapter implements DataProvider {
   }
 
   async addSession(input: Omit<Session, 'id' | 'createdAt'>): Promise<Session> {
+    if (!isLoggableDuration(input.durationSeconds)) {
+      throw new Error('Session duration must be greater than zero');
+    }
     const uid = await this.userId();
     const { data, error } = await this.supabase
       .from('sessions')
@@ -186,7 +190,7 @@ export class SupabaseAdapter implements DataProvider {
         course_id: input.courseId,
         task_id: input.taskId ?? null,
         date: input.date,
-        duration_seconds: input.durationSeconds,
+        duration_seconds: clampSessionSeconds(input.durationSeconds),
         note: input.note,
       })
       .select()
@@ -201,7 +205,12 @@ export class SupabaseAdapter implements DataProvider {
     if (updates.courseId !== undefined) patch.course_id = updates.courseId;
     if (updates.taskId !== undefined) patch.task_id = updates.taskId;
     if (updates.date !== undefined) patch.date = updates.date;
-    if (updates.durationSeconds !== undefined) patch.duration_seconds = updates.durationSeconds;
+    if (updates.durationSeconds !== undefined) {
+      if (!isLoggableDuration(updates.durationSeconds)) {
+        throw new Error('Session duration must be greater than zero');
+      }
+      patch.duration_seconds = clampSessionSeconds(updates.durationSeconds);
+    }
     if (updates.note !== undefined) patch.note = updates.note;
 
     const { data, error } = await this.supabase

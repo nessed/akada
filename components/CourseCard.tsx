@@ -26,7 +26,10 @@ export default function CourseCard({
   neglectedCutoffDays = 4,
 }: Props) {
   const wkSec = totalSeconds(sessionsThisWeek(sessions));
-  const goalSec = course.weeklyGoalHours * 3600;
+  const goalHours = Number.isFinite(course.weeklyGoalHours)
+    ? Math.max(0.5, course.weeklyGoalHours)
+    : 0.5;
+  const goalSec = goalHours * 3600;
   const pct = Math.min(100, (wkSec / goalSec) * 100);
 
   const last = lastSeenByCourse(sessions)[course.id];
@@ -70,7 +73,7 @@ export default function CourseCard({
             <span className="font-mono font-semibold text-sm tabular-nums">
               {formatHours(wkSec, 1)}
               <span className="text-muted font-sans font-normal ml-1">
-                / {course.weeklyGoalHours}h this week
+                / {goalHours}h this week
               </span>
             </span>
             <span className="font-mono text-xs text-muted">

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { clampSessionSeconds } from './session-safety';
 
 interface TimerState {
   courseId: string;
@@ -23,20 +24,43 @@ interface TimerContextValue {
   start: (courseId: string, taskId?: string | null) => void;
   pause: () => void;
   resume: () => void;
+  cancel: () => void;
   stop: () => { courseId: string; taskId: string | null; durationSeconds: number } | null;
 }
 
 const TimerContext = createContext<TimerContextValue | null>(null);
 
 const STORAGE_KEY = 'lums.activeTimer';
+const MAX_TIMER_MS = 18 * 60 * 60 * 1000;
+
+function sanitizeActive(value: unknown): TimerState | null {
+  if (!value || typeof value !== 'object') return null;
+  const state = value as Partial<TimerState>;
+  if (typeof state.courseId !== 'string' || state.courseId.trim() === '') return null;
+  const taskId = typeof state.taskId === 'string' ? state.taskId : null;
+  const startedAt = Number(state.startedAt);
+  const accumulatedMs = Number(state.accumulatedMs);
+  if (!Number.isFinite(startedAt) || !Number.isFinite(accumulatedMs)) return null;
+
+  return {
+    courseId: state.courseId,
+    taskId,
+    startedAt,
+    accumulatedMs: Math.min(MAX_TIMER_MS, Math.max(0, accumulatedMs)),
+    isPaused: Boolean(state.isPaused),
+  };
+}
 
 function loadActive(): TimerState | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as TimerState;
+    const parsed = sanitizeActive(JSON.parse(raw));
+    if (!parsed) saveActive(null);
+    return parsed;
   } catch {
+    saveActive(null);
     return null;
   }
 }
@@ -51,8 +75,10 @@ function saveActive(state: TimerState | null): void {
 }
 
 function computeElapsed(state: TimerState): number {
-  const liveMs = state.isPaused ? 0 : Date.now() - state.startedAt;
-  return Math.floor((state.accumulatedMs + liveMs) / 1000);
+  const safeState = sanitizeActive(state);
+  if (!safeState) return 0;
+  const liveMs = safeState.isPaused ? 0 : Math.max(0, Date.now() - safeState.startedAt);
+  return clampSessionSeconds((safeState.accumulatedMs + liveMs) / 1000);
 }
 
 export function TimerProvider({ children }: { children: React.ReactNode }) {
@@ -88,6 +114,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [active]);
 
   const start = useCallback((courseId: string, taskId: string | null = null) => {
+    if (!courseId.trim()) return;
     const next: TimerState = {
       courseId,
       taskId,
@@ -126,6 +153,12 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const cancel = useCallback(() => {
+    setActive(null);
+    saveActive(null);
+    setElapsed(0);
+  }, []);
+
   const stop = useCallback(() => {
     if (!active) return null;
     const totalSeconds = computeElapsed(active);
@@ -141,7 +174,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [active]);
 
   return (
-    <TimerContext.Provider value={{ active, elapsedSeconds, start, pause, resume, stop }}>
+    <TimerContext.Provider value={{ active, elapsedSeconds, start, pause, resume, cancel, stop }}>
       {children}
     </TimerContext.Provider>
   );

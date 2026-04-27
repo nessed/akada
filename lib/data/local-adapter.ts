@@ -8,6 +8,7 @@ import type {
   TaskFilters,
   UserSettings,
 } from './types';
+import { clampSessionSeconds, isLoggableDuration, sanitizeSession } from '@/lib/session-safety';
 
 const KEYS = {
   courses: 'lums.courses',
@@ -91,15 +92,23 @@ export class LocalAdapter implements DataProvider {
 
   // ---- Sessions
   async getSessions(filters?: SessionFilters): Promise<Session[]> {
-    let list = read<Session[]>(KEYS.sessions, []);
+    let list = read<Session[]>(KEYS.sessions, []).map(sanitizeSession);
     if (filters?.courseId) list = list.filter((s) => s.courseId === filters.courseId);
     if (filters?.dateRange) list = list.filter((s) => inDateRange(s.date, filters.dateRange));
     return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async addSession(input: Omit<Session, 'id' | 'createdAt'>): Promise<Session> {
+    if (!isLoggableDuration(input.durationSeconds)) {
+      throw new Error('Session duration must be greater than zero');
+    }
     const sessions = read<Session[]>(KEYS.sessions, []);
-    const session: Session = { ...input, id: uid(), createdAt: nowIso() };
+    const session: Session = {
+      ...input,
+      durationSeconds: clampSessionSeconds(input.durationSeconds),
+      id: uid(),
+      createdAt: nowIso(),
+    };
     sessions.push(session);
     write(KEYS.sessions, sessions);
     return session;
@@ -109,7 +118,14 @@ export class LocalAdapter implements DataProvider {
     const sessions = read<Session[]>(KEYS.sessions, []);
     const idx = sessions.findIndex((s) => s.id === id);
     if (idx === -1) throw new Error(`Session ${id} not found`);
-    sessions[idx] = { ...sessions[idx], ...updates, id, createdAt: sessions[idx].createdAt };
+    const safeUpdates = { ...updates };
+    if (updates.durationSeconds !== undefined) {
+      if (!isLoggableDuration(updates.durationSeconds)) {
+        throw new Error('Session duration must be greater than zero');
+      }
+      safeUpdates.durationSeconds = clampSessionSeconds(updates.durationSeconds);
+    }
+    sessions[idx] = { ...sessions[idx], ...safeUpdates, id, createdAt: sessions[idx].createdAt };
     write(KEYS.sessions, sessions);
     return sessions[idx];
   }

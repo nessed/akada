@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import type { Course } from '@/lib/data';
 import { formatHM } from '@/lib/utils';
+import { isLoggableDuration } from '@/lib/session-safety';
 
 interface Props {
   open: boolean;
   course: Course | null;
   durationSeconds: number;
+  saving?: boolean;
   onCancel: () => void;
   onSave: (note: string) => void;
 }
@@ -16,6 +18,7 @@ export default function SessionLogModal({
   open,
   course,
   durationSeconds,
+  saving = false,
   onCancel,
   onSave,
 }: Props) {
@@ -26,13 +29,15 @@ export default function SessionLogModal({
   }, [open]);
 
   if (!open || !course) return null;
+  const canSave = isLoggableDuration(durationSeconds) && !saving;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
       <button
         type="button"
         aria-label="Cancel"
-        onClick={onCancel}
+        onClick={saving ? undefined : onCancel}
+        disabled={saving}
         className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
       />
       <div className="relative w-full bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
@@ -62,17 +67,19 @@ export default function SessionLogModal({
         <div className="flex gap-2.5 mt-4">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={saving ? undefined : onCancel}
+            disabled={saving}
             className="flex-1 py-3.5 rounded-[10px] bg-transparent border border-line-strong text-ink-soft text-sm font-medium"
           >
             Discard
           </button>
           <button
             type="button"
+            disabled={!canSave}
             onClick={() => onSave(note)}
-            className="flex-1 py-3.5 rounded-[10px] bg-ink text-bg text-sm font-medium"
+            className="flex-1 py-3.5 rounded-[10px] bg-ink text-bg text-sm font-medium disabled:opacity-35"
           >
-            Save session
+            {saving ? 'Saving...' : 'Save session'}
           </button>
         </div>
       </div>
