@@ -97,8 +97,16 @@ export default function StatsPage() {
   if (loading) {
     return (
       <PageShell>
-        <div className="pt-20 text-center text-muted-soft text-sm font-serif italic">
-          Loading…
+        <div className="animate-pulse opacity-40">
+          <div className="h-3 w-32 bg-line rounded mb-2.5" />
+          <div className="h-8 w-24 bg-line rounded mb-8" />
+          <div className="grid grid-cols-3 gap-2 mb-8">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-[72px] bg-paper border border-line rounded-xl" />
+            ))}
+          </div>
+          <div className="h-48 bg-paper border border-line rounded-[14px] mb-4" />
+          <div className="h-32 bg-paper border border-line rounded-[14px]" />
         </div>
       </PageShell>
     );
@@ -303,16 +311,13 @@ function Kpi({ label, value, unit }: { label: string; value: string; unit: strin
   );
 }
 
-function EmptyState({ title, text }: { title: string; text: string }) {
+function EmptyState({ title }: { title: string; text: string }) {
   return (
-    <section className="mb-4 rounded-[14px] border border-dashed border-line-strong bg-paper px-5 py-7 text-center">
-      <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">
-        {title}
-      </h2>
-      <p className="mx-auto mt-2 mb-0 max-w-[280px] text-[13px] leading-[1.55] text-muted">
-        {text}
+    <div className="py-12 mb-4 text-center">
+      <p className="m-0 font-serif text-[16px] italic text-muted-soft">
+        Your history will map itself here...
       </p>
-    </section>
+    </div>
   );
 }
 

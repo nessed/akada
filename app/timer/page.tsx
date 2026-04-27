@@ -105,8 +105,12 @@ export default function TimerPage() {
 
   if (!course && !pendingLog) {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center text-muted-soft text-sm font-serif italic">
-        Loading…
+      <div className="min-h-[100dvh] flex items-center justify-center">
+        <div className="animate-pulse opacity-40 flex flex-col items-center">
+          <div className="h-5 w-20 bg-line rounded mb-2" />
+          <div className="h-8 w-48 bg-line rounded mb-16" />
+          <div className="h-[264px] w-[264px] rounded-full border-[2.5px] border-line border-dashed" />
+        </div>
       </div>
     );
   }

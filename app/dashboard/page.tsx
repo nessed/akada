@@ -263,8 +263,21 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <PageShell>
-        <div className="pt-20 text-center text-muted-soft text-sm font-serif italic">
-          Loading…
+        <div className="animate-pulse opacity-40">
+          <div className="flex items-start justify-between mb-8">
+            <div>
+              <div className="h-3 w-16 bg-line rounded mb-2.5" />
+              <div className="h-8 w-32 bg-line rounded mb-3" />
+              <div className="h-4 w-48 bg-line rounded" />
+            </div>
+            <div className="h-10 w-10 bg-line rounded-full" />
+          </div>
+          <div className="h-24 bg-paper border border-line rounded-[14px] mb-8" />
+          <div className="flex flex-col gap-4">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-32 bg-paper border border-line rounded-[14px]" />
+            ))}
+          </div>
         </div>
       </PageShell>
     );
@@ -378,7 +391,7 @@ export default function DashboardPage() {
       <DailySummary todaysSessions={todaysSessions} courses={courses} />
 
       {semesterInfo && (
-        <section className="mt-4 rounded-[14px] border border-line bg-paper px-[22px] py-4">
+        <section className="mt-3 py-2">
           <div className="flex items-baseline justify-between gap-3">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
@@ -406,7 +419,7 @@ export default function DashboardPage() {
           {smartPrompts.map((prompt) => (
             <div
               key={prompt}
-              className="rounded-xl border border-line bg-bg-tint px-4 py-3 text-[13px] leading-[1.45] text-ink-soft"
+              className="px-2 py-1.5 text-[14px] leading-[1.45] text-muted font-serif italic border-l-2 border-line pl-3"
             >
               {prompt}
             </div>
@@ -426,7 +439,7 @@ export default function DashboardPage() {
               </span>
             )}
           </div>
-          <div className="overflow-hidden rounded-xl border border-line bg-paper">
+          <div className="overflow-hidden">
             {todayTasks.length === 0 ? (
               <p className="m-0 px-4 py-3.5 font-serif text-[13px] italic text-muted">
                 Nothing due today. A clean page.
@@ -769,7 +782,6 @@ function getSmartPrompts({
 
 function EmptyPanel({
   title,
-  text,
   action,
   onAction,
 }: {
@@ -779,20 +791,18 @@ function EmptyPanel({
   onAction: () => void;
 }) {
   return (
-    <section className="rounded-[14px] border border-dashed border-line-strong bg-paper px-5 py-6 text-center">
-      <h3 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">
-        {title}
-      </h3>
-      <p className="mx-auto mt-2 mb-0 max-w-[280px] text-[13px] leading-[1.55] text-muted">
-        {text}
+    <div className="py-8 text-center">
+      <p className="m-0 font-serif text-[16px] italic text-muted-soft">
+        The page is blank. Add your first course...
       </p>
       <button
         type="button"
         onClick={onAction}
-        className="mt-4 rounded-full bg-ink px-4 py-2 text-xs font-medium text-bg"
+        className="mt-4 inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-1.5 text-[11px] font-medium text-muted-soft transition-colors hover:border-line-strong hover:text-ink uppercase tracking-[0.04em]"
       >
+        <span aria-hidden className="text-[14px] leading-none font-light">+</span>
         {action}
       </button>
-    </section>
+    </div>
   );
 }

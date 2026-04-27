@@ -154,8 +154,27 @@ export default function TasksPage() {
   if (loading) {
     return (
       <PageShell>
-        <div className="pt-20 text-center text-muted-soft text-sm font-serif italic">
-          Loading…
+        <div className="animate-pulse opacity-40">
+          <div className="h-3 w-12 bg-line rounded mb-2.5" />
+          <div className="h-8 w-24 bg-line rounded mb-8" />
+          <div className="flex gap-2 mb-8">
+            <div className="h-7 w-16 bg-line rounded-full" />
+            <div className="h-7 w-16 bg-line rounded-full" />
+          </div>
+          <div className="flex flex-col gap-6">
+            {[1, 2].map((i) => (
+              <div key={i}>
+                <div className="h-5 w-32 bg-line rounded mb-3" />
+                <div className="border-b border-line border-dashed py-3 flex gap-3">
+                  <div className="w-4 h-4 rounded-full bg-line" />
+                  <div className="flex-1 space-y-2 pt-1">
+                    <div className="h-3 w-2/3 bg-line rounded" />
+                    <div className="h-2 w-1/3 bg-line rounded" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </PageShell>
     );
@@ -412,15 +431,15 @@ export default function TasksPage() {
   );
 }
 
-function EmptyState({ title, text }: { title: string; text: string }) {
+function EmptyState({ title }: { title: string; text: string }) {
+  const prompt = title.includes('courses') 
+    ? 'The page is blank. Add a course to begin...' 
+    : 'The page is blank. Jot down what\'s next...';
   return (
-    <section className="rounded-[14px] border border-dashed border-line-strong bg-paper px-5 py-8 text-center">
-      <h2 className="m-0 font-serif text-[21px] font-medium tracking-[-0.01em]">
-        {title}
-      </h2>
-      <p className="mx-auto mt-2 mb-0 max-w-[280px] text-[13px] leading-[1.55] text-muted">
-        {text}
+    <div className="py-16 text-center">
+      <p className="m-0 font-serif text-[16px] italic text-muted-soft">
+        {prompt}
       </p>
-    </section>
+    </div>
   );
 }
