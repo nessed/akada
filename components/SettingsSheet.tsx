@@ -946,8 +946,3 @@ function BackButton({ onClick }: { onClick: () => void }) {
     </button>
   );
 }
-\n                <img
-                  src={shownAvatar || '/default-avatar.png'}
-                  alt="Profile"
-                  className="h-full w-full object-cover"
-                />

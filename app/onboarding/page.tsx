@@ -132,7 +132,7 @@ export default function OnboardingPage() {
     if (!valid || !canFinishSemester) return;
     try {
       let finalAvatar = avatarPreview;
-      if (avatarPreview) {
+      if (avatarPreview && avatarPreview.startsWith('data:')) {
         finalAvatar = await resizeImage(avatarPreview);
       }
 
@@ -901,6 +901,88 @@ function TextInput({
 function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <input
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GoalGuidance({ hours, color, tint }: { hours: number; color: string; tint: string }) {
+  const tier = hours >= 14 ? 2 : hours >= 9 ? 1 : hours >= 6 ? 0 : -1;
+  const tiers = [
+    { label: 'Minimum', range: '6–8h', note: 'easier electives' },
+    { label: 'Standard', range: '10–12h', note: 'aim for 3.6+' },
+    { label: 'High', range: '14+h', note: 'midterms & projects' },
+  ];
+  return (
+    <div>
+      <p className="m-0 text-[11px] text-muted font-serif italic mb-2.5 leading-[1.5]">
+        ~2–3 hrs independent study per credit hour.
+      </p>
+      <div className="flex gap-2">
+        {tiers.map((t, i) => {
+          const active = tier === i;
+          return (
+            <div
+              key={t.label}
+              className="flex-1 px-2.5 py-2 rounded-[8px] text-center transition-all duration-150"
+              style={{
+                background: active ? tint : 'var(--bg-tint)',
+                outline: active ? `1.5px solid ${color}` : '1.5px solid transparent',
+              }}
+            >
+              <p
+                className="m-0 text-[9px] font-semibold tracking-[0.08em] uppercase leading-none"
+                style={{ color: active ? color : 'var(--muted-soft)' }}
+              >
+                {t.label}
+              </p>
+              <p className="m-0 font-mono font-semibold text-[12px] text-ink mt-1">{t.range}</p>
+              <p className="m-0 text-[9px] text-muted font-serif italic mt-0.5 leading-[1.3]">
+                {t.note}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[11px] font-semibold tracking-[0.12em] uppercase text-muted mb-2.5">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink rounded-none"
+    />
+  );
+}
+
+function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input
       type="date"
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -908,4 +990,3 @@ function DateInput({ value, onChange }: { value: string; onChange: (v: string) =
     />
   );
 }
-\n              <img src={avatarPreview || '/default-avatar.png'} alt="Avatar" className="w-full h-full object-cover" />

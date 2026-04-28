@@ -57,7 +57,15 @@ function loadActive(): TimerState | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = sanitizeActive(JSON.parse(raw));
-    if (!parsed) saveActive(null);
+    if (!parsed) {
+      saveActive(null);
+      return null;
+    }
+    const liveMs = parsed.isPaused ? 0 : Math.max(0, Date.now() - parsed.startedAt);
+    if (parsed.accumulatedMs + liveMs >= MAX_TIMER_MS) {
+      saveActive(null);
+      return null;
+    }
     return parsed;
   } catch {
     saveActive(null);

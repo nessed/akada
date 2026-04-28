@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
 import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
@@ -240,56 +241,14 @@ export default function StatsPage() {
           </p>
         ) : (
           <div>
-            {sessions.slice(0, 12).map((session) => {
-              const course = courses.find((c) => c.id === session.courseId);
-              return (
-                <div
-                  key={session.id}
-                  className="group flex items-start justify-between gap-3 border-b border-line py-3.5 last:border-0"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: course?.color || 'var(--muted)' }}
-                      />
-                      <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-                        {course?.code || 'Course'} · {formatRelativeDate(session.date)}
-                      </p>
-                    </div>
-                    <p className="mt-1 mb-0 font-serif text-[15px] font-medium text-ink">
-                      {course?.name || 'Study session'}
-                    </p>
-                    {session.note && (
-                      <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-ink-soft">
-                        {session.note}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
-                      {formatHM(clampSessionSeconds(session.durationSeconds))}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => deleteSession(session.id)}
-                      aria-label="Delete session"
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-warn sm:opacity-0 sm:group-hover:opacity-100"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {sessions.slice(0, 12).map((session) => (
+              <SessionItem 
+                key={session.id} 
+                session={session} 
+                course={courses.find((c) => c.id === session.courseId)} 
+                onDelete={deleteSession} 
+              />
+            ))}
           </div>
         )}
       </section>
@@ -349,5 +308,80 @@ function FilterChip({ active, onClick, label, color, tint }: ChipProps) {
       )}
       {label}
     </button>
+  );
+}
+
+function SessionItem({ session, course, onDelete }: { session: Session; course?: Course; onDelete: (id: string) => void }) {
+  const controls = useAnimation();
+  
+  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const threshold = 70;
+    if (info.offset.x < -threshold) {
+      onDelete(session.id);
+    } else {
+      controls.start({ x: 0 });
+    }
+  };
+
+  return (
+    <div className="relative overflow-hidden border-b border-line last:border-0 group">
+      <div className="absolute inset-0 flex items-center justify-end px-4 z-0 pointer-events-none">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider uppercase text-warn opacity-80">
+          Delete
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.6}
+        onDragEnd={handleDragEnd}
+        animate={controls}
+        className="relative z-10 flex items-start justify-between gap-3 bg-paper py-3.5"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ background: course?.color || 'var(--muted)' }}
+            />
+            <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+              {course?.code || 'Course'} · {formatRelativeDate(session.date)}
+            </p>
+          </div>
+          <p className="mt-1 mb-0 font-serif text-[15px] font-medium text-ink">
+            {course?.name || 'Study session'}
+          </p>
+          {session.note && (
+            <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-ink-soft">
+              {session.note}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
+            {formatHM(clampSessionSeconds(session.durationSeconds))}
+          </span>
+          <button
+            type="button"
+            onClick={() => onDelete(session.id)}
+            aria-label="Delete session"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-warn"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </motion.div>
+    </div>
   );
 }
