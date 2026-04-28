@@ -11,40 +11,51 @@ import SessionLogModal from '@/components/SessionLogModal';
 
 export default function TimerPage() {
   const router = useRouter();
-  const { active, elapsedSeconds, pause, resume, cancel, stop } = useTimer();
+  const {
+    active,
+    pendingLog,
+    elapsedSeconds,
+    pause,
+    resume,
+    cancel,
+    clearPendingLog,
+    stop,
+  } = useTimer();
 
   const [course, setCourse] = useState<Course | null>(null);
   const [task, setTask] = useState<Task | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [goalMin, setGoalMin] = useState(50);
   const [saving, setSaving] = useState(false);
-  const [pendingLog, setPendingLog] = useState<{
-    courseId: string;
-    taskId: string | null;
-    durationSeconds: number;
-  } | null>(null);
+
+  useEffect(() => {
+    if (pendingLog) setLogOpen(true);
+  }, [pendingLog]);
 
   useEffect(() => {
     if (!active && !pendingLog) {
       router.replace('/dashboard');
       return;
     }
-    if (!active) return;
+    const timerCourseId = active?.courseId ?? pendingLog?.courseId;
+    if (!timerCourseId) return;
     let cancelled = false;
     (async () => {
       const courses = await db.getCourses();
       if (cancelled) return;
-      const timerCourse = courses.find((x) => x.id === active.courseId) || null;
+      const timerCourse = courses.find((x) => x.id === timerCourseId) || null;
       if (!timerCourse) {
         cancel();
+        clearPendingLog();
         router.replace('/dashboard');
         return;
       }
       setCourse(timerCourse);
-      if (active.taskId) {
+      const timerTaskId = active?.taskId ?? pendingLog?.taskId;
+      if (timerTaskId) {
         const tasks = await db.getTasks();
         if (cancelled) return;
-        setTask(tasks.find((t) => t.id === active.taskId) || null);
+        setTask(tasks.find((t) => t.id === timerTaskId) || null);
       } else {
         setTask(null);
       }
@@ -52,7 +63,7 @@ export default function TimerPage() {
     return () => {
       cancelled = true;
     };
-  }, [active, cancel, pendingLog, router]);
+  }, [active, cancel, clearPendingLog, pendingLog, router]);
 
   function handleStop() {
     const result = stop();
@@ -62,11 +73,10 @@ export default function TimerPage() {
     }
     const durationSeconds = clampSessionSeconds(result.durationSeconds);
     if (!isLoggableDuration(durationSeconds)) {
-      setPendingLog(null);
+      clearPendingLog();
       router.replace('/dashboard');
       return;
     }
-    setPendingLog({ ...result, durationSeconds });
     setLogOpen(true);
   }
 
@@ -82,12 +92,12 @@ export default function TimerPage() {
       await db.addSession({
         courseId: pendingLog.courseId,
         taskId: pendingLog.taskId,
-        date: isoDate(),
+        date: pendingLog.date || isoDate(),
         durationSeconds,
         note,
       });
       setLogOpen(false);
-      setPendingLog(null);
+      clearPendingLog();
       router.replace('/dashboard');
     } catch (error) {
       console.error('Failed to save session:', error);
@@ -99,7 +109,7 @@ export default function TimerPage() {
 
   function handleDiscard() {
     setLogOpen(false);
-    setPendingLog(null);
+    clearPendingLog();
     router.replace('/dashboard');
   }
 
