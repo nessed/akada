@@ -10,6 +10,7 @@ interface Props {
   course: Course | null;
   durationSeconds: number;
   saving?: boolean;
+  errorMessage?: string;
   onCancel: () => void;
   onSave: (note: string) => void;
 }
@@ -19,6 +20,7 @@ export default function SessionLogModal({
   course,
   durationSeconds,
   saving = false,
+  errorMessage = '',
   onCancel,
   onSave,
 }: Props) {
@@ -65,6 +67,12 @@ export default function SessionLogModal({
           placeholder="Optional reflection…"
           className="w-full resize-none bg-paper border border-line rounded-[10px] p-3.5 text-sm font-serif italic text-ink outline-none focus:border-line-strong"
         />
+
+        {errorMessage && (
+          <p className="mt-3 mb-0 text-[12px] leading-[1.45] text-muted">
+            {errorMessage}
+          </p>
+        )}
 
         <div className="flex gap-2.5 mt-4">
           <button

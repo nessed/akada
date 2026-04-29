@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
 import { formatHHMMSS, isoDate, resolveTint } from '@/lib/utils';
@@ -31,6 +31,14 @@ export default function TimerPage() {
   const [logOpen, setLogOpen] = useState(false);
   const [goalMin, setGoalMin] = useState(50);
   const [saving, setSaving] = useState(false);
+  const [whiteNoiseOn, setWhiteNoiseOn] = useState(false);
+  const whiteNoiseContextRef = useRef<AudioContext | null>(null);
+  const whiteNoiseBufferRef = useRef<AudioBuffer | null>(null);
+  const whiteNoiseSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const whiteNoiseGainRef = useRef<GainNode | null>(null);
+  const whiteNoiseStartingRef = useRef(false);
+  const [saveError, setSaveError] = useState('');
+  const [online, setOnline] = useState(true);
 
   const timerCourseId = active?.courseId ?? pendingLog?.courseId ?? null;
   const timerTaskId = active?.taskId ?? pendingLog?.taskId ?? null;
@@ -47,6 +55,161 @@ export default function TimerPage() {
   useEffect(() => {
     if (pendingLog) setLogOpen(true);
   }, [pendingLog]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        whiteNoiseSourceRef.current?.stop();
+      } catch {
+        // The source may already be stopped if the page unmounts after a toggle.
+      }
+      whiteNoiseSourceRef.current?.disconnect();
+      whiteNoiseGainRef.current?.disconnect();
+      whiteNoiseSourceRef.current = null;
+      whiteNoiseGainRef.current = null;
+      whiteNoiseContextRef.current?.close();
+      whiteNoiseContextRef.current = null;
+    };
+  }, []);
+
+  async function getWhiteNoiseContext() {
+    const AudioContextConstructor =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+    if (!AudioContextConstructor) return null;
+
+    const context = whiteNoiseContextRef.current ?? new AudioContextConstructor();
+    whiteNoiseContextRef.current = context;
+    if (context.state === 'suspended') await context.resume();
+    return context;
+  }
+
+  function createSeamlessLoopBuffer(context: AudioContext, source: AudioBuffer) {
+    const trimSamples = Math.min(
+      Math.floor(source.sampleRate * 0.04),
+      Math.floor(source.length / 12),
+    );
+    const crossfadeSamples = Math.min(
+      Math.floor(source.sampleRate * 0.65),
+      Math.floor((source.length - trimSamples * 2) / 3),
+    );
+    if (crossfadeSamples <= 1) return source;
+
+    const trimmedLength = source.length - trimSamples * 2;
+    const loopLength = trimmedLength - crossfadeSamples;
+    const loopBuffer = context.createBuffer(
+      source.numberOfChannels,
+      loopLength,
+      source.sampleRate,
+    );
+
+    for (let channel = 0; channel < source.numberOfChannels; channel += 1) {
+      const input = source.getChannelData(channel);
+      const output = loopBuffer.getChannelData(channel);
+      let mean = 0;
+
+      for (let i = 0; i < trimmedLength; i += 1) {
+        mean += input[trimSamples + i];
+      }
+      mean /= trimmedLength;
+
+      for (let i = 0; i < crossfadeSamples; i += 1) {
+        const progress = i / (crossfadeSamples - 1);
+        const fadeOut = Math.cos((progress * Math.PI) / 2);
+        const fadeIn = Math.sin((progress * Math.PI) / 2);
+        const tail = input[trimSamples + loopLength + i] - mean;
+        const head = input[trimSamples + i] - mean;
+        output[i] = tail * fadeOut + head * fadeIn;
+      }
+
+      for (let i = crossfadeSamples; i < loopLength; i += 1) {
+        output[i] = input[trimSamples + i] - mean;
+      }
+    }
+
+    return loopBuffer;
+  }
+
+  async function getWhiteNoiseBuffer(context: AudioContext) {
+    if (whiteNoiseBufferRef.current) return whiteNoiseBufferRef.current;
+
+    const response = await fetch('/whitenoise.ogg');
+    const audioData = await response.arrayBuffer();
+    const buffer = await context.decodeAudioData(audioData);
+    const seamlessBuffer = createSeamlessLoopBuffer(context, buffer);
+    whiteNoiseBufferRef.current = seamlessBuffer;
+    return seamlessBuffer;
+  }
+
+  function stopWhiteNoise() {
+    const context = whiteNoiseContextRef.current;
+    const source = whiteNoiseSourceRef.current;
+    const gain = whiteNoiseGainRef.current;
+
+    if (context && gain) {
+      gain.gain.cancelScheduledValues(context.currentTime);
+      gain.gain.setTargetAtTime(0, context.currentTime, 0.025);
+    }
+
+    window.setTimeout(() => {
+      try {
+        source?.stop();
+      } catch {
+        // Already stopped by cleanup.
+      }
+      source?.disconnect();
+      gain?.disconnect();
+      if (whiteNoiseSourceRef.current === source) whiteNoiseSourceRef.current = null;
+      if (whiteNoiseGainRef.current === gain) whiteNoiseGainRef.current = null;
+    }, 90);
+    setWhiteNoiseOn(false);
+  }
+
+  async function toggleWhiteNoise() {
+    if (whiteNoiseStartingRef.current) return;
+
+    if (whiteNoiseOn) {
+      stopWhiteNoise();
+      return;
+    }
+
+    whiteNoiseStartingRef.current = true;
+    try {
+      const context = await getWhiteNoiseContext();
+      if (!context) return;
+
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      source.buffer = await getWhiteNoiseBuffer(context);
+      source.loop = true;
+      gain.gain.setValueAtTime(0, context.currentTime);
+      gain.gain.linearRampToValueAtTime(0.45, context.currentTime + 0.12);
+      source.connect(gain);
+      gain.connect(context.destination);
+      source.start();
+
+      whiteNoiseSourceRef.current = source;
+      whiteNoiseGainRef.current = gain;
+      setWhiteNoiseOn(true);
+    } catch (error) {
+      console.error('Failed to play white noise:', error);
+      setWhiteNoiseOn(false);
+    } finally {
+      whiteNoiseStartingRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    const updateOnline = () => setOnline(window.navigator.onLine);
+    updateOnline();
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    return () => {
+      window.removeEventListener('online', updateOnline);
+      window.removeEventListener('offline', updateOnline);
+    };
+  }, []);
 
   // If neither timer nor pending log exists, bounce to dashboard.
   // If a timer points at a course we no longer have (e.g. deleted while
@@ -80,6 +243,11 @@ export default function TimerPage() {
 
   async function handleSave(note: string) {
     if (!pendingLog) return;
+    setSaveError('');
+    if (!online) {
+      setSaveError('You are offline. This session is still saved locally; reconnect and save again.');
+      return;
+    }
     const durationSeconds = clampSessionSeconds(pendingLog.durationSeconds);
     if (!isLoggableDuration(durationSeconds)) {
       handleDiscard();
@@ -99,7 +267,7 @@ export default function TimerPage() {
       router.replace('/dashboard');
     } catch (error) {
       console.error('Failed to save session:', error);
-      alert('Could not save that session. Please try again.');
+      setSaveError('Could not save yet. This session is still saved locally; try again in a moment.');
     } finally {
       setSaving(false);
     }
@@ -107,6 +275,7 @@ export default function TimerPage() {
 
   function handleDiscard() {
     setLogOpen(false);
+    setSaveError('');
     clearPendingLog();
     router.replace('/dashboard');
   }
@@ -261,6 +430,27 @@ export default function TimerPage() {
         <div className="flex items-center justify-center gap-3.5 px-[22px] pt-4 pb-[calc(28px+env(safe-area-inset-bottom))]">
           <button
             type="button"
+            onClick={toggleWhiteNoise}
+            aria-label={whiteNoiseOn ? 'Stop white noise' : 'Play white noise'}
+            title={whiteNoiseOn ? 'Stop white noise' : 'Play white noise'}
+            className="w-14 h-14 rounded-full border border-line bg-paper text-ink flex items-center justify-center transition-colors"
+            style={{
+              color: whiteNoiseOn ? course.color : 'var(--ink-soft)',
+              boxShadow: whiteNoiseOn ? `inset 0 0 0 1px ${course.color}` : 'none',
+            }}
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M4 14.5c1.7 0 1.7-5 3.4-5s1.7 5 3.4 5 1.7-5 3.4-5 1.7 5 3.4 5 1.7-5 3.4-5"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
             onClick={isPaused ? resume : pause}
             aria-label={isPaused ? 'Resume' : 'Pause'}
             className="w-14 h-14 rounded-full bg-paper border border-line text-ink flex items-center justify-center"
@@ -299,6 +489,12 @@ export default function TimerPage() {
         course={course}
         durationSeconds={pendingLog?.durationSeconds ?? 0}
         saving={saving}
+        errorMessage={
+          saveError ||
+          (!online && pendingLog
+            ? 'You are offline. This session is saved locally until you reconnect.'
+            : '')
+        }
         onCancel={handleDiscard}
         onSave={handleSave}
       />

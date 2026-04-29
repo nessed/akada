@@ -36,6 +36,7 @@ interface TimerContextValue {
   resume: () => void;
   cancel: () => void;
   clearPendingLog: () => void;
+  clearTimerState: () => void;
   stop: () => PendingTimerLog | null;
 }
 
@@ -43,9 +44,17 @@ const TimerContext = createContext<TimerContextValue | null>(null);
 
 const STORAGE_KEY = 'lums.activeTimer';
 const PENDING_STORAGE_KEY = 'lums.pendingTimerLog';
+const TAB_STORAGE_KEY = 'lums.timerTabs';
 const MAX_TIMER_MS = 18 * 60 * 60 * 1000;
 const RUNNING_CHECKPOINT_MS = 10 * 1000;
 const STALE_RUNNING_MS = 4 * 60 * 60 * 1000;
+const TAB_HEARTBEAT_MS = 5 * 1000;
+const TAB_TTL_MS = 20 * 1000;
+
+interface TimerTabRecord {
+  id: string;
+  lastSeenAt: number;
+}
 
 function isoDateFromMs(value: number): string {
   const date = new Date(Number.isFinite(value) ? value : Date.now());
@@ -102,6 +111,11 @@ function savePendingLog(log: PendingTimerLog | null): void {
   }
 }
 
+export function clearStoredTimerState(): void {
+  saveActive(null);
+  savePendingLog(null);
+}
+
 function loadPendingLog(): PendingTimerLog | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -123,6 +137,60 @@ function saveActive(state: TimerState | null): void {
   } else {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
+}
+
+function activeMatches(a: TimerState | null, b: TimerState): boolean {
+  return Boolean(
+    a &&
+      a.courseId === b.courseId &&
+      a.taskId === b.taskId &&
+      a.startedAt === b.startedAt &&
+      a.startedDate === b.startedDate,
+  );
+}
+
+function saveActiveIfCurrent(state: TimerState): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const current = sanitizeActive(JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null'));
+    if (!activeMatches(current, state)) return false;
+    saveActive(state);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readTimerTabs(now = Date.now()): TimerTabRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(TAB_STORAGE_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((tab) => ({
+        id: typeof tab?.id === 'string' ? tab.id : '',
+        lastSeenAt: Number(tab?.lastSeenAt),
+      }))
+      .filter((tab) => tab.id && Number.isFinite(tab.lastSeenAt) && now - tab.lastSeenAt < TAB_TTL_MS);
+  } catch {
+    return [];
+  }
+}
+
+function writeTimerTabs(tabs: TimerTabRecord[]): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(tabs));
+}
+
+function markTimerTab(id: string, now = Date.now()): void {
+  const tabs = readTimerTabs(now).filter((tab) => tab.id !== id);
+  writeTimerTabs([...tabs, { id, lastSeenAt: now }]);
+}
+
+function unregisterTimerTab(id: string, now = Date.now()): TimerTabRecord[] {
+  const tabs = readTimerTabs(now).filter((tab) => tab.id !== id);
+  writeTimerTabs(tabs);
+  return tabs;
 }
 
 function computeElapsed(state: TimerState): number {
@@ -192,6 +260,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const [pendingLog, setPendingLog] = useState<PendingTimerLog | null>(null);
   const [elapsedSeconds, setElapsed] = useState(0);
   const tickRef = useRef<number | null>(null);
+  const tabHeartbeatRef = useRef<number | null>(null);
+  const tabIdRef = useRef(`timer-tab-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const activeRef = useRef<TimerState | null>(null);
   const pendingLogRef = useRef<PendingTimerLog | null>(null);
 
@@ -218,26 +288,23 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!activeRef.current) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
+    const tabId = tabIdRef.current;
+    markTimerTab(tabId);
+    tabHeartbeatRef.current = window.setInterval(() => {
+      markTimerTab(tabId);
+    }, TAB_HEARTBEAT_MS);
 
     const handlePageHide = () => {
       const current = activeRef.current;
-      if (!current) return;
-      const log = buildPendingLog(current, Date.now());
-      activeRef.current = null;
-      saveActive(null);
-      if (log) {
-        pendingLogRef.current = log;
-        savePendingLog(log);
+      unregisterTimerTab(tabId);
+      if (current) {
+        // Refreshes and accidental closes should preserve the timer. A later
+        // hydrate decides whether the absence was short enough to keep running.
+        saveActive({ ...current, lastSeenAt: Date.now() });
       }
     };
 
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (!event.persisted) return;
+    const syncFromStorage = () => {
       const snapshot = loadActiveSnapshot();
       activeRef.current = snapshot.active;
       pendingLogRef.current = snapshot.pendingLog;
@@ -246,13 +313,26 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       setElapsed(snapshot.active ? computeElapsed(snapshot.active) : 0);
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      markTimerTab(tabId);
+      syncFromStorage();
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY && event.key !== PENDING_STORAGE_KEY) return;
+      syncFromStorage();
+    };
+
     window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('storage', handleStorage);
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (tabHeartbeatRef.current) window.clearInterval(tabHeartbeatRef.current);
+      unregisterTimerTab(tabId);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 
@@ -287,7 +367,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         lastCheckpoint = now;
         const checkpoint = { ...active, lastSeenAt: now };
         activeRef.current = checkpoint;
-        saveActive(checkpoint);
+        saveActiveIfCurrent(checkpoint);
       }
     }, 250);
     return () => {
@@ -298,6 +378,23 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
   const start = useCallback((courseId: string, taskId: string | null = null) => {
     if (!courseId.trim()) return;
+    const snapshot = loadActiveSnapshot();
+    const existingPending = pendingLogRef.current ?? snapshot.pendingLog;
+    if (existingPending) {
+      activeRef.current = null;
+      pendingLogRef.current = existingPending;
+      setActive(null);
+      setPendingLog(existingPending);
+      saveActive(null);
+      setElapsed(0);
+      return;
+    }
+    if (snapshot.active && !activeMatches(activeRef.current, snapshot.active)) {
+      activeRef.current = snapshot.active;
+      setActive(snapshot.active);
+      setElapsed(computeElapsed(snapshot.active));
+      return;
+    }
     const now = Date.now();
     const next: TimerState = {
       courseId,
@@ -405,6 +502,15 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     savePendingLog(null);
   }, []);
 
+  const clearTimerState = useCallback(() => {
+    activeRef.current = null;
+    pendingLogRef.current = null;
+    setActive(null);
+    setPendingLog(null);
+    setElapsed(0);
+    clearStoredTimerState();
+  }, []);
+
   return (
     <TimerContext.Provider
       value={{
@@ -416,6 +522,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         resume,
         cancel,
         clearPendingLog,
+        clearTimerState,
         stop,
       }}
     >

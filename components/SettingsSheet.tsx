@@ -23,6 +23,7 @@ import {
   type HeadingFont,
   type Density,
 } from '@/lib/preferences';
+import { useTimer } from '@/lib/timer-context';
 
 type Section = 'overview' | 'profile' | 'courses' | 'appearance';
 
@@ -571,6 +572,7 @@ function CoursesEditor({
   onBack: () => void;
   onSaved: () => void;
 }) {
+  const { active, pendingLog } = useTimer();
   const original = useMemo(
     () =>
       courses.map<DraftCourse>((c) => ({
@@ -640,12 +642,20 @@ function CoursesEditor({
         return;
       }
       const draftIds = new Set(validDrafts.map((d) => d.id).filter(Boolean));
+      const removed = originalRef.current.filter((o) => !draftIds.has(o.id));
+      const timerCourseId = active?.courseId ?? pendingLog?.courseId ?? null;
+      if (timerCourseId && removed.some((course) => course.id === timerCourseId)) {
+        setError(
+          active
+            ? 'Stop or discard the active timer before deleting that course.'
+            : 'Save or discard the pending timer log before deleting that course.',
+        );
+        return;
+      }
 
       // Delete removed
-      for (const o of originalRef.current) {
-        if (!draftIds.has(o.id)) {
-          await deleteCourseOptimistic(o.id!);
-        }
+      for (const o of removed) {
+        await deleteCourseOptimistic(o.id!);
       }
       // Add new + update existing
       for (const d of validDrafts) {

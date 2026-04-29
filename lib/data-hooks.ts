@@ -23,6 +23,7 @@ import type {
   UserSettings,
 } from './data';
 import { db } from './data';
+import { clearStoredTimerState } from './timer-context';
 
 const KEY = {
   onboarding: 'onboarding-complete',
@@ -332,6 +333,7 @@ export async function markOnboardingComplete() {
 }
 
 export async function resetAllData() {
+  clearStoredTimerState();
   await db.resetAll();
   // Wipe every cached resource so pages re-fetch fresh.
   await Promise.all([

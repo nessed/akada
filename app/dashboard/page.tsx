@@ -45,7 +45,7 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { active, start } = useTimer();
+  const { active, start, clearTimerState } = useTimer();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
@@ -161,6 +161,7 @@ export default function DashboardPage() {
 
   async function handleSignOut() {
     setShowSettings(false);
+    clearTimerState();
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
@@ -172,6 +173,7 @@ export default function DashboardPage() {
 
   async function handleResetData() {
     setShowSettings(false);
+    clearTimerState();
     try {
       await resetAllData();
     } catch (err) {

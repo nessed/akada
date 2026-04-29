@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import BottomNav from './BottomNav';
+import ActiveTimerDock from './ActiveTimerDock';
 import { useTimer } from '@/lib/timer-context';
 
 interface Props {
@@ -27,6 +28,7 @@ export default function PageShell({ children, hideNav }: Props) {
       >
         {children}
       </main>
+      {!hideNav && <ActiveTimerDock />}
       {!hideNav && <BottomNav />}
     </div>
   );
