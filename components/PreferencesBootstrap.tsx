@@ -9,6 +9,7 @@ const DEFAULTS = {
   paperTone: 'warm' as const,
   headingFont: 'fraunces' as const,
   density: 'comfy' as const,
+  primaryAccent: 'classic' as const,
   dailyReminder: true,
   sessionSound: false,
   hideWeekends: false,

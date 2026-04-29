@@ -95,7 +95,7 @@ export default function SessionLogModal({
             type="button"
             disabled={!canSave}
             onClick={() => onSave(note)}
-            className="flex-1 py-3.5 rounded-[10px] bg-ink text-bg text-sm font-medium disabled:opacity-35"
+            className="flex-1 py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium disabled:opacity-35"
           >
             {saving ? 'Saving...' : 'Save session'}
           </button>

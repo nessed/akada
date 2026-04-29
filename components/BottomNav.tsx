@@ -86,7 +86,7 @@ export default function BottomNav() {
               key={tab.href}
               href={tab.href}
               className={`relative flex flex-col items-center gap-1 px-3.5 py-1.5 ${
-                active ? 'text-ink' : 'text-muted-soft'
+                active ? 'text-primary' : 'text-muted-soft'
               }`}
               style={{ strokeWidth: active ? 1.8 : 1.4 }}
             >
@@ -95,7 +95,7 @@ export default function BottomNav() {
                 {tab.label}
               </span>
               {active && (
-                <span className="absolute -bottom-0.5 w-[18px] h-[1.5px] rounded-full bg-ink" />
+                <span className="absolute -bottom-0.5 w-[18px] h-[1.5px] rounded-full bg-primary" />
               )}
             </Link>
           );

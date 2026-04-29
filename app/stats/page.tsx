@@ -103,7 +103,7 @@ export default function StatsPage() {
 
   const accent =
     filter === 'all'
-      ? '#1A1915'
+      ? 'var(--primary)'
       : courses.find((c) => c.id === filter)?.color || '#1A1915';
 
   const totals = useMemo(() => {
@@ -355,9 +355,9 @@ function FilterChip({ active, onClick, label, color, tint }: ChipProps) {
       onClick={onClick}
       className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border inline-flex items-center gap-1.5 transition-colors"
       style={{
-        background: active ? (color ? tint || 'var(--bg-tint)' : 'var(--ink)') : 'transparent',
-        color: active ? (color ? 'var(--ink)' : 'var(--bg)') : 'var(--muted)',
-        borderColor: active ? color || 'var(--ink)' : 'var(--line)',
+        background: active ? (color ? tint || 'var(--bg-tint)' : 'var(--primary)') : 'transparent',
+        color: active ? (color ? 'var(--ink)' : 'var(--primary-contrast)') : 'var(--muted)',
+        borderColor: active ? color || 'var(--primary)' : 'var(--line)',
       }}
     >
       {color && (

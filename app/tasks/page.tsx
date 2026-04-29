@@ -200,7 +200,7 @@ export default function TasksPage() {
             onClick={() => setFilter(f.v)}
             className={`px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
               filter === f.v
-                ? 'bg-ink text-bg border-ink'
+                ? 'bg-primary text-primary-contrast border-primary'
                 : 'bg-transparent text-ink-soft border-line'
             }`}
           >
@@ -318,7 +318,7 @@ export default function TasksPage() {
                           <button
                             type="button"
                             onClick={() => commitDraft(course.id)}
-                            className="ml-auto px-3 py-1.5 rounded-full bg-ink text-bg text-[11px] font-medium"
+                            className="ml-auto px-3 py-1.5 rounded-full bg-primary text-primary-contrast text-[11px] font-medium"
                           >
                             Add
                           </button>
@@ -413,7 +413,7 @@ export default function TasksPage() {
                 type="button"
                 disabled={!editTitle.trim() || !editCourseId}
                 onClick={saveEditTask}
-                className="flex-1 py-3.5 rounded-[10px] bg-ink text-bg text-sm font-medium disabled:opacity-30"
+                className="flex-1 py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium disabled:opacity-30"
               >
                 Save task
               </button>

@@ -88,7 +88,7 @@ export default function LandingPage() {
               </Link>
               <Link
                 href="/dashboard"
-                className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-bg"
+                className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-contrast"
               >
                 Open app
               </Link>
@@ -109,7 +109,7 @@ export default function LandingPage() {
             <div className="mt-8 flex flex-col justify-center gap-2.5 sm:flex-row">
               <Link
                 href="/auth"
-                className="rounded-xl bg-ink px-6 py-3.5 text-[15px] font-medium text-bg"
+                className="rounded-xl bg-primary px-6 py-3.5 text-[15px] font-medium text-primary-contrast"
               >
                 Start planning
               </Link>

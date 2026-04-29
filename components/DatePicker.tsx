@@ -101,7 +101,7 @@ export default function DatePicker({
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
-        className={`flex w-full items-center justify-between gap-2 border border-line bg-bg-tint text-left text-ink-soft outline-none transition-colors hover:border-line-strong focus:border-ink ${
+        className={`flex w-full items-center justify-between gap-2 border border-line bg-bg-tint text-left text-ink-soft outline-none transition-colors hover:border-line-strong focus:border-primary ${
           compact
             ? 'rounded-md px-2.5 py-1.5 text-[11px]'
             : 'rounded-lg px-3 py-2.5 text-xs'
@@ -199,7 +199,7 @@ export default function DatePicker({
                     onClick={() => selectDate(dayIso)}
                     className={`flex aspect-square items-center justify-center rounded-[9px] text-[12px] font-medium transition-colors ${
                       isSelected
-                        ? 'bg-ink text-bg'
+                        ? 'bg-primary text-primary-contrast'
                         : isToday
                           ? 'bg-bg-tint text-ink'
                           : inMonth

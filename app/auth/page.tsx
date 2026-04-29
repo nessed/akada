@@ -188,7 +188,7 @@ export default function AuthPage() {
               password.length < 6 ||
               (isSignUp && !name.trim())
             }
-            className="mt-2.5 w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+            className="mt-2.5 w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
           >
             {state === 'loading'
               ? isSignUp
@@ -281,7 +281,7 @@ function UnderlineInput({
       autoFocus={autoFocus}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink transition-colors placeholder:text-muted-soft"
+      className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary transition-colors placeholder:text-muted-soft"
     />
   );
 }

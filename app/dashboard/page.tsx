@@ -373,13 +373,13 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => setShowSettings(true)}
-            className="relative w-[42px] h-[42px] rounded-full bg-bg-tint border border-line overflow-visible flex items-center justify-center shrink-0 hover:border-ink transition-colors"
+            className="relative w-[42px] h-[42px] rounded-full bg-bg-tint border border-line overflow-visible flex items-center justify-center shrink-0 hover:border-primary transition-colors"
           >
             <span className="block h-full w-full overflow-hidden rounded-full">
               <img src={avatarUrl || '/default-avatar.png'} alt="Settings" className="w-full h-full object-cover" />
             </span>
             {streak > 0 && (
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-bg bg-ink px-1 font-mono text-[9px] font-bold text-bg">
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-bg bg-primary px-1 font-mono text-[9px] font-bold text-primary-contrast">
                 {streak}
               </span>
             )}
@@ -407,7 +407,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-bg-tint">
             <div
-              className="h-full rounded-full bg-ink"
+              className="h-full rounded-full bg-primary"
               style={{ width: `${semesterInfo.percent}%` }}
             />
           </div>
@@ -573,7 +573,7 @@ export default function DashboardPage() {
                 type="button"
                 disabled={!newTaskTitle.trim()}
                 onClick={handleAddTask}
-                className="flex-1 py-3.5 rounded-[10px] bg-ink text-bg text-sm font-medium disabled:opacity-30"
+                className="flex-1 py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium disabled:opacity-30"
               >
                 Add task
               </button>
@@ -666,7 +666,7 @@ export default function DashboardPage() {
                 type="button"
                 disabled={!newCourseCode.trim() || !newCourseName.trim()}
                 onClick={handleAddCourse}
-                className="flex-1 py-3.5 rounded-[10px] bg-ink text-bg text-sm font-medium disabled:opacity-30"
+                className="flex-1 py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium disabled:opacity-30"
               >
                 Add course
               </button>

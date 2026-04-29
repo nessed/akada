@@ -22,6 +22,7 @@ import {
   type PaperTone,
   type HeadingFont,
   type Density,
+  type PrimaryAccent,
 } from '@/lib/preferences';
 import { useTimer } from '@/lib/timer-context';
 
@@ -186,7 +187,7 @@ export default function SettingsSheet({
                   initials
                 )}
               </span>
-              <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-ink text-bg shadow-sm">
+              <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-contrast shadow-sm">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                   <path
                     d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
@@ -244,7 +245,7 @@ export default function SettingsSheet({
               />
               <SettingRow
                 label="Appearance"
-                sub={`${labelTone(prefs.paperTone)} · ${labelFont(prefs.headingFont)}`}
+                sub={`${labelTone(prefs.paperTone)} · ${labelPrimary(prefs.primaryAccent)} · ${labelFont(prefs.headingFont)}`}
                 onClick={() => setSection('appearance')}
               />
             </SettingGroup>
@@ -352,6 +353,9 @@ function labelTone(t: PaperTone) {
 }
 function labelFont(f: HeadingFont) {
   return { fraunces: 'Fraunces', lora: 'Lora', merriweather: 'Merri.' }[f];
+}
+function labelPrimary(a: PrimaryAccent) {
+  return { classic: 'Ink', green: 'Sage' }[a];
 }
 
 function StatChip({ label, value }: { label: string; value: string }) {
@@ -478,7 +482,7 @@ function Toggle({
       style={{
         width: 38,
         height: 22,
-        background: value ? 'var(--ink)' : 'var(--line-strong)',
+        background: value ? 'var(--primary)' : 'var(--line-strong)',
       }}
     >
       <span
@@ -526,7 +530,7 @@ function ProfileEditor({
           value={settingsName}
           onChange={(e) => onNameChange(e.target.value)}
           placeholder={displayName || 'Your name'}
-          className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink"
+          className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary"
         />
       </div>
 
@@ -543,7 +547,7 @@ function ProfileEditor({
           type="button"
           disabled={updating || !settingsName.trim()}
           onClick={onSave}
-          className="flex-1 rounded-[10px] bg-ink py-3.5 text-sm font-medium text-bg disabled:opacity-40"
+          className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast disabled:opacity-40"
         >
           {updating ? 'Saving…' : 'Save changes'}
         </button>
@@ -804,7 +808,7 @@ function CoursesEditor({
           disabled={
             saving || drafts.filter((d) => d.code.trim() && d.name.trim()).length === 0
           }
-          className="flex-1 rounded-[10px] bg-ink py-3.5 text-sm font-medium text-bg disabled:opacity-40"
+          className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast disabled:opacity-40"
         >
           {saving ? 'Saving…' : 'Save courses'}
         </button>
@@ -832,6 +836,11 @@ const DENSITY_OPTIONS: { v: Density; l: string }[] = [
   { v: 'cozy', l: 'Cozy' },
   { v: 'comfy', l: 'Comfy' },
   { v: 'compact', l: 'Compact' },
+];
+
+const PRIMARY_OPTIONS: { v: PrimaryAccent; l: string; color: string; tint: string }[] = [
+  { v: 'classic', l: 'Ink', color: '#1A1915', tint: '#F4F2EC' },
+  { v: 'green', l: 'Sage', color: '#91A884', tint: '#E7EDE1' },
 ];
 
 function AppearanceEditor({
@@ -889,6 +898,39 @@ function AppearanceEditor({
 
       <div className="mt-6">
         <p className="ml-1 mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+          Primary color
+        </p>
+        <div className="grid grid-cols-2 gap-2.5">
+          {PRIMARY_OPTIONS.map((o) => {
+            const sel = prefs.primaryAccent === o.v;
+            return (
+              <button
+                key={o.v}
+                type="button"
+                onClick={() => setPrefs({ primaryAccent: o.v })}
+                className="rounded-[10px] px-3.5 py-3 text-left"
+                style={{
+                  background: sel ? o.tint : 'transparent',
+                  border: sel ? `1.5px solid ${o.color}` : '1px solid var(--line)',
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    className="h-5 w-5 rounded-full border border-line"
+                    style={{ background: o.color }}
+                  />
+                  <span className="font-serif text-[13px] font-medium text-ink">
+                    {o.l}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <p className="ml-1 mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
           Heading font
         </p>
         <div className="flex gap-2">
@@ -934,9 +976,9 @@ function AppearanceEditor({
                 onClick={() => setPrefs({ density: o.v })}
                 className="flex-1 rounded-[10px] py-3 text-[13px] font-medium"
                 style={{
-                  background: sel ? 'var(--ink)' : 'transparent',
-                  color: sel ? 'var(--bg)' : 'var(--ink-soft)',
-                  border: sel ? '1px solid var(--ink)' : '1px solid var(--line)',
+                  background: sel ? 'var(--primary)' : 'transparent',
+                  color: sel ? 'var(--primary-contrast)' : 'var(--ink-soft)',
+                  border: sel ? '1px solid var(--primary)' : '1px solid var(--line)',
                 }}
               >
                 {o.l}

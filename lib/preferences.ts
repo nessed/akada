@@ -5,11 +5,13 @@ import { useEffect, useState, useCallback } from 'react';
 export type PaperTone = 'warm' | 'paper' | 'stone' | 'white';
 export type HeadingFont = 'fraunces' | 'lora' | 'merriweather';
 export type Density = 'cozy' | 'comfy' | 'compact';
+export type PrimaryAccent = 'classic' | 'green';
 
 export interface Preferences {
   paperTone: PaperTone;
   headingFont: HeadingFont;
   density: Density;
+  primaryAccent: PrimaryAccent;
   dailyReminder: boolean;
   sessionSound: boolean;
   hideWeekends: boolean;
@@ -19,6 +21,7 @@ const DEFAULTS: Preferences = {
   paperTone: 'warm',
   headingFont: 'fraunces',
   density: 'comfy',
+  primaryAccent: 'classic',
   dailyReminder: true,
   sessionSound: false,
   hideWeekends: false,
@@ -29,6 +32,7 @@ const STORAGE_KEY = 'akada.preferences.v1';
 const PAPER_TONE_VALUES: PaperTone[] = ['warm', 'paper', 'stone', 'white'];
 const HEADING_FONT_VALUES: HeadingFont[] = ['fraunces', 'lora', 'merriweather'];
 const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
+const PRIMARY_ACCENT_VALUES: PrimaryAccent[] = ['classic', 'green'];
 
 function sanitizePreferences(value: unknown): Preferences {
   const parsed = value && typeof value === 'object' ? (value as Partial<Preferences>) : {};
@@ -42,6 +46,9 @@ function sanitizePreferences(value: unknown): Preferences {
     density: DENSITY_VALUES.includes(parsed.density as Density)
       ? (parsed.density as Density)
       : DEFAULTS.density,
+    primaryAccent: PRIMARY_ACCENT_VALUES.includes(parsed.primaryAccent as PrimaryAccent)
+      ? (parsed.primaryAccent as PrimaryAccent)
+      : DEFAULTS.primaryAccent,
     dailyReminder:
       typeof parsed.dailyReminder === 'boolean'
         ? parsed.dailyReminder
@@ -112,6 +119,22 @@ const HEADING_VAR_OVERRIDE: Record<HeadingFont, string | null> = {
   merriweather: 'var(--font-merriweather)',
 };
 
+const PRIMARY_ACCENTS: Record<
+  PrimaryAccent,
+  { primary: string; contrast: string; tint: string }
+> = {
+  classic: {
+    primary: 'var(--ink)',
+    contrast: 'var(--bg)',
+    tint: 'var(--bg-tint)',
+  },
+  green: {
+    primary: '#91A884',
+    contrast: '#1A1915',
+    tint: '#E7EDE1',
+  },
+};
+
 function readFromStorage(): Preferences {
   if (typeof window === 'undefined') return DEFAULTS;
   try {
@@ -135,6 +158,10 @@ export function applyPreferences(prefs: Preferences) {
   root.style.setProperty('--line-strong', tone.lineStrong);
   root.style.setProperty('--paper-glow-a', tone.glowA);
   root.style.setProperty('--paper-glow-b', tone.glowB);
+  const accent = PRIMARY_ACCENTS[prefs.primaryAccent] || PRIMARY_ACCENTS.classic;
+  root.style.setProperty('--primary', accent.primary);
+  root.style.setProperty('--primary-contrast', accent.contrast);
+  root.style.setProperty('--primary-tint', accent.tint);
 
   const override = HEADING_VAR_OVERRIDE[prefs.headingFont];
   if (override) {

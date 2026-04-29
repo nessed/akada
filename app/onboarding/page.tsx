@@ -179,7 +179,7 @@ export default function OnboardingPage() {
             <span
               key={s}
               className={`h-0.5 flex-1 rounded-full transition-colors duration-200 ${
-                active ? 'bg-ink' : 'bg-line'
+                active ? 'bg-primary' : 'bg-line'
               }`}
             />
           );
@@ -270,7 +270,7 @@ function Welcome({ onNext }: { onNext: () => void }) {
       <button
         type="button"
         onClick={onNext}
-        className="mt-12 w-full max-w-[280px] py-4 px-6 rounded-xl bg-ink text-bg text-[15px] font-medium tracking-[0.01em]"
+        className="mt-12 w-full max-w-[280px] py-4 px-6 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em]"
       >
         Start planning
       </button>
@@ -335,7 +335,7 @@ function NameStep({
         {/* Avatar upload */}
         <label className="relative cursor-pointer group mb-6">
           <div
-            className="w-24 h-24 rounded-full border-2 border-dashed border-line-strong flex items-center justify-center overflow-hidden transition-colors group-hover:border-ink"
+            className="w-24 h-24 rounded-full border-2 border-dashed border-line-strong flex items-center justify-center overflow-hidden transition-colors group-hover:border-primary"
             style={avatarPreview ? { borderStyle: 'solid', borderColor: 'var(--line)' } : {}}
           >
             {avatarPreview ? (
@@ -345,7 +345,7 @@ function NameStep({
               <span className="font-serif italic text-[32px] text-muted-soft">{initials}</span>
             )}
           </div>
-          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-ink text-bg flex items-center justify-center text-sm shadow-sm">
+          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-primary-contrast flex items-center justify-center text-sm shadow-sm">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
               <circle cx="12" cy="13" r="4" />
@@ -365,7 +365,7 @@ function NameStep({
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && name.trim()) onNext();
               }}
-              className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink rounded-none"
+              className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary rounded-none"
             />
           </Field>
         </div>
@@ -376,7 +376,7 @@ function NameStep({
           type="button"
           disabled={!name.trim()}
           onClick={onNext}
-          className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
           Continue
         </button>
@@ -584,7 +584,7 @@ function CoursesStep({
           type="button"
           disabled={!valid}
           onClick={onNext}
-          className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
           Continue
         </button>
@@ -650,7 +650,7 @@ function SemesterStep({
               style={{
                 background: active ? 'var(--bg-tint)' : 'var(--paper)',
                 borderColor: active ? 'var(--ink)' : 'var(--line)',
-                outline: active ? '1px solid var(--ink)' : 'none',
+                outline: active ? '1px solid var(--primary)' : 'none',
               }}
             >
               <div>
@@ -665,7 +665,7 @@ function SemesterStep({
                 className="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-colors border"
                 style={{
                   borderColor: active ? 'var(--ink)' : 'var(--line-strong)',
-                  background: active ? 'var(--ink)' : 'transparent',
+                  background: active ? 'var(--primary)' : 'transparent',
                 }}
               >
                 {active && (
@@ -693,7 +693,7 @@ function SemesterStep({
           type="button"
           disabled={!canFinish}
           onClick={onNext}
-          className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
           Continue
         </button>
@@ -823,7 +823,7 @@ function RoutineStep({
           type="button"
           disabled={saving}
           onClick={handleFinish}
-          className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {saving ? 'Setting up…' : displayName ? `Let's go, ${cleanDisplayName(displayName)}` : 'Begin'}
         </button>
@@ -900,7 +900,7 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink rounded-none"
+      className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary rounded-none"
     />
   );
 }
@@ -911,7 +911,7 @@ function DateInput({ value, onChange }: { value: string; onChange: (v: string) =
       type="date"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink rounded-none"
+      className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary rounded-none"
     />
   );
 }

@@ -26,6 +26,11 @@ const config: Config = {
           DEFAULT: 'var(--muted)',
           soft: 'var(--muted-soft)',
         },
+        primary: {
+          DEFAULT: 'var(--primary)',
+          contrast: 'var(--primary-contrast)',
+          tint: 'var(--primary-tint)',
+        },
         warn: '#B5694C',
         warnSoft: '#A38046',
         warnTint: '#F4ECDC',

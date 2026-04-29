@@ -13,6 +13,9 @@
   --ink-soft: #4B4943;
   --muted: #8C887E;
   --muted-soft: #B5B1A4;
+  --primary: var(--ink);
+  --primary-contrast: var(--bg);
+  --primary-tint: var(--bg-tint);
   --paper-glow-a: rgba(180, 170, 140, 0.10);
   --paper-glow-b: rgba(160, 150, 130, 0.08);
 }
