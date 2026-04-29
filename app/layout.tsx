@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono, Fraunces, Lora, Merriweather } from 'next/font/google';
 import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
+import SWRRoot from '@/components/SWRRoot';
 import './globals.css';
 
 const inter = Inter({
@@ -85,7 +86,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="font-sans bg-bg text-ink antialiased">
         <PreferencesBootstrap />
-        <TimerProvider>{children}</TimerProvider>
+        <SWRRoot>
+          <TimerProvider>{children}</TimerProvider>
+        </SWRRoot>
       </body>
     </html>
   );

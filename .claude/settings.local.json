@@ -28,7 +28,19 @@
       "Bash(curl -s -o /dev/null -w \"tasks=%{http_code}\\\\n\" http://localhost:3002/tasks)",
       "Bash(curl -s -o /dev/null -w \"stats=%{http_code}\\\\n\" http://localhost:3002/stats)",
       "Bash(curl -s -o /dev/null -w \"onboarding=%{http_code}\\\\n\" http://localhost:3002/onboarding)",
-      "Bash(kill 767)"
+      "Bash(kill 767)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(rm -f /tmp/akada-dev.log)",
+      "Bash(curl -s -o /dev/null -w \"auth=%{http_code} time=%{time_total}\\\\n\" http://localhost:3001/auth)",
+      "Bash(curl -s -o /dev/null -w \"dashboard=%{http_code} time=%{time_total}\\\\n\" http://localhost:3001/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"tasks=%{http_code} time=%{time_total}\\\\n\" http://localhost:3001/tasks)",
+      "Bash(curl -s -o /dev/null -w \"stats=%{http_code} time=%{time_total}\\\\n\" http://localhost:3001/stats)",
+      "Bash(curl -s -o /dev/null -w \"timer=%{http_code} time=%{time_total}\\\\n\" http://localhost:3001/timer)",
+      "Bash(ps -p 981 -o pid,stat,cmd)",
+      "Bash(curl -s -o /dev/null -w \"auth=%{http_code} time=%{time_total}s\\\\n\" http://localhost:3000/auth)",
+      "Bash(curl -s -o /dev/null -w \"dashboard=%{http_code} time=%{time_total}s\\\\n\" http://localhost:3000/dashboard)",
+      "Bash(curl -s -o /dev/null -w \"tasks=%{http_code} time=%{time_total}s\\\\n\" http://localhost:3000/tasks)",
+      "Bash(curl -s -o /dev/null -w \"stats=%{http_code} time=%{time_total}s\\\\n\" http://localhost:3000/stats)"
     ]
   }
 }

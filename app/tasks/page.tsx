@@ -5,11 +5,19 @@ import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import DatePicker from '@/components/DatePicker';
 import TaskItem from '@/components/TaskItem';
-import { db } from '@/lib/data';
-import type { Course, Task } from '@/lib/data';
+import type { Task } from '@/lib/data';
 import { isoDate } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
+import {
+  useOnboardingComplete,
+  useCourses,
+  useTasks,
+  addTaskOptimistic,
+  toggleTaskOptimistic,
+  updateTaskOptimistic,
+  deleteTaskOptimistic,
+} from '@/lib/data-hooks';
 
 type Filter = 'all' | 'today' | 'overdue';
 
@@ -17,9 +25,11 @@ export default function TasksPage() {
   const router = useRouter();
   const { active, start } = useTimer();
 
-  const [loading, setLoading] = useState(true);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
+    useOnboardingComplete();
+  const { courses, isLoading: coursesLoading } = useCourses();
+  const { tasks, isLoading: tasksLoading } = useTasks();
+
   const [filter, setFilter] = useState<Filter>('all');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -35,26 +45,17 @@ export default function TasksPage() {
   const [editHigh, setEditHigh] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const onboarded = await db.isOnboardingComplete();
-        if (!onboarded) {
-          router.replace('/onboarding');
-          return;
-        }
-        await refresh();
-        setLoading(false);
-      } catch {
-        router.replace('/auth');
-      }
-    })();
-  }, [router]);
+    if (onboardingError) {
+      router.replace('/auth');
+      return;
+    }
+    if (!onboardingLoading && onboarded === false) {
+      router.replace('/onboarding');
+    }
+  }, [onboarded, onboardingLoading, onboardingError, router]);
 
-  async function refresh() {
-    const [c, t] = await Promise.all([db.getCourses(), db.getTasks()]);
-    setCourses(c);
-    setTasks(t);
-  }
+  const loading =
+    onboardingLoading || onboarded === false || coursesLoading || tasksLoading;
 
   const visibleTasks = useMemo(() => {
     const today = isoDate();
@@ -71,11 +72,7 @@ export default function TasksPage() {
     const t = tasks.find((x) => x.id === id);
     if (!t) return;
     try {
-      await db.updateTask(id, {
-        completed: !t.completed,
-        completedAt: !t.completed ? new Date().toISOString() : null,
-      });
-      refresh();
+      await toggleTaskOptimistic(t);
     } catch (error) {
       console.error('Failed to update task:', error);
       alert('Could not update that task.');
@@ -84,8 +81,7 @@ export default function TasksPage() {
 
   async function deleteTask(id: string) {
     try {
-      await db.deleteTask(id);
-      refresh();
+      await deleteTaskOptimistic(id);
     } catch (error) {
       console.error('Failed to delete task:', error);
       alert('Could not delete that task.');
@@ -104,14 +100,13 @@ export default function TasksPage() {
     const title = cleanTaskTitle(editTitle);
     if (!editingTask || !title || !editCourseId) return;
     try {
-      await db.updateTask(editingTask.id, {
+      await updateTaskOptimistic(editingTask.id, {
         title,
         courseId: editCourseId,
         dueDate: editDue || null,
         priority: editHigh ? 'high' : 'normal',
       });
       setEditingTask(null);
-      refresh();
     } catch (error) {
       console.error('Failed to save task:', error);
       alert('Could not save that task.');
@@ -134,7 +129,7 @@ export default function TasksPage() {
       return;
     }
     try {
-      await db.addTask({
+      await addTaskOptimistic({
         courseId,
         title,
         dueDate: draftDue || null,
@@ -144,7 +139,6 @@ export default function TasksPage() {
       setDraftDue('');
       setDraftHigh(false);
       setAddingFor(null);
-      refresh();
     } catch (error) {
       console.error('Failed to add task:', error);
       alert('Could not add that task.');

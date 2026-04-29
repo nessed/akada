@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
-import { db } from '@/lib/data';
-import type { Course, Task } from '@/lib/data';
 import { formatHHMMSS, isoDate, resolveTint } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from '@/components/SessionLogModal';
+import {
+  useCourses,
+  useTasks,
+  addSessionOptimistic,
+} from '@/lib/data-hooks';
 
 export default function TimerPage() {
   const router = useRouter();
@@ -22,48 +25,43 @@ export default function TimerPage() {
     stop,
   } = useTimer();
 
-  const [course, setCourse] = useState<Course | null>(null);
-  const [task, setTask] = useState<Task | null>(null);
+  const { courses } = useCourses();
+  const { tasks } = useTasks();
+
   const [logOpen, setLogOpen] = useState(false);
   const [goalMin, setGoalMin] = useState(50);
   const [saving, setSaving] = useState(false);
+
+  const timerCourseId = active?.courseId ?? pendingLog?.courseId ?? null;
+  const timerTaskId = active?.taskId ?? pendingLog?.taskId ?? null;
+
+  const course = useMemo(
+    () => (timerCourseId ? courses.find((c) => c.id === timerCourseId) ?? null : null),
+    [courses, timerCourseId],
+  );
+  const task = useMemo(
+    () => (timerTaskId ? tasks.find((t) => t.id === timerTaskId) ?? null : null),
+    [tasks, timerTaskId],
+  );
 
   useEffect(() => {
     if (pendingLog) setLogOpen(true);
   }, [pendingLog]);
 
+  // If neither timer nor pending log exists, bounce to dashboard.
+  // If a timer points at a course we no longer have (e.g. deleted while
+  // running), cancel + bounce so we don't render a stale screen.
   useEffect(() => {
     if (!active && !pendingLog) {
       router.replace('/dashboard');
       return;
     }
-    const timerCourseId = active?.courseId ?? pendingLog?.courseId;
-    if (!timerCourseId) return;
-    let cancelled = false;
-    (async () => {
-      const courses = await db.getCourses();
-      if (cancelled) return;
-      const timerCourse = courses.find((x) => x.id === timerCourseId) || null;
-      if (!timerCourse) {
-        cancel();
-        clearPendingLog();
-        router.replace('/dashboard');
-        return;
-      }
-      setCourse(timerCourse);
-      const timerTaskId = active?.taskId ?? pendingLog?.taskId;
-      if (timerTaskId) {
-        const tasks = await db.getTasks();
-        if (cancelled) return;
-        setTask(tasks.find((t) => t.id === timerTaskId) || null);
-      } else {
-        setTask(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [active, cancel, clearPendingLog, pendingLog, router]);
+    if (timerCourseId && courses.length > 0 && !course) {
+      cancel();
+      clearPendingLog();
+      router.replace('/dashboard');
+    }
+  }, [active, cancel, clearPendingLog, course, courses.length, pendingLog, router, timerCourseId]);
 
   function handleStop() {
     const result = stop();
@@ -89,7 +87,7 @@ export default function TimerPage() {
     }
     setSaving(true);
     try {
-      await db.addSession({
+      await addSessionOptimistic({
         courseId: pendingLog.courseId,
         taskId: pendingLog.taskId,
         date: pendingLog.date || isoDate(),

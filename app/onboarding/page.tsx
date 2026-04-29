@@ -6,6 +6,12 @@ import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { PASTEL_PALETTE } from '@/lib/utils';
 import {
+  addCourseOptimistic,
+  markOnboardingComplete,
+  setSemesterOptimistic,
+  updateUserSettingsOptimistic,
+} from '@/lib/data-hooks';
+import {
   clampDailyGoalHours,
   clampWeeklyGoalHours,
   cleanCourseCode,
@@ -136,15 +142,16 @@ export default function OnboardingPage() {
         finalAvatar = await resizeImage(avatarPreview);
       }
 
-      // Save user settings (name + daily goal + avatar)
-      await db.updateUserSettings({
+      // Use the optimistic helpers so the SWR cache is hot before we navigate
+      // to /dashboard — otherwise the dashboard would briefly read a stale
+      // "not onboarded" / empty-courses cache and bounce or flash.
+      await updateUserSettingsOptimistic({
         displayName: cleanDisplayName(displayName),
         dailyGoalHours: clampDailyGoalHours(dailyGoal),
         avatarUrl: finalAvatar,
       });
-      // Save courses
       for (const c of validCourses) {
-        await db.addCourse({
+        await addCourseOptimistic({
           code: c.code,
           name: c.name,
           color: c.color,
@@ -152,8 +159,8 @@ export default function OnboardingPage() {
           weeklyGoalHours: c.weeklyGoalHours,
         });
       }
-      await db.setSemester({ startDate: start, endDate: end });
-      await db.setOnboardingComplete();
+      await setSemesterOptimistic({ startDate: start, endDate: end });
+      await markOnboardingComplete();
       router.replace('/dashboard');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : JSON.stringify(err);
@@ -819,88 +826,6 @@ function RoutineStep({
           className="w-full py-4 rounded-xl bg-ink text-bg text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {saving ? 'Setting up…' : displayName ? `Let's go, ${cleanDisplayName(displayName)}` : 'Begin'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function GoalGuidance({ hours, color, tint }: { hours: number; color: string; tint: string }) {
-  const tier = hours >= 14 ? 2 : hours >= 9 ? 1 : hours >= 6 ? 0 : -1;
-  const tiers = [
-    { label: 'Minimum', range: '6–8h', note: 'easier electives' },
-    { label: 'Standard', range: '10–12h', note: 'aim for 3.6+' },
-    { label: 'High', range: '14+h', note: 'midterms & projects' },
-  ];
-  return (
-    <div>
-      <p className="m-0 text-[11px] text-muted font-serif italic mb-2.5 leading-[1.5]">
-        ~2–3 hrs independent study per credit hour.
-      </p>
-      <div className="flex gap-2">
-        {tiers.map((t, i) => {
-          const active = tier === i;
-          return (
-            <div
-              key={t.label}
-              className="flex-1 px-2.5 py-2 rounded-[8px] text-center transition-all duration-150"
-              style={{
-                background: active ? tint : 'var(--bg-tint)',
-                outline: active ? `1.5px solid ${color}` : '1.5px solid transparent',
-              }}
-            >
-              <p
-                className="m-0 text-[9px] font-semibold tracking-[0.08em] uppercase leading-none"
-                style={{ color: active ? color : 'var(--muted-soft)' }}
-              >
-                {t.label}
-              </p>
-              <p className="m-0 font-mono font-semibold text-[12px] text-ink mt-1">{t.range}</p>
-              <p className="m-0 text-[9px] text-muted font-serif italic mt-0.5 leading-[1.3]">
-                {t.note}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-[11px] font-semibold tracking-[0.12em] uppercase text-muted mb-2.5">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function TextInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-ink rounded-none"
-    />
-  );
-}
-
-function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <input
         </button>
       </div>
     </div>

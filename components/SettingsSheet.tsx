@@ -3,7 +3,11 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import type { ChangeEvent } from 'react';
 import type { Course, Session } from '@/lib/data';
-import { db } from '@/lib/data';
+import {
+  addCourseOptimistic,
+  deleteCourseOptimistic,
+  updateCourseOptimistic,
+} from '@/lib/data-hooks';
 import { PASTEL_PALETTE, totalSeconds } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import {
@@ -640,7 +644,7 @@ function CoursesEditor({
       // Delete removed
       for (const o of originalRef.current) {
         if (!draftIds.has(o.id)) {
-          await db.deleteCourse(o.id!);
+          await deleteCourseOptimistic(o.id!);
         }
       }
       // Add new + update existing
@@ -653,9 +657,9 @@ function CoursesEditor({
           weeklyGoalHours: clampWeeklyGoalHours(d.weeklyGoalHours),
         };
         if (d.id) {
-          await db.updateCourse(d.id, payload);
+          await updateCourseOptimistic(d.id, payload);
         } else {
-          await db.addCourse(payload);
+          await addCourseOptimistic(payload);
         }
       }
       onSaved();

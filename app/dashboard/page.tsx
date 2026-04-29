@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
@@ -9,7 +9,6 @@ import CourseCard from '@/components/CourseCard';
 import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
-import { db } from '@/lib/data';
 import type { Course, Semester, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import {
@@ -30,22 +29,73 @@ import {
   cleanTaskTitle,
 } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
+import {
+  useOnboardingComplete,
+  useCourses,
+  useSessions,
+  useTasks,
+  useSemester,
+  useUserSettings,
+  addCourseOptimistic,
+  addTaskOptimistic,
+  toggleTaskOptimistic,
+  updateUserSettingsOptimistic,
+  resetAllData,
+} from '@/lib/data-hooks';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { active, start } = useTimer();
-  const [loading, setLoading] = useState(true);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [semester, setSemester] = useState<Semester | null>(null);
-  const [displayName, setDisplayName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
+
+  const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
+    useOnboardingComplete();
+  const { courses: rawCourses, isLoading: coursesLoading, revalidate: revalidateCourses } =
+    useCourses();
+  const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
+  const { tasks, isLoading: tasksLoading } = useTasks();
+  const { semester } = useSemester();
+  const { settings } = useUserSettings();
+
+  const courses = rawCourses;
+  const sessions = useMemo(
+    () => rawSessions.filter((s) => isLoggableDuration(s.durationSeconds)),
+    [rawSessions],
+  );
+
+  const displayName = settings?.displayName ?? '';
+  const avatarUrl = settings?.avatarUrl ?? '';
 
   const [showSettings, setShowSettings] = useState(false);
   const [settingsName, setSettingsName] = useState('');
   const [settingsAvatar, setSettingsAvatar] = useState('');
   const [updatingSettings, setUpdatingSettings] = useState(false);
+
+  // Keep the in-progress edit fields in sync with persisted settings whenever
+  // the sheet is opened or the underlying settings change while it's closed.
+  useEffect(() => {
+    if (!showSettings) {
+      setSettingsName(displayName);
+      setSettingsAvatar(avatarUrl);
+    }
+  }, [displayName, avatarUrl, showSettings]);
+
+  // Onboarding gate / auth redirect — fires once SWR has resolved the flag.
+  useEffect(() => {
+    if (onboardingError) {
+      router.replace('/auth');
+      return;
+    }
+    if (!onboardingLoading && onboarded === false) {
+      router.replace('/onboarding');
+    }
+  }, [onboarded, onboardingLoading, onboardingError, router]);
+
+  const loading =
+    onboardingLoading ||
+    onboarded === false ||
+    coursesLoading ||
+    sessionsLoading ||
+    tasksLoading;
 
   function resizeImage(base64: string, maxWidth = 160, maxHeight = 160): Promise<string> {
     return new Promise((resolve) => {
@@ -88,44 +138,6 @@ export default function DashboardPage() {
   const [newCourseTint, setNewCourseTint] = useState(PASTEL_PALETTE[0].tint);
   const [newCourseGoal, setNewCourseGoal] = useState(8);
 
-  async function refresh() {
-    const [c, s, t, settings, sem] = await Promise.all([
-      db.getCourses(),
-      db.getSessions(),
-      db.getTasks(),
-      db.getUserSettings(),
-      db.getSemester(),
-    ]);
-    setCourses(c);
-    setSessions(s.filter((session) => isLoggableDuration(session.durationSeconds)));
-    setTasks(t);
-    setSemester(sem);
-    if (settings?.displayName) {
-      setDisplayName(settings.displayName);
-      setSettingsName(settings.displayName);
-    }
-    if (settings?.avatarUrl) {
-      setAvatarUrl(settings.avatarUrl);
-      setSettingsAvatar(settings.avatarUrl);
-    }
-  }
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const onboarded = await db.isOnboardingComplete();
-        if (!onboarded) {
-          router.replace('/onboarding');
-          return;
-        }
-        await refresh();
-        setLoading(false);
-      } catch {
-        router.replace('/auth');
-      }
-    })();
-  }, [router]);
-
   async function handleUpdateSettings() {
     setUpdatingSettings(true);
     try {
@@ -134,12 +146,10 @@ export default function DashboardPage() {
         // It's a new base64 upload, resize it first
         finalAvatar = await resizeImage(settingsAvatar);
       }
-      await db.updateUserSettings({
+      await updateUserSettingsOptimistic({
         displayName: settingsName.trim(),
         avatarUrl: finalAvatar,
       });
-      setDisplayName(settingsName.trim());
-      setAvatarUrl(finalAvatar);
       setShowSettings(false);
     } catch (err) {
       console.error(err);
@@ -163,7 +173,7 @@ export default function DashboardPage() {
   async function handleResetData() {
     setShowSettings(false);
     try {
-      await db.resetAll();
+      await resetAllData();
     } catch (err) {
       console.error('Failed to reset data:', err);
     }
@@ -204,11 +214,7 @@ export default function DashboardPage() {
     const task = tasks.find((t) => t.id === id);
     if (!task) return;
     try {
-      await db.updateTask(id, {
-        completed: !task.completed,
-        completedAt: !task.completed ? new Date().toISOString() : null,
-      });
-      refresh();
+      await toggleTaskOptimistic(task);
     } catch (error) {
       console.error('Failed to update task:', error);
       alert('Could not update that task.');
@@ -219,7 +225,7 @@ export default function DashboardPage() {
     const title = cleanTaskTitle(newTaskTitle);
     if (!addingTaskFor || !title) return;
     try {
-      await db.addTask({
+      await addTaskOptimistic({
         courseId: addingTaskFor,
         title,
         dueDate: newTaskDue || null,
@@ -229,7 +235,6 @@ export default function DashboardPage() {
       setNewTaskTitle('');
       setNewTaskDue('');
       setNewTaskHigh(false);
-      refresh();
     } catch (error) {
       console.error('Failed to add task:', error);
       alert('Could not add that task.');
@@ -258,7 +263,7 @@ export default function DashboardPage() {
       return;
     }
     try {
-      await db.addCourse({
+      await addCourseOptimistic({
         code,
         name,
         color: newCourseColor,
@@ -266,7 +271,6 @@ export default function DashboardPage() {
         weeklyGoalHours: clampWeeklyGoalHours(newCourseGoal),
       });
       setAddingCourse(false);
-      refresh();
     } catch (error) {
       console.error('Failed to add course:', error);
       alert('Could not add that course.');
@@ -681,7 +685,7 @@ export default function DashboardPage() {
         onAvatarChange={setSettingsAvatar}
         onClose={() => !updatingSettings && setShowSettings(false)}
         onSave={handleUpdateSettings}
-        onCoursesChanged={refresh}
+        onCoursesChanged={() => revalidateCourses()}
         onSignOut={handleSignOut}
         onResetData={handleResetData}
       />

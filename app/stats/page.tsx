@@ -6,52 +6,50 @@ import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
 import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
-import { db } from '@/lib/data';
-import type { Course, Semester, Session } from '@/lib/data';
+import type { Course, Session } from '@/lib/data';
 import { formatHM, formatRelativeDate, studyStreakDays, totalSeconds } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
+import {
+  useOnboardingComplete,
+  useCourses,
+  useSessions,
+  useSemester,
+  deleteSessionOptimistic,
+} from '@/lib/data-hooks';
 
 export default function StatsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [semester, setSemester] = useState<Semester | null>(null);
+  const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
+    useOnboardingComplete();
+  const { courses, isLoading: coursesLoading } = useCourses();
+  const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
+  const { semester } = useSemester();
+
+  const sessions = useMemo(
+    () => rawSessions.filter((s) => isLoggableDuration(s.durationSeconds)),
+    [rawSessions],
+  );
+
   const [filter, setFilter] = useState<string>('all');
   const [prefs] = usePreferences();
 
   useEffect(() => {
-    (async () => {
-      try {
-        const onboarded = await db.isOnboardingComplete();
-        if (!onboarded) {
-          router.replace('/onboarding');
-          return;
-        }
-        await refresh();
-        setLoading(false);
-      } catch {
-        router.replace('/auth');
-      }
-    })();
-  }, [router]);
+    if (onboardingError) {
+      router.replace('/auth');
+      return;
+    }
+    if (!onboardingLoading && onboarded === false) {
+      router.replace('/onboarding');
+    }
+  }, [onboarded, onboardingLoading, onboardingError, router]);
 
-  async function refresh() {
-    const [c, s, sem] = await Promise.all([
-      db.getCourses(),
-      db.getSessions(),
-      db.getSemester(),
-    ]);
-    setCourses(c);
-    setSessions(s.filter((session) => isLoggableDuration(session.durationSeconds)));
-    setSemester(sem);
-  }
+  const loading =
+    onboardingLoading || onboarded === false || coursesLoading || sessionsLoading;
 
   async function deleteSession(id: string) {
     try {
-      await db.deleteSession(id);
-      refresh();
+      await deleteSessionOptimistic(id);
     } catch (error) {
       console.error('Failed to delete session:', error);
       alert('Could not delete that session.');
