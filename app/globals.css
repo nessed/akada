@@ -13,12 +13,14 @@
   --ink-soft: #4B4943;
   --muted: #8C887E;
   --muted-soft: #B5B1A4;
+  --paper-glow-a: rgba(180, 170, 140, 0.10);
+  --paper-glow-b: rgba(160, 150, 130, 0.08);
 }
 
 html,
 body {
-  background-color: #FAFAF6;
-  color: #1A1915;
+  background-color: var(--bg);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -27,8 +29,8 @@ body {
   min-height: 100dvh;
   overscroll-behavior-y: none;
   background-image:
-    radial-gradient(circle at 20% 10%, rgba(180, 170, 140, 0.10), transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(160, 150, 130, 0.08), transparent 60%);
+    radial-gradient(circle at 20% 10%, var(--paper-glow-a), transparent 50%),
+    radial-gradient(circle at 80% 80%, var(--paper-glow-b), transparent 60%);
   background-attachment: fixed;
 }
 

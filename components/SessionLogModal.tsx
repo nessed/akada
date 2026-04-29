@@ -11,6 +11,7 @@ interface Props {
   durationSeconds: number;
   saving?: boolean;
   errorMessage?: string;
+  contextMessage?: string;
   onCancel: () => void;
   onSave: (note: string) => void;
 }
@@ -21,6 +22,7 @@ export default function SessionLogModal({
   durationSeconds,
   saving = false,
   errorMessage = '',
+  contextMessage = '',
   onCancel,
   onSave,
 }: Props) {
@@ -39,10 +41,9 @@ export default function SessionLogModal({
     <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
       <button
         type="button"
-        aria-label="Cancel"
-        onClick={saving ? undefined : onCancel}
+        aria-label="Session log backdrop"
         disabled={saving}
-        className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/35 backdrop-blur-sm cursor-default"
       />
       <div className="relative w-full bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
         <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
@@ -59,6 +60,12 @@ export default function SessionLogModal({
         <p className="mt-1.5 mb-[18px] text-[13px] text-muted font-serif italic">
           A small note for your future self?
         </p>
+
+        {contextMessage && (
+          <p className="mt-[-8px] mb-[18px] text-[12px] leading-[1.45] text-muted">
+            {contextMessage}
+          </p>
+        )}
 
         <textarea
           value={note}
@@ -79,9 +86,10 @@ export default function SessionLogModal({
             type="button"
             onClick={saving ? undefined : onCancel}
             disabled={saving}
+            aria-label="Delete pending session log"
             className="flex-1 py-3.5 rounded-[10px] bg-transparent border border-line-strong text-ink-soft text-sm font-medium"
           >
-            Discard
+            Delete log
           </button>
           <button
             type="button"

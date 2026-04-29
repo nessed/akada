@@ -25,6 +25,7 @@ interface PendingTimerLog {
   taskId: string | null;
   date: string;
   durationSeconds: number;
+  recoveryReason?: 'away' | 'max';
 }
 
 interface TimerContextValue {
@@ -99,6 +100,10 @@ function sanitizePendingLog(value: unknown): PendingTimerLog | null {
     taskId: typeof log.taskId === 'string' ? log.taskId : null,
     date: typeof log.date === 'string' && log.date.trim() ? log.date : isoDateFromMs(Date.now()),
     durationSeconds,
+    recoveryReason:
+      log.recoveryReason === 'away' || log.recoveryReason === 'max'
+        ? log.recoveryReason
+        : undefined,
   };
 }
 
@@ -207,7 +212,11 @@ function computeElapsedAt(state: TimerState, atMs: number): number {
   return clampSessionSeconds((safeState.accumulatedMs + liveMs) / 1000);
 }
 
-function buildPendingLog(state: TimerState, stoppedAt: number): PendingTimerLog | null {
+function buildPendingLog(
+  state: TimerState,
+  stoppedAt: number,
+  recoveryReason?: PendingTimerLog['recoveryReason'],
+): PendingTimerLog | null {
   const safeState = sanitizeActive(state);
   if (!safeState) return null;
   const durationSeconds = computeElapsedAt(safeState, stoppedAt);
@@ -217,6 +226,7 @@ function buildPendingLog(state: TimerState, stoppedAt: number): PendingTimerLog 
     taskId: safeState.taskId,
     date: safeState.startedDate,
     durationSeconds,
+    recoveryReason,
   };
 }
 
@@ -242,7 +252,7 @@ function loadActiveSnapshot(): { active: TimerState | null; pendingLog: PendingT
     const staleRunning = !parsed.isPaused && now - parsed.lastSeenAt >= STALE_RUNNING_MS;
     if (staleRunning || parsed.accumulatedMs + liveMs >= MAX_TIMER_MS) {
       const stoppedAt = staleRunning ? parsed.lastSeenAt : now;
-      const pendingLog = buildPendingLog(parsed, stoppedAt);
+      const pendingLog = buildPendingLog(parsed, stoppedAt, staleRunning ? 'away' : 'max');
       saveActive(null);
       savePendingLog(pendingLog);
       return { active: null, pendingLog };
@@ -350,7 +360,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       const current = activeRef.current ?? active;
       if (!current.isPaused && now - current.lastSeenAt >= STALE_RUNNING_MS) {
-        const log = buildPendingLog(current, current.lastSeenAt);
+        const log = buildPendingLog(current, current.lastSeenAt, 'away');
         activeRef.current = null;
         setActive(null);
         saveActive(null);
@@ -419,7 +429,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     if (!safeState || safeState.isPaused || now - safeState.lastSeenAt < STALE_RUNNING_MS) {
       return null;
     }
-    const log = buildPendingLog(safeState, safeState.lastSeenAt);
+    const log = buildPendingLog(safeState, safeState.lastSeenAt, 'away');
     activeRef.current = null;
     setActive(null);
     saveActive(null);

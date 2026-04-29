@@ -55,7 +55,15 @@ function sanitizePreferences(value: unknown): Preferences {
 
 const PAPER_TONES: Record<
   PaperTone,
-  { bg: string; tint: string; paper: string; line: string; lineStrong: string }
+  {
+    bg: string;
+    tint: string;
+    paper: string;
+    line: string;
+    lineStrong: string;
+    glowA: string;
+    glowB: string;
+  }
 > = {
   warm: {
     bg: '#FAFAF6',
@@ -63,6 +71,8 @@ const PAPER_TONES: Record<
     paper: '#FFFFFF',
     line: '#E8E5DC',
     lineStrong: '#DDD8CB',
+    glowA: 'rgba(180, 170, 140, 0.10)',
+    glowB: 'rgba(160, 150, 130, 0.08)',
   },
   paper: {
     bg: '#F5F1E8',
@@ -70,6 +80,8 @@ const PAPER_TONES: Record<
     paper: '#FBF8EF',
     line: '#DDD6C2',
     lineStrong: '#C9C0A8',
+    glowA: 'rgba(178, 152, 92, 0.10)',
+    glowB: 'rgba(132, 112, 78, 0.08)',
   },
   stone: {
     bg: '#F4F4F1',
@@ -77,6 +89,8 @@ const PAPER_TONES: Record<
     paper: '#FFFFFF',
     line: '#E5E4DE',
     lineStrong: '#D4D2C8',
+    glowA: 'rgba(130, 132, 120, 0.08)',
+    glowB: 'rgba(110, 112, 104, 0.06)',
   },
   white: {
     bg: '#FFFFFF',
@@ -84,6 +98,8 @@ const PAPER_TONES: Record<
     paper: '#FFFFFF',
     line: '#E8E5DC',
     lineStrong: '#DDD8CB',
+    glowA: 'rgba(180, 180, 170, 0.05)',
+    glowB: 'rgba(150, 150, 145, 0.04)',
   },
 };
 
@@ -117,8 +133,8 @@ export function applyPreferences(prefs: Preferences) {
   root.style.setProperty('--paper', tone.paper);
   root.style.setProperty('--line', tone.line);
   root.style.setProperty('--line-strong', tone.lineStrong);
-  // Body bg has its own color outside CSS-var resolution; sync it.
-  if (document.body) document.body.style.backgroundColor = tone.bg;
+  root.style.setProperty('--paper-glow-a', tone.glowA);
+  root.style.setProperty('--paper-glow-b', tone.glowB);
 
   const override = HEADING_VAR_OVERRIDE[prefs.headingFont];
   if (override) {

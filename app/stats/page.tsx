@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
@@ -15,6 +15,7 @@ import {
   useCourses,
   useSessions,
   useSemester,
+  addSessionOptimistic,
   deleteSessionOptimistic,
 } from '@/lib/data-hooks';
 
@@ -33,6 +34,8 @@ export default function StatsPage() {
 
   const [filter, setFilter] = useState<string>('all');
   const [prefs] = usePreferences();
+  const [deletedSession, setDeletedSession] = useState<Session | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (onboardingError) {
@@ -44,15 +47,52 @@ export default function StatsPage() {
     }
   }, [onboarded, onboardingLoading, onboardingError, router]);
 
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || sessionsLoading;
 
   async function deleteSession(id: string) {
+    const session = rawSessions.find((s) => s.id === id) ?? null;
     try {
       await deleteSessionOptimistic(id);
+      if (session) {
+        if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+        setDeletedSession(session);
+        undoTimerRef.current = window.setTimeout(() => {
+          setDeletedSession(null);
+          undoTimerRef.current = null;
+        }, 7000);
+      }
     } catch (error) {
       console.error('Failed to delete session:', error);
       alert('Could not delete that session.');
+    }
+  }
+
+  async function undoDeleteSession() {
+    if (!deletedSession) return;
+    const session = deletedSession;
+    if (undoTimerRef.current) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    setDeletedSession(null);
+    try {
+      await addSessionOptimistic({
+        courseId: session.courseId,
+        taskId: session.taskId,
+        date: session.date,
+        durationSeconds: session.durationSeconds,
+        note: session.note,
+      });
+    } catch (error) {
+      console.error('Failed to restore session:', error);
+      alert('Could not restore that session.');
     }
   }
 
@@ -250,6 +290,28 @@ export default function StatsPage() {
           </div>
         )}
       </section>
+
+      {deletedSession && (
+        <div
+          className="fixed inset-x-0 z-50 px-[22px] animate-fade-in"
+          style={{ bottom: 'calc(92px + env(safe-area-inset-bottom))' }}
+        >
+          <div className="mx-auto max-w-2xl">
+            <div className="flex items-center gap-3 rounded-[10px] border border-line bg-paper/95 px-3.5 py-3 backdrop-blur">
+              <p className="m-0 flex-1 text-[13px] text-ink-soft">
+                Session deleted.
+              </p>
+              <button
+                type="button"
+                onClick={undoDeleteSession}
+                className="font-serif text-[13px] italic text-ink"
+              >
+                Undo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

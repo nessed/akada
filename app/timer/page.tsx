@@ -489,6 +489,13 @@ export default function TimerPage() {
         course={course}
         durationSeconds={pendingLog?.durationSeconds ?? 0}
         saving={saving}
+        contextMessage={
+          pendingLog?.recoveryReason === 'away'
+            ? 'Timer was recovered after you were away for a while. Save it if it looks right, or delete the log.'
+            : pendingLog?.recoveryReason === 'max'
+              ? 'Timer reached the session limit. Save it if it looks right, or delete the log.'
+              : ''
+        }
         errorMessage={
           saveError ||
           (!online && pendingLog

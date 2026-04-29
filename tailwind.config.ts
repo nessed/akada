@@ -10,21 +10,21 @@ const config: Config = {
     extend: {
       colors: {
         bg: {
-          DEFAULT: '#FAFAF6',
-          tint: '#F4F2EC',
+          DEFAULT: 'var(--bg)',
+          tint: 'var(--bg-tint)',
         },
-        paper: '#FFFFFF',
+        paper: 'var(--paper)',
         line: {
-          DEFAULT: '#E8E5DC',
-          strong: '#DDD8CB',
+          DEFAULT: 'var(--line)',
+          strong: 'var(--line-strong)',
         },
         ink: {
-          DEFAULT: '#1A1915',
-          soft: '#4B4943',
+          DEFAULT: 'var(--ink)',
+          soft: 'var(--ink-soft)',
         },
         muted: {
-          DEFAULT: '#8C887E',
-          soft: '#B5B1A4',
+          DEFAULT: 'var(--muted)',
+          soft: 'var(--muted-soft)',
         },
         warn: '#B5694C',
         warnSoft: '#A38046',
