@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import BottomNav from './BottomNav';
 import ActiveTimerDock from './ActiveTimerDock';
-import { useTimer } from '@/lib/timer-context';
+import PendingSessionLogSheet from './PendingSessionLogSheet';
 
 interface Props {
   children: React.ReactNode;
@@ -12,13 +10,6 @@ interface Props {
 }
 
 export default function PageShell({ children, hideNav }: Props) {
-  const router = useRouter();
-  const { pendingLog } = useTimer();
-
-  useEffect(() => {
-    if (pendingLog) router.push('/timer');
-  }, [pendingLog, router]);
-
   return (
     <div className="min-h-[100dvh] bg-bg">
       <main
@@ -29,6 +20,7 @@ export default function PageShell({ children, hideNav }: Props) {
         {children}
       </main>
       {!hideNav && <ActiveTimerDock />}
+      <PendingSessionLogSheet />
       {!hideNav && <BottomNav />}
     </div>
   );

@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Fraunces, Lora, Merriweather } from 'next/font/g
 import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import SWRRoot from '@/components/SWRRoot';
+import TimerDocumentTitle from '@/components/TimerDocumentTitle';
 import './globals.css';
 
 const inter = Inter({
@@ -87,7 +88,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans bg-bg text-ink antialiased">
         <PreferencesBootstrap />
         <SWRRoot>
-          <TimerProvider>{children}</TimerProvider>
+          <TimerProvider>
+            <TimerDocumentTitle />
+            {children}
+          </TimerProvider>
         </SWRRoot>
       </body>
     </html>

@@ -3,14 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
-import { formatHHMMSS, isoDate, resolveTint } from '@/lib/utils';
+import { formatHHMMSS, resolveTint } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
-import SessionLogModal from '@/components/SessionLogModal';
-import {
-  useCourses,
-  useTasks,
-  addSessionOptimistic,
-} from '@/lib/data-hooks';
+import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
+import { useCourses, useTasks } from '@/lib/data-hooks';
 
 export default function TimerPage() {
   const router = useRouter();
@@ -28,18 +24,13 @@ export default function TimerPage() {
   const { courses } = useCourses();
   const { tasks } = useTasks();
 
-  const [logOpen, setLogOpen] = useState(false);
   const [goalMin, setGoalMin] = useState(50);
-  const [saving, setSaving] = useState(false);
   const [whiteNoiseOn, setWhiteNoiseOn] = useState(false);
   const whiteNoiseContextRef = useRef<AudioContext | null>(null);
   const whiteNoiseBufferRef = useRef<AudioBuffer | null>(null);
   const whiteNoiseSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const whiteNoiseGainRef = useRef<GainNode | null>(null);
   const whiteNoiseStartingRef = useRef(false);
-  const [saveError, setSaveError] = useState('');
-  const [online, setOnline] = useState(true);
-
   const timerCourseId = active?.courseId ?? pendingLog?.courseId ?? null;
   const timerTaskId = active?.taskId ?? pendingLog?.taskId ?? null;
 
@@ -51,10 +42,6 @@ export default function TimerPage() {
     () => (timerTaskId ? tasks.find((t) => t.id === timerTaskId) ?? null : null),
     [tasks, timerTaskId],
   );
-
-  useEffect(() => {
-    if (pendingLog) setLogOpen(true);
-  }, [pendingLog]);
 
   useEffect(() => {
     return () => {
@@ -200,17 +187,6 @@ export default function TimerPage() {
     }
   }
 
-  useEffect(() => {
-    const updateOnline = () => setOnline(window.navigator.onLine);
-    updateOnline();
-    window.addEventListener('online', updateOnline);
-    window.addEventListener('offline', updateOnline);
-    return () => {
-      window.removeEventListener('online', updateOnline);
-      window.removeEventListener('offline', updateOnline);
-    };
-  }, []);
-
   // If neither timer nor pending log exists, bounce to dashboard.
   // If a timer points at a course we no longer have (e.g. deleted while
   // running), cancel + bounce so we don't render a stale screen.
@@ -236,48 +212,7 @@ export default function TimerPage() {
     if (!isLoggableDuration(durationSeconds)) {
       clearPendingLog();
       router.replace('/dashboard');
-      return;
     }
-    setLogOpen(true);
-  }
-
-  async function handleSave(note: string) {
-    if (!pendingLog) return;
-    setSaveError('');
-    if (!online) {
-      setSaveError('You are offline. This session is still saved locally; reconnect and save again.');
-      return;
-    }
-    const durationSeconds = clampSessionSeconds(pendingLog.durationSeconds);
-    if (!isLoggableDuration(durationSeconds)) {
-      handleDiscard();
-      return;
-    }
-    setSaving(true);
-    try {
-      await addSessionOptimistic({
-        courseId: pendingLog.courseId,
-        taskId: pendingLog.taskId,
-        date: pendingLog.date || isoDate(),
-        durationSeconds,
-        note,
-      });
-      setLogOpen(false);
-      clearPendingLog();
-      router.replace('/dashboard');
-    } catch (error) {
-      console.error('Failed to save session:', error);
-      setSaveError('Could not save yet. This session is still saved locally; try again in a moment.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function handleDiscard() {
-    setLogOpen(false);
-    setSaveError('');
-    clearPendingLog();
-    router.replace('/dashboard');
   }
 
   if (!course && !pendingLog) {
@@ -484,27 +419,7 @@ export default function TimerPage() {
         </div>
       )}
 
-      <SessionLogModal
-        open={logOpen}
-        course={course}
-        durationSeconds={pendingLog?.durationSeconds ?? 0}
-        saving={saving}
-        contextMessage={
-          pendingLog?.recoveryReason === 'away'
-            ? 'Timer was recovered after you were away for a while. Save it if it looks right, or delete the log.'
-            : pendingLog?.recoveryReason === 'max'
-              ? 'Timer reached the session limit. Save it if it looks right, or delete the log.'
-              : ''
-        }
-        errorMessage={
-          saveError ||
-          (!online && pendingLog
-            ? 'You are offline. This session is saved locally until you reconnect.'
-            : '')
-        }
-        onCancel={handleDiscard}
-        onSave={handleSave}
-      />
+      <PendingSessionLogSheet onResolved={() => router.replace('/dashboard')} />
     </div>
   );
 }

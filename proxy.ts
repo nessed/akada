@@ -50,7 +50,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Authenticated users do not need the auth page again.
-  if (user && pathname === '/auth') {
+  if (user && (pathname === '/' || pathname === '/auth')) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);

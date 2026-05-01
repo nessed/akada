@@ -84,13 +84,13 @@ export default function LandingPage() {
                 href="/auth"
                 className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-line-strong"
               >
-                Sign in
+                Log in
               </Link>
               <Link
-                href="/dashboard"
+                href="/auth?mode=signup"
                 className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-contrast"
               >
-                Open app
+                Create account
               </Link>
             </div>
           </header>
@@ -108,16 +108,16 @@ export default function LandingPage() {
             </p>
             <div className="mt-8 flex flex-col justify-center gap-2.5 sm:flex-row">
               <Link
-                href="/auth"
+                href="/auth?mode=signup"
                 className="rounded-xl bg-primary px-6 py-3.5 text-[15px] font-medium text-primary-contrast"
               >
-                Start planning
+                Create account
               </Link>
               <Link
-                href="/dashboard"
+                href="/auth"
                 className="rounded-xl border border-line-strong bg-paper px-6 py-3.5 text-[15px] font-medium text-ink-soft"
               >
-                Go to dashboard
+                Log in
               </Link>
             </div>
           </div>

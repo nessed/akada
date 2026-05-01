@@ -45,6 +45,8 @@ const TimerContext = createContext<TimerContextValue | null>(null);
 
 const STORAGE_KEY = 'lums.activeTimer';
 const PENDING_STORAGE_KEY = 'lums.pendingTimerLog';
+const NOTIFICATION_PROMPT_KEY = 'lums.timerNotificationPrompted';
+const PENDING_NOTIFICATION_KEY = 'lums.pendingTimerLogNotification';
 const TAB_STORAGE_KEY = 'lums.timerTabs';
 const MAX_TIMER_MS = 18 * 60 * 60 * 1000;
 const RUNNING_CHECKPOINT_MS = 10 * 1000;
@@ -55,6 +57,64 @@ const TAB_TTL_MS = 20 * 1000;
 interface TimerTabRecord {
   id: string;
   lastSeenAt: number;
+}
+
+function formatNotificationDuration(seconds: number): string {
+  const safeSeconds = clampSessionSeconds(seconds);
+  if (safeSeconds < 60) return `${safeSeconds}s`;
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  if (hours <= 0) return `${minutes}m`;
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+function pendingLogSignature(log: PendingTimerLog): string {
+  return [
+    log.courseId,
+    log.taskId ?? '',
+    log.date,
+    log.durationSeconds,
+    log.recoveryReason ?? '',
+  ].join('|');
+}
+
+function maybeRequestTimerNotificationPermission(): void {
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (window.Notification.permission !== 'default') return;
+  if (window.localStorage.getItem(NOTIFICATION_PROMPT_KEY) === 'true') return;
+
+  window.localStorage.setItem(NOTIFICATION_PROMPT_KEY, 'true');
+  window.Notification.requestPermission().catch(() => {
+    // Notification permission is optional; the in-app sheet still works.
+  });
+}
+
+function notifyPendingLog(log: PendingTimerLog | null): void {
+  if (
+    typeof window === 'undefined' ||
+    !log ||
+    !document.hidden ||
+    !('Notification' in window) ||
+    window.Notification.permission !== 'granted'
+  ) {
+    return;
+  }
+
+  const signature = pendingLogSignature(log);
+  if (window.localStorage.getItem(PENDING_NOTIFICATION_KEY) === signature) return;
+  window.localStorage.setItem(PENDING_NOTIFICATION_KEY, signature);
+
+  const notification = new window.Notification('Study session ready to log', {
+    body: `${formatNotificationDuration(log.durationSeconds)} is waiting in Akada.`,
+    icon: '/icon.svg',
+    tag: 'akada-pending-session-log',
+  });
+
+  notification.onclick = () => {
+    window.focus();
+    window.location.href = '/timer';
+    notification.close();
+  };
 }
 
 function isoDateFromMs(value: number): string {
@@ -111,8 +171,10 @@ function savePendingLog(log: PendingTimerLog | null): void {
   if (typeof window === 'undefined') return;
   if (log === null) {
     window.localStorage.removeItem(PENDING_STORAGE_KEY);
+    window.localStorage.removeItem(PENDING_NOTIFICATION_KEY);
   } else {
     window.localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(log));
+    notifyPendingLog(log);
   }
 }
 
@@ -415,6 +477,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       isPaused: false,
       lastSeenAt: now,
     };
+    maybeRequestTimerNotificationPermission();
     activeRef.current = next;
     setActive(next);
     saveActive(next);

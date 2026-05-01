@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { db } from '@/lib/data';
@@ -20,6 +20,39 @@ export default function AuthPage() {
   const [successMsg, setSuccessMsg] = useState('');
 
   const isSignUp = mode === 'signup';
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedMode = params.get('mode');
+    const requestedError = params.get('error');
+
+    if (requestedMode === 'signup') {
+      setMode('signup');
+    } else if (requestedMode === 'signin') {
+      setMode('signin');
+    }
+
+    if (requestedError) {
+      setErrorMsg(getAuthErrorMessage(requestedError));
+      setState('error');
+    }
+  }, []);
+
+  function setAuthMode(nextMode: Mode) {
+    setMode(nextMode);
+    setState('idle');
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const url = new URL(window.location.href);
+    if (nextMode === 'signup') {
+      url.searchParams.set('mode', 'signup');
+    } else {
+      url.searchParams.delete('mode');
+    }
+    url.searchParams.delete('error');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -72,10 +105,7 @@ export default function AuthPage() {
   }
 
   function switchMode() {
-    setMode(isSignUp ? 'signin' : 'signup');
-    setState('idle');
-    setErrorMsg('');
-    setSuccessMsg('');
+    setAuthMode(isSignUp ? 'signin' : 'signup');
   }
 
   if (state === 'success') {
@@ -141,6 +171,32 @@ export default function AuthPage() {
         </Link>
 
         <div className="mb-8">
+          <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-line bg-paper p-1">
+            <button
+              type="button"
+              onClick={() => setAuthMode('signin')}
+              aria-pressed={!isSignUp}
+              className={`rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
+                !isSignUp
+                  ? 'bg-primary text-primary-contrast'
+                  : 'text-ink-soft hover:bg-bg-tint'
+              }`}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuthMode('signup')}
+              aria-pressed={isSignUp}
+              className={`rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
+                isSignUp
+                  ? 'bg-primary text-primary-contrast'
+                  : 'text-ink-soft hover:bg-bg-tint'
+              }`}
+            >
+              Create account
+            </button>
+          </div>
           <h1 className="m-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1] whitespace-pre-line">
             {isSignUp ? 'Create your\nstudy plan.' : 'Welcome back\nto Akada.'}
           </h1>
@@ -215,12 +271,25 @@ export default function AuthPage() {
             onClick={switchMode}
             className="bg-transparent border-0 cursor-pointer font-serif italic text-[14px] text-ink underline underline-offset-4 decoration-line-strong"
           >
-            {isSignUp ? 'Sign in' : 'Start planning'}
+            {isSignUp ? 'Log in' : 'Create account'}
           </button>
         </div>
       </div>
     </div>
   );
+}
+
+function getAuthErrorMessage(error: string) {
+  switch (error) {
+    case 'missing_code':
+      return 'That confirmation link is missing a code. Try logging in instead.';
+    case 'supabase_not_configured':
+      return 'Authentication is not configured for this build.';
+    case 'callback_failed':
+      return 'That confirmation link could not be completed. Please try logging in.';
+    default:
+      return 'Could not complete authentication. Please try again.';
+  }
 }
 
 function Mark({ size = 34 }: { size?: number }) {
