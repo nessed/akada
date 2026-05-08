@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { PASTEL_PALETTE } from '@/lib/utils';
+import AkadaMark from '@/components/notebook/AkadaMark';
+import HandNote from '@/components/notebook/HandNote';
 import {
   addCourseOptimistic,
   markOnboardingComplete,
@@ -242,40 +244,49 @@ export default function OnboardingPage() {
 
 function Welcome({ onNext }: { onNext: () => void }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center text-center px-8 animate-fade-in">
-      <div className="mb-7">
-        <svg width="56" height="68" viewBox="0 0 56 68" fill="none">
-          <path d="M6 4 H50 V60 L28 48 L6 60 Z" stroke="#1A1915" strokeWidth="1.4" fill="#FAFAF6" />
-          <text
-            x="28"
-            y="32"
-            textAnchor="middle"
-            fontFamily="var(--font-serif), Georgia, serif"
-            fontSize="22"
-            fontStyle="italic"
-            fill="#1A1915"
-          >
-            A
-          </text>
+    <div className="relative flex-1 flex flex-col items-center justify-center text-center px-8 animate-fade-in">
+      {/* Off-grid arrow pointing toward the title — quiet hand-drawn touch */}
+      <div
+        aria-hidden
+        className="absolute"
+        style={{ top: 64, left: 28, transform: 'rotate(-9deg)', opacity: 0.7 }}
+      >
+        <svg width="42" height="42" viewBox="0 0 36 36" fill="none">
+          <path
+            d="M6 4 C 14 16, 18 22, 30 28 M22 22 L30 28 L24 32"
+            stroke="var(--muted-soft)"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </div>
-      <h1 className="font-serif font-medium text-[40px] leading-[1.05] tracking-[-0.02em] m-0">
+
+      <AkadaMark size={62} />
+      <h1 className="font-serif font-medium text-[44px] leading-[1.04] tracking-[-0.025em] m-0 mt-7">
         A quiet place
         <br />
         <span className="italic font-normal">to study.</span>
       </h1>
-      <p className="mt-5 text-[15px] text-ink-soft max-w-[280px] leading-[1.5]">
+      <p className="mt-5 font-serif italic text-[15px] text-ink-soft max-w-[280px] leading-[1.55]">
         Track courses, tasks, and study sessions. Stay close to the work that matters.
       </p>
+
+      <div className="mt-7">
+        <HandNote color="var(--peach)" size={22} rotate={-3}>
+          ~ a minute to set up
+        </HandNote>
+      </div>
+
       <button
         type="button"
         onClick={onNext}
-        className="mt-12 w-full max-w-[280px] py-4 px-6 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em]"
+        className="mt-9 w-full max-w-[280px] min-h-[56px] py-4 px-6 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em]"
       >
         Start planning
       </button>
-      <p className="mt-4 text-xs italic text-muted font-serif">
-        Takes a minute to set up.
+      <p className="mt-3 font-serif italic text-[12px] text-muted">
+        Swipe right to begin <span className="ml-1">›››</span>
       </p>
     </div>
   );

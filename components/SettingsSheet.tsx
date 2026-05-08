@@ -352,7 +352,12 @@ function labelTone(t: PaperTone) {
   return { warm: 'Warm', paper: 'Paper', stone: 'Stone', white: 'White' }[t];
 }
 function labelFont(f: HeadingFont) {
-  return { fraunces: 'Fraunces', lora: 'Lora', merriweather: 'Merri.' }[f];
+  return {
+    cormorant: 'Cormorant',
+    fraunces: 'Fraunces',
+    lora: 'Lora',
+    merriweather: 'Merri.',
+  }[f];
 }
 function labelPrimary(a: PrimaryAccent) {
   return { classic: 'Ink', green: 'Sage' }[a];
@@ -827,7 +832,8 @@ const PAPER_OPTIONS: { v: PaperTone; l: string; bg: string }[] = [
 ];
 
 const FONT_OPTIONS: { v: HeadingFont; l: string; family: string }[] = [
-  { v: 'fraunces', l: 'Fraunces', family: 'var(--font-serif), serif' },
+  { v: 'cormorant', l: 'Cormorant', family: 'var(--font-cormorant), serif' },
+  { v: 'fraunces', l: 'Fraunces', family: 'var(--font-fraunces), serif' },
   { v: 'lora', l: 'Lora', family: 'var(--font-lora), serif' },
   { v: 'merriweather', l: 'Merri.', family: 'var(--font-merriweather), serif' },
 ];

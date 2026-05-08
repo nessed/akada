@@ -40,7 +40,12 @@
       "Bash(curl -s -o /dev/null -w \"auth=%{http_code} time=%{time_total}s\\\\n\" http://localhost:3000/auth)",
       "Bash(curl -s -o /dev/null -w \"dashboard=%{http_code} time=%{time_total}s\\\\n\" http://localhost:3000/dashboard)",
       "Bash(curl -s -o /dev/null -w \"tasks=%{http_code} time=%{time_total}s\\\\n\" http://localhost:3000/tasks)",
-      "Bash(curl -s -o /dev/null -w \"stats=%{http_code} time=%{time_total}s\\\\n\" http://localhost:3000/stats)"
+      "Bash(curl -s -o /dev/null -w \"stats=%{http_code} time=%{time_total}s\\\\n\" http://localhost:3000/stats)",
+      "Bash(rm -rf /tmp/design2 /tmp/design2.gz /tmp/design2_extract)",
+      "Bash(cp \"/c/Users/Ali/.claude/projects/c--Users-Ali-Work-Code-Repos-academic-planner/f8d5881d-e340-47e1-aa3b-0b562e35773f/tool-results/webfetch-1778255548290-ezcvqe.bin\" /tmp/design2.gz)",
+      "Bash(gunzip /tmp/design2.gz)",
+      "Bash(mkdir -p /tmp/design2_extract)",
+      "Bash(tar -xf /tmp/design2 -C /tmp/design2_extract)"
     ]
   }
 }

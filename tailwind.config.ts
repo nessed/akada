@@ -13,10 +13,14 @@ const config: Config = {
           DEFAULT: 'var(--bg)',
           tint: 'var(--bg-tint)',
         },
-        paper: 'var(--paper)',
+        paper: {
+          DEFAULT: 'var(--paper)',
+          2: 'var(--paper-2)',
+        },
         line: {
           DEFAULT: 'var(--line)',
           strong: 'var(--line-strong)',
+          soft: 'var(--line-soft)',
         },
         ink: {
           DEFAULT: 'var(--ink)',
@@ -31,6 +35,14 @@ const config: Config = {
           contrast: 'var(--primary-contrast)',
           tint: 'var(--primary-tint)',
         },
+        // Course pastel palette as Tailwind utilities (text-sage, bg-sage-tint, …)
+        sage: { DEFAULT: 'var(--sage)', tint: 'var(--sage-tint)' },
+        rose: { DEFAULT: 'var(--rose)', tint: 'var(--rose-tint)' },
+        lav: { DEFAULT: 'var(--lav)', tint: 'var(--lav-tint)' },
+        peach: { DEFAULT: 'var(--peach)', tint: 'var(--peach-tint)' },
+        sky: { DEFAULT: 'var(--sky)', tint: 'var(--sky-tint)' },
+        butter: { DEFAULT: 'var(--butter)', tint: 'var(--butter-tint)' },
+        mint: { DEFAULT: 'var(--mint)', tint: 'var(--mint-tint)' },
         warn: '#B5694C',
         warnSoft: '#A38046',
         warnTint: '#F4ECDC',
@@ -39,9 +51,12 @@ const config: Config = {
         prioritySoft: '#A85C42',
       },
       fontFamily: {
-        serif: ['var(--font-serif)', 'Iowan Old Style', 'Georgia', 'serif'],
+        // Default serif points at the user's --font-serif preference (Cormorant
+        // by default in v2; Fraunces/Lora/Merriweather selectable in Settings).
+        serif: ['var(--font-serif)', 'var(--font-cormorant)', 'Cormorant Garamond', 'Iowan Old Style', 'Georgia', 'serif'],
         sans: ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
+        hand: ['var(--font-hand)', 'Caveat', 'Patrick Hand', 'cursive'],
       },
       animation: {
         'slide-up': 'slideUp 0.26s cubic-bezier(0.2, 0.7, 0.2, 1)',

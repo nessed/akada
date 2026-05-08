@@ -10,6 +10,9 @@ import type { Course, Session } from '@/lib/data';
 import { formatHM, formatRelativeDate, studyStreakDays, totalSeconds } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
+import HandNote from '@/components/notebook/HandNote';
+import HandCheck from '@/components/notebook/HandCheck';
+import Stamp from '@/components/notebook/Stamp';
 import {
   useOnboardingComplete,
   useCourses,
@@ -151,21 +154,118 @@ export default function StatsPage() {
     );
   }
 
+  // Editorial computed bits — the Vol./Issue mark, totals, and "best day"
+  // headline that the redesigned stats page leans on.
+  const semesterLabel = useMemo(() => {
+    const now = new Date();
+    const month = now.getMonth(); // 0-11
+    const year = String(now.getFullYear()).slice(-2);
+    const seasonName = month <= 4 ? 'Spring' : month <= 7 ? 'Summer' : 'Fall';
+    return `${seasonName} '${year}`;
+  }, []);
+
+  const semesterWeekMark = useMemo(() => {
+    if (!semester) return null;
+    const start = new Date(semester.startDate + 'T00:00:00').getTime();
+    const end = new Date(semester.endDate + 'T00:00:00').getTime();
+    const now = Date.now();
+    const totalWeeks = Math.max(1, Math.ceil((end - start) / 86400000 / 7));
+    const elapsedDays = Math.max(0, (now - start) / 86400000);
+    const currentWeek = Math.min(totalWeeks, Math.max(1, Math.ceil(elapsedDays / 7)));
+    return { current: currentWeek, total: totalWeeks };
+  }, [semester]);
+
+  const totalHrs = totalSec / 3600;
+  const totalWhole = Math.floor(totalHrs);
+  const totalDecimal = `.${Math.round((totalHrs - totalWhole) * 10)}`;
+
+  // Best day of week — name + duration. Used in the KPI ribbon.
+  const bestDay = useMemo(() => {
+    const byDow: Record<number, number> = {};
+    for (const s of sessions) {
+      const d = new Date(s.date + 'T00:00:00').getDay();
+      byDow[d] = (byDow[d] || 0) + clampSessionSeconds(s.durationSeconds);
+    }
+    let bestDow = -1;
+    let bestSec = 0;
+    for (const [dow, sec] of Object.entries(byDow)) {
+      if (sec > bestSec) {
+        bestSec = sec;
+        bestDow = Number(dow);
+      }
+    }
+    if (bestDow === -1) return null;
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return { day: dayNames[bestDow], duration: formatHM(bestSec) };
+  }, [sessions]);
+
   return (
     <PageShell>
-      <header className="mb-[22px]">
-        <p className="m-0 text-[11px] tracking-[0.18em] uppercase text-muted font-semibold">
-          The semester so far
-        </p>
-        <h1 className="mt-1.5 mb-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1]">
-          Stats
+      {/* Vol. III editorial header */}
+      <header className="mb-[18px]">
+        <div className="flex items-center justify-between gap-3">
+          <p className="m-0 text-[10px] tracking-[0.18em] uppercase text-muted font-semibold">
+            Vol. III · {semesterLabel}
+          </p>
+          {semesterWeekMark && (
+            <Stamp>
+              Wk {semesterWeekMark.current} / {semesterWeekMark.total}
+            </Stamp>
+          )}
+        </div>
+        <h1 className="mt-3 mb-0 font-serif font-medium text-[52px] tracking-[-0.035em] leading-[0.95]">
+          The <span className="italic">Semester</span>
+          <br />
+          so far<span className="text-peach">.</span>
         </h1>
+        <div className="mt-3.5 flex items-center gap-2.5">
+          <span className="flex-1 h-px bg-ink" />
+          <span className="font-serif italic text-[12px] text-muted">compiled by Akada</span>
+          <span className="flex-1 h-px bg-ink" />
+        </div>
       </header>
 
-      <div className="mb-[18px] grid grid-cols-3 gap-2">
-        <Kpi label="Total" value={(totalSec / 3600).toFixed(1)} unit="h" />
-        <Kpi label="Streak" value={streak.toString()} unit="d" />
-        <Kpi label="Avg / day" value={(avgPerDay / 60).toFixed(0)} unit="m" />
+      {/* Hero number — total hours logged, big mono with a hand-note nudge */}
+      <section className="relative mb-5 mt-2">
+        <HandNote
+          color="var(--peach)"
+          size={18}
+          rotate={-6}
+          style={{ position: 'absolute', top: -2, right: 6 }}
+        >
+          {streak >= 7 ? '↑ on a roll' : streak >= 3 ? `${streak}-day streak` : '→ keep going'}
+        </HandNote>
+        <div className="flex items-baseline gap-3">
+          <span className="font-mono font-semibold tabular-nums text-[80px] leading-[0.9] tracking-[-0.04em] text-ink">
+            {totalWhole}
+            <span className="text-muted-soft">{totalDecimal}</span>
+          </span>
+          <div className="pb-2.5">
+            <span className="font-serif italic text-[22px] text-ink-soft">hours</span>
+            <p className="m-0 mt-0.5 text-[12px] text-muted">logged this semester</p>
+          </div>
+        </div>
+      </section>
+
+      {/* KPI ribbon — ink top border like a newspaper rule */}
+      <div
+        className="mb-4 grid grid-cols-3 gap-0 px-0 py-3.5"
+        style={{
+          borderTop: '1.5px solid var(--ink)',
+          borderBottom: '1px solid var(--line)',
+        }}
+      >
+        <KpiCell label="Streak" value={streak.toString()} unit="days" />
+        <KpiCell
+          label="Avg / day"
+          value={avgPerDay > 0 ? formatHM(avgPerDay) : '—'}
+          border
+        />
+        {bestDay ? (
+          <KpiCell label="Best day" value={bestDay.day} sub={bestDay.duration} />
+        ) : (
+          <KpiCell label="Best day" value="—" />
+        )}
       </div>
 
       {sessions.length === 0 && (
@@ -223,56 +323,191 @@ export default function StatsPage() {
         </div>
       </section>
 
-      {/* Weekly bars */}
-      <section className="bg-paper rounded-[14px] border border-line py-5 px-[22px] mb-4">
-        <h2 className="m-0 mb-[18px] font-serif font-medium text-[17px]">This week</h2>
+      {/* Weekly bars — deckle card */}
+      <section className="card deckle bg-paper border border-line py-5 px-[22px] mb-4">
+        <h2 className="m-0 mb-[18px] font-serif font-medium text-[20px]">This week</h2>
         <WeeklyChart sessions={sessions} courses={courses} />
       </section>
 
-      {/* Totals */}
-      <section className="bg-paper rounded-[14px] border border-line px-[22px]">
-        <h2 className="my-4 font-serif font-medium text-[17px]">Hours by course</h2>
+      {/* Totals — deckle card with hand-drawn trend arrows */}
+      <section className="card deckle bg-paper border border-line px-[22px]">
+        <h2 className="my-4 font-serif font-medium text-[20px]">Hours by course</h2>
         <div>
-          {totals.map(({ course, totalHours, avg }) => (
-            <div
-              key={course.id}
-              className="flex items-center justify-between py-3.5 border-b border-line last:border-0"
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: course.color }}
-                />
-                <div>
-                  <p
-                    className="m-0 text-[10px] font-semibold tracking-[0.14em] uppercase"
-                    style={{ color: course.color }}
-                  >
-                    {course.code}
-                  </p>
-                  <p className="mt-0.5 mb-0 font-serif font-medium text-[15px]">
-                    {course.name}
-                  </p>
+          {totals.map(({ course, totalHours, avg }) => {
+            // Quick trend: compare last 7 days vs the 7 before that
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const eightDaysAgo = new Date(today);
+            eightDaysAgo.setDate(today.getDate() - 7);
+            const fifteenDaysAgo = new Date(today);
+            fifteenDaysAgo.setDate(today.getDate() - 14);
+            let recentSec = 0;
+            let priorSec = 0;
+            for (const s of sessions) {
+              if (s.courseId !== course.id) continue;
+              const d = new Date(s.date + 'T00:00:00');
+              if (d >= eightDaysAgo) recentSec += clampSessionSeconds(s.durationSeconds);
+              else if (d >= fifteenDaysAgo) priorSec += clampSessionSeconds(s.durationSeconds);
+            }
+            const trend: 'up' | 'flat' | 'down' =
+              recentSec > priorSec * 1.1
+                ? 'up'
+                : recentSec < priorSec * 0.9
+                  ? 'down'
+                  : 'flat';
+            const trendChar = trend === 'up' ? '↗' : trend === 'down' ? '↘' : '→';
+            const trendColor =
+              trend === 'up'
+                ? 'var(--sage)'
+                : trend === 'down'
+                  ? 'var(--rose)'
+                  : 'var(--muted-soft)';
+            return (
+              <div
+                key={course.id}
+                className="flex items-center justify-between py-3.5 border-b border-dashed border-line last:border-0"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ background: course.color }}
+                  />
+                  <div className="min-w-0">
+                    <p
+                      className="m-0 text-[10px] font-semibold tracking-[0.14em] uppercase"
+                      style={{ color: course.color }}
+                    >
+                      {course.code}
+                    </p>
+                    <p className="mt-0.5 mb-0 font-serif font-medium text-[15px]">
+                      {course.name}
+                    </p>
+                    {totalHours > 0 && (
+                      <div className="mt-2 h-[3px] rounded-full bg-bg-tint overflow-hidden max-w-[140px]">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.min(100, (totalHours / 30) * 100)}%`,
+                            background: course.color,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right shrink-0 pl-3">
+                  {totalHours > 0 ? (
+                    <>
+                      <p className="m-0 font-mono font-semibold text-[18px] tabular-nums leading-none tracking-[-0.02em]">
+                        {totalHours.toFixed(1)}
+                        <span className="text-muted font-sans font-normal text-[11px] ml-[3px]">
+                          h
+                        </span>
+                      </p>
+                      <p className="mt-1 mb-0 text-[10.5px] text-muted italic font-serif">
+                        {avg.toFixed(1)} h/wk
+                        <span className="ml-1.5" style={{ color: trendColor }}>
+                          {trendChar}
+                        </span>
+                      </p>
+                    </>
+                  ) : (
+                    <p className="m-0 text-[12px] text-muted-soft italic font-serif">
+                      No sessions yet
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="text-right">
-                <p className="m-0 font-mono font-semibold text-[15px] tabular-nums">
-                  {totalHours.toFixed(1)}
-                  <span className="text-muted font-sans font-normal text-[11px] ml-[3px]">
-                    h
-                  </span>
-                </p>
-                <p className="mt-0.5 mb-0 text-[10px] text-muted italic font-serif">
-                  {avg.toFixed(1)} h/wk avg
-                </p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
-      <section className="mt-4 bg-paper rounded-[14px] border border-line px-[22px]">
-        <h2 className="my-4 font-serif font-medium text-[17px]">Session history</h2>
+      {/* Marks & milestones — semester-shaped achievements */}
+      {sessions.length > 0 && (
+        <section className="mt-4">
+          <h2 className="m-0 mb-3 font-serif font-medium text-[20px]">
+            Marks &amp; milestones
+          </h2>
+          <div className="card deckle bg-paper border border-line px-[22px] py-2">
+            {(() => {
+              const totalHours = totalSec / 3600;
+              const dayCountAll = new Set(sessions.map((s) => s.date)).size;
+              const items = [
+                {
+                  label: 'First 10-hour week',
+                  achieved: streak >= 5 || totalHours >= 10,
+                  color: 'var(--sage)',
+                },
+                {
+                  label: '7-day streak',
+                  achieved: streak >= 7,
+                  detail: streak > 0 ? `currently ${streak}d` : undefined,
+                  color: 'var(--peach)',
+                },
+                {
+                  label: 'Reach 100 hours this semester',
+                  achieved: totalHours >= 100,
+                  detail:
+                    totalHours < 100
+                      ? `${(100 - totalHours).toFixed(1)} to go`
+                      : undefined,
+                  color: 'var(--lav)',
+                },
+                {
+                  label: '20 study days logged',
+                  achieved: dayCountAll >= 20,
+                  detail:
+                    dayCountAll < 20 ? `${20 - dayCountAll} to go` : undefined,
+                  color: 'var(--rose)',
+                },
+              ];
+              return items.map((m, i, arr) => (
+                <div
+                  key={m.label}
+                  className="flex items-start gap-3 py-3"
+                  style={{
+                    borderBottom: i < arr.length - 1 ? '1px dashed var(--line)' : 'none',
+                  }}
+                >
+                  <div
+                    className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center"
+                    style={{
+                      background: m.achieved ? m.color : 'transparent',
+                      border: m.achieved ? 'none' : `1.5px dashed ${m.color}`,
+                      color: m.achieved ? 'var(--ink)' : m.color,
+                    }}
+                  >
+                    {m.achieved ? (
+                      <HandCheck size={14} color="var(--ink)" />
+                    ) : (
+                      <svg width="9" height="9" viewBox="0 0 12 12">
+                        <circle cx="6" cy="6" r="2.5" fill="currentColor" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <p
+                      className="m-0 text-[13.5px] leading-[1.4]"
+                      style={{ color: m.achieved ? 'var(--ink)' : 'var(--muted)' }}
+                    >
+                      {m.label}
+                      {m.detail && (
+                        <span className="ml-2 font-serif italic text-[11.5px] text-muted-soft">
+                          ({m.detail})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        </section>
+      )}
+
+      <section className="mt-4 card deckle bg-paper border border-line px-[22px]">
+        <h2 className="my-4 font-serif font-medium text-[20px]">Session history</h2>
         {sessions.length === 0 ? (
           <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
             Your logged study sessions will appear here.
@@ -290,6 +525,22 @@ export default function StatsPage() {
           </div>
         )}
       </section>
+
+      {/* Editorial footer — closes the issue */}
+      {semester && (
+        <p
+          className="mt-8 text-center text-[12px] text-muted-soft font-serif italic pt-4"
+          style={{ borderTop: '1px solid var(--line)' }}
+        >
+          End of issue ·{' '}
+          {(() => {
+            const end = new Date(semester.endDate + 'T00:00:00').getTime();
+            const days = Math.max(0, Math.ceil((end - Date.now()) / 86400000));
+            return `${days} day${days === 1 ? '' : 's'} remain${days === 1 ? 's' : ''} in the term`;
+          })()}
+          .
+        </p>
+      )}
 
       {deletedSession && (
         <div
@@ -316,16 +567,41 @@ export default function StatsPage() {
   );
 }
 
-function Kpi({ label, value, unit }: { label: string; value: string; unit: string }) {
+// Vol. III KPI cell — sits inside the ink-ruled ribbon (no per-cell card,
+// vertical separators between).
+function KpiCell({
+  label,
+  value,
+  unit,
+  sub,
+  border,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  sub?: string;
+  border?: boolean;
+}) {
   return (
-    <div className="rounded-xl border border-line bg-paper px-3.5 py-3.5">
+    <div
+      className="px-3 py-1"
+      style={{
+        borderRight: border ? '1px solid var(--line)' : 'none',
+        borderLeft: border ? '1px solid var(--line)' : 'none',
+      }}
+    >
       <p className="m-0 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted">
         {label}
       </p>
-      <p className="mt-1.5 mb-0 font-mono text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums">
+      <p className="mt-1.5 mb-0 font-mono font-semibold text-[22px] leading-none tracking-[-0.02em] tabular-nums">
         {value}
-        <span className="ml-[3px] text-[11px] font-medium text-muted">{unit}</span>
+        {unit && (
+          <span className="ml-1 font-sans text-[11px] font-normal text-muted">{unit}</span>
+        )}
       </p>
+      {sub && (
+        <p className="mt-1 mb-0 font-serif italic text-[11px] text-muted">{sub}</p>
+      )}
     </div>
   );
 }

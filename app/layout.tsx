@@ -1,5 +1,13 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono, Fraunces, Lora, Merriweather } from 'next/font/google';
+import {
+  Inter,
+  JetBrains_Mono,
+  Fraunces,
+  Lora,
+  Merriweather,
+  Cormorant_Garamond,
+  Caveat,
+} from 'next/font/google';
 import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import SWRRoot from '@/components/SWRRoot';
@@ -24,7 +32,7 @@ const fraunces = Fraunces({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   style: ['normal', 'italic'],
-  variable: '--font-serif',
+  variable: '--font-fraunces',
   display: 'swap',
 });
 
@@ -41,6 +49,23 @@ const merriweather = Merriweather({
   weight: ['400', '700'],
   style: ['normal', 'italic'],
   variable: '--font-merriweather',
+  display: 'swap',
+});
+
+// Refined editorial heading face — used as the new default --font-serif.
+const cormorant = Cormorant_Garamond({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  style: ['normal', 'italic'],
+  variable: '--font-cormorant',
+  display: 'swap',
+});
+
+// Handwritten marginalia and notes (HandNote primitive, Caveat utility).
+const caveat = Caveat({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-hand',
   display: 'swap',
 });
 
@@ -72,7 +97,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#FAFAF6',
+  themeColor: '#FAF8F2',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -83,7 +108,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${mono.variable} ${fraunces.variable} ${lora.variable} ${merriweather.variable}`}
+      className={`${inter.variable} ${mono.variable} ${fraunces.variable} ${lora.variable} ${merriweather.variable} ${cormorant.variable} ${caveat.variable}`}
     >
       <body className="font-sans bg-bg text-ink antialiased">
         <PreferencesBootstrap />

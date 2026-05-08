@@ -9,6 +9,7 @@ import type { Task } from '@/lib/data';
 import { isoDate } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
+import StickyNote from '@/components/notebook/StickyNote';
 import {
   useOnboardingComplete,
   useCourses,
@@ -178,10 +179,13 @@ export default function TasksPage() {
     <PageShell>
       <header className="mb-[18px]">
         <p className="m-0 text-[11px] tracking-[0.18em] uppercase text-muted font-semibold">
-          To do
+          The list
         </p>
-        <h1 className="mt-1.5 mb-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1]">
-          Tasks
+        <h1 className="mt-1.5 mb-0 font-serif font-medium text-[36px] tracking-[-0.025em] leading-[1.05]">
+          Tasks{' '}
+          <span className="font-serif italic text-muted text-[28px]">
+            · {tasks.filter((t) => !t.completed).length} open
+          </span>
         </h1>
       </header>
 
@@ -343,6 +347,17 @@ export default function TasksPage() {
             </section>
           );
         })}
+        </div>
+      )}
+
+      {/* Hand-pinned reminder at the end of the list — only shows when a real
+          list exists, so it doesn't interrupt empty states. */}
+      {courses.length > 0 && visibleTasks.length > 0 && filter === 'all' && (
+        <div className="mt-7 flex justify-end pr-3">
+          <StickyNote tilt="r2" tapeOffset="38%">
+            remember to <br />
+            email TA before friday !!
+          </StickyNote>
         </div>
       )}
 

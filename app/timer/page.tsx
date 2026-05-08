@@ -332,6 +332,34 @@ export default function TimerPage() {
                   className="transition-[stroke-dashoffset] duration-700 ease-out"
                 />
               </svg>
+              {/* 60 minute-tick marks around the inner edge of the ring —
+                  longer + thicker every 5 (the "5/10/.../55" hours marks). */}
+              <svg
+                width="100%"
+                height="100%"
+                viewBox="0 0 284 284"
+                className="absolute inset-0 pointer-events-none"
+                aria-hidden
+              >
+                {Array.from({ length: 60 }).map((_, i) => {
+                  const angle = ((i * 6 - 90) * Math.PI) / 180;
+                  const isMajor = i % 5 === 0;
+                  const inner = isMajor ? ringRadius - 8 : ringRadius - 4;
+                  const outer = ringRadius - 1.5;
+                  return (
+                    <line
+                      key={i}
+                      x1={142 + Math.cos(angle) * inner}
+                      y1={142 + Math.sin(angle) * inner}
+                      x2={142 + Math.cos(angle) * outer}
+                      y2={142 + Math.sin(angle) * outer}
+                      stroke="var(--muted-soft)"
+                      strokeWidth={isMajor ? 1.2 : 0.6}
+                      opacity="0.45"
+                    />
+                  );
+                })}
+              </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <div
                   className="font-mono font-semibold text-[clamp(34px,12vw,54px)] leading-none tracking-[-0.02em] text-ink tabular-nums transition-opacity duration-200"

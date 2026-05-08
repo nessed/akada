@@ -197,10 +197,22 @@ export default function AuthPage() {
               Create account
             </button>
           </div>
-          <h1 className="m-0 font-serif font-medium text-[32px] tracking-[-0.02em] leading-[1.1] whitespace-pre-line">
-            {isSignUp ? 'Create your\nstudy plan.' : 'Welcome back\nto Akada.'}
+          <h1 className="m-0 font-serif font-medium text-[34px] tracking-[-0.025em] leading-[1.05]">
+            {isSignUp ? (
+              <>
+                Create your<br />
+                <span className="italic font-normal">study plan.</span>
+              </>
+            ) : (
+              <>
+                Welcome back<br />
+                <span className="italic font-normal">
+                  to <span className="hl">Akada</span>.
+                </span>
+              </>
+            )}
           </h1>
-          <p className="mt-3 mb-0 text-[14px] text-ink-soft leading-[1.55] max-w-[300px]">
+          <p className="mt-3 mb-0 font-serif italic text-[14px] text-muted leading-[1.55] max-w-[300px]">
             {isSignUp
               ? 'Track courses, tasks, and focused study sessions in one calm workspace.'
               : 'Sign in to manage your courses, tasks, timer, and progress.'}
@@ -244,7 +256,7 @@ export default function AuthPage() {
               password.length < 6 ||
               (isSignUp && !name.trim())
             }
-            className="mt-2.5 w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+            className="mt-2.5 w-full min-h-[56px] py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
           >
             {state === 'loading'
               ? isSignUp
@@ -254,6 +266,16 @@ export default function AuthPage() {
                 ? 'Create account'
                 : 'Sign in'}
           </button>
+
+          {!isSignUp && (
+            <button
+              type="button"
+              className="mt-1 self-center bg-transparent border-0 cursor-pointer font-serif italic text-[13px] text-muted underline underline-offset-4 decoration-line-strong min-h-[44px] px-3"
+              onClick={() => setErrorMsg('Password reset is coming soon — please reach out for now.')}
+            >
+              Forgot password?
+            </button>
+          )}
         </form>
 
         {state === 'error' && errorMsg && (

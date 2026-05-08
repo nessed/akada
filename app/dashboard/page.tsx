@@ -29,6 +29,7 @@ import {
   cleanTaskTitle,
 } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
+import HandNote from '@/components/notebook/HandNote';
 import {
   useOnboardingComplete,
   useCourses,
@@ -387,6 +388,20 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* Streak hand-note — only when there's a meaningful streak */}
+      {streak >= 3 && (
+        <div className="relative h-0">
+          <HandNote
+            color="var(--peach)"
+            size={18}
+            rotate={-7}
+            style={{ position: 'absolute', top: -54, right: 64 }}
+          >
+            {streak} day streak ↗
+          </HandNote>
+        </div>
+      )}
+
       {/* Daily summary */}
       <DailySummary todaysSessions={todaysSessions} courses={courses} />
 
@@ -405,11 +420,26 @@ export default function DashboardPage() {
               {semesterInfo.daysRemaining}d left
             </span>
           </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-bg-tint">
+          {/* Semester bar with week markers — feels like a ruler/timeline */}
+          <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-bg-tint">
             <div
               className="h-full rounded-full bg-primary"
               style={{ width: `${semesterInfo.percent}%` }}
             />
+            {semesterInfo.totalWeeks > 1 && (
+              <div className="absolute inset-0 flex pointer-events-none">
+                {Array.from({ length: semesterInfo.totalWeeks - 1 }).map((_, i) => (
+                  <span
+                    key={i}
+                    className="flex-1"
+                    style={{
+                      borderRight: '1px solid rgba(255,252,245,0.55)',
+                    }}
+                  />
+                ))}
+                <span className="flex-1" />
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -821,9 +851,9 @@ function DashboardTaskItem({ task, course, isLast, onToggle, onStartTimer }: { t
           type="button"
           onClick={() => onToggle(task.id)}
           aria-label="Mark complete"
-          className="h-[18px] w-[18px] shrink-0 rounded-[5px] border-[1.5px] border-line-strong"
+          className="scribble-box h-5 w-5 shrink-0"
         />
-        <p className="m-0 min-w-0 flex-1 text-[13px] leading-[1.4] text-ink">
+        <p className="m-0 min-w-0 flex-1 text-[13.5px] leading-[1.4] text-ink">
           {task.title}
         </p>
         {course && (

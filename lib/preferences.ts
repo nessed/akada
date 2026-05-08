@@ -3,7 +3,10 @@
 import { useEffect, useState, useCallback } from 'react';
 
 export type PaperTone = 'warm' | 'paper' | 'stone' | 'white';
-export type HeadingFont = 'fraunces' | 'lora' | 'merriweather';
+// Cormorant is the new editorial default (Akada · Vol. III refined design).
+// Fraunces / Lora / Merriweather remain selectable for users who already
+// prefer them.
+export type HeadingFont = 'cormorant' | 'fraunces' | 'lora' | 'merriweather';
 export type Density = 'cozy' | 'comfy' | 'compact';
 export type PrimaryAccent = 'classic' | 'green';
 
@@ -19,7 +22,7 @@ export interface Preferences {
 
 const DEFAULTS: Preferences = {
   paperTone: 'warm',
-  headingFont: 'fraunces',
+  headingFont: 'cormorant',
   density: 'comfy',
   primaryAccent: 'classic',
   dailyReminder: true,
@@ -30,7 +33,7 @@ const DEFAULTS: Preferences = {
 const STORAGE_KEY = 'akada.preferences.v1';
 
 const PAPER_TONE_VALUES: PaperTone[] = ['warm', 'paper', 'stone', 'white'];
-const HEADING_FONT_VALUES: HeadingFont[] = ['fraunces', 'lora', 'merriweather'];
+const HEADING_FONT_VALUES: HeadingFont[] = ['cormorant', 'fraunces', 'lora', 'merriweather'];
 const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
 const PRIMARY_ACCENT_VALUES: PrimaryAccent[] = ['classic', 'green'];
 
@@ -73,13 +76,14 @@ const PAPER_TONES: Record<
   }
 > = {
   warm: {
-    bg: '#FAFAF6',
-    tint: '#F4F2EC',
-    paper: '#FFFFFF',
-    line: '#E8E5DC',
-    lineStrong: '#DDD8CB',
-    glowA: 'rgba(180, 170, 140, 0.10)',
-    glowB: 'rgba(160, 150, 130, 0.08)',
+    // Refined paper-warm tones (Akada · Vol. III)
+    bg: '#FAF8F2',
+    tint: '#F1ECDF',
+    paper: '#FFFCF5',
+    line: '#E5DECC',
+    lineStrong: '#D7CDB3',
+    glowA: 'rgba(190, 170, 120, 0.10)',
+    glowB: 'rgba(180, 150, 110, 0.07)',
   },
   paper: {
     bg: '#F5F1E8',
@@ -113,8 +117,12 @@ const PAPER_TONES: Record<
 // Maps user choice -> the next/font CSS variable that wires to that family.
 // We override --font-serif (which Tailwind's font-serif resolves to) so the
 // switch ripples through every heading without per-component changes.
+//
+// `cormorant` (the default) clears the override and lets globals.css's
+// :root rule provide the Cormorant stack.
 const HEADING_VAR_OVERRIDE: Record<HeadingFont, string | null> = {
-  fraunces: null, // use the default --font-serif from next/font
+  cormorant: null,
+  fraunces: 'var(--font-fraunces)',
   lora: 'var(--font-lora)',
   merriweather: 'var(--font-merriweather)',
 };

@@ -26,18 +26,22 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
           type="button"
           onClick={() => onToggle(task.id)}
           aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
-          className="shrink-0 mt-0.5 w-5 h-5 rounded-md flex items-center justify-center"
-          style={{
-            border: `1.5px solid ${task.completed ? course.color : 'var(--line-strong)'}`,
-            background: task.completed ? course.color : 'transparent',
-          }}
+          className={`shrink-0 mt-0.5 w-5 h-5 flex items-center justify-center ${
+            task.completed ? 'rounded-md' : 'scribble-box'
+          }`}
+          style={
+            task.completed
+              ? { background: course.color, border: `1.5px solid ${course.color}` }
+              : undefined
+          }
         >
           {task.completed && (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path
-                d="M5 12l4 4L19 7"
-                stroke="#FFFFFF"
-                strokeWidth="2.4"
+                d="M2.5 8 Q5 11.5 6.5 12 Q9 9 13.5 3.5"
+                stroke="#FFFCF5"
+                strokeWidth="1.8"
+                fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -47,26 +51,32 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
 
         <div className="flex-1 min-w-0">
           <p
-            className={`m-0 text-sm leading-[1.4] ${
-              task.completed ? 'line-through text-ink' : 'text-ink'
+            className={`m-0 text-[14.5px] leading-[1.4] ${
+              task.completed
+                ? 'line-through text-ink-soft/70 decoration-line-strong'
+                : 'text-ink'
             }`}
           >
-            {task.priority === 'high' && !task.completed && (
-              <span
-                className="inline-block w-1 h-1 rounded-full bg-priority align-middle mr-2"
-                aria-hidden
-              />
-            )}
             {task.title}
           </p>
-          {due && (
-            <p
-              className="mt-1 mb-0 text-[11px] font-serif italic"
-              style={{ color: due.tone === 'warn' ? '#B5694C' : 'var(--muted)' }}
-            >
-              {due.text}
-            </p>
-          )}
+          <div className="mt-1 flex items-center gap-2.5">
+            {task.priority === 'high' && !task.completed && (
+              <span
+                className="font-hand inline-block text-[14px] text-rose"
+                style={{ transform: 'rotate(-3deg)' }}
+              >
+                !! high
+              </span>
+            )}
+            {due && !task.completed && (
+              <span
+                className="text-[11px] font-serif italic"
+                style={{ color: due.tone === 'warn' ? '#B5694C' : 'var(--muted)' }}
+              >
+                {due.text}
+              </span>
+            )}
+          </div>
         </div>
 
         {!task.completed && (
