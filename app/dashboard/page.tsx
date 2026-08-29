@@ -11,6 +11,7 @@ import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
 import type { Course, Semester, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
+import { clearClientSessionState } from '@/lib/session-cleanup';
 import {
   formatHM,
   daysBetween,
@@ -169,7 +170,14 @@ export default function DashboardPage() {
     } catch {
       // ignore — fall through to redirect either way
     }
-    router.replace('/auth');
+    // The timer, preferences and anything the local adapter cached all
+    // outlive the Supabase session, so wipe them before leaving. Otherwise
+    // the next person on a shared laptop inherits them.
+    clearClientSessionState();
+    // A hard navigation rather than router.replace, so the SWR cache, the
+    // timer context and every other in-memory copy of the previous user's
+    // data goes with the page.
+    window.location.replace('/auth');
   }
 
   async function handleResetData() {

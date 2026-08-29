@@ -53,25 +53,41 @@ export default function OnboardingPage() {
   const [end, setEnd] = useState('');
   const [dailyGoal, setDailyGoal] = useState(4);
   const [avatarPreview, setAvatarPreview] = useState('');
+  const [gate, setGate] = useState<'checking' | 'open'>('checking');
 
   useEffect(() => {
+    let active = true;
     (async () => {
       try {
-        const [settings, auth] = await Promise.all([
+        const [settings, auth, onboarded] = await Promise.all([
           db.getUserSettings(),
           createClient().auth.getUser(),
+          db.isOnboardingComplete(),
         ]);
+        if (!active) return;
+        // Someone who has already finished setup must not be able to run it
+        // again by typing the URL — it would duplicate every course and
+        // overwrite their profile.
+        if (onboarded) {
+          router.replace('/dashboard');
+          return;
+        }
         const metadataName =
           typeof auth.data.user?.user_metadata?.display_name === 'string'
             ? auth.data.user.user_metadata.display_name
             : '';
         setDisplayName((current) => current || settings?.displayName || metadataName || '');
         setAvatarPreview((current) => current || settings?.avatarUrl || '');
+        setGate('open');
       } catch {
-        // Local mode or unauthenticated edge: keep the form empty.
+        // Local mode or unauthenticated edge: keep the form empty but usable.
+        if (active) setGate('open');
       }
     })();
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const editing = courses[editIdx];
   function update(patch: Partial<DraftCourse>) {
@@ -169,6 +185,14 @@ export default function OnboardingPage() {
       console.error('Onboarding setup failed:', err);
       alert('Setup failed: ' + msg);
     }
+  }
+
+  if (gate === 'checking') {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center px-8">
+        <p className="m-0 font-serif italic text-[14px] text-muted">Loading your setup…</p>
+      </div>
+    );
   }
 
   return (
