@@ -5,6 +5,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { db } from '@/lib/data';
+import {
+  MIN_PASSWORD_LENGTH,
+  authRedirectErrorMessage,
+  friendlyAuthError,
+} from '@/lib/auth-messages';
 
 type Mode = 'signin' | 'signup';
 type State = 'idle' | 'loading' | 'success' | 'error';
@@ -18,6 +23,7 @@ export default function AuthPage() {
   const [state, setState] = useState<State>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [successKind, setSuccessKind] = useState<'signup' | 'reset'>('signup');
 
   const isSignUp = mode === 'signup';
 
@@ -33,7 +39,7 @@ export default function AuthPage() {
     }
 
     if (requestedError) {
-      setErrorMsg(getAuthErrorMessage(requestedError));
+      setErrorMsg(authRedirectErrorMessage(requestedError));
       setState('error');
     }
   }, []);
@@ -64,7 +70,7 @@ export default function AuthPage() {
       const supabase = createClient();
 
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
@@ -74,9 +80,15 @@ export default function AuthPage() {
         });
 
         if (error) {
-          setErrorMsg(error.message);
+          setErrorMsg(friendlyAuthError(error.message, 'signup'));
           setState('error');
+        } else if (data.session) {
+          // Email confirmations are switched off in Supabase, so sign-up
+          // returns a live session. Showing "check your email" here would
+          // strand the user on a screen with nothing to wait for.
+          await goToNextStep();
         } else {
+          setSuccessKind('signup');
           setSuccessMsg(email.trim());
           setState('success');
         }
@@ -87,19 +99,56 @@ export default function AuthPage() {
         });
 
         if (error) {
-          setErrorMsg(error.message);
+          setErrorMsg(friendlyAuthError(error.message, 'signin'));
           setState('error');
         } else {
-          try {
-            const onboarded = await db.isOnboardingComplete();
-            router.replace(onboarded ? '/dashboard' : '/onboarding');
-          } catch {
-            router.replace('/onboarding');
-          }
+          await goToNextStep();
         }
       }
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : 'Could not sign in. Please try again.');
+      setErrorMsg(
+        friendlyAuthError(error instanceof Error ? error.message : '', mode),
+      );
+      setState('error');
+    }
+  }
+
+  async function goToNextStep() {
+    let onboarded = false;
+    try {
+      onboarded = await db.isOnboardingComplete();
+    } catch {
+      onboarded = false;
+    }
+    router.replace(onboarded ? '/dashboard' : '/onboarding');
+  }
+
+  async function handleForgotPassword() {
+    const target = email.trim();
+    if (!target) {
+      setErrorMsg('Enter your email address above first, then tap “Forgot password?”.');
+      setState('error');
+      return;
+    }
+    setState('loading');
+    setErrorMsg('');
+    try {
+      const next = encodeURIComponent('/auth/reset');
+      const { error } = await createClient().auth.resetPasswordForEmail(target, {
+        redirectTo: `${window.location.origin}/auth/callback?next=${next}`,
+      });
+      if (error) {
+        setErrorMsg(friendlyAuthError(error.message, 'reset'));
+        setState('error');
+        return;
+      }
+      setSuccessKind('reset');
+      setSuccessMsg(target);
+      setState('success');
+    } catch (error) {
+      setErrorMsg(
+        friendlyAuthError(error instanceof Error ? error.message : '', 'reset'),
+      );
       setState('error');
     }
   }
@@ -119,10 +168,20 @@ export default function AuthPage() {
             Check your email
           </h1>
           <p className="text-[15px] text-ink-soft leading-[1.6] max-w-[300px] mx-auto">
-            We sent a confirmation link to{' '}
-            <span className="font-medium text-ink">{successMsg}</span>.
-            <br />
-            Click it to finish setting up Akada.
+            {successKind === 'reset' ? (
+              <>
+                If an account exists for{' '}
+                <span className="font-medium text-ink">{successMsg}</span>, we have
+                sent a link to reset the password.
+              </>
+            ) : (
+              <>
+                We sent a confirmation link to{' '}
+                <span className="font-medium text-ink">{successMsg}</span>.
+                <br />
+                Click it to finish setting up Akada.
+              </>
+            )}
           </p>
           <button
             type="button"
@@ -246,6 +305,11 @@ export default function AuthPage() {
               placeholder="Password"
               type="password"
             />
+            {isSignUp && (
+              <p className="mt-2 mb-0 text-[11.5px] text-muted-soft">
+                At least {MIN_PASSWORD_LENGTH} characters.
+              </p>
+            )}
           </Field>
 
           <button
@@ -253,7 +317,7 @@ export default function AuthPage() {
             disabled={
               state === 'loading' ||
               !email.trim() ||
-              password.length < 6 ||
+              (isSignUp ? password.length < MIN_PASSWORD_LENGTH : password.length === 0) ||
               (isSignUp && !name.trim())
             }
             className="mt-2.5 w-full min-h-[56px] py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
@@ -271,7 +335,8 @@ export default function AuthPage() {
             <button
               type="button"
               className="mt-1 self-center bg-transparent border-0 cursor-pointer font-serif italic text-[13px] text-muted underline underline-offset-4 decoration-line-strong min-h-[44px] px-3"
-              onClick={() => setErrorMsg('Password reset is coming soon — please reach out for now.')}
+              onClick={handleForgotPassword}
+              disabled={state === 'loading'}
             >
               Forgot password?
             </button>
@@ -299,19 +364,6 @@ export default function AuthPage() {
       </div>
     </div>
   );
-}
-
-function getAuthErrorMessage(error: string) {
-  switch (error) {
-    case 'missing_code':
-      return 'That confirmation link is missing a code. Try logging in instead.';
-    case 'supabase_not_configured':
-      return 'Authentication is not configured for this build.';
-    case 'callback_failed':
-      return 'That confirmation link could not be completed. Please try logging in.';
-    default:
-      return 'Could not complete authentication. Please try again.';
-  }
 }
 
 function Mark({ size = 34 }: { size?: number }) {
