@@ -189,6 +189,10 @@ export default function DashboardPage() {
       await resetAllData();
     } catch (err) {
       console.error('Failed to reset data:', err);
+      // Navigating on to onboarding after a failed reset tells the user
+      // their data is gone when it is all still there.
+      alert('Could not reset your data — nothing was deleted. Please try again.');
+      return;
     }
     router.replace('/onboarding');
   }

@@ -26,6 +26,7 @@ export default function TimerPage() {
 
   const [goalMin, setGoalMin] = useState(50);
   const [whiteNoiseOn, setWhiteNoiseOn] = useState(false);
+  const [whiteNoiseError, setWhiteNoiseError] = useState('');
   const whiteNoiseContextRef = useRef<AudioContext | null>(null);
   const whiteNoiseBufferRef = useRef<AudioBuffer | null>(null);
   const whiteNoiseSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -200,9 +201,13 @@ export default function TimerPage() {
     }
 
     whiteNoiseStartingRef.current = true;
+    setWhiteNoiseError('');
     try {
       const context = await getWhiteNoiseContext();
-      if (!context) return;
+      if (!context) {
+        setWhiteNoiseError('Audio is unavailable on this device.');
+        return;
+      }
 
       const source = context.createBufferSource();
       const gain = context.createGain();
@@ -220,6 +225,9 @@ export default function TimerPage() {
     } catch (error) {
       console.error('Failed to play white noise:', error);
       setWhiteNoiseOn(false);
+      // Tapping a button and having nothing happen, with the reason only in
+      // the console, is indistinguishable from the app being broken.
+      setWhiteNoiseError('Audio is unavailable on this device.');
     } finally {
       whiteNoiseStartingRef.current = false;
     }
@@ -426,6 +434,12 @@ export default function TimerPage() {
           </>
         )}
       </div>
+
+      {whiteNoiseError && (
+        <p className="m-0 px-[22px] text-center text-[12px] text-muted" role="status">
+          {whiteNoiseError}
+        </p>
+      )}
 
       {course && active && (
         <div className="flex items-center justify-center gap-3.5 px-[22px] pt-4 pb-[calc(28px+env(safe-area-inset-bottom))]">

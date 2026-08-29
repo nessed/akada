@@ -333,6 +333,11 @@ export default function StatsPage() {
       <section className="card deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Hours by course</h2>
         <div>
+          {totals.length === 0 && (
+            <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
+              Add a course and your hours will break down here.
+            </p>
+          )}
           {totals.map(({ course, totalHours, avg }) => {
             // Quick trend: compare last 7 days vs the 7 before that
             const today = new Date();

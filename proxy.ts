@@ -34,6 +34,15 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
 
+  // Dev-only escape hatch, matching the one in lib/data/index.ts: with
+  // NEXT_PUBLIC_USE_LOCAL_DATA=true the app runs entirely off localStorage
+  // and there is no auth to enforce. Never available in a production build.
+  const localDataMode =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.NEXT_PUBLIC_USE_LOCAL_DATA === 'true';
+
+  if (localDataMode) return supabaseResponse;
+
   // Fail closed. Without auth configured we cannot tell anyone apart, so
   // private routes stay shut rather than opening to everybody.
   if (!hasSupabaseConfig) {
