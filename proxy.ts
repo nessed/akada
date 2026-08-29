@@ -7,7 +7,15 @@ import type { NextRequest } from 'next/server';
  * next week is protected until someone deliberately makes it public, which is
  * the opposite of the old hardcoded PROTECTED list.
  */
-const PUBLIC_PATHS = new Set(['/', '/auth', '/auth/callback', '/auth/reset']);
+const PUBLIC_PATHS = new Set([
+  '/',
+  '/auth',
+  '/auth/callback',
+  '/auth/reset',
+  // Next metadata route with no file extension. Social crawlers fetch it
+  // unauthenticated, so leaving it protected silently kills link previews.
+  '/opengraph-image',
+]);
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;

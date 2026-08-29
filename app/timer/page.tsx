@@ -118,13 +118,51 @@ export default function TimerPage() {
     return loopBuffer;
   }
 
+  /**
+   * Noise is synthesised here rather than decoded from a shipped file.
+   * The app used to fetch /whitenoise.ogg and run it through
+   * decodeAudioData, which Safari and iOS cannot do — Ogg Vorbis is
+   * unsupported there, so white noise was silently dead for every iPhone
+   * user. Generating it works on every browser, drops a 191 KB download,
+   * and keeps working offline.
+   */
+  function createNoiseBuffer(context: AudioContext) {
+    const seconds = 5;
+    const length = Math.floor(context.sampleRate * seconds);
+    const buffer = context.createBuffer(2, length, context.sampleRate);
+
+    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+      const data = buffer.getChannelData(channel);
+      // Paul Kellet's pink-noise filter. Flat white noise is harsh over a
+      // long session; pink rolls off the high end into the softer "shhh"
+      // people actually want to study to.
+      let b0 = 0;
+      let b1 = 0;
+      let b2 = 0;
+      let b3 = 0;
+      let b4 = 0;
+      let b5 = 0;
+      let b6 = 0;
+      for (let i = 0; i < length; i += 1) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.969 * b2 + white * 0.153852;
+        b3 = 0.8665 * b3 + white * 0.3104856;
+        b4 = 0.55 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.016898;
+        data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+        b6 = white * 0.115926;
+      }
+    }
+
+    return buffer;
+  }
+
   async function getWhiteNoiseBuffer(context: AudioContext) {
     if (whiteNoiseBufferRef.current) return whiteNoiseBufferRef.current;
 
-    const response = await fetch('/whitenoise.ogg');
-    const audioData = await response.arrayBuffer();
-    const buffer = await context.decodeAudioData(audioData);
-    const seamlessBuffer = createSeamlessLoopBuffer(context, buffer);
+    const seamlessBuffer = createSeamlessLoopBuffer(context, createNoiseBuffer(context));
     whiteNoiseBufferRef.current = seamlessBuffer;
     return seamlessBuffer;
   }

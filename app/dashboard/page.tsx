@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+// Aliased: the DOM `Image` constructor is used below by resizeImage().
+import NextImage from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
@@ -387,7 +389,17 @@ export default function DashboardPage() {
             className="relative w-[42px] h-[42px] rounded-full bg-bg-tint border border-line overflow-visible flex items-center justify-center shrink-0 hover:border-primary transition-colors"
           >
             <span className="block h-full w-full overflow-hidden rounded-full">
-              <img src={avatarUrl || '/default-avatar.png'} alt="Settings" className="w-full h-full object-cover" />
+              <NextImage
+                src={avatarUrl || '/default-avatar.svg'}
+                alt="Settings"
+                width={42}
+                height={42}
+                // Avatars are user-supplied base64 data URLs or arbitrary
+                // https URLs, neither of which the optimizer can handle
+                // without a remotePatterns allowlist per user.
+                unoptimized
+                className="w-full h-full object-cover"
+              />
             </span>
             {streak > 0 && (
               <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-bg bg-primary px-1 font-mono text-[9px] font-bold text-primary-contrast">

@@ -7,3 +7,6 @@ out/
 next-env.d.ts
 .next-dev*.log
 .design-bundle/
+
+# Local Claude Code settings (contains machine-specific paths)
+.claude/settings.local.json
