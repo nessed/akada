@@ -282,11 +282,12 @@ export default function SettingsSheet({
                 tone="warn"
                 last
                 onClick={() => {
-                  if (
-                    confirm(
-                      'Reset everything — courses, sessions, tasks? This cannot be undone.',
-                    )
-                  ) {
+                  // A single confirm() is one mistaken tap away from deleting
+                  // everything, so require the word to be typed out.
+                  const typed = prompt(
+                    'This permanently deletes every course, task and study session in your account. It cannot be undone.\n\nType RESET to confirm.',
+                  );
+                  if (typed?.trim().toUpperCase() === 'RESET') {
                     onResetData?.();
                   }
                 }}

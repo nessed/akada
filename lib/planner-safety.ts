@@ -3,7 +3,15 @@ const COURSE_NAME_MAX = 90;
 const TASK_TITLE_MAX = 140;
 const SESSION_NOTE_MAX = 800;
 const DISPLAY_NAME_MAX = 60;
-const AVATAR_URL_MAX = 250_000;
+// Avatars are resized client-side to 160x160 JPEG at 0.7 quality, which lands
+// around 3-8 KB of base64. 64 KB is generous headroom and still keeps a row
+// small; the old 250,000-character ceiling let a quarter-megabyte blob per
+// user straight into Postgres.
+const AVATAR_URL_MAX = 64_000;
+
+const AVATAR_DATA_URL = /^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
+// (?!\/) rejects protocol-relative "//evil.com/x.png", which is off-origin.
+const AVATAR_RELATIVE_PATH = /^\/(?!\/)[A-Za-z0-9._~\-/]*$/;
 
 export function cleanText(value: unknown, maxLength: number): string {
   return String(value ?? '')
@@ -32,8 +40,44 @@ export function cleanSessionNote(value: unknown): string {
   return cleanText(value, SESSION_NOTE_MAX);
 }
 
+/**
+ * Avatars are stored as a URL string in Postgres and rendered into an <img>.
+ * Only three shapes are allowed: an https: URL, a base64 image data URL, and
+ * a same-origin relative path such as /default-avatar.png. Everything else —
+ * javascript:, data:text/html, http:, an oversized blob — is rejected.
+ *
+ * Returns '' for anything invalid, so a bad value read back out of the
+ * database degrades to the default avatar rather than rendering.
+ */
 export function cleanAvatarUrl(value: unknown): string {
-  return String(value ?? '').slice(0, AVATAR_URL_MAX);
+  const raw = String(value ?? '').trim();
+  if (!raw || raw.length > AVATAR_URL_MAX) return '';
+  if (AVATAR_DATA_URL.test(raw)) return raw;
+  if (AVATAR_RELATIVE_PATH.test(raw)) return raw;
+  try {
+    if (new URL(raw).protocol === 'https:') return raw;
+  } catch {
+    // Not parseable as an absolute URL.
+  }
+  return '';
+}
+
+/**
+ * Write-path counterpart to cleanAvatarUrl. Silently blanking an avatar the
+ * user just picked looks like the save failed for no reason, so on the way
+ * into the database we throw a message the UI can show instead.
+ */
+export function assertAvatarUrl(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  if (raw.length > AVATAR_URL_MAX) {
+    throw new Error('That image is too large. Please choose a smaller one.');
+  }
+  const cleaned = cleanAvatarUrl(raw);
+  if (!cleaned) {
+    throw new Error('That image could not be used. Please choose a different one.');
+  }
+  return cleaned;
 }
 
 export function clampStepNumber(

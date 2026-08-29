@@ -284,7 +284,9 @@ export default function DashboardPage() {
       setAddingCourse(false);
     } catch (error) {
       console.error('Failed to add course:', error);
-      alert('Could not add that course.');
+      // Surface the real reason — most often a duplicate course code the
+      // database rejected, which the user can act on.
+      alert(error instanceof Error ? error.message : 'Could not add that course.');
     }
   }
 
