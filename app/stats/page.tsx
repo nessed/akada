@@ -136,24 +136,6 @@ export default function StatsPage() {
   const avgPerDay = dayCount ? totalSec / dayCount : 0;
   const streak = studyStreakDays(sessions);
 
-  if (loading) {
-    return (
-      <PageShell>
-        <div className="animate-pulse opacity-40">
-          <div className="h-3 w-32 bg-line rounded mb-2.5" />
-          <div className="h-8 w-24 bg-line rounded mb-8" />
-          <div className="grid grid-cols-3 gap-2 mb-8">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-[72px] bg-paper border border-line rounded-xl" />
-            ))}
-          </div>
-          <div className="h-48 bg-paper border border-line rounded-[14px] mb-4" />
-          <div className="h-32 bg-paper border border-line rounded-[14px]" />
-        </div>
-      </PageShell>
-    );
-  }
-
   // Editorial computed bits — the Vol./Issue mark, totals, and "best day"
   // headline that the redesigned stats page leans on.
   const semesterLabel = useMemo(() => {
@@ -198,6 +180,24 @@ export default function StatsPage() {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return { day: dayNames[bestDow], duration: formatHM(bestSec) };
   }, [sessions]);
+
+  if (loading) {
+    return (
+      <PageShell>
+        <div className="animate-pulse opacity-40">
+          <div className="h-3 w-32 bg-line rounded mb-2.5" />
+          <div className="h-8 w-24 bg-line rounded mb-8" />
+          <div className="grid grid-cols-3 gap-2 mb-8">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-[72px] bg-paper border border-line rounded-xl" />
+            ))}
+          </div>
+          <div className="h-48 bg-paper border border-line rounded-[14px] mb-4" />
+          <div className="h-32 bg-paper border border-line rounded-[14px]" />
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>
@@ -606,11 +606,12 @@ function KpiCell({
   );
 }
 
-function EmptyState({ title }: { title: string; text: string }) {
+function EmptyState({ title, text }: { title: string; text: string }) {
   return (
     <div className="py-12 mb-4 text-center">
-      <p className="m-0 font-serif text-[16px] italic text-muted-soft">
-        Your history will map itself here...
+      <p className="m-0 font-serif text-[16px] italic text-ink-soft">{title}</p>
+      <p className="mx-auto mt-2 mb-0 max-w-[300px] text-[13px] leading-[1.55] text-muted">
+        {text}
       </p>
     </div>
   );
