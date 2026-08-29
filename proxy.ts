@@ -15,6 +15,8 @@ const PUBLIC_PATHS = new Set([
   // Next metadata route with no file extension. Social crawlers fetch it
   // unauthenticated, so leaving it protected silently kills link previews.
   '/opengraph-image',
+  // Crash reporting has to work on the signed-out pages too.
+  '/api/client-error',
 ]);
 
 function isPublicPath(pathname: string): boolean {

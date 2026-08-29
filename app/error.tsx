@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { reportClientError } from '@/lib/report-error';
 
 export default function AppError({
   error,
@@ -11,6 +12,7 @@ export default function AppError({
 }) {
   useEffect(() => {
     console.error('Application error:', error);
+    reportClientError(error, 'app');
   }, [error]);
 
   return (
