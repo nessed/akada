@@ -92,15 +92,8 @@ RLS being *enabled* and RLS being *correct* are different things. Prove it:
 1. Sign up two accounts on the deployed site (step 4), say `a@…` and `b@…`.
 2. Add a course as user A.
 3. Get both ids: `select id, email from auth.users;`
-4. As user B, signed in **in the browser**, open the console on `/dashboard`
-   and run:
-
-   ```js
-   const { data, error } = await window.__akadaSupabase?.from('courses').select('*')
-   ```
-
-   — or more simply, just confirm user B's dashboard shows **only B's
-   courses**, and that B's course count is unaffected by anything A does.
+4. Signed in as user B in the browser, confirm B's dashboard shows **only
+   B's courses**, and that nothing user A does changes what B sees.
 
 5. The rigorous version. Paste this whole block into the SQL Editor after
    both accounts exist and user A has at least one course. It impersonates
@@ -138,7 +131,7 @@ RLS being *enabled* and RLS being *correct* are different things. Prove it:
    It either raises `FAIL: ...` or notices `PASS`. Repeat with `tasks`,
    `sessions`, `semesters` and `user_settings` substituted for `courses`.
 
-**If that last query returns anything other than 0, do not launch.**
+**If any of them raises `FAIL`, do not launch.**
 
 ### 1.4 Advisors
 
