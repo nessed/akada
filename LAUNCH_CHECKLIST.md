@@ -10,22 +10,41 @@ Times are rough. The whole list is about 45 minutes if nothing surprises you.
 
 ---
 
-## 0. Blocked on you (do this first) — 2 min
+## 0. Why none of this is already done — read first
 
-I never got the Supabase project URL and anon key, so **nothing in this
-checklist has been executed and nothing in Phases 1, 2 or 5 was verified
-against a live database.** Everything below is written from the code and from
-Supabase's documented behaviour, not from a run against your project.
+Your credentials arrived and are correct in shape, but **the sandbox I run in
+blocks outbound network access to `jsllofhlkrckdbilgsxf.supabase.co`** — the
+egress proxy answers 403 to CONNECT under an organization policy (the same
+denial hits `google.com`; only npm, PyPI and Anthropic are allowed). The
+Supabase MCP integration is authenticated to a different Supabase account
+that does not contain this project either.
 
-To unblock the parts I can still do for you, paste back:
+So **nothing in this checklist has been executed against your database, and
+no auth flow was exercised against live Supabase.** Everything below is
+written from the code and Supabase's documented behaviour. You have to run it.
 
-- `NEXT_PUBLIC_SUPABASE_URL` — Supabase → your project → **Project Settings →
-  Data API → Project URL** (looks like `https://abcdefghijkl.supabase.co`)
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — **Project Settings → API Keys → `anon`
-  `public`**. This one is safe to share: it ships to every browser already.
+What I *was* able to verify with your real values:
 
-**Never paste the `service_role` key.** The app is RLS-only and does not use
-it. If it ever leaks, every row in the database is readable by anyone.
+- A production build with your URL and key succeeds, and the CSP correctly
+  locks `connect-src` to `https://jsllofhlkrckdbilgsxf.supabase.co` and its
+  `wss:` origin.
+- **Your `sb_publishable_...` key works with this stack.** I checked against
+  a local stand-in server: `@supabase/supabase-js` 2.104 accepts the new key
+  format without complaint and sends it as both the `apikey` header and
+  `Authorization: Bearer`. No code change was needed — the app passes the
+  string straight through, so the new and legacy formats both work.
+- A Supabase outage is handled safely rather than dangerously: with the
+  project unreachable, `getUser()` fails, the proxy treats the visitor as
+  signed out and redirects protected routes to `/auth`. No redirect loop, and
+  no protected page renders.
+
+**Never paste the `service_role` or `sb_secret_` key** — to me or anywhere
+else outside the Supabase dashboard. The app is RLS-only and does not use
+one. If it leaks, every row in the database is readable by anyone.
+
+> If you migrated this project to the new API key system, the legacy `anon`
+> and `service_role` JWTs may be disabled. That is fine — the app only ever
+> uses the one publishable key.
 
 ---
 
@@ -83,17 +102,41 @@ RLS being *enabled* and RLS being *correct* are different things. Prove it:
    — or more simply, just confirm user B's dashboard shows **only B's
    courses**, and that B's course count is unaffected by anything A does.
 
-5. The rigorous version, in the SQL Editor:
+5. The rigorous version. Paste this whole block into the SQL Editor after
+   both accounts exist and user A has at least one course. It impersonates
+   user B and tries to read and write user A's rows across all five tables:
 
    ```sql
-   -- impersonate user B, then try to read user A's rows
-   set local role authenticated;
-   set local request.jwt.claims = '{"sub":"<USER_B_UUID>","role":"authenticated"}';
-   select count(*) from courses where user_id = '<USER_A_UUID>';
-   -- must return 0
+   do $$
+   declare
+     a uuid; b uuid; leaked int; wrote int;
+   begin
+     select id into a from auth.users order by created_at limit 1;
+     select id into b from auth.users order by created_at desc limit 1;
+     if a = b then raise exception 'Need two accounts to test with'; end if;
+
+     -- become user B
+     perform set_config('role', 'authenticated', true);
+     perform set_config('request.jwt.claims',
+       json_build_object('sub', b, 'role', 'authenticated')::text, true);
+
+     select count(*) into leaked from courses where user_id = a;
+     if leaked > 0 then raise exception 'FAIL: B can read % of A''s courses', leaked; end if;
+
+     begin
+       update courses set name = 'HACKED' where user_id = a;
+       get diagnostics wrote = row_count;
+       if wrote > 0 then raise exception 'FAIL: B wrote % of A''s rows', wrote; end if;
+     exception when insufficient_privilege then null;
+     end;
+
+     raise notice 'PASS: user B cannot read or write user A''s rows';
+   end $$;
+   reset role;
    ```
 
-   Reset with `reset role;`.
+   It either raises `FAIL: ...` or notices `PASS`. Repeat with `tasks`,
+   `sessions`, `semesters` and `user_settings` substituted for `courses`.
 
 **If that last query returns anything other than 0, do not launch.**
 
@@ -321,7 +364,7 @@ Ordered by how likely they are to bite you.
 
 | # | Severity | Issue |
 |---|---|---|
-| 1 | **High** | **Nothing in this checklist has been run, and no auth or database behaviour was verified against a live Supabase project.** I never received credentials. The auth matrix and production smoke test in my report are marked NOT RUN, not passed. Section 4 is the substitute and you have to actually do it. |
+| 1 | **High** | **Nothing in this checklist has been run, and no auth or database behaviour was verified against a live Supabase project.** Credentials arrived but my sandbox's egress policy blocks all network access to your Supabase host (see §0). The auth matrix and production smoke test in my report are marked NOT RUN, not passed. Sections 1.3 and 4 are the substitute and you have to actually do them. |
 | 2 | **High** | **Supabase free tier has no backups.** See 1.5. |
 | 3 | Medium | **The built-in email sender caps at ~2–4/hour.** A launch-day rush means most sign-ups get no confirmation email, with no error shown. Custom SMTP (2.2) is the fix. |
 | 4 | Medium | **The onboarding gate is client-side.** A signed-in but un-onboarded user typing `/dashboard` sees a skeleton for a fraction of a second before being redirected. No data leaks — RLS covers that, and they have no data yet — but it is a visible flash. Enforcing it in `proxy.ts` would mean a database round-trip on every single navigation, which is a bad trade on hobby-tier. |
