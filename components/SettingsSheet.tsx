@@ -130,7 +130,7 @@ export default function SettingsSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] md:flex md:items-center md:justify-center md:p-6 animate-fade-in">
+    <div className="fixed inset-0 z-[90] animate-fade-in">
       <button
         type="button"
         aria-label="Close settings"
@@ -139,13 +139,13 @@ export default function SettingsSheet({
         className="absolute inset-0 bg-ink/40 backdrop-blur-sm disabled:cursor-wait"
       />
       <div
-        className="app-scroll absolute inset-x-0 bottom-0 top-10 md:static md:inset-auto md:w-full md:max-w-lg md:max-h-[85vh] overflow-y-auto rounded-t-[26px] md:rounded-[26px] bg-bg shadow-2xl animate-slide-up md:animate-fade-in"
+        className="app-scroll absolute inset-x-0 bottom-0 top-10 overflow-y-auto rounded-t-[26px] bg-bg shadow-2xl animate-slide-up"
         style={{
           backgroundImage:
             'radial-gradient(circle at 20% 0%, rgba(180,170,140,0.10), transparent 50%)',
         }}
       >
-        <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-line-strong md:hidden" />
+        <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-line-strong" />
 
         <header className="flex items-center justify-between px-[22px] pt-[18px]">
           <div>

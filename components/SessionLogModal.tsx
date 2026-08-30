@@ -60,15 +60,15 @@ export default function SessionLogModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end md:items-center justify-center md:p-6 animate-fade-in">
+    <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
       <button
         type="button"
         aria-label="Session log backdrop"
         disabled={saving}
         className="absolute inset-0 bg-ink/35 backdrop-blur-sm cursor-default"
       />
-      <div className="relative w-full md:max-w-md bg-bg rounded-t-3xl md:rounded-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] md:pb-7 md:max-h-[85vh] md:overflow-y-auto animate-slide-up md:animate-fade-in">
-        <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px] md:hidden" />
+      <div className="relative w-full bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
+        <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
 
         <div className="flex items-center gap-2">
           <span

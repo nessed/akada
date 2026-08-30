@@ -329,10 +329,6 @@ export default function StatsPage() {
         <WeeklyChart sessions={sessions} courses={courses} />
       </section>
 
-      {/* Hours by course sits beside Marks & milestones at lg: — both are
-          card-list content that reads fine narrower, unlike the heatmap
-          above which wants the full width to show more weeks unscrolled. */}
-      <div className="lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
       {/* Totals — deckle card with hand-drawn trend arrows */}
       <section className="card deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Hours by course</h2>
@@ -434,7 +430,7 @@ export default function StatsPage() {
 
       {/* Marks & milestones — semester-shaped achievements */}
       {sessions.length > 0 && (
-        <section className="mt-4 lg:mt-0">
+        <section className="mt-4">
           <h2 className="m-0 mb-3 font-serif font-medium text-[20px]">
             Marks &amp; milestones
           </h2>
@@ -514,7 +510,6 @@ export default function StatsPage() {
           </div>
         </section>
       )}
-      </div>
 
       <section className="mt-4 card deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Session history</h2>
