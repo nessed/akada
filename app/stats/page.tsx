@@ -549,10 +549,10 @@ export default function StatsPage() {
 
       {deletedSession && (
         <div
-          className="fixed inset-x-0 z-50 px-[22px] animate-fade-in"
+          className="fixed inset-x-0 z-50 px-[22px] md:px-8 animate-fade-in"
           style={{ bottom: 'calc(92px + env(safe-area-inset-bottom))' }}
         >
-          <div className="mx-auto max-w-2xl">
+          <div className="mx-auto max-w-2xl md:max-w-3xl">
             <div className="flex items-center gap-3 rounded-[10px] border border-line bg-paper/95 px-3.5 py-3 backdrop-blur">
               <p className="m-0 flex-1 text-[13px] text-ink-soft">
                 Session deleted.

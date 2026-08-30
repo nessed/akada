@@ -78,7 +78,7 @@ export default function BottomNav() {
           'linear-gradient(180deg, transparent 0%, var(--bg) 30%)',
       }}
     >
-      <div className="mx-auto max-w-2xl w-full flex justify-around items-center">
+      <div className="mx-auto max-w-2xl md:max-w-3xl w-full flex justify-around items-center">
         {tabs.map((tab) => {
           const active = pathname === tab.href || pathname?.startsWith(tab.href + '/');
           return (

@@ -573,7 +573,7 @@ export default function DashboardPage() {
             onClick={() => setAddingTaskFor(null)}
             className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
           />
-          <div className="relative w-full bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
+          <div className="relative w-full md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
             <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
             {(() => {
               const course = courses.find((c) => c.id === addingTaskFor);
@@ -652,7 +652,7 @@ export default function DashboardPage() {
             onClick={() => setAddingCourse(false)}
             className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
           />
-          <div className="relative w-full bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
+          <div className="relative w-full md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
             <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
             <h3 className="mt-0 mb-1.5 font-serif font-medium text-[22px] tracking-[-0.01em]">
               Add a course
