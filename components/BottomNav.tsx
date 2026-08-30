@@ -71,7 +71,7 @@ export default function BottomNav() {
   const pathname = usePathname();
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-40 flex justify-around items-center px-4 pt-3 lg:hidden"
+      className="fixed bottom-0 inset-x-0 z-40 flex justify-around items-center px-4 pt-3"
       style={{
         paddingBottom: 'calc(20px + env(safe-area-inset-bottom))',
         background:

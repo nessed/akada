@@ -44,9 +44,9 @@ export default function ActiveTimerDock() {
 
   return (
     <div
-      className="fixed inset-x-0 lg:left-64 top-[max(env(safe-area-inset-top),14px)] z-50 px-[22px] md:px-10 lg:px-12 pointer-events-none animate-fade-in"
+      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] z-50 px-[22px] md:px-8 pointer-events-none animate-fade-in"
     >
-      <div className="mx-auto flex max-w-2xl md:max-w-3xl lg:max-w-5xl justify-end pointer-events-auto">
+      <div className="mx-auto flex max-w-2xl md:max-w-3xl justify-end pointer-events-auto">
         <div
           role="button"
           tabIndex={0}

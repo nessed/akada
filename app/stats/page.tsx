@@ -271,10 +271,7 @@ export default function StatsPage() {
       </div>
 
       {sessions.length === 0 && (
-        <EmptyState
-          title="No sessions logged"
-          text="Start a timer from a course or task to begin building your study history."
-        />
+        <EmptyState text="Your history will map itself here..." />
       )}
 
       {/* Heatmap */}
@@ -331,17 +328,13 @@ export default function StatsPage() {
         <WeeklyChart sessions={sessions} courses={courses} />
       </section>
 
-      {/* Hours by course sits beside Marks & milestones at lg: — both are
-          card-list content that reads fine narrower, unlike the heatmap
-          above which wants the full width to show more weeks unscrolled. */}
-      <div className="lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
       {/* Totals — deckle card with hand-drawn trend arrows */}
       <section className="card deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Hours by course</h2>
         <div>
           {totals.length === 0 && (
             <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
-              Add a course and your hours will break down here.
+              Nothing to weigh up yet...
             </p>
           )}
           {totals.map(({ course, totalHours, avg }) => {
@@ -436,7 +429,7 @@ export default function StatsPage() {
 
       {/* Marks & milestones — semester-shaped achievements */}
       {sessions.length > 0 && (
-        <section className="mt-4 lg:mt-0">
+        <section className="mt-4">
           <h2 className="m-0 mb-3 font-serif font-medium text-[20px]">
             Marks &amp; milestones
           </h2>
@@ -516,7 +509,6 @@ export default function StatsPage() {
           </div>
         </section>
       )}
-      </div>
 
       <section className="mt-4 card deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Session history</h2>
@@ -556,10 +548,10 @@ export default function StatsPage() {
 
       {deletedSession && (
         <div
-          className="fixed inset-x-0 z-50 px-[22px] animate-fade-in"
+          className="fixed inset-x-0 z-50 px-[22px] md:px-8 animate-fade-in"
           style={{ bottom: 'calc(92px + env(safe-area-inset-bottom))' }}
         >
-          <div className="mx-auto max-w-2xl">
+          <div className="mx-auto max-w-2xl md:max-w-3xl">
             <div className="flex items-center gap-3 rounded-[10px] border border-line bg-paper/95 px-3.5 py-3 backdrop-blur">
               <p className="m-0 flex-1 text-[13px] text-ink-soft">
                 Session deleted.
@@ -618,13 +610,10 @@ function KpiCell({
   );
 }
 
-function EmptyState({ title, text }: { title: string; text: string }) {
+function EmptyState({ text }: { text: string }) {
   return (
     <div className="py-12 mb-4 text-center">
-      <p className="m-0 font-serif text-[16px] italic text-ink-soft">{title}</p>
-      <p className="mx-auto mt-2 mb-0 max-w-[300px] text-[13px] leading-[1.55] text-muted">
-        {text}
-      </p>
+      <p className="m-0 font-serif text-[16px] italic text-muted-soft">{text}</p>
     </div>
   );
 }

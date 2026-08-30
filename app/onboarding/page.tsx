@@ -223,8 +223,10 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col">
-      {/* Step dots — same width cap as the content below so the bar doesn't
-          stretch edge-to-edge and disconnect from the card it's tracking. */}
+      {/* Step dots */}
+      {/* Capped to the same width as the content below, so the progress
+          bar tracks the card it belongs to instead of stretching the
+          full width of a laptop screen. */}
       <div className="mx-auto flex w-full max-w-xl gap-1.5 px-6 pt-[max(env(safe-area-inset-top),3.5rem)]">
         {STEPS.map((s, i) => {
           const active = i <= STEPS.indexOf(step);
