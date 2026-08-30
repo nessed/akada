@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { db } from '@/lib/data';
+import { ButtonSpinner } from '@/components/LoadingIndicator';
 import {
   MIN_PASSWORD_LENGTH,
   authRedirectErrorMessage,
@@ -24,6 +25,7 @@ export default function AuthPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [successKind, setSuccessKind] = useState<'signup' | 'reset'>('signup');
+  const [loadingAction, setLoadingAction] = useState<'signin' | 'signup' | 'reset' | null>(null);
 
   const isSignUp = mode === 'signup';
 
@@ -64,6 +66,7 @@ export default function AuthPage() {
     e.preventDefault();
     if (!email.trim() || !password) return;
     setState('loading');
+    setLoadingAction(isSignUp ? 'signup' : 'signin');
     setErrorMsg('');
 
     try {
@@ -82,6 +85,7 @@ export default function AuthPage() {
         if (error) {
           setErrorMsg(friendlyAuthError(error.message, 'signup'));
           setState('error');
+          setLoadingAction(null);
         } else if (data.session) {
           // Email confirmations are switched off in Supabase, so sign-up
           // returns a live session. Showing "check your email" here would
@@ -91,6 +95,7 @@ export default function AuthPage() {
           setSuccessKind('signup');
           setSuccessMsg(email.trim());
           setState('success');
+          setLoadingAction(null);
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -101,6 +106,7 @@ export default function AuthPage() {
         if (error) {
           setErrorMsg(friendlyAuthError(error.message, 'signin'));
           setState('error');
+          setLoadingAction(null);
         } else {
           await goToNextStep();
         }
@@ -110,6 +116,7 @@ export default function AuthPage() {
         friendlyAuthError(error instanceof Error ? error.message : '', mode),
       );
       setState('error');
+      setLoadingAction(null);
     }
   }
 
@@ -131,6 +138,7 @@ export default function AuthPage() {
       return;
     }
     setState('loading');
+    setLoadingAction('reset');
     setErrorMsg('');
     try {
       const next = encodeURIComponent('/auth/reset');
@@ -140,16 +148,19 @@ export default function AuthPage() {
       if (error) {
         setErrorMsg(friendlyAuthError(error.message, 'reset'));
         setState('error');
+        setLoadingAction(null);
         return;
       }
       setSuccessKind('reset');
       setSuccessMsg(target);
       setState('success');
+      setLoadingAction(null);
     } catch (error) {
       setErrorMsg(
         friendlyAuthError(error instanceof Error ? error.message : '', 'reset'),
       );
       setState('error');
+      setLoadingAction(null);
     }
   }
 
@@ -234,6 +245,7 @@ export default function AuthPage() {
             <button
               type="button"
               onClick={() => setAuthMode('signin')}
+              disabled={state === 'loading'}
               aria-pressed={!isSignUp}
               className={`rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
                 !isSignUp
@@ -246,6 +258,7 @@ export default function AuthPage() {
             <button
               type="button"
               onClick={() => setAuthMode('signup')}
+              disabled={state === 'loading'}
               aria-pressed={isSignUp}
               className={`rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
                 isSignUp
@@ -278,7 +291,7 @@ export default function AuthPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]" aria-busy={state === 'loading'}>
           {isSignUp && (
             <Field label="Name">
               <UnderlineInput
@@ -323,13 +336,21 @@ export default function AuthPage() {
             className="mt-2.5 w-full min-h-[56px] py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
           >
             {state === 'loading'
-              ? isSignUp
-                ? 'Creating account...'
-                : 'Signing in...'
+              ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />{loadingAction === 'signup' ? 'Creating your account…' : loadingAction === 'reset' ? 'Sending reset link…' : 'Signing you in…'}</span>
               : isSignUp
                 ? 'Create account'
                 : 'Sign in'}
           </button>
+
+          {state === 'loading' && (
+            <p className="-mt-2 mb-0 text-center font-serif italic text-[12px] text-muted" role="status">
+              {loadingAction === 'signup'
+                ? 'Setting up your secure account. Keep this page open.'
+                : loadingAction === 'reset'
+                  ? 'Requesting a secure reset link.'
+                  : 'Checking your account details.'}
+            </p>
+          )}
 
           {!isSignUp && (
             <button
@@ -356,6 +377,7 @@ export default function AuthPage() {
           <button
             type="button"
             onClick={switchMode}
+            disabled={state === 'loading'}
             className="bg-transparent border-0 cursor-pointer font-serif italic text-[14px] text-ink underline underline-offset-4 decoration-line-strong"
           >
             {isSignUp ? 'Log in' : 'Create account'}

@@ -5,6 +5,7 @@ import type { Course } from '@/lib/data';
 import { formatHHMMSS } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import HandCheck from '@/components/notebook/HandCheck';
+import { ButtonSpinner } from './LoadingIndicator';
 
 // Quick-reflection tag chips. Tapping appends `#tag` into the note so the
 // data shape stays the same — no schema migration needed for this flourish.
@@ -155,7 +156,7 @@ export default function SessionLogModal({
             className="flex-[2] min-h-[50px] py-3.5 rounded-[12px] bg-primary text-primary-contrast text-[14px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-35"
           >
             <HandCheck size={14} color="currentColor" />
-            {saving ? 'Saving…' : 'Save to journal'}
+            {saving ? <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving session…</span> : 'Save to journal'}
           </button>
         </div>
       </div>

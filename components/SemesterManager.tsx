@@ -6,6 +6,7 @@ import { db } from '@/lib/data';
 import { useSemesters, createSemesterOptimistic } from '@/lib/data-hooks';
 import { formatHM, seasonLabel, totalSeconds } from '@/lib/utils';
 import { cleanText, isIsoDate } from '@/lib/planner-safety';
+import LoadingIndicator, { ButtonSpinner } from './LoadingIndicator';
 
 /**
  * Settings → Semester. The active semester is what Dashboard, Tasks and
@@ -244,7 +245,7 @@ function StartSemesterForm({
           disabled={saving}
           className="flex-1 min-h-[52px] rounded-2xl bg-primary text-primary-contrast text-[14px] font-medium tracking-[0.01em] disabled:opacity-40"
         >
-          {saving ? 'Starting…' : 'Start semester'}
+          {saving ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />Starting semester…</span> : 'Start semester'}
         </button>
       </div>
     </div>
@@ -296,9 +297,12 @@ function SemesterArchive({ semester, onBack }: { semester: Semester; onBack: () 
       )}
 
       {courses === null && !error ? (
-        <div className="mt-5 animate-pulse opacity-40">
-          <div className="h-16 bg-paper border border-line rounded-xl mb-2" />
-          <div className="h-16 bg-paper border border-line rounded-xl" />
+        <div className="mt-5">
+          <LoadingIndicator compact label="Opening semester archive" className="mb-4" />
+          <div className="animate-pulse opacity-40" aria-hidden>
+            <div className="h-16 bg-paper border border-line rounded-xl mb-2" />
+            <div className="h-16 bg-paper border border-line rounded-xl" />
+          </div>
         </div>
       ) : (
         courses && (

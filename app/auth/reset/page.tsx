@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { db } from '@/lib/data';
 import { MIN_PASSWORD_LENGTH, friendlyAuthError } from '@/lib/auth-messages';
+import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 
 type Stage = 'checking' | 'ready' | 'no-session' | 'saving';
 
@@ -76,7 +77,10 @@ export default function ResetPasswordPage() {
   if (stage === 'checking') {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center px-8">
-        <p className="m-0 font-serif italic text-[14px] text-muted">Checking your link…</p>
+        <LoadingIndicator
+          label="Checking your reset link"
+          detail="This only takes a moment."
+        />
       </div>
     );
   }
@@ -159,7 +163,7 @@ export default function ResetPasswordPage() {
             disabled={saving || password.length < MIN_PASSWORD_LENGTH || !confirm}
             className="mt-2.5 w-full min-h-[56px] py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
           >
-            {saving ? 'Saving…' : 'Save password'}
+            {saving ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />Saving password…</span> : 'Save password'}
           </button>
         </form>
 

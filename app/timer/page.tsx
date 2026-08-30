@@ -6,6 +6,7 @@ import { useTimer } from '@/lib/timer-context';
 import { formatHHMMSS, resolveTint } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
+import LoadingIndicator from '@/components/LoadingIndicator';
 import { useCourses, useTasks } from '@/lib/data-hooks';
 
 export default function TimerPage() {
@@ -264,10 +265,13 @@ export default function TimerPage() {
   if (!course && !pendingLog) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center">
-        <div className="animate-pulse opacity-40 flex flex-col items-center">
+        <div className="flex flex-col items-center">
+          <LoadingIndicator compact label="Loading your timer" className="mb-8" />
+          <div className="animate-pulse opacity-40 flex flex-col items-center" aria-hidden>
           <div className="h-5 w-20 bg-line rounded mb-2" />
           <div className="h-8 w-48 bg-line rounded mb-16" />
           <div className="h-[264px] w-[264px] rounded-full border-[2.5px] border-line border-dashed" />
+          </div>
         </div>
       </div>
     );

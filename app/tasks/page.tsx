@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
+import LoadingIndicator from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskItem from '@/components/TaskItem';
 import type { Task } from '@/lib/data';
@@ -149,7 +150,8 @@ export default function TasksPage() {
   if (loading) {
     return (
       <PageShell>
-        <div className="animate-pulse opacity-40">
+        <LoadingIndicator compact label="Loading your tasks" className="mb-6" />
+        <div className="animate-pulse opacity-40" aria-hidden>
           <div className="h-3 w-12 bg-line rounded mb-2.5" />
           <div className="h-8 w-24 bg-line rounded mb-8" />
           <div className="flex gap-2 mb-8">

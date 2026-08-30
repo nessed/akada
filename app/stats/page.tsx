@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
+import LoadingIndicator from '@/components/LoadingIndicator';
 import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
 import type { Course, Session } from '@/lib/data';
@@ -184,7 +185,8 @@ export default function StatsPage() {
   if (loading) {
     return (
       <PageShell>
-        <div className="animate-pulse opacity-40">
+        <LoadingIndicator compact label="Compiling your semester" className="mb-6" />
+        <div className="animate-pulse opacity-40" aria-hidden>
           <div className="h-3 w-32 bg-line rounded mb-2.5" />
           <div className="h-8 w-24 bg-line rounded mb-8" />
           <div className="grid grid-cols-3 gap-2 mb-8">

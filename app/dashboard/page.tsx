@@ -11,6 +11,7 @@ import CourseCard from '@/components/CourseCard';
 import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
+import LoadingIndicator from '@/components/LoadingIndicator';
 import type { Course, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
@@ -299,7 +300,8 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <PageShell>
-        <div className="animate-pulse opacity-40">
+        <LoadingIndicator compact label="Loading your planner" className="mb-6" />
+        <div className="animate-pulse opacity-40" aria-hidden>
           <div className="flex items-start justify-between mb-8">
             <div>
               <div className="h-3 w-16 bg-line rounded mb-2.5" />

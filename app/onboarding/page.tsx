@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
@@ -212,7 +213,10 @@ export default function OnboardingPage() {
   if (gate === 'checking') {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center px-8">
-        <p className="m-0 font-serif italic text-[14px] text-muted">Loading your setup…</p>
+        <LoadingIndicator
+          label="Loading your setup"
+          detail="Getting your planner ready."
+        />
       </div>
     );
   }
@@ -883,7 +887,7 @@ function RoutineStep({
           onClick={handleFinish}
           className="w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {saving ? 'Setting up…' : displayName ? `Let's go, ${cleanDisplayName(displayName)}` : 'Begin'}
+          {saving ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />Setting up your planner…</span> : displayName ? `Let's go, ${cleanDisplayName(displayName)}` : 'Begin'}
         </button>
       </div>
     </div>

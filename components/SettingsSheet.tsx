@@ -27,6 +27,7 @@ import {
   type PrimaryAccent,
 } from '@/lib/preferences';
 import { useTimer } from '@/lib/timer-context';
+import { ButtonSpinner } from './LoadingIndicator';
 
 type Section = 'overview' | 'profile' | 'courses' | 'semester' | 'appearance';
 
@@ -567,7 +568,7 @@ function ProfileEditor({
           onClick={onSave}
           className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast disabled:opacity-40"
         >
-          {updating ? 'Saving…' : 'Save changes'}
+          {updating ? <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving changes…</span> : 'Save changes'}
         </button>
       </div>
     </div>
@@ -828,7 +829,7 @@ function CoursesEditor({
           }
           className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast disabled:opacity-40"
         >
-          {saving ? 'Saving…' : 'Save courses'}
+          {saving ? <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving courses…</span> : 'Save courses'}
         </button>
       </div>
     </div>
