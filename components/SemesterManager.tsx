@@ -131,10 +131,13 @@ function StartSemesterForm({
   onCancel: () => void;
   onStarted: () => void;
 }) {
-  const [label, setLabel] = useState(seasonLabel());
-  const [addDates, setAddDates] = useState(false);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const presets = semesterPresets();
+  const suggestedPreset = presets.find((preset) => preset.label === seasonLabel()) ?? presets[0];
+  const [label, setLabel] = useState(() => suggestedPreset.label);
+  const [addDates, setAddDates] = useState(true);
+  const [startDate, setStartDate] = useState(() => suggestedPreset.startDate);
+  const [endDate, setEndDate] = useState(() => suggestedPreset.endDate);
+  const [selectedPreset, setSelectedPreset] = useState(() => suggestedPreset.label);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -168,6 +171,15 @@ function StartSemesterForm({
     }
   }
 
+  function applyPreset(preset: SemesterPreset) {
+    setSelectedPreset(preset.label);
+    setLabel(preset.label);
+    setStartDate(preset.startDate);
+    setEndDate(preset.endDate);
+    setAddDates(true);
+    setError('');
+  }
+
   return (
     <div className="px-[22px] pt-5 pb-10 app-scroll animate-fade-in">
       <BackButtonLocal onClick={onCancel} />
@@ -179,12 +191,56 @@ function StartSemesterForm({
       </p>
 
       <div className="mt-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="m-0 text-[10px] font-semibold tracking-[0.16em] uppercase text-muted">
+            Term presets
+          </p>
+          <span className="text-[11px] font-serif italic text-primary">Suggested for today</span>
+        </div>
+        <div className="mt-2.5 grid gap-2">
+          {presets.map((preset) => {
+            const selected = selectedPreset === preset.label;
+            const suggested = preset.label === suggestedPreset.label;
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                aria-pressed={selected}
+                className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors ${
+                  selected
+                    ? 'border-primary bg-primary/10 text-ink'
+                    : 'border-line bg-paper text-ink-soft hover:border-line-strong'
+                }`}
+              >
+                <span className="min-w-0">
+                  <span className="block text-[13px] font-medium">
+                    {preset.label}
+                    {suggested && <span className="ml-1.5 font-serif italic text-[11px] text-primary">recommended</span>}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-muted">{preset.range}</span>
+                </span>
+                {selected && (
+                  <span className="text-primary" aria-label="Selected">
+                    ✓
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-5">
         <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
           Name
         </label>
         <input
           value={label}
-          onChange={(e) => setLabel(e.target.value)}
+          onChange={(e) => {
+            setLabel(e.target.value);
+            setSelectedPreset('');
+          }}
           placeholder="Fall 2026"
           className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary transition-colors placeholder:text-muted-soft"
         />
@@ -199,30 +255,45 @@ function StartSemesterForm({
           + Add dates (optional)
         </button>
       ) : (
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
-              Start
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[14px] text-ink outline-none focus:border-primary transition-colors"
-            />
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
+                Start
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setSelectedPreset('');
+                }}
+                className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[14px] text-ink outline-none focus:border-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
+                End
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setSelectedPreset('');
+                }}
+                className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[14px] text-ink outline-none focus:border-primary transition-colors"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
-              End
-            </label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[14px] text-ink outline-none focus:border-primary transition-colors"
-            />
-          </div>
-        </div>
+          <button
+            type="button"
+            onClick={() => setAddDates(false)}
+            className="mt-3 text-[12px] font-serif italic text-muted underline underline-offset-4 decoration-line-strong"
+          >
+            Remove dates
+          </button>
+        </>
       )}
 
       {error && (
@@ -248,6 +319,37 @@ function StartSemesterForm({
       </div>
     </div>
   );
+}
+
+interface SemesterPreset {
+  label: string;
+  range: string;
+  startDate: string;
+  endDate: string;
+}
+
+function semesterPresets(today = new Date()): SemesterPreset[] {
+  const year = today.getFullYear();
+  return [
+    {
+      label: `Spring ${year}`,
+      range: 'Jan 19 – May 20',
+      startDate: `${year}-01-19`,
+      endDate: `${year}-05-20`,
+    },
+    {
+      label: `Summer ${year}`,
+      range: 'Jun 1 – Aug 13',
+      startDate: `${year}-06-01`,
+      endDate: `${year}-08-13`,
+    },
+    {
+      label: `Fall ${year}`,
+      range: 'Aug 31 – Dec 18',
+      startDate: `${year}-08-31`,
+      endDate: `${year}-12-18`,
+    },
+  ];
 }
 
 function SemesterArchive({ semester, onBack }: { semester: Semester; onBack: () => void }) {
