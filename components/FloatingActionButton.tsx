@@ -42,7 +42,7 @@ export default function FloatingActionButton({ courses, onStartTimer, onAddTask 
         style={{ bottom: 'calc(84px + env(safe-area-inset-bottom))' }}
       >
         {mode === 'menu' && (
-          <div className="rounded-2xl bg-paper border border-line shadow-xl overflow-hidden animate-fade-in">
+          <div className="rounded-2xl bg-paper border border-line shadow-[0_18px_48px_rgba(26,25,21,0.16)] overflow-hidden animate-fade-in">
             <button
               type="button"
               onClick={() => setMode('pickCourseTimer')}
@@ -72,7 +72,7 @@ export default function FloatingActionButton({ courses, onStartTimer, onAddTask 
         )}
 
         {(mode === 'pickCourseTimer' || mode === 'pickCourseTask') && (
-          <div className="rounded-2xl bg-paper border border-line shadow-xl overflow-hidden animate-fade-in min-w-[260px] max-w-[320px]">
+          <div className="rounded-2xl bg-paper border border-line shadow-[0_18px_48px_rgba(26,25,21,0.16)] overflow-hidden animate-fade-in min-w-[260px] max-w-[320px]">
             <div className="px-5 pt-4 pb-2 text-[11px] font-semibold tracking-[0.16em] uppercase text-muted">
               {mode === 'pickCourseTimer' ? 'Start timer for' : 'Add task to'}
             </div>

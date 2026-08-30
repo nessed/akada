@@ -139,7 +139,7 @@ export default function SettingsSheet({
         className="absolute inset-0 bg-ink/40 backdrop-blur-sm disabled:cursor-wait"
       />
       <div
-        className="app-scroll absolute inset-x-0 bottom-0 top-10 md:mx-auto md:max-w-2xl overflow-y-auto rounded-t-[26px] bg-bg shadow-2xl animate-slide-up"
+        className="app-scroll absolute inset-x-0 bottom-0 top-10 md:mx-auto md:max-w-2xl overflow-y-auto rounded-t-[26px] bg-bg shadow-[0_-20px_60px_rgba(26,25,21,0.13)] animate-slide-up"
         style={{
           backgroundImage:
             'radial-gradient(circle at 20% 0%, rgba(180,170,140,0.10), transparent 50%)',

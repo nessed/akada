@@ -269,10 +269,7 @@ export default function StatsPage() {
       </div>
 
       {sessions.length === 0 && (
-        <EmptyState
-          title="No sessions logged"
-          text="Start a timer from a course or task to begin building your study history."
-        />
+        <EmptyState text="Your history will map itself here..." />
       )}
 
       {/* Heatmap */}
@@ -335,7 +332,7 @@ export default function StatsPage() {
         <div>
           {totals.length === 0 && (
             <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
-              Add a course and your hours will break down here.
+              Nothing to weigh up yet...
             </p>
           )}
           {totals.map(({ course, totalHours, avg }) => {
@@ -611,13 +608,10 @@ function KpiCell({
   );
 }
 
-function EmptyState({ title, text }: { title: string; text: string }) {
+function EmptyState({ text }: { text: string }) {
   return (
     <div className="py-12 mb-4 text-center">
-      <p className="m-0 font-serif text-[16px] italic text-ink-soft">{title}</p>
-      <p className="mx-auto mt-2 mb-0 max-w-[300px] text-[13px] leading-[1.55] text-muted">
-        {text}
-      </p>
+      <p className="m-0 font-serif text-[16px] italic text-muted-soft">{text}</p>
     </div>
   );
 }

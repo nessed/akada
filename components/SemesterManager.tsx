@@ -45,8 +45,8 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
       <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
         Semester
       </h3>
-      <p className="mt-1.5 mb-0 text-[13px] text-muted leading-[1.5]">
-        Courses, tasks and the timer always work in your active semester.
+      <p className="mt-1.5 mb-0 font-serif text-[13px] italic text-muted">
+        Where this term&apos;s work is kept.
       </p>
 
       <div className="mt-5">
@@ -64,7 +64,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
           </div>
         ) : (
           !isLoading && (
-            <p className="text-[13px] text-muted italic font-serif">No active semester yet.</p>
+            <p className="font-serif text-[13px] italic text-muted-soft">Not started yet.</p>
           )
         )}
       </div>
@@ -76,9 +76,8 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
       >
         Start new semester
       </button>
-      <p className="mt-2 mb-0 text-[11.5px] text-muted-soft leading-[1.5]">
-        Your current courses, tasks and sessions stay exactly as they are —
-        they just stop being the default view. Find them anytime below.
+      <p className="mt-2.5 mb-0 text-center font-serif text-[12px] italic text-muted-soft">
+        This term&apos;s pages stay where they are.
       </p>
 
       {past.length > 0 && (
@@ -174,9 +173,8 @@ function StartSemesterForm({
       <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
         Start new semester
       </h3>
-      <p className="mt-1.5 mb-0 text-[13px] text-muted leading-[1.5]">
-        This becomes where new courses, tasks and study sessions go. Nothing
-        from your current semester is touched.
+      <p className="mt-1.5 mb-0 font-serif text-[13px] italic text-muted">
+        A fresh page. Nothing before it is touched.
       </p>
 
       <div className="mt-5">
@@ -288,7 +286,7 @@ function SemesterArchive({ semester, onBack }: { semester: Semester; onBack: () 
       <p className="mt-1.5 mb-0 text-[13px] text-muted leading-[1.5]">
         {semester.startDate && semester.endDate
           ? `${semester.startDate} → ${semester.endDate}`
-          : 'No dates were set for this semester.'}
+          : 'No dates kept for this term.'}
       </p>
 
       {error && (
@@ -316,8 +314,8 @@ function SemesterArchive({ semester, onBack }: { semester: Semester; onBack: () 
               Courses
             </p>
             {courses.length === 0 ? (
-              <p className="text-[13px] text-muted italic font-serif">
-                No courses were added in this semester.
+              <p className="font-serif text-[13px] italic text-muted-soft">
+                This term was left blank.
               </p>
             ) : (
               <div className="overflow-hidden rounded-xl border border-line bg-paper">
