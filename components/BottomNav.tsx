@@ -71,14 +71,14 @@ export default function BottomNav() {
   const pathname = usePathname();
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-40 flex justify-around items-center px-4 pt-3"
+      className="fixed bottom-0 inset-x-0 z-40 flex justify-around items-center px-4 pt-3 lg:hidden"
       style={{
         paddingBottom: 'calc(20px + env(safe-area-inset-bottom))',
         background:
           'linear-gradient(180deg, transparent 0%, var(--bg) 30%)',
       }}
     >
-      <div className="mx-auto max-w-2xl w-full flex justify-around items-center">
+      <div className="mx-auto max-w-2xl md:max-w-3xl w-full flex justify-around items-center">
         {tabs.map((tab) => {
           const active = pathname === tab.href || pathname?.startsWith(tab.href + '/');
           return (

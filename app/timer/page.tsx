@@ -291,7 +291,11 @@ export default function TimerPage() {
           : 'var(--bg)',
       }}
     >
-      <div className="flex items-center justify-between px-[22px] pt-[max(env(safe-area-inset-top),60px)]">
+      {/* Timer is deliberately full-bleed (no PageShell/sidebar) even on
+          desktop — it's a focus screen, not a data page. Only the top bar
+          gets a width cap on very wide viewports so the back button and
+          goal picker don't end up stranded far apart from each other. */}
+      <div className="flex items-center justify-between px-[22px] pt-[max(env(safe-area-inset-top),60px)] lg:mx-auto lg:w-full lg:max-w-3xl">
         <button
           type="button"
           onClick={() => router.push('/dashboard')}
