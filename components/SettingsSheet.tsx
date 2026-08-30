@@ -7,7 +7,9 @@ import {
   addCourseOptimistic,
   deleteCourseOptimistic,
   updateCourseOptimistic,
+  useActiveSemester,
 } from '@/lib/data-hooks';
+import SemesterManager from './SemesterManager';
 import { PASTEL_PALETTE, totalSeconds } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import {
@@ -26,7 +28,7 @@ import {
 } from '@/lib/preferences';
 import { useTimer } from '@/lib/timer-context';
 
-type Section = 'overview' | 'profile' | 'courses' | 'appearance';
+type Section = 'overview' | 'profile' | 'courses' | 'semester' | 'appearance';
 
 interface Props {
   open: boolean;
@@ -64,6 +66,7 @@ export default function SettingsSheet({
   onResetData,
 }: Props) {
   const [section, setSection] = useState<Section>('overview');
+  const { semester: activeSemester } = useActiveSemester();
   const [prefs, setPrefs] = usePreferences();
 
   // Reset to overview each time the sheet opens.
@@ -244,6 +247,11 @@ export default function SettingsSheet({
                 onClick={() => setSection('courses')}
               />
               <SettingRow
+                label="Semester"
+                sub={activeSemester?.label ?? 'Not set'}
+                onClick={() => setSection('semester')}
+              />
+              <SettingRow
                 label="Appearance"
                 sub={`${labelTone(prefs.paperTone)} · ${labelPrimary(prefs.primaryAccent)} · ${labelFont(prefs.headingFont)}`}
                 onClick={() => setSection('appearance')}
@@ -285,7 +293,7 @@ export default function SettingsSheet({
                   // A single confirm() is one mistaken tap away from deleting
                   // everything, so require the word to be typed out.
                   const typed = prompt(
-                    'This permanently deletes every course, task and study session in your account. It cannot be undone.\n\nType RESET to confirm.',
+                    'This permanently deletes every semester, course, task and study session in your account. It cannot be undone.\n\nType RESET to confirm.',
                   );
                   if (typed?.trim().toUpperCase() === 'RESET') {
                     onResetData?.();
@@ -333,6 +341,10 @@ export default function SettingsSheet({
               setSection('overview');
             }}
           />
+        )}
+
+        {section === 'semester' && (
+          <SemesterManager onBack={() => setSection('overview')} />
         )}
 
         {section === 'appearance' && (

@@ -58,13 +58,26 @@ one. If it leaks, every row in the database is readable by anyone.
 The file is idempotent — safe on a fresh project and safe to re-run on your
 existing one. It creates nothing destructive.
 
-Two statements can fail if your live database has drifted. Both print a clear
-error and both tell you the fix inline:
+**This version adds multi-semester support.** `semesters` changes shape from
+one row per user (upserted in place every time) to many rows per user with
+its own `id`, so a "start new semester" doesn't overwrite the last one.
+Running the file migrates your existing semester and courses/tasks/sessions
+in place automatically — no data is lost, and nothing needs to run twice. I
+tested this exact migration path against a local Postgres seeded with
+realistic pre-migration data (two users, courses, tasks, sessions, the old
+single-semester shape) and confirmed: it runs clean, backfills every row
+correctly, stays idempotent across three consecutive runs, and RLS still
+isolates users afterward. I could not run it against *your* project directly
+— see §0 — so still read the output when you run it.
+
+Three statements can fail if your live database has drifted. Each prints a
+clear error and tells you the fix inline:
 
 | If you see | Run this first, then re-run the file |
 |---|---|
-| `could not create unique index "courses_user_id_code_unique"` | `select user_id, upper(code), count(*) from courses group by 1,2 having count(*) > 1;` then delete or rename the duplicates |
+| `could not create unique index "courses_user_id_semester_code_unique"` | `select user_id, semester_id, upper(code), count(*) from courses group by 1,2,3 having count(*) > 1;` then delete or rename the duplicates |
 | `insert or update ... violates foreign key constraint "<table>_user_id_fkey"` | `delete from <table> where user_id not in (select id from auth.users);` — these are rows belonging to already-deleted accounts |
+| `Need two accounts to test with` (only from the §1.3 proof below, not from the schema file itself) | You only have one account, or two accounts created in the same instant. Sign up a second test account, then re-run. |
 
 ### 1.2 Confirm RLS is actually on
 
@@ -97,24 +110,46 @@ RLS being *enabled* and RLS being *correct* are different things. Prove it:
 
 5. The rigorous version. Paste this whole block into the SQL Editor after
    both accounts exist and user A has at least one course. It impersonates
-   user B and tries to read and write user A's rows across all five tables:
+   user B and checks all five tables in one pass — that B can neither read
+   nor write A's rows — plus a sanity check that B can still read their
+   *own* data (without it, a broken test setup and a broken app both look
+   like "PASS", because both make everything invisible to everyone):
 
    ```sql
    do $$
    declare
-     a uuid; b uuid; leaked int; wrote int;
+     a uuid; b uuid; own int; leaked int; wrote int;
    begin
-     select id into a from auth.users order by created_at limit 1;
-     select id into b from auth.users order by created_at desc limit 1;
+     -- order by (created_at, id): id breaks a tie when both accounts were
+     -- created in the same instant, which order by created_at alone won't.
+     select id into a from auth.users order by created_at, id limit 1;
+     select id into b from auth.users order by created_at, id desc limit 1;
      if a = b then raise exception 'Need two accounts to test with'; end if;
 
-     -- become user B
+     -- sanity check: user A must be able to read their own courses. If this
+     -- fails, the problem is this test's setup (or your RLS policies are
+     -- broken in a way that locks out everyone, not just other users) —
+     -- either way, the checks below are not trustworthy until this passes.
      perform set_config('role', 'authenticated', true);
+     perform set_config('request.jwt.claims',
+       json_build_object('sub', a, 'role', 'authenticated')::text, true);
+     select count(*) into own from courses where user_id = a;
+     if own = 0 then raise exception 'SANITY FAIL: user A cannot read their own courses — fix this before trusting any PASS below'; end if;
+
+     -- become user B
      perform set_config('request.jwt.claims',
        json_build_object('sub', b, 'role', 'authenticated')::text, true);
 
      select count(*) into leaked from courses where user_id = a;
-     if leaked > 0 then raise exception 'FAIL: B can read % of A''s courses', leaked; end if;
+     if leaked > 0 then raise exception 'FAIL courses: B can read % of A''s rows', leaked; end if;
+     select count(*) into leaked from tasks where user_id = a;
+     if leaked > 0 then raise exception 'FAIL tasks: B can read % of A''s rows', leaked; end if;
+     select count(*) into leaked from sessions where user_id = a;
+     if leaked > 0 then raise exception 'FAIL sessions: B can read % of A''s rows', leaked; end if;
+     select count(*) into leaked from semesters where user_id = a;
+     if leaked > 0 then raise exception 'FAIL semesters: B can read % of A''s rows', leaked; end if;
+     select count(*) into leaked from user_settings where user_id = a;
+     if leaked > 0 then raise exception 'FAIL user_settings: B can read % of A''s rows', leaked; end if;
 
      begin
        update courses set name = 'HACKED' where user_id = a;
@@ -123,15 +158,20 @@ RLS being *enabled* and RLS being *correct* are different things. Prove it:
      exception when insufficient_privilege then null;
      end;
 
-     raise notice 'PASS: user B cannot read or write user A''s rows';
+     begin
+       insert into courses (user_id, code, name, color) values (a, 'FORGED', 'Forged', '#000000');
+       raise exception 'FAIL: B inserted a course under A''s user_id';
+     exception when insufficient_privilege then null;
+     end;
+
+     raise notice 'PASS: user B cannot read, write, or forge any of user A''s rows across all five tables';
    end $$;
    reset role;
    ```
 
-   It either raises `FAIL: ...` or notices `PASS`. Repeat with `tasks`,
-   `sessions`, `semesters` and `user_settings` substituted for `courses`.
+   It either raises `FAIL ...` / `SANITY FAIL ...`, or notices `PASS`.
 
-**If any of them raises `FAIL`, do not launch.**
+**If it raises anything other than `PASS`, do not launch.**
 
 ### 1.4 Advisors
 

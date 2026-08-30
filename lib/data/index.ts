@@ -38,6 +38,7 @@ export type {
   Session,
   Task,
   Semester,
+  NewSemesterInput,
   TaskPriority,
   SessionFilters,
   TaskFilters,

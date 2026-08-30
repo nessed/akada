@@ -11,7 +11,7 @@ import CourseCard from '@/components/CourseCard';
 import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
-import type { Course, Semester, Session, Task } from '@/lib/data';
+import type { Course, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
 import {
@@ -38,7 +38,7 @@ import {
   useCourses,
   useSessions,
   useTasks,
-  useSemester,
+  useActiveSemester,
   useUserSettings,
   addCourseOptimistic,
   addTaskOptimistic,
@@ -57,7 +57,7 @@ export default function DashboardPage() {
     useCourses();
   const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
   const { tasks, isLoading: tasksLoading } = useTasks();
-  const { semester } = useSemester();
+  const { semester } = useActiveSemester();
   const { settings } = useUserSettings();
 
   const courses = rawCourses;
@@ -338,7 +338,12 @@ export default function DashboardPage() {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowIso = isoDate(tomorrow);
   const tomorrowCount = openTasks.filter((t) => t.dueDate === tomorrowIso).length;
-  const semesterInfo = semester ? getSemesterInfo(semester, today) : null;
+  // Dates are optional on a semester now (Settings → Semester lets you start
+  // one with just a label). No dates just means no progress ribbon to show.
+  const semesterInfo =
+    semester?.startDate && semester?.endDate
+      ? getSemesterInfo(semester.startDate, semester.endDate, today)
+      : null;
   const smartPrompts = getSmartPrompts({
     courses,
     sessions,
@@ -751,12 +756,12 @@ export default function DashboardPage() {
   );
 }
 
-function getSemesterInfo(semester: Semester, today: string) {
-  const totalDays = Math.max(1, daysBetween(semester.startDate, semester.endDate) + 1);
-  const elapsedDays = Math.min(Math.max(0, daysBetween(semester.startDate, today) + 1), totalDays);
+function getSemesterInfo(startDate: string, endDate: string, today: string) {
+  const totalDays = Math.max(1, daysBetween(startDate, endDate) + 1);
+  const elapsedDays = Math.min(Math.max(0, daysBetween(startDate, today) + 1), totalDays);
   const totalWeeks = Math.max(1, Math.ceil(totalDays / 7));
   const currentWeek = Math.min(totalWeeks, Math.max(1, Math.ceil(elapsedDays / 7)));
-  const daysRemaining = Math.max(0, daysBetween(today, semester.endDate));
+  const daysRemaining = Math.max(0, daysBetween(today, endDate));
   return {
     totalWeeks,
     currentWeek,

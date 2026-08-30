@@ -8,6 +8,17 @@ export function isoDate(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * "Spring 2026" / "Fall 2026"-style label from a date. Mirrors the season
+ * cutoffs supabase/schema.sql uses when guessing a label for a semester
+ * migrated from before semesters had names of their own.
+ */
+export function seasonLabel(d: Date = new Date()): string {
+  const month = d.getMonth(); // 0-11
+  const season = month <= 4 ? 'Spring' : month <= 7 ? 'Summer' : 'Fall';
+  return `${season} ${d.getFullYear()}`;
+}
+
 export function startOfWeek(d: Date = new Date()): Date {
   // Monday as start of week
   const date = new Date(d);

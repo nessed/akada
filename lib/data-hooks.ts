@@ -19,6 +19,7 @@ import type {
   Course,
   Session,
   Semester,
+  NewSemesterInput,
   Task,
   UserSettings,
 } from './data';
@@ -30,7 +31,8 @@ const KEY = {
   courses: 'courses',
   sessions: 'sessions',
   tasks: 'tasks',
-  semester: 'semester',
+  activeSemester: 'active-semester',
+  semesters: 'semesters',
   userSettings: 'user-settings',
 } as const;
 
@@ -64,9 +66,18 @@ export function useTasks() {
   return { tasks: data ?? [], error, isLoading, revalidate };
 }
 
-export function useSemester() {
-  const { data, error, isLoading } = useSWR(KEY.semester, () => db.getSemester());
+/** The semester Dashboard/Tasks/Timer currently write into. */
+export function useActiveSemester() {
+  const { data, error, isLoading } = useSWR(KEY.activeSemester, () => db.getActiveSemester());
   return { semester: data ?? null, error, isLoading };
+}
+
+/** Every semester the user has, newest first — for the Settings archive list. */
+export function useSemesters() {
+  const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.semesters, () =>
+    db.getSemesters(),
+  );
+  return { semesters: data ?? [], error, isLoading, revalidate };
 }
 
 export function useUserSettings() {
@@ -309,20 +320,45 @@ export async function updateUserSettingsOptimistic(patch: Partial<UserSettings>)
   );
 }
 
-export async function setSemesterOptimistic(semester: Semester) {
+/**
+ * Starts a new semester and makes it active. Every course/task/session read
+ * is scoped to the active semester, so the moment this resolves, Dashboard,
+ * Tasks and Timer are looking at a blank slate — the previous semester's
+ * data hasn't gone anywhere, it's just no longer what "active" points at.
+ * Those three caches have to be dropped, not just the semester ones, or the
+ * UI would keep showing the old semester's courses until something else
+ * happened to trigger a refetch.
+ */
+export async function createSemesterOptimistic(input: NewSemesterInput): Promise<Semester> {
+  const created = await db.createSemester(input);
+  await Promise.all([
+    mutate(KEY.activeSemester, created, { revalidate: false }),
+    mutate(KEY.semesters),
+    mutate(KEY.courses, [], { revalidate: false }),
+    mutate(KEY.tasks, [], { revalidate: false }),
+    mutate(KEY.sessions, [], { revalidate: false }),
+  ]);
+  return created;
+}
+
+export async function updateSemesterOptimistic(id: string, updates: NewSemesterInput) {
   await mutate(
-    KEY.semester,
-    async () => {
-      await db.setSemester(semester);
-      return semester;
+    KEY.semesters,
+    async (current: Semester[] | undefined) => {
+      const updated = await db.updateSemester(id, updates);
+      return (current ?? []).map((s) => (s.id === id ? updated : s));
     },
     {
-      optimisticData: semester,
+      optimisticData: (current: Semester[] | undefined) =>
+        (current ?? []).map((s) => (s.id === id ? { ...s, ...updates } : s)),
       rollbackOnError: true,
       populateCache: true,
       revalidate: false,
     },
   );
+  // The active semester's own card (Dashboard's progress ribbon, etc.) may
+  // be the one that was just edited.
+  mutate(KEY.activeSemester);
 }
 
 /* ───────── Lifecycle ───────── */
@@ -341,7 +377,8 @@ export async function resetAllData() {
     mutate(KEY.courses, [], { revalidate: false }),
     mutate(KEY.sessions, [], { revalidate: false }),
     mutate(KEY.tasks, [], { revalidate: false }),
-    mutate(KEY.semester, null, { revalidate: false }),
+    mutate(KEY.activeSemester, null, { revalidate: false }),
+    mutate(KEY.semesters, [], { revalidate: false }),
     mutate(KEY.userSettings, null, { revalidate: false }),
   ]);
 }
