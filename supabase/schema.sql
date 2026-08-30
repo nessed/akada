@@ -29,6 +29,15 @@ alter table courses enable row level security;
 -- section 5 for how existing rows get backfilled.
 alter table courses add column if not exists semester_id uuid;
 
+-- Optional catalog details, filled in when a course is picked from the
+-- add-course search and left null for a manually typed one. All nullable and
+-- purely additive: existing rows stay valid untouched, and the course card
+-- renders only the fields that are present.
+alter table courses add column if not exists credits      numeric;
+alter table courses add column if not exists section      text;
+alter table courses add column if not exists instructor   text;
+alter table courses add column if not exists meeting_time text;
+
 -- ============================================================
 -- 2. TASKS  (FK -> courses)
 -- ============================================================
