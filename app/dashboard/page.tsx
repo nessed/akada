@@ -12,9 +12,12 @@ import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
+import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
+import type { CatalogCourse } from '@/lib/catalog';
+import { parseCourseInput } from '@/lib/catalog';
 import {
   formatHM,
   daysBetween,
@@ -137,6 +140,13 @@ export default function DashboardPage() {
   const [newTaskHigh, setNewTaskHigh] = useState(false);
 
   const [addingCourse, setAddingCourse] = useState(false);
+  // One search box drives the whole thing. `picked` is set only when a
+  // catalog suggestion was chosen; everything else is a manual course.
+  const [courseQuery, setCourseQuery] = useState('');
+  const [pickedCourse, setPickedCourse] = useState<CatalogCourse | null>(null);
+  const [newCourseSection, setNewCourseSection] = useState('');
+  // Shown only when the typed text can't supply one, so the common case
+  // stays a single field.
   const [newCourseCode, setNewCourseCode] = useState('');
   const [newCourseName, setNewCourseName] = useState('');
   const [newCourseColor, setNewCourseColor] = useState(PASTEL_PALETTE[0].value);
@@ -264,6 +274,9 @@ export default function DashboardPage() {
     const next =
       PASTEL_PALETTE.find((p) => !used.has(p.value)) ||
       PASTEL_PALETTE[courses.length % PASTEL_PALETTE.length];
+    setCourseQuery('');
+    setPickedCourse(null);
+    setNewCourseSection('');
     setNewCourseCode('');
     setNewCourseName('');
     setNewCourseColor(next.value);
@@ -272,18 +285,47 @@ export default function DashboardPage() {
     setAddingCourse(true);
   }
 
+  /**
+   * A catalog pick supplies code/title/credits directly; anything else is
+   * read out of whatever was typed, so submitting without touching the
+   * suggestions still creates a normal manual course.
+   */
+  function resolveNewCourse() {
+    if (pickedCourse) {
+      const chosen = pickedCourse.sections?.find((sec) => sec.id === newCourseSection);
+      return {
+        code: cleanCourseCode(pickedCourse.code),
+        name: cleanCourseName(pickedCourse.title),
+        credits: pickedCourse.credits ?? null,
+        section: newCourseSection || null,
+        instructor: chosen?.instructor ?? null,
+        meetingTime: chosen?.meets ?? null,
+      };
+    }
+    const parsed = parseCourseInput(courseQuery);
+    return {
+      code: cleanCourseCode(newCourseCode || parsed.code),
+      name: cleanCourseName(newCourseName || parsed.name),
+      credits: null,
+      section: newCourseSection || null,
+      instructor: null,
+      meetingTime: null,
+    };
+  }
+
+  const draftCourse = resolveNewCourse();
+  const canAddCourse = Boolean(draftCourse.code && draftCourse.name);
+
   async function handleAddCourse() {
-    const code = cleanCourseCode(newCourseCode);
-    const name = cleanCourseName(newCourseName);
-    if (!code || !name) return;
-    if (courses.some((course) => cleanCourseCode(course.code) === code)) {
+    const draft = resolveNewCourse();
+    if (!draft.code || !draft.name) return;
+    if (courses.some((course) => cleanCourseCode(course.code) === draft.code)) {
       alert('That course code already exists.');
       return;
     }
     try {
       await addCourseOptimistic({
-        code,
-        name,
+        ...draft,
         color: newCourseColor,
         tint: newCourseTint,
         weeklyGoalHours: clampWeeklyGoalHours(newCourseGoal),
@@ -663,23 +705,53 @@ export default function DashboardPage() {
               One more to the list.
             </p>
 
-            <div className="flex gap-2.5 mb-3">
-              <input
+            <div className="mb-3">
+              <CourseSearchInput
                 autoFocus
-                type="text"
-                value={newCourseCode}
-                onChange={(e) => setNewCourseCode(e.target.value.toUpperCase())}
-                placeholder="Code"
-                className="w-[90px] bg-paper border border-line rounded-[10px] px-3 py-3 text-sm font-mono text-ink outline-none focus:border-line-strong uppercase"
+                query={courseQuery}
+                onQueryChange={(v) => {
+                  setCourseQuery(v);
+                  // The typed text is the source of truth again, so drop any
+                  // code/name the user had filled into the fallback fields.
+                  setNewCourseCode('');
+                  setNewCourseName('');
+                }}
+                picked={pickedCourse}
+                onPick={(course) => {
+                  setPickedCourse(course);
+                  setNewCourseSection('');
+                }}
+                section={newCourseSection}
+                onSectionChange={setNewCourseSection}
+                onSubmit={handleAddCourse}
               />
-              <input
-                type="text"
-                value={newCourseName}
-                onChange={(e) => setNewCourseName(e.target.value)}
-                placeholder="Course name"
-                className="flex-1 bg-paper border border-line rounded-[10px] px-4 py-3 text-sm font-serif italic text-ink outline-none focus:border-line-strong"
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCourse(); }}
-              />
+
+              {/* Only the half the typed text couldn't supply is asked for,
+                  so the common case stays one field. */}
+              {!pickedCourse && courseQuery.trim().length > 0 && !canAddCourse && (
+                <div className="mt-2.5 flex gap-2.5 animate-fade-in">
+                  {!draftCourse.code && (
+                    <input
+                      type="text"
+                      value={newCourseCode}
+                      onChange={(e) => setNewCourseCode(e.target.value.toUpperCase())}
+                      placeholder="Code"
+                      className="w-[110px] bg-paper border border-line rounded-[10px] px-3 py-3 text-sm font-mono text-ink outline-none focus:border-line-strong uppercase"
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddCourse(); }}
+                    />
+                  )}
+                  {!draftCourse.name && (
+                    <input
+                      type="text"
+                      value={newCourseName}
+                      onChange={(e) => setNewCourseName(e.target.value)}
+                      placeholder="Course name"
+                      className="flex-1 bg-paper border border-line rounded-[10px] px-4 py-3 text-sm font-serif italic text-ink outline-none focus:border-line-strong"
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddCourse(); }}
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2 mb-3">
@@ -727,7 +799,7 @@ export default function DashboardPage() {
               </button>
               <button
                 type="button"
-                disabled={!newCourseCode.trim() || !newCourseName.trim()}
+                disabled={!canAddCourse}
                 onClick={handleAddCourse}
                 className="flex-1 py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium disabled:opacity-30"
               >

@@ -17,6 +17,10 @@ import {
   cleanAvatarUrl,
   cleanCourseCode,
   cleanCourseName,
+  cleanCredits,
+  cleanInstructor,
+  cleanMeetingTime,
+  cleanSection,
   cleanDisplayName,
   cleanOptionalDate,
   cleanSessionNote,
@@ -126,6 +130,10 @@ function sanitizeCourse(course: Course): Course {
     color: cleanText(course.color, 32) || '#A8B89B',
     tint: course.tint ? cleanText(course.tint, 32) : undefined,
     weeklyGoalHours: clampWeeklyGoalHours(course.weeklyGoalHours),
+    credits: cleanCredits(course.credits),
+    section: cleanSection(course.section),
+    instructor: cleanInstructor(course.instructor),
+    meetingTime: cleanMeetingTime(course.meetingTime),
   };
 }
 

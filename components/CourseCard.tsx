@@ -41,6 +41,15 @@ export default function CourseCard({
   const sinceLabel =
     since === 0 ? 'today' : since === 1 ? 'yesterday' : `${since}d ago`;
 
+  const catalogLine = [
+    typeof course.credits === 'number' ? `${course.credits} cr` : null,
+    course.section ? `Sec ${course.section}` : null,
+    course.instructor,
+    course.meetingTime,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <article className="relative bg-paper rounded-[14px] border border-line overflow-hidden">
       <div
@@ -59,6 +68,13 @@ export default function CourseCard({
             <h3 className="mt-1 mb-0 font-serif font-medium text-[19px] tracking-[-0.01em] truncate">
               {course.name}
             </h3>
+            {/* Only what the catalog actually supplied — a manually typed
+                course simply has no second line. */}
+            {catalogLine && (
+              <p className="mt-1 mb-0 truncate text-[11.5px] text-muted-soft">
+                {catalogLine}
+              </p>
+            )}
           </div>
           {neglected && (
             <span className="shrink-0 text-[10px] italic font-serif text-warnSoft bg-warnTint px-2 py-[3px] rounded-full tracking-[0.02em]">

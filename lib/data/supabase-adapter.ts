@@ -19,6 +19,10 @@ import {
   cleanAvatarUrl,
   cleanCourseCode,
   cleanCourseName,
+  cleanCredits,
+  cleanInstructor,
+  cleanMeetingTime,
+  cleanSection,
   cleanDisplayName,
   cleanOptionalDate,
   cleanSessionNote,
@@ -37,6 +41,10 @@ interface CourseRow {
   tint: string | null;
   weekly_goal_hours: number;
   created_at: string;
+  credits: number | null;
+  section: string | null;
+  instructor: string | null;
+  meeting_time: string | null;
 }
 
 interface SessionRow {
@@ -77,6 +85,10 @@ function rowToCourse(r: CourseRow): Course {
     tint: r.tint ? cleanText(r.tint, 32) : undefined,
     weeklyGoalHours: clampWeeklyGoalHours(r.weekly_goal_hours),
     createdAt: r.created_at,
+    credits: cleanCredits(r.credits),
+    section: cleanSection(r.section),
+    instructor: cleanInstructor(r.instructor),
+    meetingTime: cleanMeetingTime(r.meeting_time),
   };
 }
 
@@ -211,6 +223,10 @@ export class SupabaseAdapter implements DataProvider {
         color: cleanText(input.color, 32) || '#A8B89B',
         tint: input.tint ? cleanText(input.tint, 32) : null,
         weekly_goal_hours: clampWeeklyGoalHours(input.weeklyGoalHours),
+        credits: cleanCredits(input.credits),
+        section: cleanSection(input.section),
+        instructor: cleanInstructor(input.instructor),
+        meeting_time: cleanMeetingTime(input.meetingTime),
       })
       .select()
       .single();
@@ -237,6 +253,10 @@ export class SupabaseAdapter implements DataProvider {
     if (updates.weeklyGoalHours !== undefined) {
       patch.weekly_goal_hours = clampWeeklyGoalHours(updates.weeklyGoalHours);
     }
+    if (updates.credits !== undefined) patch.credits = cleanCredits(updates.credits);
+    if (updates.section !== undefined) patch.section = cleanSection(updates.section);
+    if (updates.instructor !== undefined) patch.instructor = cleanInstructor(updates.instructor);
+    if (updates.meetingTime !== undefined) patch.meeting_time = cleanMeetingTime(updates.meetingTime);
 
     const { data, error } = await this.supabase
       .from('courses')

@@ -6,6 +6,16 @@ export interface Course {
   tint?: string;
   weeklyGoalHours: number;
   createdAt: string;
+  /**
+   * Filled in from the course catalog when one is picked in the add-course
+   * search, blank for a manually typed course. All optional — a course is
+   * complete without any of them, and the card only shows what exists.
+   */
+  credits?: number | null;
+  section?: string | null;
+  instructor?: string | null;
+  /** Already formatted for display, e.g. "Mon/Wed 10:00". */
+  meetingTime?: string | null;
 }
 
 export interface Session {
