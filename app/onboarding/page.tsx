@@ -9,8 +9,8 @@ import AkadaMark from '@/components/notebook/AkadaMark';
 import HandNote from '@/components/notebook/HandNote';
 import {
   addCourseOptimistic,
+  createSemesterOptimistic,
   markOnboardingComplete,
-  setSemesterOptimistic,
   updateUserSettingsOptimistic,
 } from '@/lib/data-hooks';
 import {
@@ -22,6 +22,7 @@ import {
   hasDuplicateCourseCodes,
   isIsoDate,
 } from '@/lib/planner-safety';
+import { seasonLabel } from '@/lib/utils';
 
 type Step = 'welcome' | 'name' | 'courses' | 'semester' | 'routine';
 
@@ -180,6 +181,16 @@ export default function OnboardingPage() {
         dailyGoalHours: clampDailyGoalHours(dailyGoal),
         avatarUrl: finalAvatar,
       });
+      // The semester has to exist and be active *before* any course is
+      // added — every course attaches to whichever semester is currently
+      // active, so adding them first would silently create a nameless
+      // placeholder semester and then strand the courses there when this
+      // one activates right after.
+      await createSemesterOptimistic({
+        label: seasonLabel(new Date(start + 'T00:00:00')),
+        startDate: start,
+        endDate: end,
+      });
       for (const c of validCourses) {
         await addCourseOptimistic({
           code: c.code,
@@ -189,7 +200,6 @@ export default function OnboardingPage() {
           weeklyGoalHours: c.weeklyGoalHours,
         });
       }
-      await setSemesterOptimistic({ startDate: start, endDate: end });
       await markOnboardingComplete();
       router.replace('/dashboard');
     } catch (err: unknown) {
@@ -209,8 +219,9 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col">
-      {/* Step dots */}
-      <div className="flex gap-1.5 px-6 pt-[max(env(safe-area-inset-top),3.5rem)]">
+      {/* Step dots — same width cap as the content below so the bar doesn't
+          stretch edge-to-edge and disconnect from the card it's tracking. */}
+      <div className="mx-auto flex w-full max-w-xl gap-1.5 px-6 pt-[max(env(safe-area-inset-top),3.5rem)]">
         {STEPS.map((s, i) => {
           const active = i <= STEPS.indexOf(step);
           return (

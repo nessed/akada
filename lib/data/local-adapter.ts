@@ -4,11 +4,13 @@ import type {
   Session,
   Task,
   Semester,
+  NewSemesterInput,
   SessionFilters,
   TaskFilters,
   UserSettings,
 } from './types';
 import { clampSessionSeconds, isLoggableDuration, sanitizeSession } from '@/lib/session-safety';
+import { seasonLabel } from '@/lib/utils';
 import {
   clampDailyGoalHours,
   clampWeeklyGoalHours,
@@ -27,10 +29,21 @@ const KEYS = {
   courses: 'lums.courses',
   sessions: 'lums.sessions',
   tasks: 'lums.tasks',
-  semester: 'lums.semester',
+  semesters: 'lums.semesters',
+  activeSemesterId: 'lums.activeSemesterId',
   onboarding: 'lums.onboardingComplete',
   userSettings: 'lums.userSettings',
 } as const;
+
+/**
+ * Courses, tasks and sessions are stored with a semesterId that isn't part
+ * of the public Course/Task/Session type — mirrors semester_id being a
+ * plain column the Supabase rows carry but the app-facing type doesn't
+ * expose, since callers only ever see one semester's worth at a time.
+ */
+type StoredCourse = Course & { semesterId: string };
+type StoredTask = Task & { semesterId: string };
+type StoredSession = Session & { semesterId: string };
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -65,6 +78,41 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function sanitizeSemester(input: NewSemesterInput): { label: string; startDate: string | null; endDate: string | null } {
+  return {
+    label: cleanText(input.label ?? '', 60) || seasonLabel(),
+    startDate: cleanOptionalDate(input.startDate ?? null),
+    endDate: cleanOptionalDate(input.endDate ?? null),
+  };
+}
+
+function createSemesterRecord(input: NewSemesterInput): Semester {
+  const semesters = read<Semester[]>(KEYS.semesters, []);
+  const semester: Semester = {
+    id: uid(),
+    createdAt: nowIso(),
+    isActive: false, // isActive is computed at read time, never trusted from storage
+    ...sanitizeSemester(input),
+  };
+  semesters.push(semester);
+  write(KEYS.semesters, semesters);
+  return semester;
+}
+
+/**
+ * The semester every course/task/session read and write is scoped to.
+ * Self-healing: an account with none yet — the instant onboarding starts, or
+ * a very old local session — gets a blank one created and activated rather
+ * than being locked out of adding a course.
+ */
+function activeSemesterId(): string {
+  const existing = read<string | null>(KEYS.activeSemesterId, null);
+  if (existing) return existing;
+  const created = createSemesterRecord({});
+  write(KEYS.activeSemesterId, created.id);
+  return created.id;
+}
+
 function inDateRange(dateStr: string, range?: [string, string]): boolean {
   if (!range) return true;
   return dateStr >= range[0] && dateStr <= range[1];
@@ -95,20 +143,35 @@ function sanitizeTask(task: Task): Task {
 
 export class LocalAdapter implements DataProvider {
   // ---- Courses
+  // Always scoped to the active semester — see getCoursesForSemester for
+  // reading a specific (usually past) one instead.
+
   async getCourses(): Promise<Course[]> {
-    const list = read<Course[]>(KEYS.courses, [])
+    const activeId = activeSemesterId();
+    const list = read<StoredCourse[]>(KEYS.courses, [])
+      .filter((course) => course.semesterId === activeId)
+      .map(sanitizeCourse)
+      .filter((course) => course.code && course.name);
+    return [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async getCoursesForSemester(semesterId: string): Promise<Course[]> {
+    const list = read<StoredCourse[]>(KEYS.courses, [])
+      .filter((course) => course.semesterId === semesterId)
       .map(sanitizeCourse)
       .filter((course) => course.code && course.name);
     return [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   async addCourse(input: Omit<Course, 'id' | 'createdAt'>): Promise<Course> {
-    const courses = read<Course[]>(KEYS.courses, []);
-    const course: Course = sanitizeCourse({
+    const courses = read<StoredCourse[]>(KEYS.courses, []);
+    const draft: StoredCourse = {
       ...input,
       id: uid(),
       createdAt: nowIso(),
-    });
+      semesterId: activeSemesterId(),
+    };
+    const course: StoredCourse = { ...sanitizeCourse(draft), semesterId: draft.semesterId };
     if (!course.code || !course.name) throw new Error('Course code and name are required');
     courses.push(course);
     write(KEYS.courses, courses);
@@ -116,15 +179,16 @@ export class LocalAdapter implements DataProvider {
   }
 
   async updateCourse(id: string, updates: Partial<Course>): Promise<Course> {
-    const courses = read<Course[]>(KEYS.courses, []);
+    const courses = read<StoredCourse[]>(KEYS.courses, []);
     const idx = courses.findIndex((c) => c.id === id);
     if (idx === -1) throw new Error(`Course ${id} not found`);
-    courses[idx] = sanitizeCourse({
+    const draft: StoredCourse = {
       ...courses[idx],
       ...updates,
       id,
       createdAt: courses[idx].createdAt,
-    });
+    };
+    courses[idx] = { ...sanitizeCourse(draft), semesterId: draft.semesterId };
     if (!courses[idx].code || !courses[idx].name) {
       throw new Error('Course code and name are required');
     }
@@ -142,11 +206,25 @@ export class LocalAdapter implements DataProvider {
   }
 
   // ---- Sessions
+  // Always scoped to the active semester. A new session inherits its
+  // semesterId from the course it's logged against, mirroring what the
+  // sessions_set_semester_id trigger does in Postgres.
+
   async getSessions(filters?: SessionFilters): Promise<Session[]> {
-    let list = read<Session[]>(KEYS.sessions, []).map(sanitizeSession);
+    const activeId = activeSemesterId();
+    let list = read<StoredSession[]>(KEYS.sessions, [])
+      .filter((s) => s.semesterId === activeId)
+      .map(sanitizeSession);
     if (filters?.courseId) list = list.filter((s) => s.courseId === filters.courseId);
     if (filters?.dateRange) list = list.filter((s) => inDateRange(s.date, filters.dateRange));
     return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async getSessionsForSemester(semesterId: string): Promise<Session[]> {
+    const list = read<StoredSession[]>(KEYS.sessions, [])
+      .filter((s) => s.semesterId === semesterId)
+      .map(sanitizeSession);
+    return [...list].sort((a, b) => b.date.localeCompare(a.date));
   }
 
   async addSession(input: Omit<Session, 'id' | 'createdAt'>): Promise<Session> {
@@ -155,8 +233,9 @@ export class LocalAdapter implements DataProvider {
     }
     const courseId = cleanText(input.courseId, 80);
     if (!courseId) throw new Error('Course is required');
-    const sessions = read<Session[]>(KEYS.sessions, []);
-    const session: Session = {
+    const sessions = read<StoredSession[]>(KEYS.sessions, []);
+    const course = read<StoredCourse[]>(KEYS.courses, []).find((c) => c.id === courseId);
+    const session: StoredSession = {
       ...input,
       courseId,
       taskId: input.taskId ? cleanText(input.taskId, 80) : null,
@@ -165,6 +244,7 @@ export class LocalAdapter implements DataProvider {
       note: cleanSessionNote(input.note),
       id: uid(),
       createdAt: nowIso(),
+      semesterId: course?.semesterId ?? activeSemesterId(),
     };
     sessions.push(session);
     write(KEYS.sessions, sessions);
@@ -200,8 +280,12 @@ export class LocalAdapter implements DataProvider {
   }
 
   // ---- Tasks
+  // Always scoped to the active semester, same inheritance rule as Sessions.
+
   async getTasks(filters?: TaskFilters): Promise<Task[]> {
-    let list = read<Task[]>(KEYS.tasks, [])
+    const activeId = activeSemesterId();
+    let list = read<StoredTask[]>(KEYS.tasks, [])
+      .filter((task) => task.semesterId === activeId)
       .map(sanitizeTask)
       .filter((task) => task.courseId && task.title);
     if (filters?.courseId) list = list.filter((t) => t.courseId === filters.courseId);
@@ -218,8 +302,9 @@ export class LocalAdapter implements DataProvider {
     const title = cleanTaskTitle(input.title);
     if (!courseId) throw new Error('Course is required');
     if (!title) throw new Error('Task title is required');
-    const tasks = read<Task[]>(KEYS.tasks, []);
-    const task: Task = {
+    const tasks = read<StoredTask[]>(KEYS.tasks, []);
+    const course = read<StoredCourse[]>(KEYS.courses, []).find((c) => c.id === courseId);
+    const task: StoredTask = {
       ...input,
       courseId,
       title,
@@ -229,6 +314,7 @@ export class LocalAdapter implements DataProvider {
       createdAt: nowIso(),
       completed: false,
       completedAt: null,
+      semesterId: course?.semesterId ?? activeSemesterId(),
     };
     tasks.push(task);
     write(KEYS.tasks, tasks);
@@ -236,7 +322,7 @@ export class LocalAdapter implements DataProvider {
   }
 
   async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
-    const tasks = read<Task[]>(KEYS.tasks, []);
+    const tasks = read<StoredTask[]>(KEYS.tasks, []);
     const idx = tasks.findIndex((t) => t.id === id);
     if (idx === -1) throw new Error(`Task ${id} not found`);
     const safeUpdates = { ...updates };
@@ -252,7 +338,8 @@ export class LocalAdapter implements DataProvider {
     if (updates.priority !== undefined) {
       safeUpdates.priority = updates.priority === 'high' ? 'high' : 'normal';
     }
-    tasks[idx] = sanitizeTask({ ...tasks[idx], ...safeUpdates, id, createdAt: tasks[idx].createdAt });
+    const draft: StoredTask = { ...tasks[idx], ...safeUpdates, id, createdAt: tasks[idx].createdAt };
+    tasks[idx] = { ...sanitizeTask(draft), semesterId: draft.semesterId };
     write(KEYS.tasks, tasks);
     return tasks[idx];
   }
@@ -262,13 +349,44 @@ export class LocalAdapter implements DataProvider {
     write(KEYS.tasks, tasks);
   }
 
-  // ---- Semester
-  async getSemester(): Promise<Semester | null> {
-    return read<Semester | null>(KEYS.semester, null);
+  // ---- Semesters
+  async getActiveSemester(): Promise<Semester | null> {
+    const activeId = read<string | null>(KEYS.activeSemesterId, null);
+    if (!activeId) return null;
+    const found = read<Semester[]>(KEYS.semesters, []).find((s) => s.id === activeId);
+    return found ? { ...found, isActive: true } : null;
   }
 
-  async setSemester(semester: Semester): Promise<void> {
-    write(KEYS.semester, semester);
+  async getSemesters(): Promise<Semester[]> {
+    const activeId = read<string | null>(KEYS.activeSemesterId, null);
+    const list = read<Semester[]>(KEYS.semesters, []).map((s) => ({
+      ...s,
+      isActive: s.id === activeId,
+    }));
+    return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async createSemester(input: NewSemesterInput): Promise<Semester> {
+    const created = createSemesterRecord(input);
+    write(KEYS.activeSemesterId, created.id);
+    return { ...created, isActive: true };
+  }
+
+  async updateSemester(id: string, updates: NewSemesterInput): Promise<Semester> {
+    const semesters = read<Semester[]>(KEYS.semesters, []);
+    const idx = semesters.findIndex((s) => s.id === id);
+    if (idx === -1) throw new Error(`Semester ${id} not found`);
+    semesters[idx] = {
+      ...semesters[idx],
+      ...sanitizeSemester({
+        label: updates.label ?? semesters[idx].label,
+        startDate: updates.startDate !== undefined ? updates.startDate : semesters[idx].startDate,
+        endDate: updates.endDate !== undefined ? updates.endDate : semesters[idx].endDate,
+      }),
+    };
+    write(KEYS.semesters, semesters);
+    const activeId = read<string | null>(KEYS.activeSemesterId, null);
+    return { ...semesters[idx], isActive: semesters[idx].id === activeId };
   }
 
   // ---- Onboarding

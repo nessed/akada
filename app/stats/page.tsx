@@ -17,7 +17,7 @@ import {
   useOnboardingComplete,
   useCourses,
   useSessions,
-  useSemester,
+  useActiveSemester,
   addSessionOptimistic,
   deleteSessionOptimistic,
 } from '@/lib/data-hooks';
@@ -28,7 +28,7 @@ export default function StatsPage() {
     useOnboardingComplete();
   const { courses, isLoading: coursesLoading } = useCourses();
   const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
-  const { semester } = useSemester();
+  const { semester } = useActiveSemester();
 
   const sessions = useMemo(
     () => rawSessions.filter((s) => isLoggableDuration(s.durationSeconds)),
@@ -113,7 +113,7 @@ export default function StatsPage() {
     return courses.map((c) => {
       const cs = sessions.filter((s) => s.courseId === c.id);
       const sec = totalSeconds(cs);
-      const weeksObserved = semester
+      const weeksObserved = semester?.startDate
         ? Math.max(
             1,
             Math.ceil(
@@ -147,7 +147,7 @@ export default function StatsPage() {
   }, []);
 
   const semesterWeekMark = useMemo(() => {
-    if (!semester) return null;
+    if (!semester?.startDate || !semester?.endDate) return null;
     const start = new Date(semester.startDate + 'T00:00:00').getTime();
     const end = new Date(semester.endDate + 'T00:00:00').getTime();
     const now = Date.now();
@@ -329,6 +329,10 @@ export default function StatsPage() {
         <WeeklyChart sessions={sessions} courses={courses} />
       </section>
 
+      {/* Hours by course sits beside Marks & milestones at lg: — both are
+          card-list content that reads fine narrower, unlike the heatmap
+          above which wants the full width to show more weeks unscrolled. */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
       {/* Totals — deckle card with hand-drawn trend arrows */}
       <section className="card deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Hours by course</h2>
@@ -430,7 +434,7 @@ export default function StatsPage() {
 
       {/* Marks & milestones — semester-shaped achievements */}
       {sessions.length > 0 && (
-        <section className="mt-4">
+        <section className="mt-4 lg:mt-0">
           <h2 className="m-0 mb-3 font-serif font-medium text-[20px]">
             Marks &amp; milestones
           </h2>
@@ -510,6 +514,7 @@ export default function StatsPage() {
           </div>
         </section>
       )}
+      </div>
 
       <section className="mt-4 card deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Session history</h2>
@@ -532,7 +537,7 @@ export default function StatsPage() {
       </section>
 
       {/* Editorial footer — closes the issue */}
-      {semester && (
+      {semester?.endDate && (
         <p
           className="mt-8 text-center text-[12px] text-muted-soft font-serif italic pt-4"
           style={{ borderTop: '1px solid var(--line)' }}

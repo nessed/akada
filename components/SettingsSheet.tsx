@@ -7,7 +7,9 @@ import {
   addCourseOptimistic,
   deleteCourseOptimistic,
   updateCourseOptimistic,
+  useActiveSemester,
 } from '@/lib/data-hooks';
+import SemesterManager from './SemesterManager';
 import { PASTEL_PALETTE, totalSeconds } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import {
@@ -26,7 +28,7 @@ import {
 } from '@/lib/preferences';
 import { useTimer } from '@/lib/timer-context';
 
-type Section = 'overview' | 'profile' | 'courses' | 'appearance';
+type Section = 'overview' | 'profile' | 'courses' | 'semester' | 'appearance';
 
 interface Props {
   open: boolean;
@@ -64,6 +66,7 @@ export default function SettingsSheet({
   onResetData,
 }: Props) {
   const [section, setSection] = useState<Section>('overview');
+  const { semester: activeSemester } = useActiveSemester();
   const [prefs, setPrefs] = usePreferences();
 
   // Reset to overview each time the sheet opens.
@@ -127,7 +130,7 @@ export default function SettingsSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] animate-fade-in">
+    <div className="fixed inset-0 z-[90] md:flex md:items-center md:justify-center md:p-6 animate-fade-in">
       <button
         type="button"
         aria-label="Close settings"
@@ -136,13 +139,13 @@ export default function SettingsSheet({
         className="absolute inset-0 bg-ink/40 backdrop-blur-sm disabled:cursor-wait"
       />
       <div
-        className="app-scroll absolute inset-x-0 bottom-0 top-10 overflow-y-auto rounded-t-[26px] bg-bg shadow-2xl animate-slide-up"
+        className="app-scroll absolute inset-x-0 bottom-0 top-10 md:static md:inset-auto md:w-full md:max-w-lg md:max-h-[85vh] overflow-y-auto rounded-t-[26px] md:rounded-[26px] bg-bg shadow-2xl animate-slide-up md:animate-fade-in"
         style={{
           backgroundImage:
             'radial-gradient(circle at 20% 0%, rgba(180,170,140,0.10), transparent 50%)',
         }}
       >
-        <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-line-strong" />
+        <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-line-strong md:hidden" />
 
         <header className="flex items-center justify-between px-[22px] pt-[18px]">
           <div>
@@ -244,6 +247,11 @@ export default function SettingsSheet({
                 onClick={() => setSection('courses')}
               />
               <SettingRow
+                label="Semester"
+                sub={activeSemester?.label ?? 'Not set'}
+                onClick={() => setSection('semester')}
+              />
+              <SettingRow
                 label="Appearance"
                 sub={`${labelTone(prefs.paperTone)} · ${labelPrimary(prefs.primaryAccent)} · ${labelFont(prefs.headingFont)}`}
                 onClick={() => setSection('appearance')}
@@ -285,7 +293,7 @@ export default function SettingsSheet({
                   // A single confirm() is one mistaken tap away from deleting
                   // everything, so require the word to be typed out.
                   const typed = prompt(
-                    'This permanently deletes every course, task and study session in your account. It cannot be undone.\n\nType RESET to confirm.',
+                    'This permanently deletes every semester, course, task and study session in your account. It cannot be undone.\n\nType RESET to confirm.',
                   );
                   if (typed?.trim().toUpperCase() === 'RESET') {
                     onResetData?.();
@@ -333,6 +341,10 @@ export default function SettingsSheet({
               setSection('overview');
             }}
           />
+        )}
+
+        {section === 'semester' && (
+          <SemesterManager onBack={() => setSection('overview')} />
         )}
 
         {section === 'appearance' && (

@@ -32,8 +32,19 @@ export interface Task {
 }
 
 export interface Semester {
-  startDate: string;
-  endDate: string;
+  id: string;
+  label: string;
+  startDate: string | null;
+  endDate: string | null;
+  createdAt: string;
+  /** Whether this is the semester Dashboard, Tasks and Timer currently write into. */
+  isActive: boolean;
+}
+
+export interface NewSemesterInput {
+  label?: string;
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 export interface SessionFilters {

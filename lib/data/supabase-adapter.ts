@@ -5,11 +5,13 @@ import type {
   Session,
   Task,
   Semester,
+  NewSemesterInput,
   SessionFilters,
   TaskFilters,
   UserSettings,
 } from './types';
 import { clampSessionSeconds, isLoggableDuration, sanitizeSession } from '@/lib/session-safety';
+import { seasonLabel } from '@/lib/utils';
 import {
   clampDailyGoalHours,
   clampWeeklyGoalHours,
@@ -58,6 +60,14 @@ interface TaskRow {
   created_at: string;
 }
 
+interface SemesterRow {
+  id: string;
+  label: string;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+}
+
 function rowToCourse(r: CourseRow): Course {
   return {
     id: r.id,
@@ -95,14 +105,27 @@ function rowToTask(r: TaskRow): Task {
   };
 }
 
+function rowToSemester(r: SemesterRow, activeId: string | null): Semester {
+  return {
+    id: r.id,
+    label: cleanText(r.label, 60) || seasonLabel(new Date(r.created_at)),
+    startDate: cleanOptionalDate(r.start_date),
+    endDate: cleanOptionalDate(r.end_date),
+    createdAt: r.created_at,
+    isActive: r.id === activeId,
+  };
+}
+
 /**
  * Postgres 23505 is a unique-constraint violation. The only unique constraint
- * on courses is (user_id, upper(code)), so this is always a duplicate course
- * code — say so instead of surfacing the raw constraint name.
+ * on courses is (user_id, semester_id, upper(code)), so this is always a
+ * duplicate course code within the same semester — say so instead of
+ * surfacing the raw constraint name. The same code in a different semester
+ * (e.g. retaking CS101) is allowed and won't hit this.
  */
 function courseWriteError(error: { code?: string }, code: string): Error {
   if (error.code === '23505') {
-    return new Error(`You already have a course with the code ${code}.`);
+    return new Error(`You already have a course with the code ${code} this semester.`);
   }
   return error as unknown as Error;
 }
@@ -113,20 +136,60 @@ export class SupabaseAdapter implements DataProvider {
   private async userId(): Promise<string> {
     const { data: { session } } = await this.supabase.auth.getSession();
     if (session?.user) return session.user.id;
-    
+
     const { data: { user } } = await this.supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
     return user.id;
   }
 
+  /** Reads user_settings.active_semester_id without creating anything. */
+  private async readActiveSemesterId(uid: string): Promise<string | null> {
+    const { data, error } = await this.supabase
+      .from('user_settings')
+      .select('active_semester_id')
+      .eq('user_id', uid)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.active_semester_id ?? null;
+  }
+
+  /**
+   * The semester every course/task/session read and write is scoped to.
+   * Self-healing: an account that somehow has none yet — the instant
+   * onboarding starts, or an old account mid-migration — gets a blank one
+   * created and activated rather than being locked out of adding a course.
+   */
+  private async activeSemesterId(uid: string): Promise<string> {
+    const existing = await this.readActiveSemesterId(uid);
+    if (existing) return existing;
+    const created = await this.createSemesterFor(uid, {});
+    return created.id;
+  }
+
   // ---- Courses ----
+  // Always scoped to the active semester — see getCoursesForSemester for
+  // reading a specific (usually past) one instead.
 
   async getCourses(): Promise<Course[]> {
+    const uid = await this.userId();
+    const semesterId = await this.activeSemesterId(uid);
+    const { data, error } = await this.supabase
+      .from('courses')
+      .select('*')
+      .eq('user_id', uid)
+      .eq('semester_id', semesterId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data as CourseRow[]).map(rowToCourse);
+  }
+
+  async getCoursesForSemester(semesterId: string): Promise<Course[]> {
     const uid = await this.userId();
     const { data, error } = await this.supabase
       .from('courses')
       .select('*')
       .eq('user_id', uid)
+      .eq('semester_id', semesterId)
       .order('created_at', { ascending: true });
     if (error) throw error;
     return (data as CourseRow[]).map(rowToCourse);
@@ -134,6 +197,7 @@ export class SupabaseAdapter implements DataProvider {
 
   async addCourse(input: Omit<Course, 'id' | 'createdAt'>): Promise<Course> {
     const uid = await this.userId();
+    const semesterId = await this.activeSemesterId(uid);
     const code = cleanCourseCode(input.code);
     const name = cleanCourseName(input.name);
     if (!code || !name) throw new Error('Course code and name are required');
@@ -141,6 +205,7 @@ export class SupabaseAdapter implements DataProvider {
       .from('courses')
       .insert({
         user_id: uid,
+        semester_id: semesterId,
         code,
         name,
         color: cleanText(input.color, 32) || '#A8B89B',
@@ -196,13 +261,18 @@ export class SupabaseAdapter implements DataProvider {
   }
 
   // ---- Sessions ----
+  // Always scoped to the active semester. addSession doesn't need to set
+  // semester_id itself — supabase/schema.sql's tasks_set_semester_id /
+  // sessions_set_semester_id triggers copy it from the course on insert.
 
   async getSessions(filters?: SessionFilters): Promise<Session[]> {
     const uid = await this.userId();
+    const semesterId = await this.activeSemesterId(uid);
     let query = this.supabase
       .from('sessions')
       .select('*')
       .eq('user_id', uid)
+      .eq('semester_id', semesterId)
       .order('created_at', { ascending: false });
 
     if (filters?.courseId) {
@@ -213,6 +283,18 @@ export class SupabaseAdapter implements DataProvider {
     }
 
     const { data, error } = await query;
+    if (error) throw error;
+    return (data as SessionRow[]).map(rowToSession);
+  }
+
+  async getSessionsForSemester(semesterId: string): Promise<Session[]> {
+    const uid = await this.userId();
+    const { data, error } = await this.supabase
+      .from('sessions')
+      .select('*')
+      .eq('user_id', uid)
+      .eq('semester_id', semesterId)
+      .order('date', { ascending: false });
     if (error) throw error;
     return (data as SessionRow[]).map(rowToSession);
   }
@@ -280,13 +362,17 @@ export class SupabaseAdapter implements DataProvider {
   }
 
   // ---- Tasks ----
+  // Always scoped to the active semester — see the Sessions comment above,
+  // the same trigger keeps tasks.semester_id in sync.
 
   async getTasks(filters?: TaskFilters): Promise<Task[]> {
     const uid = await this.userId();
+    const semesterId = await this.activeSemesterId(uid);
     let query = this.supabase
       .from('tasks')
       .select('*')
       .eq('user_id', uid)
+      .eq('semester_id', semesterId)
       .order('created_at', { ascending: true });
 
     if (filters?.courseId) {
@@ -366,35 +452,91 @@ export class SupabaseAdapter implements DataProvider {
     if (error) throw error;
   }
 
-  // ---- Semester ----
+  // ---- Semesters ----
 
-  async getSemester(): Promise<Semester | null> {
+  async getActiveSemester(): Promise<Semester | null> {
     const uid = await this.userId();
+    const activeId = await this.readActiveSemesterId(uid);
+    if (!activeId) return null;
     const { data, error } = await this.supabase
       .from('semesters')
-      .select('start_date, end_date')
+      .select('*')
+      .eq('id', activeId)
       .eq('user_id', uid)
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;
-    return {
-      startDate: data.start_date,
-      endDate: data.end_date,
-    };
+    return rowToSemester(data as SemesterRow, activeId);
   }
 
-  async setSemester(semester: Semester): Promise<void> {
+  async getSemesters(): Promise<Semester[]> {
     const uid = await this.userId();
-    const { error } = await this.supabase.from('semesters').upsert(
-      {
+    const [{ data: rows, error }, activeId] = await Promise.all([
+      this.supabase
+        .from('semesters')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false }),
+      this.readActiveSemesterId(uid),
+    ]);
+    if (error) throw error;
+    return (rows as SemesterRow[]).map((r) => rowToSemester(r, activeId));
+  }
+
+  /**
+   * Shared by createSemester and the self-healing fallback in
+   * activeSemesterId — the latter must not go through the public
+   * createSemester (which re-resolves uid via userId()) while already
+   * holding it.
+   */
+  private async createSemesterFor(uid: string, input: NewSemesterInput): Promise<Semester> {
+    const label = cleanText(input.label ?? '', 60) || seasonLabel();
+    const { data, error } = await this.supabase
+      .from('semesters')
+      .insert({
         user_id: uid,
-        start_date: semester.startDate,
-        end_date: semester.endDate,
-        updated_at: new Date().toISOString(),
-      },
+        label,
+        start_date: cleanOptionalDate(input.startDate ?? null),
+        end_date: cleanOptionalDate(input.endDate ?? null),
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    const created = data as SemesterRow;
+
+    const { error: settingsError } = await this.supabase.from('user_settings').upsert(
+      { user_id: uid, active_semester_id: created.id, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' },
     );
+    if (settingsError) throw settingsError;
+
+    return rowToSemester(created, created.id);
+  }
+
+  async createSemester(input: NewSemesterInput): Promise<Semester> {
+    const uid = await this.userId();
+    return this.createSemesterFor(uid, input);
+  }
+
+  async updateSemester(id: string, updates: NewSemesterInput): Promise<Semester> {
+    const uid = await this.userId();
+    const patch: Record<string, unknown> = {};
+    if (updates.label !== undefined) patch.label = cleanText(updates.label ?? '', 60);
+    if (updates.startDate !== undefined) patch.start_date = cleanOptionalDate(updates.startDate);
+    if (updates.endDate !== undefined) patch.end_date = cleanOptionalDate(updates.endDate);
+
+    const [{ data, error }, activeId] = await Promise.all([
+      this.supabase
+        .from('semesters')
+        .update(patch)
+        .eq('id', id)
+        .eq('user_id', uid)
+        .select()
+        .single(),
+      this.readActiveSemesterId(uid),
+    ]);
     if (error) throw error;
+    return rowToSemester(data as SemesterRow, activeId);
   }
 
   // ---- Onboarding ----

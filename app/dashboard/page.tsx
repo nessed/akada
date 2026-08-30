@@ -11,7 +11,7 @@ import CourseCard from '@/components/CourseCard';
 import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
-import type { Course, Semester, Session, Task } from '@/lib/data';
+import type { Course, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
 import {
@@ -38,7 +38,7 @@ import {
   useCourses,
   useSessions,
   useTasks,
-  useSemester,
+  useActiveSemester,
   useUserSettings,
   addCourseOptimistic,
   addTaskOptimistic,
@@ -57,7 +57,7 @@ export default function DashboardPage() {
     useCourses();
   const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
   const { tasks, isLoading: tasksLoading } = useTasks();
-  const { semester } = useSemester();
+  const { semester } = useActiveSemester();
   const { settings } = useUserSettings();
 
   const courses = rawCourses;
@@ -338,7 +338,12 @@ export default function DashboardPage() {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowIso = isoDate(tomorrow);
   const tomorrowCount = openTasks.filter((t) => t.dueDate === tomorrowIso).length;
-  const semesterInfo = semester ? getSemesterInfo(semester, today) : null;
+  // Dates are optional on a semester now (Settings → Semester lets you start
+  // one with just a label). No dates just means no progress ribbon to show.
+  const semesterInfo =
+    semester?.startDate && semester?.endDate
+      ? getSemesterInfo(semester.startDate, semester.endDate, today)
+      : null;
   const smartPrompts = getSmartPrompts({
     courses,
     sessions,
@@ -350,6 +355,12 @@ export default function DashboardPage() {
 
   return (
     <PageShell>
+      {/* Header through "Due today" stay a comfortable reading width even
+          on a wide laptop viewport — a task list stretched to 1000px wide
+          reads worse, not better. The Courses grid below breaks out to the
+          full container width instead, since more columns is exactly what
+          the extra room is for. */}
+      <div className="lg:max-w-2xl">
       {/* Journal header */}
       <header className="mb-[22px] flex items-start justify-between gap-3.5">
         <div className="min-w-0 flex-1">
@@ -515,6 +526,7 @@ export default function DashboardPage() {
           </div>
         </section>
       )}
+      </div>
 
       {/* Section header */}
       <div className={`${todayTasks.length > 0 || overdueCount > 0 ? '' : 'mt-[26px]'} mb-3.5 flex items-baseline justify-between`}>
@@ -540,7 +552,7 @@ export default function DashboardPage() {
           onAction={openAddCourse}
         />
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {courses.map((course) => (
             <CourseCard
               key={course.id}
@@ -561,15 +573,15 @@ export default function DashboardPage() {
 
       {/* Quick task modal */}
       {addingTaskFor && (
-        <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+        <div className="fixed inset-0 z-[80] flex items-end md:items-center justify-center md:p-6 animate-fade-in">
           <button
             type="button"
             aria-label="Cancel"
             onClick={() => setAddingTaskFor(null)}
             className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
           />
-          <div className="relative w-full bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
-            <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
+          <div className="relative w-full md:max-w-md bg-bg rounded-t-3xl md:rounded-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] md:pb-7 md:max-h-[85vh] md:overflow-y-auto animate-slide-up md:animate-fade-in">
+            <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px] md:hidden" />
             {(() => {
               const course = courses.find((c) => c.id === addingTaskFor);
               return course ? (
@@ -640,15 +652,15 @@ export default function DashboardPage() {
 
       {/* Add course sheet */}
       {addingCourse && (
-        <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+        <div className="fixed inset-0 z-[80] flex items-end md:items-center justify-center md:p-6 animate-fade-in">
           <button
             type="button"
             aria-label="Cancel"
             onClick={() => setAddingCourse(false)}
             className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
           />
-          <div className="relative w-full bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
-            <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
+          <div className="relative w-full md:max-w-md bg-bg rounded-t-3xl md:rounded-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] md:pb-7 md:max-h-[85vh] md:overflow-y-auto animate-slide-up md:animate-fade-in">
+            <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px] md:hidden" />
             <h3 className="mt-0 mb-1.5 font-serif font-medium text-[22px] tracking-[-0.01em]">
               Add a course
             </h3>
@@ -751,12 +763,12 @@ export default function DashboardPage() {
   );
 }
 
-function getSemesterInfo(semester: Semester, today: string) {
-  const totalDays = Math.max(1, daysBetween(semester.startDate, semester.endDate) + 1);
-  const elapsedDays = Math.min(Math.max(0, daysBetween(semester.startDate, today) + 1), totalDays);
+function getSemesterInfo(startDate: string, endDate: string, today: string) {
+  const totalDays = Math.max(1, daysBetween(startDate, endDate) + 1);
+  const elapsedDays = Math.min(Math.max(0, daysBetween(startDate, today) + 1), totalDays);
   const totalWeeks = Math.max(1, Math.ceil(totalDays / 7));
   const currentWeek = Math.min(totalWeeks, Math.max(1, Math.ceil(elapsedDays / 7)));
-  const daysRemaining = Math.max(0, daysBetween(today, semester.endDate));
+  const daysRemaining = Math.max(0, daysBetween(today, endDate));
   return {
     totalWeeks,
     currentWeek,
