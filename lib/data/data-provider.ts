@@ -38,6 +38,7 @@ export interface DataProvider {
   /** Creates a new semester and makes it active. Existing courses/tasks/sessions stay exactly where they were — they just stop being the default view. */
   createSemester(input: NewSemesterInput): Promise<Semester>;
   updateSemester(id: string, updates: NewSemesterInput): Promise<Semester>;
+  deleteSemester(id: string): Promise<void>;
   /** Read-only archive lookups for a specific (usually non-active) semester. */
   getCoursesForSemester(semesterId: string): Promise<Course[]>;
   getSessionsForSemester(semesterId: string): Promise<Session[]>;

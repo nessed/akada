@@ -52,6 +52,7 @@ export const FALL_2026: CatalogCourse[] = [
   { code: 'ECON 220', title: 'Intermediate Macroeconomics', credits: 3, department: 'Economics' },
   { code: 'ECON 300', title: 'Econometrics', credits: 3, department: 'Economics' },
   { code: 'ECON 330', title: 'Development Economics', credits: 3, department: 'Economics' },
+  { code: 'ECON 343', title: 'Agriculture and Food Policy', credits: 3, department: 'Economics' },
 
   // ── Political Science ─────────────────────────────────────────────
   { code: 'POL 100', title: 'Introduction to Political Science', credits: 3, department: 'Political Science' },

@@ -361,6 +361,17 @@ export async function updateSemesterOptimistic(id: string, updates: NewSemesterI
   mutate(KEY.activeSemester);
 }
 
+export async function deleteSemesterOptimistic(id: string) {
+  await db.deleteSemester(id);
+  await Promise.all([
+    mutate(KEY.semesters),
+    mutate(KEY.activeSemester),
+    mutate(KEY.courses),
+    mutate(KEY.tasks),
+    mutate(KEY.sessions),
+  ]);
+}
+
 /* ───────── Lifecycle ───────── */
 
 export async function markOnboardingComplete() {

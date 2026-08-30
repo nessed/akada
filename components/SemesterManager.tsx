@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Course, Semester } from '@/lib/data';
 import { db } from '@/lib/data';
-import { useSemesters, createSemesterOptimistic } from '@/lib/data-hooks';
+import { useSemesters, createSemesterOptimistic, deleteSemesterOptimistic } from '@/lib/data-hooks';
 import { formatHM, seasonLabel, totalSeconds } from '@/lib/utils';
 import { cleanText, isIsoDate } from '@/lib/planner-safety';
 import LoadingIndicator, { ButtonSpinner } from './LoadingIndicator';
@@ -17,17 +18,56 @@ import LoadingIndicator, { ButtonSpinner } from './LoadingIndicator';
  * mistake.
  */
 export default function SemesterManager({ onBack }: { onBack: () => void }) {
+  const router = useRouter();
   const { semesters, isLoading } = useSemesters();
   const [starting, setStarting] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   const active = semesters.find((s) => s.isActive) ?? null;
   const past = semesters.filter((s) => !s.isActive);
 
+  async function deleteSemester(semester: Semester) {
+    setError('');
+    const confirmed = window.confirm(
+      `Delete ${semester.label}? This permanently removes its courses, tasks, and study sessions.`,
+    );
+    if (!confirmed) return;
+
+    const typed = window.prompt(
+      `This cannot be undone. Type delete this semester to permanently delete ${semester.label}.`,
+    );
+    if (typed !== 'delete this semester') {
+      setError('Semester not deleted. Type the confirmation text exactly to continue.');
+      window.alert('Semester not deleted. Type delete this semester exactly to continue.');
+      return;
+    }
+
+    setDeletingId(semester.id);
+    try {
+      await deleteSemesterOptimistic(semester.id);
+      setViewingId(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not delete that semester.';
+      setError(message);
+      window.alert(message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   if (viewingId) {
     const semester = semesters.find((s) => s.id === viewingId);
     if (semester) {
-      return <SemesterArchive semester={semester} onBack={() => setViewingId(null)} />;
+      return (
+        <SemesterArchive
+          semester={semester}
+          onBack={() => setViewingId(null)}
+          onDelete={() => deleteSemester(semester)}
+          deleting={deletingId === semester.id}
+        />
+      );
     }
   }
 
@@ -35,7 +75,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
     return (
       <StartSemesterForm
         onCancel={() => setStarting(false)}
-        onStarted={() => setStarting(false)}
+        onStarted={() => router.push('/onboarding?newSemester=1')}
       />
     );
   }
@@ -80,6 +120,19 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
       <p className="mt-2.5 mb-0 text-center font-serif text-[12px] italic text-muted-soft">
         This term&apos;s pages stay where they are.
       </p>
+
+      {active && (
+        <button
+          type="button"
+          onClick={() => deleteSemester(active)}
+          disabled={deletingId === active.id}
+          className="mt-4 w-full min-h-[44px] rounded-xl border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
+        >
+          {deletingId === active.id ? 'Deleting semester...' : 'Delete active semester'}
+        </button>
+      )}
+
+      {error && <p className="mt-3 text-[13px] text-priority font-serif italic">{error}</p>}
 
       {past.length > 0 && (
         <div className="mt-6">
@@ -352,7 +405,17 @@ function semesterPresets(today = new Date()): SemesterPreset[] {
   ];
 }
 
-function SemesterArchive({ semester, onBack }: { semester: Semester; onBack: () => void }) {
+function SemesterArchive({
+  semester,
+  onBack,
+  onDelete,
+  deleting,
+}: {
+  semester: Semester;
+  onBack: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [totalHours, setTotalHours] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -448,6 +511,15 @@ function SemesterArchive({ semester, onBack }: { semester: Semester; onBack: () 
                 ))}
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={deleting}
+              className="mt-6 w-full min-h-[44px] rounded-xl border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
+            >
+              {deleting ? 'Deleting semester...' : 'Delete this semester'}
+            </button>
           </>
         )
       )}

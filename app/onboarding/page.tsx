@@ -1,8 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { PASTEL_PALETTE } from '@/lib/utils';
@@ -46,8 +46,25 @@ const emptyDraft = (): DraftCourse => ({
 });
 
 export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[100dvh] flex items-center justify-center px-8">
+          <LoadingIndicator label="Loading your setup" detail="Getting your planner ready." />
+        </div>
+      }
+    >
+      <OnboardingContent />
+    </Suspense>
+  );
+}
+
+function OnboardingContent() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>('welcome');
+  const searchParams = useSearchParams();
+  const newSemesterMode = searchParams.get('newSemester') === '1';
+  const setupSteps: Step[] = newSemesterMode ? ['courses', 'routine'] : STEPS;
+  const [step, setStep] = useState<Step>(() => (newSemesterMode ? 'courses' : 'welcome'));
   const [displayName, setDisplayName] = useState('');
   const [courses, setCourses] = useState<DraftCourse[]>([emptyDraft()]);
   const [editIdx, setEditIdx] = useState(0);
@@ -74,7 +91,7 @@ export default function OnboardingPage() {
       // Someone who has already finished setup must not be able to run it
       // again by typing the URL — it would duplicate every course and
       // overwrite their profile.
-      if (onboarded) {
+      if (onboarded && !newSemesterMode) {
         router.replace('/dashboard');
         return;
       }
@@ -101,7 +118,7 @@ export default function OnboardingPage() {
     return () => {
       active = false;
     };
-  }, [router]);
+  }, [newSemesterMode, router]);
 
   const editing = courses[editIdx];
   function update(patch: Partial<DraftCourse>) {
@@ -167,7 +184,7 @@ export default function OnboardingPage() {
   }
 
   async function finish() {
-    if (!valid || !canFinishSemester) return;
+    if (!valid || (!newSemesterMode && !canFinishSemester)) return;
     try {
       let finalAvatar = avatarPreview;
       if (avatarPreview && avatarPreview.startsWith('data:')) {
@@ -177,21 +194,27 @@ export default function OnboardingPage() {
       // Use the optimistic helpers so the SWR cache is hot before we navigate
       // to /dashboard — otherwise the dashboard would briefly read a stale
       // "not onboarded" / empty-courses cache and bounce or flash.
-      await updateUserSettingsOptimistic({
-        displayName: cleanDisplayName(displayName),
-        dailyGoalHours: clampDailyGoalHours(dailyGoal),
-        avatarUrl: finalAvatar,
-      });
+      await updateUserSettingsOptimistic(
+        newSemesterMode
+          ? { dailyGoalHours: clampDailyGoalHours(dailyGoal) }
+          : {
+              displayName: cleanDisplayName(displayName),
+              dailyGoalHours: clampDailyGoalHours(dailyGoal),
+              avatarUrl: finalAvatar,
+            },
+      );
       // The semester has to exist and be active *before* any course is
       // added — every course attaches to whichever semester is currently
       // active, so adding them first would silently create a nameless
       // placeholder semester and then strand the courses there when this
       // one activates right after.
-      await createSemesterOptimistic({
-        label: seasonLabel(new Date(start + 'T00:00:00')),
-        startDate: start,
-        endDate: end,
-      });
+      if (!newSemesterMode) {
+        await createSemesterOptimistic({
+          label: seasonLabel(new Date(start + 'T00:00:00')),
+          startDate: start,
+          endDate: end,
+        });
+      }
       for (const c of validCourses) {
         await addCourseOptimistic({
           code: c.code,
@@ -228,8 +251,8 @@ export default function OnboardingPage() {
           bar tracks the card it belongs to instead of stretching the
           full width of a laptop screen. */}
       <div className="mx-auto flex w-full max-w-xl gap-1.5 px-6 pt-[max(env(safe-area-inset-top),3.5rem)]">
-        {STEPS.map((s, i) => {
-          const active = i <= STEPS.indexOf(step);
+        {setupSteps.map((s, i) => {
+          const active = i <= setupSteps.indexOf(step);
           return (
             <span
               key={s}
@@ -263,8 +286,8 @@ export default function OnboardingPage() {
             addAnother={addAnother}
             removeCourse={removeCourse}
             valid={valid}
-            onBack={() => setStep('name')}
-            onNext={() => setStep('semester')}
+            onBack={() => (newSemesterMode ? router.replace('/dashboard') : setStep('name'))}
+            onNext={() => setStep(newSemesterMode ? 'routine' : 'semester')}
           />
         )}
         {step === 'semester' && (
@@ -286,7 +309,7 @@ export default function OnboardingPage() {
             totalWeeklyGoal={courses
               .filter((c) => c.code.trim() && c.name.trim())
               .reduce((sum, c) => sum + clampWeeklyGoalHours(c.weeklyGoalHours), 0)}
-            onBack={() => setStep('semester')}
+            onBack={() => setStep(newSemesterMode ? 'courses' : 'semester')}
             onFinish={finish}
           />
         )}

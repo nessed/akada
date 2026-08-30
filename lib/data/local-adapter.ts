@@ -397,6 +397,26 @@ export class LocalAdapter implements DataProvider {
     return { ...semesters[idx], isActive: semesters[idx].id === activeId };
   }
 
+  async deleteSemester(id: string): Promise<void> {
+    const semesters = read<Semester[]>(KEYS.semesters, []);
+    if (!semesters.some((semester) => semester.id === id)) {
+      throw new Error('Semester not found.');
+    }
+    const remaining = semesters.filter((semester) => semester.id !== id);
+    if (remaining.length === 0) {
+      throw new Error('Start another semester before deleting your only semester.');
+    }
+
+    write(KEYS.semesters, remaining);
+    if (read<string | null>(KEYS.activeSemesterId, null) === id) {
+      const nextActive = [...remaining].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      write(KEYS.activeSemesterId, nextActive.id);
+    }
+    write(KEYS.courses, read<StoredCourse[]>(KEYS.courses, []).filter((course) => course.semesterId !== id));
+    write(KEYS.tasks, read<StoredTask[]>(KEYS.tasks, []).filter((task) => task.semesterId !== id));
+    write(KEYS.sessions, read<StoredSession[]>(KEYS.sessions, []).filter((session) => session.semesterId !== id));
+  }
+
   // ---- Onboarding
   async isOnboardingComplete(): Promise<boolean> {
     return read<boolean>(KEYS.onboarding, false);

@@ -559,6 +559,46 @@ export class SupabaseAdapter implements DataProvider {
     return rowToSemester(data as SemesterRow, activeId);
   }
 
+  async deleteSemester(id: string): Promise<void> {
+    const uid = await this.userId();
+    const [{ data: rows, error: semestersError }, activeId] = await Promise.all([
+      this.supabase
+        .from('semesters')
+        .select('id')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false }),
+      this.readActiveSemesterId(uid),
+    ]);
+    if (semestersError) throw semestersError;
+
+    const semesters = (rows ?? []) as Array<{ id: string }>;
+    if (!semesters.some((semester) => semester.id === id)) {
+      throw new Error('Semester not found.');
+    }
+    const nextActive = semesters.find((semester) => semester.id !== id) ?? null;
+    if (!nextActive) {
+      throw new Error('Start another semester before deleting your only semester.');
+    }
+
+    // The schema cascades this delete to the semester's courses, tasks, and
+    // sessions. When removing the active semester, preserve a usable active
+    // term by switching to the newest remaining one first.
+    if (activeId === id) {
+      const { error: settingsError } = await this.supabase.from('user_settings').upsert(
+        { user_id: uid, active_semester_id: nextActive.id, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      );
+      if (settingsError) throw settingsError;
+    }
+
+    const { error } = await this.supabase
+      .from('semesters')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', uid);
+    if (error) throw error;
+  }
+
   // ---- Onboarding ----
 
   async isOnboardingComplete(): Promise<boolean> {
