@@ -13,6 +13,7 @@ import { clampSessionSeconds, isLoggableDuration, sanitizeSession } from '@/lib/
 import {
   clampDailyGoalHours,
   clampWeeklyGoalHours,
+  assertAvatarUrl,
   cleanAvatarUrl,
   cleanCourseCode,
   cleanCourseName,
@@ -94,6 +95,18 @@ function rowToTask(r: TaskRow): Task {
   };
 }
 
+/**
+ * Postgres 23505 is a unique-constraint violation. The only unique constraint
+ * on courses is (user_id, upper(code)), so this is always a duplicate course
+ * code — say so instead of surfacing the raw constraint name.
+ */
+function courseWriteError(error: { code?: string }, code: string): Error {
+  if (error.code === '23505') {
+    return new Error(`You already have a course with the code ${code}.`);
+  }
+  return error as unknown as Error;
+}
+
 export class SupabaseAdapter implements DataProvider {
   private supabase = createClient();
 
@@ -136,7 +149,7 @@ export class SupabaseAdapter implements DataProvider {
       })
       .select()
       .single();
-    if (error) throw error;
+    if (error) throw courseWriteError(error, code);
     return rowToCourse(data as CourseRow);
   }
 
@@ -167,7 +180,7 @@ export class SupabaseAdapter implements DataProvider {
       .eq('user_id', uid)
       .select()
       .single();
-    if (error) throw error;
+    if (error) throw courseWriteError(error, String(patch.code ?? updates.code ?? ''));
     return rowToCourse(data as CourseRow);
   }
 
@@ -435,7 +448,7 @@ export class SupabaseAdapter implements DataProvider {
     if (settings.dailyGoalHours !== undefined) {
       patch.daily_goal_hours = clampDailyGoalHours(settings.dailyGoalHours);
     }
-    if (settings.avatarUrl !== undefined) patch.avatar_url = cleanAvatarUrl(settings.avatarUrl);
+    if (settings.avatarUrl !== undefined) patch.avatar_url = assertAvatarUrl(settings.avatarUrl);
 
     const { error } = await this.supabase.from('user_settings').upsert(
       { user_id: uid, ...patch },

@@ -53,14 +53,37 @@ export default function OnboardingPage() {
   const [end, setEnd] = useState('');
   const [dailyGoal, setDailyGoal] = useState(4);
   const [avatarPreview, setAvatarPreview] = useState('');
+  const [gate, setGate] = useState<'checking' | 'open'>('checking');
 
   useEffect(() => {
+    let active = true;
     (async () => {
+      // The gate is decided on its own. Bundling it with the prefill calls
+      // meant any one of them failing (createClient() throws when Supabase
+      // is unconfigured) opened setup to an already-onboarded user.
+      let onboarded = false;
+      try {
+        onboarded = await db.isOnboardingComplete();
+      } catch {
+        onboarded = false;
+      }
+      if (!active) return;
+
+      // Someone who has already finished setup must not be able to run it
+      // again by typing the URL — it would duplicate every course and
+      // overwrite their profile.
+      if (onboarded) {
+        router.replace('/dashboard');
+        return;
+      }
+
+      // Prefill is best-effort and must never block the form.
       try {
         const [settings, auth] = await Promise.all([
           db.getUserSettings(),
           createClient().auth.getUser(),
         ]);
+        if (!active) return;
         const metadataName =
           typeof auth.data.user?.user_metadata?.display_name === 'string'
             ? auth.data.user.user_metadata.display_name
@@ -68,10 +91,15 @@ export default function OnboardingPage() {
         setDisplayName((current) => current || settings?.displayName || metadataName || '');
         setAvatarPreview((current) => current || settings?.avatarUrl || '');
       } catch {
-        // Local mode or unauthenticated edge: keep the form empty.
+        // Local mode or unauthenticated edge: keep the form empty but usable.
       }
+
+      if (active) setGate('open');
     })();
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const editing = courses[editIdx];
   function update(patch: Partial<DraftCourse>) {
@@ -169,6 +197,14 @@ export default function OnboardingPage() {
       console.error('Onboarding setup failed:', err);
       alert('Setup failed: ' + msg);
     }
+  }
+
+  if (gate === 'checking') {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center px-8">
+        <p className="m-0 font-serif italic text-[14px] text-muted">Loading your setup…</p>
+      </div>
+    );
   }
 
   return (

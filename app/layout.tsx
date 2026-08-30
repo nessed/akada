@@ -12,6 +12,7 @@ import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import SWRRoot from '@/components/SWRRoot';
 import TimerDocumentTitle from '@/components/TimerDocumentTitle';
+import { SITE_URL } from '@/lib/site-url';
 import './globals.css';
 
 const inter = Inter({
@@ -70,7 +71,7 @@ const caveat = Caveat({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('http://localhost:3000'),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: 'Akada - Study Planner',
     template: '%s - Akada',
@@ -89,6 +90,14 @@ export const metadata: Metadata = {
     description:
       'A calm academic planner for courses, tasks, study timers, and progress tracking.',
     type: 'website',
+    siteName: 'Akada',
+    url: SITE_URL,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Akada - Study Planner',
+    description:
+      'A calm academic planner for courses, tasks, study timers, and progress tracking.',
   },
   icons: {
     icon: '/icon.svg',
@@ -100,8 +109,9 @@ export const viewport: Viewport = {
   themeColor: '#FAF8F2',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // maximumScale / userScalable are deliberately not set: blocking pinch-zoom
+  // fails WCAG 1.4.4 and there is nothing here that needs a fixed scale.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -15,11 +15,20 @@ Akada is a modern, beautifully designed academic planner and study companion bui
 
 ## 🛠️ Tech Stack
 
-- **Frontend Framework:** [Next.js 14](https://nextjs.org/) (App Router)
+- **Frontend Framework:** [Next.js 16](https://nextjs.org/) (App Router, React 18)
 - **Language:** [TypeScript](https://www.typescriptlang.org/)
-- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
-- **Database & Auth:** [Supabase](https://supabase.com/) (PostgreSQL)
-- **Fonts:** Inter, JetBrains Mono, and Fraunces (via `next/font`)
+- **Styling:** [Tailwind CSS 3](https://tailwindcss.com/)
+- **Database & Auth:** [Supabase](https://supabase.com/) (PostgreSQL, RLS-only — no service-role key)
+- **Data fetching:** [SWR](https://swr.vercel.app/)
+- **Animation:** [Framer Motion](https://www.framer.com/motion/)
+- **Fonts (via `next/font`):** Inter (sans), JetBrains Mono (mono), Cormorant
+  Garamond (default serif), plus Fraunces, Lora and Merriweather as
+  user-selectable heading faces, and Caveat for handwritten marginalia.
+
+The auth gate lives in **`proxy.ts` at the repo root** — Next 16's rename of
+`middleware.ts`. The export must stay named `proxy`. It is default-deny: every
+route requires a session except `/`, `/auth`, `/auth/callback`, `/auth/reset`
+and static assets.
 
 ## ⚙️ Getting Started
 
@@ -41,11 +50,17 @@ Akada is a modern, beautifully designed academic planner and study companion bui
    ```
 
 3. **Environment Setup:**
-   Create a `.env.local` file in the root directory and add your Supabase credentials:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```bash
+   cp .env.example .env.local
    ```
+   Fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
+   `NEXT_PUBLIC_SITE_URL`. See `.env.example` for what each one does.
+
+   The build **fails** if the Supabase variables are missing. That is
+   deliberate: it used to fall back to `localStorage` silently, which meant a
+   misconfigured deploy looked healthy while losing every user's data. To run
+   with no backend at all, set `NEXT_PUBLIC_USE_LOCAL_DATA=true` (development
+   only — it is ignored in production builds).
 
 4. **Database Setup:**
    Run the SQL statements found in `supabase/schema.sql` in your Supabase project's SQL Editor to create the necessary tables and Row Level Security (RLS) policies.
@@ -57,6 +72,32 @@ Akada is a modern, beautifully designed academic planner and study companion bui
 
    Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
+### Checks
+
+All three must pass before shipping:
+
+```bash
+npx tsc --noEmit   # types
+npm run lint       # eslint
+npm run build      # production build
+```
+
+## 🚢 Deploying (Vercel)
+
+1. Import the repository in Vercel. Framework preset: **Next.js**. Build
+   command and output directory are detected automatically.
+2. Add the environment variables from `.env.example` to **both** the
+   Production and Preview environments (Project Settings → Environment
+   Variables). Preview needs its own `NEXT_PUBLIC_SITE_URL`.
+3. In the Supabase dashboard, set **Authentication → URL Configuration →
+   Site URL** to the production domain, and add every deploy origin plus
+   `/auth/callback` to the redirect allowlist. Sign-up silently fails from
+   any origin that is not on that list.
+4. Run `supabase/schema.sql` in the SQL Editor. It is idempotent.
+
+`LAUNCH_CHECKLIST.md` has the full click-by-click list of dashboard settings,
+including the ones that cannot be configured from this repo.
+
 ## 🗄️ Database Schema Overview
 
 The Supabase database consists of the following core tables:
@@ -66,7 +107,16 @@ The Supabase database consists of the following core tables:
 - `semesters`: Tracks the academic term boundaries for a user.
 - `user_settings`: User profile data including display name, avatar URL, and daily goals.
 
-All tables are protected by Row Level Security (RLS) policies ensuring users can only access their own data.
+All tables are protected by Row Level Security (RLS) policies ensuring users
+can only access their own data. The app authenticates as the end user via the
+anon key and never uses a service-role key, so RLS is the only thing standing
+between accounts — keep it that way.
+
+`supabase/schema.sql` is the source of truth and is idempotent: run the whole
+file against a fresh or an existing project. It also creates the indexes the
+stats page and heatmap need, a case-insensitive unique index on
+`(user_id, upper(code))` for course codes, and cascade-on-delete to
+`auth.users`.
 
 ## 📄 License
 This project is for personal or academic use.

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+// Aliased: the DOM `Image` constructor is used below by resizeImage().
+import NextImage from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
@@ -11,6 +13,7 @@ import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
 import type { Course, Semester, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
+import { clearClientSessionState } from '@/lib/session-cleanup';
 import {
   formatHM,
   daysBetween,
@@ -169,7 +172,14 @@ export default function DashboardPage() {
     } catch {
       // ignore — fall through to redirect either way
     }
-    router.replace('/auth');
+    // The timer, preferences and anything the local adapter cached all
+    // outlive the Supabase session, so wipe them before leaving. Otherwise
+    // the next person on a shared laptop inherits them.
+    clearClientSessionState();
+    // A hard navigation rather than router.replace, so the SWR cache, the
+    // timer context and every other in-memory copy of the previous user's
+    // data goes with the page.
+    window.location.replace('/auth');
   }
 
   async function handleResetData() {
@@ -179,6 +189,10 @@ export default function DashboardPage() {
       await resetAllData();
     } catch (err) {
       console.error('Failed to reset data:', err);
+      // Navigating on to onboarding after a failed reset tells the user
+      // their data is gone when it is all still there.
+      alert('Could not reset your data — nothing was deleted. Please try again.');
+      return;
     }
     router.replace('/onboarding');
   }
@@ -276,7 +290,9 @@ export default function DashboardPage() {
       setAddingCourse(false);
     } catch (error) {
       console.error('Failed to add course:', error);
-      alert('Could not add that course.');
+      // Surface the real reason — most often a duplicate course code the
+      // database rejected, which the user can act on.
+      alert(error instanceof Error ? error.message : 'Could not add that course.');
     }
   }
 
@@ -377,7 +393,17 @@ export default function DashboardPage() {
             className="relative w-[42px] h-[42px] rounded-full bg-bg-tint border border-line overflow-visible flex items-center justify-center shrink-0 hover:border-primary transition-colors"
           >
             <span className="block h-full w-full overflow-hidden rounded-full">
-              <img src={avatarUrl || '/default-avatar.png'} alt="Settings" className="w-full h-full object-cover" />
+              <NextImage
+                src={avatarUrl || '/default-avatar.svg'}
+                alt="Settings"
+                width={42}
+                height={42}
+                // Avatars are user-supplied base64 data URLs or arbitrary
+                // https URLs, neither of which the optimizer can handle
+                // without a remotePatterns allowlist per user.
+                unoptimized
+                className="w-full h-full object-cover"
+              />
             </span>
             {streak > 0 && (
               <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-bg bg-primary px-1 font-mono text-[9px] font-bold text-primary-contrast">
