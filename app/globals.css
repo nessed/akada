@@ -4,14 +4,16 @@
 
 :root {
   color-scheme: light;
-  /* Refined paper-warm palette (Akada · Vol. III) */
-  --bg: #FAF8F2;
-  --bg-tint: #F1ECDF;
-  --paper: #FFFCF5;
-  --paper-2: #FBF7EA;
-  --line: #E5DECC;
-  --line-strong: #D7CDB3;
-  --line-soft: #EFE9D8;
+  /* The shipped default: the "Paper" tone from Appearance. Kept in step with
+     PAPER_TONES.paper in lib/preferences.ts so the first paint already looks
+     the way the app settles, with no flash before preferences apply. */
+  --bg: #F5F1E8;
+  --bg-tint: #EDE7D8;
+  --paper: #FBF8EF;
+  --paper-2: #F7F3E6;
+  --line: #DDD6C2;
+  --line-strong: #C9C0A8;
+  --line-soft: #EAE4D3;
   --ink: #1A1714;
   --ink-soft: #4B4640;
   --muted: #8C8576;
@@ -21,17 +23,17 @@
   --primary-contrast: var(--bg);
   --primary-tint: var(--bg-tint);
 
-  --paper-glow-a: rgba(190, 170, 120, 0.10);
-  --paper-glow-b: rgba(180, 150, 110, 0.07);
+  --paper-glow-a: rgba(178, 152, 92, 0.10);
+  --paper-glow-b: rgba(132, 112, 78, 0.08);
 
   /* Highlighter swipe colors — uneven, lifted off the line */
   --highlight-yellow: rgba(228, 197, 92, 0.42);
   --highlight-pink: rgba(214, 132, 132, 0.32);
   --highlight-mint: rgba(135, 181, 156, 0.36);
 
-  /* Default heading typeface — Cormorant Garamond. Overridden at runtime by
-     usePreferences() when the user picks Fraunces / Lora / Merriweather. */
-  --font-serif: var(--font-cormorant), 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
+  /* Default heading typeface — Fraunces. Overridden at runtime by
+     usePreferences() when the user picks Cormorant / Lora / Merriweather. */
+  --font-serif: var(--font-fraunces), 'Fraunces', 'Iowan Old Style', Georgia, serif;
 
   /* Course pastel highlighter palette (refined) */
   --sage: #8FA37E;

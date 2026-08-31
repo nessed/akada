@@ -17,7 +17,7 @@ import type { Course, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
 import type { CatalogCourse } from '@/lib/catalog';
-import { parseCourseInput } from '@/lib/catalog';
+import { deriveCourseCode, parseCourseInput } from '@/lib/catalog';
 import {
   formatHM,
   daysBetween,
@@ -50,6 +50,18 @@ import {
   updateUserSettingsOptimistic,
   resetAllData,
 } from '@/lib/data-hooks';
+
+/** The quiet uppercase caption every other form in the app labels a field with. */
+function SheetField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-2.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -146,8 +158,8 @@ export default function DashboardPage() {
   const [pickedCourse, setPickedCourse] = useState<CatalogCourse | null>(null);
   const [newCourseSection, setNewCourseSection] = useState('');
   // Shown only when the typed text can't supply one, so the common case
-  // stays a single field.
-  const [newCourseCode, setNewCourseCode] = useState('');
+  // stays a single field. There is no matching field for the code: a course
+  // typed by name gets one derived from it.
   const [newCourseName, setNewCourseName] = useState('');
   const [newCourseColor, setNewCourseColor] = useState(PASTEL_PALETTE[0].value);
   const [newCourseTint, setNewCourseTint] = useState(PASTEL_PALETTE[0].tint);
@@ -277,7 +289,6 @@ export default function DashboardPage() {
     setCourseQuery('');
     setPickedCourse(null);
     setNewCourseSection('');
-    setNewCourseCode('');
     setNewCourseName('');
     setNewCourseColor(next.value);
     setNewCourseTint(next.tint);
@@ -286,8 +297,9 @@ export default function DashboardPage() {
   }
 
   /**
-   * A catalog pick supplies code/title/credits directly; anything else is
-   * read out of whatever was typed, so submitting without touching the
+   * A catalog pick supplies code/title/credits directly, and the chosen
+   * section fills in its instructor and meeting time; anything else is read
+   * out of whatever was typed, so submitting without touching the
    * suggestions still creates a normal manual course.
    */
   function resolveNewCourse() {
@@ -303,9 +315,12 @@ export default function DashboardPage() {
       };
     }
     const parsed = parseCourseInput(courseQuery);
+    const name = cleanCourseName(newCourseName || parsed.name);
     return {
-      code: cleanCourseCode(newCourseCode || parsed.code),
-      name: cleanCourseName(newCourseName || parsed.name),
+      // Nobody is asked to type a code: one comes off the front of what was
+      // typed, or is built from the name, and only the card ever shows it.
+      code: cleanCourseCode(parsed.code || uniqueCourseCode(deriveCourseCode(name))),
+      name,
       credits: null,
       section: newCourseSection || null,
       instructor: null,
@@ -313,8 +328,28 @@ export default function DashboardPage() {
     };
   }
 
+  /** Keeps a derived code from colliding with one already on the list. */
+  function uniqueCourseCode(base: string) {
+    if (!base) return '';
+    const taken = new Set(courses.map((course) => cleanCourseCode(course.code)));
+    if (!taken.has(base)) return base;
+    let suffix = 2;
+    while (taken.has(`${base} ${suffix}`)) suffix += 1;
+    return `${base} ${suffix}`;
+  }
+
   const draftCourse = resolveNewCourse();
-  const canAddCourse = Boolean(draftCourse.code && draftCourse.name);
+  const canAddCourse = Boolean(draftCourse.name);
+  // Everything the catalog and the chosen section supplied, in the order the
+  // course card itself reads them.
+  const draftPreviewDetail = [
+    draftCourse.section && `Sec ${draftCourse.section}`,
+    typeof draftCourse.credits === 'number' && `${draftCourse.credits} cr`,
+    draftCourse.instructor,
+    draftCourse.meetingTime,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   async function handleAddCourse() {
     const draft = resolveNewCourse();
@@ -705,91 +740,113 @@ export default function DashboardPage() {
               One more to the list.
             </p>
 
-            <div className="mb-3">
-              <CourseSearchInput
-                autoFocus
-                query={courseQuery}
-                onQueryChange={(v) => {
-                  setCourseQuery(v);
-                  // The typed text is the source of truth again, so drop any
-                  // code/name the user had filled into the fallback fields.
-                  setNewCourseCode('');
-                  setNewCourseName('');
-                }}
-                picked={pickedCourse}
-                onPick={(course) => {
-                  setPickedCourse(course);
-                  setNewCourseSection('');
-                }}
-                section={newCourseSection}
-                onSectionChange={setNewCourseSection}
-                onSubmit={handleAddCourse}
-              />
+            <div className="flex flex-col gap-[18px]">
+              <SheetField label="Course">
+                <CourseSearchInput
+                  autoFocus
+                  query={courseQuery}
+                  onQueryChange={(v) => {
+                    setCourseQuery(v);
+                    // The typed text is the source of truth again, so drop any
+                    // name the user had filled into the fallback field.
+                    setNewCourseName('');
+                  }}
+                  picked={pickedCourse}
+                  onPick={(course) => {
+                    setPickedCourse(course);
+                    setNewCourseSection('');
+                  }}
+                  section={newCourseSection}
+                  onSectionChange={setNewCourseSection}
+                  accent={newCourseColor}
+                  accentTint={newCourseTint}
+                  onSubmit={handleAddCourse}
+                />
 
-              {/* Only the half the typed text couldn't supply is asked for,
-                  so the common case stays one field. */}
-              {!pickedCourse && courseQuery.trim().length > 0 && !canAddCourse && (
-                <div className="mt-2.5 flex gap-2.5 animate-fade-in">
-                  {!draftCourse.code && (
-                    <input
-                      type="text"
-                      value={newCourseCode}
-                      onChange={(e) => setNewCourseCode(e.target.value.toUpperCase())}
-                      placeholder="Code"
-                      className="w-[110px] bg-paper border border-line rounded-[10px] px-3 py-3 text-sm font-mono text-ink outline-none focus:border-line-strong uppercase"
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddCourse(); }}
+                {/* A code alone ("CS 200") is the one thing that leaves nothing
+                    to name the course by, so that is the only follow-up field. */}
+                {!pickedCourse && courseQuery.trim().length > 0 && !canAddCourse && (
+                  <input
+                    type="text"
+                    value={newCourseName}
+                    onChange={(e) => setNewCourseName(e.target.value)}
+                    placeholder="Course name"
+                    className="mt-2.5 w-full bg-paper border border-line rounded-[10px] px-4 py-3 text-sm font-serif italic text-ink outline-none focus:border-line-strong animate-fade-in"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddCourse(); }}
+                  />
+                )}
+              </SheetField>
+
+              <SheetField label="Accent colour">
+                <div className="flex flex-wrap gap-2.5">
+                  {PASTEL_PALETTE.map((p) => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      aria-label={p.name}
+                      onClick={() => { setNewCourseColor(p.value); setNewCourseTint(p.tint); }}
+                      className="w-8 h-8 rounded-full border-0 transition-transform"
+                      style={{
+                        background: p.value,
+                        boxShadow: newCourseColor === p.value
+                          ? `0 0 0 2px var(--bg), 0 0 0 3.5px ${p.value}`
+                          : 'none',
+                        transform: newCourseColor === p.value ? 'scale(1.05)' : 'scale(1)',
+                      }}
                     />
-                  )}
-                  {!draftCourse.name && (
-                    <input
-                      type="text"
-                      value={newCourseName}
-                      onChange={(e) => setNewCourseName(e.target.value)}
-                      placeholder="Course name"
-                      className="flex-1 bg-paper border border-line rounded-[10px] px-4 py-3 text-sm font-serif italic text-ink outline-none focus:border-line-strong"
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddCourse(); }}
-                    />
-                  )}
+                  ))}
+                </div>
+              </SheetField>
+
+              <SheetField label="Weekly study goal">
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    step="0.5"
+                    value={newCourseGoal}
+                    onChange={(e) => setNewCourseGoal(clampWeeklyGoalHours(e.target.value))}
+                    className="pl-range flex-1"
+                    style={{ color: newCourseColor }}
+                  />
+                  <div className="font-mono font-semibold text-sm text-ink w-14 text-right">
+                    {newCourseGoal}
+                    <span className="text-muted ml-1">h</span>
+                  </div>
+                </div>
+              </SheetField>
+
+              {/* The same card the course is about to become, so the colour,
+                  the code and whatever the catalog filled in are seen rather
+                  than described. */}
+              {canAddCourse && (
+                <div className="relative overflow-hidden rounded-[14px] border border-line bg-paper animate-fade-in">
+                  <div
+                    className="absolute left-0 top-0 bottom-0 w-1"
+                    style={{ background: newCourseColor }}
+                  />
+                  <div className="py-3.5 pl-5 pr-4">
+                    <p
+                      className="m-0 text-[10px] font-semibold tracking-[0.14em] uppercase"
+                      style={{ color: newCourseColor }}
+                    >
+                      {draftCourse.code}
+                    </p>
+                    <h4 className="mt-1 mb-0 font-serif font-medium text-[17px] tracking-[-0.01em]">
+                      {draftCourse.name}
+                    </h4>
+                    {draftPreviewDetail && (
+                      <p className="mt-1.5 mb-0 font-serif text-[11px] italic leading-[1.5] text-muted">
+                        {draftPreviewDetail}
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2 mb-3">
-              {PASTEL_PALETTE.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  aria-label={p.name}
-                  onClick={() => { setNewCourseColor(p.value); setNewCourseTint(p.tint); }}
-                  className="w-7 h-7 rounded-full border-0 transition-transform"
-                  style={{
-                    background: p.value,
-                    boxShadow: newCourseColor === p.value
-                      ? `0 0 0 2px var(--bg), 0 0 0 3.5px ${p.value}`
-                      : 'none',
-                    transform: newCourseColor === p.value ? 'scale(1.1)' : 'scale(1)',
-                  }}
-                />
-              ))}
-            </div>
-
-            <div className="flex items-center gap-3 mb-4">
-              <input
-                type="range"
-                min="1"
-                max="20"
-                step="0.5"
-                value={newCourseGoal}
-                onChange={(e) => setNewCourseGoal(clampWeeklyGoalHours(e.target.value))}
-                className="pl-range flex-1"
-                style={{ color: newCourseColor }}
-              />
-              <span className="font-mono font-semibold text-sm text-ink w-14 text-right">
-                {newCourseGoal}<span className="text-muted ml-1 font-normal">h/wk</span>
-              </span>
-            </div>
-
-            <div className="mt-4 flex gap-2.5">
+            <div className="mt-6 flex gap-2.5">
               <button
                 type="button"
                 onClick={() => setAddingCourse(false)}

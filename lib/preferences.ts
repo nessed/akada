@@ -3,9 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 
 export type PaperTone = 'warm' | 'paper' | 'stone' | 'white';
-// Cormorant is the new editorial default (Akada · Vol. III refined design).
-// Fraunces / Lora / Merriweather remain selectable for users who already
-// prefer them.
+// Fraunces on the Paper tone is the default the app ships in; Cormorant /
+// Lora / Merriweather remain selectable in Appearance.
 export type HeadingFont = 'cormorant' | 'fraunces' | 'lora' | 'merriweather';
 export type Density = 'cozy' | 'comfy' | 'compact';
 export type PrimaryAccent = 'classic' | 'green';
@@ -21,8 +20,8 @@ export interface Preferences {
 }
 
 const DEFAULTS: Preferences = {
-  paperTone: 'warm',
-  headingFont: 'cormorant',
+  paperTone: 'paper',
+  headingFont: 'fraunces',
   density: 'comfy',
   primaryAccent: 'classic',
   dailyReminder: true,
@@ -118,11 +117,11 @@ const PAPER_TONES: Record<
 // We override --font-serif (which Tailwind's font-serif resolves to) so the
 // switch ripples through every heading without per-component changes.
 //
-// `cormorant` (the default) clears the override and lets globals.css's
-// :root rule provide the Cormorant stack.
+// `fraunces` (the default) clears the override and lets globals.css's :root
+// rule provide the Fraunces stack, so the first paint already matches.
 const HEADING_VAR_OVERRIDE: Record<HeadingFont, string | null> = {
-  cormorant: null,
-  fraunces: 'var(--font-fraunces)',
+  fraunces: null,
+  cormorant: 'var(--font-cormorant)',
   lora: 'var(--font-lora)',
   merriweather: 'var(--font-merriweather)',
 };
@@ -157,7 +156,7 @@ function readFromStorage(): Preferences {
 
 export function applyPreferences(prefs: Preferences) {
   if (typeof document === 'undefined') return;
-  const tone = PAPER_TONES[prefs.paperTone] || PAPER_TONES.warm;
+  const tone = PAPER_TONES[prefs.paperTone] || PAPER_TONES[DEFAULTS.paperTone];
   const root = document.documentElement;
   root.style.setProperty('--bg', tone.bg);
   root.style.setProperty('--bg-tint', tone.tint);

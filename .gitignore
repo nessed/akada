@@ -10,3 +10,8 @@ next-env.d.ts
 
 # Local Claude Code settings (contains machine-specific paths)
 .claude/settings.local.json
+
+# Registrar course memo — the source for scripts/build-catalog.py. Kept out of
+# git: it carries instructor notes that need not be published. Drop the term's
+# .xlsx here to regenerate the catalog.
+Fall Semester*.xlsx

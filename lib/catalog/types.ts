@@ -11,9 +11,22 @@
 export interface CatalogSection {
   /** Short label as printed in the catalog, e.g. "L1", "S2". */
   id: string;
+  /**
+   * What kind of meeting this section is — "Lab", "Recitation" — for the
+   * ones that enrol separately from the lecture. Omitted for lectures, which
+   * are the default and would only add noise.
+   */
+  component?: string;
   instructor?: string;
-  /** Human-readable, already formatted, e.g. "Mon/Wed 10:00". */
+  /** Human-readable, already formatted, e.g. "Mon & Wed, 9:30 AM - 10:45 AM". */
   meets?: string;
+  /**
+   * How often the section meets and for how long — "Twice a week - 75 min".
+   * Set only where `meets` is absent, which is most sections: the registrar
+   * publishes a slot on the timetable for a minority of courses, and this is
+   * the nearest thing the rest can say about when they run.
+   */
+  cadence?: string;
 }
 
 export interface CatalogCourse {

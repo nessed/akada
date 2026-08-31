@@ -2,7 +2,9 @@
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogCourse } from '@/lib/catalog';
-import { searchCatalog } from '@/lib/catalog';
+import SectionPicker from '@/components/SectionPicker';
+
+type SearchCatalog = (query: string) => CatalogCourse[];
 
 /** Approximate row height and gutter, used only to decide which way to open. */
 const ROW_HEIGHT = 46;
@@ -16,6 +18,9 @@ interface Props {
   onPick: (course: CatalogCourse | null) => void;
   section: string;
   onSectionChange: (value: string) => void;
+  /** The course's own colour and tint, carried through to the section list. */
+  accent: string;
+  accentTint: string;
   /** Enter with nothing highlighted submits, so the picker is never required. */
   onSubmit: () => void;
   autoFocus?: boolean;
@@ -34,6 +39,8 @@ export default function CourseSearchInput({
   onPick,
   section,
   onSectionChange,
+  accent,
+  accentTint,
   onSubmit,
   autoFocus,
 }: Props) {
@@ -48,13 +55,28 @@ export default function CourseSearchInput({
   // the bottom. Flip it above the input when it wouldn't fit below.
   const [placeAbove, setPlaceAbove] = useState(false);
   const listId = useId();
+  // The term catalog is a few hundred courses, so it is fetched as its own
+  // chunk when this sheet opens rather than shipped with the dashboard.
+  const [searchCatalog, setSearchCatalog] = useState<SearchCatalog | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    import('@/lib/catalog/search').then((module) => {
+      if (live) setSearchCatalog(() => module.searchCatalog);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const results = useMemo(
-    () => (picked ? [] : searchCatalog(query)),
-    [query, picked],
+    () => (picked || !searchCatalog ? [] : searchCatalog(query)),
+    [query, picked, searchCatalog],
   );
 
-  const showList = open && !picked && query.trim().length >= 2;
+  // Until the catalog lands there is nothing to say about the query, and
+  // "not in the catalog" would be a lie for the few milliseconds it takes.
+  const showList = open && !picked && Boolean(searchCatalog) && query.trim().length >= 2;
 
   // Clicking anywhere else closes the list without touching what was typed.
   useEffect(() => {
@@ -195,19 +217,15 @@ export default function CourseSearchInput({
       {picked && (
         <div className="mt-2.5 animate-fade-in">
           {sections.length > 0 ? (
-            <select
+            <SectionPicker
+              // Re-mounts on a different course, so its list opens again.
+              key={picked.code}
+              sections={sections}
               value={section}
-              onChange={(e) => onSectionChange(e.target.value)}
-              aria-label="Section (optional)"
-              className="w-full appearance-none bg-paper border border-line rounded-[10px] px-4 py-3 text-sm text-ink outline-none focus:border-line-strong"
-            >
-              <option value="">Section (optional)</option>
-              {sections.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {[s.id, s.instructor, s.meets].filter(Boolean).join(' · ')}
-                </option>
-              ))}
-            </select>
+              onChange={onSectionChange}
+              accent={accent}
+              accentTint={accentTint}
+            />
           ) : (
             <input
               type="text"

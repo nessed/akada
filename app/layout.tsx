@@ -53,7 +53,7 @@ const merriweather = Merriweather({
   display: 'swap',
 });
 
-// Refined editorial heading face — used as the new default --font-serif.
+// Editorial alternative to the default Fraunces, offered in Appearance.
 const cormorant = Cormorant_Garamond({
   subsets: ['latin'],
   weight: ['400', '500', '600'],

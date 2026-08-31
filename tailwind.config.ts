@@ -51,9 +51,9 @@ const config: Config = {
         prioritySoft: '#A85C42',
       },
       fontFamily: {
-        // Default serif points at the user's --font-serif preference (Cormorant
-        // by default in v2; Fraunces/Lora/Merriweather selectable in Settings).
-        serif: ['var(--font-serif)', 'var(--font-cormorant)', 'Cormorant Garamond', 'Iowan Old Style', 'Georgia', 'serif'],
+        // Default serif points at the user's --font-serif preference (Fraunces
+        // by default; Cormorant/Lora/Merriweather selectable in Appearance).
+        serif: ['var(--font-serif)', 'var(--font-fraunces)', 'Fraunces', 'Iowan Old Style', 'Georgia', 'serif'],
         sans: ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
         hand: ['var(--font-hand)', 'Caveat', 'Patrick Hand', 'cursive'],
