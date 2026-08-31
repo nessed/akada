@@ -44,6 +44,9 @@ const lora = Lora({
   style: ['normal', 'italic'],
   variable: '--font-lora',
   display: 'swap',
+  // Only renders if chosen in Appearance, so it is not worth a preload on
+  // every page load. Same for the other two alternates below.
+  preload: false,
 });
 
 const merriweather = Merriweather({
@@ -52,6 +55,7 @@ const merriweather = Merriweather({
   style: ['normal', 'italic'],
   variable: '--font-merriweather',
   display: 'swap',
+  preload: false,
 });
 
 // Editorial alternative to the default Fraunces, offered in Appearance.
@@ -61,6 +65,7 @@ const cormorant = Cormorant_Garamond({
   style: ['normal', 'italic'],
   variable: '--font-cormorant',
   display: 'swap',
+  preload: false,
 });
 
 // Handwritten marginalia and notes (HandNote primitive, Caveat utility).

@@ -68,7 +68,9 @@ const PAPER_TONES: Record<
     bg: string;
     tint: string;
     paper: string;
+    paper2: string;
     line: string;
+    lineSoft: string;
     lineStrong: string;
     glowA: string;
     glowB: string;
@@ -79,7 +81,9 @@ const PAPER_TONES: Record<
     bg: '#FAF8F2',
     tint: '#F1ECDF',
     paper: '#FFFCF5',
+    paper2: '#FBF7EA',
     line: '#E5DECC',
+    lineSoft: '#EFE9D8',
     lineStrong: '#D7CDB3',
     glowA: 'rgba(190, 170, 120, 0.10)',
     glowB: 'rgba(180, 150, 110, 0.07)',
@@ -88,7 +92,9 @@ const PAPER_TONES: Record<
     bg: '#F5F1E8',
     tint: '#EDE7D8',
     paper: '#FBF8EF',
+    paper2: '#F7F3E6',
     line: '#DDD6C2',
+    lineSoft: '#EAE4D3',
     lineStrong: '#C9C0A8',
     glowA: 'rgba(178, 152, 92, 0.10)',
     glowB: 'rgba(132, 112, 78, 0.08)',
@@ -97,7 +103,9 @@ const PAPER_TONES: Record<
     bg: '#F4F4F1',
     tint: '#EAEAE3',
     paper: '#FFFFFF',
+    paper2: '#FAFAF7',
     line: '#E5E4DE',
+    lineSoft: '#EFEFEA',
     lineStrong: '#D4D2C8',
     glowA: 'rgba(130, 132, 120, 0.08)',
     glowB: 'rgba(110, 112, 104, 0.06)',
@@ -106,7 +114,9 @@ const PAPER_TONES: Record<
     bg: '#FFFFFF',
     tint: '#F2F2F0',
     paper: '#FFFFFF',
+    paper2: '#FBFBFA',
     line: '#E8E5DC',
+    lineSoft: '#F1F0EA',
     lineStrong: '#DDD8CB',
     glowA: 'rgba(180, 180, 170, 0.05)',
     glowB: 'rgba(150, 150, 145, 0.04)',
@@ -161,7 +171,9 @@ export function applyPreferences(prefs: Preferences) {
   root.style.setProperty('--bg', tone.bg);
   root.style.setProperty('--bg-tint', tone.tint);
   root.style.setProperty('--paper', tone.paper);
+  root.style.setProperty('--paper-2', tone.paper2);
   root.style.setProperty('--line', tone.line);
+  root.style.setProperty('--line-soft', tone.lineSoft);
   root.style.setProperty('--line-strong', tone.lineStrong);
   root.style.setProperty('--paper-glow-a', tone.glowA);
   root.style.setProperty('--paper-glow-b', tone.glowB);

@@ -18,7 +18,7 @@ export default function PageShell({ children, hideNav }: Props) {
           the Stats undo toast mirror this exact width so they stay aligned
           with the page; change all four together. */}
       <main
-        className={`mx-auto max-w-2xl md:max-w-3xl px-[22px] md:px-8 ${
+        className={`mx-auto max-w-2xl md:max-w-3xl px-[var(--density-gutter)] md:px-8 ${
           hideNav ? 'pb-8' : 'pb-[120px]'
         } pt-[max(env(safe-area-inset-top),64px)] md:pt-20`}
       >

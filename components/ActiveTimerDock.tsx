@@ -44,7 +44,7 @@ export default function ActiveTimerDock() {
 
   return (
     <div
-      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] z-50 px-[22px] md:px-8 pointer-events-none animate-fade-in"
+      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] z-50 px-[var(--density-gutter)] md:px-8 pointer-events-none animate-fade-in"
     >
       <div className="mx-auto flex max-w-2xl md:max-w-3xl justify-end pointer-events-auto">
         <div

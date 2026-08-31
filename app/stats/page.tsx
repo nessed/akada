@@ -550,7 +550,7 @@ export default function StatsPage() {
 
       {deletedSession && (
         <div
-          className="fixed inset-x-0 z-50 px-[22px] md:px-8 animate-fade-in"
+          className="fixed inset-x-0 z-50 px-[var(--density-gutter)] md:px-8 animate-fade-in"
           style={{ bottom: 'calc(92px + env(safe-area-inset-bottom))' }}
         >
           <div className="mx-auto max-w-2xl md:max-w-3xl">
