@@ -26,7 +26,7 @@ export default function GlobalError({
             justifyContent: 'center',
             padding: 24,
             background: '#F8F5EF',
-            color: '#1A1915',
+            color: '#1A1714',
             fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
           }}
         >
@@ -49,7 +49,7 @@ export default function GlobalError({
                 border: 0,
                 borderRadius: 999,
                 padding: '0 24px',
-                background: '#1A1915',
+                background: '#1A1714',
                 color: '#F8F5EF',
                 fontWeight: 700,
               }}

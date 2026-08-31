@@ -136,9 +136,9 @@ const PRIMARY_ACCENTS: Record<
     tint: 'var(--bg-tint)',
   },
   green: {
-    primary: '#91A884',
+    primary: 'var(--sage)',
     contrast: 'var(--ink)',
-    tint: '#E7EDE1',
+    tint: 'var(--sage-tint)',
   },
 };
 

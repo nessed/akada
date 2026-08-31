@@ -315,11 +315,9 @@ export default function TasksPage() {
                           <button
                             type="button"
                             onClick={() => setDraftHigh((v) => !v)}
-                            className="px-2.5 py-1 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase"
-                            style={{
-                              background: draftHigh ? '#F4DCD2' : 'var(--bg-tint)',
-                              color: draftHigh ? '#A85C42' : 'var(--muted)',
-                            }}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase ${
+                              draftHigh ? 'bg-priorityTint text-prioritySoft' : 'bg-bg-tint text-muted'
+                            }`}
                           >
                             {draftHigh ? '● High' : 'Normal'}
                           </button>
@@ -406,11 +404,9 @@ export default function TasksPage() {
               <button
                 type="button"
                 onClick={() => setEditHigh((v) => !v)}
-                className="px-3 py-2 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase"
-                style={{
-                  background: editHigh ? '#F4DCD2' : 'var(--bg-tint)',
-                  color: editHigh ? '#A85C42' : 'var(--muted)',
-                }}
+                className={`px-3 py-2 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase ${
+                  editHigh ? 'bg-priorityTint text-prioritySoft' : 'bg-bg-tint text-muted'
+                }`}
               >
                 {editHigh ? 'High' : 'Normal'}
               </button>

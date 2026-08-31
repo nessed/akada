@@ -17,7 +17,7 @@ export default function OpengraphImage() {
           flexDirection: 'column',
           justifyContent: 'space-between',
           background: '#FAF8F2',
-          color: '#1A1915',
+          color: '#1A1714',
           padding: '72px 80px',
         }}
       >
@@ -29,8 +29,8 @@ export default function OpengraphImage() {
               justifyContent: 'center',
               width: 64,
               height: 78,
-              border: '3px solid #1A1915',
-              background: '#FFFCF5',
+              border: '3px solid #1A1714',
+              background: '#FBF8EF',
               fontSize: 38,
               fontStyle: 'italic',
               fontWeight: 600,
@@ -72,7 +72,7 @@ export default function OpengraphImage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', width: 300, height: 3, background: '#1A1915' }} />
+          <div style={{ display: 'flex', width: 300, height: 3, background: '#1A1714' }} />
           <div style={{ fontSize: 22, color: '#7A756A' }}>Track. Focus. Review.</div>
         </div>
       </div>

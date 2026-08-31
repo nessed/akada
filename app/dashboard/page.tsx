@@ -541,7 +541,7 @@ export default function DashboardPage() {
                     key={i}
                     className="flex-1"
                     style={{
-                      borderRight: '1px solid rgba(255,252,245,0.55)',
+                      borderRight: '1px solid var(--line-soft)',
                     }}
                   />
                 ))}
@@ -690,11 +690,9 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setNewTaskHigh((v) => !v)}
-                className="px-3 py-2 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase"
-                style={{
-                  background: newTaskHigh ? '#F4DCD2' : 'var(--bg-tint)',
-                  color: newTaskHigh ? '#A85C42' : 'var(--muted)',
-                }}
+                className={`px-3 py-2 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase ${
+                  newTaskHigh ? 'bg-priorityTint text-prioritySoft' : 'bg-bg-tint text-muted'
+                }`}
               >
                 {newTaskHigh ? '● High' : 'Normal'}
               </button>

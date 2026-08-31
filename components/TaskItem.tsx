@@ -39,7 +39,7 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <path
                 d="M2.5 8 Q5 11.5 6.5 12 Q9 9 13.5 3.5"
-                stroke="#FFFCF5"
+                stroke="var(--paper)"
                 strokeWidth="1.8"
                 fill="none"
                 strokeLinecap="round"
@@ -70,8 +70,9 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
             )}
             {due && !task.completed && (
               <span
-                className="text-[11px] font-serif italic"
-                style={{ color: due.tone === 'warn' ? '#B5694C' : 'var(--muted)' }}
+                className={`text-[11px] font-serif italic ${
+                  due.tone === 'warn' ? 'text-warn' : 'text-muted'
+                }`}
               >
                 {due.text}
               </span>

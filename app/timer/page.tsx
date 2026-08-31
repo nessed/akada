@@ -493,7 +493,7 @@ export default function TimerPage() {
             type="button"
             onClick={handleStop}
             className="h-14 px-7 rounded-full text-sm font-semibold inline-flex items-center gap-2 tracking-[0.01em]"
-            style={{ background: course.color, color: '#1A1915' }}
+            style={{ background: course.color, color: 'var(--ink)' }}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="6" width="12" height="12" rx="1" />

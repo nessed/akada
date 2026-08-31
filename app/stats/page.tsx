@@ -110,7 +110,7 @@ export default function StatsPage() {
   const accent =
     filter === 'all'
       ? 'var(--primary)'
-      : courses.find((c) => c.id === filter)?.color || '#1A1915';
+      : courses.find((c) => c.id === filter)?.color || 'var(--ink)';
 
   const totals = useMemo(() => {
     return courses.map((c) => {

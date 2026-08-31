@@ -35,21 +35,29 @@
      usePreferences() when the user picks Cormorant / Lora / Merriweather. */
   --font-serif: var(--font-fraunces), 'Fraunces', 'Iowan Old Style', Georgia, serif;
 
-  /* Course pastel highlighter palette (refined) */
-  --sage: #8FA37E;
-  --sage-tint: #E1E7D5;
-  --rose: #C99090;
-  --rose-tint: #EFD8D6;
-  --lav: #A595BC;
-  --lav-tint: #E0D7EA;
-  --peach: #D9A176;
-  --peach-tint: #F1DAC2;
-  --sky: #93AAB9;
-  --sky-tint: #D7E2EA;
-  --butter: #CFB46F;
-  --butter-tint: #ECDDA9;
-  --mint: #87B59C;
-  --mint-tint: #D2E5D8;
+  /* Course pastel highlighter palette. Mirrors PASTEL_PALETTE in
+     lib/utils.ts, which is what a course is actually coloured with — these
+     are for the places that reach for a pastel without owning a course. */
+  --sage: #A8B89B;
+  --sage-tint: #E9EEE3;
+  --rose: #D4A5A5;
+  --rose-tint: #F1E2E2;
+  --lav: #B5A8C9;
+  --lav-tint: #E8E2F0;
+  --peach: #E2B594;
+  --peach-tint: #F4E1D2;
+  --sky: #A8BCC9;
+  --sky-tint: #E2EAEF;
+  --clay: #C99B7E;
+  --clay-tint: #EFDDCD;
+  --butter: #D9C58C;
+  --butter-tint: #F1E9C9;
+  --mint: #9FC1B0;
+  --mint-tint: #DCEAE2;
+  --slate: #9AA3AB;
+  --slate-tint: #DEE2E6;
+  --mauve: #B89BAA;
+  --mauve-tint: #E8DCE3;
 }
 
 html,

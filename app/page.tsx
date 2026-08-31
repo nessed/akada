@@ -1,11 +1,16 @@
 import Link from 'next/link';
+import { PASTEL_PALETTE } from '@/lib/utils';
+
+// The three sample courses on the landing page, coloured from the real
+// palette so the marketing shot and the app cannot drift apart.
+const [SAGE, ROSE, LAVENDER] = PASTEL_PALETTE;
 
 const sampleCourses = [
   {
     code: 'POL 227',
     name: 'Comparative Politics',
-    color: '#A8B89B',
-    tint: '#E9EEE3',
+    color: SAGE.value,
+    tint: SAGE.tint,
     hours: '3.5',
     goal: '6h',
     pct: 58,
@@ -13,8 +18,8 @@ const sampleCourses = [
   {
     code: 'ENG 305',
     name: 'Modernist Literature',
-    color: '#D4A5A5',
-    tint: '#F1E2E2',
+    color: ROSE.value,
+    tint: ROSE.tint,
     hours: '2.0',
     goal: '5h',
     pct: 40,
@@ -22,8 +27,8 @@ const sampleCourses = [
   {
     code: 'PSY 110',
     name: 'Cognition & Memory',
-    color: '#B5A8C9',
-    tint: '#E8E2F0',
+    color: LAVENDER.value,
+    tint: LAVENDER.tint,
     hours: '4.0',
     goal: '4h',
     pct: 100,
@@ -163,7 +168,7 @@ function ProductPreview() {
               2 tasks due today. 3h 25m logged this week.
             </p>
           </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-[#E2B594] font-serif text-[17px] font-medium">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-peach font-serif text-[17px] font-medium">
             A
           </div>
         </div>
@@ -185,9 +190,9 @@ function ProductPreview() {
               <span className="text-[12px] text-muted">today</span>
             </div>
             <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-bg-tint">
-              <span className="w-[54%] bg-[#A8B89B]" />
-              <span className="w-[28%] bg-[#D4A5A5]" />
-              <span className="w-[18%] bg-[#B5A8C9]" />
+              <span className="w-[54%] bg-sage" />
+              <span className="w-[28%] bg-rose" />
+              <span className="w-[18%] bg-lav" />
             </div>
           </div>
         </div>

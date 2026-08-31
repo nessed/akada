@@ -207,7 +207,7 @@ export default function SettingsSheet({
         <div className="px-[22px] pt-[22px]">
           <div className="flex items-center gap-3.5 rounded-[14px] border border-line bg-paper px-[18px] py-4">
             <label className="relative shrink-0 cursor-pointer">
-              <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-ink/10 bg-[#E2B594] font-serif text-[20px] font-medium text-ink shadow-sm">
+              <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-ink/10 bg-peach font-serif text-[20px] font-medium text-ink">
                 {shownAvatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -450,10 +450,7 @@ function SettingRow({
       } ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
     >
       <div className="min-w-0 flex-1">
-        <p
-          className="m-0 text-sm font-medium"
-          style={{ color: tone === 'warn' ? '#B5694C' : 'var(--ink)' }}
-        >
+        <p className={`m-0 text-sm font-medium ${tone === 'warn' ? 'text-warn' : 'text-ink'}`}>
           {label}
         </p>
         {sub && <p className="mt-0.5 mb-0 text-[11px] text-muted">{sub}</p>}
@@ -858,7 +855,7 @@ function CoursesEditor({
 /* ───────── Appearance editor ───────── */
 
 const PAPER_OPTIONS: { v: PaperTone; l: string; bg: string }[] = [
-  { v: 'warm', l: 'Warm', bg: '#FAFAF6' },
+  { v: 'warm', l: 'Warm', bg: '#FAF8F2' },
   { v: 'paper', l: 'Paper', bg: '#F5F1E8' },
   { v: 'stone', l: 'Stone', bg: '#F4F4F1' },
   { v: 'white', l: 'White', bg: '#FFFFFF' },
@@ -878,8 +875,8 @@ const DENSITY_OPTIONS: { v: Density; l: string }[] = [
 ];
 
 const PRIMARY_OPTIONS: { v: PrimaryAccent; l: string; color: string; tint: string }[] = [
-  { v: 'classic', l: 'Ink', color: '#1A1915', tint: '#F4F2EC' },
-  { v: 'green', l: 'Sage', color: '#91A884', tint: '#E7EDE1' },
+  { v: 'classic', l: 'Ink', color: 'var(--ink)', tint: 'var(--bg-tint)' },
+  { v: 'green', l: 'Sage', color: 'var(--sage)', tint: 'var(--sage-tint)' },
 ];
 
 function AppearanceEditor({
@@ -919,14 +916,11 @@ function AppearanceEditor({
                 <span
                   className="h-[26px] rounded-md border-l-[3px]"
                   style={{
-                    background: 'rgba(0,0,0,0.04)',
-                    borderLeftColor: '#A8B89B',
+                    background: 'var(--bg-tint)',
+                    borderLeftColor: 'var(--sage)',
                   }}
                 />
-                <span
-                  className="font-serif text-[12px] font-medium"
-                  style={{ color: '#1A1915' }}
-                >
+                <span className="font-serif text-[12px] font-medium text-ink">
                   {o.l}
                 </span>
               </button>
