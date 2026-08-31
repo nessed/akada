@@ -10,6 +10,7 @@ import {
 } from 'next/font/google';
 import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
+import NoticeProvider from '@/components/Notice';
 import SWRRoot from '@/components/SWRRoot';
 import TimerDocumentTitle from '@/components/TimerDocumentTitle';
 import { SITE_URL } from '@/lib/site-url';
@@ -106,7 +107,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#FAF8F2',
+  // The shipped default paper tone. Kept in step with --bg in globals.css and
+  // PAPER_TONES.paper, so the browser and PWA chrome match the page.
+  themeColor: '#F5F1E8',
   width: 'device-width',
   initialScale: 1,
   // maximumScale / userScalable are deliberately not set: blocking pinch-zoom
@@ -125,7 +128,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SWRRoot>
           <TimerProvider>
             <TimerDocumentTitle />
-            {children}
+            <NoticeProvider>{children}</NoticeProvider>
           </TimerProvider>
         </SWRRoot>
       </body>

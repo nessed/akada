@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase';
 import { PASTEL_PALETTE } from '@/lib/utils';
 import AkadaMark from '@/components/notebook/AkadaMark';
 import HandNote from '@/components/notebook/HandNote';
+import { useNotice } from '@/components/Notice';
 import {
   addCourseOptimistic,
   createSemesterOptimistic,
@@ -61,6 +62,7 @@ export default function OnboardingPage() {
 
 function OnboardingContent() {
   const router = useRouter();
+  const { notify } = useNotice();
   const searchParams = useSearchParams();
   const newSemesterMode = searchParams.get('newSemester') === '1';
   const setupSteps: Step[] = newSemesterMode ? ['courses', 'routine'] : STEPS;
@@ -227,9 +229,8 @@ function OnboardingContent() {
       await markOnboardingComplete();
       router.replace('/dashboard');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : JSON.stringify(err);
       console.error('Onboarding setup failed:', err);
-      alert('Setup failed: ' + msg);
+      notify(err instanceof Error ? err.message : 'Setup did not finish.');
     }
   }
 
@@ -384,15 +385,17 @@ function NameStep({
   onBack: () => void;
   onNext: () => void;
 }) {
+  const { notify } = useNotice();
+
   function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      alert('Please choose an image file.');
+      notify('That file is not an image.');
       return;
     }
     if (file.size > 6 * 1024 * 1024) {
-      alert('Please choose an image under 6 MB.');
+      notify('That image is over 6 MB.');
       return;
     }
     const reader = new FileReader();

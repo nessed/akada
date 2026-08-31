@@ -28,6 +28,8 @@ import {
 } from '@/lib/preferences';
 import { useTimer } from '@/lib/timer-context';
 import { ButtonSpinner } from './LoadingIndicator';
+import ConfirmSheet from './ConfirmSheet';
+import { useNotice } from './Notice';
 
 type Section = 'overview' | 'profile' | 'courses' | 'semester' | 'appearance';
 
@@ -69,6 +71,9 @@ export default function SettingsSheet({
   const [section, setSection] = useState<Section>('overview');
   const { semester: activeSemester } = useActiveSemester();
   const [prefs, setPrefs] = usePreferences();
+  const { notify } = useNotice();
+  // Which of the two irreversible actions is waiting to be confirmed.
+  const [confirming, setConfirming] = useState<'reset' | 'signOut' | null>(null);
 
   // Reset to overview each time the sheet opens.
   useEffect(() => {
@@ -95,11 +100,11 @@ export default function SettingsSheet({
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      alert('Please choose an image file.');
+      notify('That file is not an image.');
       return;
     }
     if (file.size > 6 * 1024 * 1024) {
-      alert('Please choose an image under 6 MB.');
+      notify('That image is over 6 MB.');
       return;
     }
     const reader = new FileReader();
@@ -132,6 +137,29 @@ export default function SettingsSheet({
 
   return (
     <div className="fixed inset-0 z-[90] animate-fade-in">
+      <ConfirmSheet
+        open={confirming === 'reset'}
+        title="Reset the planner?"
+        body="Every semester, course, task and session goes with it."
+        confirmLabel="Reset"
+        requirePhrase="RESET"
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          setConfirming(null);
+          onResetData?.();
+        }}
+      />
+      <ConfirmSheet
+        open={confirming === 'signOut'}
+        title="Sign out?"
+        confirmLabel="Sign out"
+        cancelLabel="Stay"
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          setConfirming(null);
+          onSignOut?.();
+        }}
+      />
       <button
         type="button"
         aria-label="Close settings"
@@ -290,16 +318,9 @@ export default function SettingsSheet({
                 sub="Start with a clean planner"
                 tone="warn"
                 last
-                onClick={() => {
-                  // A single confirm() is one mistaken tap away from deleting
-                  // everything, so require the word to be typed out.
-                  const typed = prompt(
-                    'This permanently deletes every semester, course, task and study session in your account. It cannot be undone.\n\nType RESET to confirm.',
-                  );
-                  if (typed?.trim().toUpperCase() === 'RESET') {
-                    onResetData?.();
-                  }
-                }}
+                // One mistaken tap away from deleting everything, so the
+                // sheet asks for the word to be typed out.
+                onClick={() => setConfirming('reset')}
               />
             </SettingGroup>
 
@@ -310,9 +331,7 @@ export default function SettingsSheet({
                 label="Sign out"
                 tone="warn"
                 last
-                onClick={() => {
-                  if (confirm('Sign out?')) onSignOut?.();
-                }}
+                onClick={() => setConfirming('signOut')}
               />
             </SettingGroup>
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
+import { useNotice } from '@/components/Notice';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskItem from '@/components/TaskItem';
@@ -26,6 +27,7 @@ type Filter = 'all' | 'today' | 'overdue';
 export default function TasksPage() {
   const router = useRouter();
   const { active, start } = useTimer();
+  const { notify } = useNotice();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
@@ -77,7 +79,7 @@ export default function TasksPage() {
       await toggleTaskOptimistic(t);
     } catch (error) {
       console.error('Failed to update task:', error);
-      alert('Could not update that task.');
+      notify('That task did not update.');
     }
   }
 
@@ -86,7 +88,7 @@ export default function TasksPage() {
       await deleteTaskOptimistic(id);
     } catch (error) {
       console.error('Failed to delete task:', error);
-      alert('Could not delete that task.');
+      notify('That task is still here — it did not delete.');
     }
   }
 
@@ -111,7 +113,7 @@ export default function TasksPage() {
       setEditingTask(null);
     } catch (error) {
       console.error('Failed to save task:', error);
-      alert('Could not save that task.');
+      notify('Those changes did not save.');
     }
   }
 
@@ -143,7 +145,7 @@ export default function TasksPage() {
       setAddingFor(null);
     } catch (error) {
       console.error('Failed to add task:', error);
-      alert('Could not add that task.');
+      notify('That task was not added.');
     }
   }
 

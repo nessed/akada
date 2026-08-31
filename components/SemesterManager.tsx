@@ -8,6 +8,7 @@ import { useSemesters, createSemesterOptimistic, deleteSemesterOptimistic } from
 import { formatHM, seasonLabel, totalSeconds } from '@/lib/utils';
 import { cleanText, isIsoDate } from '@/lib/planner-safety';
 import LoadingIndicator, { ButtonSpinner } from './LoadingIndicator';
+import ConfirmSheet from './ConfirmSheet';
 
 /**
  * Settings → Semester. The active semester is what Dashboard, Tasks and
@@ -23,6 +24,8 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
   const [starting, setStarting] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // The semester waiting on its typed confirmation.
+  const [pendingDelete, setPendingDelete] = useState<Semester | null>(null);
   const [error, setError] = useState('');
 
   const active = semesters.find((s) => s.isActive) ?? null;
@@ -30,30 +33,15 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
 
   async function deleteSemester(semester: Semester) {
     setError('');
-    const confirmed = window.confirm(
-      `Delete ${semester.label}? This permanently removes its courses, tasks, and study sessions.`,
-    );
-    if (!confirmed) return;
-
-    const typed = window.prompt(
-      `This cannot be undone. Type delete this semester to permanently delete ${semester.label}.`,
-    );
-    if (typed !== 'delete this semester') {
-      setError('Semester not deleted. Type the confirmation text exactly to continue.');
-      window.alert('Semester not deleted. Type delete this semester exactly to continue.');
-      return;
-    }
-
     setDeletingId(semester.id);
     try {
       await deleteSemesterOptimistic(semester.id);
       setViewingId(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not delete that semester.';
-      setError(message);
-      window.alert(message);
+      setError(err instanceof Error ? err.message : 'That semester is still here.');
     } finally {
       setDeletingId(null);
+      setPendingDelete(null);
     }
   }
 
@@ -64,7 +52,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
         <SemesterArchive
           semester={semester}
           onBack={() => setViewingId(null)}
-          onDelete={() => deleteSemester(semester)}
+          onDelete={() => setPendingDelete(semester)}
           deleting={deletingId === semester.id}
         />
       );
@@ -82,6 +70,19 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="px-[22px] pt-5 pb-10 app-scroll animate-fade-in">
+      <ConfirmSheet
+        open={pendingDelete !== null}
+        title={pendingDelete ? `Delete ${pendingDelete.label}?` : ''}
+        body="Its courses, tasks and study sessions go with it."
+        confirmLabel="Delete"
+        requirePhrase="delete this semester"
+        busy={deletingId !== null}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) deleteSemester(pendingDelete);
+        }}
+      />
+
       <BackButtonLocal onClick={onBack} />
       <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
         Semester
@@ -124,7 +125,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
       {active && (
         <button
           type="button"
-          onClick={() => deleteSemester(active)}
+          onClick={() => setPendingDelete(active)}
           disabled={deletingId === active.id}
           className="mt-4 w-full min-h-[44px] rounded-xl border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
         >

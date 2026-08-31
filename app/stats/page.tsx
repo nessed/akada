@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
+import { useNotice } from '@/components/Notice';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
@@ -24,6 +25,7 @@ import {
 } from '@/lib/data-hooks';
 
 export default function StatsPage() {
+  const { notify } = useNotice();
   const router = useRouter();
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
@@ -74,7 +76,7 @@ export default function StatsPage() {
       }
     } catch (error) {
       console.error('Failed to delete session:', error);
-      alert('Could not delete that session.');
+      notify('That session is still here — it did not delete.');
     }
   }
 
@@ -96,7 +98,7 @@ export default function StatsPage() {
       });
     } catch (error) {
       console.error('Failed to restore session:', error);
-      alert('Could not restore that session.');
+      notify('That session did not come back.');
     }
   }
 

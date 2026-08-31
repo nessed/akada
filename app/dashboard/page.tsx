@@ -12,6 +12,8 @@ import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
+import ConfirmSheet from '@/components/ConfirmSheet';
+import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
@@ -66,6 +68,7 @@ function SheetField({ label, children }: { label: string; children: React.ReactN
 export default function DashboardPage() {
   const router = useRouter();
   const { active, start, clearTimerState } = useTimer();
+  const { notify } = useNotice();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
@@ -151,6 +154,12 @@ export default function DashboardPage() {
   const [newTaskDue, setNewTaskDue] = useState('');
   const [newTaskHigh, setNewTaskHigh] = useState(false);
 
+  // Set while a running timer stands between a tap and the timer screen.
+  const [pendingTimer, setPendingTimer] = useState<{
+    courseId: string;
+    taskId: string | null;
+  } | null>(null);
+
   const [addingCourse, setAddingCourse] = useState(false);
   // One search box drives the whole thing. `picked` is set only when a
   // catalog suggestion was chosen; everything else is a manual course.
@@ -180,7 +189,7 @@ export default function DashboardPage() {
       setShowSettings(false);
     } catch (err) {
       console.error(err);
-      alert('Failed to update settings');
+      notify('Settings did not save.');
     } finally {
       setUpdatingSettings(false);
     }
@@ -214,40 +223,29 @@ export default function DashboardPage() {
       console.error('Failed to reset data:', err);
       // Navigating on to onboarding after a failed reset tells the user
       // their data is gone when it is all still there.
-      alert('Could not reset your data — nothing was deleted. Please try again.');
+      notify('Nothing was deleted — the reset did not go through.');
       return;
     }
     router.replace('/onboarding');
   }
 
-  function handleStartTimerForTask(task: Task) {
-    if (active) {
-      if (active.courseId !== task.courseId || active.taskId !== task.id) {
-        if (!window.confirm('You have an active timer for another task. Discard it and start a new one?')) {
-          return;
-        }
-        start(task.courseId, task.id);
-      }
-      router.push('/timer');
-      return;
-    }
-    start(task.courseId, task.id);
+  function beginTimer(courseId: string, taskId: string | null) {
+    start(courseId, taskId);
     router.push('/timer');
   }
 
-  function handleStartTimer(courseId: string) {
-    if (active) {
-      if (active.courseId !== courseId || active.taskId !== null) {
-        if (!window.confirm('You have an active timer. Discard it and start a new one?')) {
-          return;
-        }
-        start(courseId, null);
-      }
-      router.push('/timer');
+  function handleStartTimerForTask(task: Task) {
+    handleStartTimer(task.courseId, task.id);
+  }
+
+  function handleStartTimer(courseId: string, taskId: string | null = null) {
+    // A timer already running on something else would be discarded, which is
+    // the one thing here worth stopping to ask about.
+    if (active && (active.courseId !== courseId || active.taskId !== taskId)) {
+      setPendingTimer({ courseId, taskId });
       return;
     }
-    start(courseId, null);
-    router.push('/timer');
+    beginTimer(courseId, taskId);
   }
 
   async function handleToggleTask(id: string) {
@@ -257,7 +255,7 @@ export default function DashboardPage() {
       await toggleTaskOptimistic(task);
     } catch (error) {
       console.error('Failed to update task:', error);
-      alert('Could not update that task.');
+      notify('That task did not update.');
     }
   }
 
@@ -277,7 +275,7 @@ export default function DashboardPage() {
       setNewTaskHigh(false);
     } catch (error) {
       console.error('Failed to add task:', error);
-      alert('Could not add that task.');
+      notify('That task was not added.');
     }
   }
 
@@ -355,7 +353,7 @@ export default function DashboardPage() {
     const draft = resolveNewCourse();
     if (!draft.code || !draft.name) return;
     if (courses.some((course) => cleanCourseCode(course.code) === draft.code)) {
-      alert('That course code already exists.');
+      notify(`${draft.code} is already on your list.`);
       return;
     }
     try {
@@ -370,7 +368,7 @@ export default function DashboardPage() {
       console.error('Failed to add course:', error);
       // Surface the real reason — most often a duplicate course code the
       // database rejected, which the user can act on.
-      alert(error instanceof Error ? error.message : 'Could not add that course.');
+      notify(error instanceof Error ? error.message : 'That course was not added.');
     }
   }
 
@@ -866,6 +864,19 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      <ConfirmSheet
+        open={pendingTimer !== null}
+        title="Start this one instead?"
+        body="The timer already running will be discarded."
+        confirmLabel="Start"
+        cancelLabel="Keep going"
+        onCancel={() => setPendingTimer(null)}
+        onConfirm={() => {
+          if (pendingTimer) beginTimer(pendingTimer.courseId, pendingTimer.taskId);
+          setPendingTimer(null);
+        }}
+      />
+
       <SettingsSheet
         open={showSettings}
         updating={updatingSettings}

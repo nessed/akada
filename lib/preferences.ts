@@ -137,7 +137,7 @@ const PRIMARY_ACCENTS: Record<
   },
   green: {
     primary: '#91A884',
-    contrast: '#1A1915',
+    contrast: 'var(--ink)',
     tint: '#E7EDE1',
   },
 };
