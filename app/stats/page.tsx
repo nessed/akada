@@ -208,7 +208,7 @@ export default function StatsPage() {
       {/* Vol. III editorial header */}
       <header className="mb-[18px]">
         <div className="flex items-center justify-between gap-3">
-          <p className="m-0 text-[10px] tracking-[0.18em] uppercase text-muted font-semibold">
+          <p className="eyebrow m-0 text-muted">
             Vol. III · {semesterLabel}
           </p>
           {semesterWeekMark && (
@@ -380,7 +380,7 @@ export default function StatsPage() {
                   />
                   <div className="min-w-0">
                     <p
-                      className="m-0 text-[10px] font-semibold tracking-[0.14em] uppercase"
+                      className="eyebrow m-0"
                       style={{ color: course.color }}
                     >
                       {course.code}
@@ -596,7 +596,7 @@ function KpiCell({
         borderLeft: border ? '1px solid var(--line)' : 'none',
       }}
     >
-      <p className="m-0 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted">
+      <p className="eyebrow m-0 text-muted">
         {label}
       </p>
       <p className="mt-1.5 mb-0 font-mono font-semibold text-[22px] leading-none tracking-[-0.02em] tabular-nums">
@@ -687,7 +687,7 @@ function SessionItem({ session, course, onDelete }: { session: Session; course?:
               className="h-2 w-2 shrink-0 rounded-full"
               style={{ background: course?.color || 'var(--muted)' }}
             />
-            <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+            <p className="eyebrow m-0 text-muted">
               {course?.code || 'Course'} · {formatRelativeDate(session.date)}
             </p>
           </div>

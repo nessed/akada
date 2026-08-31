@@ -153,7 +153,7 @@ export default function DatePicker({
                   year: 'numeric',
                 })}
               </p>
-              <p className="mt-0.5 mb-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <p className="eyebrow mt-0.5 mb-0 text-muted">
                 due date
               </p>
             </div>

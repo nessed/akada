@@ -234,7 +234,7 @@ export default function AuthPage() {
             <p className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em] leading-none">
               Akada
             </p>
-            <p className="mt-1 mb-0 text-[10px] tracking-[0.22em] uppercase text-muted font-semibold">
+            <p className="eyebrow mt-1 mb-0 text-muted">
               Study Planner
             </p>
           </div>
@@ -418,7 +418,7 @@ function Mark({ size = 34 }: { size?: number }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
+      <label className="eyebrow block text-muted mb-2">
         {label}
       </label>
       {children}

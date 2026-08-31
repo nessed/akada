@@ -178,7 +178,7 @@ export default function SettingsSheet({
 
         <header className="flex items-center justify-between px-[22px] pt-[18px]">
           <div>
-            <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+            <p className="eyebrow m-0 text-muted">
               Study planner
             </p>
             <h2 className="mt-1 mb-0 font-serif text-[26px] font-medium tracking-[-0.02em]">
@@ -402,7 +402,7 @@ function StatChip({ label, value }: { label: string; value: string }) {
       <p className="m-0 font-mono text-[15px] font-semibold tracking-[-0.01em] tabular-nums">
         {value}
       </p>
-      <p className="mt-0.5 mb-0 text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">
+      <p className="eyebrow mt-0.5 mb-0 text-muted">
         {label}
       </p>
     </div>
@@ -418,7 +418,7 @@ function SettingGroup({
 }) {
   return (
     <div className="mt-6">
-      <p className="ml-1 mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+      <p className="eyebrow ml-1 mb-2 text-muted">
         {label}
       </p>
       <div className="overflow-hidden rounded-xl border border-line bg-paper">
@@ -557,7 +557,7 @@ function ProfileEditor({
       </h3>
 
       <div className="mt-5">
-        <label className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted mb-2">
+        <label className="eyebrow block text-muted mb-2">
           Display name
         </label>
         <input
@@ -747,7 +747,7 @@ function CoursesEditor({
                 value={c.code}
                 onChange={(e) => update(i, { code: e.target.value.toUpperCase() })}
                 placeholder="CODE"
-                className="w-[84px] bg-transparent border-0 border-b border-line py-1 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] outline-none"
+                className="eyebrow w-[84px] bg-transparent border-0 border-b border-line py-1 px-0.5 outline-none"
                 style={{ color: c.color }}
               />
               <input
@@ -790,7 +790,7 @@ function CoursesEditor({
             </div>
 
             <div className="mt-3 flex items-center gap-3">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+              <span className="eyebrow text-muted">
                 Goal
               </span>
               <input
@@ -896,7 +896,7 @@ function AppearanceEditor({
       </h3>
 
       <div className="mt-5">
-        <p className="ml-1 mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <p className="eyebrow ml-1 mb-2.5 text-muted">
           Paper tone
         </p>
         <div className="grid grid-cols-2 gap-2.5">
@@ -930,7 +930,7 @@ function AppearanceEditor({
       </div>
 
       <div className="mt-6">
-        <p className="ml-1 mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <p className="eyebrow ml-1 mb-2.5 text-muted">
           Primary color
         </p>
         <div className="grid grid-cols-2 gap-2.5">
@@ -963,7 +963,7 @@ function AppearanceEditor({
       </div>
 
       <div className="mt-6">
-        <p className="ml-1 mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <p className="eyebrow ml-1 mb-2.5 text-muted">
           Heading font
         </p>
         <div className="flex gap-2">
@@ -996,7 +996,7 @@ function AppearanceEditor({
       </div>
 
       <div className="mt-6">
-        <p className="ml-1 mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <p className="eyebrow ml-1 mb-2.5 text-muted">
           Density
         </p>
         <div className="flex gap-2">

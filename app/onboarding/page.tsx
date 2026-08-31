@@ -630,7 +630,7 @@ function CoursesStep({
           />
           <div className="py-[18px] pl-6 pr-5">
             <p
-              className="m-0 text-[10px] font-semibold tracking-[0.14em] uppercase"
+              className="eyebrow m-0"
               style={{ color: editing.color }}
             >
               {editing.code || 'COURSE CODE'}
@@ -769,7 +769,7 @@ function SemesterStep({
         })}
 
         <div className="mt-4 py-5 px-[22px] bg-paper rounded-[14px] border border-line">
-          <p className="m-0 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted">
+          <p className="eyebrow m-0 text-muted">
             Term length
           </p>
           <p className="mt-1.5 mb-0 font-serif font-medium italic text-[22px]">
@@ -876,7 +876,7 @@ function RoutineStep({
                 }}
               >
                 <p
-                  className="m-0 text-[9px] font-semibold tracking-[0.08em] uppercase leading-none"
+                  className="eyebrow m-0 leading-none tracking-[0.08em]"
                   style={{ color: active ? 'var(--ink)' : 'var(--muted-soft)' }}
                 >
                   {t.label}
@@ -892,7 +892,7 @@ function RoutineStep({
 
         {/* Summary card */}
         <div className="py-5 px-[22px] bg-paper rounded-[14px] border border-line">
-          <p className="m-0 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted">
+          <p className="eyebrow m-0 text-muted">
             Your plan
           </p>
           <p className="mt-1.5 mb-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
@@ -947,7 +947,7 @@ function GoalGuidance({ hours, color, tint }: { hours: number; color: string; ti
               }}
             >
               <p
-                className="m-0 text-[9px] font-semibold tracking-[0.08em] uppercase leading-none"
+                className="eyebrow m-0 leading-none tracking-[0.08em]"
                 style={{ color: active ? color : 'var(--muted-soft)' }}
               >
                 {t.label}
@@ -967,7 +967,7 @@ function GoalGuidance({ hours, color, tint }: { hours: number; color: string; ti
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[11px] font-semibold tracking-[0.12em] uppercase text-muted mb-2.5">
+      <label className="eyebrow block text-muted mb-2.5">
         {label}
       </label>
       {children}

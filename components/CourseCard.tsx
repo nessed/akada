@@ -60,7 +60,7 @@ export default function CourseCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p
-              className="m-0 text-[10px] font-semibold tracking-[0.16em] uppercase"
+              className="eyebrow m-0"
               style={{ color: course.color }}
             >
               {course.code}

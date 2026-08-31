@@ -92,7 +92,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
       </p>
 
       <div className="mt-5">
-        <p className="ml-1 mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <p className="eyebrow ml-1 mb-2 text-muted">
           Active
         </p>
         {active ? (
@@ -137,7 +137,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
 
       {past.length > 0 && (
         <div className="mt-6">
-          <p className="ml-1 mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+          <p className="eyebrow ml-1 mb-2 text-muted">
             Past semesters
           </p>
           <div className="overflow-hidden rounded-xl border border-line bg-paper">
@@ -246,7 +246,7 @@ function StartSemesterForm({
 
       <div className="mt-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="m-0 text-[10px] font-semibold tracking-[0.16em] uppercase text-muted">
+          <p className="eyebrow m-0 text-muted">
             Term presets
           </p>
           <span className="text-[11px] font-serif italic text-primary">Suggested for today</span>
@@ -286,7 +286,7 @@ function StartSemesterForm({
       </div>
 
       <div className="mt-5">
-        <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
+        <label className="eyebrow block text-muted mb-2">
           Name
         </label>
         <input
@@ -312,7 +312,7 @@ function StartSemesterForm({
         <>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
+              <label className="eyebrow block text-muted mb-2">
                 Start
               </label>
               <input
@@ -326,7 +326,7 @@ function StartSemesterForm({
               />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2">
+              <label className="eyebrow block text-muted mb-2">
                 End
               </label>
               <input
@@ -472,7 +472,7 @@ function SemesterArchive({
         courses && (
           <>
             <div className="mt-5 rounded-xl border border-line bg-paper px-4 py-3.5">
-              <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+              <p className="eyebrow m-0 text-muted">
                 Total logged
               </p>
               <p className="mt-1 mb-0 font-mono font-semibold text-[22px] text-ink">
@@ -480,7 +480,7 @@ function SemesterArchive({
               </p>
             </div>
 
-            <p className="mt-5 ml-1 mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+            <p className="eyebrow mt-5 ml-1 mb-2 text-muted">
               Courses
             </p>
             {courses.length === 0 ? (
@@ -501,7 +501,7 @@ function SemesterArchive({
                       style={{ background: c.color }}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                      <p className="eyebrow m-0 text-muted">
                         {c.code}
                       </p>
                       <p className="mt-0.5 mb-0 text-sm font-medium text-ink truncate">

@@ -18,7 +18,7 @@ export default function AppError({
   return (
     <div className="min-h-[100dvh] bg-bg flex items-center justify-center px-6">
       <div className="w-full max-w-sm text-center">
-        <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <p className="eyebrow m-0 text-muted">
           Something went wrong
         </p>
         <h1 className="mt-3 mb-0 font-serif text-[30px] font-medium tracking-[-0.02em] text-ink">

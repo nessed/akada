@@ -182,7 +182,7 @@ export default function TasksPage() {
   return (
     <PageShell>
       <header className="mb-[18px]">
-        <p className="m-0 text-[11px] tracking-[0.18em] uppercase text-muted font-semibold">
+        <p className="eyebrow m-0 text-muted">
           The list
         </p>
         <h1 className="mt-1.5 mb-0 font-serif font-medium text-[36px] tracking-[-0.025em] leading-[1.05]">
@@ -261,7 +261,7 @@ export default function TasksPage() {
                   style={{ background: course.color }}
                 />
                 <span
-                  className="text-[10px] font-semibold tracking-[0.16em] uppercase"
+                  className="eyebrow"
                   style={{ color: course.color }}
                 >
                   {course.code}

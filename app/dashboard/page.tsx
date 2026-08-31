@@ -57,7 +57,7 @@ import {
 function SheetField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-2.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+      <label className="eyebrow mb-2.5 block text-muted">
         {label}
       </label>
       {children}
@@ -435,7 +435,7 @@ export default function DashboardPage() {
       {/* Journal header */}
       <header className="mb-[22px] flex items-start justify-between gap-3.5">
         <div className="min-w-0 flex-1">
-          <p className="m-0 flex items-baseline gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+          <p className="eyebrow m-0 flex items-baseline gap-2 font-mono text-muted">
             <span>Wk {String(weekOfYear).padStart(2, '0')}</span>
             <span className="opacity-45">·</span>
             <span>{weekdayLabel}</span>
@@ -517,7 +517,7 @@ export default function DashboardPage() {
         <section className="mt-3 py-2">
           <div className="flex items-baseline justify-between gap-3">
             <div>
-              <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+              <p className="eyebrow m-0 text-muted">
                 Semester
               </p>
               <h2 className="mt-1 mb-0 font-serif text-[18px] font-medium tracking-[-0.01em]">
@@ -572,7 +572,7 @@ export default function DashboardPage() {
               Due today
             </h2>
             {overdueCount > 0 && (
-              <span className="rounded-full bg-priorityTint px-2 py-[3px] text-[10px] font-semibold uppercase tracking-[0.06em] text-prioritySoft">
+              <span className="eyebrow rounded-full bg-priorityTint px-2 py-[3px] text-prioritySoft tracking-[0.06em]">
                 {overdueCount} overdue
               </span>
             )}
@@ -656,7 +656,7 @@ export default function DashboardPage() {
               const course = courses.find((c) => c.id === addingTaskFor);
               return course ? (
                 <p
-                  className="m-0 text-[11px] font-semibold tracking-[0.16em] uppercase"
+                  className="eyebrow m-0"
                   style={{ color: course.color }}
                 >
                   {course.code}
@@ -824,7 +824,7 @@ export default function DashboardPage() {
                   />
                   <div className="py-3.5 pl-5 pr-4">
                     <p
-                      className="m-0 text-[10px] font-semibold tracking-[0.14em] uppercase"
+                      className="eyebrow m-0"
                       style={{ color: newCourseColor }}
                     >
                       {draftCourse.code}
@@ -975,7 +975,7 @@ function EmptyPanel({
       <button
         type="button"
         onClick={onAction}
-        className="mt-4 inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-1.5 text-[11px] font-medium text-muted-soft transition-colors hover:border-line-strong hover:text-ink uppercase tracking-[0.04em]"
+        className="eyebrow mt-4 inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-1.5 text-muted-soft transition-colors hover:border-line-strong hover:text-ink tracking-[0.04em]"
       >
         <span aria-hidden className="text-[14px] leading-none font-light">+</span>
         {action}
@@ -1031,7 +1031,7 @@ function DashboardTaskItem({ task, course, isLast, onToggle, onStartTimer }: { t
           <button
             type="button"
             onClick={() => onStartTimer(task)}
-            className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.04em]"
+            className="eyebrow shrink-0 rounded-full px-2.5 py-1 tracking-[0.04em]"
             style={{
               background: course.tint || 'var(--bg-tint)',
               color: 'var(--ink)',

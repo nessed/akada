@@ -79,7 +79,7 @@ export default function LandingPage() {
                 <p className="m-0 font-serif text-[22px] font-medium leading-none tracking-[-0.02em]">
                   Akada
                 </p>
-                <p className="mt-1 mb-0 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted">
+                <p className="eyebrow mt-1 mb-0 text-muted">
                   Study Planner
                 </p>
               </div>
@@ -101,7 +101,7 @@ export default function LandingPage() {
           </header>
 
           <div className="mx-auto mt-14 max-w-3xl text-center sm:mt-16">
-            <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
+            <p className="eyebrow m-0 text-muted">
               Courses, tasks, timer, progress
             </p>
             <h1 className="mt-4 mb-0 font-serif text-[48px] font-medium leading-[0.98] tracking-[-0.03em] sm:text-[66px]">
@@ -158,7 +158,7 @@ function ProductPreview() {
       <div className="overflow-hidden rounded-[22px] border border-line bg-bg">
         <div className="flex items-start justify-between gap-3 px-5 pt-5">
           <div>
-            <p className="m-0 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+            <p className="eyebrow m-0 font-mono text-muted">
               Wk 17
             </p>
             <h2 className="mt-1 mb-0 font-serif text-[30px] font-normal leading-none tracking-[-0.02em]">
@@ -211,7 +211,7 @@ function ProductPreview() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p
-                      className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em]"
+                      className="eyebrow m-0"
                       style={{ color: course.color }}
                     >
                       {course.code}

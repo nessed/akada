@@ -315,7 +315,7 @@ export default function TimerPage() {
 
         {course && (
           <div className="flex items-center gap-1.5 rounded-full border border-line bg-paper py-1.5 pl-3 pr-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+            <span className="eyebrow text-muted">
               Goal
             </span>
             {[25, 50, 90].map((goal) => (
@@ -340,7 +340,7 @@ export default function TimerPage() {
         {course && (
           <>
             <p
-              className="m-0 text-[11px] font-semibold tracking-[0.22em] uppercase"
+              className="eyebrow m-0"
               style={{ color: course.color }}
             >
               {course.code}
@@ -418,7 +418,9 @@ export default function TimerPage() {
                   {formatHHMMSS(actualSeconds)}
                 </div>
                 <p
-                  className={`mt-3.5 mb-0 text-[11px] tracking-[0.24em] uppercase text-muted font-semibold ${
+                  // Wider than the caption spec on purpose: this one sits
+                  // under the timer as display type, not as a label.
+                  className={`eyebrow mt-3.5 mb-0 tracking-[0.24em] ${
                     isPaused ? '' : 'animate-tick'
                   }`}
                 >

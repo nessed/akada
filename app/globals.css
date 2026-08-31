@@ -161,6 +161,20 @@ input[type='date']::-webkit-calendar-picker-indicator {
   mix-blend-mode: multiply;
 }
 
+/* The uppercase caption used for section headers, field labels and course
+   codes. One spec, so the same idea reads the same everywhere; anything set
+   alongside it (a colour, a mono family) still wins, because Tailwind's
+   utilities layer comes after this one. */
+@layer components {
+  .eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+  }
+}
+
 /* Faint ruled-paper lines (used on auth, onboarding atmospheres) */
 .ruled {
   background-image: repeating-linear-gradient(

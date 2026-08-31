@@ -77,7 +77,7 @@ export default function SessionLogModal({
             style={{ background: course.color }}
           />
           <p
-            className="m-0 text-[10px] font-semibold tracking-[0.16em] uppercase"
+            className="eyebrow m-0"
             style={{ color: course.color }}
           >
             {course.code} · {course.name}
@@ -100,7 +100,7 @@ export default function SessionLogModal({
         )}
 
         <div className="mt-4">
-          <p className="m-0 mb-2 text-[10px] font-semibold tracking-[0.16em] uppercase text-muted">
+          <p className="eyebrow m-0 mb-2 text-muted">
             What did you do?
           </p>
           <textarea

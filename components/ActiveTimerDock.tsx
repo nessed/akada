@@ -65,7 +65,7 @@ export default function ActiveTimerDock() {
           />
 
           <div className="min-w-0">
-            <p className="m-0 max-w-[74px] truncate text-[9px] font-semibold uppercase tracking-[0.14em]" style={{ color }}>
+            <p className="eyebrow m-0 max-w-[74px] truncate" style={{ color }}>
               {code}
             </p>
             <p className="m-0 font-mono text-[13px] font-semibold leading-[1.15] tabular-nums text-ink">

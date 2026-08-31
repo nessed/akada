@@ -125,7 +125,7 @@ export default function ResetPasswordPage() {
           <div>
             <label
               htmlFor="new-password"
-              className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2"
+              className="eyebrow block text-muted mb-2"
             >
               New password
             </label>
@@ -143,7 +143,7 @@ export default function ResetPasswordPage() {
           <div>
             <label
               htmlFor="confirm-password"
-              className="block text-[10px] font-semibold tracking-[0.16em] uppercase text-muted mb-2"
+              className="eyebrow block text-muted mb-2"
             >
               Confirm password
             </label>
