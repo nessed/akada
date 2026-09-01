@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
@@ -27,6 +27,14 @@ import {
 type Filter = 'all' | 'today' | 'overdue';
 
 export default function TasksPage() {
+  return (
+    <Suspense fallback={<TasksPageFallback />}>
+      <TasksPageContent />
+    </Suspense>
+  );
+}
+
+function TasksPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { active, start } = useTimer();
@@ -482,6 +490,14 @@ export default function TasksPage() {
           </div>
         </div>
       )}
+    </PageShell>
+  );
+}
+
+function TasksPageFallback() {
+  return (
+    <PageShell>
+      <LoadingIndicator compact label="Loading your tasks" className="mb-6" />
     </PageShell>
   );
 }
