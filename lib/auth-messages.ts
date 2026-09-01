@@ -36,7 +36,7 @@ export function friendlyAuthError(
     return 'That email and password combination is not right.';
   }
   if (message.includes('email not confirmed')) {
-    return 'Please confirm your email address first — check your inbox for the link.';
+    return 'Please confirm your email address first, check your inbox for the link.';
   }
   if (
     message.includes('already registered') ||

@@ -8,7 +8,7 @@ import HandCheck from '@/components/notebook/HandCheck';
 import { ButtonSpinner } from './LoadingIndicator';
 
 // Quick-reflection tag chips. Tapping appends `#tag` into the note so the
-// data shape stays the same — no schema migration needed for this flourish.
+// data shape stays the same, no schema migration needed for this flourish.
 const REFLECTION_TAGS = ['focused', 'distracted', 'reading', 'writing', 'practice'];
 
 interface Props {
@@ -41,7 +41,7 @@ export default function SessionLogModal({
   if (!open || !course) return null;
   const canSave = isLoggableDuration(durationSeconds) && !saving;
   const safeSeconds = clampSessionSeconds(durationSeconds);
-  // Big mono digits — same `00:48:23` shape as the timer ring so the user sees
+  // Big mono digits, same `00:48:23` shape as the timer ring so the user sees
   // the same number style they were watching mid-session.
   const totalMinutes = Math.floor(safeSeconds / 60);
   const seconds = safeSeconds % 60;

@@ -204,7 +204,7 @@ export default function SettingsSheet({
           </button>
         </header>
 
-        {/* Profile card — always visible */}
+        {/* Profile card, always visible */}
         <div className="px-[22px] pt-[22px]">
           <div className="flex items-center gap-3.5 rounded-[14px] border border-line bg-paper px-[18px] py-4">
             <label className="relative shrink-0 cursor-pointer">

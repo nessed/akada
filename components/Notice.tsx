@@ -14,7 +14,7 @@ import {
  * The app's way of saying something went wrong.
  *
  * It replaces `alert()`, which is unstyleable operating-system chrome in a
- * system font — the loudest thing that could appear on a page made of paper,
+ * system font, the loudest thing that could appear on a page made of paper,
  * and it blocks the thread while it sits there. This is a quiet slip of paper
  * that slides in above the nav, says one sentence, and leaves on its own.
  */
@@ -58,7 +58,7 @@ export default function NoticeProvider({ children }: { children: React.ReactNode
       {children}
       {message && (
         <div
-          // Above the bottom nav and the floating dock, below the sheets —
+          // Above the bottom nav and the floating dock, below the sheets:
           // a sheet that reports its own failure has to stay on top of this.
           className="pointer-events-none fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[75] flex justify-center px-[22px]"
           role="status"

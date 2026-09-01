@@ -3,7 +3,7 @@ export type { CatalogCourse, CatalogSection } from './types';
 /**
  * The light half of the catalog: everything here is safe to import eagerly.
  * The term data and the search over it live in `./search`, which the picker
- * pulls in on demand — keep this module free of any import from there.
+ * pulls in on demand, keep this module free of any import from there.
  */
 
 /**

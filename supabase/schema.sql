@@ -1,5 +1,5 @@
 -- ============================================================================
--- Akada — Supabase schema (source of truth)
+-- Akada. Supabase schema (source of truth)
 --
 -- Run this whole file in the Supabase SQL Editor (Dashboard > SQL Editor >
 -- New query). It is idempotent: safe to run against a fresh project and safe
@@ -171,8 +171,7 @@ alter table user_settings add column if not exists avatar_url       text    not 
 
 -- Which semester new courses, tasks and study sessions go into. The
 -- Dashboard, Tasks and Timer pages always operate on this one; switching it
--- (lib/data/*.ts: createSemester) is how "start a new semester" works —
--- everything from the old semester stays exactly where it was, just no
+-- (lib/data/*.ts: createSemester) is how "start a new semester" works, -- everything from the old semester stays exactly where it was, just no
 -- longer the default view. Past semesters are reachable read-only from
 -- Settings → Semester.
 alter table user_settings add column if not exists active_semester_id uuid;
@@ -213,8 +212,7 @@ where us.active_semester_id is null
 
 -- Going forward: a task or session always inherits its semester_id from the
 -- course it belongs to, so the app never has to compute or pass it. This is
--- what keeps addTask/addSession unchanged in lib/data/supabase-adapter.ts —
--- only the *reads* needed to learn about semesters at all.
+-- what keeps addTask/addSession unchanged in lib/data/supabase-adapter.ts, -- only the *reads* needed to learn about semesters at all.
 create or replace function akada_set_semester_from_course()
 returns trigger
 language plpgsql
@@ -245,7 +243,7 @@ create trigger sessions_set_semester_id
 -- performance advisor asks for under "auth_rls_initplan".
 --
 -- Semester scoping (which rows a query returns) is enforced entirely in the
--- application query layer, same as any other filter — these policies only
+-- application query layer, same as any other filter, these policies only
 -- ever decide ownership (whose rows these are), same as before.
 -- ============================================================
 drop policy if exists "Users manage own courses"  on courses;
@@ -306,8 +304,7 @@ create index if not exists user_settings_active_semester_id_idx on user_settings
 -- 9. DATA INTEGRITY CONSTRAINTS
 -- ============================================================
 
--- Course codes are unique per user *within a semester*, case-insensitively —
--- scoped to semester_id rather than globally, because reusing a code like
+-- Course codes are unique per user *within a semester*, case-insensitively, -- scoped to semester_id rather than globally, because reusing a code like
 -- CS101 every term is normal. lib/planner-safety.ts checks this client-side
 -- too, but nothing stopped two tabs or a later "add course" from creating
 -- CS101 twice in the same semester.

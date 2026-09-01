@@ -90,7 +90,7 @@ export default function TasksPage() {
       await deleteTaskOptimistic(id);
     } catch (error) {
       console.error('Failed to delete task:', error);
-      notify('That task is still here — it did not delete.');
+      notify('That task is still here. It did not delete.');
     }
   }
 
@@ -348,7 +348,7 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Hand-pinned reminder at the end of the list — only shows when a real
+      {/* Hand-pinned reminder at the end of the list, only shows when a real
           list exists, so it doesn't interrupt empty states. */}
       {courses.length > 0 && visibleTasks.length > 0 && filter === 'all' && (
         <div className="mt-7 flex justify-end pr-3">

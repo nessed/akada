@@ -59,7 +59,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     if (!pendingLog) return;
     setSaveError('');
     if (!online) {
-      setSaveError('Offline — kept on this device.');
+      setSaveError('Offline. Kept on this device.');
       return;
     }
     const durationSeconds = clampSessionSeconds(pendingLog.durationSeconds);
@@ -81,7 +81,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       onResolved?.();
     } catch (error) {
       console.error('Failed to save session:', error);
-      setSaveError('Did not save — kept on this device.');
+      setSaveError('Did not save. Kept on this device.');
     } finally {
       setSaving(false);
     }
@@ -110,7 +110,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       errorMessage={
         saveError ||
         (!online && pendingLog
-          ? 'Offline — kept on this device.'
+          ? 'Offline. Kept on this device.'
           : '')
       }
       onCancel={handleDiscard}

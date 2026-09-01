@@ -26,16 +26,16 @@
   --paper-glow-a: rgba(178, 152, 92, 0.10);
   --paper-glow-b: rgba(132, 112, 78, 0.08);
 
-  /* Highlighter swipe colors — uneven, lifted off the line */
+  /* Highlighter swipe colors, uneven, lifted off the line */
   --highlight-yellow: rgba(228, 197, 92, 0.42);
   --highlight-pink: rgba(214, 132, 132, 0.32);
   --highlight-mint: rgba(135, 181, 156, 0.36);
 
-  /* Default heading typeface — Fraunces. Overridden at runtime by
+  /* Default heading typeface. Fraunces. Overridden at runtime by
      usePreferences() when the user picks Cormorant / Lora / Merriweather. */
   --font-serif: var(--font-fraunces), 'Fraunces', 'Iowan Old Style', Georgia, serif;
 
-  /* Alarm ramp — muted terracottas, never red. `warn` is the quiet tone
+  /* Alarm ramp, muted terracottas, never red. `warn` is the quiet tone
      (an overdue date, a course gone untouched); `priority` is for errors,
      high-priority marks and destructive actions. */
   --warn: #B5694C;
@@ -46,7 +46,7 @@
   --priority-tint: #F4DCD2;
 
   /* Course pastel highlighter palette. Mirrors PASTEL_PALETTE in
-     lib/utils.ts, which is what a course is actually coloured with — these
+     lib/utils.ts, which is what a course is actually coloured with, these
      are for the places that reach for a pastel without owning a course. */
   --sage: #A8B89B;
   --sage-tint: #E9EEE3;
@@ -96,7 +96,7 @@ input[type='number'] {
   -moz-appearance: textfield;
 }
 
-/* Density — the one preference that has to reach past a colour token.
+/* Density, the one preference that has to reach past a colour token.
    Comfy is the shipped middle; cozy opens the page up, compact closes it.
    Read by PageShell's gutter and the space between stacked cards. */
 :root,
@@ -116,7 +116,7 @@ input[type='number'] {
   --density-section: 24px;
 }
 
-/* Scrollbars are hidden everywhere, not only on WebKit — Firefox needs its
+/* Scrollbars are hidden everywhere, not only on WebKit. Firefox needs its
    own property, and it was previously set on .app-scroll alone. */
 html,
 body {
@@ -141,7 +141,7 @@ button,
   touch-action: manipulation;
 }
 
-/* Range slider — notebook style; thumb slightly larger for touch targets */
+/* Range slider, notebook style; thumb slightly larger for touch targets */
 input[type='range'].pl-range {
   -webkit-appearance: none;
   appearance: none;
@@ -180,13 +180,13 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   Refined notebook utilities — paper noise, deckle cards, highlighter
+   Refined notebook utilities, paper noise, deckle cards, highlighter
    swipes, hand-drawn checkboxes, sticky notes, swipe-affordances, etc.
    These mirror the tokens in the Akada Refined design bundle so future
    handoffs stay on-theme.
    ────────────────────────────────────────────────────────────────────── */
 
-/* Subtle paper noise overlay — drop into a relative ancestor as
+/* Subtle paper noise overlay, drop into a relative ancestor as
    <span aria-hidden className="paper-noise"/> when you want texture
    without re-rendering the whole bg. */
 .paper-noise {
@@ -213,7 +213,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* Anyone who has asked their system for less movement gets the app without
-   it — including the tick, which otherwise pulses for a whole session. */
+   it, including the tick, which otherwise pulses for a whole session. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -236,7 +236,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   );
 }
 
-/* Highlighter swipe — sits below text baseline, slightly off-square */
+/* Highlighter swipe, sits below text baseline, slightly off-square */
 .hl {
   background-image: linear-gradient(
     180deg,
@@ -266,7 +266,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   padding: 0 2px;
 }
 
-/* Highlighter swipe in any colour — set --hl on the element. Same geometry
+/* Highlighter swipe in any colour, set --hl on the element. Same geometry
    as .hl, which is this with the yellow baked in. Used wherever something is
    picked: a filter, a course, a goal. A swipe of highlighter is how a page
    marks a choice; a filled pill is how software does. */
@@ -281,7 +281,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background-position: 0 2px;
 }
 
-/* Hand-drawn underline — wavy, slightly imperfect */
+/* Hand-drawn underline, wavy, slightly imperfect */
 .hand-underline {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%231A1714' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.6'/></svg>");
   background-repeat: no-repeat;
@@ -298,7 +298,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background: transparent;
 }
 
-/* Card with deckle (irregular) edges — applies to .deckle alongside other
+/* Card with deckle (irregular) edges, applies to .deckle alongside other
    border-radius rules. Use with bg-paper + border for a subtle hand-cut feel. */
 .deckle {
   border-radius: 14px 13px 15px 13px / 13px 15px 13px 14px;
@@ -310,7 +310,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .tilt-l2 { transform: rotate(-0.6deg); }
 .tilt-r2 { transform: rotate(0.8deg); }
 
-/* Sticky note — bright butter yellow, asymmetric corners + warm shadow */
+/* Sticky note, bright butter yellow, asymmetric corners + warm shadow */
 .sticky {
   background: linear-gradient(180deg, #F4E58A 0%, #EFDC72 100%);
   box-shadow:
@@ -320,7 +320,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   position: relative;
 }
 
-/* Tape strip — anchor sticky notes to the page */
+/* Tape strip, anchor sticky notes to the page */
 .tape {
   position: absolute;
   width: 56px;
@@ -339,7 +339,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background: linear-gradient(-90deg, var(--rose-tint), transparent 75%);
 }
 
-/* Postmark-style stamp pill — slightly tilted */
+/* Postmark-style stamp pill, slightly tilted */
 .stamp {
   display: inline-flex;
   align-items: center;

@@ -21,8 +21,8 @@ interface Props {
 /**
  * A select in the app's own hand.
  *
- * A native `<select>` renders the operating system's list — system font, its
- * own highlight colour, one cramped line per option — in the middle of a
+ * A native `<select>` renders the operating system's list, system font, its
+ * own highlight colour, one cramped line per option, in the middle of a
  * paper sheet. This is the same construction as the course suggestions and
  * the section picker: paper, ruled dividers, a tint on what is chosen.
  */

@@ -13,7 +13,7 @@ export default function PageShell({ children, hideNav }: Props) {
   return (
     <div className="min-h-[100dvh] bg-bg">
       {/* The sheet gets a little wider on a bigger screen, and the margins
-          around it get a lot wider — per readmedesign.md, more room should
+          around it get a lot wider, per readmedesign.md, more room should
           become whitespace, not more columns. BottomNav, ActiveTimerDock and
           the Stats undo toast mirror this exact width so they stay aligned
           with the page; change all four together. */}

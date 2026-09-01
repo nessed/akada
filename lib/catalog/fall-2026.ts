@@ -177,7 +177,7 @@ export const FALL_2026: CatalogCourse[] = [
 
   // Astronomy
   {
-    code: 'AST 302', title: 'Fundamentals of Astronomy – I', credits: 3, department: 'Astronomy',
+    code: 'AST 302', title: 'Fundamentals of Astronomy - I', credits: 3, department: 'Astronomy',
     sections: [
       { id: 'S1', cadence: 'Twice a week - 75 min' },
     ],
@@ -3007,7 +3007,7 @@ export const FALL_2026: CatalogCourse[] = [
     ],
   },
   {
-    code: 'PHY 307', title: 'Fundamentals of Astronomy – I', credits: 3, department: 'Physics',
+    code: 'PHY 307', title: 'Fundamentals of Astronomy - I', credits: 3, department: 'Physics',
     sections: [
       { id: 'S1', cadence: 'Twice a week - 75 min' },
     ],
@@ -3043,7 +3043,7 @@ export const FALL_2026: CatalogCourse[] = [
     ],
   },
   {
-    code: 'PHY 506', title: 'Fundamentals of Astronomy – I', credits: 3, department: 'Physics',
+    code: 'PHY 506', title: 'Fundamentals of Astronomy - I', credits: 3, department: 'Physics',
     sections: [
       { id: 'S1', cadence: 'Twice a week - 75 min' },
     ],

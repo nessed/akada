@@ -128,7 +128,7 @@ export function rgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// Muted pastel notebook palette — each entry pairs a strong color with a soft tint
+// Muted pastel notebook palette, each entry pairs a strong color with a soft tint
 // used for backgrounds, badges, and timer gradients.
 export interface Pastel {
   name: string;

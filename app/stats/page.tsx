@@ -76,7 +76,7 @@ export default function StatsPage() {
       }
     } catch (error) {
       console.error('Failed to delete session:', error);
-      notify('That session is still here — it did not delete.');
+      notify('That session is still here. It did not delete.');
     }
   }
 
@@ -139,7 +139,7 @@ export default function StatsPage() {
   const avgPerDay = dayCount ? totalSec / dayCount : 0;
   const streak = studyStreakDays(sessions);
 
-  // Editorial computed bits — the Vol./Issue mark, totals, and "best day"
+  // Editorial computed bits, the Vol./Issue mark, totals, and "best day"
   // headline that the redesigned stats page leans on.
   const semesterLabel = useMemo(() => {
     const now = new Date();
@@ -164,7 +164,7 @@ export default function StatsPage() {
   const totalWhole = Math.floor(totalHrs);
   const totalDecimal = `.${Math.round((totalHrs - totalWhole) * 10)}`;
 
-  // Best day of week — name + duration. Used in the KPI ribbon.
+  // Best day of week, name + duration. Read out in the ledger line.
   const bestDay = useMemo(() => {
     const byDow: Record<number, number> = {};
     for (const s of sessions) {
@@ -229,7 +229,7 @@ export default function StatsPage() {
         </div>
       </header>
 
-      {/* Hero number — total hours logged, big mono with a hand-note nudge */}
+      {/* Hero number, total hours logged, big mono with a hand-note nudge */}
       <section className="relative mb-5 mt-2">
         <HandNote
           color="var(--peach)"
@@ -328,13 +328,13 @@ export default function StatsPage() {
         </div>
       </section>
 
-      {/* Weekly bars — deckle card */}
+      {/* Weekly bars, deckle card */}
       <section className="deckle bg-paper border border-line py-5 px-[22px] mb-4">
         <h2 className="m-0 mb-[18px] font-serif font-medium text-[20px]">This week</h2>
         <WeeklyChart sessions={sessions} courses={courses} />
       </section>
 
-      {/* Totals — deckle card with hand-drawn trend arrows */}
+      {/* Totals, deckle card with hand-drawn trend arrows */}
       <section className="deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Hours by course</h2>
         <div>
@@ -433,7 +433,7 @@ export default function StatsPage() {
         </div>
       </section>
 
-      {/* Marks & milestones — semester-shaped achievements */}
+      {/* Marks & milestones, semester-shaped achievements */}
       {sessions.length > 0 && (
         <section className="mt-4">
           <h2 className="m-0 mb-3 font-serif font-medium text-[20px]">
@@ -520,7 +520,7 @@ export default function StatsPage() {
         <h2 className="my-4 font-serif font-medium text-[20px]">Session history</h2>
         {sessions.length === 0 ? (
           <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
-            Nothing logged yet — the ledger starts with the first session.
+            Nothing logged yet. The ledger starts with the first session.
           </p>
         ) : (
           <div>
@@ -536,7 +536,7 @@ export default function StatsPage() {
         )}
       </section>
 
-      {/* Editorial footer — closes the issue */}
+      {/* Editorial footer, closes the issue */}
       {semester?.endDate && (
         <p
           className="mt-8 text-center text-[12px] text-muted-soft font-serif italic pt-4"
@@ -577,8 +577,6 @@ export default function StatsPage() {
   );
 }
 
-// Vol. III KPI cell — sits inside the ink-ruled ribbon (no per-cell card,
-// vertical separators between).
 /** A number inside a sentence: mono, upright, the app's ink. */
 function Figure({ children }: { children: React.ReactNode }) {
   return (

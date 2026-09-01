@@ -9,7 +9,7 @@ interface Props {
   onComplete?: () => void;
   /** Swipe left. Omit and the row does not open that way. */
   onDelete?: () => void;
-  /** Tints the "Complete" affordance — usually the course's own colour. */
+  /** Tints the "Complete" affordance, usually the course's own colour. */
   accent?: string;
   /** Classes for the row's own surface, which sits above the affordance. */
   surfaceClassName?: string;
@@ -22,8 +22,8 @@ const THRESHOLD = 70;
 /**
  * A row that opens sideways onto an action.
  *
- * Three copies of this existed — in the dashboard's task list, in TaskItem
- * and in the stats session list — each with its own drag handling and its own
+ * Three copies of this existed, in the dashboard's task list, in TaskItem
+ * and in the stats session list, each with its own drag handling and its own
  * hand-rolled affordance, and none of them using the `.swipe-bg-complete` /
  * `.swipe-bg-delete` washes that were written for exactly this.
  */

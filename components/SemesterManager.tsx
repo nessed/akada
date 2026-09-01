@@ -17,7 +17,7 @@ import HandCheck from './notebook/HandCheck';
  * Settings → Semester. The active semester is what Dashboard, Tasks and
  * Timer write into; "Start new semester" switches that pointer, so the
  * courses you add right after belong to the new term instead of piling into
- * the old one. Past semesters stay reachable here, read-only — tap one to
+ * the old one. Past semesters stay reachable here, read-only, tap one to
  * see what was in it without risking logging today's session into it by
  * mistake.
  */
@@ -389,19 +389,19 @@ function semesterPresets(today = new Date()): SemesterPreset[] {
   return [
     {
       label: `Spring ${year}`,
-      range: 'Jan 19 – May 20',
+      range: 'Jan 19 to May 20',
       startDate: `${year}-01-19`,
       endDate: `${year}-05-20`,
     },
     {
       label: `Summer ${year}`,
-      range: 'Jun 1 – Aug 13',
+      range: 'Jun 1 to Aug 13',
       startDate: `${year}-06-01`,
       endDate: `${year}-08-13`,
     },
     {
       label: `Fall ${year}`,
-      range: 'Aug 31 – Dec 18',
+      range: 'Aug 31 to Dec 18',
       startDate: `${year}-08-31`,
       endDate: `${year}-12-18`,
     },

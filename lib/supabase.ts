@@ -12,7 +12,7 @@ function getSupabaseConfig() {
 }
 
 /**
- * Browser client — used in 'use client' components and SupabaseAdapter.
+ * Browser client, used in 'use client' components and SupabaseAdapter.
  * Safe to call multiple times; the SDK deduplicates internally.
  */
 export function createClient() {
@@ -21,7 +21,7 @@ export function createClient() {
 }
 
 /**
- * Server client — used in proxy and route handlers.
+ * Server client, used in proxy and route handlers.
  * Requires a cookie store that implements getAll / setAll.
  */
 export function createServerSupabaseClient(cookieStore: {

@@ -1,6 +1,6 @@
 'use client';
 
-// Postmark-style stamp pill — slightly tilted, mono caps. Used on the Stats
+// Postmark-style stamp pill, slightly tilted, mono caps. Used on the Stats
 // page header (e.g. "WK 17 / 18") and anywhere a "received" / dated mark is
 // useful.
 

@@ -68,7 +68,7 @@ export default function CourseCard({
             <h3 className="mt-1 mb-0 font-serif font-medium text-[19px] tracking-[-0.01em] truncate">
               {course.name}
             </h3>
-            {/* Only what the catalog actually supplied — a manually typed
+            {/* Only what the catalog actually supplied, a manually typed
                 course simply has no second line. */}
             {catalogLine && (
               <p className="mt-1 mb-0 truncate text-[11.5px] text-muted-soft">

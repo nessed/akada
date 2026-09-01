@@ -3,7 +3,7 @@ import { FALL_2026 } from './fall-2026';
 
 /**
  * The catalog the add-course picker searches. Swapping terms is a one-line
- * change here — see the header of `fall-2026.ts`.
+ * change here, see the header of `fall-2026.ts`.
  *
  * This module is the only thing that pulls the term data in, and the picker
  * loads it with a dynamic import when the add-course sheet opens, so a

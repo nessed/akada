@@ -1,6 +1,6 @@
-# Akada — UI & Aesthetic Design Choices
+# Akada. UI & Aesthetic Design Choices
 
-This document outlines the core visual philosophy, UI elements, and styling choices behind the Akada Study Planner. The app is designed to feel like a "quiet place to study"—minimalist, organic, and distraction-free, mimicking the tactile feel of a high-quality physical notebook.
+This document outlines the core visual philosophy, UI elements, and styling choices behind the Akada Study Planner. The app is designed to feel like a "quiet place to study"-minimalist, organic, and distraction-free, mimicking the tactile feel of a high-quality physical notebook.
 
 ## 🎨 Visual Philosophy & Aesthetic
 Akada's design moves away from the stark, high-contrast flat designs typical of modern software. Instead, it leans into a **warm, organic "notebook" aesthetic**. It feels tangible, calming, and personal, utilizing soft paper tones, ink-like typography, and soothing pastel accents.
@@ -17,14 +17,14 @@ To maintain the soul of the app, we actively reject standard SaaS UI/UX "best pr
 The color system is heavily curated to resemble premium paper, ink, and mild highlighters.
 
 ### Core Foundation (Paper & Ink)
-The foundation is not one palette but four — the **paper tone** a reader picks
+The foundation is not one palette but four, the **paper tone** a reader picks
 in Appearance. `Paper` is what the app ships with; `Warm`, `Stone` and `White`
 are the alternatives. Every value below is the shipped `Paper` tone, and the
 authority for all of them is `PAPER_TONES` in `lib/preferences.ts`, mirrored
 into `:root` in `globals.css` so the first paint needs no correction.
 
 - **Backgrounds (`bg`, `bg-tint`, `paper`, `paper-2`)**: `#F5F1E8`, `#EDE7D8`,
-  `#FBF8EF`, `#F7F3E6`. Warm cream throughout — cards are a lighter cream, not
+  `#FBF8EF`, `#F7F3E6`. Warm cream throughout, cards are a lighter cream, not
   white. True `#FFFFFF` appears only in the `Stone` and `White` tones.
 - **Lines (`line`, `line-soft`, `line-strong`)**: `#DDD6C2`, `#EAE4D3`,
   `#C9C0A8`. Borders and dividers resemble the faint ruled lines of a notebook
@@ -39,7 +39,7 @@ into `:root` in `globals.css` so the first paint needs no correction.
 ### The Pastel Highlighter Palette
 For course categorization and tags, Akada uses a beautifully crafted palette of muted pastels. Each color is paired with a soft "tint" version used for backgrounds, while the strong value is used for text, borders, or accents.
 
-`PASTEL_PALETTE` in `lib/utils.ts` is the source of truth — it is what a course
+`PASTEL_PALETTE` in `lib/utils.ts` is the source of truth, it is what a course
 is actually coloured with. The `--sage`…`--mauve` variables in `globals.css`
 mirror it exactly, for the places that need a pastel without owning a course.
 If the two ever disagree again, `lib/utils.ts` wins.
@@ -56,7 +56,7 @@ If the two ever disagree again, `lib/utils.ts` wins.
 
 ### The Alarm Ramp (muted terracotta, never red)
 Two semantic ramps carry everything the interface would otherwise say in red.
-They are warm clays, and that is the point — see "No Alarmist Indicators".
+They are warm clays, and that is the point, see "No Alarmist Indicators".
 - **`warn` / `warnSoft` / `warnTint`**: `#B5694C`, `#A38046`, `#F4ECDC`. The
   quiet tone: an overdue date, a course that has gone untouched.
 - **`priority` / `prioritySoft` / `priorityTint`**: `#C97A6B`, `#A85C42`,
@@ -67,19 +67,19 @@ Typography in Akada blends modern readability with classic literary elegance.
 - **Sans-Serif (`Inter`)**: Used for the majority of the UI, providing clean, highly legible structure.
 - **Serif (`Fraunces`)**: Applied to headings, quotes, or focal points to give the application an elegant, editorial, and sophisticated character. It is the default; **Cormorant Garamond**, **Lora** and **Merriweather** are selectable in Appearance and swap in through `--font-serif`, so no component names a family.
 - **Monospace (`JetBrains Mono`)**: Used purposefully for data, durations, and the study timer, grounding the numbers in a precise, tool-like feel.
-- **Handwriting (`Caveat`)**: Reserved for marginalia — the `HandNote` primitive and the `.font-hand` utility. Never for UI text.
+- **Handwriting (`Caveat`)**: Reserved for marginalia, the `HandNote` primitive and the `.font-hand` utility. Never for UI text.
 
 ### The Eyebrow
 One caption spec, `.eyebrow` in `globals.css`: 10px, 600 weight, uppercase,
 `0.16em` tracking, `muted`. Section headers, field labels, course codes and
 "Wk 14" all use it. It sits in `@layer components`, so a colour, a mono family
-or a tighter tracking set alongside it still wins — that is how the badges and
+or a tighter tracking set alongside it still wins, that is how the badges and
 the timer's display caption keep their own letterspacing.
 
 ### Type scale
 Two title tiers, so a screen title is recognisable as one:
-- **Screen title** — `text-[36px]` at `tracking-[-0.025em]`, serif.
-- **Section heading** — `text-[17px]`/`text-[20px]`, serif medium.
+- **Screen title**, `text-[36px]` at `tracking-[-0.025em]`, serif.
+- **Section heading**, `text-[17px]`/`text-[20px]`, serif medium.
 
 Two deliberate exceptions: the stats masthead is `52px`, which is the one
 editorial flourish in the app, and the dashboard's date is `32px` because it
@@ -98,8 +98,8 @@ could add here", and the timer's single filled action.
 
 ### Buttons
 Two shapes, not four:
-- **Page CTA** — full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
-- **Sheet action pair** — `flex-1`, `py-3.5`, `rounded-[10px]`, `text-sm`,
+- **Page CTA**, full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
+- **Sheet action pair**, `flex-1`, `py-3.5`, `rounded-[10px]`, `text-sm`,
   matching the radius of the fields above it in the same sheet.
 
 Solid `bg-primary` fill belongs to the one primary action on a screen. A

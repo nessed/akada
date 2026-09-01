@@ -74,8 +74,8 @@ export function cleanSessionNote(value: unknown): string {
 /**
  * Avatars are stored as a URL string in Postgres and rendered into an <img>.
  * Only three shapes are allowed: an https: URL, a base64 image data URL, and
- * a same-origin relative path such as /default-avatar.svg. Everything else —
- * javascript:, data:text/html, http:, an oversized blob — is rejected.
+ * a same-origin relative path such as /default-avatar.svg. Everything else
+ * (javascript:, data:text/html, http:, an oversized blob) is rejected.
  *
  * Returns '' for anything invalid, so a bad value read back out of the
  * database degrades to the default avatar rather than rendering.

@@ -41,7 +41,7 @@ const KEYS = {
 
 /**
  * Courses, tasks and sessions are stored with a semesterId that isn't part
- * of the public Course/Task/Session type — mirrors semester_id being a
+ * of the public Course/Task/Session type, mirrors semester_id being a
  * plain column the Supabase rows carry but the app-facing type doesn't
  * expose, since callers only ever see one semester's worth at a time.
  */
@@ -105,8 +105,8 @@ function createSemesterRecord(input: NewSemesterInput): Semester {
 
 /**
  * The semester every course/task/session read and write is scoped to.
- * Self-healing: an account with none yet — the instant onboarding starts, or
- * a very old local session — gets a blank one created and activated rather
+ * Self-healing: an account with none yet, the instant onboarding starts, or
+ * a very old local session, gets a blank one created and activated rather
  * than being locked out of adding a course.
  */
 function activeSemesterId(): string {
@@ -151,7 +151,7 @@ function sanitizeTask(task: Task): Task {
 
 export class LocalAdapter implements DataProvider {
   // ---- Courses
-  // Always scoped to the active semester — see getCoursesForSemester for
+  // Always scoped to the active semester, see getCoursesForSemester for
   // reading a specific (usually past) one instead.
 
   async getCourses(): Promise<Course[]> {

@@ -1,6 +1,6 @@
 'use client';
 
-// Hand-drawn check mark — paired with .scribble-box to give checkboxes a
+// Hand-drawn check mark, paired with .scribble-box to give checkboxes a
 // human, written-in feel rather than a pixel-perfect tick.
 
 interface Props {

@@ -131,7 +131,7 @@ function rowToSemester(r: SemesterRow, activeId: string | null): Semester {
 /**
  * Postgres 23505 is a unique-constraint violation. The only unique constraint
  * on courses is (user_id, semester_id, upper(code)), so this is always a
- * duplicate course code within the same semester — say so instead of
+ * duplicate course code within the same semester, say so instead of
  * surfacing the raw constraint name. The same code in a different semester
  * (e.g. retaking CS101) is allowed and won't hit this.
  */
@@ -167,8 +167,8 @@ export class SupabaseAdapter implements DataProvider {
 
   /**
    * The semester every course/task/session read and write is scoped to.
-   * Self-healing: an account that somehow has none yet — the instant
-   * onboarding starts, or an old account mid-migration — gets a blank one
+   * Self-healing: an account that somehow has none yet, the instant
+   * onboarding starts, or an old account mid-migration, gets a blank one
    * created and activated rather than being locked out of adding a course.
    */
   private async activeSemesterId(uid: string): Promise<string> {
@@ -179,7 +179,7 @@ export class SupabaseAdapter implements DataProvider {
   }
 
   // ---- Courses ----
-  // Always scoped to the active semester — see getCoursesForSemester for
+  // Always scoped to the active semester, see getCoursesForSemester for
   // reading a specific (usually past) one instead.
 
   async getCourses(): Promise<Course[]> {
@@ -282,7 +282,7 @@ export class SupabaseAdapter implements DataProvider {
 
   // ---- Sessions ----
   // Always scoped to the active semester. addSession doesn't need to set
-  // semester_id itself — supabase/schema.sql's tasks_set_semester_id /
+  // semester_id itself, supabase/schema.sql's tasks_set_semester_id /
   // sessions_set_semester_id triggers copy it from the course on insert.
 
   async getSessions(filters?: SessionFilters): Promise<Session[]> {
@@ -382,7 +382,7 @@ export class SupabaseAdapter implements DataProvider {
   }
 
   // ---- Tasks ----
-  // Always scoped to the active semester — see the Sessions comment above,
+  // Always scoped to the active semester, see the Sessions comment above,
   // the same trigger keeps tasks.semester_id in sync.
 
   async getTasks(filters?: TaskFilters): Promise<Task[]> {
@@ -505,7 +505,7 @@ export class SupabaseAdapter implements DataProvider {
 
   /**
    * Shared by createSemester and the self-healing fallback in
-   * activeSemesterId — the latter must not go through the public
+   * activeSemesterId, the latter must not go through the public
    * createSemester (which re-resolves uid via userId()) while already
    * holding it.
    */

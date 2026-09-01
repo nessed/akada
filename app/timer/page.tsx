@@ -123,7 +123,7 @@ export default function TimerPage() {
   /**
    * Noise is synthesised here rather than decoded from a shipped file.
    * The app used to fetch /whitenoise.ogg and run it through
-   * decodeAudioData, which Safari and iOS cannot do — Ogg Vorbis is
+   * decodeAudioData, which Safari and iOS cannot do. Ogg Vorbis is
    * unsupported there, so white noise was silently dead for every iPhone
    * user. Generating it works on every browser, drops a 191 KB download,
    * and keeps working offline.
@@ -385,8 +385,7 @@ export default function TimerPage() {
                   className="transition-[stroke-dashoffset] duration-700 ease-out"
                 />
               </svg>
-              {/* 60 minute-tick marks around the inner edge of the ring —
-                  longer + thicker every 5 (the "5/10/.../55" hours marks). */}
+              {/* 60 minute-tick marks around the inner edge of the ring, longer + thicker every 5 (the "5/10/.../55" hours marks). */}
               <svg
                 width="100%"
                 height="100%"

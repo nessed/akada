@@ -21,8 +21,8 @@ const PUBLIC_PATHS = new Set([
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
-  // Static assets served out of /public — manifest, robots, sitemap, icons,
-  // audio — always carry a file extension and must stay reachable signed out.
+  // Static assets served out of /public, manifest, robots, sitemap, icons,
+  // audio, always carry a file extension and must stay reachable signed out.
   return /\.[a-z0-9]+$/i.test(pathname);
 }
 

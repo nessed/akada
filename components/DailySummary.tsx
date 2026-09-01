@@ -33,7 +33,7 @@ export default function DailySummary({ todaysSessions, courses }: Props) {
     <section
       className="deckle relative mt-2 overflow-hidden border border-line bg-paper px-[22px] py-[18px]"
     >
-      {/* Page-fold corner — folded-down notebook page detail */}
+      {/* Page-fold corner, folded-down notebook page detail */}
       <div
         aria-hidden
         className="absolute right-0 top-0"

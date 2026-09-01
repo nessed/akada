@@ -174,7 +174,7 @@ export default function CourseSearchInput({
         >
           {results.length === 0 ? (
             <li className="px-4 py-3 font-serif text-[13px] italic text-muted-soft">
-              Not in the catalog — press Enter to add it anyway.
+              Not in the catalog. Press Enter to add it anyway.
             </li>
           ) : (
             results.map((course, i) => (

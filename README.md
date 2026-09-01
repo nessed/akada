@@ -1,4 +1,4 @@
-# Akada — Study Planner
+# Akada. Study Planner
 
 *A quiet place to study.*
 
@@ -18,14 +18,14 @@ Akada is a modern, beautifully designed academic planner and study companion bui
 - **Frontend Framework:** [Next.js 16](https://nextjs.org/) (App Router, React 18)
 - **Language:** [TypeScript](https://www.typescriptlang.org/)
 - **Styling:** [Tailwind CSS 3](https://tailwindcss.com/)
-- **Database & Auth:** [Supabase](https://supabase.com/) (PostgreSQL, RLS-only — no service-role key)
+- **Database & Auth:** [Supabase](https://supabase.com/) (PostgreSQL, RLS-only, no service-role key)
 - **Data fetching:** [SWR](https://swr.vercel.app/)
 - **Animation:** [Framer Motion](https://www.framer.com/motion/)
 - **Fonts (via `next/font`):** Inter (sans), JetBrains Mono (mono), Cormorant
   Garamond (default serif), plus Fraunces, Lora and Merriweather as
   user-selectable heading faces, and Caveat for handwritten marginalia.
 
-The auth gate lives in **`proxy.ts` at the repo root** — Next 16's rename of
+The auth gate lives in **`proxy.ts` at the repo root**. Next 16's rename of
 `middleware.ts`. The export must stay named `proxy`. It is default-deny: every
 route requires a session except `/`, `/auth`, `/auth/callback`, `/auth/reset`
 and static assets.
@@ -60,7 +60,7 @@ and static assets.
    deliberate: it used to fall back to `localStorage` silently, which meant a
    misconfigured deploy looked healthy while losing every user's data. To run
    with no backend at all, set `NEXT_PUBLIC_USE_LOCAL_DATA=true` (development
-   only — it is ignored in production builds).
+   only, it is ignored in production builds).
 
 4. **Database Setup:**
    Run the SQL statements found in `supabase/schema.sql` in your Supabase project's SQL Editor to create the necessary tables and Row Level Security (RLS) policies.
@@ -110,7 +110,7 @@ The Supabase database consists of the following core tables:
 All tables are protected by Row Level Security (RLS) policies ensuring users
 can only access their own data. The app authenticates as the end user via the
 anon key and never uses a service-role key, so RLS is the only thing standing
-between accounts — keep it that way.
+between accounts, keep it that way.
 
 `supabase/schema.sql` is the source of truth and is idempotent: run the whole
 file against a fresh or an existing project. It also creates the indexes the
@@ -120,7 +120,7 @@ stats page and heatmap need, a case-insensitive unique index on
 
 ## 📚 Course catalog
 
-The add-course search runs against `lib/catalog/fall-2026.ts` — 524 courses
+The add-course search runs against `lib/catalog/fall-2026.ts`, 524 courses
 and 887 sections for Fall 2026, generated, not hand-written. Regenerate it
 with the term's registrar course memo in the repo root:
 
@@ -130,8 +130,8 @@ python scripts/build-catalog.py "…" --refresh-planner   # re-pull the schedule
 ```
 
 Two sources, because neither is complete alone. The **course memo** is
-authoritative for what exists — codes, titles, credits, components, section
-labels, instructors — but publishes an actual day and time for only about a
+authoritative for what exists, codes, titles, credits, components, section
+labels, instructors, but publishes an actual day and time for only about a
 sixth of sections. The rest come from **[LUMS Pro Planner][planner]**, a
 public dataset maintained by Muhammad Sohaib Shahzad, a LUMS student, which
 carries a day and time for every section it lists and a room for most.

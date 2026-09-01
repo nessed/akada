@@ -1,6 +1,6 @@
 'use client';
 
-// Akada bookmark monogram — used in the auth screen, onboarding welcome,
+// Akada bookmark monogram, used in the auth screen, onboarding welcome,
 // and as a small wordmark anywhere we want the brand glyph.
 
 interface Props {

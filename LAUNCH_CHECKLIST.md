@@ -1,4 +1,4 @@
-# Akada — Launch Checklist
+# Akada. Launch Checklist
 
 Everything here has to be done by hand, in a dashboard I cannot reach from the
 repo. Work top to bottom; later steps depend on earlier ones.
@@ -6,14 +6,14 @@ repo. Work top to bottom; later steps depend on earlier ones.
 Times are rough. The whole list is about 45 minutes if nothing surprises you.
 
 > **Supabase dashboard menus move between releases.** Where a path below does
-> not match what you see, the setting name is still right — search for it.
+> not match what you see, the setting name is still right, search for it.
 
 ---
 
-## 0. Why none of this is already done — read first
+## 0. Why none of this is already done, read first
 
 Your credentials arrived and are correct in shape, but **the sandbox I run in
-blocks outbound network access to `jsllofhlkrckdbilgsxf.supabase.co`** — the
+blocks outbound network access to `jsllofhlkrckdbilgsxf.supabase.co`**, the
 egress proxy answers 403 to CONNECT under an organization policy (the same
 denial hits `google.com`; only npm, PyPI and Anthropic are allowed). The
 Supabase MCP integration is authenticated to a different Supabase account
@@ -31,44 +31,43 @@ What I *was* able to verify with your real values:
 - **Your `sb_publishable_...` key works with this stack.** I checked against
   a local stand-in server: `@supabase/supabase-js` 2.104 accepts the new key
   format without complaint and sends it as both the `apikey` header and
-  `Authorization: Bearer`. No code change was needed — the app passes the
+  `Authorization: Bearer`. No code change was needed, the app passes the
   string straight through, so the new and legacy formats both work.
 - A Supabase outage is handled safely rather than dangerously: with the
   project unreachable, `getUser()` fails, the proxy treats the visitor as
   signed out and redirects protected routes to `/auth`. No redirect loop, and
   no protected page renders.
 
-**Never paste the `service_role` or `sb_secret_` key** — to me or anywhere
+**Never paste the `service_role` or `sb_secret_` key**, to me or anywhere
 else outside the Supabase dashboard. The app is RLS-only and does not use
 one. If it leaks, every row in the database is readable by anyone.
 
 > If you migrated this project to the new API key system, the legacy `anon`
-> and `service_role` JWTs may be disabled. That is fine — the app only ever
+> and `service_role` JWTs may be disabled. That is fine, the app only ever
 > uses the one publishable key.
 
 ---
 
-## 1. Database — 10 min
+## 1. Database, 10 min
 
 ### 1.1 Run the schema
 
 1. Supabase → **SQL Editor** → **New query**.
 2. Paste the entire contents of `supabase/schema.sql` and **Run**.
 
-The file is idempotent — safe on a fresh project and safe to re-run on your
+The file is idempotent, safe on a fresh project and safe to re-run on your
 existing one. It creates nothing destructive.
 
 **This version adds multi-semester support.** `semesters` changes shape from
 one row per user (upserted in place every time) to many rows per user with
 its own `id`, so a "start new semester" doesn't overwrite the last one.
 Running the file migrates your existing semester and courses/tasks/sessions
-in place automatically — no data is lost, and nothing needs to run twice. I
+in place automatically, no data is lost, and nothing needs to run twice. I
 tested this exact migration path against a local Postgres seeded with
 realistic pre-migration data (two users, courses, tasks, sessions, the old
 single-semester shape) and confirmed: it runs clean, backfills every row
 correctly, stays idempotent across three consecutive runs, and RLS still
-isolates users afterward. I could not run it against *your* project directly
-— see §0 — so still read the output when you run it.
+isolates users afterward. I could not run it against *your* project directly, see §0, so still read the output when you run it.
 
 Three statements can fail if your live database has drifted. Each prints a
 clear error and tells you the fix inline:
@@ -76,7 +75,7 @@ clear error and tells you the fix inline:
 | If you see | Run this first, then re-run the file |
 |---|---|
 | `could not create unique index "courses_user_id_semester_code_unique"` | `select user_id, semester_id, upper(code), count(*) from courses group by 1,2,3 having count(*) > 1;` then delete or rename the duplicates |
-| `insert or update ... violates foreign key constraint "<table>_user_id_fkey"` | `delete from <table> where user_id not in (select id from auth.users);` — these are rows belonging to already-deleted accounts |
+| `insert or update ... violates foreign key constraint "<table>_user_id_fkey"` | `delete from <table> where user_id not in (select id from auth.users);`, these are rows belonging to already-deleted accounts |
 | `Need two accounts to test with` (only from the §1.3 proof below, not from the schema file itself) | You only have one account, or two accounts created in the same instant. Sign up a second test account, then re-run. |
 
 ### 1.2 Confirm RLS is actually on
@@ -110,8 +109,8 @@ RLS being *enabled* and RLS being *correct* are different things. Prove it:
 
 5. The rigorous version. Paste this whole block into the SQL Editor after
    both accounts exist and user A has at least one course. It impersonates
-   user B and checks all five tables in one pass — that B can neither read
-   nor write A's rows — plus a sanity check that B can still read their
+   user B and checks all five tables in one pass, that B can neither read
+   nor write A's rows, plus a sanity check that B can still read their
    *own* data (without it, a broken test setup and a broken app both look
    like "PASS", because both make everything invisible to everyone):
 
@@ -128,13 +127,12 @@ RLS being *enabled* and RLS being *correct* are different things. Prove it:
 
      -- sanity check: user A must be able to read their own courses. If this
      -- fails, the problem is this test's setup (or your RLS policies are
-     -- broken in a way that locks out everyone, not just other users) —
-     -- either way, the checks below are not trustworthy until this passes.
+     -- broken in a way that locks out everyone, not just other users), -- either way, the checks below are not trustworthy until this passes.
      perform set_config('role', 'authenticated', true);
      perform set_config('request.jwt.claims',
        json_build_object('sub', a, 'role', 'authenticated')::text, true);
      select count(*) into own from courses where user_id = a;
-     if own = 0 then raise exception 'SANITY FAIL: user A cannot read their own courses — fix this before trusting any PASS below'; end if;
+     if own = 0 then raise exception 'SANITY FAIL: user A cannot read their own courses, fix this before trusting any PASS below'; end if;
 
      -- become user B
      perform set_config('request.jwt.claims',
@@ -177,9 +175,9 @@ RLS being *enabled* and RLS being *correct* are different things. Prove it:
 
 Supabase → **Advisors** → run both **Security** and **Performance**.
 
-- The `auth_rls_initplan` warning should be gone — `schema.sql` already wraps
+- The `auth_rls_initplan` warning should be gone, `schema.sql` already wraps
   `auth.uid()` in a scalar subquery, which is the documented fix.
-- "Unindexed foreign keys" should be gone — the file adds all of them.
+- "Unindexed foreign keys" should be gone, the file adds all of them.
 - If **Leaked password protection disabled** appears, step 2.3 fixes it.
 - Anything else it reports, send it to me rather than guessing.
 
@@ -200,16 +198,16 @@ have never restored is a guess.
 
 ---
 
-## 2. Supabase Auth settings — 12 min
+## 2. Supabase Auth settings, 12 min
 
 All under **Authentication** in the sidebar.
 
-### 2.1 URL configuration — this one silently breaks sign-up
+### 2.1 URL configuration, this one silently breaks sign-up
 
 **Authentication → URL Configuration**
 
 - **Site URL:** `https://your-real-domain.com` (no trailing slash)
-- **Redirect URLs** — add every one of these:
+- **Redirect URLs**, add every one of these:
 
   ```
   https://your-real-domain.com/**
@@ -219,10 +217,10 @@ All under **Authentication** in the sidebar.
 
 `app/auth/page.tsx` builds its callback from `window.location.origin`, so
 **any origin not on this list makes sign-up fail with no visible error.**
-Vercel preview deployments each get their own URL — the `.vercel.app/**`
+Vercel preview deployments each get their own URL, the `.vercel.app/**`
 wildcard covers them.
 
-### 2.2 Email confirmations — decide now
+### 2.2 Email confirmations, decide now
 
 **Authentication → Sign In / Providers → Email → "Confirm email"**
 
@@ -230,12 +228,12 @@ wildcard covers them.
 accounts against addresses they do not own, and Supabase's built-in email
 sender is rate-limited hard enough that spam is self-limiting.
 
-The app now handles **both** settings correctly — that was a real bug before:
+The app now handles **both** settings correctly, that was a real bug before:
 with confirmations off, `signUp` returns a live session and the old code
 stranded the user on a "check your email" screen forever. It now routes them
 straight to `/onboarding`.
 
-> ⚠️ **The built-in email sender is capped at ~2–4 messages per hour** and is
+> ⚠️ **The built-in email sender is capped at ~2 to 4 messages per hour** and is
 > explicitly not for production. If you expect more than a trickle of sign-ups
 > on day one, set up custom SMTP (**Authentication → Emails → SMTP Settings**)
 > with Resend, Postmark or SendGrid. Otherwise your third user of the hour
@@ -247,13 +245,13 @@ straight to `/onboarding`.
 or **Authentication → Policies** depending on dashboard version:
 
 - **Minimum password length: `8`.** The client now enforces 8 on sign-up
-  (it was 6). Set the server to match — the client check is a courtesy, the
+  (it was 6). Set the server to match, the client check is a courtesy, the
   server one is the control.
 - **Prevent use of leaked passwords: ON.** This checks HaveIBeenPwned. The
   app already maps the resulting error to "That password has appeared in a
   known data breach."
 
-Existing accounts with shorter passwords can still sign in — the app only
+Existing accounts with shorter passwords can still sign in, the app only
 enforces the new minimum on sign-up and reset, deliberately.
 
 ### 2.4 Link expiry and rate limits
@@ -270,7 +268,7 @@ enforces the new minimum on sign-up and reset, deliberately.
 **Authentication → Attack Protection → Enable CAPTCHA protection**
 
 Leave **OFF for launch.** Turning it on requires a matching `captchaToken` in
-the `signUp` / `signInWithPassword` calls, which the app does not send — so
+the `signUp` / `signInWithPassword` calls, which the app does not send, so
 enabling it will break sign-up entirely. Revisit if you get bot sign-ups; it
 is a code change plus this toggle, not a toggle alone.
 
@@ -282,7 +280,7 @@ The default says "Supabase". Replace the subject and body with something that
 says Akada, e.g.:
 
 - **Subject:** `Confirm your Akada account`
-- **Body:** keep `{{ .ConfirmationURL }}` exactly as-is — everything else is
+- **Body:** keep `{{ .ConfirmationURL }}` exactly as-is, everything else is
   yours.
 
 Do the same for **Reset password**, which now has a real destination
@@ -290,16 +288,16 @@ Do the same for **Reset password**, which now has a real destination
 
 ---
 
-## 3. Vercel — 10 min
+## 3. Vercel, 10 min
 
 ### 3.1 Create the project
 
-There is currently **no Vercel project** on the connected account — I checked.
+There is currently **no Vercel project** on the connected account. I checked.
 
 1. Vercel → **Add New → Project** → import `nessed/akada`.
 2. Framework preset: **Next.js**. Leave build command and output directory on
    their defaults.
-3. **Do not deploy yet** — set the environment variables first, or the build
+3. **Do not deploy yet**, set the environment variables first, or the build
    will fail (deliberately, see below).
 
 ### 3.2 Environment variables
@@ -311,7 +309,7 @@ Production and Preview.
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` | same |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your anon key | same |
-| `NEXT_PUBLIC_SITE_URL` | `https://your-real-domain.com` | leave **unset** — the app falls back to the Vercel deployment URL automatically |
+| `NEXT_PUBLIC_SITE_URL` | `https://your-real-domain.com` | leave **unset**, the app falls back to the Vercel deployment URL automatically |
 
 Do **not** set `NEXT_PUBLIC_USE_LOCAL_DATA` anywhere. It is ignored in
 production builds, but there is no reason for it to exist there.
@@ -323,13 +321,13 @@ production builds, but there is no reason for it to exist there.
 > was silently lost. If you see
 > `Akada is not configured: NEXT_PUBLIC_SUPABASE_URL and
 > NEXT_PUBLIC_SUPABASE_ANON_KEY are both required` in the build log, that is
-> the guard working — set the variables and redeploy.
+> the guard working, set the variables and redeploy.
 
 ### 3.3 Domain
 
 **Project Settings → Domains** → add your domain and follow the DNS records
 Vercel gives you (an `A` record to `76.76.21.21`, or a `CNAME` to
-`cname.vercel-dns.com` for a subdomain — Vercel shows the exact values).
+`cname.vercel-dns.com` for a subdomain. Vercel shows the exact values).
 
 After DNS resolves, go back and make sure **`NEXT_PUBLIC_SITE_URL` matches the
 final domain exactly**, then redeploy. It drives `metadataBase`, so if it is
@@ -351,7 +349,7 @@ dependency, and you asked for none.
 
 ---
 
-## 4. Smoke test on the real domain — 10 min
+## 4. Smoke test on the real domain, 10 min
 
 **Not on localhost.** Use the production URL, on a phone if you can.
 
@@ -399,12 +397,12 @@ Ordered by how likely they are to bite you.
 |---|---|---|
 | 1 | **High** | **Nothing in this checklist has been run, and no auth or database behaviour was verified against a live Supabase project.** Credentials arrived but my sandbox's egress policy blocks all network access to your Supabase host (see §0). The auth matrix and production smoke test in my report are marked NOT RUN, not passed. Sections 1.3 and 4 are the substitute and you have to actually do them. |
 | 2 | **High** | **Supabase free tier has no backups.** See 1.5. |
-| 3 | Medium | **The built-in email sender caps at ~2–4/hour.** A launch-day rush means most sign-ups get no confirmation email, with no error shown. Custom SMTP (2.2) is the fix. |
-| 4 | Medium | **The onboarding gate is client-side.** A signed-in but un-onboarded user typing `/dashboard` sees a skeleton for a fraction of a second before being redirected. No data leaks — RLS covers that, and they have no data yet — but it is a visible flash. Enforcing it in `proxy.ts` would mean a database round-trip on every single navigation, which is a bad trade on hobby-tier. |
+| 3 | Medium | **The built-in email sender caps at ~2 to 4/hour.** A launch-day rush means most sign-ups get no confirmation email, with no error shown. Custom SMTP (2.2) is the fix. |
+| 4 | Medium | **The onboarding gate is client-side.** A signed-in but un-onboarded user typing `/dashboard` sees a skeleton for a fraction of a second before being redirected. No data leaks. RLS covers that, and they have no data yet, but it is a visible flash. Enforcing it in `proxy.ts` would mean a database round-trip on every single navigation, which is a bad trade on hobby-tier. |
 | 5 | Medium | **CSP keeps `'unsafe-inline'` for scripts.** Next inlines its hydration payload; the strict nonce alternative forces every currently-static page to render dynamically. The CSP still blocks attacker-hosted scripts, framing, plugins, base-tag hijacking and off-origin form posts. Tighten post-launch if you want it. |
 | 6 | Low | **Back-button after sign-out may show a cached screen.** Authenticated responses are now `no-store` and sign-out does a hard navigation, but browser bfcache can still restore a rendered page from memory. Any actual interaction re-fetches and bounces to `/auth`. Verify it yourself in step 4. |
 | 7 | Low | **Avatars are base64 blobs in Postgres**, capped at 64 KB (down from 250 KB, and now scheme-validated). Fine for hundreds of users; move to Supabase Storage before thousands. |
-| 8 | Low | **Notched-device safe areas are unverified.** I added `viewport-fit=cover`, without which the `env(safe-area-inset-*)` padding the app already used was resolving to zero — so this is strictly an improvement — but I have no physical notched device. Check the bottom nav and FAB on a real iPhone. |
+| 8 | Low | **Notched-device safe areas are unverified.** I added `viewport-fit=cover`, without which the `env(safe-area-inset-*)` padding the app already used was resolving to zero, so this is strictly an improvement, but I have no physical notched device. Check the bottom nav and FAB on a real iPhone. |
 | 9 | Low | **`resetAll()` still exists in the production UI**, now behind typing the word `RESET`. Consider removing the control entirely once you have real users. |
 | 10 | Low | **No tests and no CI.** Out of scope for tonight, but the next change to `lib/timer-context.tsx` has nothing catching it. |
 
@@ -412,7 +410,7 @@ Ordered by how likely they are to bite you.
 
 ## 6. After launch
 
-- Custom SMTP (2.2) — do this first if sign-ups are working at all.
+- Custom SMTP (2.2), do this first if sign-ups are working at all.
 - Supabase Pro for backups (1.5).
 - Sentry (3.4).
 - A GitHub Action running the three gates (`tsc --noEmit`, `lint`, `build`)

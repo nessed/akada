@@ -35,8 +35,8 @@ function lines(section: CatalogSection) {
 /**
  * Section chooser for a course picked out of the catalog.
  *
- * A native <select> put the operating system's own dropdown — system font,
- * blue highlight, one cramped line per option — in the middle of a paper
+ * A native <select> put the operating system's own dropdown, system font,
+ * blue highlight, one cramped line per option, in the middle of a paper
  * sheet, and gave no hint that a course had eight sections to look through.
  * This is the same list the course suggestions use: paper, ruled dividers,
  * the time in serif and the instructor beneath it.
@@ -76,7 +76,7 @@ export default function SectionPicker({
   }, [open]);
 
   // The sheet is anchored to the bottom of the screen, so the list almost
-  // always wants to open upwards — but not on a short course list near the
+  // always wants to open upwards, but not on a short course list near the
   // top of a tall window.
   useLayoutEffect(() => {
     if (!open) return;

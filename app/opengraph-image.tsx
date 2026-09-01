@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-export const alt = 'Akada — a calm study planner for courses, tasks and focused sessions';
+export const alt = 'Akada: a calm study planner for courses, tasks and focused sessions';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 

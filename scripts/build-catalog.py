@@ -7,17 +7,17 @@ meeting times and rooms merged in from LUMS Pro Planner.
 Two sources, because neither is complete on its own:
 
   * The **course memo** (registrar, one row per section) is authoritative for
-    what exists — course codes, titles, credits, components, section labels,
+    what exists, course codes, titles, credits, components, section labels,
     instructors. It publishes an actual day/time for only ~16% of sections.
 
   * **LUMS Pro Planner** (https://lumsproplanner.com/Courses.json) is a
     public, CORS-open dataset maintained by Muhammad Sohaib Shahzad, a LUMS
-    student — "from a student, for the students". It carries a day, a start
+    student, "from a student, for the students". It carries a day, a start
     and an end time for every section it lists, and a room for 93% of them.
     Downloaded to a local snapshot so a build never depends on it being up.
 
 The memo leads; the planner fills in when and where. Where only the planner
-knows about a section, it is added — after add/drop the memo goes stale and
+knows about a section, it is added, after add/drop the memo goes stale and
 it does not.
 
 Standard library only (an xlsx is just a zip of XML), so there is nothing to
@@ -169,7 +169,7 @@ def format_meeting(raw):
     form: "Mon & Wed, 12:30 PM - 1:45 PM". Anything unrecognised is dropped
     rather than shown half-parsed.
     """
-    text = re.sub(r'\s+', ' ', (raw or '').replace('–', '-').replace('—', '-')).strip()
+    text = re.sub(r'\s+', ' ', (raw or '').replace('-', '-').replace('-', '-')).strip()
     if not text:
         return ''
 
@@ -353,7 +353,10 @@ def build(path, sheet_name, planner):
             course = courses[code] = {
                 'code': code,
                 'key': (subject, catalog),
-                'title': re.sub(r'\s+', ' ', cell(row, 'Course Title')),
+                # Registrar titles carry en dashes ("Astronomy - I"); the app
+                # writes plain hyphens.
+                'title': re.sub(r'\s+', ' ', cell(row, 'Course Title'))
+                         .replace('–', '-').replace('—', '-'),
                 'credits': credits,
                 'department': DEPARTMENTS.get(subject, ''),
                 'sections': OrderedDict(),
@@ -403,7 +406,7 @@ def build(path, sheet_name, planner):
             if section['meets']:
                 section['cadence'] = ''
 
-        # A section the planner knows about and the memo does not — the memo
+        # A section the planner knows about and the memo does not, the memo
         # is a snapshot from before enrolment, and sections open after it.
         for label, timing in timings.items():
             if label in course['sections']:

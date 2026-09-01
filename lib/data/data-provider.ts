@@ -10,7 +10,7 @@ import type {
 } from './types';
 
 export interface DataProvider {
-  // Courses — always scoped to the active semester. Use getCoursesForSemester
+  // Courses, always scoped to the active semester. Use getCoursesForSemester
   // to read a past (non-active) semester's courses for the read-only archive
   // view.
   getCourses(): Promise<Course[]>;
@@ -18,13 +18,13 @@ export interface DataProvider {
   updateCourse(id: string, updates: Partial<Course>): Promise<Course>;
   deleteCourse(id: string): Promise<void>;
 
-  // Sessions — scoped to the active semester, same rule as courses.
+  // Sessions, scoped to the active semester, same rule as courses.
   getSessions(filters?: SessionFilters): Promise<Session[]>;
   addSession(session: Omit<Session, 'id' | 'createdAt'>): Promise<Session>;
   updateSession(id: string, updates: Partial<Session>): Promise<Session>;
   deleteSession(id: string): Promise<void>;
 
-  // Tasks — scoped to the active semester, same rule as courses.
+  // Tasks, scoped to the active semester, same rule as courses.
   getTasks(filters?: TaskFilters): Promise<Task[]>;
   addTask(task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>): Promise<Task>;
   updateTask(id: string, updates: Partial<Task>): Promise<Task>;
@@ -35,7 +35,7 @@ export interface DataProvider {
   getActiveSemester(): Promise<Semester | null>;
   /** Every semester the user has, newest first. */
   getSemesters(): Promise<Semester[]>;
-  /** Creates a new semester and makes it active. Existing courses/tasks/sessions stay exactly where they were — they just stop being the default view. */
+  /** Creates a new semester and makes it active. Existing courses/tasks/sessions stay exactly where they were, they just stop being the default view. */
   createSemester(input: NewSemesterInput): Promise<Semester>;
   updateSemester(id: string, updates: NewSemesterInput): Promise<Semester>;
   deleteSemester(id: string): Promise<void>;

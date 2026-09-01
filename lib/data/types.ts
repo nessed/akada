@@ -8,7 +8,7 @@ export interface Course {
   createdAt: string;
   /**
    * Filled in from the course catalog when one is picked in the add-course
-   * search, blank for a manually typed course. All optional — a course is
+   * search, blank for a manually typed course. All optional, a course is
    * complete without any of them, and the card only shows what exists.
    */
   credits?: number | null;

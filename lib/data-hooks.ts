@@ -72,7 +72,7 @@ export function useActiveSemester() {
   return { semester: data ?? null, error, isLoading };
 }
 
-/** Every semester the user has, newest first — for the Settings archive list. */
+/** Every semester the user has, newest first, for the Settings archive list. */
 export function useSemesters() {
   const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.semesters, () =>
     db.getSemesters(),
@@ -165,7 +165,7 @@ export async function deleteCourseOptimistic(id: string) {
       revalidate: false,
     },
   );
-  // Sessions/tasks may reference this course — invalidate them.
+  // Sessions/tasks may reference this course, invalidate them.
   mutate(KEY.sessions);
   mutate(KEY.tasks);
 }
@@ -323,7 +323,7 @@ export async function updateUserSettingsOptimistic(patch: Partial<UserSettings>)
 /**
  * Starts a new semester and makes it active. Every course/task/session read
  * is scoped to the active semester, so the moment this resolves, Dashboard,
- * Tasks and Timer are looking at a blank slate — the previous semester's
+ * Tasks and Timer are looking at a blank slate, the previous semester's
  * data hasn't gone anywhere, it's just no longer what "active" points at.
  * Those three caches have to be dropped, not just the semester ones, or the
  * UI would keep showing the old semester's courses until something else

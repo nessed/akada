@@ -93,7 +93,7 @@ function OnboardingContent() {
       if (!active) return;
 
       // Someone who has already finished setup must not be able to run it
-      // again by typing the URL — it would duplicate every course and
+      // again by typing the URL, it would duplicate every course and
       // overwrite their profile.
       if (onboarded && !newSemesterMode) {
         router.replace('/dashboard');
@@ -196,7 +196,7 @@ function OnboardingContent() {
       }
 
       // Use the optimistic helpers so the SWR cache is hot before we navigate
-      // to /dashboard — otherwise the dashboard would briefly read a stale
+      // to /dashboard, otherwise the dashboard would briefly read a stale
       // "not onboarded" / empty-courses cache and bounce or flash.
       await updateUserSettingsOptimistic(
         newSemesterMode
@@ -208,7 +208,7 @@ function OnboardingContent() {
             },
       );
       // The semester has to exist and be active *before* any course is
-      // added — every course attaches to whichever semester is currently
+      // added, every course attaches to whichever semester is currently
       // active, so adding them first would silently create a nameless
       // placeholder semester and then strand the courses there when this
       // one activates right after.
@@ -324,7 +324,7 @@ function OnboardingContent() {
 function Welcome({ onNext }: { onNext: () => void }) {
   return (
     <div className="relative flex-1 flex flex-col items-center justify-center text-center px-8 animate-fade-in">
-      {/* Off-grid arrow pointing toward the title — quiet hand-drawn touch */}
+      {/* Off-grid arrow pointing toward the title, quiet hand-drawn touch */}
       <div
         aria-hidden
         className="absolute"
@@ -711,7 +711,7 @@ function upcomingSemesters(today = new Date()) {
         range: `${new Date(start + 'T00:00:00').toLocaleDateString(undefined, {
           month: 'short',
           day: 'numeric',
-        })} – ${new Date(end + 'T00:00:00').toLocaleDateString(undefined, {
+        })} to ${new Date(end + 'T00:00:00').toLocaleDateString(undefined, {
           month: 'short',
           day: 'numeric',
         })}`,
@@ -934,7 +934,7 @@ function GoalGuidance({ hours, color }: { hours: number; color: string }) {
         : hours >= 9
           ? 'about right'
           : hours >= 6
-            ? 'light — fine for electives'
+            ? 'light, fine for electives'
             : '~2-3 hrs a week per credit'}
     </HandNote>
   );

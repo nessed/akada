@@ -6,7 +6,7 @@ interface Props {
   open: boolean;
   /** Serif headline. A question, not a warning. */
   title: string;
-  /** One quiet line of consequence. Optional — most confirms don't need it. */
+  /** One quiet line of consequence. Optional, most confirms don't need it. */
   body?: string;
   confirmLabel: string;
   cancelLabel?: string;
@@ -23,8 +23,8 @@ interface Props {
 /**
  * The app's confirmation, in place of `confirm()` and `prompt()`.
  *
- * Same chrome as every other sheet in the app — dimmed ink, paper panel,
- * grab handle, slide-up — so a destructive question arrives the way the rest
+ * Same chrome as every other sheet in the app, dimmed ink, paper panel,
+ * grab handle, slide-up, so a destructive question arrives the way the rest
  * of the app speaks rather than as an operating-system modal.
  */
 export default function ConfirmSheet({

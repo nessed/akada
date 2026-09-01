@@ -4,7 +4,7 @@
 // "~ on track", and other off-grid annotations that make the UI feel less
 // machine-generated.
 //
-// Honors `prefs.marginalia === false` by rendering null — call sites should
+// Honors `prefs.marginalia === false` by rendering null, call sites should
 // wrap with the `useMarginalia()` helper or check the pref themselves.
 
 interface Props {

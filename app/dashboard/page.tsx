@@ -104,7 +104,7 @@ export default function DashboardPage() {
     }
   }, [displayName, avatarUrl, showSettings]);
 
-  // Onboarding gate / auth redirect — fires once SWR has resolved the flag.
+  // Onboarding gate / auth redirect, fires once SWR has resolved the flag.
   useEffect(() => {
     if (onboardingError) {
       router.replace('/auth');
@@ -204,7 +204,7 @@ export default function DashboardPage() {
       const supabase = createClient();
       await supabase.auth.signOut();
     } catch {
-      // ignore — fall through to redirect either way
+      // ignore, fall through to redirect either way
     }
     // The timer, preferences and anything the local adapter cached all
     // outlive the Supabase session, so wipe them before leaving. Otherwise
@@ -225,7 +225,7 @@ export default function DashboardPage() {
       console.error('Failed to reset data:', err);
       // Navigating on to onboarding after a failed reset tells the user
       // their data is gone when it is all still there.
-      notify('Nothing was deleted — the reset did not go through.');
+      notify('Nothing was deleted. The reset did not go through.');
       return;
     }
     router.replace('/onboarding');
@@ -372,7 +372,7 @@ export default function DashboardPage() {
       setAddingCourse(false);
     } catch (error) {
       console.error('Failed to add course:', error);
-      // Surface the real reason — most often a duplicate course code the
+      // Surface the real reason, most often a duplicate course code the
       // database rejected, which the user can act on.
       notify(error instanceof Error ? error.message : 'That course was not added.');
     }
@@ -497,7 +497,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Streak hand-note — only when there's a meaningful streak */}
+      {/* Streak hand-note, only when there's a meaningful streak */}
       {streak >= 3 && (
         <div className="relative h-0">
           <HandNote
@@ -529,7 +529,7 @@ export default function DashboardPage() {
               {semesterInfo.daysRemaining}d left
             </span>
           </div>
-          {/* Semester bar with week markers — feels like a ruler/timeline */}
+          {/* Semester bar with week markers, feels like a ruler/timeline */}
           <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-bg-tint">
             <div
               className="h-full rounded-full bg-primary"
