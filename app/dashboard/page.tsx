@@ -25,7 +25,6 @@ import {
   formatHM,
   daysBetween,
   isoDate,
-  isoWeekNumber,
   sessionsForDate,
   studyStreakDays,
   PASTEL_PALETTE,
@@ -429,7 +428,6 @@ export default function DashboardPage() {
   const monthLabel = now.toLocaleDateString(undefined, { month: 'long' });
   const dayNum = now.getDate();
   const yearLabel = String(now.getFullYear()).slice(-2);
-  const weekOfYear = isoWeekNumber(now);
   const openTasks = tasks.filter((t) => !t.completed);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -455,11 +453,7 @@ export default function DashboardPage() {
       {/* Journal header */}
       <header className="mb-[22px] flex items-start justify-between gap-3.5">
         <div className="min-w-0 flex-1">
-          <p className="eyebrow m-0 flex items-baseline gap-2 font-mono text-muted">
-            <span>Wk {String(weekOfYear).padStart(2, '0')}</span>
-            <span className="opacity-45">·</span>
-            <span>{weekdayLabel}</span>
-          </p>
+          <p className="eyebrow m-0 font-mono text-muted">{weekdayLabel}</p>
           <h1 className="mt-1.5 mb-0 font-serif text-[32px] font-normal leading-[1.05] tracking-[-0.02em]">
             {monthLabel} <span className="italic">{dayNum}</span>
             <span className="ml-1.5 text-[18px] text-muted tracking-normal">
