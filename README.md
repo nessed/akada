@@ -12,7 +12,6 @@ It is built around a simple rule: the app authenticates as the student. There is
 - Record focused study sessions with the built-in timer.
 - Keep past semesters while making one semester active.
 - Review study history and progress in Stats.
-- Connect Claude through the Akada MCP endpoint. Claude can find a course and add extracted tasks to it after you approve the connection.
 
 ## Stack
 
@@ -20,7 +19,6 @@ It is built around a simple rule: the app authenticates as the student. There is
 - Tailwind CSS
 - Supabase Auth and Postgres with RLS
 - SWR and Framer Motion
-- Model Context Protocol TypeScript SDK
 
 ## Run locally
 
@@ -51,23 +49,8 @@ npm run build
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public Supabase publishable key. RLS still applies. |
 | `NEXT_PUBLIC_SITE_URL` | Canonical deployed origin, with no trailing slash. |
-| `AKADA_MCP_TOKEN_SECRET` | Server-only random secret used to protect Claude connector tokens. Required only when using MCP. |
 
-Never add a Supabase `service_role` key. The app and connector both use the student's own Supabase session, which keeps RLS in force.
-
-## Claude connector
-
-After deployment, set `AKADA_MCP_TOKEN_SECRET` in Vercel to a random value of at least 32 characters, apply it to Production (and Preview if used), and redeploy. Keep this value stable: changing it invalidates existing Claude connector credentials.
-
-In Claude, go to **Customize -> Connectors -> Add custom connector** and use:
-
-```text
-https://your-akada-domain/api/mcp
-```
-
-Choose **Always required** authentication, **No client ID -- register one automatically** for the OAuth client, and leave Additional request headers blank. Complete Akada's sign-in and approval screen, then enable Akada for the conversation from the chat's Connectors menu.
-
-The connector exposes only two actions: find an active-semester course and create tasks in that course. It cannot delete or edit existing tasks, courses, semesters, or sessions. Consider setting the task-creation tool to **Needs approval** in Claude's connector permissions.
+Never add a Supabase `service_role` key. The app authenticates as the student, and Row Level Security protects each user's data.
 
 ## Deployment
 
