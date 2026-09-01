@@ -57,13 +57,17 @@ Never add a Supabase `service_role` key. The app and connector both use the stud
 
 ## Claude connector
 
-After deployment, set `AKADA_MCP_TOKEN_SECRET` in Vercel to a random value of at least 32 characters. In Claude, add a custom connector using:
+After deployment, set `AKADA_MCP_TOKEN_SECRET` in Vercel to a random value of at least 32 characters, apply it to Production (and Preview if used), and redeploy. Keep this value stable: changing it invalidates existing Claude connector credentials.
+
+In Claude, go to **Customize -> Connectors -> Add custom connector** and use:
 
 ```text
 https://your-akada-domain/api/mcp
 ```
 
-Claude opens Akada's sign-in and approval screen once. The connector exposes only two actions: find an active-semester course and create tasks in that course. It cannot delete or edit existing tasks, courses, semesters, or sessions.
+Choose **Always required** authentication, **No client ID -- register one automatically** for the OAuth client, and leave Additional request headers blank. Complete Akada's sign-in and approval screen, then enable Akada for the conversation from the chat's Connectors menu.
+
+The connector exposes only two actions: find an active-semester course and create tasks in that course. It cannot delete or edit existing tasks, courses, semesters, or sessions. Consider setting the task-creation tool to **Needs approval** in Claude's connector permissions.
 
 ## Deployment
 
