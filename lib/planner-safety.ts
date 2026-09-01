@@ -34,7 +34,7 @@ export function cleanCourseName(value: unknown): string {
 
 const SECTION_MAX = 24;
 const INSTRUCTOR_MAX = 80;
-const MEETING_MAX = 60;
+export const MEETING_TIME_MAX = 60;
 
 /** Optional catalog fields: empty string collapses to null so a blank never
  *  round-trips as a meaningless "" on the course card. */
@@ -52,7 +52,7 @@ export function cleanInstructor(value: unknown): string | null {
 }
 
 export function cleanMeetingTime(value: unknown): string | null {
-  return cleanOptionalText(value, MEETING_MAX);
+  return cleanOptionalText(value, MEETING_TIME_MAX);
 }
 
 /** Credits are 0-12 in half steps; anything else is treated as "not set". */

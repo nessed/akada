@@ -1,20 +1,35 @@
 """
-Regenerate `lib/catalog/<term>.ts` from a registrar course-memo workbook.
+Regenerate `lib/catalog/<term>.ts` from the registrar course memo, with
+meeting times and rooms merged in from LUMS Pro Planner.
 
     python scripts/build-catalog.py "Fall Semester 2026 - Course Memo.xlsx"
 
-The memo has one row per *section*, so courses are grouped by
-`Subj Area + Catalog`. Meeting times are not a column: the courses that
-publish them do so inside the free-text "Additional Information" cell, under
-a "Section Details" heading, which is parsed here and matched back to the
-section labels on the rows.
+Two sources, because neither is complete on its own:
+
+  * The **course memo** (registrar, one row per section) is authoritative for
+    what exists — course codes, titles, credits, components, section labels,
+    instructors. It publishes an actual day/time for only ~16% of sections.
+
+  * **LUMS Pro Planner** (https://lumsproplanner.com/Courses.json) is a
+    public, CORS-open dataset maintained by Muhammad Sohaib Shahzad, a LUMS
+    student — "from a student, for the students". It carries a day, a start
+    and an end time for every section it lists, and a room for 93% of them.
+    Downloaded to a local snapshot so a build never depends on it being up.
+
+The memo leads; the planner fills in when and where. Where only the planner
+knows about a section, it is added — after add/drop the memo goes stale and
+it does not.
 
 Standard library only (an xlsx is just a zip of XML), so there is nothing to
 install before running it.
 """
 
 import argparse
+import io
+import json
+import os
 import re
+import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 from collections import OrderedDict
@@ -60,6 +75,20 @@ DAY_ABBR = [
 PLACEHOLDER_NAMES = {'tba', 'tbd', 'staff', 'n/a', 'na', 'to be announced', 'to be determined'}
 
 TIMES_A_WEEK = {'1': 'Once a week', '2': 'Twice a week'}
+
+PLANNER_URL = 'https://lumsproplanner.com/Courses.json'
+PLANNER_SNAPSHOT = 'scripts/planner-courses.json'
+
+# The planner keys a section by component and number ("LEC" 1); the memo, and
+# Zambeel, label the same thing "S1". These are the memo's own prefixes.
+COMPONENT_PREFIX = {
+    'LEC': 'S', 'LAB': 'L', 'RAC': 'R', 'REC': 'R', 'SEM': 'M', 'PRT': 'P', 'FLD': 'F',
+}
+
+DAY_SHORT = {
+    'monday': 'Mon', 'tuesday': 'Tue', 'wednesday': 'Wed', 'thursday': 'Thu',
+    'friday': 'Fri', 'saturday': 'Sat', 'sunday': 'Sun',
+}
 
 
 # -- xlsx reading ------------------------------------------------------
@@ -112,10 +141,15 @@ def read_sheet(path, sheet_name):
 
 # -- field cleanup -----------------------------------------------------
 
+PLACEHOLDER_PATTERN = re.compile(r'not announced|to be announced|to be determined', re.I)
+
+
 def clean_person(value):
     """Instructor names, with registrar placeholders dropped rather than shown."""
     name = re.sub(r'\s+', ' ', value or '').strip(' ,;.')
-    return '' if name.lower().strip(' .') in PLACEHOLDER_NAMES else name
+    if name.lower().strip(' .') in PLACEHOLDER_NAMES:
+        return ''
+    return '' if PLACEHOLDER_PATTERN.search(name) else name
 
 
 def format_teaching_staff(names):
@@ -173,6 +207,93 @@ def format_cadence(per_week, minutes):
     return '%s - %s min' % (how_often, minutes)
 
 
+def load_planner(refresh):
+    """
+    The planner snapshot, refreshed from the network only when asked. Builds
+    stay reproducible and keep working when the site is down or gone.
+    """
+    if refresh or not os.path.exists(PLANNER_SNAPSHOT):
+        print('fetching %s' % PLANNER_URL)
+        with urllib.request.urlopen(PLANNER_URL, timeout=60) as response:
+            payload = response.read().decode('utf-8')
+        with io.open(PLANNER_SNAPSHOT, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(payload)
+    with io.open(PLANNER_SNAPSHOT, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def format_planner_meeting(schedule):
+    """"Mon & Wed, 12:30 PM - 1:45 PM" out of the planner's day list and times."""
+    days = [DAY_SHORT.get((day or '').lower(), '') for day in schedule.get('Days') or []]
+    days = [day for day in days if day]
+    start, end = schedule.get('Start Time'), schedule.get('End Time')
+    if not days or not start or not end:
+        return ''
+
+    def meridiem(value):
+        # "12:30pm" -> "12:30 PM"
+        match = re.match(r'\s*(\d{1,2}):(\d{2})\s*([APap])\.?[Mm]?\.?\s*$', value or '')
+        if not match:
+            return (value or '').strip()
+        return '%d:%s %sM' % (int(match.group(1)), match.group(2), match.group(3).upper())
+
+    # Two days read best joined; a longer list wants commas, and a section
+    # that runs every day should just say so.
+    if len(days) == 7:
+        spelled = 'Daily'
+    elif len(days) > 2:
+        spelled = ', '.join(days)
+    else:
+        spelled = ' & '.join(days)
+
+    return '%s, %s - %s' % (spelled, meridiem(start), meridiem(end))
+
+
+def format_room(venue):
+    """
+    "A-1 - Academic Block" is how the planner writes a room. The room and the
+    building are joined with a comma rather than a middle dot, because the
+    picker uses the dot to separate the fields around it.
+
+    A venue that only says it does not know yet is dropped: an empty room
+    reads as "not stated", which is the truth, where "Not Announced Yet"
+    reads as a room.
+    """
+    room = re.sub(r'\s+', ' ', (venue or '').replace(' - ', ', ')).strip()
+    if re.search(r'not announced|to be announced|tba|tbd', room, re.I):
+        return ''
+    return room
+
+
+def planner_sections(planner):
+    """
+    Flatten the planner into { ('ACCT', '100'): { 'S1': {...} } }, keyed the
+    way the memo labels a section so the two can be joined.
+    """
+    out = {}
+    for subject, catalog in (planner.get('Course List') or {}).items():
+        for number, course in catalog.items():
+            sections = {}
+            for component in course.get('Available Components') or []:
+                prefix = COMPONENT_PREFIX.get(component, 'S')
+                for index, section in (course.get(component) or {}).items():
+                    label = '%s%s' % (prefix, index)
+                    sections[label] = {
+                        'component': COMPONENTS.get(component),
+                        'meets': format_planner_meeting(section.get('Schedule') or {}),
+                        'room': format_room(section.get('Venue')),
+                        'instructor': format_teaching_staff(
+                            [clean_person(name) for name in section.get('Instructors') or []]),
+                    }
+            if sections:
+                out[(subject, number)] = {
+                    'title': re.sub(r'\s+', ' ', course.get('Title') or ''),
+                    'credits': course.get('Credits'),
+                    'sections': sections,
+                }
+    return out
+
+
 def parse_section_details(blob):
     """
     Pull { 'S1': {'meets': ..., 'instructor': ...} } out of the free-text
@@ -205,7 +326,7 @@ def ts_string(value):
 
 # -- build -------------------------------------------------------------
 
-def build(path, sheet_name):
+def build(path, sheet_name, planner):
     rows = read_sheet(path, sheet_name)
     header = next(rows)
     at = {name: i for i, name in enumerate(header)}
@@ -231,6 +352,7 @@ def build(path, sheet_name):
                 credits = None
             course = courses[code] = {
                 'code': code,
+                'key': (subject, catalog),
                 'title': re.sub(r'\s+', ' ', cell(row, 'Course Title')),
                 'credits': credits,
                 'department': DEPARTMENTS.get(subject, ''),
@@ -251,26 +373,61 @@ def build(path, sheet_name):
             'meets': '',
             'cadence': format_cadence(cell(row, 'Class(es) Per Week'),
                                       cell(row, 'Minutes Per Session')),
+            'room': '',
         })
         section['staff'].append(clean_person(cell(row, 'Instructor Name')))
 
-    # Meeting times, and any instructor the section rows left blank, come from
-    # the notes, which are per course rather than per row.
+    schedule = planner_sections(planner)
+    matched = added = 0
+
     for course in courses.values():
+        published = schedule.get(course['key'], {})
+        timings = published.get('sections', {})
+
         for label, section in course['sections'].items():
             detail = course['details'].get(label)
             section['instructor'] = (format_teaching_staff(section.pop('staff'))
                                      or (detail or {}).get('instructor', ''))
-            section['meets'] = (detail or {}).get('meets', '')
-            # A published slot says everything the cadence would have.
+            # Three sources for when a section meets, best first: the planner,
+            # which has one for everything it lists; the memo's own notes,
+            # which cover a sixth of them; and failing both, how often and how
+            # long it runs.
+            timing = timings.get(label)
+            if timing and timing['meets']:
+                section['meets'] = timing['meets']
+                section['room'] = timing['room']
+                section['instructor'] = section['instructor'] or timing['instructor']
+                matched += 1
+            else:
+                section['meets'] = (detail or {}).get('meets', '')
             if section['meets']:
                 section['cadence'] = ''
-        del course['details']
+
+        # A section the planner knows about and the memo does not — the memo
+        # is a snapshot from before enrolment, and sections open after it.
+        for label, timing in timings.items():
+            if label in course['sections']:
+                continue
+            course['sections'][label] = {
+                'id': label,
+                'component': timing['component'],
+                'instructor': timing['instructor'],
+                'meets': timing['meets'],
+                'room': timing['room'],
+                'cadence': '',
+            }
+            added += 1
+
         # Lectures first, then the labs and recitations that enrol alongside
         # them, so the picker's list opens on the choice most people want.
         course['sections'] = OrderedDict(
             sorted(course['sections'].items(),
                    key=lambda kv: (bool(kv[1]['component']), kv[0])))
+
+        del course['details']
+        del course['key']
+
+    print('planner: %d sections timed, %d added that the memo lacked' % (matched, added))
 
     return list(courses.values())
 
@@ -278,7 +435,7 @@ def build(path, sheet_name):
 def render(courses, export_name, term, source):
     def section_literal(section):
         parts = ['id: ' + ts_string(section['id'])]
-        for key in ('component', 'instructor', 'meets', 'cadence'):
+        for key in ('component', 'instructor', 'meets', 'room', 'cadence'):
             if section.get(key):
                 parts.append('%s: %s' % (key, ts_string(section[key])))
         return '{ ' + ', '.join(parts) + ' }'
@@ -295,11 +452,11 @@ def render(courses, export_name, term, source):
         ' *   python scripts/build-catalog.py "%s" \\' % source,
         ' *       --out %s --export %s --term "%s"' % (out_path, export_name, term),
         ' *',
-        ' * Only what the picker renders is kept: code, title, credits, department',
-        ' * and the section list. `meets` is present only for the courses whose memo',
-        ' * entry publishes a day/time on the timetable; every other section carries',
-        ' * `cadence` instead - how often it meets and for how long, which is all the',
-        ' * memo says about when those ones run.',
+        ' * Sources: the registrar memo for what exists, and LUMS Pro Planner',
+        ' * (https://lumsproplanner.com, by Muhammad Sohaib Shahzad) for when and',
+        ' * where each section meets. A section with neither a published slot nor a',
+        ' * planner entry carries `cadence` instead - how often it meets and for how',
+        ' * long, which is all the memo says about when those ones run.',
         ' *',
         ' * Pointing the app at a different term is a one-line change in',
         ' * `lib/catalog/index.ts` - see ACTIVE_CATALOG there.',
@@ -342,16 +499,20 @@ def main():
     parser.add_argument('--out', default='lib/catalog/fall-2026.ts')
     parser.add_argument('--export', dest='export_name', default='FALL_2026')
     parser.add_argument('--term', default='Fall 2026')
+    parser.add_argument('--refresh-planner', action='store_true',
+                        help='re-download the planner snapshot before building')
     args = parser.parse_args()
 
-    courses = build(args.workbook, args.sheet)
+    planner = load_planner(args.refresh_planner)
+    courses = build(args.workbook, args.sheet, planner)
     with open(args.out, 'w', encoding='utf-8', newline='\n') as f:
         f.write(render(courses, args.export_name, args.term, args.workbook))
 
     sections = sum(len(c['sections']) for c in courses)
     timed = sum(1 for c in courses for s in c['sections'].values() if s['meets'])
-    print('%s: %d courses, %d sections, %d with a meeting time'
-          % (args.out, len(courses), sections, timed))
+    roomed = sum(1 for c in courses for s in c['sections'].values() if s.get('room'))
+    print('%s: %d courses, %d sections, %d timed, %d with a room'
+          % (args.out, len(courses), sections, timed, roomed))
 
 
 if __name__ == '__main__':

@@ -36,6 +36,7 @@ import {
   cleanCourseCode,
   cleanCourseName,
   cleanTaskTitle,
+  MEETING_TIME_MAX,
 } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
 import HandNote from '@/components/notebook/HandNote';
@@ -303,13 +304,17 @@ export default function DashboardPage() {
   function resolveNewCourse() {
     if (pickedCourse) {
       const chosen = pickedCourse.sections?.find((sec) => sec.id === newCourseSection);
+      const withRoom = [chosen?.meets, chosen?.room].filter(Boolean).join(' · ');
       return {
         code: cleanCourseCode(pickedCourse.code),
         name: cleanCourseName(pickedCourse.title),
         credits: pickedCourse.credits ?? null,
         section: newCourseSection || null,
         instructor: chosen?.instructor ?? null,
-        meetingTime: chosen?.meets ?? null,
+        // The room earns its place only when it does not push the line past
+        // what the field holds; the time is the half that must survive.
+        meetingTime:
+          (withRoom.length <= MEETING_TIME_MAX ? withRoom : chosen?.meets) || null,
       };
     }
     const parsed = parseCourseInput(courseQuery);

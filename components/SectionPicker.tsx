@@ -25,7 +25,9 @@ const MAX_ROWS = 4;
  */
 function lines(section: CatalogSection) {
   const when = section.meets || section.cadence;
-  const detail = [section.component, section.instructor].filter(Boolean).join(' · ');
+  const detail = [section.component, section.room, section.instructor]
+    .filter(Boolean)
+    .join(' · ');
   if (when) return { primary: when, secondary: detail };
   return { primary: detail || `Section ${section.id}`, secondary: '' };
 }

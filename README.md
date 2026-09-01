@@ -118,5 +118,31 @@ stats page and heatmap need, a case-insensitive unique index on
 `(user_id, upper(code))` for course codes, and cascade-on-delete to
 `auth.users`.
 
+## 📚 Course catalog
+
+The add-course search runs against `lib/catalog/fall-2026.ts` — 524 courses
+and 887 sections for Fall 2026, generated, not hand-written. Regenerate it
+with the term's registrar course memo in the repo root:
+
+```bash
+python scripts/build-catalog.py "Fall Semester 2026 - Course Memo.xlsx"
+python scripts/build-catalog.py "…" --refresh-planner   # re-pull the schedule
+```
+
+Two sources, because neither is complete alone. The **course memo** is
+authoritative for what exists — codes, titles, credits, components, section
+labels, instructors — but publishes an actual day and time for only about a
+sixth of sections. The rest come from **[LUMS Pro Planner][planner]**, a
+public dataset maintained by Muhammad Sohaib Shahzad, a LUMS student, which
+carries a day and time for every section it lists and a room for most.
+`scripts/planner-courses.json` is a committed snapshot of it, so a build
+never depends on the site being up.
+
+The memo workbook is deliberately **not** committed: it carries free-text
+notes from named instructors that do not need publishing. The generated
+catalog contains none of it.
+
+[planner]: https://lumsproplanner.com
+
 ## 📄 License
 This project is for personal or academic use.

@@ -20,6 +20,8 @@ export interface CatalogSection {
   instructor?: string;
   /** Human-readable, already formatted, e.g. "Mon & Wed, 9:30 AM - 10:45 AM". */
   meets?: string;
+  /** Where it meets, as the catalog prints it: "A-1 · Academic Block". */
+  room?: string;
   /**
    * How often the section meets and for how long — "Twice a week - 75 min".
    * Set only where `meets` is absent, which is most sections: the registrar
