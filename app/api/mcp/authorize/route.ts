@@ -87,7 +87,7 @@ function consentPage(params: AuthorizationParams) {
 <html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Connect Claude to Akada</title>
 <style>body{margin:0;background:#f8f5ed;color:#1e1b17;font:16px Georgia,serif}.wrap{width:min(92vw,460px);margin:12vh auto;padding:32px;border:1px solid #ddd4c1;border-radius:18px;background:#fffdf8}.eyebrow{font:600 11px system-ui,sans-serif;letter-spacing:.12em;color:#8b806d}.note{color:#756b5c;line-height:1.55}.actions{display:flex;gap:12px;margin-top:26px}button,a{border-radius:11px;padding:12px 16px;font:600 14px system-ui,sans-serif;text-decoration:none;cursor:pointer}button{border:0;background:#1e1b17;color:#fff}a{border:1px solid #d8cfbd;color:#332e27}</style></head>
-<body><main class="wrap"><p class="eyebrow">AKADA CONNECTOR</p><h1>Connect Claude to Akada?</h1><p class="note">Claude will be able to find your current courses and add study tasks to them. It cannot delete courses, tasks, or study history.</p><form method="post" action="/api/mcp/authorize">${hidden('response_type', 'code')}${hidden('client_id', params.clientId)}${hidden('redirect_uri', params.redirectUri)}${hidden('code_challenge', params.codeChallenge)}${hidden('code_challenge_method', 'S256')}${hidden('scope', params.scope)}${params.state ? hidden('state', params.state) : ''}<div class="actions"><button type="submit">Allow connection</button><a href="${htmlEscape(siteUrl())}">Cancel</a></div></form></main></body></html>`;
+<body><main class="wrap"><p class="eyebrow">AKADA CONNECTOR</p><h1>Connect Claude to Akada?</h1><p class="note">Claude will be able to find your current courses and add study tasks to them. It cannot delete courses, tasks, or study history.</p><form id="mcp-consent" method="post" action="/api/mcp/authorize">${hidden('response_type', 'code')}${hidden('client_id', params.clientId)}${hidden('redirect_uri', params.redirectUri)}${hidden('code_challenge', params.codeChallenge)}${hidden('code_challenge_method', 'S256')}${hidden('scope', params.scope)}${params.state ? hidden('state', params.state) : ''}<div class="actions"><button type="submit">Allow connection</button><a href="${htmlEscape(siteUrl())}">Cancel</a></div></form></main><script>document.getElementById('mcp-consent').addEventListener('submit',async(event)=>{event.preventDefault();const form=event.currentTarget;const response=await fetch(form.action,{method:'POST',body:new FormData(form),headers:{Accept:'application/json'}});if(!response.ok){window.location.reload();return}const payload=await response.json();window.location.assign(payload.redirect_uri)})</script></body></html>`;
 }
 
 export async function GET(request: NextRequest) {
@@ -128,5 +128,10 @@ export async function POST(request: NextRequest) {
   const redirect = new URL(params.redirectUri);
   redirect.searchParams.set('code', code);
   if (params.state) redirect.searchParams.set('state', params.state);
+  if (request.headers.get('accept')?.includes('application/json')) {
+    return Response.json({ redirect_uri: redirect.toString() }, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
   return withCookies(NextResponse.redirect(redirect), auth.pendingCookies);
 }
