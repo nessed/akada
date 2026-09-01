@@ -206,11 +206,11 @@ All under **Authentication** in the sidebar.
 
 **Authentication → URL Configuration**
 
-- **Site URL:** `https://your-real-domain.com` (no trailing slash)
+- **Site URL:** `https://akada.app` (no trailing slash)
 - **Redirect URLs**, add every one of these:
 
   ```
-  https://your-real-domain.com/**
+  https://akada.app/**
   https://<your-vercel-project>.vercel.app/**
   http://localhost:3000/**
   ```
@@ -309,7 +309,7 @@ Production and Preview.
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` | same |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your anon key | same |
-| `NEXT_PUBLIC_SITE_URL` | `https://your-real-domain.com` | leave **unset**, the app falls back to the Vercel deployment URL automatically |
+| `NEXT_PUBLIC_SITE_URL` | `https://akada.app` | leave **unset**, the app falls back to the Vercel deployment URL automatically |
 
 Do **not** set `NEXT_PUBLIC_USE_LOCAL_DATA` anywhere. It is ignored in
 production builds, but there is no reason for it to exist there.
@@ -382,7 +382,7 @@ Tick each one:
 Check headers once, from a terminal:
 
 ```bash
-curl -sI https://your-real-domain.com | grep -iE 'strict-transport|content-security|x-frame|x-content-type|referrer|permissions|x-powered-by'
+curl -sI https://akada.app | grep -iE 'strict-transport|content-security|x-frame|x-content-type|referrer|permissions|x-powered-by'
 ```
 
 You should see six security headers and **no** `x-powered-by`.
@@ -417,3 +417,98 @@ Ordered by how likely they are to bite you.
   on every PR.
 - Move avatars to Supabase Storage.
 - Nonce-based CSP.
+
+---
+
+## 7. Operational risks, ranked
+
+Sections 1 to 4 get the app online. This section is about keeping it online
+and keeping other people's data safe once it is. Ranked by what will actually
+bite first.
+
+**Domain:** `akada.app` is being registered. Several items below depend on it,
+and two things must change the day it resolves:
+
+- `NEXT_PUBLIC_SITE_URL` in Vercel, currently `https://akada.vercel.app`.
+- Supabase → Authentication → URL Configuration: Site URL and the redirect
+  allowlist. Sign-up fails silently from any origin not on that list.
+
+### 7.1 Email is the single point of failure. Fix before telling anyone.
+
+Confirmations are ON, so no email means no usable account. Supabase's built-in
+sender caps at roughly 2 to 4 messages per hour and is documented as not for
+production. The 5th sign-up in an hour gets no email and no error: they wait,
+then leave, and you never hear about it.
+
+The audience makes it worse. These users are on `@lums.edu.pk`, and an
+institutional gateway is likely to bin or spam-folder mail that carries no SPF
+or DKIM alignment to a domain you own.
+
+- [ ] Register `akada.app`.
+- [ ] Resend (free tier around 3,000/month, 100/day) or Postmark. Verify the
+      domain, which means adding SPF and DKIM DNS records.
+- [ ] Supabase → Authentication → Emails → SMTP Settings, point at it.
+- [ ] Test with a real `@lums.edu.pk` address, not only Gmail. Gmail is
+      forgiving; university gateways are not.
+
+Until this is done, keep the user count to people you can unblock by hand.
+
+### 7.2 There are no backups, and deletion is now permanent
+
+Supabase's free tier does not back up the database. A bad migration, a bug, or
+a deleted project loses everything with no undo. There is now also a
+delete-account button that hard-deletes the auth user and cascades every row,
+which is correct behaviour and a loaded gun with no safety.
+
+- [ ] Either Supabase Pro (around $25/month, daily backups), or a GitHub
+      Action on a cron running `pg_dump` into a private repo or object
+      storage. Connection string as a repo secret, never in the codebase.
+
+Also: **free projects pause after about 7 days of inactivity.** Over a
+semester break the app goes down quietly until someone opens the dashboard.
+
+### 7.3 RLS is the whole security model, and it is unverified
+
+There is no server-side permission layer. No API route checks ownership, and
+the app holds no service-role key by design. Row Level Security policies are
+the only thing between one student and another's courses, tasks and notes. One
+missing or wrong policy on one table exposes everyone.
+
+- [ ] Run section 1.3, the two-account isolation proof, against the live
+      database. Five minutes, and it is the only claim in this document that
+      has never been checked.
+- [ ] Confirm no `service_role` or `sb_secret_` key exists in Vercel's
+      environment variables. Anything that can read env vars could then read
+      every row, RLS bypassed.
+
+### 7.4 A personal address is published on a public page
+
+`/privacy`, `/terms` and the site footer all carry a personal Gmail, on pages
+built to be indexed. It will be scraped.
+
+- [ ] Once `akada.app` resolves, forward `hello@akada.app` to it and change
+      `CONTACT_EMAIL` in `lib/contact.ts`. One constant; every surface follows.
+
+### 7.5 Nothing tells you when it breaks
+
+Crashes reach Vercel runtime logs and stop there. The first signal of an
+outage will be a friend messaging you, or silence.
+
+- [ ] Sentry's free tier is 5,000 errors/month, and the handler is already
+      isolated in `app/api/client-error/route.ts`.
+
+### 7.6 Have an answer for "I cannot get in"
+
+It will happen in week one, and if SMTP is down both routes fail at once.
+
+- [ ] Know where Supabase → Authentication → Users lets you confirm a user by
+      hand, before somebody needs it.
+- [ ] Same for a password reset that never arrives.
+
+### 7.7 Export covers less than the privacy policy implies
+
+Settings exports study sessions only. The policy points at it as the way to
+take your data with you, which should mean courses and tasks too.
+
+- [ ] Extend it to one JSON of everything. It also makes deleting an account
+      less frightening, because a copy can be taken first.
