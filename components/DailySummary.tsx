@@ -31,8 +31,7 @@ export default function DailySummary({ todaysSessions, courses }: Props) {
 
   return (
     <section
-      className="card deckle relative overflow-hidden mt-2 px-5 py-[18px]"
-      style={{ background: 'var(--paper)', border: '1px solid var(--line)' }}
+      className="deckle relative mt-2 overflow-hidden border border-line bg-paper px-[22px] py-[18px]"
     >
       {/* Page-fold corner — folded-down notebook page detail */}
       <div

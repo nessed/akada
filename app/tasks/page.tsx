@@ -219,19 +219,9 @@ export default function TasksPage() {
 
       {/* Sections */}
       {courses.length === 0 ? (
-        <EmptyState
-          title="No courses yet"
-          text="Add courses during setup or from Settings before creating tasks."
-        />
+        <EmptyState title="No courses yet" />
       ) : visibleTasks.length === 0 ? (
-        <EmptyState
-          title={filter === 'all' ? 'No tasks yet' : `No ${filter} tasks`}
-          text={
-            filter === 'all'
-              ? 'Add a task under a course and it will show up here.'
-              : 'Nothing matches this filter right now.'
-          }
-        />
+        <EmptyState title={filter === 'all' ? 'No tasks yet' : `No ${filter} tasks`} />
       ) : (
         <div className="flex flex-col gap-[22px]">
           {courses.map((course) => {
@@ -440,7 +430,7 @@ export default function TasksPage() {
   );
 }
 
-function EmptyState({ title }: { title: string; text: string }) {
+function EmptyState({ title }: { title: string }) {
   const prompt = title.includes('courses') 
     ? 'The page is blank. Add a course to begin...' 
     : 'The page is blank. Jot down what\'s next...';

@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { PASTEL_PALETTE } from '@/lib/utils';
@@ -24,7 +24,8 @@ import {
   hasDuplicateCourseCodes,
   isIsoDate,
 } from '@/lib/planner-safety';
-import { seasonLabel } from '@/lib/utils';
+import { isoDate, seasonLabel } from '@/lib/utils';
+import HandCheck from '@/components/notebook/HandCheck';
 
 type Step = 'welcome' | 'name' | 'courses' | 'semester' | 'routine';
 
@@ -362,9 +363,6 @@ function Welcome({ onNext }: { onNext: () => void }) {
       >
         Start planning
       </button>
-      <p className="mt-3 font-serif italic text-[12px] text-muted">
-        Swipe right to begin <span className="ml-1">›››</span>
-      </p>
     </div>
   );
 }
@@ -638,14 +636,8 @@ function CoursesStep({
             <h3 className="mt-1 mb-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
               {editing.name || 'Course name'}
             </h3>
-            <div className="mt-3.5 h-1 rounded-full bg-bg-tint">
-              <div
-                className="h-full rounded-full"
-                style={{ width: '24%', background: editing.color }}
-              />
-            </div>
             <p className="mt-2.5 mb-0 text-xs text-muted font-serif italic">
-              Goal · {editing.weeklyGoalHours} hrs / week
+              {editing.weeklyGoalHours} hrs a week
             </p>
           </div>
         </div>
@@ -693,11 +685,46 @@ interface SemesterStepProps {
   onNext: () => void;
 }
 
-const SEMESTERS = [
-  { label: 'Spring 2026', range: 'Jan 19 – May 20', start: '2026-01-19', end: '2026-05-20' },
-  { label: 'Summer 2026', range: 'Jun 1 – Aug 13', start: '2026-06-01', end: '2026-08-13' },
-  { label: 'Fall 2026', range: 'Aug 31 – Dec 18', start: '2026-08-31', end: '2026-12-18' },
+/** Roughly when each term runs, as month/day pairs. */
+const TERM_SHAPES = [
+  { season: 'Spring', start: [0, 19], end: [4, 20] },
+  { season: 'Summer', start: [5, 1], end: [7, 13] },
+  { season: 'Fall', start: [7, 31], end: [11, 18] },
 ];
+
+function iso(year: number, [month, day]: number[]): string {
+  return isoDate(new Date(year, month, day));
+}
+
+/**
+ * The next three terms, counted from today. Hardcoding them meant that by
+ * September the list offered two terms that had already finished and one
+ * that had started, with no way to say anything else.
+ */
+function upcomingSemesters(today = new Date()) {
+  const options = [];
+  for (let year = today.getFullYear(); options.length < 3; year += 1) {
+    for (const shape of TERM_SHAPES) {
+      const start = iso(year, shape.start);
+      const end = iso(year, shape.end);
+      // A term already over is no longer upcoming; one in progress still is.
+      if (end < isoDate(today) || options.length >= 3) continue;
+      options.push({
+        label: `${shape.season} ${year}`,
+        range: `${new Date(start + 'T00:00:00').toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        })} – ${new Date(end + 'T00:00:00').toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        })}`,
+        start,
+        end,
+      });
+    }
+  }
+  return options;
+}
 
 function SemesterStep({
   start,
@@ -708,6 +735,13 @@ function SemesterStep({
   onBack,
   onNext,
 }: SemesterStepProps) {
+  const semesters = useMemo(() => upcomingSemesters(), []);
+  const onAPreset = semesters.some((sem) => sem.start === start && sem.end === end);
+  // Opened by hand, or already open because the dates came from somewhere
+  // other than a preset.
+  const [custom, setCustom] = useState(false);
+  const showCustom = custom || (Boolean(start || end) && !onAPreset);
+
   const weeks = canFinish
     ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000 / 7)
     : null;
@@ -726,7 +760,7 @@ function SemesterStep({
       </div>
 
       <div className="px-7 pt-8 flex flex-col gap-3">
-        {SEMESTERS.map((sem) => {
+        {semesters.map((sem) => {
           const active = start === sem.start && end === sem.end;
           return (
             <button
@@ -739,8 +773,7 @@ function SemesterStep({
               className="flex items-center justify-between p-5 rounded-[14px] transition-all duration-150 text-left border"
               style={{
                 background: active ? 'var(--bg-tint)' : 'var(--paper)',
-                borderColor: active ? 'var(--ink)' : 'var(--line)',
-                outline: active ? '1px solid var(--primary)' : 'none',
+                borderColor: active ? 'var(--line-strong)' : 'var(--line)',
               }}
             >
               <div>
@@ -753,20 +786,34 @@ function SemesterStep({
               </div>
               <div
                 className="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-colors border"
-                style={{
-                  borderColor: active ? 'var(--ink)' : 'var(--line-strong)',
-                  background: active ? 'var(--primary)' : 'transparent',
-                }}
+                style={{ borderColor: active ? 'var(--ink)' : 'var(--line-strong)' }}
               >
-                {active && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--bg)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                )}
+                {active && <HandCheck size={13} color="var(--ink)" />}
               </div>
             </button>
           );
         })}
+
+        {showCustom ? (
+          <div className="mt-1 grid grid-cols-2 gap-3 animate-fade-in">
+            <div>
+              <label className="eyebrow mb-2 block">Starts</label>
+              <DateInput value={start} onChange={setStart} />
+            </div>
+            <div>
+              <label className="eyebrow mb-2 block">Ends</label>
+              <DateInput value={end} onChange={setEnd} />
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCustom(true)}
+            className="self-start rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-2.5 text-xs font-medium text-muted"
+          >
+            + Other dates
+          </button>
+        )}
 
         <div className="mt-4 py-5 px-[22px] bg-paper rounded-[14px] border border-line">
           <p className="eyebrow m-0 text-muted">

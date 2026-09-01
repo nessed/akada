@@ -620,12 +620,7 @@ export default function DashboardPage() {
 
       {/* Course cards */}
       {courses.length === 0 ? (
-        <EmptyPanel
-          title="No courses yet"
-          text="Add your classes and weekly goals to make the dashboard useful."
-          action="Add a course"
-          onAction={openAddCourse}
-        />
+        <EmptyPanel action="Add a course" onAction={openAddCourse} />
       ) : (
         <div className="flex flex-col gap-3">
           {courses.map((course) => (
@@ -962,16 +957,7 @@ function getSmartPrompts({
   return prompts.slice(0, 2);
 }
 
-function EmptyPanel({
-  title,
-  action,
-  onAction,
-}: {
-  title: string;
-  text: string;
-  action: string;
-  onAction: () => void;
-}) {
+function EmptyPanel({ action, onAction }: { action: string; onAction: () => void }) {
   return (
     <div className="py-8 text-center">
       <p className="m-0 font-serif text-[16px] italic text-muted-soft">

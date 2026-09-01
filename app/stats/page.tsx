@@ -277,7 +277,7 @@ export default function StatsPage() {
       )}
 
       {/* Heatmap */}
-      <section className="bg-paper rounded-[14px] border border-line py-5 px-[22px] mb-4">
+      <section className="deckle bg-paper border border-line py-5 px-[22px] mb-4">
         <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
           <h2 className="m-0 font-serif font-medium text-[17px]">Activity</h2>
           <div className="flex gap-1 overflow-x-auto app-scroll">
@@ -325,13 +325,13 @@ export default function StatsPage() {
       </section>
 
       {/* Weekly bars — deckle card */}
-      <section className="card deckle bg-paper border border-line py-5 px-[22px] mb-4">
+      <section className="deckle bg-paper border border-line py-5 px-[22px] mb-4">
         <h2 className="m-0 mb-[18px] font-serif font-medium text-[20px]">This week</h2>
         <WeeklyChart sessions={sessions} courses={courses} />
       </section>
 
       {/* Totals — deckle card with hand-drawn trend arrows */}
-      <section className="card deckle bg-paper border border-line px-[22px]">
+      <section className="deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Hours by course</h2>
         <div>
           {totals.length === 0 && (
@@ -435,7 +435,7 @@ export default function StatsPage() {
           <h2 className="m-0 mb-3 font-serif font-medium text-[20px]">
             Marks &amp; milestones
           </h2>
-          <div className="card deckle bg-paper border border-line px-[22px] py-2">
+          <div className="deckle bg-paper border border-line px-[22px] py-2">
             {(() => {
               const totalHours = totalSec / 3600;
               const dayCountAll = new Set(sessions.map((s) => s.date)).size;
@@ -512,7 +512,7 @@ export default function StatsPage() {
         </section>
       )}
 
-      <section className="mt-4 card deckle bg-paper border border-line px-[22px]">
+      <section className="mt-4 deckle bg-paper border border-line px-[22px]">
         <h2 className="my-4 font-serif font-medium text-[20px]">Session history</h2>
         {sessions.length === 0 ? (
           <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
