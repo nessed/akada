@@ -6,9 +6,13 @@ const isProd = process.env.NODE_ENV === 'production';
 // Derive it from the env var rather than hardcoding, so previews and
 // production each lock down to their own backend.
 let supabaseOrigin = '';
+let siteOrigin = '';
 try {
   if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
     supabaseOrigin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin;
+  }
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    siteOrigin = new URL(process.env.NEXT_PUBLIC_SITE_URL).origin;
   }
 } catch {
   // Malformed URL — leave it out of connect-src rather than breaking the build
@@ -40,7 +44,7 @@ const csp = [
   "manifest-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  `form-action 'self'${siteOrigin ? ` ${siteOrigin}` : ''}`,
   "frame-ancestors 'none'",
   ...(isProd ? ['upgrade-insecure-requests'] : []),
 ].join('; ');
