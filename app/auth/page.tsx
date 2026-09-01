@@ -70,11 +70,19 @@ export default function AuthPage() {
       const supabase = createClient();
 
       if (isSignUp) {
+        const requestedNext = new URLSearchParams(window.location.search).get('next');
+        const safeNext =
+          requestedNext &&
+          requestedNext.startsWith('/') &&
+          !requestedNext.startsWith('//') &&
+          !requestedNext.startsWith('/\\')
+            ? requestedNext
+            : null;
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
-            emailRedirectTo: window.location.origin + '/auth/callback',
+            emailRedirectTo: `${window.location.origin}/auth/callback${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ''}`,
             data: name.trim() ? { display_name: name.trim() } : undefined,
           },
         });
@@ -121,7 +129,15 @@ export default function AuthPage() {
     } catch {
       onboarded = false;
     }
-    router.replace(onboarded ? '/dashboard' : '/onboarding');
+    const requestedNext = new URLSearchParams(window.location.search).get('next');
+    const safeNext =
+      requestedNext &&
+      requestedNext.startsWith('/') &&
+      !requestedNext.startsWith('//') &&
+      !requestedNext.startsWith('/\\')
+        ? requestedNext
+        : null;
+    router.replace(safeNext ?? (onboarded ? '/dashboard' : '/onboarding'));
   }
 
   async function handleForgotPassword() {

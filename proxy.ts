@@ -26,6 +26,11 @@ const PUBLIC_PATHS = new Set([
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
+  // The remote MCP connector performs its own OAuth and bearer-token checks.
+  // It must be reachable before an Akada browser session exists, otherwise a
+  // connector gets HTML redirects instead of OAuth/MCP protocol responses.
+  if (pathname === '/api/mcp' || pathname.startsWith('/api/mcp/')) return true;
+  if (pathname.startsWith('/.well-known/oauth-')) return true;
   // Static assets served out of /public, manifest, robots, sitemap, icons,
   // audio, always carry a file extension and must stay reachable signed out.
   return /\.[a-z0-9]+$/i.test(pathname);
