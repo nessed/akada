@@ -29,6 +29,7 @@ import {
 import { useTimer } from '@/lib/timer-context';
 import { ButtonSpinner } from './LoadingIndicator';
 import ConfirmSheet from './ConfirmSheet';
+import BackButton from './BackButton';
 import { useNotice } from './Notice';
 
 type Section = 'overview' | 'profile' | 'courses' | 'semester' | 'appearance';
@@ -521,7 +522,7 @@ function Toggle({
       }}
     >
       <span
-        className="absolute top-0.5 rounded-full bg-paper shadow-[0_1px_3px_rgba(0,0,0,0.18)] transition-[left] duration-200"
+        className="absolute top-0.5 rounded-full bg-paper shadow-[0_1px_3px_rgba(26,25,21,0.10)] transition-[left] duration-200"
         style={{
           width: 18,
           height: 18,
@@ -1024,14 +1025,3 @@ function AppearanceEditor({
   );
 }
 
-function BackButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="mb-3 bg-transparent border-0 p-0 text-[13px] text-muted cursor-pointer"
-    >
-      ← Back
-    </button>
-  );
-}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
+import SelectField from '@/components/SelectField';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskItem from '@/components/TaskItem';
@@ -380,17 +381,17 @@ export default function TasksPage() {
             />
 
             <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-2">
-              <select
+              <SelectField
+                className="min-w-0 flex-1"
+                ariaLabel="Course"
                 value={editCourseId}
-                onChange={(e) => setEditCourseId(e.target.value)}
-                className="min-w-0 bg-bg-tint border border-line rounded-lg px-3 py-2.5 text-xs text-ink-soft outline-none"
-              >
-                {courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.code} - {course.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setEditCourseId}
+                options={courses.map((course) => ({
+                  value: course.id,
+                  tag: course.code,
+                  label: course.name,
+                }))}
+              />
               <button
                 type="button"
                 onClick={() => setEditHigh((v) => !v)}

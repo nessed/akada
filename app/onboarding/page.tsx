@@ -26,6 +26,7 @@ import {
 } from '@/lib/planner-safety';
 import { isoDate, seasonLabel } from '@/lib/utils';
 import HandCheck from '@/components/notebook/HandCheck';
+import DatePicker from '@/components/DatePicker';
 
 type Step = 'welcome' | 'name' | 'courses' | 'semester' | 'routine';
 
@@ -866,10 +867,6 @@ function RoutineStep({
     }
   }
 
-  // Compute a helpful comparison
-  const weeklyFromDaily = dailyGoal * 7;
-  const surplus = weeklyFromDaily - totalWeeklyGoal;
-
   return (
     <div className="flex-1 flex flex-col animate-fade-in">
       <div className="px-7 pt-2">
@@ -944,13 +941,6 @@ function RoutineStep({
           </p>
           <p className="mt-1.5 mb-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
             {dailyGoal}h daily · {totalWeeklyGoal}h weekly
-          </p>
-          <p className="mt-2 mb-0 text-[12px] text-ink-soft leading-[1.5] font-serif italic">
-            {surplus >= 2
-              ? `That's ${surplus.toFixed(0)}h buffer above your course goals — great for review.`
-              : surplus >= 0
-              ? 'Right on track with your course goals.'
-              : `You'll need to prioritize — ${Math.abs(surplus).toFixed(0)}h short of course goals per week.`}
           </p>
         </div>
       </div>
@@ -1043,12 +1033,5 @@ function TextInput({
 }
 
 function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <input
-      type="date"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary rounded-none"
-    />
-  );
+  return <DatePicker value={value} onChange={onChange} allowClear={false} placeholder="Pick a date" />;
 }

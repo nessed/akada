@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Session } from '@/lib/data';
 import { isoDate, formatHM } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
@@ -13,6 +13,8 @@ interface Props {
 }
 
 export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: Props) {
+  const [reading, setReading] = useState<{ iso: string; sec: number } | null>(null);
+
   const cells = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -50,7 +52,8 @@ export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: 
   }, [sessions, weeks]);
 
   return (
-    <div className="flex gap-1">
+    <div>
+      <div className="flex gap-1">
       {Array.from({ length: weeks }).map((_, w) => (
         <div key={w} className="flex flex-col gap-1">
           {Array.from({ length: 7 }).map((_, d) => {
@@ -66,9 +69,12 @@ export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: 
                 ? 0.08
                 : 0.18 + cell.intensity * 0.82;
             return (
-              <span
+              <button
                 key={d}
-                title={cell.future ? '' : `${cell.iso} · ${formatHM(cell.sec)}`}
+                type="button"
+                aria-label={`${cell.iso} · ${formatHM(cell.sec)}`}
+                onClick={() => setReading({ iso: cell.iso, sec: cell.sec })}
+                disabled={cell.future}
                 style={{
                   width: 14,
                   height: 14,
@@ -79,12 +85,24 @@ export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: 
                       ? 'var(--bg-tint)'
                       : accent,
                   opacity: cell.future ? 0 : op,
+                  border: 'none',
+                  padding: 0,
                 }}
               />
             );
           })}
         </div>
       ))}
+      </div>
+      {reading && (
+        <p className="mt-2.5 mb-0 font-mono text-[11px] text-muted tabular-nums animate-fade-in">
+          {new Date(reading.iso + 'T00:00:00').toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+          })}
+          <span className="ml-2 text-ink">{formatHM(reading.sec)}</span>
+        </p>
+      )}
     </div>
   );
 }

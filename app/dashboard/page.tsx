@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 // Aliased: the DOM `Image` constructor is used below by resizeImage().
 import NextImage from 'next/image';
 import { useRouter } from 'next/navigation';
-import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
 import DailySummary from '@/components/DailySummary';
 import CourseCard from '@/components/CourseCard';
@@ -13,6 +12,7 @@ import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
+import SwipeRow from '@/components/SwipeRow';
 import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
@@ -452,12 +452,7 @@ export default function DashboardPage() {
             </span>
           </h1>
           <p className="mt-2 mb-0 max-w-[260px] text-[13px] leading-[1.5] text-ink-soft">
-            {overdueCount > 0 ? (
-              <>
-                You have <b className="text-ink">{overdueCount} overdue</b>{' '}
-                {overdueCount === 1 ? 'task' : 'tasks'} waiting.
-              </>
-            ) : todayTasks.length > 0 ? (
+            {todayTasks.length > 0 ? (
               <>
                 <b className="text-ink">{todayTasks.length}</b>{' '}
                 {todayTasks.length === 1 ? 'task' : 'tasks'} on the page today.
@@ -928,9 +923,7 @@ function getSmartPrompts({
   const prompts: string[] = [];
   const openTasks = tasks.filter((t) => !t.completed);
 
-  if (overdueCount > 0) {
-    prompts.push(`${overdueCount} overdue ${overdueCount === 1 ? 'task needs' : 'tasks need'} attention.`);
-  } else if (tomorrowCount > 0) {
+  if (tomorrowCount > 0) {
     prompts.push(`${tomorrowCount} ${tomorrowCount === 1 ? 'task is' : 'tasks are'} due tomorrow.`);
   }
 
@@ -976,39 +969,14 @@ function EmptyPanel({ action, onAction }: { action: string; onAction: () => void
 }
 
 function DashboardTaskItem({ task, course, isLast, onToggle, onStartTimer }: { task: Task; course?: Course; isLast: boolean; onToggle: (id: string) => void; onStartTimer: (task: Task) => void; }) {
-  const controls = useAnimation();
-
-  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    const threshold = 70;
-    if (info.offset.x > threshold) {
-      onToggle(task.id);
-      controls.start({ x: 0 });
-    } else {
-      controls.start({ x: 0 });
-    }
-  };
-
   return (
-    <div className={`relative overflow-hidden group ${isLast ? '' : 'border-b border-dashed border-line'}`}>
-      <div className="absolute inset-0 flex items-center justify-start px-4 z-0 pointer-events-none">
-        <div
-          className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider uppercase opacity-80"
-          style={{ color: course?.color || 'var(--ink)' }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M5 12l4 4L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Complete
-        </div>
-      </div>
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.6}
-        onDragEnd={handleDragEnd}
-        animate={controls}
-        className="relative z-10 flex items-center gap-3 px-3.5 py-[11px] bg-bg"
-      >
+    <SwipeRow
+      className={isLast ? '' : 'border-b border-dashed border-line'}
+      accent={course?.color}
+      onComplete={() => onToggle(task.id)}
+      surfaceClassName="flex items-center gap-3 bg-bg px-3.5 py-[11px]"
+    >
+      <>
         <button
           type="button"
           onClick={() => onToggle(task.id)}
@@ -1031,7 +999,7 @@ function DashboardTaskItem({ task, course, isLast, onToggle, onStartTimer }: { t
             {course.code}
           </button>
         )}
-      </motion.div>
-    </div>
+      </>
+    </SwipeRow>
   );
 }

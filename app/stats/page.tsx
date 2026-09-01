@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, useAnimation, PanInfo } from 'framer-motion';
 import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
+import SwipeRow from '@/components/SwipeRow';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
@@ -652,35 +652,13 @@ function FilterChip({ active, onClick, label, color, tint }: ChipProps) {
 }
 
 function SessionItem({ session, course, onDelete }: { session: Session; course?: Course; onDelete: (id: string) => void }) {
-  const controls = useAnimation();
-  
-  const handleDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    const threshold = 70;
-    if (info.offset.x < -threshold) {
-      onDelete(session.id);
-    } else {
-      controls.start({ x: 0 });
-    }
-  };
-
   return (
-    <div className="relative overflow-hidden border-b border-line last:border-0 group">
-      <div className="absolute inset-0 flex items-center justify-end px-4 z-0 pointer-events-none">
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider uppercase text-warn opacity-80">
-          Delete
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
-      </div>
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.6}
-        onDragEnd={handleDragEnd}
-        animate={controls}
-        className="relative z-10 flex items-start justify-between gap-3 bg-paper py-3.5"
-      >
+    <SwipeRow
+      className="border-b border-line last:border-0"
+      onDelete={() => onDelete(session.id)}
+      surfaceClassName="flex items-start justify-between gap-3 bg-paper py-3.5"
+    >
+      <>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span
@@ -721,7 +699,7 @@ function SessionItem({ session, course, onDelete }: { session: Session; course?:
             </svg>
           </button>
         </div>
-      </motion.div>
-    </div>
+      </>
+    </SwipeRow>
   );
 }

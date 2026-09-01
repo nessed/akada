@@ -85,15 +85,9 @@ export default function CourseCard({
 
         {/* Progress */}
         <div className="mt-4">
-          <div className="flex items-baseline justify-between mb-1.5">
-            <span className="font-mono font-semibold text-sm tabular-nums">
+          <div className="mb-1.5">
+            <span className="font-mono text-sm font-semibold tabular-nums">
               {formatHours(wkSec, 1)}
-              <span className="text-muted font-sans font-normal ml-1">
-                / {goalHours}h this week
-              </span>
-            </span>
-            <span className="font-mono text-xs text-muted">
-              {Math.round(pct)}%
             </span>
           </div>
           <div className="h-1 rounded-full bg-bg-tint overflow-hidden">

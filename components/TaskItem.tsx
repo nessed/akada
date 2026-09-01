@@ -2,6 +2,7 @@
 
 import type { Course, Task } from '@/lib/data';
 import { dueLabel } from '@/lib/utils';
+import HandCheck from './notebook/HandCheck';
 
 interface Props {
   task: Task;
@@ -35,26 +36,13 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
               : undefined
           }
         >
-          {task.completed && (
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path
-                d="M2.5 8 Q5 11.5 6.5 12 Q9 9 13.5 3.5"
-                stroke="var(--paper)"
-                strokeWidth="1.8"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          )}
+          {task.completed && <HandCheck size={12} color="var(--paper)" strokeWidth={1.8} />}
         </button>
 
         <div className="flex-1 min-w-0">
           <p
             className={`m-0 text-[14.5px] leading-[1.4] ${
-              task.completed
-                ? 'line-through text-ink-soft/70 decoration-line-strong'
-                : 'text-ink'
+              task.completed ? 'text-ink-soft' : 'text-ink'
             }`}
           >
             {task.title}

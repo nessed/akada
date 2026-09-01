@@ -117,7 +117,7 @@ export default function FloatingActionButton({ courses, onStartTimer, onAddTask 
           style={{
             width: 52,
             height: 52,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+            boxShadow: '0 4px 12px rgba(26,25,21,0.05)',
           }}
         >
           <svg

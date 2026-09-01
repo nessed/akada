@@ -426,9 +426,6 @@ export default function TimerPage() {
                 >
                   {isPaused ? 'Paused' : 'In session'}
                 </p>
-                <p className="mt-1.5 mb-0 font-mono text-[11px] text-muted-soft tabular-nums">
-                  {Math.round(pct * 100)}% of {goalMin}m
-                </p>
               </div>
             </div>
 

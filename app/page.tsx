@@ -228,14 +228,10 @@ function ProductPreview() {
                   </span>
                 </div>
                 <div className="mt-3">
-                  <div className="mb-1.5 flex items-baseline justify-between">
+                  <div className="mb-1.5">
                     <span className="font-mono text-[13px] font-semibold">
                       {course.hours}
-                      <span className="ml-1 font-sans font-normal text-muted">
-                        / {course.goal}
-                      </span>
                     </span>
-                    <span className="text-[11px] text-muted">this week</span>
                   </div>
                   <div className="h-1 overflow-hidden rounded-full bg-bg-tint">
                     <div

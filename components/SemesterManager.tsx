@@ -9,6 +9,9 @@ import { formatHM, seasonLabel, totalSeconds } from '@/lib/utils';
 import { cleanText, isIsoDate } from '@/lib/planner-safety';
 import LoadingIndicator, { ButtonSpinner } from './LoadingIndicator';
 import ConfirmSheet from './ConfirmSheet';
+import DatePicker from './DatePicker';
+import BackButton from './BackButton';
+import HandCheck from './notebook/HandCheck';
 
 /**
  * Settings → Semester. The active semester is what Dashboard, Tasks and
@@ -83,7 +86,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
         }}
       />
 
-      <BackButtonLocal onClick={onBack} />
+      <BackButton onClick={onBack} />
       <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
         Semester
       </h3>
@@ -129,7 +132,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
           disabled={deletingId === active.id}
           className="mt-4 w-full min-h-[44px] rounded-xl border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
         >
-          {deletingId === active.id ? 'Deleting semester...' : 'Delete active semester'}
+          {deletingId === active.id ? 'Deleting semester…' : 'Delete active semester'}
         </button>
       )}
 
@@ -236,7 +239,7 @@ function StartSemesterForm({
 
   return (
     <div className="px-[22px] pt-5 pb-10 app-scroll animate-fade-in">
-      <BackButtonLocal onClick={onCancel} />
+      <BackButton onClick={onCancel} />
       <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
         Start new semester
       </h3>
@@ -249,7 +252,6 @@ function StartSemesterForm({
           <p className="eyebrow m-0 text-muted">
             Term presets
           </p>
-          <span className="text-[11px] font-serif italic text-primary">Suggested for today</span>
         </div>
         <div className="mt-2.5 grid gap-2">
           {presets.map((preset) => {
@@ -276,7 +278,7 @@ function StartSemesterForm({
                 </span>
                 {selected && (
                   <span className="text-primary" aria-label="Selected">
-                    ✓
+                    <HandCheck size={13} color="var(--primary)" />
                   </span>
                 )}
               </button>
@@ -315,28 +317,28 @@ function StartSemesterForm({
               <label className="eyebrow block text-muted mb-2">
                 Start
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
+                allowClear={false}
+                placeholder="Start"
+                onChange={(next) => {
+                  setStartDate(next);
                   setSelectedPreset('');
                 }}
-                className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[14px] text-ink outline-none focus:border-primary transition-colors"
               />
             </div>
             <div>
               <label className="eyebrow block text-muted mb-2">
                 End
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
+                allowClear={false}
+                placeholder="End"
+                onChange={(next) => {
+                  setEndDate(next);
                   setSelectedPreset('');
                 }}
-                className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[14px] text-ink outline-none focus:border-primary transition-colors"
               />
             </div>
           </div>
@@ -446,7 +448,7 @@ function SemesterArchive({
 
   return (
     <div className="px-[22px] pt-5 pb-10 app-scroll animate-fade-in">
-      <BackButtonLocal onClick={onBack} />
+      <BackButton onClick={onBack} />
       <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
         {semester.label}
       </h3>
@@ -519,7 +521,7 @@ function SemesterArchive({
               disabled={deleting}
               className="mt-6 w-full min-h-[44px] rounded-xl border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
             >
-              {deleting ? 'Deleting semester...' : 'Delete this semester'}
+              {deleting ? 'Deleting semester…' : 'Delete this semester'}
             </button>
           </>
         )
@@ -528,14 +530,3 @@ function SemesterArchive({
   );
 }
 
-function BackButtonLocal({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="mb-3 bg-transparent border-0 p-0 text-[13px] text-muted cursor-pointer"
-    >
-      ← Back
-    </button>
-  );
-}
