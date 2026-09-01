@@ -17,12 +17,32 @@ To maintain the soul of the app, we actively reject standard SaaS UI/UX "best pr
 The color system is heavily curated to resemble premium paper, ink, and mild highlighters.
 
 ### Core Foundation (Paper & Ink)
-- **Backgrounds (`bg`, `bg-tint`, `paper`)**: The app uses `#FAFAF6` as its primary background, an off-white, slightly warm tone resembling high-quality journal paper. True white (`#FFFFFF`) is used sparingly for elevated cards.
-- **Lines (`line`, `line-strong`)**: `#E8E5DC` and `#DDD8CB`. Borders and dividers resemble the faint ruled lines of a notebook rather than harsh digital borders.
-- **Text (`ink`, `ink-soft`, `muted`)**: Instead of pure black, text relies on deep, warm charcoals like `#1A1915` and `#4B4943`, mimicking the look of pen ink and reducing eye strain.
+The foundation is not one palette but four — the **paper tone** a reader picks
+in Appearance. `Paper` is what the app ships with; `Warm`, `Stone` and `White`
+are the alternatives. Every value below is the shipped `Paper` tone, and the
+authority for all of them is `PAPER_TONES` in `lib/preferences.ts`, mirrored
+into `:root` in `globals.css` so the first paint needs no correction.
+
+- **Backgrounds (`bg`, `bg-tint`, `paper`, `paper-2`)**: `#F5F1E8`, `#EDE7D8`,
+  `#FBF8EF`, `#F7F3E6`. Warm cream throughout — cards are a lighter cream, not
+  white. True `#FFFFFF` appears only in the `Stone` and `White` tones.
+- **Lines (`line`, `line-soft`, `line-strong`)**: `#DDD6C2`, `#EAE4D3`,
+  `#C9C0A8`. Borders and dividers resemble the faint ruled lines of a notebook
+  rather than harsh digital borders.
+- **Text (`ink`, `ink-soft`, `muted`, `muted-soft`)**: `#1A1714`, `#4B4640`,
+  `#8C8576`, `#B5AE99`. Instead of pure black, text relies on deep, warm
+  charcoals, mimicking pen ink and reducing eye strain. `muted` carries every
+  label and caption; `muted-soft` is for text that should barely register.
+- **Primary (`primary`)**: resolves to `ink`. The "Sage" option in Appearance
+  swaps it for the sage pastel.
 
 ### The Pastel Highlighter Palette
 For course categorization and tags, Akada uses a beautifully crafted palette of muted pastels. Each color is paired with a soft "tint" version used for backgrounds, while the strong value is used for text, borders, or accents.
+
+`PASTEL_PALETTE` in `lib/utils.ts` is the source of truth — it is what a course
+is actually coloured with. The `--sage`…`--mauve` variables in `globals.css`
+mirror it exactly, for the places that need a pastel without owning a course.
+If the two ever disagree again, `lib/utils.ts` wins.
 - **Sage**: `#A8B89B`
 - **Rose**: `#D4A5A5`
 - **Lavender**: `#B5A8C9`
@@ -34,11 +54,33 @@ For course categorization and tags, Akada uses a beautifully crafted palette of 
 - **Slate**: `#9AA3AB`
 - **Mauve**: `#B89BAA`
 
+### The Alarm Ramp (muted terracotta, never red)
+Two semantic ramps carry everything the interface would otherwise say in red.
+They are warm clays, and that is the point — see "No Alarmist Indicators".
+- **`warn` / `warnSoft` / `warnTint`**: `#B5694C`, `#A38046`, `#F4ECDC`. The
+  quiet tone: an overdue date, a course that has gone untouched.
+- **`priority` / `prioritySoft` / `priorityTint`**: `#C97A6B`, `#A85C42`,
+  `#F4DCD2`. Inline errors, high-priority tasks, destructive affordances.
+
 ## 🖋️ Typography
 Typography in Akada blends modern readability with classic literary elegance.
 - **Sans-Serif (`Inter`)**: Used for the majority of the UI, providing clean, highly legible structure.
-- **Serif (`Fraunces`)**: Applied to headings, quotes, or focal points to give the application an elegant, editorial, and sophisticated character.
+- **Serif (`Fraunces`)**: Applied to headings, quotes, or focal points to give the application an elegant, editorial, and sophisticated character. It is the default; **Cormorant Garamond**, **Lora** and **Merriweather** are selectable in Appearance and swap in through `--font-serif`, so no component names a family.
 - **Monospace (`JetBrains Mono`)**: Used purposefully for data, durations, and the study timer, grounding the numbers in a precise, tool-like feel.
+- **Handwriting (`Caveat`)**: Reserved for marginalia — the `HandNote` primitive and the `.font-hand` utility. Never for UI text.
+
+### The Eyebrow
+One caption spec, `.eyebrow` in `globals.css`: 10px, 600 weight, uppercase,
+`0.16em` tracking, `muted`. Section headers, field labels, course codes and
+"Wk 14" all use it. It sits in `@layer components`, so a colour, a mono family
+or a tighter tracking set alongside it still wins — that is how the badges and
+the timer's display caption keep their own letterspacing.
+
+### Density
+`Cozy` / `Comfy` / `Compact` in Appearance set `--density-gutter`,
+`--density-gap` and `--density-section` on `:root`. Anything that wants to
+breathe with the reader's choice should use those rather than a fixed px
+value. `Comfy` is the shipped middle at a 22px gutter.
 
 ## 🖼️ Textures & Custom UI Elements
 - **Radial Mesh Gradients**: The global background (`globals.css`) incorporates very subtle radial gradients `rgba(180, 170, 140, 0.10)`. This uneven lighting effect breathes life into the background, making the "paper" feel slightly textured and organic rather than a flat digital canvas.
