@@ -33,6 +33,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
 
   const active = semesters.find((s) => s.isActive) ?? null;
   const past = semesters.filter((s) => !s.isActive);
+  const transitionNeedsCare = semesterNeedsStartConfirmation(active);
 
   async function deleteSemester(semester: Semester) {
     setError('');
@@ -65,6 +66,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
   if (starting) {
     return (
       <StartSemesterForm
+        activeSemester={active}
         onCancel={() => setStarting(false)}
         onStarted={() => router.push('/onboarding?newSemester=1')}
       />
@@ -121,8 +123,12 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
       >
         Start new semester
       </button>
-      <p className="mt-2.5 mb-0 text-center font-serif text-[12px] italic text-muted-soft">
-        This term&apos;s pages stay where they are.
+      <p className={`mt-2.5 mb-0 text-center font-serif text-[12px] italic ${transitionNeedsCare ? 'text-warn' : 'text-muted-soft'}`}>
+        {transitionNeedsCare
+          ? active?.endDate
+            ? `${active?.label ?? 'This term'} is scheduled through ${formatSemesterDate(active.endDate)}.`
+            : `${active?.label ?? 'This term'} has no end date to check against.`
+          : 'This term\'s pages stay where they are.'}
       </p>
 
       {active && (
@@ -182,9 +188,11 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
 }
 
 function StartSemesterForm({
+  activeSemester,
   onCancel,
   onStarted,
 }: {
+  activeSemester: Semester | null;
   onCancel: () => void;
   onStarted: () => void;
 }) {
@@ -197,13 +205,35 @@ function StartSemesterForm({
   const [selectedPreset, setSelectedPreset] = useState(() => suggestedPreset.label);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [confirmingStart, setConfirmingStart] = useState(false);
 
   const datesValid =
     !addDates ||
     (!startDate && !endDate) ||
     (isIsoDate(startDate) && isIsoDate(endDate) && endDate >= startDate);
 
-  async function start() {
+  function buildDraft() {
+    return {
+      label,
+      startDate: addDates && startDate ? startDate : null,
+      endDate: addDates && endDate ? endDate : null,
+    };
+  }
+
+  async function createSemester() {
+    setConfirmingStart(false);
+    setSaving(true);
+    try {
+      await createSemesterOptimistic(buildDraft());
+      onStarted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start a new semester.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function start() {
     setError('');
     if (!cleanText(label, 60)) {
       setError('Give this semester a name.');
@@ -213,19 +243,11 @@ function StartSemesterForm({
       setError('End date must be on or after the start date.');
       return;
     }
-    setSaving(true);
-    try {
-      await createSemesterOptimistic({
-        label,
-        startDate: addDates && startDate ? startDate : null,
-        endDate: addDates && endDate ? endDate : null,
-      });
-      onStarted();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start a new semester.');
-    } finally {
-      setSaving(false);
+    if (semesterNeedsStartConfirmation(activeSemester)) {
+      setConfirmingStart(true);
+      return;
     }
+    void createSemester();
   }
 
   function applyPreset(preset: SemesterPreset) {
@@ -239,6 +261,16 @@ function StartSemesterForm({
 
   return (
     <div className="px-[22px] pt-5 pb-10 app-scroll animate-fade-in">
+      <ConfirmSheet
+        open={confirmingStart}
+        title="Begin a new term early?"
+        body={startConfirmationCopy(activeSemester)}
+        confirmLabel="Start new term"
+        cancelLabel="Keep current term"
+        busy={saving}
+        onCancel={() => setConfirmingStart(false)}
+        onConfirm={() => void createSemester()}
+      />
       <BackButton onClick={onCancel} />
       <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
         Start new semester
@@ -246,6 +278,14 @@ function StartSemesterForm({
       <p className="mt-1.5 mb-0 font-serif text-[13px] italic text-muted">
         A fresh page. Nothing before it is touched.
       </p>
+
+      {semesterNeedsStartConfirmation(activeSemester) && (
+        <p className="mt-4 mb-0 border-l-2 border-warn/60 pl-3 font-serif text-[13px] italic leading-[1.5] text-warn">
+          {activeSemester?.endDate
+            ? `${activeSemester.label} is still on its academic timeline.`
+            : `${activeSemester?.label} has no end date, so its timeline cannot be checked.`}
+        </p>
+      )}
 
       <div className="mt-5">
         <div className="flex items-center justify-between gap-3">
@@ -382,6 +422,35 @@ interface SemesterPreset {
   range: string;
   startDate: string;
   endDate: string;
+}
+
+/**
+ * A semester ending today is still active until the day is over. When no end
+ * date exists we deliberately cannot infer that it has finished, so we keep
+ * the same small confirmation in front of an accidental hand-off.
+ */
+function semesterNeedsStartConfirmation(semester: Semester | null, now = new Date()): boolean {
+  if (!semester) return false;
+  if (!semester.endDate) return true;
+  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+  return semester.endDate >= today;
+}
+
+function formatSemesterDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${value}T00:00:00Z`));
+}
+
+function startConfirmationCopy(semester: Semester | null): string {
+  if (!semester) return 'The new term will become the page your planner opens to.';
+  if (!semester.endDate) {
+    return `${semester.label} has no end date, so Akada cannot tell whether it is finished. The new term will become active; this term will stay safely in your archive.`;
+  }
+  return `${semester.label} is scheduled through ${formatSemesterDate(semester.endDate)}. The new term will become active; this term will stay safely in your archive.`;
 }
 
 function semesterPresets(today = new Date()): SemesterPreset[] {
@@ -529,4 +598,3 @@ function SemesterArchive({
     </div>
   );
 }
-

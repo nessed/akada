@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
 import SelectField from '@/components/SelectField';
@@ -28,6 +28,7 @@ type Filter = 'all' | 'today' | 'overdue';
 
 export default function TasksPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { active, start } = useTimer();
   const { notify } = useNotice();
   // Guards the two writes that were previously fire-and-forget from the UI's
@@ -52,6 +53,7 @@ export default function TasksPage() {
   const [editCourseId, setEditCourseId] = useState('');
   const [editDue, setEditDue] = useState('');
   const [editHigh, setEditHigh] = useState(false);
+  const handledTaskIntent = useRef(false);
 
   useEffect(() => {
     if (onboardingError) {
@@ -62,6 +64,30 @@ export default function TasksPage() {
       router.replace('/onboarding');
     }
   }, [onboarded, onboardingLoading, onboardingError, router]);
+
+  // Course cards can link straight into a fresh task for themselves. Keeping
+  // the course in the URL makes this a useful navigation state, while the
+  // ref stops SWR revalidations from repeatedly reopening the form.
+  useEffect(() => {
+    if (handledTaskIntent.current || coursesLoading || courses.length === 0) return;
+    const courseId = searchParams.get('course');
+    const wantsNewTask = searchParams.get('newTask') === '1';
+    if (!courseId || !wantsNewTask || !courses.some((course) => course.id === courseId)) return;
+
+    handledTaskIntent.current = true;
+    setFilter('all');
+    setCollapsed((current) => ({ ...current, [courseId]: false }));
+    setAddingFor(courseId);
+    setDraftTitle('');
+    setDraftDue('');
+    setDraftHigh(false);
+    requestAnimationFrame(() => {
+      document.getElementById(`course-${courseId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+  }, [courses, coursesLoading, searchParams]);
 
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || tasksLoading;
@@ -230,8 +256,8 @@ export default function TasksPage() {
       {/* Sections */}
       {courses.length === 0 ? (
         <EmptyState title="No courses yet" />
-      ) : visibleTasks.length === 0 ? (
-        <EmptyState title={filter === 'all' ? 'No tasks yet' : `No ${filter} tasks`} />
+      ) : filter !== 'all' && visibleTasks.length === 0 ? (
+        <EmptyState title={`No ${filter} tasks`} />
       ) : (
         <div className="flex flex-col gap-[22px]">
           {courses.map((course) => {
@@ -248,7 +274,7 @@ export default function TasksPage() {
           const open = list.filter((t) => !t.completed).length;
 
           return (
-            <section key={course.id}>
+            <section key={course.id} id={`course-${course.id}`}>
               <button
                 type="button"
                 onClick={() =>
@@ -346,7 +372,7 @@ export default function TasksPage() {
                           setDraftDue('');
                           setDraftHigh(false);
                         }}
-                        className="w-full text-left px-1 py-3 text-[13px] text-muted-soft font-serif italic"
+                        className="w-full text-left px-1 py-3 text-[13px] text-muted-soft font-serif italic transition-colors hover:text-ink"
                       >
                         + jot a task…
                       </button>

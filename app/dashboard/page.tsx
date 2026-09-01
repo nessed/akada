@@ -33,13 +33,19 @@ import {
 import { isLoggableDuration } from '@/lib/session-safety';
 import {
   clampWeeklyGoalHours,
+  cleanCredits,
   cleanCourseCode,
   cleanCourseName,
+  cleanInstructor,
+  cleanMeetingTime,
+  cleanSection,
   cleanTaskTitle,
+  hasDuplicateCourseCodes,
   MEETING_TIME_MAX,
 } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
 import HandNote from '@/components/notebook/HandNote';
+import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
 import {
   useOnboardingComplete,
   useCourses,
@@ -49,7 +55,9 @@ import {
   useUserSettings,
   addCourseOptimistic,
   addTaskOptimistic,
+  deleteCourseOptimistic,
   toggleTaskOptimistic,
+  updateCourseOptimistic,
   updateUserSettingsOptimistic,
   resetAllData,
   deleteAccountAndData,
@@ -66,6 +74,17 @@ function SheetField({ label, children }: { label: string; children: React.ReactN
     </div>
   );
 }
+
+type CourseEditDraft = {
+  id: string;
+  code: string;
+  name: string;
+  credits: string;
+  section: string;
+  instructor: string;
+  meetingTime: string;
+  weeklyGoalHours: number;
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -141,6 +160,10 @@ export default function DashboardPage() {
   const [leaving, setLeaving] = useState<string | null>(null);
   const [savingTask, setSavingTask] = useState(false);
   const [savingCourse, setSavingCourse] = useState(false);
+  const [editingCourse, setEditingCourse] = useState<CourseEditDraft | null>(null);
+  const [savingCourseEdit, setSavingCourseEdit] = useState(false);
+  const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
+  const [deletingCourseBusy, setDeletingCourseBusy] = useState(false);
 
   const [addingCourse, setAddingCourse] = useState(false);
   // One search box drives the whole thing. `picked` is set only when a
@@ -311,7 +334,7 @@ export default function DashboardPage() {
       return {
         code: cleanCourseCode(pickedCourse.code),
         name: cleanCourseName(pickedCourse.title),
-        credits: pickedCourse.credits ?? null,
+        credits: pickedCourse.credits ?? 4,
         section: newCourseSection || null,
         instructor: chosen?.instructor ?? null,
         // The room earns its place only when it does not push the line past
@@ -327,7 +350,7 @@ export default function DashboardPage() {
       // typed, or is built from the name, and only the card ever shows it.
       code: cleanCourseCode(parsed.code || uniqueCourseCode(deriveCourseCode(name))),
       name,
-      credits: null,
+      credits: 4,
       section: newCourseSection || null,
       instructor: null,
       meetingTime: null,
@@ -380,6 +403,77 @@ export default function DashboardPage() {
       notify(error instanceof Error ? error.message : 'That course was not added.');
     } finally {
       setSavingCourse(false);
+    }
+  }
+
+  function openEditCourse(course: Course) {
+    setEditingCourse({
+      id: course.id,
+      code: course.code,
+      name: course.name,
+      credits: String(typeof course.credits === 'number' && course.credits > 0 ? course.credits : 4),
+      section: course.section ?? '',
+      instructor: course.instructor ?? '',
+      meetingTime: course.meetingTime ?? '',
+      weeklyGoalHours: clampWeeklyGoalHours(course.weeklyGoalHours),
+    });
+  }
+
+  function updateCourseEdit(patch: Partial<CourseEditDraft>) {
+    setEditingCourse((current) => current ? { ...current, ...patch } : current);
+  }
+
+  async function handleSaveCourseEdit() {
+    if (!editingCourse || savingCourseEdit) return;
+    const code = cleanCourseCode(editingCourse.code);
+    const name = cleanCourseName(editingCourse.name);
+    if (!code || !name) {
+      notify('A course needs both a code and a name.');
+      return;
+    }
+    if (hasDuplicateCourseCodes([
+      ...courses.filter((course) => course.id !== editingCourse.id),
+      { code },
+    ])) {
+      notify(`${code} is already on your list.`);
+      return;
+    }
+    setSavingCourseEdit(true);
+    try {
+      await updateCourseOptimistic(editingCourse.id, {
+        code,
+        name,
+        credits: cleanCredits(editingCourse.credits) ?? 4,
+        section: cleanSection(editingCourse.section),
+        instructor: cleanInstructor(editingCourse.instructor),
+        meetingTime: cleanMeetingTime(editingCourse.meetingTime),
+        weeklyGoalHours: clampWeeklyGoalHours(editingCourse.weeklyGoalHours),
+      });
+      setEditingCourse(null);
+    } catch (error) {
+      console.error('Failed to update course:', error);
+      notify(error instanceof Error ? error.message : 'That course did not save.');
+    } finally {
+      setSavingCourseEdit(false);
+    }
+  }
+
+  async function handleDeleteCourse() {
+    if (!deletingCourse || deletingCourseBusy) return;
+    if (active?.courseId === deletingCourse.id) {
+      notify('Stop or discard the active timer before deleting this course.');
+      setDeletingCourse(null);
+      return;
+    }
+    setDeletingCourseBusy(true);
+    try {
+      await deleteCourseOptimistic(deletingCourse.id);
+      setDeletingCourse(null);
+    } catch (error) {
+      console.error('Failed to delete course:', error);
+      notify(error instanceof Error ? error.message : 'That course was not deleted.');
+    } finally {
+      setDeletingCourseBusy(false);
     }
   }
 
@@ -634,6 +728,9 @@ export default function DashboardPage() {
               sessions={sessions.filter((s) => s.courseId === course.id)}
               tasks={tasks.filter((t) => t.courseId === course.id)}
               onStartTimer={handleStartTimer}
+              onEdit={openEditCourse}
+              onDelete={setDeletingCourse}
+              onAddTask={(courseId) => router.push(`/tasks?course=${encodeURIComponent(courseId)}&newTask=1`)}
             />
           ))}
         </div>
@@ -768,6 +865,7 @@ export default function DashboardPage() {
                   onPick={(course) => {
                     setPickedCourse(course);
                     setNewCourseSection('');
+                    if (course?.credits) setNewCourseGoal(clampWeeklyGoalHours(course.credits * 2));
                   }}
                   section={newCourseSection}
                   onSectionChange={setNewCourseSection}
@@ -812,22 +910,12 @@ export default function DashboardPage() {
               </SheetField>
 
               <SheetField label="Weekly study goal">
-                <div className="flex items-center gap-4">
-                  <input
-                    type="range"
-                    min="1"
-                    max="20"
-                    step="0.5"
-                    value={newCourseGoal}
-                    onChange={(e) => setNewCourseGoal(clampWeeklyGoalHours(e.target.value))}
-                    className="pl-range flex-1"
-                    style={{ color: newCourseColor }}
-                  />
-                  <div className="font-mono font-semibold text-sm text-ink w-14 text-right">
-                    {newCourseGoal}
-                    <span className="text-muted ml-1">h</span>
-                  </div>
-                </div>
+                <WeeklyGoalSlider
+                  value={newCourseGoal}
+                  onChange={setNewCourseGoal}
+                  credits={draftCourse.credits}
+                  label="Weekly study goal for this course"
+                />
               </SheetField>
 
               {/* The same card the course is about to become, so the colour,
@@ -886,6 +974,129 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Course details stay close to the original add-course sheet: a few
+          calm fields, the notebook slider, then one clear save action. */}
+      {editingCourse && (
+        <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+          <button
+            type="button"
+            aria-label="Cancel editing course"
+            onClick={() => !savingCourseEdit && setEditingCourse(null)}
+            className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+          />
+          <div className="relative max-h-[92dvh] w-full overflow-y-auto md:mx-auto md:max-w-xl rounded-t-3xl bg-bg px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
+            <div className="mx-auto mb-[18px] h-1 w-9 rounded-full bg-line-strong" />
+            <h3 className="mt-0 mb-1.5 font-serif font-medium text-[22px] tracking-[-0.01em]">
+              Edit course
+            </h3>
+            <p className="mt-0 mb-4 font-serif text-[13px] italic text-muted">
+              Shape the class around your actual term.
+            </p>
+
+            <div className="flex flex-col gap-[18px]">
+              <div className="grid grid-cols-[100px_1fr] gap-2.5">
+                <SheetField label="Course code">
+                  <input
+                    autoFocus
+                    value={editingCourse.code}
+                    onChange={(event) => updateCourseEdit({ code: event.target.value.toUpperCase() })}
+                    className="w-full rounded-[10px] border border-line bg-paper px-3 py-3 text-sm text-ink outline-none focus:border-line-strong"
+                  />
+                </SheetField>
+                <SheetField label="Course name">
+                  <input
+                    value={editingCourse.name}
+                    onChange={(event) => updateCourseEdit({ name: event.target.value })}
+                    className="w-full rounded-[10px] border border-line bg-paper px-3 py-3 font-serif text-sm italic text-ink outline-none focus:border-line-strong"
+                  />
+                </SheetField>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <SheetField label="Credit hours">
+                  <input
+                    type="number"
+                    min="0.5"
+                    max="12"
+                    step="0.5"
+                    value={editingCourse.credits}
+                    onChange={(event) => updateCourseEdit({ credits: event.target.value })}
+                    className="w-full rounded-[10px] border border-line bg-paper px-3 py-3 font-mono text-sm text-ink outline-none focus:border-line-strong"
+                  />
+                </SheetField>
+                <SheetField label="Section">
+                  <input
+                    value={editingCourse.section}
+                    onChange={(event) => updateCourseEdit({ section: event.target.value })}
+                    placeholder="Optional"
+                    className="w-full rounded-[10px] border border-line bg-paper px-3 py-3 text-sm text-ink outline-none placeholder:text-muted-soft focus:border-line-strong"
+                  />
+                </SheetField>
+              </div>
+
+              <SheetField label="Meeting time">
+                <input
+                  value={editingCourse.meetingTime}
+                  onChange={(event) => updateCourseEdit({ meetingTime: event.target.value })}
+                  placeholder="e.g. Mon & Wed, 9:30 AM – 10:45 AM"
+                  className="w-full rounded-[10px] border border-line bg-paper px-4 py-3 font-serif text-sm italic text-ink outline-none placeholder:text-muted-soft focus:border-line-strong"
+                />
+              </SheetField>
+
+              <SheetField label="Instructor">
+                <input
+                  value={editingCourse.instructor}
+                  onChange={(event) => updateCourseEdit({ instructor: event.target.value })}
+                  placeholder="Optional"
+                  className="w-full rounded-[10px] border border-line bg-paper px-4 py-3 font-serif text-sm italic text-ink outline-none placeholder:text-muted-soft focus:border-line-strong"
+                />
+              </SheetField>
+
+              <SheetField label="Weekly study goal">
+                <WeeklyGoalSlider
+                  value={editingCourse.weeklyGoalHours}
+                  onChange={(weeklyGoalHours) => updateCourseEdit({ weeklyGoalHours })}
+                  credits={Number(editingCourse.credits) || 4}
+                  label={`Weekly study goal for ${editingCourse.name || 'this course'}`}
+                />
+              </SheetField>
+            </div>
+
+            <div className="mt-6 flex gap-2.5">
+              <button
+                type="button"
+                disabled={savingCourseEdit}
+                onClick={() => setEditingCourse(null)}
+                className="flex-1 rounded-[10px] border border-line-strong bg-transparent py-3.5 text-sm font-medium text-ink-soft disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingCourseEdit || !editingCourse.code.trim() || !editingCourse.name.trim()}
+                onClick={handleSaveCourseEdit}
+                className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast disabled:opacity-30"
+              >
+                {savingCourseEdit ? (
+                  <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving</span>
+                ) : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <ConfirmSheet
+        open={deletingCourse !== null}
+        title={`Delete ${deletingCourse?.name ?? 'this course'}?`}
+        body="Its study sessions and tasks will be removed too. Type DELETE to make sure."
+        confirmLabel="Delete course"
+        cancelLabel="Keep course"
+        requirePhrase="DELETE"
+        busy={deletingCourseBusy}
+        onCancel={() => !deletingCourseBusy && setDeletingCourse(null)}
+        onConfirm={handleDeleteCourse}
+      />
       <ConfirmSheet
         open={pendingTimer !== null}
         title="Start this one instead?"

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { Course, Session, Task } from '@/lib/data';
 import {
   formatHours,
@@ -15,6 +16,9 @@ interface Props {
   sessions: Session[]; // sessions for this course
   tasks: Task[]; // tasks for this course
   onStartTimer: (courseId: string) => void;
+  onEdit: (course: Course) => void;
+  onDelete: (course: Course) => void;
+  onAddTask: (courseId: string) => void;
   neglectedCutoffDays?: number;
 }
 
@@ -23,8 +27,12 @@ export default function CourseCard({
   sessions,
   tasks,
   onStartTimer,
+  onEdit,
+  onDelete,
+  onAddTask,
   neglectedCutoffDays = 4,
 }: Props) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const wkSec = totalSeconds(sessionsThisWeek(sessions));
   const goalHours = Number.isFinite(course.weeklyGoalHours)
     ? Math.max(0.5, course.weeklyGoalHours)
@@ -42,7 +50,7 @@ export default function CourseCard({
     since === 0 ? 'today' : since === 1 ? 'yesterday' : `${since}d ago`;
 
   const catalogLine = [
-    typeof course.credits === 'number' ? `${course.credits} cr` : null,
+    `${typeof course.credits === 'number' && course.credits > 0 ? course.credits : 4} cr`,
     course.section ? `Sec ${course.section}` : null,
     course.instructor,
     course.meetingTime,
@@ -76,14 +84,62 @@ export default function CourseCard({
               </p>
             )}
           </div>
-          {neglected && (
-            <span
-              className="shrink-0 font-hand text-[14px] text-warnSoft"
-              style={{ transform: 'rotate(-2.5deg)' }}
+          <div className="relative flex shrink-0 items-start gap-2">
+            {neglected && (
+              <span
+                className="font-hand text-[14px] text-warnSoft"
+                style={{ transform: 'rotate(-2.5deg)' }}
+              >
+                {since === Infinity ? 'untouched' : `${since}d quiet`}
+              </span>
+            )}
+            <button
+              type="button"
+              aria-label={`Manage ${course.name}`}
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              onClick={() => setMenuOpen((open) => !open)}
+              className="-mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-bg-tint hover:text-ink"
             >
-              {since === Infinity ? 'untouched' : `${since}d quiet`}
-            </span>
-          )}
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="5" cy="12" r="1.6" />
+                <circle cx="12" cy="12" r="1.6" />
+                <circle cx="19" cy="12" r="1.6" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                aria-label={`Manage ${course.name}`}
+                className="absolute right-0 top-8 z-20 w-36 overflow-hidden rounded-[10px] border border-line bg-paper py-1 shadow-[0_8px_20px_rgba(57,48,36,0.12)] animate-fade-in"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); onEdit(course); }}
+                  className="w-full px-3 py-2 text-left text-xs text-ink-soft transition-colors hover:bg-bg-tint"
+                >
+                  Edit course
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); onAddTask(course.id); }}
+                  className="w-full px-3 py-2 text-left text-xs text-ink-soft transition-colors hover:bg-bg-tint"
+                >
+                  Add task
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); onDelete(course); }}
+                  className="w-full px-3 py-2 text-left text-xs text-priority transition-colors hover:bg-priorityTint"
+                >
+                  Delete course
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Progress */}

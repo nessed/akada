@@ -27,6 +27,7 @@ import {
   type PrimaryAccent,
 } from '@/lib/preferences';
 import { useTimer } from '@/lib/timer-context';
+import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
 import { ButtonSpinner } from './LoadingIndicator';
 import ConfirmSheet from './ConfirmSheet';
 import BackButton from './BackButton';
@@ -650,6 +651,7 @@ interface DraftCourse {
   name: string;
   color: string;
   tint: string;
+  credits: number;
   weeklyGoalHours: number;
 }
 
@@ -671,6 +673,7 @@ function CoursesEditor({
         name: c.name,
         color: c.color,
         tint: c.tint || PASTEL_PALETTE[0].tint,
+        credits: typeof c.credits === 'number' && c.credits > 0 ? c.credits : 4,
         weeklyGoalHours: clampWeeklyGoalHours(c.weeklyGoalHours),
       })),
     [courses],
@@ -706,7 +709,8 @@ function CoursesEditor({
         name: '',
         color: next.value,
         tint: next.tint,
-        weeklyGoalHours: 5,
+        credits: 4,
+        weeklyGoalHours: 8,
       },
     ]);
   }
@@ -754,6 +758,7 @@ function CoursesEditor({
           name: cleanCourseName(d.name),
           color: d.color,
           tint: d.tint,
+          credits: d.credits,
           weeklyGoalHours: clampWeeklyGoalHours(d.weeklyGoalHours),
         };
         if (d.id) {
@@ -840,26 +845,14 @@ function CoursesEditor({
               </button>
             </div>
 
-            <div className="mt-3 flex items-center gap-3">
-              <span className="eyebrow text-muted">
-                Goal
-              </span>
-              <input
-                type="range"
-                min="1"
-                max="20"
-                step="0.5"
+            <div className="mt-3">
+              <span className="eyebrow mb-1 block text-muted">Goal</span>
+              <WeeklyGoalSlider
                 value={c.weeklyGoalHours}
-                onChange={(e) =>
-                  update(i, { weeklyGoalHours: clampWeeklyGoalHours(e.target.value) })
-                }
-                className="pl-range flex-1"
-                style={{ color: c.color }}
+                onChange={(weeklyGoalHours) => update(i, { weeklyGoalHours })}
+                credits={c.credits}
+                label={`Weekly study goal for ${c.code || c.name || `course ${i + 1}`}`}
               />
-              <span className="w-[38px] text-right font-mono text-[13px] font-semibold tabular-nums">
-                {c.weeklyGoalHours}
-                <span className="text-muted ml-0.5">h</span>
-              </span>
             </div>
           </div>
         ))}
@@ -1074,4 +1067,3 @@ function AppearanceEditor({
     </div>
   );
 }
-

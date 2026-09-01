@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase';
 import { PASTEL_PALETTE } from '@/lib/utils';
 import AkadaMark from '@/components/notebook/AkadaMark';
 import HandNote from '@/components/notebook/HandNote';
+import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
 import { useNotice } from '@/components/Notice';
 import {
   addCourseOptimistic,
@@ -46,7 +47,7 @@ const emptyDraft = (): DraftCourse => ({
   name: '',
   color: PASTEL_PALETTE[0].value,
   tint: PASTEL_PALETTE[0].tint,
-  weeklyGoalHours: 6,
+  weeklyGoalHours: 8,
 });
 
 export default function OnboardingPage() {
@@ -137,7 +138,7 @@ function OnboardingContent() {
       PASTEL_PALETTE[courses.length % PASTEL_PALETTE.length];
     setCourses((prev) => [
       ...prev,
-      { code: '', name: '', color: next.value, tint: next.tint, weeklyGoalHours: 6 },
+      { code: '', name: '', color: next.value, tint: next.tint, weeklyGoalHours: 8 },
     ]);
     setEditIdx(courses.length);
   }
@@ -583,25 +584,12 @@ function CoursesStep({
           </div>
         </Field>
         <Field label="Weekly study goal">
-          <div className="flex items-center gap-4">
-            <input
-              type="range"
-              min="1"
-              max="20"
-              step="0.5"
-              value={editing.weeklyGoalHours}
-              onChange={(e) => update({ weeklyGoalHours: clampWeeklyGoalHours(e.target.value) })}
-              className="pl-range flex-1"
-              style={{ color: editing.color }}
-            />
-            <div className="font-mono font-semibold text-sm text-ink w-14 text-right">
-              {editing.weeklyGoalHours}
-              <span className="text-muted ml-1">h</span>
-            </div>
-          </div>
+          <WeeklyGoalSlider
+            value={editing.weeklyGoalHours}
+            onChange={(weeklyGoalHours) => update({ weeklyGoalHours })}
+          />
         </Field>
 
-        <GoalGuidance hours={editing.weeklyGoalHours} color={editing.color} />
 
         {/* WYSIWYG preview */}
         <div className="relative bg-paper rounded-[14px] border border-line overflow-hidden mt-1">
@@ -914,20 +902,6 @@ function RoutineStep({
         </button>
       </div>
     </div>
-  );
-}
-
-function GoalGuidance({ hours, color }: { hours: number; color: string }) {
-  return (
-    <HandNote color={color} rotate={-1.5} className="self-start">
-      {hours >= 14
-        ? 'a heavy term'
-        : hours >= 9
-          ? 'about right'
-          : hours >= 6
-            ? 'light, fine for electives'
-            : '~2-3 hrs a week per credit'}
-    </HandNote>
   );
 }
 
