@@ -70,15 +70,19 @@ const tabs = [
 export default function BottomNav() {
   const pathname = usePathname();
   return (
+    /* The fade has to finish before the icons start, otherwise a card
+       scrolling underneath stays legible behind the tab labels. The taller
+       pt is the fade region, not padding around the icons, and the bar is
+       click-through outside the tabs so it does not swallow taps on it. */
     <nav
-      className="fixed bottom-0 inset-x-0 z-40 flex justify-around items-center px-4 pt-3"
+      className="pointer-events-none fixed bottom-0 inset-x-0 z-40 flex justify-around items-center px-4 pt-10"
       style={{
         paddingBottom: 'calc(20px + env(safe-area-inset-bottom))',
         background:
-          'linear-gradient(180deg, transparent 0%, var(--bg) 30%)',
+          'linear-gradient(180deg, transparent 0%, var(--bg) 38%, var(--bg) 100%)',
       }}
     >
-      <div className="mx-auto max-w-2xl md:max-w-3xl w-full flex justify-around items-center">
+      <div className="pointer-events-auto mx-auto max-w-2xl md:max-w-3xl w-full flex justify-around items-center">
         {tabs.map((tab) => {
           const active = pathname === tab.href || pathname?.startsWith(tab.href + '/');
           return (

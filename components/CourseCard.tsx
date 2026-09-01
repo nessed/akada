@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { Course, Session, Task } from '@/lib/data';
 import {
   formatHours,
@@ -59,12 +60,20 @@ export default function CourseCard({
     .join(' · ');
 
   return (
-    <article className="relative bg-paper rounded-[14px] border border-line overflow-hidden">
+    <article className="relative bg-paper rounded-[14px] border border-line overflow-hidden transition-colors focus-within:border-line-strong hover:border-line-strong">
       <div
-        className="absolute left-0 top-0 bottom-0 w-1"
+        className="pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-1"
         style={{ background: course.color }}
       />
-      <div className="py-[18px] pl-[22px] pr-[18px]">
+      {/* The whole card is the way into the course. It sits under the content
+          rather than wrapping it, so the menu and the timer button stay real
+          buttons instead of controls nested inside a link. */}
+      <Link
+        href={`/tasks?course=${encodeURIComponent(course.id)}`}
+        aria-label={`Open ${course.name} tasks`}
+        className="absolute inset-0 rounded-[14px]"
+      />
+      <div className="pointer-events-none relative py-[18px] pl-[22px] pr-[18px]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p
@@ -84,7 +93,7 @@ export default function CourseCard({
               </p>
             )}
           </div>
-          <div className="relative flex shrink-0 items-start gap-2">
+          <div className="pointer-events-auto relative z-10 flex shrink-0 items-start gap-2">
             {neglected && (
               <span
                 className="font-hand text-[14px] text-warnSoft"
@@ -169,7 +178,7 @@ export default function CourseCard({
             type="button"
             onClick={() => onStartTimer(course.id)}
             aria-label={`Start timer for ${course.code}`}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95"
+            className="pointer-events-auto relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95"
             style={{
               background: course.tint || 'var(--bg-tint)',
               color: course.color || 'var(--ink)',

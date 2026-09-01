@@ -10,7 +10,7 @@ import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskItem from '@/components/TaskItem';
 import type { Task } from '@/lib/data';
-import { isoDate } from '@/lib/utils';
+import { isoDate, resolveTint } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
 import StickyNote from '@/components/notebook/StickyNote';
@@ -50,6 +50,10 @@ function TasksPageContent() {
 
   const [filter, setFilter] = useState<Filter>('all');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // The course the page was opened for, straight off the URL. It marks that
+  // course's heading so arriving from a dashboard card lands somewhere
+  // visible even when nothing had to scroll.
+  const focusedCourseId = searchParams.get('course');
 
   // Inline add per course
   const [addingFor, setAddingFor] = useState<string | null>(null);
@@ -73,22 +77,25 @@ function TasksPageContent() {
     }
   }, [onboarded, onboardingLoading, onboardingError, router]);
 
-  // Course cards can link straight into a fresh task for themselves. Keeping
-  // the course in the URL makes this a useful navigation state, while the
-  // ref stops SWR revalidations from repeatedly reopening the form.
+  // Two arrivals from a course card: `?course=` alone means "show me this
+  // course", `&newTask=1` means "and start typing". Keeping the course in the
+  // URL makes this a useful navigation state, while the ref stops SWR
+  // revalidations from repeatedly reopening the form.
   useEffect(() => {
     if (handledTaskIntent.current || coursesLoading || courses.length === 0) return;
     const courseId = searchParams.get('course');
+    if (!courseId || !courses.some((course) => course.id === courseId)) return;
     const wantsNewTask = searchParams.get('newTask') === '1';
-    if (!courseId || !wantsNewTask || !courses.some((course) => course.id === courseId)) return;
 
     handledTaskIntent.current = true;
     setFilter('all');
     setCollapsed((current) => ({ ...current, [courseId]: false }));
-    setAddingFor(courseId);
-    setDraftTitle('');
-    setDraftDue('');
-    setDraftHigh(false);
+    if (wantsNewTask) {
+      setAddingFor(courseId);
+      setDraftTitle('');
+      setDraftDue('');
+      setDraftHigh(false);
+    }
     requestAnimationFrame(() => {
       document.getElementById(`course-${courseId}`)?.scrollIntoView({
         behavior: 'smooth',
@@ -301,7 +308,18 @@ function TasksPageContent() {
                   {course.code}
                 </span>
                 <span className="min-w-0 flex-1 truncate font-serif text-[17px] font-medium tracking-[-0.01em] text-ink">
-                  {course.name}
+                  {/* The swipe goes on the words, not on the flex track, or it
+                      runs the width of the row past the end of the name. */}
+                  <span
+                    className={course.id === focusedCourseId ? 'hl-swipe' : undefined}
+                    style={
+                      course.id === focusedCourseId
+                        ? ({ '--hl': resolveTint(course.color, course.tint) } as React.CSSProperties)
+                        : undefined
+                    }
+                  >
+                    {course.name}
+                  </span>
                 </span>
                 <span className="ml-auto text-xs text-muted font-mono">{open}</span>
               </button>

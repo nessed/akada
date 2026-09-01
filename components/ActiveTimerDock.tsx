@@ -46,7 +46,9 @@ export default function ActiveTimerDock() {
     <div
       className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] z-50 px-[var(--density-gutter)] md:px-8 pointer-events-none animate-fade-in"
     >
-      <div className="mx-auto flex max-w-2xl md:max-w-3xl justify-end pointer-events-auto">
+      {/* pointer-events stay off the full-width row, it would otherwise be an
+          invisible click blocker across the top of the page. */}
+      <div className="mx-auto flex max-w-2xl md:max-w-3xl justify-end">
         <div
           role="button"
           tabIndex={0}
@@ -55,7 +57,7 @@ export default function ActiveTimerDock() {
             if (event.key === 'Enter' || event.key === ' ') openTimer();
           }}
           aria-label={`${active.isPaused ? 'Paused' : 'Active'} timer for ${code}`}
-          className="flex items-center gap-2 rounded-[8px] border border-line bg-paper/90 px-2.5 py-2 text-left backdrop-blur"
+          className="pointer-events-auto flex items-center gap-2 rounded-[8px] border border-line bg-paper/90 px-2.5 py-2 text-left backdrop-blur"
           style={{ boxShadow: `inset 0 0 0 1px ${tint}` }}
         >
           <span
