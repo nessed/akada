@@ -1,5 +1,22 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PASTEL_PALETTE } from '@/lib/utils';
+
+export const metadata: Metadata = {
+  // The one indexable page, so it carries the brand itself rather than
+  // relying on the layout's '%s - Akada' template.
+  title: 'Akada: a calm study planner for university',
+  description:
+    'Akada keeps your courses, deadlines and study hours on one quiet page. '
+    + 'Pick your sections from the course catalog, set a weekly goal, and log the time you actually study.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: 'Akada: a calm study planner for university',
+    description:
+      'Your courses, deadlines and study hours on one quiet page.',
+    url: '/',
+  },
+};
 
 // The three sample courses on the landing page, coloured from the real
 // palette so the marketing shot and the app cannot drift apart.

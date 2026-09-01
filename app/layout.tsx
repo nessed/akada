@@ -97,7 +97,6 @@ export const metadata: Metadata = {
       'A calm academic planner for courses, tasks, study timers, and progress tracking.',
     type: 'website',
     siteName: 'Akada',
-    url: SITE_URL,
   },
   twitter: {
     card: 'summary_large_image',
@@ -106,8 +105,11 @@ export const metadata: Metadata = {
       'A calm academic planner for courses, tasks, study timers, and progress tracking.',
   },
   icons: {
-    icon: '/icon.svg',
-    apple: '/apple-icon.svg',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: { url: '/apple-icon.png', sizes: '180x180', type: 'image/png' },
   },
 };
 
