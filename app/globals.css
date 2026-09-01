@@ -78,9 +78,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* overscroll-behavior belongs on html, not body. body is its own scroll
+   container here (see the overflow-x rule below) and is exactly as tall as
+   its content, so it has nothing of its own to scroll: a wheel or a swipe
+   over the page has to chain up to the viewport to move anything. Declaring
+   `none` on body blocked precisely that chaining and left every page
+   unscrollable while still reporting a full scrollHeight. On html it reaches
+   the viewport directly, which is what suppressing the overscroll glow and
+   pull-to-refresh actually wanted, and body keeps the default `auto` so the
+   chain stays open. */
+html {
+  overscroll-behavior-y: none;
+}
+
 body {
   min-height: 100dvh;
-  overscroll-behavior-y: none;
   background-image:
     radial-gradient(circle at 18% 12%, var(--paper-glow-a), transparent 55%),
     radial-gradient(circle at 82% 88%, var(--paper-glow-b), transparent 60%);
@@ -122,7 +134,9 @@ html,
 body {
   scrollbar-width: none;
   /* A regression that overflows should be clipped, not turn the whole page
-     into a horizontal scroller. */
+     into a horizontal scroller. body is the one that does the clipping, so it
+     has to stay here, which is what makes body a scroll container and why
+     overscroll-behavior-y is declared on html above rather than on body. */
   overflow-x: hidden;
 }
 
