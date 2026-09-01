@@ -35,6 +35,16 @@
      usePreferences() when the user picks Cormorant / Lora / Merriweather. */
   --font-serif: var(--font-fraunces), 'Fraunces', 'Iowan Old Style', Georgia, serif;
 
+  /* Alarm ramp — muted terracottas, never red. `warn` is the quiet tone
+     (an overdue date, a course gone untouched); `priority` is for errors,
+     high-priority marks and destructive actions. */
+  --warn: #B5694C;
+  --warn-soft: #A38046;
+  --warn-tint: #F4ECDC;
+  --priority: #C97A6B;
+  --priority-soft: #A85C42;
+  --priority-tint: #F4DCD2;
+
   /* Course pastel highlighter palette. Mirrors PASTEL_PALETTE in
      lib/utils.ts, which is what a course is actually coloured with — these
      are for the places that reach for a pastel without owning a course. */
@@ -254,6 +264,21 @@ input[type='date']::-webkit-calendar-picker-indicator {
     transparent 92%
   );
   padding: 0 2px;
+}
+
+/* Highlighter swipe in any colour — set --hl on the element. Same geometry
+   as .hl, which is this with the yellow baked in. Used wherever something is
+   picked: a filter, a course, a goal. A swipe of highlighter is how a page
+   marks a choice; a filled pill is how software does. */
+.hl-swipe {
+  background-image: linear-gradient(
+    180deg,
+    transparent 52%,
+    var(--hl, var(--highlight-yellow)) 52% 94%,
+    transparent 94%
+  );
+  padding: 0 3px;
+  background-position: 0 2px;
 }
 
 /* Hand-drawn underline — wavy, slightly imperfect */

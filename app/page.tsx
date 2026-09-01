@@ -221,8 +221,8 @@ function ProductPreview() {
                     </h3>
                   </div>
                   <span
-                    className="shrink-0 rounded-full px-2 py-1 text-[10px] font-medium text-ink-soft"
-                    style={{ background: course.tint }}
+                    className="hl-swipe shrink-0 font-mono text-[11px] font-semibold text-ink"
+                    style={{ '--hl': course.tint } as React.CSSProperties}
                   >
                     {course.pct}%
                   </span>

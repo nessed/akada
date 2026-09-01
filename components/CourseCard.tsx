@@ -77,7 +77,10 @@ export default function CourseCard({
             )}
           </div>
           {neglected && (
-            <span className="shrink-0 text-[10px] italic font-serif text-warnSoft bg-warnTint px-2 py-[3px] rounded-full tracking-[0.02em]">
+            <span
+              className="shrink-0 font-hand text-[14px] text-warnSoft"
+              style={{ transform: 'rotate(-2.5deg)' }}
+            >
               {since === Infinity ? 'untouched' : `${since}d quiet`}
             </span>
           )}

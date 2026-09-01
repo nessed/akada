@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
 import SelectField from '@/components/SelectField';
+import HandCheck from '@/components/notebook/HandCheck';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskItem from '@/components/TaskItem';
@@ -207,10 +208,8 @@ export default function TasksPage() {
             key={f.v}
             type="button"
             onClick={() => setFilter(f.v)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-              filter === f.v
-                ? 'bg-primary text-primary-contrast border-primary'
-                : 'bg-transparent text-ink-soft border-line'
+            className={`bg-transparent px-0.5 py-1 font-serif text-[15px] transition-colors ${
+              filter === f.v ? 'hl-swipe text-ink' : 'text-muted-soft hover:text-ink-soft'
             }`}
           >
             {f.l}
@@ -306,16 +305,22 @@ export default function TasksPage() {
                           <button
                             type="button"
                             onClick={() => setDraftHigh((v) => !v)}
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase ${
-                              draftHigh ? 'bg-priorityTint text-prioritySoft' : 'bg-bg-tint text-muted'
-                            }`}
+                            aria-pressed={draftHigh}
+                            className="flex items-center gap-1.5 bg-transparent px-1 py-1"
                           >
-                            {draftHigh ? '● High' : 'Normal'}
+                            <span className="scribble-box flex h-4 w-4 items-center justify-center">
+                              {draftHigh && <HandCheck size={11} color="var(--priority)" strokeWidth={1.6} />}
+                            </span>
+                            <span
+                              className={`font-hand text-[14px] ${draftHigh ? 'text-priority' : 'text-muted-soft'}`}
+                            >
+                              !! high
+                            </span>
                           </button>
                           <button
                             type="button"
                             onClick={() => commitDraft(course.id)}
-                            className="ml-auto px-3 py-1.5 rounded-full bg-primary text-primary-contrast text-[11px] font-medium"
+                            className="hand-underline ml-auto bg-transparent px-0.5 font-serif text-[13px] text-ink"
                           >
                             Add
                           </button>
@@ -395,11 +400,17 @@ export default function TasksPage() {
               <button
                 type="button"
                 onClick={() => setEditHigh((v) => !v)}
-                className={`px-3 py-2 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase ${
-                  editHigh ? 'bg-priorityTint text-prioritySoft' : 'bg-bg-tint text-muted'
-                }`}
+                aria-pressed={editHigh}
+                className="flex items-center gap-2 bg-transparent px-1 py-2"
               >
-                {editHigh ? 'High' : 'Normal'}
+                <span className="scribble-box flex h-4 w-4 items-center justify-center">
+                  {editHigh && <HandCheck size={11} color="var(--priority)" strokeWidth={1.6} />}
+                </span>
+                <span
+                  className={`font-hand text-[15px] ${editHigh ? 'text-priority' : 'text-muted-soft'}`}
+                >
+                  !! high
+                </span>
               </button>
             </div>
 

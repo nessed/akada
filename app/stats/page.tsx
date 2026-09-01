@@ -251,25 +251,29 @@ export default function StatsPage() {
         </div>
       </section>
 
-      {/* KPI ribbon — ink top border like a newspaper rule */}
+      {/* The term so far, as a line in a ledger under a newspaper rule. */}
       <div
-        className="mb-4 grid grid-cols-3 gap-0 px-0 py-3.5"
+        className="mb-4 py-3.5"
         style={{
           borderTop: '1.5px solid var(--ink)',
           borderBottom: '1px solid var(--line)',
         }}
       >
-        <KpiCell label="Streak" value={streak.toString()} unit="days" />
-        <KpiCell
-          label="Avg / day"
-          value={avgPerDay > 0 ? formatHM(avgPerDay) : '—'}
-          border
-        />
-        {bestDay ? (
-          <KpiCell label="Best day" value={bestDay.day} sub={bestDay.duration} />
-        ) : (
-          <KpiCell label="Best day" value="—" />
-        )}
+        <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1.5 font-serif text-[13px] italic text-muted">
+          <span>
+            <Figure>{streak}</Figure> day{streak === 1 ? '' : 's'} running
+          </span>
+          {avgPerDay > 0 && (
+            <span>
+              <Figure>{formatHM(avgPerDay)}</Figure> a day
+            </span>
+          )}
+          {bestDay && (
+            <span>
+              best on <Figure>{bestDay.day}</Figure>, {bestDay.duration}
+            </span>
+          )}
+        </p>
       </div>
 
       {sessions.length === 0 && (
@@ -575,40 +579,12 @@ export default function StatsPage() {
 
 // Vol. III KPI cell — sits inside the ink-ruled ribbon (no per-cell card,
 // vertical separators between).
-function KpiCell({
-  label,
-  value,
-  unit,
-  sub,
-  border,
-}: {
-  label: string;
-  value: string;
-  unit?: string;
-  sub?: string;
-  border?: boolean;
-}) {
+/** A number inside a sentence: mono, upright, the app's ink. */
+function Figure({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="px-3 py-1"
-      style={{
-        borderRight: border ? '1px solid var(--line)' : 'none',
-        borderLeft: border ? '1px solid var(--line)' : 'none',
-      }}
-    >
-      <p className="eyebrow m-0 text-muted">
-        {label}
-      </p>
-      <p className="mt-1.5 mb-0 font-mono font-semibold text-[22px] leading-none tracking-[-0.02em] tabular-nums">
-        {value}
-        {unit && (
-          <span className="ml-1 font-sans text-[11px] font-normal text-muted">{unit}</span>
-        )}
-      </p>
-      {sub && (
-        <p className="mt-1 mb-0 font-serif italic text-[11px] text-muted">{sub}</p>
-      )}
-    </div>
+    <span className="font-mono text-[15px] font-semibold not-italic text-ink tabular-nums">
+      {children}
+    </span>
   );
 }
 
@@ -633,19 +609,15 @@ function FilterChip({ active, onClick, label, color, tint }: ChipProps) {
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border inline-flex items-center gap-1.5 transition-colors"
-      style={{
-        background: active ? (color ? tint || 'var(--bg-tint)' : 'var(--primary)') : 'transparent',
-        color: active ? (color ? 'var(--ink)' : 'var(--primary-contrast)') : 'var(--muted)',
-        borderColor: active ? color || 'var(--primary)' : 'var(--line)',
-      }}
+      className={`shrink-0 bg-transparent px-0.5 py-1 font-serif text-[14px] transition-colors ${
+        active ? 'hl-swipe text-ink' : 'text-muted-soft hover:text-ink-soft'
+      }`}
+      style={
+        active
+          ? ({ '--hl': tint || 'var(--highlight-yellow)' } as React.CSSProperties)
+          : undefined
+      }
     >
-      {color && (
-        <span
-          className="w-1.5 h-1.5 rounded-full"
-          style={{ background: color }}
-        />
-      )}
       {label}
     </button>
   );

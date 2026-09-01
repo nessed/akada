@@ -85,6 +85,17 @@ Two deliberate exceptions: the stats masthead is `52px`, which is the one
 editorial flourish in the app, and the dashboard's date is `32px` because it
 is a date rather than a title. Everything else follows the tiers.
 
+### Marks, not chips
+The app does not use pills. A capsule with a tinted fill is how software says
+"selected"; a page says it with a **swipe of highlighter** (`.hl`, or
+`.hl-swipe` with `--hl` set to a course's tint), a **hand-drawn underline**
+(`.hand-underline`), a **scribble box** and tick (`.scribble-box` +
+`HandCheck`), or a note in the margin (`HandNote`, Caveat). Filters, chosen
+courses, reflection tags, timer goals and priority marks all read this way.
+
+The exceptions are deliberate: a **dashed outline** for "there is more you
+could add here", and the timer's single filled action.
+
 ### Buttons
 Two shapes, not four:
 - **Page CTA** — full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.

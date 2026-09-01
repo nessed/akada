@@ -120,12 +120,14 @@ export default function SessionLogModal({
                 key={tag}
                 type="button"
                 onClick={() => toggleTag(tag)}
-                className="inline-flex items-center rounded-full border px-3 py-1.5 text-[11px] font-medium min-h-[30px] transition-colors"
-                style={{
-                  background: active ? course.tint || 'var(--bg-tint)' : 'transparent',
-                  borderColor: active ? course.color : 'var(--line)',
-                  color: active ? 'var(--ink)' : 'var(--muted)',
-                }}
+                className={`inline-flex min-h-[30px] items-center bg-transparent px-0.5 font-serif text-[13px] transition-colors ${
+                  active ? 'hl-swipe text-ink' : 'text-muted-soft'
+                }`}
+                style={
+                  active
+                    ? ({ '--hl': course.tint || 'var(--bg-tint)' } as React.CSSProperties)
+                    : undefined
+                }
               >
                 #{tag}
               </button>

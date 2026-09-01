@@ -46,12 +46,12 @@ const config: Config = {
         mint: { DEFAULT: 'var(--mint)', tint: 'var(--mint-tint)' },
         slate: { DEFAULT: 'var(--slate)', tint: 'var(--slate-tint)' },
         mauve: { DEFAULT: 'var(--mauve)', tint: 'var(--mauve-tint)' },
-        warn: '#B5694C',
-        warnSoft: '#A38046',
-        warnTint: '#F4ECDC',
-        priority: '#C97A6B',
-        priorityTint: '#F4DCD2',
-        prioritySoft: '#A85C42',
+        warn: 'var(--warn)',
+        warnSoft: 'var(--warn-soft)',
+        warnTint: 'var(--warn-tint)',
+        priority: 'var(--priority)',
+        priorityTint: 'var(--priority-tint)',
+        prioritySoft: 'var(--priority-soft)',
       },
       fontFamily: {
         // Default serif points at the user's --font-serif preference (Fraunces

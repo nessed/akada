@@ -534,17 +534,13 @@ function CoursesStep({
               key={i}
               type="button"
               onClick={() => setEditIdx(i)}
-              className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
-              style={{
-                background: i === editIdx ? c.tint : 'transparent',
-                borderColor: i === editIdx ? c.color : 'var(--line)',
-                color: i === editIdx ? 'var(--ink)' : 'var(--muted)',
-              }}
+              className={`shrink-0 bg-transparent px-0.5 py-1 font-mono text-[12px] font-semibold transition-colors ${
+                i === editIdx ? 'hl-swipe text-ink' : 'text-muted-soft'
+              }`}
+              style={
+                i === editIdx ? ({ '--hl': c.tint } as React.CSSProperties) : undefined
+              }
             >
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ background: c.color }}
-              />
               {c.code || `Course ${i + 1}`}
               <span
                 role="button"
@@ -619,7 +615,7 @@ function CoursesStep({
           </div>
         </Field>
 
-        <GoalGuidance hours={editing.weeklyGoalHours} color={editing.color} tint={editing.tint} />
+        <GoalGuidance hours={editing.weeklyGoalHours} color={editing.color} />
 
         {/* WYSIWYG preview */}
         <div className="relative bg-paper rounded-[14px] border border-line overflow-hidden mt-1">
@@ -655,7 +651,7 @@ function CoursesStep({
           <button
             type="button"
             onClick={addAnother}
-            className="self-start py-2.5 px-3.5 rounded-full border border-dashed border-line-strong text-muted text-xs font-medium"
+            className="self-start rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-2 font-serif text-[13px] text-muted transition-colors hover:text-ink"
           >
             + Add another
           </button>
@@ -810,7 +806,7 @@ function SemesterStep({
           <button
             type="button"
             onClick={() => setCustom(true)}
-            className="self-start rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-2.5 text-xs font-medium text-muted"
+            className="self-start rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-2 font-serif text-[13px] text-muted transition-colors hover:text-ink"
           >
             + Other dates
           </button>
@@ -901,38 +897,9 @@ function RoutineStep({
           </div>
         </Field>
 
-        {/* Tier indicators */}
-        <div className="flex gap-2">
-          {[
-            { label: 'Light', range: '1–3h', note: 'easy days' },
-            { label: 'Focused', range: '4–6h', note: 'most students' },
-            { label: 'Deep', range: '7+h', note: 'exam season' },
-          ].map((t, i) => {
-            const tier = dailyGoal >= 7 ? 2 : dailyGoal >= 4 ? 1 : 0;
-            const active = tier === i;
-            return (
-              <div
-                key={t.label}
-                className="flex-1 px-2.5 py-2 rounded-[8px] text-center transition-all duration-150"
-                style={{
-                  background: active ? 'var(--bg-tint)' : 'transparent',
-                  outline: active ? '1.5px solid var(--line-strong)' : '1.5px solid transparent',
-                }}
-              >
-                <p
-                  className="eyebrow m-0 leading-none tracking-[0.08em]"
-                  style={{ color: active ? 'var(--ink)' : 'var(--muted-soft)' }}
-                >
-                  {t.label}
-                </p>
-                <p className="m-0 font-mono font-semibold text-[12px] text-ink mt-1">{t.range}</p>
-                <p className="m-0 text-[9px] text-muted font-serif italic mt-0.5 leading-[1.3]">
-                  {t.note}
-                </p>
-              </div>
-            );
-          })}
-        </div>
+        <HandNote className="self-start" rotate={-1.5}>
+          {dailyGoal >= 7 ? 'exam season' : dailyGoal >= 4 ? 'most students' : 'easy days'}
+        </HandNote>
 
         {/* Summary card */}
         <div className="py-5 px-[22px] bg-paper rounded-[14px] border border-line">
@@ -959,45 +926,17 @@ function RoutineStep({
   );
 }
 
-function GoalGuidance({ hours, color, tint }: { hours: number; color: string; tint: string }) {
-  const tier = hours >= 14 ? 2 : hours >= 9 ? 1 : hours >= 6 ? 0 : -1;
-  const tiers = [
-    { label: 'Minimum', range: '6–8h', note: 'easier electives' },
-    { label: 'Standard', range: '10–12h', note: 'aim for 3.6+' },
-    { label: 'High', range: '14+h', note: 'midterms & projects' },
-  ];
+function GoalGuidance({ hours, color }: { hours: number; color: string }) {
   return (
-    <div>
-      <p className="m-0 text-[11px] text-muted font-serif italic mb-2.5 leading-[1.5]">
-        ~2–3 hrs independent study per credit hour.
-      </p>
-      <div className="flex gap-2">
-        {tiers.map((t, i) => {
-          const active = tier === i;
-          return (
-            <div
-              key={t.label}
-              className="flex-1 px-2.5 py-2 rounded-[8px] text-center transition-all duration-150"
-              style={{
-                background: active ? tint : 'var(--bg-tint)',
-                outline: active ? `1.5px solid ${color}` : '1.5px solid transparent',
-              }}
-            >
-              <p
-                className="eyebrow m-0 leading-none tracking-[0.08em]"
-                style={{ color: active ? color : 'var(--muted-soft)' }}
-              >
-                {t.label}
-              </p>
-              <p className="m-0 font-mono font-semibold text-[12px] text-ink mt-1">{t.range}</p>
-              <p className="m-0 text-[9px] text-muted font-serif italic mt-0.5 leading-[1.3]">
-                {t.note}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <HandNote color={color} rotate={-1.5} className="self-start">
+      {hours >= 14
+        ? 'a heavy term'
+        : hours >= 9
+          ? 'about right'
+          : hours >= 6
+            ? 'light — fine for electives'
+            : '~2-3 hrs a week per credit'}
+    </HandNote>
   );
 }
 

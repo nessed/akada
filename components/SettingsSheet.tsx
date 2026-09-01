@@ -252,7 +252,7 @@ export default function SettingsSheet({
             <button
               type="button"
               onClick={() => setSection('profile')}
-              className="rounded-full border border-line-strong bg-transparent px-3 py-1.5 text-[11px] font-medium text-ink-soft"
+              className="hand-underline bg-transparent px-0.5 font-serif text-[13px] text-ink-soft"
             >
               Edit
             </button>

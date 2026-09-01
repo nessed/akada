@@ -217,14 +217,14 @@ export default function DatePicker({
               <button
                 type="button"
                 onClick={() => selectDate(todayIso)}
-                className="flex-1 rounded-full border border-line bg-bg-tint px-3 py-2 text-[11px] font-medium text-ink-soft"
+                className="hand-underline flex-1 bg-transparent py-1 font-serif text-[13px] text-ink-soft"
               >
                 Today
               </button>
               <button
                 type="button"
                 onClick={() => selectDate(tomorrowIso)}
-                className="flex-1 rounded-full border border-line bg-bg-tint px-3 py-2 text-[11px] font-medium text-ink-soft"
+                className="hand-underline flex-1 bg-transparent py-1 font-serif text-[13px] text-ink-soft"
               >
                 Tomorrow
               </button>
@@ -232,7 +232,7 @@ export default function DatePicker({
                 <button
                   type="button"
                   onClick={() => selectDate('')}
-                  className="flex-1 rounded-full border border-line bg-transparent px-3 py-2 text-[11px] font-medium text-muted"
+                  className="flex-1 bg-transparent py-1 font-serif text-[13px] italic text-muted"
                 >
                   Clear
                 </button>

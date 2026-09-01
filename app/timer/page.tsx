@@ -323,11 +323,14 @@ export default function TimerPage() {
                 key={goal}
                 type="button"
                 onClick={() => setGoalMin(goal)}
-                className="rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold"
-                style={{
-                  background: goalMin === goal ? course.color : 'transparent',
-                  color: goalMin === goal ? 'var(--ink)' : 'var(--muted)',
-                }}
+                className={`bg-transparent px-0.5 font-mono text-[11px] font-semibold ${
+                  goalMin === goal ? 'hl-swipe text-ink' : 'text-muted'
+                }`}
+                style={
+                  goalMin === goal
+                    ? ({ '--hl': course.tint || course.color } as React.CSSProperties)
+                    : undefined
+                }
               >
                 {goal}
               </button>

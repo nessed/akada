@@ -13,6 +13,7 @@ import SettingsSheet from '@/components/SettingsSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import SwipeRow from '@/components/SwipeRow';
+import HandCheck from '@/components/notebook/HandCheck';
 import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
@@ -488,7 +489,7 @@ export default function DashboardPage() {
               />
             </span>
             {streak > 0 && (
-              <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-bg bg-primary px-1 font-mono text-[9px] font-bold text-primary-contrast">
+              <span className="absolute -bottom-1 -right-1.5 font-hand text-[15px] leading-none text-ink">
                 {streak}
               </span>
             )}
@@ -572,7 +573,7 @@ export default function DashboardPage() {
               Due today
             </h2>
             {overdueCount > 0 && (
-              <span className="eyebrow rounded-full bg-priorityTint px-2 py-[3px] text-prioritySoft tracking-[0.06em]">
+              <span className="font-hand text-[15px] text-priority" style={{ transform: 'rotate(-2deg)' }}>
                 {overdueCount} overdue
               </span>
             )}
@@ -685,11 +686,17 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setNewTaskHigh((v) => !v)}
-                className={`px-3 py-2 rounded-full text-[10px] font-medium tracking-[0.04em] uppercase ${
-                  newTaskHigh ? 'bg-priorityTint text-prioritySoft' : 'bg-bg-tint text-muted'
-                }`}
+                aria-pressed={newTaskHigh}
+                className="flex items-center gap-2 bg-transparent px-1 py-2"
               >
-                {newTaskHigh ? '● High' : 'Normal'}
+                <span className="scribble-box flex h-4 w-4 items-center justify-center">
+                  {newTaskHigh && <HandCheck size={11} color="var(--priority)" strokeWidth={1.6} />}
+                </span>
+                <span
+                  className={`font-hand text-[15px] ${newTaskHigh ? 'text-priority' : 'text-muted-soft'}`}
+                >
+                  !! high
+                </span>
               </button>
             </div>
             <div className="mt-4 flex gap-2.5">
@@ -959,7 +966,7 @@ function EmptyPanel({ action, onAction }: { action: string; onAction: () => void
       <button
         type="button"
         onClick={onAction}
-        className="eyebrow mt-4 inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-1.5 text-muted-soft transition-colors hover:border-line-strong hover:text-ink tracking-[0.04em]"
+        className="mt-4 inline-flex items-center gap-1 self-start rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-2 font-serif text-[13px] text-muted transition-colors hover:text-ink"
       >
         <span aria-hidden className="text-[14px] leading-none font-light">+</span>
         {action}
@@ -990,11 +997,8 @@ function DashboardTaskItem({ task, course, isLast, onToggle, onStartTimer }: { t
           <button
             type="button"
             onClick={() => onStartTimer(task)}
-            className="eyebrow shrink-0 rounded-full px-2.5 py-1 tracking-[0.04em]"
-            style={{
-              background: course.tint || 'var(--bg-tint)',
-              color: 'var(--ink)',
-            }}
+            className="hl-swipe eyebrow shrink-0 bg-transparent text-ink tracking-[0.04em]"
+            style={{ '--hl': course.tint || 'var(--bg-tint)' } as React.CSSProperties}
           >
             {course.code}
           </button>

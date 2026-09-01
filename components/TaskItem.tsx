@@ -73,10 +73,10 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
             type="button"
             onClick={() => onStartTimer(task)}
             aria-label="Start timer for this task"
-            className="shrink-0 px-2.5 py-[5px] rounded-full text-[11px] font-medium inline-flex items-center gap-1"
-            style={{ background: course.tint || 'var(--bg-tint)', color: 'var(--ink)' }}
+            className="hl-swipe inline-flex shrink-0 items-center gap-1 bg-transparent font-serif text-[12px] text-ink"
+            style={{ '--hl': course.tint || 'var(--bg-tint)' } as React.CSSProperties}
           >
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
               <path d="M7 5l12 7-12 7V5z" />
             </svg>
             Start
