@@ -293,30 +293,36 @@ export default function AuthPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]" aria-busy={state === 'loading'}>
           {isSignUp && (
-            <Field label="Name">
+            <Field label="Name" htmlFor="name">
               <UnderlineInput
+                id="name"
                 value={name}
                 onChange={setName}
                 placeholder="Your name"
+                autoComplete="name"
                 autoFocus
               />
             </Field>
           )}
-          <Field label="Email">
+          <Field label="Email" htmlFor="email">
             <UnderlineInput
+              id="email"
               value={email}
               onChange={setEmail}
               placeholder="you@school.edu"
               type="email"
+              autoComplete="email"
               autoFocus={!isSignUp}
             />
           </Field>
-          <Field label="Password">
+          <Field label="Password" htmlFor="password">
             <UnderlineInput
+              id="password"
               value={password}
               onChange={setPassword}
               placeholder="Password"
               type="password"
+              autoComplete={isSignUp ? 'new-password' : 'current-password'}
             />
             {isSignUp && (
               <p className="mt-2 mb-0 text-[11.5px] text-muted-soft">
@@ -355,7 +361,7 @@ export default function AuthPage() {
         </form>
 
         {state === 'error' && errorMsg && (
-          <p className="mt-3 text-center text-[13px] text-priority font-serif italic">
+          <p role="alert" className="mt-3 text-center text-[13px] text-priority font-serif italic">
             {errorMsg}
           </p>
         )}
@@ -405,10 +411,18 @@ function Mark({ size = 34 }: { size?: number }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <label className="eyebrow block text-muted mb-2">
+      <label htmlFor={htmlFor} className="eyebrow block text-muted mb-2">
         {label}
       </label>
       {children}
@@ -417,22 +431,29 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function UnderlineInput({
+  id,
   value,
   onChange,
   placeholder,
   type = 'text',
+  autoComplete,
   autoFocus,
 }: {
+  id: string;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
   type?: string;
+  autoComplete?: string;
   autoFocus?: boolean;
 }) {
   return (
     <input
+      id={id}
+      name={id}
       type={type}
       value={value}
+      autoComplete={autoComplete}
       autoFocus={autoFocus}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}

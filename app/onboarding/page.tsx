@@ -25,6 +25,7 @@ import {
   isIsoDate,
 } from '@/lib/planner-safety';
 import { isoDate, seasonLabel } from '@/lib/utils';
+import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
 import HandCheck from '@/components/notebook/HandCheck';
 import DatePicker from '@/components/DatePicker';
 
@@ -158,41 +159,13 @@ function OnboardingContent() {
   const valid = validCourses.length >= 1 && !hasDuplicateCourseCodes(validCourses);
   const canFinishSemester = isIsoDate(start) && isIsoDate(end) && end >= start;
 
-  function resizeImage(base64: string, maxWidth = 160, maxHeight = 160): Promise<string> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.src = base64;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
-      };
-      img.onerror = () => resolve(base64);
-    });
-  }
 
   async function finish() {
     if (!valid || (!newSemesterMode && !canFinishSemester)) return;
     try {
       let finalAvatar = avatarPreview;
-      if (avatarPreview && avatarPreview.startsWith('data:')) {
-        finalAvatar = await resizeImage(avatarPreview);
+      if (avatarPreview && isUploadedImage(avatarPreview)) {
+        finalAvatar = await resizeAvatar(avatarPreview);
       }
 
       // Use the optimistic helpers so the SWR cache is hot before we navigate
@@ -330,7 +303,7 @@ function Welcome({ onNext }: { onNext: () => void }) {
         className="absolute"
         style={{ top: 64, left: 28, transform: 'rotate(-9deg)', opacity: 0.7 }}
       >
-        <svg width="42" height="42" viewBox="0 0 36 36" fill="none">
+        <svg aria-hidden width="42" height="42" viewBox="0 0 36 36" fill="none">
           <path
             d="M6 4 C 14 16, 18 22, 30 28 M22 22 L30 28 L24 32"
             stroke="var(--muted-soft)"
@@ -435,7 +408,7 @@ function NameStep({
             )}
           </div>
           <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-primary-contrast flex items-center justify-center text-sm shadow-sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
               <circle cx="12" cy="13" r="4" />
             </svg>
@@ -509,6 +482,19 @@ function CoursesStep({
   onBack,
   onNext,
 }: CoursesStepProps) {
+  // Which code is repeated, so the block can say so rather than just
+  // greying the button out.
+  const duplicateCode = (() => {
+    const seen = new Set<string>();
+    for (const course of courses) {
+      const code = cleanCourseCode(course.code);
+      if (!code) continue;
+      if (seen.has(code)) return code;
+      seen.add(code);
+    }
+    return '';
+  })();
+
   return (
     <div className="flex-1 flex flex-col overflow-y-auto app-scroll animate-fade-in">
       <div className="px-7 pt-2">
@@ -659,6 +645,11 @@ function CoursesStep({
       </div>
 
       <div className="px-7 pt-8 pb-7 mt-auto">
+        {duplicateCode && (
+          <p role="alert" className="mb-3 text-center font-serif text-[13px] italic text-priority">
+            Two courses share the code {duplicateCode}.
+          </p>
+        )}
         <button
           type="button"
           disabled={!valid}

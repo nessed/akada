@@ -168,7 +168,7 @@ export default function ResetPasswordPage() {
         </form>
 
         {errorMsg && (
-          <p className="mt-3 text-center text-[13px] text-priority font-serif italic">
+          <p role="alert" className="mt-3 text-center text-[13px] text-priority font-serif italic">
             {errorMsg}
           </p>
         )}

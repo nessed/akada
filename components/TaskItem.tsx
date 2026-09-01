@@ -90,7 +90,7 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
             aria-label="Edit task"
             className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-70 transition-opacity hover:text-ink"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none">
               <path
                 d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3zM14 8l2 2"
                 stroke="currentColor"
@@ -108,7 +108,7 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
           aria-label="Delete task"
           className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-70 transition-opacity hover:text-priority"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+          <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none">
             <path
               d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12"
               stroke="currentColor"

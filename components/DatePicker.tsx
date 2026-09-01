@@ -110,7 +110,7 @@ export default function DatePicker({
         <span className={value ? 'text-ink-soft' : 'text-muted-soft'}>
           {value ? formatDisplay(value) : placeholder}
         </span>
-        <svg
+        <svg aria-hidden
           width="14"
           height="14"
           viewBox="0 0 24 24"
@@ -128,7 +128,7 @@ export default function DatePicker({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-[calc(100%+8px)] z-[100] w-[min(20rem,calc(100vw-44px))] overflow-hidden rounded-[14px] border border-line bg-paper shadow-[0_18px_48px_rgba(26,25,21,0.16)] animate-slide-up">
+        <div className="absolute left-0 top-[calc(100%+8px)] z-[100] w-[min(20rem,calc(100vw-2*var(--density-gutter)))] overflow-hidden rounded-[14px] border border-line bg-paper shadow-[0_18px_48px_rgba(26,25,21,0.16)] animate-slide-up">
           <div className="flex items-center justify-between border-b border-line bg-bg px-3.5 py-3">
             <button
               type="button"
@@ -136,7 +136,7 @@ export default function DatePicker({
               aria-label="Previous month"
               className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:bg-bg-tint"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none">
                 <path
                   d="M15 18l-6-6 6-6"
                   stroke="currentColor"
@@ -163,7 +163,7 @@ export default function DatePicker({
               aria-label="Next month"
               className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:bg-bg-tint"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none">
                 <path
                   d="M9 6l6 6-6 6"
                   stroke="currentColor"

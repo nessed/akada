@@ -121,6 +121,9 @@ input[type='number'] {
 html,
 body {
   scrollbar-width: none;
+  /* A regression that overflows should be clipped, not turn the whole page
+     into a horizontal scroller. */
+  overflow-x: hidden;
 }
 
 ::-webkit-scrollbar {

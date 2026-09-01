@@ -49,7 +49,7 @@ export default function FloatingActionButton({ courses, onStartTimer, onAddTask 
               className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-bg-tint text-left"
             >
               <span className="w-8 h-8 rounded-full bg-bg-tint flex items-center justify-center">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M7 5l12 7-12 7V5z" />
                 </svg>
               </span>
@@ -62,7 +62,7 @@ export default function FloatingActionButton({ courses, onStartTimer, onAddTask 
               className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-bg-tint text-left"
             >
               <span className="w-8 h-8 rounded-full bg-bg-tint flex items-center justify-center">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </span>
@@ -120,7 +120,7 @@ export default function FloatingActionButton({ courses, onStartTimer, onAddTask 
             boxShadow: '0 4px 12px rgba(26,25,21,0.05)',
           }}
         >
-          <svg
+          <svg aria-hidden
             width="18"
             height="18"
             viewBox="0 0 24 24"

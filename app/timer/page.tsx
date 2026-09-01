@@ -302,7 +302,7 @@ export default function TimerPage() {
           aria-label="Back"
           className="w-[38px] h-[38px] rounded-full border border-line bg-paper flex items-center justify-center text-ink-soft"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path
               d="M15 18l-6-6 6-6"
               stroke="currentColor"
@@ -358,7 +358,7 @@ export default function TimerPage() {
             )}
 
             <div className="relative mt-[34px] aspect-square w-full max-w-[284px]">
-              <svg
+              <svg aria-hidden
                 width="100%"
                 height="100%"
                 viewBox="0 0 284 284"
@@ -459,7 +459,7 @@ export default function TimerPage() {
               boxShadow: whiteNoiseOn ? `inset 0 0 0 1px ${course.color}` : 'none',
             }}
           >
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+            <svg aria-hidden width="19" height="19" viewBox="0 0 24 24" fill="none">
               <path
                 d="M4 14.5c1.7 0 1.7-5 3.4-5s1.7 5 3.4 5 1.7-5 3.4-5 1.7 5 3.4 5 1.7-5 3.4-5"
                 stroke="currentColor"
@@ -476,11 +476,11 @@ export default function TimerPage() {
             className="w-14 h-14 rounded-full bg-paper border border-line text-ink flex items-center justify-center"
           >
             {isPaused ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 5l12 7-12 7V5z" />
               </svg>
             ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path
                   d="M9 5v14M15 5v14"
                   stroke="currentColor"
@@ -496,7 +496,7 @@ export default function TimerPage() {
             className="h-14 px-7 rounded-full text-sm font-semibold inline-flex items-center gap-2 tracking-[0.01em]"
             style={{ background: course.color, color: 'var(--ink)' }}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+            <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="6" width="12" height="12" rx="1" />
             </svg>
             Stop &amp; log

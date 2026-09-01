@@ -81,11 +81,11 @@ export default function ActiveTimerDock() {
               className="w-6 h-6 rounded-full border border-line bg-bg flex items-center justify-center text-ink-soft"
             >
               {active.isPaused ? (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <svg aria-hidden width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M7 5l12 7-12 7V5z" />
                 </svg>
               ) : (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                <svg aria-hidden width="10" height="10" viewBox="0 0 24 24" fill="none">
                   <path
                     d="M9 5v14M15 5v14"
                     stroke="currentColor"
@@ -102,7 +102,7 @@ export default function ActiveTimerDock() {
               className="w-6 h-6 rounded-full border border-line bg-bg flex items-center justify-center"
               style={{ color }}
             >
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+              <svg aria-hidden width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                 <rect x="6" y="6" width="12" height="12" rx="1.5" />
               </svg>
             </button>

@@ -193,7 +193,7 @@ export default function SettingsSheet({
             aria-label="Close"
             className="flex h-[34px] w-[34px] items-center justify-center rounded-full border border-line bg-paper text-ink-soft disabled:opacity-50"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path
                 d="M6 6l12 12M18 6L6 18"
                 stroke="currentColor"
@@ -221,7 +221,7 @@ export default function SettingsSheet({
                 )}
               </span>
               <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-contrast shadow-sm">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none">
                   <path
                     d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
                     stroke="currentColor"
@@ -460,7 +460,7 @@ function SettingRow({
       </div>
       {onClick && (
         <span className="text-muted-soft" aria-hidden>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path
               d="M9 6l6 6-6 6"
               stroke="currentColor"
@@ -826,7 +826,7 @@ function CoursesEditor({
       </div>
 
       {error && (
-        <p className="mt-3 text-center text-[12px] text-priority font-serif italic">
+        <p role="alert" className="mt-3 text-center text-[12px] text-priority font-serif italic">
           {error}
         </p>
       )}

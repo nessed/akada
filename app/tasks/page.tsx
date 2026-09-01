@@ -6,7 +6,7 @@ import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
 import SelectField from '@/components/SelectField';
 import HandCheck from '@/components/notebook/HandCheck';
-import LoadingIndicator from '@/components/LoadingIndicator';
+import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskItem from '@/components/TaskItem';
 import type { Task } from '@/lib/data';
@@ -30,6 +30,9 @@ export default function TasksPage() {
   const router = useRouter();
   const { active, start } = useTimer();
   const { notify } = useNotice();
+  // Guards the two writes that were previously fire-and-forget from the UI's
+  // point of view: nothing changed on the button while they were in flight.
+  const [savingTask, setSavingTask] = useState(false);
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
@@ -104,7 +107,8 @@ export default function TasksPage() {
 
   async function saveEditTask() {
     const title = cleanTaskTitle(editTitle);
-    if (!editingTask || !title || !editCourseId) return;
+    if (!editingTask || !title || !editCourseId || savingTask) return;
+    setSavingTask(true);
     try {
       await updateTaskOptimistic(editingTask.id, {
         title,
@@ -116,6 +120,8 @@ export default function TasksPage() {
     } catch (error) {
       console.error('Failed to save task:', error);
       notify('Those changes did not save.');
+    } finally {
+      setSavingTask(false);
     }
   }
 
@@ -134,6 +140,8 @@ export default function TasksPage() {
       setAddingFor(null);
       return;
     }
+    if (savingTask) return;
+    setSavingTask(true);
     try {
       await addTaskOptimistic({
         courseId,
@@ -148,6 +156,8 @@ export default function TasksPage() {
     } catch (error) {
       console.error('Failed to add task:', error);
       notify('That task was not added.');
+    } finally {
+      setSavingTask(false);
     }
   }
 
@@ -256,7 +266,7 @@ export default function TasksPage() {
                 >
                   {course.code}
                 </span>
-                <span className="font-serif font-medium text-[17px] text-ink tracking-[-0.01em]">
+                <span className="min-w-0 flex-1 truncate font-serif text-[17px] font-medium tracking-[-0.01em] text-ink">
                   {course.name}
                 </span>
                 <span className="ml-auto text-xs text-muted font-mono">{open}</span>
@@ -319,10 +329,11 @@ export default function TasksPage() {
                           </button>
                           <button
                             type="button"
+                            disabled={savingTask}
                             onClick={() => commitDraft(course.id)}
-                            className="hand-underline ml-auto bg-transparent px-0.5 font-serif text-[13px] text-ink"
+                            className="hand-underline ml-auto bg-transparent px-0.5 font-serif text-[13px] text-ink disabled:opacity-40"
                           >
-                            Add
+                            {savingTask ? 'Adding' : 'Add'}
                           </button>
                         </div>
                       </div>
@@ -428,11 +439,18 @@ export default function TasksPage() {
               </button>
               <button
                 type="button"
-                disabled={!editTitle.trim() || !editCourseId}
+                disabled={!editTitle.trim() || !editCourseId || savingTask}
                 onClick={saveEditTask}
                 className="flex-1 py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium disabled:opacity-30"
               >
-                Save task
+                {savingTask ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <ButtonSpinner />
+                    Saving
+                  </span>
+                ) : (
+                  'Save task'
+                )}
               </button>
             </div>
           </div>

@@ -119,7 +119,7 @@ export default function CourseCard({
               color: course.color || 'var(--ink)',
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M7 5l12 7-12 7V5z" />
             </svg>
           </button>

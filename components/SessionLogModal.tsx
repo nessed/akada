@@ -136,7 +136,7 @@ export default function SessionLogModal({
         </div>
 
         {errorMessage && (
-          <p className="mt-3 mb-0 text-[12px] leading-[1.45] text-priority font-serif italic">
+          <p role="alert" className="mt-3 mb-0 text-[12px] leading-[1.45] text-priority font-serif italic">
             {errorMessage}
           </p>
         )}

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-// Aliased: the DOM `Image` constructor is used below by resizeImage().
 import NextImage from 'next/image';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
@@ -10,7 +9,7 @@ import CourseCard from '@/components/CourseCard';
 import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
-import LoadingIndicator from '@/components/LoadingIndicator';
+import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import SwipeRow from '@/components/SwipeRow';
 import HandCheck from '@/components/notebook/HandCheck';
@@ -19,6 +18,7 @@ import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
+import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
 import type { CatalogCourse } from '@/lib/catalog';
 import { deriveCourseCode, parseCourseInput } from '@/lib/catalog';
 import {
@@ -122,34 +122,6 @@ export default function DashboardPage() {
     sessionsLoading ||
     tasksLoading;
 
-  function resizeImage(base64: string, maxWidth = 160, maxHeight = 160): Promise<string> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.src = base64;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
-      };
-      img.onerror = () => resolve(base64);
-    });
-  }
 
   const [addingTaskFor, setAddingTaskFor] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -161,6 +133,14 @@ export default function DashboardPage() {
     courseId: string;
     taskId: string | null;
   } | null>(null);
+
+  // True while a sheet's own write is in flight, so its button can say so
+  // and cannot be pressed a second time.
+  // Sign out and reset both navigate away at the end, so the screen stays
+  // covered until they do rather than sitting on a dead dashboard.
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const [savingTask, setSavingTask] = useState(false);
+  const [savingCourse, setSavingCourse] = useState(false);
 
   const [addingCourse, setAddingCourse] = useState(false);
   // One search box drives the whole thing. `picked` is set only when a
@@ -180,9 +160,8 @@ export default function DashboardPage() {
     setUpdatingSettings(true);
     try {
       let finalAvatar = settingsAvatar;
-      if (settingsAvatar && !settingsAvatar.startsWith('https://')) {
-        // It's a new base64 upload, resize it first
-        finalAvatar = await resizeImage(settingsAvatar);
+      if (settingsAvatar && isUploadedImage(settingsAvatar)) {
+        finalAvatar = await resizeAvatar(settingsAvatar);
       }
       await updateUserSettingsOptimistic({
         displayName: settingsName.trim(),
@@ -198,6 +177,7 @@ export default function DashboardPage() {
   }
 
   async function handleSignOut() {
+    setLeaving('Signing out');
     setShowSettings(false);
     clearTimerState();
     try {
@@ -217,6 +197,7 @@ export default function DashboardPage() {
   }
 
   async function handleResetData() {
+    setLeaving('Clearing your planner');
     setShowSettings(false);
     clearTimerState();
     try {
@@ -226,6 +207,7 @@ export default function DashboardPage() {
       // Navigating on to onboarding after a failed reset tells the user
       // their data is gone when it is all still there.
       notify('Nothing was deleted. The reset did not go through.');
+      setLeaving(null);
       return;
     }
     router.replace('/onboarding');
@@ -263,7 +245,8 @@ export default function DashboardPage() {
 
   async function handleAddTask() {
     const title = cleanTaskTitle(newTaskTitle);
-    if (!addingTaskFor || !title) return;
+    if (!addingTaskFor || !title || savingTask) return;
+    setSavingTask(true);
     try {
       await addTaskOptimistic({
         courseId: addingTaskFor,
@@ -278,6 +261,8 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Failed to add task:', error);
       notify('That task was not added.');
+    } finally {
+      setSavingTask(false);
     }
   }
 
@@ -357,11 +342,12 @@ export default function DashboardPage() {
 
   async function handleAddCourse() {
     const draft = resolveNewCourse();
-    if (!draft.code || !draft.name) return;
+    if (!draft.code || !draft.name || savingCourse) return;
     if (courses.some((course) => cleanCourseCode(course.code) === draft.code)) {
       notify(`${draft.code} is already on your list.`);
       return;
     }
+    setSavingCourse(true);
     try {
       await addCourseOptimistic({
         ...draft,
@@ -375,7 +361,17 @@ export default function DashboardPage() {
       // Surface the real reason, most often a duplicate course code the
       // database rejected, which the user can act on.
       notify(error instanceof Error ? error.message : 'That course was not added.');
+    } finally {
+      setSavingCourse(false);
     }
+  }
+
+  if (leaving) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center px-8">
+        <LoadingIndicator label={leaving} detail="One moment." />
+      </div>
+    );
   }
 
   if (loading) {
@@ -709,11 +705,18 @@ export default function DashboardPage() {
               </button>
               <button
                 type="button"
-                disabled={!newTaskTitle.trim()}
+                disabled={!newTaskTitle.trim() || savingTask}
                 onClick={handleAddTask}
                 className="flex-1 py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium disabled:opacity-30"
               >
-                Add task
+                {savingTask ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <ButtonSpinner />
+                    Adding
+                  </span>
+                ) : (
+                  'Add task'
+                )}
               </button>
             </div>
           </div>
@@ -854,11 +857,18 @@ export default function DashboardPage() {
               </button>
               <button
                 type="button"
-                disabled={!canAddCourse}
+                disabled={!canAddCourse || savingCourse}
                 onClick={handleAddCourse}
                 className="flex-1 py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium disabled:opacity-30"
               >
-                Add course
+                {savingCourse ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <ButtonSpinner />
+                    Adding
+                  </span>
+                ) : (
+                  'Add course'
+                )}
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ButtonSpinner } from './LoadingIndicator';
 
 interface Props {
   open: boolean;
@@ -111,7 +112,14 @@ export default function ConfirmSheet({
             onClick={onConfirm}
             className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast disabled:opacity-30"
           >
-            {confirmLabel}
+            {busy ? (
+              <span className="flex items-center justify-center gap-2">
+                <ButtonSpinner />
+                {confirmLabel}
+              </span>
+            ) : (
+              confirmLabel
+            )}
           </button>
         </div>
       </div>

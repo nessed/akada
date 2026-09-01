@@ -8,7 +8,7 @@ const tabs = [
     href: '/dashboard',
     label: 'Today',
     icon: (
-      <svg
+      <svg aria-hidden
         width="20"
         height="20"
         viewBox="0 0 24 24"
@@ -26,7 +26,7 @@ const tabs = [
     href: '/tasks',
     label: 'Tasks',
     icon: (
-      <svg
+      <svg aria-hidden
         width="20"
         height="20"
         viewBox="0 0 24 24"
@@ -48,7 +48,7 @@ const tabs = [
     href: '/stats',
     label: 'Stats',
     icon: (
-      <svg
+      <svg aria-hidden
         width="20"
         height="20"
         viewBox="0 0 24 24"

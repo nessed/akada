@@ -9,8 +9,10 @@ import type { NextRequest } from 'next/server';
  * Vercel these become runtime logs, which Log Drains and alerts can watch.
  * Swapping this for Sentry later means changing this one handler.
  *
- * Deliberately records nothing about the user: no ids, no emails, no planner
- * content. Just what broke and where.
+ * Records no account data: no ids, no emails, no planner content. It does
+ * log the path the error happened on and the user agent, and a stack trace
+ * can incidentally carry a string from the page, so the privacy policy has
+ * to account for crash logs.
  */
 
 const MAX_FIELD = 1000;

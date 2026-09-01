@@ -136,7 +136,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
         </button>
       )}
 
-      {error && <p className="mt-3 text-[13px] text-priority font-serif italic">{error}</p>}
+      {error && <p role="alert" className="mt-3 text-[13px] text-priority font-serif italic">{error}</p>}
 
       {past.length > 0 && (
         <div className="mt-6">
@@ -162,7 +162,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
                   )}
                 </div>
                 <span className="text-muted-soft shrink-0" aria-hidden>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none">
                     <path
                       d="M9 6l6 6-6 6"
                       stroke="currentColor"
@@ -353,7 +353,7 @@ function StartSemesterForm({
       )}
 
       {error && (
-        <p className="mt-3 text-[13px] text-priority font-serif italic">{error}</p>
+        <p role="alert" className="mt-3 text-[13px] text-priority font-serif italic">{error}</p>
       )}
 
       <div className="mt-6 flex gap-3">
@@ -459,7 +459,7 @@ function SemesterArchive({
       </p>
 
       {error && (
-        <p className="mt-4 text-[13px] text-priority font-serif italic">{error}</p>
+        <p role="alert" className="mt-4 text-[13px] text-priority font-serif italic">{error}</p>
       )}
 
       {courses === null && !error ? (

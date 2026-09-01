@@ -491,7 +491,7 @@ export default function StatsPage() {
                     {m.achieved ? (
                       <HandCheck size={14} color="var(--ink)" />
                     ) : (
-                      <svg width="9" height="9" viewBox="0 0 12 12">
+                      <svg aria-hidden width="9" height="9" viewBox="0 0 12 12">
                         <circle cx="6" cy="6" r="2.5" fill="currentColor" />
                       </svg>
                     )}
@@ -658,7 +658,7 @@ function SessionItem({ session, course, onDelete }: { session: Session; course?:
             aria-label="Delete session"
             className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-priority"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none">
               <path
                 d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12"
                 stroke="currentColor"
