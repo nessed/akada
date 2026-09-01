@@ -59,7 +59,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     if (!pendingLog) return;
     setSaveError('');
     if (!online) {
-      setSaveError('You are offline. This session is still saved locally; reconnect and save again.');
+      setSaveError('Offline — kept on this device.');
       return;
     }
     const durationSeconds = clampSessionSeconds(pendingLog.durationSeconds);
@@ -81,7 +81,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       onResolved?.();
     } catch (error) {
       console.error('Failed to save session:', error);
-      setSaveError('Could not save yet. This session is still saved locally; try again in a moment.');
+      setSaveError('Did not save — kept on this device.');
     } finally {
       setSaving(false);
     }
@@ -102,15 +102,15 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       saving={saving}
       contextMessage={
         pendingLog?.recoveryReason === 'away'
-          ? 'Timer was recovered after you were away for a while. Save it if it looks right, or delete the log.'
+          ? 'Recovered while you were away.'
           : pendingLog?.recoveryReason === 'max'
-            ? 'Timer reached the session limit. Save it if it looks right, or delete the log.'
+            ? 'Reached the session limit.'
             : ''
       }
       errorMessage={
         saveError ||
         (!online && pendingLog
-          ? 'You are offline. This session is saved locally until you reconnect.'
+          ? 'Offline — kept on this device.'
           : '')
       }
       onCancel={handleDiscard}

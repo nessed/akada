@@ -199,7 +199,7 @@ export default function DatePicker({
                     onClick={() => selectDate(dayIso)}
                     className={`flex aspect-square items-center justify-center rounded-[9px] text-[12px] font-medium transition-colors ${
                       isSelected
-                        ? 'bg-primary text-primary-contrast'
+                        ? 'bg-bg-tint text-ink ring-1 ring-line-strong'
                         : isToday
                           ? 'bg-bg-tint text-ink'
                           : inMonth

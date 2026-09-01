@@ -114,7 +114,7 @@ export default function LandingPage() {
             <div className="mt-8 flex flex-col justify-center gap-2.5 sm:flex-row">
               <Link
                 href="/auth?mode=signup"
-                className="rounded-xl bg-primary px-6 py-3.5 text-[15px] font-medium text-primary-contrast"
+                className="rounded-2xl bg-primary px-6 py-3.5 text-[15px] font-medium text-primary-contrast"
               >
                 Create account
               </Link>

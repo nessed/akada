@@ -342,16 +342,6 @@ export default function AuthPage() {
                 : 'Sign in'}
           </button>
 
-          {state === 'loading' && (
-            <p className="-mt-2 mb-0 text-center font-serif italic text-[12px] text-muted" role="status">
-              {loadingAction === 'signup'
-                ? 'Setting up your secure account. Keep this page open.'
-                : loadingAction === 'reset'
-                  ? 'Requesting a secure reset link.'
-                  : 'Checking your account details.'}
-            </p>
-          )}
-
           {!isSignUp && (
             <button
               type="button"

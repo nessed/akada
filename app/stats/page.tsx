@@ -516,7 +516,7 @@ export default function StatsPage() {
         <h2 className="my-4 font-serif font-medium text-[20px]">Session history</h2>
         {sessions.length === 0 ? (
           <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
-            Your logged study sessions will appear here.
+            Nothing logged yet — the ledger starts with the first session.
           </p>
         ) : (
           <div>
@@ -686,7 +686,7 @@ function SessionItem({ session, course, onDelete }: { session: Session; course?:
             type="button"
             onClick={() => onDelete(session.id)}
             aria-label="Delete session"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-warn"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-priority"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
               <path

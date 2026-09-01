@@ -106,7 +106,7 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
           type="button"
           onClick={() => onDelete(task.id)}
           aria-label="Delete task"
-          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-70 transition-opacity hover:text-warn"
+          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-70 transition-opacity hover:text-priority"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
             <path

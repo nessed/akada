@@ -30,7 +30,7 @@ export default function AppError({
         <button
           type="button"
           onClick={reset}
-          className="mt-7 h-12 rounded-full bg-primary px-6 text-sm font-semibold text-primary-contrast"
+          className="mt-7 h-12 rounded-2xl bg-primary px-6 text-sm font-medium text-primary-contrast"
         >
           Try again
         </button>

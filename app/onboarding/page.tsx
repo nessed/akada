@@ -465,7 +465,7 @@ function NameStep({
           type="button"
           disabled={!name.trim()}
           onClick={onNext}
-          className="w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
           Continue
         </button>
@@ -667,7 +667,7 @@ function CoursesStep({
           type="button"
           disabled={!valid}
           onClick={onNext}
-          className="w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
           Continue
         </button>
@@ -831,7 +831,7 @@ function SemesterStep({
           type="button"
           disabled={!canFinish}
           onClick={onNext}
-          className="w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
           Continue
         </button>
@@ -950,7 +950,7 @@ function RoutineStep({
           type="button"
           disabled={saving}
           onClick={handleFinish}
-          className="w-full py-4 rounded-xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {saving ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />Setting up your planner…</span> : displayName ? `Let's go, ${cleanDisplayName(displayName)}` : 'Begin'}
         </button>

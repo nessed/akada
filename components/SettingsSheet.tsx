@@ -243,9 +243,11 @@ export default function SettingsSheet({
               <p className="m-0 truncate font-serif text-[18px] font-medium tracking-[-0.01em]">
                 {shownName}
               </p>
-              <p className="mt-0.5 mb-0 truncate text-xs text-muted">
-                Courses, tasks, sessions, and progress.
-              </p>
+              {activeSemester?.label && (
+                <p className="mt-0.5 mb-0 truncate text-xs text-muted">
+                  {activeSemester.label}
+                </p>
+              )}
             </div>
             <button
               type="button"
@@ -1010,9 +1012,9 @@ function AppearanceEditor({
                 onClick={() => setPrefs({ density: o.v })}
                 className="flex-1 rounded-[10px] py-3 text-[13px] font-medium"
                 style={{
-                  background: sel ? 'var(--primary)' : 'transparent',
-                  color: sel ? 'var(--primary-contrast)' : 'var(--ink-soft)',
-                  border: sel ? '1px solid var(--primary)' : '1px solid var(--line)',
+                  background: sel ? 'var(--bg-tint)' : 'transparent',
+                  color: sel ? 'var(--ink)' : 'var(--ink-soft)',
+                  border: sel ? '1.5px solid var(--ink)' : '1px solid var(--line)',
                 }}
               >
                 {o.l}

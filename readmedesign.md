@@ -76,6 +76,25 @@ One caption spec, `.eyebrow` in `globals.css`: 10px, 600 weight, uppercase,
 or a tighter tracking set alongside it still wins — that is how the badges and
 the timer's display caption keep their own letterspacing.
 
+### Type scale
+Two title tiers, so a screen title is recognisable as one:
+- **Screen title** — `text-[36px]` at `tracking-[-0.025em]`, serif.
+- **Section heading** — `text-[17px]`/`text-[20px]`, serif medium.
+
+Two deliberate exceptions: the stats masthead is `52px`, which is the one
+editorial flourish in the app, and the dashboard's date is `32px` because it
+is a date rather than a title. Everything else follows the tiers.
+
+### Buttons
+Two shapes, not four:
+- **Page CTA** — full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
+- **Sheet action pair** — `flex-1`, `py-3.5`, `rounded-[10px]`, `text-sm`,
+  matching the radius of the fields above it in the same sheet.
+
+Solid `bg-primary` fill belongs to the one primary action on a screen. A
+*selection* is never a solid fill: it is a `bg-tint` wash with an ink border
+or an accent tick (see `SectionPicker`).
+
 ### Density
 `Cozy` / `Comfy` / `Compact` in Appearance set `--density-gutter`,
 `--density-gap` and `--density-section` on `:root`. Anything that wants to

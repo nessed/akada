@@ -566,7 +566,7 @@ export default function DashboardPage() {
       )}
 
       {(todayTasks.length > 0 || overdueCount > 0) && (
-        <section className="mt-5 mb-[22px]">
+        <section className="mt-[var(--density-section)] mb-[22px]">
           <div className="mb-2.5 flex items-baseline justify-between">
             <h2 className="m-0 font-serif text-[17px] font-medium tracking-[-0.01em]">
               Due today

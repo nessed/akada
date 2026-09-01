@@ -153,7 +153,7 @@ export default function SessionLogModal({
             type="button"
             disabled={!canSave}
             onClick={() => onSave(note)}
-            className="flex-[2] min-h-[50px] py-3.5 rounded-[12px] bg-primary text-primary-contrast text-[14px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-35"
+            className="flex-[2] min-h-[50px] py-3.5 rounded-[10px] bg-primary text-primary-contrast text-[14px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-35"
           >
             <HandCheck size={14} color="currentColor" />
             {saving ? <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving session…</span> : 'Save to journal'}
