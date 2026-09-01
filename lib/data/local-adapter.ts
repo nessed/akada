@@ -430,6 +430,12 @@ export class LocalAdapter implements DataProvider {
     Object.values(KEYS).forEach(remove);
   }
 
+  async deleteAccount(): Promise<void> {
+    // Local mode has no account behind the data, so erasing the data is the
+    // whole of it.
+    await this.resetAll();
+  }
+
   // ---- User settings
   async getUserSettings(): Promise<UserSettings | null> {
     const settings = read<UserSettings | null>(KEYS.userSettings, null);

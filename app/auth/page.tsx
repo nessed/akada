@@ -13,7 +13,7 @@ import {
 } from '@/lib/auth-messages';
 
 type Mode = 'signin' | 'signup';
-type State = 'idle' | 'loading' | 'success' | 'error';
+type State = 'idle' | 'loading' | 'error';
 
 export default function AuthPage() {
   const router = useRouter();
@@ -23,8 +23,6 @@ export default function AuthPage() {
   const [password, setPassword] = useState('');
   const [state, setState] = useState<State>('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [successKind, setSuccessKind] = useState<'signup' | 'reset'>('signup');
   const [loadingAction, setLoadingAction] = useState<'signin' | 'signup' | 'reset' | null>(null);
 
   const isSignUp = mode === 'signup';
@@ -50,7 +48,6 @@ export default function AuthPage() {
     setMode(nextMode);
     setState('idle');
     setErrorMsg('');
-    setSuccessMsg('');
 
     const url = new URL(window.location.href);
     if (nextMode === 'signup') {
@@ -92,10 +89,7 @@ export default function AuthPage() {
           // strand the user on a screen with nothing to wait for.
           await goToNextStep();
         } else {
-          setSuccessKind('signup');
-          setSuccessMsg(email.trim());
-          setState('success');
-          setLoadingAction(null);
+          router.push('/auth/check-email?kind=signup');
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -151,9 +145,7 @@ export default function AuthPage() {
         setLoadingAction(null);
         return;
       }
-      setSuccessKind('reset');
-      setSuccessMsg(target);
-      setState('success');
+      router.push('/auth/check-email?kind=reset');
       setLoadingAction(null);
     } catch (error) {
       setErrorMsg(
@@ -166,47 +158,6 @@ export default function AuthPage() {
 
   function switchMode() {
     setAuthMode(isSignUp ? 'signin' : 'signup');
-  }
-
-  if (state === 'success') {
-    return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center px-8 animate-fade-in">
-        <div className="w-full max-w-[340px] text-center">
-          <div className="mx-auto mb-7">
-            <Mark size={56} />
-          </div>
-          <h1 className="font-serif font-medium text-[28px] tracking-[-0.02em] mb-3">
-            Check your email
-          </h1>
-          <p className="text-[15px] text-ink-soft leading-[1.6] max-w-[300px] mx-auto">
-            {successKind === 'reset' ? (
-              <>
-                If an account exists for{' '}
-                <span className="font-medium text-ink">{successMsg}</span>, we have
-                sent a link to reset the password.
-              </>
-            ) : (
-              <>
-                We sent a confirmation link to{' '}
-                <span className="font-medium text-ink">{successMsg}</span>.
-                <br />
-                Click it to finish setting up Akada.
-              </>
-            )}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setState('idle');
-              setMode('signin');
-            }}
-            className="mt-8 text-[13px] text-muted font-serif italic hover:text-ink transition-colors"
-          >
-            Back to sign in
-          </button>
-        </div>
-      </div>
-    );
   }
 
   return (

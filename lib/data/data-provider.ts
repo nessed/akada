@@ -53,4 +53,9 @@ export interface DataProvider {
 
   // Dev / debugging
   resetAll(): Promise<void>;
+  /**
+   * Erase the account itself, not just its contents: the auth record goes
+   * too, and the database cascades everything else with it.
+   */
+  deleteAccount(): Promise<void>;
 }

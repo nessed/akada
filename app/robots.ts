@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: '*',
-      allow: ['/', '/auth'],
+      allow: ['/', '/auth', '/privacy', '/terms'],
       // Everything behind the auth gate is per-user and has nothing to index.
       disallow: ['/dashboard', '/timer', '/tasks', '/stats', '/onboarding', '/auth/'],
     },

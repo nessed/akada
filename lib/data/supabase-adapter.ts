@@ -670,4 +670,13 @@ export class SupabaseAdapter implements DataProvider {
     await this.supabase.from('semesters').delete().eq('user_id', uid);
     await this.supabase.from('user_settings').delete().eq('user_id', uid);
   }
+
+  async deleteAccount(): Promise<void> {
+    // A SECURITY DEFINER function in the schema, because removing a row from
+    // auth.users is the one thing RLS alone cannot express. It deletes
+    // auth.uid() and nothing else, and the FK cascades do the rest.
+    const { error } = await this.supabase.rpc('delete_own_account');
+    if (error) throw new Error(error.message || 'Could not delete the account.');
+    await this.supabase.auth.signOut();
+  }
 }

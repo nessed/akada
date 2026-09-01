@@ -12,6 +12,11 @@ const PUBLIC_PATHS = new Set([
   '/auth',
   '/auth/callback',
   '/auth/reset',
+  '/auth/check-email',
+  // Both have to be readable by someone who has not signed up, and by a
+  // crawler.
+  '/privacy',
+  '/terms',
   // Next metadata route with no file extension. Social crawlers fetch it
   // unauthenticated, so leaving it protected silently kills link previews.
   '/opengraph-image',

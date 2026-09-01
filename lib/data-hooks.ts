@@ -394,6 +394,25 @@ export async function resetAllData() {
   ]);
 }
 
+/**
+ * Erase the account itself. The rows go with it through the database's own
+ * cascades, so this is `resetAllData` plus the auth record, and there is
+ * nothing to come back to afterwards.
+ */
+export async function deleteAccountAndData() {
+  clearStoredTimerState();
+  await db.deleteAccount();
+  await Promise.all([
+    mutate(KEY.onboarding, false, { revalidate: false }),
+    mutate(KEY.courses, [], { revalidate: false }),
+    mutate(KEY.sessions, [], { revalidate: false }),
+    mutate(KEY.tasks, [], { revalidate: false }),
+    mutate(KEY.activeSemester, null, { revalidate: false }),
+    mutate(KEY.semesters, [], { revalidate: false }),
+    mutate(KEY.userSettings, null, { revalidate: false }),
+  ]);
+}
+
 // Public re-exports so consumers can build their own SWR keys / call
 // mutate(KEY.foo) without re-deriving the constant.
 export const PLANNER_KEYS = KEY;

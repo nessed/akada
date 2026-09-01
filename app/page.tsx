@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PASTEL_PALETTE } from '@/lib/utils';
+import { CONTACT_EMAIL } from '@/lib/contact';
 
 export const metadata: Metadata = {
   // The one indexable page, so it carries the brand itself rather than
@@ -165,6 +166,42 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+
+      {/* The page used to end on the feature grid, so anyone who read to the
+          bottom had to scroll back up to act. */}
+      <section className="mx-auto max-w-5xl px-6 pb-16 text-center sm:px-8 lg:px-10">
+        <h2 className="m-0 font-serif text-[26px] font-medium tracking-[-0.02em]">
+          Start the term <span className="italic">on one page</span>.
+        </h2>
+        <p className="mx-auto mt-2.5 mb-0 max-w-[360px] text-[14px] leading-[1.6] text-ink-soft">
+          Free, and it takes a minute to set up.
+        </p>
+        <Link
+          href="/auth?mode=signup"
+          className="mt-6 inline-block rounded-2xl bg-primary px-6 py-3.5 text-[15px] font-medium text-primary-contrast"
+        >
+          Create account
+        </Link>
+      </section>
+
+      <footer className="border-t border-line">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-7 sm:px-8 lg:px-10">
+          <p className="m-0 font-serif text-[13px] italic text-muted">
+            Akada, made with quiet hands.
+          </p>
+          <nav className="flex items-center gap-5 font-serif text-[13px] text-muted">
+            <Link className="hand-underline" href="/privacy">
+              Privacy
+            </Link>
+            <Link className="hand-underline" href="/terms">
+              Terms
+            </Link>
+            <a className="hand-underline" href={`mailto:${CONTACT_EMAIL}`}>
+              Contact
+            </a>
+          </nav>
+        </div>
+      </footer>
     </main>
   );
 }

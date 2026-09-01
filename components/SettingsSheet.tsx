@@ -30,6 +30,7 @@ import { useTimer } from '@/lib/timer-context';
 import { ButtonSpinner } from './LoadingIndicator';
 import ConfirmSheet from './ConfirmSheet';
 import BackButton from './BackButton';
+import { CONTACT_EMAIL } from '@/lib/contact';
 import { useNotice } from './Notice';
 
 type Section = 'overview' | 'profile' | 'courses' | 'semester' | 'appearance';
@@ -50,6 +51,7 @@ interface Props {
   onCoursesChanged?: () => void;
   onSignOut?: () => void;
   onResetData?: () => void;
+  onDeleteAccount?: () => void;
 }
 
 export default function SettingsSheet({
@@ -68,13 +70,16 @@ export default function SettingsSheet({
   onCoursesChanged,
   onSignOut,
   onResetData,
+  onDeleteAccount,
 }: Props) {
   const [section, setSection] = useState<Section>('overview');
   const { semester: activeSemester } = useActiveSemester();
   const [prefs, setPrefs] = usePreferences();
   const { notify } = useNotice();
   // Which of the two irreversible actions is waiting to be confirmed.
-  const [confirming, setConfirming] = useState<'reset' | 'signOut' | null>(null);
+  const [confirming, setConfirming] = useState<'reset' | 'signOut' | 'delete' | null>(
+    null,
+  );
 
   // Reset to overview each time the sheet opens.
   useEffect(() => {
@@ -148,6 +153,18 @@ export default function SettingsSheet({
         onConfirm={() => {
           setConfirming(null);
           onResetData?.();
+        }}
+      />
+      <ConfirmSheet
+        open={confirming === 'delete'}
+        title="Delete your account?"
+        body="Your courses, tasks, sessions and sign-in all go. This cannot be undone."
+        confirmLabel="Delete"
+        requirePhrase="DELETE"
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          setConfirming(null);
+          onDeleteAccount?.();
         }}
       />
       <ConfirmSheet
@@ -328,13 +345,24 @@ export default function SettingsSheet({
             </SettingGroup>
 
             <SettingGroup label="Account">
-              <SettingRow label="Help & contact" sub="hello@akada.app" />
-              <SettingRow label="Privacy" sub="Read the policy" />
+              <SettingRow
+                label="Help & contact"
+                sub={CONTACT_EMAIL}
+                href={`mailto:${CONTACT_EMAIL}`}
+              />
+              <SettingRow label="Privacy" sub="How your data is handled" href="/privacy" />
+              <SettingRow label="Terms" sub="What you agree to" href="/terms" />
               <SettingRow
                 label="Sign out"
                 tone="warn"
-                last
                 onClick={() => setConfirming('signOut')}
+              />
+              <SettingRow
+                label="Delete account"
+                sub="Everything, permanently"
+                tone="warn"
+                last
+                onClick={() => setConfirming('delete')}
               />
             </SettingGroup>
 
@@ -435,30 +463,31 @@ function SettingRow({
   label,
   sub,
   onClick,
+  href,
   tone,
   last,
 }: {
   label: string;
   sub?: string;
   onClick?: () => void;
+  /** For the rows that lead somewhere real: a policy page, a mailto. */
+  href?: string;
   tone?: 'warn';
   last?: boolean;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 px-4 py-3.5 bg-transparent text-left ${
-        last ? '' : 'border-b border-line'
-      } ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
-    >
+  const className = `flex w-full items-center gap-3 px-4 py-3.5 bg-transparent text-left ${
+    last ? '' : 'border-b border-line'
+  } ${onClick || href ? 'cursor-pointer' : 'cursor-default'}`;
+
+  const body = (
+    <>
       <div className="min-w-0 flex-1">
         <p className={`m-0 text-sm font-medium ${tone === 'warn' ? 'text-warn' : 'text-ink'}`}>
           {label}
         </p>
         {sub && <p className="mt-0.5 mb-0 text-[11px] text-muted">{sub}</p>}
       </div>
-      {onClick && (
+      {(onClick || href) && (
         <span className="text-muted-soft" aria-hidden>
           <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path
@@ -471,6 +500,25 @@ function SettingRow({
           </svg>
         </span>
       )}
+    </>
+  );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target={href.startsWith('mailto:') ? undefined : '_blank'}
+        rel="noreferrer"
+        className={className}
+      >
+        {body}
+      </a>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {body}
     </button>
   );
 }

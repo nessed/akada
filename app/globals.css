@@ -269,6 +269,44 @@ input[type='date']::-webkit-calendar-picker-indicator {
   padding: 0 2px;
 }
 
+/* The privacy policy and the terms: read as documents, not as screens. */
+.legal-prose p,
+.legal-prose li {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+.legal-prose p {
+  margin: 0 0 0.9em;
+}
+.legal-prose p:last-child,
+.legal-prose ul:last-child {
+  margin-bottom: 0;
+}
+.legal-prose ul {
+  margin: 0 0 0.9em;
+  padding-left: 1.1em;
+  list-style: none;
+}
+.legal-prose li {
+  position: relative;
+  margin-bottom: 0.45em;
+}
+.legal-prose li::before {
+  content: '';
+  position: absolute;
+  left: -0.9em;
+  top: 0.72em;
+  width: 5px;
+  height: 1px;
+  background: var(--line-strong);
+}
+.legal-prose strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
 /* Highlighter swipe in any colour, set --hl on the element. Same geometry
    as .hl, which is this with the yellow baked in. Used wherever something is
    picked: a filter, a course, a goal. A swipe of highlighter is how a page

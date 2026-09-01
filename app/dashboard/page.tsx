@@ -53,6 +53,7 @@ import {
   toggleTaskOptimistic,
   updateUserSettingsOptimistic,
   resetAllData,
+  deleteAccountAndData,
 } from '@/lib/data-hooks';
 
 /** The quiet uppercase caption every other form in the app labels a field with. */
@@ -194,6 +195,23 @@ export default function DashboardPage() {
     // timer context and every other in-memory copy of the previous user's
     // data goes with the page.
     window.location.replace('/auth');
+  }
+
+  async function handleDeleteAccount() {
+    setLeaving('Deleting your account');
+    setShowSettings(false);
+    clearTimerState();
+    try {
+      await deleteAccountAndData();
+    } catch (error) {
+      console.error('Failed to delete account:', error);
+      notify(error instanceof Error ? error.message : 'The account was not deleted.');
+      setLeaving(null);
+      return;
+    }
+    // Nothing of this account should outlive it on the device either.
+    clearClientSessionState();
+    window.location.replace('/');
   }
 
   async function handleResetData() {
@@ -903,6 +921,7 @@ export default function DashboardPage() {
         onCoursesChanged={() => revalidateCourses()}
         onSignOut={handleSignOut}
         onResetData={handleResetData}
+        onDeleteAccount={handleDeleteAccount}
       />
     </PageShell>
   );
