@@ -1,7 +1,35 @@
 import { createClient } from '@supabase/supabase-js';
 
 export const MCP_SCOPES = ['akada.tasks.read', 'akada.tasks.write'] as const;
-export const CLAUDE_CALLBACK_URL = 'https://claude.ai/api/mcp/auth_callback';
+/**
+ * Hosts Claude serves its connector callback from. Claude web is on both
+ * domains, and which one a given account lands on is not ours to predict, so
+ * hardcoding one of them broke registration for half the clients that exist.
+ */
+const CLAUDE_CALLBACK_HOSTS = new Set(['claude.ai', 'claude.com']);
+
+/** RFC 8252 loopback: Claude Code, MCP Inspector and anything else running locally. */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+export const MAX_REDIRECT_URIS = 5;
+
+/**
+ * A redirect URI is where an authorization code gets delivered, so a bad one
+ * is a code handed to somebody else. Claude's own hosts over https, plus
+ * http loopback on any port for local clients — nothing else.
+ */
+export function isAllowedRedirectUri(value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.hash) return false;
+  if (url.protocol === 'https:') return CLAUDE_CALLBACK_HOSTS.has(url.hostname);
+  if (url.protocol === 'http:') return LOOPBACK_HOSTS.has(url.hostname);
+  return false;
+}
 
 export function siteUrl() {
   const value = process.env.NEXT_PUBLIC_SITE_URL;

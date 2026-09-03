@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { CLAUDE_CALLBACK_URL, oauthError } from '../_shared';
+import { MAX_REDIRECT_URIS, isAllowedRedirectUri, oauthError } from '../_shared';
 import { registerMcpClient } from '@/lib/mcp-auth';
 
 export const runtime = 'nodejs';
@@ -13,16 +13,27 @@ export async function POST(request: NextRequest) {
     return oauthError('invalid_client_metadata', 'Client registration needs a JSON body.');
   }
 
-  const redirectUris = Array.isArray(body.redirect_uris)
+  const requested = Array.isArray(body.redirect_uris)
     ? body.redirect_uris.filter((uri): uri is string => typeof uri === 'string')
     : [];
-  if (redirectUris.length !== 1 || redirectUris[0] !== CLAUDE_CALLBACK_URL) {
+  if (requested.length === 0 || requested.length > MAX_REDIRECT_URIS) {
     return oauthError(
       'invalid_redirect_uri',
-      'This connector only accepts Claude’s registered callback URL.',
+      `Register between 1 and ${MAX_REDIRECT_URIS} redirect URIs.`,
     );
   }
 
+  // Registration is open, so this is the only thing standing between a
+  // consenting user and a code delivered to somebody else's callback.
+  const rejected = requested.filter((uri) => !isAllowedRedirectUri(uri));
+  if (rejected.length > 0) {
+    return oauthError(
+      'invalid_redirect_uri',
+      'Redirect URIs must be https on claude.ai or claude.com, or http on localhost for a local client.',
+    );
+  }
+
+  const redirectUris = [...new Set(requested)];
   const clientId = registerMcpClient(redirectUris);
   return Response.json(
     {

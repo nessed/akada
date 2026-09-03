@@ -169,8 +169,25 @@ async function authenticate(request: NextRequest) {
   }
 }
 
+// A bearer token is not a cookie, so there is nothing here for a browser to
+// send ambiently and no credentialed mode to allow. Without these an MCP
+// client running in a page — Inspector, anything on loopback — never gets
+// past its own preflight.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, content-type, mcp-protocol-version, mcp-session-id',
+  'Access-Control-Expose-Headers': 'mcp-session-id, www-authenticate',
+  'Access-Control-Max-Age': '86400',
+};
+
+function withCors(response: Response) {
+  for (const [name, value] of Object.entries(CORS_HEADERS)) response.headers.set(name, value);
+  return response;
+}
+
 function unauthorized() {
-  return Response.json(
+  return withCors(Response.json(
     { error: 'Unauthorized' },
     {
       status: 401,
@@ -179,13 +196,13 @@ function unauthorized() {
         'WWW-Authenticate': `Bearer resource_metadata="${siteUrl()}/.well-known/oauth-protected-resource/mcp"`,
       },
     },
-  );
+  ));
 }
 
 export async function POST(request: NextRequest) {
   const auth = await authenticate(request);
   if (!auth) return unauthorized();
-  return handler.fetch(request, {
+  const response = await handler.fetch(request, {
     authInfo: {
       token: auth.token,
       clientId: auth.payload.clientId,
@@ -194,8 +211,9 @@ export async function POST(request: NextRequest) {
       resource: new URL(mcpUrl()),
     },
   });
+  return withCors(response);
 }
 
 export function OPTIONS() {
-  return new Response(null, { status: 204, headers: { Allow: 'POST, OPTIONS' } });
+  return withCors(new Response(null, { status: 204, headers: { Allow: 'POST, OPTIONS' } }));
 }

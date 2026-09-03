@@ -28,4 +28,6 @@ Redeploy after adding or changing an environment variable.
 6. Add the connector, click **Connect**, sign in to Akada, and select **Allow connection**.
 7. Enable Akada for a chat through the chat's Connectors menu.
 
+Registration accepts callbacks on `claude.ai` and `claude.com`, plus `http://localhost` on any port so a local client (Claude Code, the MCP Inspector) can connect to a deployment too. Anything else is refused at registration.
+
 The connector provides `find_course` and `create_tasks`. It cannot edit or delete courses, tasks, semesters, or study sessions. In Claude's connector permissions, set `create_tasks` to **Needs approval** if you want to review each task-creation request.
