@@ -282,9 +282,16 @@ export default function TimerPage() {
   const actualSeconds = clampSessionSeconds(elapsedSeconds);
   const goalSec = Math.max(60, goalMin * 60);
   const pct = Math.min(1, actualSeconds / goalSec);
-  const ringRadius = 132;
-  const stroke = 2.5;
+  const ringRadius = 126;
+  const stroke = 3.5;
   const circumference = 2 * Math.PI * ringRadius;
+  const s = Math.max(0, Math.floor(actualSeconds));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  const hh = String(hrs).padStart(2, '0');
+  const mm = String(mins).padStart(2, '0');
+  const ss = String(secs).padStart(2, '0');
 
   return (
     <div
@@ -357,13 +364,50 @@ export default function TimerPage() {
               </p>
             )}
 
-            <div className="relative mt-[34px] aspect-square w-full max-w-[284px]">
-              <svg aria-hidden
+            <div className="relative mt-[34px] aspect-square w-full max-w-[284px] flex items-center justify-center">
+              {/* Subtle outer breathing pulse ring when active */}
+              {!isPaused && (
+                <div
+                  className="absolute -inset-1 rounded-full pointer-events-none animate-pulse transition-opacity duration-700"
+                  style={{
+                    border: `1.5px solid ${course.color}`,
+                    opacity: 0.22,
+                  }}
+                />
+              )}
+
+              {/* Soft radial backdrop glow */}
+              <div
+                className="absolute inset-[10px] rounded-full pointer-events-none transition-opacity duration-700 ease-out"
+                style={{
+                  background: `radial-gradient(circle, ${resolveTint(course.color, course.tint)} 0%, transparent 70%)`,
+                  opacity: isPaused ? 0.35 : 0.85,
+                }}
+              />
+
+              {/* Subtle tactile inner depth border */}
+              <div className="absolute inset-[14px] rounded-full border border-line/40 pointer-events-none shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]" />
+
+              {/* Smooth circular progress ring */}
+              <svg
+                aria-hidden
                 width="100%"
                 height="100%"
                 viewBox="0 0 284 284"
-                className="absolute inset-0 -rotate-90"
+                className="absolute inset-0 -rotate-90 pointer-events-none"
               >
+                <defs>
+                  <filter id="timerRingGlow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow
+                      dx="0"
+                      dy="0"
+                      stdDeviation="2.5"
+                      floodColor={course.color}
+                      floodOpacity={isPaused ? "0" : "0.35"}
+                    />
+                  </filter>
+                </defs>
+                {/* Subtle soft track */}
                 <circle
                   cx="142"
                   cy="142"
@@ -371,63 +415,96 @@ export default function TimerPage() {
                   fill="none"
                   stroke="var(--line)"
                   strokeWidth={stroke}
+                  opacity="0.45"
                 />
+                {/* Crisp colored progress stroke with rounded caps */}
                 <circle
                   cx="142"
                   cy="142"
                   r={ringRadius}
                   fill="none"
                   stroke={course.color}
-                  strokeWidth={stroke * 1.4}
+                  strokeWidth={stroke * 1.3}
                   strokeDasharray={circumference}
                   strokeDashoffset={circumference * (1 - pct)}
                   strokeLinecap="round"
                   className="transition-[stroke-dashoffset] duration-700 ease-out"
+                  filter={isPaused ? undefined : 'url(#timerRingGlow)'}
                 />
               </svg>
-              {/* 60 minute-tick marks around the inner edge of the ring, longer + thicker every 5 (the "5/10/.../55" hours marks). */}
-              <svg
-                width="100%"
-                height="100%"
-                viewBox="0 0 284 284"
-                className="absolute inset-0 pointer-events-none"
-                aria-hidden
-              >
-                {Array.from({ length: 60 }).map((_, i) => {
-                  const angle = ((i * 6 - 90) * Math.PI) / 180;
-                  const isMajor = i % 5 === 0;
-                  const inner = isMajor ? ringRadius - 8 : ringRadius - 4;
-                  const outer = ringRadius - 1.5;
-                  return (
-                    <line
-                      key={i}
-                      x1={142 + Math.cos(angle) * inner}
-                      y1={142 + Math.sin(angle) * inner}
-                      x2={142 + Math.cos(angle) * outer}
-                      y2={142 + Math.sin(angle) * outer}
-                      stroke="var(--muted-soft)"
-                      strokeWidth={isMajor ? 1.2 : 0.6}
-                      opacity="0.45"
-                    />
-                  );
-                })}
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
+
+              {/* Clock face content */}
+              <div className="relative z-10 flex flex-col items-center justify-center select-none">
+                {/* Clean, bold, balanced digital readout with clear hours/minutes/seconds styling */}
                 <div
-                  className="font-mono font-semibold text-[clamp(34px,12vw,54px)] leading-none tracking-[-0.02em] text-ink tabular-nums transition-opacity duration-200"
-                  style={{ opacity: isPaused ? 0.55 : 1 }}
+                  className="font-mono flex items-baseline justify-center tracking-tight tabular-nums transition-opacity duration-300"
+                  style={{ opacity: isPaused ? 0.6 : 1 }}
                 >
-                  {formatHHMMSS(actualSeconds)}
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`text-[clamp(26px,7.5vw,38px)] font-bold leading-none ${
+                        hrs > 0 ? 'text-ink' : 'text-muted-soft/60'
+                      }`}
+                    >
+                      {hh}
+                    </span>
+                    <span className="text-[9px] font-sans font-semibold uppercase tracking-widest text-muted mt-1 select-none">
+                      hr
+                    </span>
+                  </div>
+
+                  <span className="text-[clamp(18px,4.5vw,24px)] text-muted-soft/60 font-light px-1.5 -translate-y-2 select-none">
+                    :
+                  </span>
+
+                  <div className="flex flex-col items-center">
+                    <span className="text-[clamp(26px,7.5vw,38px)] font-bold text-ink leading-none">
+                      {mm}
+                    </span>
+                    <span className="text-[9px] font-sans font-semibold uppercase tracking-widest text-muted mt-1 select-none">
+                      min
+                    </span>
+                  </div>
+
+                  <span className="text-[clamp(18px,4.5vw,24px)] text-muted-soft/60 font-light px-1.5 -translate-y-2 select-none">
+                    :
+                  </span>
+
+                  <div className="flex flex-col items-center">
+                    <span className="text-[clamp(26px,7.5vw,38px)] font-semibold text-ink-soft leading-none">
+                      {ss}
+                    </span>
+                    <span className="text-[9px] font-sans font-semibold uppercase tracking-widest text-muted mt-1 select-none">
+                      sec
+                    </span>
+                  </div>
                 </div>
-                <p
-                  // Wider than the caption spec on purpose: this one sits
-                  // under the timer as display type, not as a label.
-                  className={`eyebrow mt-3.5 mb-0 tracking-[0.24em] ${
-                    isPaused ? '' : 'animate-tick'
-                  }`}
-                >
-                  {isPaused ? 'Paused' : 'In session'}
-                </p>
+
+                {/* Subtle visual polish for active vs paused status */}
+                {isPaused ? (
+                  <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-bg-tint/80 border border-line">
+                    <span className="inline-block w-2 h-2 rounded-full bg-muted-soft" />
+                    <span className="eyebrow tracking-[0.18em] text-muted font-medium">
+                      Paused
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-paper/90 border border-line shadow-xs">
+                    <span className="relative flex h-2 w-2">
+                      <span
+                        className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-70"
+                        style={{ backgroundColor: course.color }}
+                      />
+                      <span
+                        className="relative inline-flex rounded-full h-2 w-2"
+                        style={{ backgroundColor: course.color }}
+                      />
+                    </span>
+                    <span className="eyebrow tracking-[0.18em] text-ink font-semibold">
+                      In session
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

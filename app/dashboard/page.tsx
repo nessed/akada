@@ -5,6 +5,7 @@ import NextImage from 'next/image';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import DailySummary from '@/components/DailySummary';
+import WeeklyProgressBanner from '@/components/WeeklyProgressBanner';
 import CourseCard from '@/components/CourseCard';
 import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
@@ -13,6 +14,7 @@ import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import SwipeRow from '@/components/SwipeRow';
 import HandCheck from '@/components/notebook/HandCheck';
+import DueDateBadge from '@/components/DueDateBadge';
 import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
@@ -512,10 +514,12 @@ export default function DashboardPage() {
   const today = isoDate();
   const todaysSessions = sessionsForDate(sessions, today);
   const totalToday = totalSeconds(todaysSessions);
-  const todayTasks = tasks.filter((t) => !t.completed && t.dueDate === today).slice(0, 3);
-  const overdueCount = tasks.filter(
+  const todayTasks = tasks.filter((t) => !t.completed && t.dueDate === today);
+  const overdueTasks = tasks.filter(
     (t) => !t.completed && t.dueDate && t.dueDate < today,
-  ).length;
+  );
+  const overdueCount = overdueTasks.length;
+  const urgentTasks = [...overdueTasks, ...todayTasks].slice(0, 5);
   const streak = studyStreakDays(sessions);
   const now = new Date();
   const weekdayLabel = now.toLocaleDateString(undefined, { weekday: 'long' });
@@ -616,6 +620,9 @@ export default function DashboardPage() {
       {/* Daily summary */}
       <DailySummary todaysSessions={todaysSessions} courses={courses} />
 
+      {/* Weekly study progress across all courses */}
+      <WeeklyProgressBanner courses={courses} sessions={sessions} />
+
       {semesterInfo && (
         <section className="mt-3 py-2">
           <div className="flex items-baseline justify-between gap-3">
@@ -668,11 +675,15 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {(todayTasks.length > 0 || overdueCount > 0) && (
+      {(urgentTasks.length > 0 || overdueCount > 0) && (
         <section className="mt-[var(--density-section)] mb-[22px]">
           <div className="mb-2.5 flex items-baseline justify-between">
             <h2 className="m-0 font-serif text-[17px] font-medium tracking-[-0.01em]">
-              Due today
+              {overdueCount > 0 && todayTasks.length > 0
+                ? 'Tasks to focus on'
+                : overdueCount > 0
+                ? 'Overdue tasks'
+                : 'Due today'}
             </h2>
             {overdueCount > 0 && (
               <span className="font-hand text-[15px] text-priority" style={{ transform: 'rotate(-2deg)' }}>
@@ -681,17 +692,17 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="overflow-hidden">
-            {todayTasks.length === 0 ? (
+            {urgentTasks.length === 0 ? (
               <p className="m-0 px-4 py-3.5 font-serif text-[13px] italic text-muted">
                 Nothing due today. A clean page.
               </p>
             ) : (
-              todayTasks.map((task, index) => (
+              urgentTasks.map((task, index) => (
                 <DashboardTaskItem
                   key={task.id}
                   task={task}
                   course={courses.find((c) => c.id === task.courseId)}
-                  isLast={index === todayTasks.length - 1}
+                  isLast={index === urgentTasks.length - 1}
                   onToggle={handleToggleTask}
                   onStartTimer={handleStartTimerForTask}
                 />
@@ -702,7 +713,7 @@ export default function DashboardPage() {
       )}
 
       {/* Section header */}
-      <div className={`${todayTasks.length > 0 || overdueCount > 0 ? '' : 'mt-[26px]'} mb-3.5 flex items-baseline justify-between`}>
+      <div className={`${urgentTasks.length > 0 || overdueCount > 0 ? '' : 'mt-[26px]'} mb-3.5 flex items-baseline justify-between`}>
         <h2 className="m-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
           Courses
         </h2>
@@ -1224,9 +1235,24 @@ function DashboardTaskItem({ task, course, isLast, onToggle, onStartTimer }: { t
           aria-label="Mark complete"
           className="scribble-box h-5 w-5 shrink-0"
         />
-        <p className="m-0 min-w-0 flex-1 text-[13.5px] leading-[1.4] text-ink">
-          {task.title}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="m-0 text-[13.5px] leading-[1.4] text-ink">
+            {task.title}
+          </p>
+          {(task.dueDate || task.priority === 'high') && (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {task.priority === 'high' && (
+                <span
+                  className="font-hand inline-block text-[13px] text-priority font-semibold tracking-wide"
+                  style={{ transform: 'rotate(-3deg)' }}
+                >
+                  !! high
+                </span>
+              )}
+              {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
+            </div>
+          )}
+        </div>
         {course && (
           <button
             type="button"

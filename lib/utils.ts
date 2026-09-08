@@ -82,21 +82,63 @@ export function daysBetween(a: string, b: string): number {
 }
 
 // "Today" / "Tomorrow" / "Xd overdue" / "In Xd" / "Apr 27"
+export type DueCategory = 'overdue' | 'today' | 'tomorrow' | 'upcoming';
+
 export interface DueLabel {
   text: string;
   tone: 'warn' | 'now' | 'soon' | 'far';
+  category: DueCategory;
+  days: number;
+  formattedDate: string;
 }
 export function dueLabel(dueDate: string | null, today = isoDate()): DueLabel | null {
   if (!dueDate || !isIsoDate(dueDate)) return null;
   const days = daysBetween(today, dueDate);
-  if (days < 0) return { text: `${-days}d overdue`, tone: 'warn' };
-  if (days === 0) return { text: 'Today', tone: 'now' };
-  if (days === 1) return { text: 'Tomorrow', tone: 'soon' };
-  if (days < 7) return { text: `In ${days}d`, tone: 'soon' };
   const d = new Date(dueDate + 'T00:00:00');
+  const formattedDate = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  if (days < 0) {
+    return {
+      text: `${-days}d overdue`,
+      tone: 'warn',
+      category: 'overdue',
+      days,
+      formattedDate,
+    };
+  }
+  if (days === 0) {
+    return {
+      text: 'Today',
+      tone: 'now',
+      category: 'today',
+      days,
+      formattedDate,
+    };
+  }
+  if (days === 1) {
+    return {
+      text: 'Tomorrow',
+      tone: 'soon',
+      category: 'tomorrow',
+      days,
+      formattedDate,
+    };
+  }
+  if (days < 7) {
+    return {
+      text: `In ${days}d`,
+      tone: 'soon',
+      category: 'upcoming',
+      days,
+      formattedDate,
+    };
+  }
   return {
-    text: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    text: formattedDate,
     tone: 'far',
+    category: 'upcoming',
+    days,
+    formattedDate,
   };
 }
 

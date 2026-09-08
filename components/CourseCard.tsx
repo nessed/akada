@@ -35,9 +35,14 @@ export default function CourseCard({
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const wkSec = totalSeconds(sessionsThisWeek(sessions));
-  const goalHours = Number.isFinite(course.weeklyGoalHours)
-    ? Math.max(0.5, course.weeklyGoalHours)
-    : 0.5;
+  const defaultGoal =
+    typeof course.credits === 'number' && course.credits > 0
+      ? course.credits * 2
+      : 8;
+  const goalHours =
+    Number.isFinite(course.weeklyGoalHours) && course.weeklyGoalHours > 0
+      ? course.weeklyGoalHours
+      : defaultGoal;
   const goalSec = goalHours * 3600;
   const pct = Math.min(100, (wkSec / goalSec) * 100);
 
@@ -153,9 +158,15 @@ export default function CourseCard({
 
         {/* Progress */}
         <div className="mt-4">
-          <div className="mb-1.5">
-            <span className="font-mono text-sm font-semibold tabular-nums">
-              {formatHours(wkSec, 1)}
+          <div className="mb-1.5 flex items-baseline justify-between text-xs">
+            <span className="font-mono text-sm font-semibold tabular-nums text-ink">
+              {formatHours(wkSec, 1)}h
+              <span className="ml-1 text-xs font-normal text-muted font-sans">
+                / {goalHours}h
+              </span>
+            </span>
+            <span className="font-mono text-xs tabular-nums text-muted">
+              {Math.round(pct)}%
             </span>
           </div>
           <div className="h-1 rounded-full bg-bg-tint overflow-hidden">

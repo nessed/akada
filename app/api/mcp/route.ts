@@ -144,6 +144,69 @@ function createServer(token: AuthenticatedToken) {
     },
   );
 
+  server.registerTool(
+    'delete_course',
+    {
+      title: 'Delete an Akada course',
+      description: 'Permanently delete a course from the student’s active Akada semester by course_id. Also deletes all associated tasks and study sessions. Only call this when the student explicitly requests deleting the course.',
+      inputSchema: z.object({
+        course_id: z.string().uuid(),
+      }),
+      annotations: { destructiveHint: true },
+    },
+    async ({ course_id }) => {
+      try {
+        const semesterId = await activeSemesterId(token);
+        if (!semesterId) return toolError('No active semester is set in Akada.');
+        const supabase = mcpSupabase(token.supabaseAccessToken);
+        const { data: course, error: courseError } = await supabase
+          .from('courses')
+          .select('id, code, name')
+          .eq('id', course_id)
+          .eq('user_id', token.userId)
+          .eq('semester_id', semesterId)
+          .maybeSingle();
+        if (courseError || !course) {
+          return toolError('That course is not available in your active Akada semester. Find the course again first.');
+        }
+
+        const { error: sessionsError } = await supabase
+          .from('sessions')
+          .delete()
+          .eq('course_id', course.id)
+          .eq('user_id', token.userId);
+        if (sessionsError) return toolError('Akada could not remove study sessions for this course.');
+
+        const { error: tasksError } = await supabase
+          .from('tasks')
+          .delete()
+          .eq('course_id', course.id)
+          .eq('user_id', token.userId);
+        if (tasksError) return toolError('Akada could not remove tasks for this course.');
+
+        const { error: deleteError } = await supabase
+          .from('courses')
+          .delete()
+          .eq('id', course.id)
+          .eq('user_id', token.userId)
+          .eq('semester_id', semesterId);
+        if (deleteError) return toolError('Akada could not delete that course.');
+
+        return result({
+          deleted: true,
+          course: {
+            id: course.id,
+            code: course.code,
+            name: course.name,
+          },
+          message: `Deleted course ${course.code} (${course.name}) and all associated tasks and study sessions.`,
+        });
+      } catch {
+        return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');
+      }
+    },
+  );
+
   return server;
 }
 

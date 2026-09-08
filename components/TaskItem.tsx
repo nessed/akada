@@ -1,7 +1,7 @@
 'use client';
 
 import type { Course, Task } from '@/lib/data';
-import { dueLabel } from '@/lib/utils';
+import DueDateBadge from '@/components/DueDateBadge';
 import HandCheck from './notebook/HandCheck';
 
 interface Props {
@@ -14,7 +14,6 @@ interface Props {
 }
 
 export default function TaskItem({ task, course, onToggle, onStartTimer, onDelete, onEdit }: Props) {
-  const due = dueLabel(task.dueDate);
 
   return (
     <div className="relative overflow-hidden border-b border-dashed border-line group">
@@ -47,25 +46,19 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
           >
             {task.title}
           </p>
-          <div className="mt-1 flex items-center gap-2.5">
-            {task.priority === 'high' && !task.completed && (
-              <span
-                className="font-hand inline-block text-[14px] text-rose"
-                style={{ transform: 'rotate(-3deg)' }}
-              >
-                !! high
-              </span>
-            )}
-            {due && !task.completed && (
-              <span
-                className={`text-[11px] font-serif italic ${
-                  due.tone === 'warn' ? 'text-warn' : 'text-muted'
-                }`}
-              >
-                {due.text}
-              </span>
-            )}
-          </div>
+          {(!task.completed && (task.priority === 'high' || task.dueDate)) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {task.priority === 'high' && (
+                <span
+                  className="font-hand inline-block text-[14px] text-priority font-semibold tracking-wide"
+                  style={{ transform: 'rotate(-3deg)' }}
+                >
+                  !! high
+                </span>
+              )}
+              {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
+            </div>
+          )}
         </div>
 
         {!task.completed && (
