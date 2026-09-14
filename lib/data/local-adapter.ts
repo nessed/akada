@@ -142,6 +142,8 @@ function sanitizeTask(task: Task): Task {
     ...task,
     courseId: cleanText(task.courseId, 80),
     title: cleanTaskTitle(task.title),
+    description: cleanText(task.description ?? '', 5000),
+    subtasks: Array.isArray(task.subtasks) ? task.subtasks.slice(0, 50).map((item) => ({ id: cleanText(item.id, 80), title: cleanText(item.title, 300), completed: Boolean(item.completed) })).filter((item) => item.id && item.title) : [],
     dueDate: cleanOptionalDate(task.dueDate),
     priority: task.priority === 'high' ? 'high' : 'normal',
     completed: Boolean(task.completed),
@@ -316,6 +318,8 @@ export class LocalAdapter implements DataProvider {
       ...input,
       courseId,
       title,
+      description: cleanText(input.description ?? '', 5000),
+      subtasks: Array.isArray(input.subtasks) ? input.subtasks : [],
       dueDate: cleanOptionalDate(input.dueDate),
       priority: input.priority === 'high' ? 'high' : 'normal',
       id: uid(),
@@ -342,6 +346,8 @@ export class LocalAdapter implements DataProvider {
       safeUpdates.title = cleanTaskTitle(updates.title);
       if (!safeUpdates.title) throw new Error('Task title is required');
     }
+    if (updates.description !== undefined) safeUpdates.description = cleanText(updates.description, 5000);
+    if (updates.subtasks !== undefined) safeUpdates.subtasks = updates.subtasks;
     if (updates.dueDate !== undefined) safeUpdates.dueDate = cleanOptionalDate(updates.dueDate);
     if (updates.priority !== undefined) {
       safeUpdates.priority = updates.priority === 'high' ? 'high' : 'normal';

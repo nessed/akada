@@ -30,10 +30,19 @@ export interface Session {
 
 export type TaskPriority = 'high' | 'normal';
 
+export interface TaskSubtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 export interface Task {
   id: string;
   courseId: string;
   title: string;
+  /** Optional longer context shown in the task reading view. */
+  description?: string;
+  subtasks?: TaskSubtask[];
   dueDate: string | null;
   priority: TaskPriority;
   completed: boolean;

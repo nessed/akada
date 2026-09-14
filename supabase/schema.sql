@@ -55,6 +55,11 @@ create table if not exists tasks (
 
 alter table tasks enable row level security;
 
+-- Task reading view / MCP context. Additive so older rows receive a harmless
+-- empty value and can be progressively enriched from the app.
+alter table tasks add column if not exists description text not null default '';
+alter table tasks add column if not exists subtasks jsonb not null default '[]'::jsonb;
+
 -- Denormalized copy of the owning course's semester_id, kept in sync by the
 -- trigger in section 6. Lets the app filter tasks by semester with a plain
 -- .eq() instead of a join through courses on every read.

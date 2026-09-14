@@ -4,6 +4,7 @@ import type {
   Course,
   Session,
   Task,
+  TaskSubtask,
   Semester,
   NewSemesterInput,
   SessionFilters,
@@ -61,6 +62,8 @@ interface TaskRow {
   id: string;
   course_id: string;
   title: string;
+  description: string | null;
+  subtasks: unknown;
   due_date: string | null;
   priority: 'high' | 'normal';
   completed: boolean;
@@ -109,12 +112,25 @@ function rowToTask(r: TaskRow): Task {
     id: r.id,
     courseId: cleanText(r.course_id, 80),
     title: cleanTaskTitle(r.title),
+    description: cleanText(r.description ?? '', 5000),
+    subtasks: sanitizeSubtasks(r.subtasks),
     dueDate: cleanOptionalDate(r.due_date),
     priority: r.priority === 'high' ? 'high' : 'normal',
     completed: Boolean(r.completed),
     completedAt: r.completed_at,
     createdAt: r.created_at,
   };
+}
+
+function sanitizeSubtasks(value: unknown): TaskSubtask[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 50).flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Partial<TaskSubtask>;
+    const id = cleanText(String(row.id ?? ''), 80);
+    const title = cleanText(String(row.title ?? ''), 300);
+    return id && title ? [{ id, title, completed: Boolean(row.completed) }] : [];
+  });
 }
 
 function rowToSemester(r: SemesterRow, activeId: string | null): Semester {
@@ -421,6 +437,8 @@ export class SupabaseAdapter implements DataProvider {
         user_id: uid,
         course_id: courseId,
         title,
+        description: cleanText(input.description ?? '', 5000),
+        subtasks: sanitizeSubtasks(input.subtasks),
         due_date: cleanOptionalDate(input.dueDate),
         priority: input.priority === 'high' ? 'high' : 'normal',
       })
@@ -443,6 +461,8 @@ export class SupabaseAdapter implements DataProvider {
       if (!title) throw new Error('Task title is required');
       patch.title = title;
     }
+    if (updates.description !== undefined) patch.description = cleanText(updates.description, 5000);
+    if (updates.subtasks !== undefined) patch.subtasks = sanitizeSubtasks(updates.subtasks);
     if (updates.dueDate !== undefined) patch.due_date = cleanOptionalDate(updates.dueDate);
     if (updates.priority !== undefined) patch.priority = updates.priority === 'high' ? 'high' : 'normal';
     if (updates.completed !== undefined) {

@@ -1,10 +1,19 @@
 // ---- Time / date helpers
 
-export function isoDate(d: Date = new Date()): string {
-  // Local YYYY-MM-DD (not UTC) so a session at 11pm doesn't get logged tomorrow.
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+export function isoDate(d?: Date): string {
+  // Explicit dates are calendar dates (calendar grids / due dates). The
+  // implicit "today" honors the user's chosen late-night day boundary.
+  const date = new Date(d ?? new Date());
+  if (!d && typeof window !== 'undefined') {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem('akada.preferences.v1') || '{}');
+      const cutoff = Number(stored.dayEndingHour);
+      if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= 6) date.setHours(date.getHours() - cutoff);
+    } catch { /* a normal calendar day is a safe fallback */ }
+  }
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 

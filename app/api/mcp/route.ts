@@ -104,7 +104,7 @@ function createServer(token: AuthenticatedToken) {
         if (course_id && !allowed.has(course_id)) return toolError('That course is not available in your active Akada semester.');
         let query = supabase
           .from('tasks')
-          .select('id, course_id, title, due_date, priority, completed, completed_at, created_at')
+          .select('id, course_id, title, description, due_date, priority, completed, completed_at, created_at')
           .eq('user_id', token.userId)
           .order('due_date', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false })
@@ -119,12 +119,45 @@ function createServer(token: AuthenticatedToken) {
             .map((task) => ({
               id: task.id,
               title: task.title,
+              description: task.description ?? '',
               due_date: task.due_date,
               priority: task.priority,
               completed: task.completed,
               completed_at: task.completed_at,
               course: allowed.get(task.course_id),
             })),
+        });
+      } catch {
+        return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_overview',
+    {
+      title: 'Read Akada study overview',
+      description: 'Read a compact, read-only snapshot of active-semester courses, open-task counts, and recent study sessions for the signed-in student.',
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      try {
+        const semesterId = await activeSemesterId(token);
+        if (!semesterId) return result({ courses: [], recent_sessions: [], message: 'No active semester is set in Akada.' });
+        const supabase = mcpSupabase(token.supabaseAccessToken);
+        const [{ data: courses, error: coursesError }, { data: tasks, error: tasksError }, { data: sessions, error: sessionsError }] = await Promise.all([
+          supabase.from('courses').select('id, code, name, weekly_goal_hours').eq('user_id', token.userId).eq('semester_id', semesterId).order('code'),
+          supabase.from('tasks').select('course_id, completed').eq('user_id', token.userId).eq('semester_id', semesterId),
+          supabase.from('sessions').select('course_id, date, duration_seconds, note').eq('user_id', token.userId).eq('semester_id', semesterId).order('date', { ascending: false }).limit(12),
+        ]);
+        if (coursesError || tasksError || sessionsError) return toolError('Akada could not load the study overview.');
+        const openByCourse = new Map<string, number>();
+        (tasks ?? []).filter((task) => !task.completed).forEach((task) => openByCourse.set(task.course_id, (openByCourse.get(task.course_id) ?? 0) + 1));
+        const courseById = new Map((courses ?? []).map((course) => [course.id, course]));
+        return result({
+          courses: (courses ?? []).map((course) => ({ id: course.id, code: course.code, name: course.name, weekly_study_goal_hours: Number(course.weekly_goal_hours), open_task_count: openByCourse.get(course.id) ?? 0 })),
+          recent_sessions: (sessions ?? []).map((session) => ({ date: session.date, duration_seconds: session.duration_seconds, note: session.note, course: courseById.get(session.course_id) ?? null })),
         });
       } catch {
         return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');

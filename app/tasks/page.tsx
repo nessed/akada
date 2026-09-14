@@ -50,6 +50,7 @@ function TasksPageContent() {
 
   const [filter, setFilter] = useState<Filter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('smart');
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // The course the page was opened for, straight off the URL. It marks that
   // course's heading so arriving from a dashboard card lands somewhere
@@ -63,7 +64,9 @@ function TasksPageContent() {
   const [draftHigh, setDraftHigh] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  const [subtaskDraft, setSubtaskDraft] = useState('');
   const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
   const [editCourseId, setEditCourseId] = useState('');
   const [editDue, setEditDue] = useState('');
   const [editHigh, setEditHigh] = useState(false);
@@ -81,6 +84,10 @@ function TasksPageContent() {
       if (event.key.toLowerCase() === 's') {
         event.preventDefault();
         setSortMode((current) => current === 'smart' ? 'due' : current === 'due' ? 'newest' : 'smart');
+      }
+      if (event.key === '?') {
+        event.preventDefault();
+        setShortcutHelpOpen(true);
       }
       if (event.key === 'Escape') {
         setAddingFor(null);
@@ -165,6 +172,7 @@ function TasksPageContent() {
   function openEditTask(task: Task) {
     setEditingTask(task);
     setEditTitle(task.title);
+    setEditDescription(task.description ?? '');
     setEditCourseId(task.courseId);
     setEditDue(task.dueDate || '');
     setEditHigh(task.priority === 'high');
@@ -177,6 +185,7 @@ function TasksPageContent() {
     try {
       await updateTaskOptimistic(editingTask.id, {
         title,
+        description: editDescription,
         courseId: editCourseId,
         dueDate: editDue || null,
         priority: editHigh ? 'high' : 'normal',
@@ -187,6 +196,15 @@ function TasksPageContent() {
       notify('Those changes did not save.');
     } finally {
       setSavingTask(false);
+    }
+  }
+
+  async function saveSubtasks(task: Task, subtasks: NonNullable<Task['subtasks']>) {
+    try {
+      await updateTaskOptimistic(task.id, { subtasks });
+      setViewingTask((current) => current?.id === task.id ? { ...current, subtasks } : current);
+    } catch {
+      notify('That subtask change did not save.');
     }
   }
 
@@ -292,7 +310,7 @@ function TasksPageContent() {
         ))}
       </div>
       <div className="mb-5 flex items-center justify-between gap-3 text-[12px] text-muted">
-        <span className="font-serif italic">N: new task · S: change sort</span>
+        <button type="button" onClick={() => setShortcutHelpOpen(true)} className="bg-transparent p-0 font-serif italic text-muted hover:text-ink">N: new task · S: change sort · ?: shortcuts</button>
         <select
           value={sortMode}
           onChange={(event) => setSortMode(event.target.value as SortMode)}
@@ -477,6 +495,14 @@ function TasksPageContent() {
               className="w-full bg-paper border border-line rounded-[10px] px-4 py-3 text-sm text-ink outline-none focus:border-line-strong"
             />
 
+            <textarea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              placeholder="Notes or details (optional)"
+              rows={4}
+              className="mt-2.5 w-full resize-y rounded-[10px] border border-line bg-paper px-4 py-3 text-sm text-ink outline-none focus:border-line-strong"
+            />
+
             <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-2">
               <SelectField
                 className="min-w-0 flex-1"
@@ -545,6 +571,7 @@ function TasksPageContent() {
             <div className="mx-auto mb-5 h-1 w-9 rounded-full bg-line-strong" />
             <p className="eyebrow m-0 text-muted">Task details</p>
             <h2 className="mt-2 font-serif text-[26px] font-medium leading-tight text-ink">{viewingTask.title}</h2>
+            {viewingTask.description && <p className="mt-3 whitespace-pre-wrap font-serif text-[14px] leading-relaxed text-ink-soft">{viewingTask.description}</p>}
             <dl className="mt-5 divide-y divide-dashed divide-line border-y border-line text-[13px]">
               <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Course</dt><dd className="m-0 text-right">{(() => { const course = courses.find((item) => item.id === viewingTask.courseId); return course ? `${course.code} · ${course.name}` : 'Unknown course'; })()}</dd></div>
               <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Due</dt><dd className="m-0">{viewingTask.dueDate ?? 'No due date'}</dd></div>
@@ -553,7 +580,29 @@ function TasksPageContent() {
               <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Added</dt><dd className="m-0">{new Date(viewingTask.createdAt).toLocaleDateString()}</dd></div>
               {viewingTask.completedAt && <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Completed</dt><dd className="m-0">{new Date(viewingTask.completedAt).toLocaleDateString()}</dd></div>}
             </dl>
+            <div className="mt-5">
+              <p className="eyebrow m-0 text-muted">Subtasks</p>
+              <div className="mt-2 divide-y divide-dashed divide-line border-y border-line">
+                {(viewingTask.subtasks ?? []).map((subtask) => <label key={subtask.id} className="flex items-center gap-2 py-2.5 text-[13px]"><input type="checkbox" checked={subtask.completed} onChange={() => saveSubtasks(viewingTask, (viewingTask.subtasks ?? []).map((item) => item.id === subtask.id ? { ...item, completed: !item.completed } : item))} /><span className={subtask.completed ? 'line-through text-muted' : ''}>{subtask.title}</span></label>)}
+                <form onSubmit={(event) => { event.preventDefault(); const title = subtaskDraft.trim(); if (!title) return; saveSubtasks(viewingTask, [...(viewingTask.subtasks ?? []), { id: `subtask-${Date.now()}`, title, completed: false }]); setSubtaskDraft(''); }} className="flex gap-2 py-2"><input value={subtaskDraft} onChange={(event) => setSubtaskDraft(event.target.value)} placeholder="Add a subtask" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" /><button type="submit" className="text-[13px] text-ink">Add</button></form>
+              </div>
+            </div>
             <div className="mt-5 flex gap-2"><button type="button" onClick={() => { setViewingTask(null); openEditTask(viewingTask); }} className="flex-1 rounded-[10px] border border-line-strong py-3 text-sm text-ink">Edit</button>{!viewingTask.completed && <button type="button" onClick={() => { handleStartTimerForTask(viewingTask); setViewingTask(null); }} className="flex-1 rounded-[10px] bg-primary py-3 text-sm text-primary-contrast">Start focus</button>}{viewingTask.completed && <button type="button" onClick={() => setViewingTask(null)} className="flex-1 rounded-[10px] bg-primary py-3 text-sm text-primary-contrast">Done</button>}</div>
+          </section>
+        </div>
+      )}
+      {shortcutHelpOpen && (
+        <div className="fixed inset-0 z-[85] grid place-items-center p-5 animate-fade-in">
+          <button type="button" aria-label="Close shortcuts" onClick={() => setShortcutHelpOpen(false)} className="absolute inset-0 bg-ink/35 backdrop-blur-sm" />
+          <section className="relative w-full max-w-sm rounded-2xl border border-line bg-bg p-6 shadow-xl">
+            <p className="eyebrow m-0 text-muted">Keyboard shortcuts</p><h2 className="mt-2 font-serif text-[24px]">Stay in the flow</h2>
+            <dl className="mt-5 divide-y divide-dashed divide-line border-y border-line text-[13px]">
+              <div className="flex justify-between py-3"><dt>New task</dt><dd><kbd>N</kbd></dd></div>
+              <div className="flex justify-between py-3"><dt>Change sort</dt><dd><kbd>S</kbd></dd></div>
+              <div className="flex justify-between py-3"><dt>Close sheet</dt><dd><kbd>Esc</kbd></dd></div>
+              <div className="flex justify-between py-3"><dt>Save a new task</dt><dd><kbd>Enter</kbd></dd></div>
+            </dl>
+            <button type="button" onClick={() => setShortcutHelpOpen(false)} className="mt-5 w-full rounded-[10px] bg-primary py-3 text-sm text-primary-contrast">Got it</button>
           </section>
         </div>
       )}
