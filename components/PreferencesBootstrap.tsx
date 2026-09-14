@@ -13,6 +13,8 @@ const DEFAULTS = {
   dailyReminder: true,
   sessionSound: false,
   hideWeekends: false,
+  darkMode: false,
+  dayEndingHour: 0,
 };
 
 export default function PreferencesBootstrap() {

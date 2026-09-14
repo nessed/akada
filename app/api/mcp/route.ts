@@ -79,6 +79,60 @@ function createServer(token: AuthenticatedToken) {
   );
 
   server.registerTool(
+    'get_tasks',
+    {
+      title: 'Read Akada tasks',
+      description: 'Read the signed-in student’s active-semester tasks. Optionally narrow to a course or include completed tasks. This tool never changes Akada data.',
+      inputSchema: z.object({
+        course_id: z.string().uuid().optional(),
+        include_completed: z.boolean().default(false),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ course_id, include_completed }) => {
+      try {
+        const semesterId = await activeSemesterId(token);
+        if (!semesterId) return result({ tasks: [], message: 'No active semester is set in Akada.' });
+        const supabase = mcpSupabase(token.supabaseAccessToken);
+        const { data: courses, error: courseError } = await supabase
+          .from('courses')
+          .select('id, code, name')
+          .eq('user_id', token.userId)
+          .eq('semester_id', semesterId);
+        if (courseError) return toolError('Akada could not load courses.');
+        const allowed = new Map((courses ?? []).map((course) => [course.id, course]));
+        if (course_id && !allowed.has(course_id)) return toolError('That course is not available in your active Akada semester.');
+        let query = supabase
+          .from('tasks')
+          .select('id, course_id, title, due_date, priority, completed, completed_at, created_at')
+          .eq('user_id', token.userId)
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (course_id) query = query.eq('course_id', course_id);
+        if (!include_completed) query = query.eq('completed', false);
+        const { data, error } = await query;
+        if (error) return toolError('Akada could not load tasks.');
+        return result({
+          tasks: (data ?? [])
+            .filter((task) => allowed.has(task.course_id))
+            .map((task) => ({
+              id: task.id,
+              title: task.title,
+              due_date: task.due_date,
+              priority: task.priority,
+              completed: task.completed,
+              completed_at: task.completed_at,
+              course: allowed.get(task.course_id),
+            })),
+        });
+      } catch {
+        return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');
+      }
+    },
+  );
+
+  server.registerTool(
     'create_tasks',
     {
       title: 'Add study tasks to Akada',

@@ -70,6 +70,24 @@
   --mauve-tint: #E8DCE3;
 }
 
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #171716;
+  --bg-tint: #24231f;
+  --paper: #201f1c;
+  --paper-2: #292720;
+  --line: #3d3a32;
+  --line-strong: #5b5548;
+  --line-soft: #302e28;
+  --ink: #f3ede1;
+  --ink-soft: #d0c8ba;
+  --muted: #a59c8c;
+  --muted-soft: #756f64;
+  --paper-glow-a: rgba(167, 143, 83, 0.08);
+  --paper-glow-b: rgba(110, 150, 120, 0.06);
+  --primary-contrast: #171716;
+}
+
 html,
 body {
   background-color: var(--bg);

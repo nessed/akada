@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { clampSessionSeconds } from './session-safety';
+import { plannerDate } from './preferences';
 
 interface TimerState {
   courseId: string;
@@ -472,7 +473,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       courseId,
       taskId,
       startedAt: now,
-      startedDate: isoDateFromMs(now),
+      startedDate: plannerDate(new Date(now)),
       accumulatedMs: 0,
       isPaused: false,
       lastSeenAt: now,

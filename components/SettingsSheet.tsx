@@ -324,8 +324,33 @@ export default function SettingsSheet({
                 label="Hide weekends from heatmap"
                 value={prefs.hideWeekends}
                 onChange={(v) => setPrefs({ hideWeekends: v })}
-                last
               />
+              <SettingRowToggle
+                label="Dark mode"
+                sub="Easy on late-night eyes"
+                value={prefs.darkMode}
+                onChange={(v) => setPrefs({ darkMode: v })}
+              />
+              <div className="flex items-center justify-between gap-3 border-t border-dashed border-line py-3">
+                <div>
+                  <p className="m-0 text-[13px] text-ink">Day ends at</p>
+                  <p className="mt-0.5 mb-0 text-[11px] text-muted">Late sessions stay with the prior day</p>
+                </div>
+                <select
+                  value={prefs.dayEndingHour}
+                  onChange={(event) => setPrefs({ dayEndingHour: Number(event.target.value) })}
+                  className="rounded border border-line bg-paper px-2 py-1.5 text-[12px] text-ink"
+                  aria-label="Day ending time"
+                >
+                  <option value={0}>Midnight</option>
+                  <option value={1}>1:00 AM</option>
+                  <option value={2}>2:00 AM</option>
+                  <option value={3}>3:00 AM</option>
+                  <option value={4}>4:00 AM</option>
+                  <option value={5}>5:00 AM</option>
+                  <option value={6}>6:00 AM</option>
+                </select>
+              </div>
             </SettingGroup>
 
             <SettingGroup label="Data">

@@ -11,9 +11,10 @@ interface Props {
   onStartTimer: (task: Task) => void;
   onDelete: (id: string) => void;
   onEdit?: (task: Task) => void;
+  onOpen?: (task: Task) => void;
 }
 
-export default function TaskItem({ task, course, onToggle, onStartTimer, onDelete, onEdit }: Props) {
+export default function TaskItem({ task, course, onToggle, onStartTimer, onDelete, onEdit, onOpen }: Props) {
 
   return (
     <div className="relative overflow-hidden border-b border-dashed border-line group">
@@ -39,13 +40,15 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
         </button>
 
         <div className="flex-1 min-w-0">
-          <p
-            className={`m-0 text-[14.5px] leading-[1.4] ${
+          <button
+            type="button"
+            onClick={() => onOpen?.(task)}
+            className={`m-0 block max-w-full bg-transparent p-0 text-left text-[14.5px] leading-[1.4] ${
               task.completed ? 'text-ink-soft' : 'text-ink'
-            }`}
+            } ${onOpen ? 'hover:underline' : 'cursor-default'}`}
           >
             {task.title}
-          </p>
+          </button>
           {(!task.completed && (task.priority === 'high' || task.dueDate)) && (
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               {task.priority === 'high' && (

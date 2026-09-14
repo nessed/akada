@@ -8,7 +8,7 @@ import SwipeRow from '@/components/SwipeRow';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
-import type { Course, Session } from '@/lib/data';
+import type { Course, Session, Task } from '@/lib/data';
 import { formatHM, formatRelativeDate, studyStreakDays, totalSeconds } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
@@ -20,6 +20,7 @@ import {
   useCourses,
   useSessions,
   useActiveSemester,
+  useTasks,
   addSessionOptimistic,
   deleteSessionOptimistic,
 } from '@/lib/data-hooks';
@@ -31,6 +32,7 @@ export default function StatsPage() {
     useOnboardingComplete();
   const { courses, isLoading: coursesLoading } = useCourses();
   const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
+  const { tasks, isLoading: tasksLoading } = useTasks();
   const { semester } = useActiveSemester();
 
   const sessions = useMemo(
@@ -60,7 +62,23 @@ export default function StatsPage() {
   }, []);
 
   const loading =
-    onboardingLoading || onboarded === false || coursesLoading || sessionsLoading;
+    onboardingLoading || onboarded === false || coursesLoading || sessionsLoading || tasksLoading;
+
+  const recentActivity = useMemo(() => {
+    const entries: Array<{ id: string; at: string; text: string; course?: Course }> = [];
+    sessions.forEach((session) => entries.push({
+      id: `session-${session.id}`,
+      at: session.createdAt,
+      text: `Logged ${formatHM(session.durationSeconds)} of study`,
+      course: courses.find((course) => course.id === session.courseId),
+    }));
+    tasks.forEach((task: Task) => {
+      const course = courses.find((item) => item.id === task.courseId);
+      entries.push({ id: `task-${task.id}`, at: task.createdAt, text: `Added task: ${task.title}`, course });
+      if (task.completed && task.completedAt) entries.push({ id: `done-${task.id}`, at: task.completedAt, text: `Completed task: ${task.title}`, course });
+    });
+    return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
+  }, [courses, sessions, tasks]);
 
   async function deleteSession(id: string) {
     const session = rawSessions.find((s) => s.id === id) ?? null;
@@ -534,6 +552,18 @@ export default function StatsPage() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="mt-4 deckle bg-paper border border-line px-[22px]">
+        <h2 className="my-4 font-serif font-medium text-[20px]">Recent activity</h2>
+        {recentActivity.length === 0 ? (
+          <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">Your latest study and task updates will show up here.</p>
+        ) : recentActivity.map((entry) => (
+          <div key={entry.id} className="flex gap-3 border-t border-dashed border-line py-3 first:border-t-0">
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: entry.course?.color ?? 'var(--muted-soft)' }} />
+            <div className="min-w-0 flex-1"><p className="m-0 text-[13px] text-ink">{entry.text}</p><p className="mt-1 mb-0 text-[11px] text-muted">{entry.course?.code ? `${entry.course.code} · ` : ''}{formatRelativeDate(entry.at.slice(0, 10))}</p></div>
+          </div>
+        ))}
       </section>
 
       {/* Editorial footer, closes the issue */}

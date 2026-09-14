@@ -17,6 +17,8 @@ export interface Preferences {
   dailyReminder: boolean;
   sessionSound: boolean;
   hideWeekends: boolean;
+  darkMode: boolean;
+  dayEndingHour: number;
 }
 
 const DEFAULTS: Preferences = {
@@ -27,6 +29,8 @@ const DEFAULTS: Preferences = {
   dailyReminder: true,
   sessionSound: false,
   hideWeekends: false,
+  darkMode: false,
+  dayEndingHour: 0,
 };
 
 const STORAGE_KEY = 'akada.preferences.v1';
@@ -59,6 +63,11 @@ function sanitizePreferences(value: unknown): Preferences {
       typeof parsed.sessionSound === 'boolean' ? parsed.sessionSound : DEFAULTS.sessionSound,
     hideWeekends:
       typeof parsed.hideWeekends === 'boolean' ? parsed.hideWeekends : DEFAULTS.hideWeekends,
+    darkMode: typeof parsed.darkMode === 'boolean' ? parsed.darkMode : DEFAULTS.darkMode,
+    dayEndingHour:
+      typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 6
+        ? Math.round(parsed.dayEndingHour)
+        : DEFAULTS.dayEndingHour,
   };
 }
 
@@ -189,6 +198,19 @@ export function applyPreferences(prefs: Preferences) {
     root.style.removeProperty('--font-serif');
   }
   root.dataset.density = prefs.density;
+  root.dataset.theme = prefs.darkMode ? 'dark' : 'light';
+}
+
+/** Date used for planner records, honoring the chosen late-night cutoff. */
+export function plannerDate(value = new Date()): string {
+  let cutoff = DEFAULTS.dayEndingHour;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw) cutoff = sanitizePreferences(JSON.parse(raw)).dayEndingHour;
+  } catch { /* regular calendar days remain a safe fallback */ }
+  const adjusted = new Date(value);
+  adjusted.setHours(adjusted.getHours() - cutoff);
+  return `${adjusted.getFullYear()}-${String(adjusted.getMonth() + 1).padStart(2, '0')}-${String(adjusted.getDate()).padStart(2, '0')}`;
 }
 
 export function usePreferences(): [Preferences, (patch: Partial<Preferences>) => void] {

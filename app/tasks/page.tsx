@@ -13,7 +13,6 @@ import type { Task } from '@/lib/data';
 import { isoDate, resolveTint } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
-import StickyNote from '@/components/notebook/StickyNote';
 import {
   useOnboardingComplete,
   useCourses,
@@ -25,6 +24,7 @@ import {
 } from '@/lib/data-hooks';
 
 type Filter = 'all' | 'today' | 'overdue';
+type SortMode = 'smart' | 'due' | 'newest';
 
 export default function TasksPage() {
   return (
@@ -49,6 +49,7 @@ function TasksPageContent() {
   const { tasks, isLoading: tasksLoading } = useTasks();
 
   const [filter, setFilter] = useState<Filter>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('smart');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // The course the page was opened for, straight off the URL. It marks that
   // course's heading so arriving from a dashboard card lands somewhere
@@ -61,11 +62,34 @@ function TasksPageContent() {
   const [draftDue, setDraftDue] = useState('');
   const [draftHigh, setDraftHigh] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editCourseId, setEditCourseId] = useState('');
   const [editDue, setEditDue] = useState('');
   const [editHigh, setEditHigh] = useState(false);
   const handledTaskIntent = useRef(false);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable=true]')) return;
+      if (event.key.toLowerCase() === 'n' && courses[0]) {
+        event.preventDefault();
+        setAddingFor(courses[0].id);
+        setDraftTitle('');
+      }
+      if (event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        setSortMode((current) => current === 'smart' ? 'due' : current === 'due' ? 'newest' : 'smart');
+      }
+      if (event.key === 'Escape') {
+        setAddingFor(null);
+        setEditingTask(null);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [courses]);
 
   useEffect(() => {
     if (onboardingError) {
@@ -267,6 +291,19 @@ function TasksPageContent() {
           </button>
         ))}
       </div>
+      <div className="mb-5 flex items-center justify-between gap-3 text-[12px] text-muted">
+        <span className="font-serif italic">N: new task · S: change sort</span>
+        <select
+          value={sortMode}
+          onChange={(event) => setSortMode(event.target.value as SortMode)}
+          aria-label="Task sort order"
+          className="rounded border border-line bg-paper px-2 py-1 text-ink"
+        >
+          <option value="smart">Smart order</option>
+          <option value="due">Due date</option>
+          <option value="newest">Newest</option>
+        </select>
+      </div>
 
       {/* Sections */}
       {courses.length === 0 ? (
@@ -279,6 +316,8 @@ function TasksPageContent() {
           const list = visibleTasks
             .filter((t) => t.courseId === course.id)
             .sort((a, b) => {
+              if (sortMode === 'newest') return b.createdAt.localeCompare(a.createdAt);
+              if (sortMode === 'due') return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
               if (a.completed !== b.completed) return a.completed ? 1 : -1;
               if (a.priority !== b.priority) return a.priority === 'high' ? -1 : 1;
               return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
@@ -335,6 +374,7 @@ function TasksPageContent() {
                       onStartTimer={handleStartTimerForTask}
                       onDelete={deleteTask}
                       onEdit={openEditTask}
+                      onOpen={setViewingTask}
                     />
                   ))}
 
@@ -408,17 +448,6 @@ function TasksPageContent() {
             </section>
           );
         })}
-        </div>
-      )}
-
-      {/* Hand-pinned reminder at the end of the list, only shows when a real
-          list exists, so it doesn't interrupt empty states. */}
-      {courses.length > 0 && visibleTasks.length > 0 && filter === 'all' && (
-        <div className="mt-7 flex justify-end pr-3">
-          <StickyNote tilt="r2" tapeOffset="38%">
-            remember to <br />
-            email TA before friday !!
-          </StickyNote>
         </div>
       )}
 
@@ -506,6 +535,26 @@ function TasksPageContent() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {viewingTask && (
+        <div className="fixed inset-0 z-[75] flex items-end animate-fade-in">
+          <button type="button" aria-label="Close task details" onClick={() => setViewingTask(null)} className="absolute inset-0 bg-ink/35 backdrop-blur-sm" />
+          <section className="relative w-full bg-bg rounded-t-3xl px-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] md:mx-auto md:max-w-xl animate-slide-up">
+            <div className="mx-auto mb-5 h-1 w-9 rounded-full bg-line-strong" />
+            <p className="eyebrow m-0 text-muted">Task details</p>
+            <h2 className="mt-2 font-serif text-[26px] font-medium leading-tight text-ink">{viewingTask.title}</h2>
+            <dl className="mt-5 divide-y divide-dashed divide-line border-y border-line text-[13px]">
+              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Course</dt><dd className="m-0 text-right">{(() => { const course = courses.find((item) => item.id === viewingTask.courseId); return course ? `${course.code} · ${course.name}` : 'Unknown course'; })()}</dd></div>
+              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Due</dt><dd className="m-0">{viewingTask.dueDate ?? 'No due date'}</dd></div>
+              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Priority</dt><dd className="m-0 capitalize">{viewingTask.priority}</dd></div>
+              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Status</dt><dd className="m-0">{viewingTask.completed ? 'Completed' : 'Open'}</dd></div>
+              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Added</dt><dd className="m-0">{new Date(viewingTask.createdAt).toLocaleDateString()}</dd></div>
+              {viewingTask.completedAt && <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Completed</dt><dd className="m-0">{new Date(viewingTask.completedAt).toLocaleDateString()}</dd></div>}
+            </dl>
+            <div className="mt-5 flex gap-2"><button type="button" onClick={() => { setViewingTask(null); openEditTask(viewingTask); }} className="flex-1 rounded-[10px] border border-line-strong py-3 text-sm text-ink">Edit</button>{!viewingTask.completed && <button type="button" onClick={() => { handleStartTimerForTask(viewingTask); setViewingTask(null); }} className="flex-1 rounded-[10px] bg-primary py-3 text-sm text-primary-contrast">Start focus</button>}{viewingTask.completed && <button type="button" onClick={() => setViewingTask(null)} className="flex-1 rounded-[10px] bg-primary py-3 text-sm text-primary-contrast">Done</button>}</div>
+          </section>
         </div>
       )}
     </PageShell>
