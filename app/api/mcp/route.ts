@@ -10,6 +10,29 @@ export const dynamic = 'force-dynamic';
 const MAX_TASKS_PER_REQUEST = 20;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+// This is deliberately independent of optional app-migration columns. MCP
+// must continue to read a student's tasks while a deployment is rolling out
+// (or when an existing project has not yet applied a newer schema.sql).
+const TaskReadSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  subtasks: z.array(z.object({ id: z.string(), title: z.string(), completed: z.boolean() })),
+  due_date: z.string().nullable(),
+  priority: z.enum(['high', 'normal']),
+  completed: z.boolean(),
+  completed_at: z.string().nullable(),
+  created_at: z.string(),
+  course: z.object({ id: z.string(), code: z.string(), name: z.string() }),
+});
+
+const TasksReadResponseSchema = z.object({
+  schema_version: z.literal('akada.tasks.v1'),
+  tasks: z.array(TaskReadSchema),
+  meta: z.object({ include_completed: z.boolean(), course_id: z.string().nullable(), count: z.number().int() }),
+  message: z.string().optional(),
+});
+
 type AuthenticatedToken = ReturnType<typeof readAccessToken>;
 
 function result(value: unknown) {
@@ -92,7 +115,9 @@ function createServer(token: AuthenticatedToken) {
     async ({ course_id, include_completed }) => {
       try {
         const semesterId = await activeSemesterId(token);
-        if (!semesterId) return result({ tasks: [], message: 'No active semester is set in Akada.' });
+        if (!semesterId) return result(TasksReadResponseSchema.parse({
+          schema_version: 'akada.tasks.v1', tasks: [], meta: { include_completed, course_id: course_id ?? null, count: 0 }, message: 'No active semester is set in Akada.',
+        }));
         const supabase = mcpSupabase(token.supabaseAccessToken);
         const { data: courses, error: courseError } = await supabase
           .from('courses')
@@ -104,7 +129,10 @@ function createServer(token: AuthenticatedToken) {
         if (course_id && !allowed.has(course_id)) return toolError('That course is not available in your active Akada semester.');
         let query = supabase
           .from('tasks')
-          .select('id, course_id, title, description, due_date, priority, completed, completed_at, created_at')
+          // Do not add optional columns here. `description` was introduced
+          // after the original deployment and made the whole tool fail on
+          // projects that had not yet run the migration.
+          .select('id, course_id, title, due_date, priority, completed, completed_at, created_at')
           .eq('user_id', token.userId)
           .order('due_date', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false })
@@ -113,20 +141,56 @@ function createServer(token: AuthenticatedToken) {
         if (!include_completed) query = query.eq('completed', false);
         const { data, error } = await query;
         if (error) return toolError('Akada could not load tasks.');
-        return result({
-          tasks: (data ?? [])
+        const baseTasks = (data ?? [])
             .filter((task) => allowed.has(task.course_id))
             .map((task) => ({
               id: task.id,
               title: task.title,
-              description: task.description ?? '',
+              // Stable field for clients. It will be populated by a future
+              // versioned detail endpoint once the migration is universal.
+              description: '',
+              subtasks: [],
               due_date: task.due_date,
-              priority: task.priority,
-              completed: task.completed,
+              priority: task.priority === 'high' ? 'high' : 'normal',
+              completed: Boolean(task.completed),
               completed_at: task.completed_at,
+              created_at: task.created_at,
               course: allowed.get(task.course_id),
-            })),
-        });
+            }));
+        // The description/subtasks migration is additive. Try to hydrate
+        // richer task data, but never make an MCP read fail because a live
+        // project is still on the original tasks schema.
+        const ids = baseTasks.map((task) => task.id);
+        if (ids.length > 0) {
+          const { data: details, error: detailsError } = await supabase
+            .from('tasks')
+            .select('id, description, subtasks')
+            .in('id', ids)
+            .eq('user_id', token.userId);
+          if (!detailsError) {
+            const byId = new Map((details ?? []).map((detail) => [detail.id, detail]));
+            baseTasks.forEach((task) => {
+              const detail = byId.get(task.id);
+              if (!detail) return;
+              task.description = typeof detail.description === 'string' ? detail.description : '';
+              task.subtasks = Array.isArray(detail.subtasks)
+                ? detail.subtasks.flatMap((subtask) => {
+                    if (!subtask || typeof subtask !== 'object') return [];
+                    const row = subtask as { id?: unknown; title?: unknown; completed?: unknown };
+                    return typeof row.id === 'string' && typeof row.title === 'string'
+                      ? [{ id: row.id, title: row.title, completed: Boolean(row.completed) }]
+                      : [];
+                  })
+                : [];
+            });
+          }
+        }
+        const tasks = baseTasks;
+        return result(TasksReadResponseSchema.parse({
+          schema_version: 'akada.tasks.v1',
+          tasks,
+          meta: { include_completed, course_id: course_id ?? null, count: tasks.length },
+        }));
       } catch {
         return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');
       }
