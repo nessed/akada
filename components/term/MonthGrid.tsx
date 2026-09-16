@@ -79,8 +79,8 @@ export default function MonthGrid({
         {WEEKDAYS.slice(0, columns).map((day, i) => (
           <span
             key={day}
-            className="text-[9.5px] font-semibold uppercase tracking-[0.14em]"
-            style={{ color: i >= 5 ? 'var(--muted-soft)' : 'var(--muted)' }}
+            className="text-[11px] font-semibold uppercase tracking-[0.12em]"
+            style={{ color: i >= 5 ? 'var(--muted)' : 'var(--ink-soft)' }}
           >
             {day}
           </span>
@@ -123,7 +123,7 @@ export default function MonthGrid({
 
               <span
                 className={`font-mono ${isToday ? 'text-[14px] font-bold text-ink' : 'text-[13px]'}`}
-                style={{ color: isToday ? undefined : weekend ? 'var(--muted-soft)' : 'var(--ink-soft)' }}
+                style={{ color: isToday ? undefined : weekend ? 'var(--muted)' : 'var(--ink-soft)' }}
               >
                 {String(date.getDate()).padStart(2, '0')}
               </span>
@@ -149,7 +149,7 @@ export default function MonthGrid({
                     >
                       {task.title}
                       {task.weight ? (
-                        <span className="ml-1 font-mono text-[10px] text-muted">
+                        <span className="ml-1 font-mono text-[11px] text-muted">
                           {task.weight}%
                         </span>
                       ) : null}
@@ -159,7 +159,7 @@ export default function MonthGrid({
               })}
 
               {dayTasks.length > 2 && (
-                <span className="mt-1 block font-mono text-[10px] text-muted-soft">
+                <span className="mt-1 block font-mono text-[11px] text-muted">
                   +{dayTasks.length - 2}
                 </span>
               )}

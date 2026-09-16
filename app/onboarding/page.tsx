@@ -462,7 +462,7 @@ function CoursesStep({
             onKeyDown={(e) => {
               if (e.key === 'Enter') onAdd();
             }}
-            className="mt-3 w-full animate-fade-in border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2 font-serif text-[15px] italic text-ink outline-none focus:border-ink"
+            className="mt-3 w-full animate-fade-in border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2 font-serif text-[16px] italic text-ink focus:border-ink"
           />
         )}
 
@@ -490,7 +490,7 @@ function CoursesStep({
               <CourseSpine color={course.color} />
               <span className="min-w-0 flex-1">
                 <span
-                  className="block text-[9px] font-semibold uppercase tracking-[0.14em]"
+                  className="block text-[11px] font-semibold uppercase tracking-[0.12em]"
                   style={{ color: course.color }}
                 >
                   {course.code}
@@ -504,7 +504,7 @@ function CoursesStep({
                 type="button"
                 onClick={() => onRemove(course.code)}
                 aria-label={`Remove ${course.code}`}
-                className="flex-none bg-transparent font-mono text-[13px] text-muted-soft hover:text-priority"
+                className="flex-none bg-transparent font-mono text-[13px] text-muted hover:text-priority"
               >
                 ×
               </button>
@@ -584,7 +584,7 @@ function RoutineStep({
               </span>
               <span
                 className="flex-none font-mono text-[11px]"
-                style={{ color: on ? 'var(--muted)' : 'var(--muted-soft)' }}
+                style={{ color: on ? 'var(--ink-soft)' : 'var(--muted)' }}
               >
                 {slot.hours}
               </span>
@@ -614,7 +614,7 @@ function RoutineStep({
             aria-pressed={reviewDay === -1}
             onClick={() => onReviewDay(-1)}
             className={`ml-auto bg-transparent font-serif text-sm italic ${
-              reviewDay === -1 ? 'text-ink' : 'text-muted-soft'
+              reviewDay === -1 ? 'text-ink' : 'text-muted'
             }`}
           >
             never

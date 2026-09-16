@@ -13,9 +13,15 @@ import type { Course, Session, Task } from '@/lib/data';
  * around: it earns the desktop width, and it is what turns a phone-shaped
  * planner into something worth opening on a laptop.
  *
- * Past days show tallies for what was sat down for; days ahead show what is
- * due. A day with nothing on it says "clear" rather than sitting empty, since
- * an empty row reads as missing data and a clear day is information.
+ * Past days show what was sat down for; days ahead show what is due. A day
+ * with nothing on it says so rather than sitting empty, since an empty row
+ * reads as missing data and a day with nothing owing is information.
+ *
+ * "Clear" is the strict word it looks like. A day is clear only when nothing
+ * is owed on it — which includes work that was due before it and never got
+ * done. A Tuesday with three things a week late is not a clear Tuesday, and
+ * the spine used to say it was, because it only ever looked at tasks dated
+ * that exact day.
  */
 
 export interface SpineDay {
@@ -28,6 +34,12 @@ export interface SpineDay {
   loggedSeconds: number;
   courseCount: number;
   items: { id: string; title: string; color: string; time?: string | null }[];
+  /**
+   * Open tasks due on or before this day but not shown in `items` — the ones
+   * already late by the time this day comes round. What stops a day being
+   * called clear.
+   */
+  carriedOver: number;
 }
 
 export function buildWeek(
@@ -49,6 +61,7 @@ export function buildWeek(
     if (hideWeekends && weekend) continue;
 
     const daySessions = sessions.filter((s) => s.date === iso);
+    const open = tasks.filter((t) => !t.completed && t.dueDate);
     days.push({
       iso,
       date: d.getDate(),
@@ -58,8 +71,8 @@ export function buildWeek(
       isWeekend: weekend,
       loggedSeconds: daySessions.reduce((a, s) => a + s.durationSeconds, 0),
       courseCount: new Set(daySessions.map((s) => s.courseId)).size,
-      items: tasks
-        .filter((t) => !t.completed && t.dueDate === iso)
+      items: open
+        .filter((t) => t.dueDate === iso)
         .slice(0, 3)
         .map((t) => ({
           id: t.id,
@@ -67,6 +80,7 @@ export function buildWeek(
           color: byId.get(t.courseId)?.color || 'var(--muted)',
           time: null,
         })),
+      carriedOver: open.filter((t) => (t.dueDate as string) < iso).length,
     });
   }
   return days;
@@ -81,9 +95,11 @@ export default function WeekSpine({ days }: { days: SpineDay[] }) {
         return (
           <div
             key={day.iso}
-            className={`relative flex gap-3.5 ${last ? 'py-2.5' : 'border-b border-line-soft py-2.5'} ${
-              day.isPast && !day.isToday ? 'opacity-60' : ''
-            }`}
+            // A past day used to be the same row at 60% opacity, which took
+            // every text token in it below 4.5:1. Today is marked by the paper
+            // it sits on and the rule down its left; that is enough emphasis
+            // without dimming the other six days out of legibility.
+            className={`relative flex gap-3.5 ${last ? 'py-2.5' : 'border-b border-line-soft py-2.5'}`}
             style={
               day.isToday
                 ? {
@@ -101,14 +117,14 @@ export default function WeekSpine({ days }: { days: SpineDay[] }) {
             <span className="w-[34px] flex-none text-right">
               <span
                 className={`block font-mono ${
-                  day.isToday ? 'text-[16px] font-bold text-ink' : 'text-[14px] text-ink-soft'
+                  day.isToday ? 'text-[18px] font-bold text-ink' : 'text-[15px] text-ink-soft'
                 }`}
               >
                 {String(day.date).padStart(2, '0')}
               </span>
               <span
-                className={`block text-[9px] font-semibold uppercase tracking-[0.1em] ${
-                  day.isToday ? 'text-ink' : 'text-muted-soft'
+                className={`block text-[11px] font-semibold uppercase tracking-[0.08em] ${
+                  day.isToday ? 'text-ink' : 'text-muted'
                 }`}
               >
                 {day.weekday}
@@ -123,25 +139,39 @@ export default function WeekSpine({ days }: { days: SpineDay[] }) {
                 </span>
               ))}
 
+              {/* The duration is the fact, so it goes first and in words. The
+                  strokes follow it as a picture of the same number, and they
+                  are allowed to be missed. */}
               {hours > 0 && (
-                <span className="flex items-center gap-[7px]">
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`tnum flex-none font-mono text-[13px] ${
+                      day.isToday ? 'text-ink' : 'text-ink-soft'
+                    }`}
+                  >
+                    {formatHM(day.loggedSeconds)}
+                    {day.isToday ? ' so far' : ''}
+                  </span>
                   <TallyCount
                     count={Math.round(hours)}
                     color={day.isToday ? 'var(--ink)' : 'var(--muted)'}
                   />
-                  <span
-                    className={`font-serif text-[13px] italic ${
-                      day.isToday ? 'text-ink-soft' : 'text-muted'
-                    }`}
-                  >
-                    {formatHM(day.loggedSeconds)}
-                    {day.isToday ? ' so far' : day.courseCount > 1 ? ` · ${day.courseCount} courses` : ''}
-                  </span>
+                  {!day.isToday && day.courseCount > 1 && (
+                    <span className="flex-none text-[13px] text-muted">
+                      {day.courseCount} courses
+                    </span>
+                  )}
                 </span>
               )}
 
               {day.items.length === 0 && hours === 0 && (
-                <span className="font-serif text-[13px] italic text-muted-soft">clear</span>
+                <span className="text-[13px] text-muted">
+                  {day.carriedOver > 0
+                    ? `${day.carriedOver} still open`
+                    : day.isPast
+                      ? 'Nothing due, nothing logged'
+                      : 'Clear'}
+                </span>
               )}
             </span>
           </div>
@@ -161,7 +191,7 @@ export function ReviewInvitation({ weekNumber }: { weekNumber: number }) {
     <Link href="/stats" className="mb-7 mt-auto block border-t border-line-strong pt-4">
       <span className="flex items-baseline justify-between gap-2.5">
         <span className="max-w-[22ch] font-serif text-[18px] leading-[1.25]">
-          Week {weekNumber} is written up and waiting.
+          Your week {weekNumber} review is ready.
         </span>
         <span className="flex-none font-mono text-[11px] text-warn">READ →</span>
       </span>

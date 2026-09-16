@@ -108,7 +108,7 @@ export default function LockedIn({
 
       <div className="relative flex items-center justify-between px-6 pt-[max(env(safe-area-inset-top),22px)]">
         <span
-          className="text-[9.5px] font-semibold uppercase tracking-[0.16em]"
+          className="text-[11px] font-semibold uppercase tracking-[0.12em]"
           style={{ color: FAINT }}
         >
           {isPaused ? 'Paused' : 'Locked in'}
@@ -127,7 +127,7 @@ export default function LockedIn({
       <div className="relative flex flex-1 flex-col items-center justify-center px-7">
         {course && (
           <p
-            className="m-0 text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+            className="m-0 text-[11px] font-semibold uppercase tracking-[0.12em]"
             style={{ color: accent }}
           >
             {course.code}
@@ -174,7 +174,7 @@ export default function LockedIn({
               {clock.slice(3)}
             </p>
             <p
-              className="mt-3 text-[9.5px] font-semibold uppercase tracking-[0.16em]"
+              className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em]"
               style={{ color: over ? '#B5694C' : FAINT }}
             >
               {over ? 'over the block' : `left of ${blockMinutes}`}

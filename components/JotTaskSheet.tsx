@@ -12,8 +12,8 @@ import { isoDate } from '@/lib/utils';
 /**
  * Writing something down.
  *
- * One sheet for the whole app — the header's "jot something", the "+ jot a
- * task…" at the foot of a list, the course page's own add. It also carries
+ * One sheet for the whole app — the header's "add a task", the "+ add a
+ * task" at the foot of a list, the course page's own add. It also carries
  * the two new kinds: a reading, which takes a page count and joins the
  * backlog, and an exam, which is circled on the month and counted down to.
  *
@@ -97,7 +97,7 @@ export default function JotTaskSheet({
     <Sheet
       open={open}
       onClose={() => !saving && onClose()}
-      title="Write it down"
+      title="Add a task"
       actions={
         <SheetActions
           onCancel={onClose}
@@ -195,7 +195,7 @@ export default function JotTaskSheet({
               >
                 <CourseDot color={course.color} size={8} />
                 <span
-                  className="text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+                  className="text-[11px] font-semibold uppercase tracking-[0.12em]"
                   style={{ color: course.color }}
                 >
                   {course.code}

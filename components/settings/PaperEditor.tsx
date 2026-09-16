@@ -77,7 +77,7 @@ export default function PaperEditor({
                     Aa
                   </span>
                   <span
-                    className="mt-1.5 block font-mono text-[10px]"
+                    className="mt-1.5 block font-mono text-[11px]"
                     style={{ color: tone.muted }}
                   >
                     14:02

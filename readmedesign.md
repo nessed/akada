@@ -30,10 +30,17 @@ into `:root` in `globals.css` so the first paint needs no correction.
 - **Lines (`line`, `line-soft`, `line-strong`)**: `#DDD6C2`, `#EAE4D3`,
   `#C9C0A8`. Borders and dividers resemble the faint ruled lines of a notebook
   rather than harsh digital borders.
-- **Text (`ink`, `ink-soft`, `muted`, `muted-soft`)**: `#1A1714`, `#4B4640`,
-  `#8C8576`, `#B5AE99`. Instead of pure black, text relies on deep, warm
-  charcoals, mimicking pen ink and reducing eye strain. `muted` carries every
-  label and caption; `muted-soft` is for text that should barely register.
+- **Text (`ink`, `ink-soft`, `muted`)**: `#1A1714`, `#4B4640`, `#6F6A5D`.
+  Instead of pure black, text relies on deep, warm charcoals, mimicking pen
+  ink and reducing eye strain. `muted` carries every label and caption, and it
+  is set dark enough to be read rather than only noticed: 4.78:1 on the
+  shipped paper, which is the tightest of the daylight stocks.
+- **`muted-soft` (`#B5AE99`) is not a text colour.** It is rules, ghost tally
+  strokes and disabled states. There is no such thing as text that should
+  barely register — if something is not worth reading, take it off the page.
+  `scripts/check-contrast.mjs` reads `PAPER_TONES` and `globals.css` directly
+  and fails if any text token drops under 4.5:1 on any stock's bg, paper or
+  paper-2. Run it with `npm run contrast`.
 - **Primary (`primary`)**: resolves to `ink`. It is the fill on the one
   primary action a screen is allowed.
 
@@ -58,10 +65,14 @@ If the two ever disagree again, `lib/utils.ts` wins.
 ### The Alarm Ramp (muted terracotta, never red)
 Two semantic ramps carry everything the interface would otherwise say in red.
 They are warm clays, and that is the point, see "No Alarmist Indicators".
-- **`warn` / `warnSoft` / `warnTint`**: `#B5694C`, `#A38046`, `#F4ECDC`. The
+- **`warn` / `warnSoft` / `warnTint`**: `#9E5A3F`, `#846836`, `#F4ECDC`. The
   quiet tone: an overdue date, a course that has gone untouched.
-- **`priority` / `prioritySoft` / `priorityTint`**: `#C97A6B`, `#A85C42`,
+- **`priority` / `prioritySoft` / `priorityTint`**: `#A8503C`, `#8F4531`,
   `#F4DCD2`. Inline errors, high-priority tasks, destructive affordances.
+
+Both ramps carry words as often as they carry marks — an overdue date is a
+word — so both are set at the contrast a word needs: 4.67, 4.64, 4.80 and 6.08
+against the shipped paper. Muted does not mean unreadable.
 
 ## 🖋️ Typography
 Three families, and no choice to make. The heading-font picker is gone along
@@ -88,9 +99,11 @@ heading and every line of prose the app speaks in.
 > in the app renders in the sans with nothing in the console to say so.
 
 ### The Eyebrow
-One caption spec, `.eyebrow` in `globals.css`: 10px, 600 weight, uppercase,
-`0.16em` tracking, `muted`. Section headers, field labels, course codes and
-"Wk 14" all use it. It sits in `@layer components`, so a colour, a mono family
+One caption spec, `.eyebrow` in `globals.css`: 11px, 600 weight, uppercase,
+`0.12em` tracking, `ink-soft`. Section headers, field labels, course codes and
+"Wk 14" all use it. It names every section on every screen, so it is set to be
+read at a glance: 10px of `muted` at `0.16em` was a texture where a word was
+wanted. Nothing in the app is set below 11px. It sits in `@layer components`, so a colour, a mono family
 or a tighter tracking set alongside it still wins, that is how the badges and
 the timer's display caption keep their own letterspacing.
 
@@ -124,6 +137,15 @@ could add here", and the one filled action per screen.
 of strokes says "you did four, you said eight", which is the same fact without
 the arithmetic. The last stroke is allowed to be a stub, so half an hour reads
 as half a mark rather than rounding up to flatter anybody.
+
+**But the strokes never carry the fact alone.** Counting marks is work, and
+nobody arrives knowing what one stroke is worth, so every tally is set beside
+its own reading in mono — "4h of 8h" — and carries that sentence as its
+accessible name. The same rule holds anywhere the app draws rather than
+writes: a duration is words first and a picture second. This is the one place
+the "no over-explaining" rule above is deliberately overruled. Not explaining
+and not saying are different things, and a number nobody can read is not
+restraint.
 
 ### Buttons
 Two shapes, not four:

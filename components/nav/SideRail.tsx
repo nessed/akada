@@ -38,12 +38,15 @@ export default function SideRail({ reviewWaiting }: { reviewWaiting?: boolean })
               key={tab.href}
               href={tab.href}
               aria-current={active ? 'page' : undefined}
-              className={`relative flex w-[52px] flex-col items-center gap-[5px] px-0 pb-[7px] pt-[9px] ${
-                active ? 'border border-line bg-bg text-ink' : 'text-muted hover:text-ink-soft'
+              className={`relative flex w-[64px] flex-col items-center gap-[5px] px-1 pb-[7px] pt-[9px] text-center ${
+                active ? 'border border-line bg-bg text-ink' : 'text-ink-soft hover:text-ink'
               }`}
             >
               {tab.icon(active ? 1.7 : 1.5)}
-              <span className="text-[8.5px] font-semibold uppercase tracking-[0.1em]">
+              {/* 11px and sentence case. Eight and a half pixels of caps was
+                  a texture where a word was wanted, and "Week review" has no
+                  business being shouted at that size. */}
+              <span className="text-[11px] font-semibold leading-[1.15] tracking-[0.01em]">
                 {tab.label}
               </span>
               {/* The one thing in the app allowed to ask for attention, and it

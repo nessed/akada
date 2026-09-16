@@ -25,7 +25,7 @@ import {
 } from '@/components/notebook/Marks';
 import { useNotice } from '@/components/Notice';
 import type { Task } from '@/lib/data';
-import { formatHM, isoDate, dueLabel } from '@/lib/utils';
+import { daysBetween, formatHM, isoDate, dueLabel } from '@/lib/utils';
 import {
   countdowns,
   dayBlocks,
@@ -47,6 +47,13 @@ import {
   useActiveSemester,
   toggleTaskOptimistic,
 } from '@/lib/data-hooks';
+
+/**
+ * How many rows either list on Today is allowed. Past this the count in the
+ * heading still tells the truth and the rest are one link away, which is
+ * better than a screen that scrolls for a minute before it reaches the week.
+ */
+const LIST_CAP = 5;
 
 export default function DashboardPage() {
   return (
@@ -166,17 +173,24 @@ function DashboardPageContent() {
     [courses, tasks, sessions, prefs.hideWeekends, today],
   );
 
-  const onThePage = useMemo(
+  // Two different facts, so two different lists. They used to be one list
+  // under a heading that named neither of them, which is how a screen ends up
+  // saying "on the page today" over six things that were due last week.
+  const overdue = useMemo(
     () =>
       tasks
-        .filter((t) => t.dueDate && t.dueDate <= today)
-        .sort((a, b) => {
-          if (a.completed !== b.completed) return a.completed ? 1 : -1;
-          return (a.dueDate as string).localeCompare(b.dueDate as string);
-        })
-        .slice(0, 6),
+        .filter((t) => !t.completed && t.dueDate && t.dueDate < today)
+        .sort((a, b) => (a.dueDate as string).localeCompare(b.dueDate as string)),
     [tasks, today],
   );
+  const dueToday = useMemo(
+    () =>
+      tasks
+        .filter((t) => t.dueDate === today)
+        .sort((a, b) => (a.completed === b.completed ? 0 : a.completed ? 1 : -1)),
+    [tasks, today],
+  );
+  const oldestOverdueDays = overdue.length > 0 ? -daysBetween(today, overdue[0].dueDate as string) : 0;
 
   const todaySeconds = sessions
     .filter((s) => s.date === today)
@@ -198,11 +212,11 @@ function DashboardPageContent() {
     <>
       {coming ? (
         <div className="rule-ink pb-4 pt-4">
-          <Eyebrow>Coming</Eyebrow>
+          <Eyebrow>Next deadline</Eyebrow>
           <div className="mt-2 flex items-end justify-between gap-3">
             <div className="min-w-0">
-              <p className="m-0 font-serif text-[20px] leading-[1.2]">{coming.task.title}</p>
-              <p className="mt-1 text-xs text-muted">
+              <p className="m-0 font-serif text-[18px] leading-[1.2]">{coming.task.title}</p>
+              <p className="mt-1 text-[13px] text-muted">
                 {[
                   coming.course?.code,
                   coming.task.weight ? `worth ${coming.task.weight}%` : null,
@@ -212,20 +226,32 @@ function DashboardPageContent() {
                   .join(' · ')}
               </p>
             </div>
-            <p
-              className="m-0 flex-none font-mono text-[30px] font-bold leading-[0.9] tracking-[-0.03em]"
-              style={{ color: coming.days <= 10 ? 'var(--warn)' : 'var(--ink)' }}
-            >
-              {coming.days}
-              <span className="text-[13px] font-normal text-muted">d</span>
-            </p>
+            {/* A countdown of nothing is not a countdown. Zero days reads as
+                an error next to a heading that says "next deadline", so the
+                last two days are words. */}
+            {coming.days <= 1 ? (
+              <p
+                className="m-0 flex-none font-serif text-[18px] leading-[1.1]"
+                style={{ color: 'var(--warn)' }}
+              >
+                {coming.days === 0 ? 'today' : 'tomorrow'}
+              </p>
+            ) : (
+              <p
+                className="m-0 flex-none font-mono text-[27px] font-bold leading-[0.9] tracking-[-0.03em]"
+                style={{ color: coming.days <= 10 ? 'var(--warn)' : 'var(--ink)' }}
+              >
+                {coming.days}
+                <span className="text-[13px] font-normal text-muted"> days</span>
+              </p>
+            )}
           </div>
         </div>
       ) : (
         <div className="rule-ink pb-4 pt-4">
-          <Eyebrow>Coming</Eyebrow>
+          <Eyebrow>Next deadline</Eyebrow>
           <p className="mt-2 font-serif text-[18px] leading-[1.3] text-muted">
-            Nothing weighted on the calendar yet.
+            No graded deadlines yet.
           </p>
         </div>
       )}
@@ -262,23 +288,23 @@ function DashboardPageContent() {
               {quiet.length} {quiet.length === 1 ? 'course' : 'courses'} quiet this week
             </span>
           )}
-          <TextButton onClick={() => setJotting(true)}>jot something</TextButton>
+          <TextButton onClick={() => setJotting(true)}>add a task</TextButton>
         </div>
       </div>
 
       {/* The day. */}
-      <div className="mt-7 flex items-end justify-between gap-6">
+      <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
         <div>
-          <p className="m-0 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-muted">
+          <p className="m-0 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
             {now.toLocaleDateString(undefined, { weekday: 'long' })}
           </p>
-          <h1 className="mt-1.5 font-serif text-[34px] font-normal leading-none tracking-[-0.03em] md:text-[46px]">
+          <h1 className="mt-1.5 font-serif text-[24px] font-normal leading-none tracking-[-0.03em] text-ink-soft md:text-[28px]">
             {now.toLocaleDateString(undefined, { month: 'long' })}{' '}
             <em className="italic">{now.getDate()}</em>
           </h1>
         </div>
-        <p className="m-0 hidden max-w-[26ch] text-right font-serif text-[15px] leading-[1.5] text-ink-soft sm:block">
-          {daySentence(dueSoon, todaySeconds)}
+        <p className="m-0 max-w-[34ch] font-serif text-[15px] leading-[1.5] text-ink-soft sm:max-w-[26ch] sm:text-right">
+          {daySentence(overdue.length, oldestOverdueDays, dueSoon, todaySeconds)}
         </p>
       </div>
 
@@ -292,7 +318,7 @@ function DashboardPageContent() {
         <div className="rule-ink mt-7 flex flex-col items-start gap-5 pt-4 md:flex-row md:gap-8">
           <div className="min-w-0 flex-1">
             <Eyebrow>Next</Eyebrow>
-            <h2 className="mt-2 font-serif text-[22px] font-normal leading-[1.15] tracking-[-0.02em] md:text-[27px]">
+            <h2 className="mt-2 font-serif text-[27px] font-medium leading-[1.15] tracking-[-0.02em] text-ink">
               {next.title}
             </h2>
             <p className="mt-2.5 flex flex-wrap items-center gap-2.5 text-[13px] leading-[1.5] text-ink-soft">
@@ -300,7 +326,7 @@ function DashboardPageContent() {
               {nextCourse?.code}
               <Tick />
               <span
-                className="font-mono text-xs"
+                className="font-mono text-[13px]"
                 style={{
                   color: (dueLabel(next.dueDate)?.days ?? 1) <= 1 ? 'var(--warn)' : 'var(--ink-soft)',
                 }}
@@ -321,7 +347,7 @@ function DashboardPageContent() {
               icon={<PlayGlyph />}
               onClick={() => handleStartTimer(next.courseId, next.id)}
             >
-              Sit down for 50 minutes
+              Start a session
             </PageButton>
             <Link
               href="/tasks"
@@ -335,11 +361,11 @@ function DashboardPageContent() {
         <div className="rule-ink mt-7 flex flex-col items-start gap-4 pt-4 md:flex-row md:items-center md:justify-between">
           <div>
             <Eyebrow>Next</Eyebrow>
-            <p className="mt-2 font-serif text-[22px] leading-[1.2] text-ink-soft">
+            <p className="mt-2 font-serif text-[27px] leading-[1.2] text-ink-soft">
               Nothing is written down yet.
             </p>
           </div>
-          <TextButton onClick={() => setJotting(true)}>jot the first one</TextButton>
+          <TextButton onClick={() => setJotting(true)}>add the first task</TextButton>
         </div>
       )}
 
@@ -347,8 +373,8 @@ function DashboardPageContent() {
       {blocks.length > 0 && (
         <div className="mt-9">
           <div className="flex items-baseline justify-between">
-            <Eyebrow>The day</Eyebrow>
-            <p className="m-0 font-mono text-[11px] text-muted">
+            <Eyebrow>Your day</Eyebrow>
+            <p className="m-0 font-mono text-[13px] text-muted">
               {todaySeconds > 0 ? `${formatHM(todaySeconds)} logged` : 'nothing logged yet'}
             </p>
           </div>
@@ -357,26 +383,79 @@ function DashboardPageContent() {
       )}
 
       <div className="mt-9 flex flex-col gap-9 lg:flex-row lg:gap-10">
-        {/* On the page today. */}
+        {/* What is late, and what is due. Each under its own name. */}
         <div className="min-w-0 flex-[1.05]">
-          <Eyebrow className="mb-1">On the page today</Eyebrow>
-          {onThePage.length === 0 ? (
-            <p className="py-3 font-serif text-[15px] italic text-muted-soft">
-              Nothing due today.
-            </p>
-          ) : (
-            onThePage.map((task) => (
-              <TaskLine
-                key={task.id}
-                task={task}
-                course={courses.find((c) => c.id === task.courseId)}
-                onToggle={() => handleToggleTask(task)}
-                onStart={() => handleStartTimer(task.courseId, task.id)}
-              />
-            ))
+          {overdue.length > 0 && (
+            <section>
+              <div className="mb-1 flex items-baseline justify-between gap-3">
+                <Eyebrow style={{ color: 'var(--warn)' }}>Overdue</Eyebrow>
+                <span className="font-mono text-[13px]" style={{ color: 'var(--warn)' }}>
+                  {overdue.length}
+                </span>
+              </div>
+              {overdue.slice(0, LIST_CAP).map((task, i) => (
+                <TaskLine
+                  key={task.id}
+                  task={task}
+                  course={courses.find((c) => c.id === task.courseId)}
+                  // The oldest thing is the one worth doing first, so it is
+                  // the only one set in full ink. Anything under three days
+                  // late has not earned that weight yet.
+                  emphasis={
+                    i === 0 ? 'strong' : -daysBetween(today, task.dueDate as string) < 3 ? 'soft' : 'normal'
+                  }
+                  startOnHover={i > 1}
+                  onToggle={() => handleToggleTask(task)}
+                  onStart={() => handleStartTimer(task.courseId, task.id)}
+                />
+              ))}
+              {overdue.length > LIST_CAP && (
+                <Link
+                  href="/tasks"
+                  className="mt-2.5 inline-block font-serif text-[13px] italic text-muted hover:text-ink-soft"
+                >
+                  the other {overdue.length - LIST_CAP} are in Tasks →
+                </Link>
+              )}
+            </section>
           )}
+
+          <section className={overdue.length > 0 ? 'mt-7' : ''}>
+            <div className="mb-1 flex items-baseline justify-between gap-3">
+              <Eyebrow>Due today</Eyebrow>
+              {dueToday.length > 0 && (
+                <span className="font-mono text-[13px] text-muted">{dueToday.length}</span>
+              )}
+            </div>
+            {dueToday.length === 0 ? (
+              <p className="py-3 font-serif text-[15px] italic text-muted">
+                {overdue.length > 0
+                  ? 'Nothing else is due today.'
+                  : 'Nothing due today, and nothing overdue.'}
+              </p>
+            ) : (
+              dueToday.slice(0, LIST_CAP).map((task) => (
+                <TaskLine
+                  key={task.id}
+                  task={task}
+                  course={courses.find((c) => c.id === task.courseId)}
+                  onToggle={() => handleToggleTask(task)}
+                  onStart={task.completed ? undefined : () => handleStartTimer(task.courseId, task.id)}
+                />
+              ))
+            )}
+            {dueToday.length > LIST_CAP && (
+              <Link
+                href="/tasks"
+                className="mt-2.5 inline-block font-serif text-[13px] italic text-muted hover:text-ink-soft"
+              >
+                the other {dueToday.length - LIST_CAP} are in Tasks →
+              </Link>
+            )}
+          </section>
+
           <TextButton tone="quiet" className="mt-2.5" onClick={() => setJotting(true)}>
-            + jot a task…
+            + add a task
           </TextButton>
         </div>
 
@@ -384,7 +463,7 @@ function DashboardPageContent() {
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-baseline justify-between">
             <Eyebrow>Courses</Eyebrow>
-            <span className="font-mono text-[10px] text-muted-soft">hours this week</span>
+            <span className="font-mono text-[11px] text-muted">hours this week</span>
           </div>
           {courses.length === 0 ? (
             <div className="border border-dashed border-line-strong px-4 py-6 text-center">
@@ -392,7 +471,7 @@ function DashboardPageContent() {
                 No courses on the list yet.
               </p>
               <TextButton className="mt-3" onClick={() => setAddingCourse(true)}>
-                add the first one
+                add the first course
               </TextButton>
             </div>
           ) : (
@@ -407,10 +486,10 @@ function DashboardPageContent() {
                 >
                   <CourseSpine color={course.color} height={26} />
                   <span className="min-w-0 flex-1">
-                    <span
-                      className="block text-[9.5px] font-semibold uppercase tracking-[0.14em]"
-                      style={{ color: course.color }}
-                    >
+                    {/* The spine beside it is the colour cue. The code is a
+                        word, so it is set in ink a person can read rather
+                        than in a pastel that scores under two to one. */}
+                    <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-soft">
                       {course.code}
                     </span>
                     <span className="block truncate font-serif text-[15px] text-ink">
@@ -425,10 +504,10 @@ function DashboardPageContent() {
                       className="flex-none"
                     />
                   ) : (
-                    <span className="flex-none font-serif text-[12.5px] italic text-warn">
+                    <span className="flex-none font-serif text-[13px] italic text-warn">
                       {quietFor === null
-                        ? 'not opened yet'
-                        : `${quietFor} ${quietFor === 1 ? 'day' : 'days'} quiet`}
+                        ? '0h this week'
+                        : `0h this week · ${quietFor} ${quietFor === 1 ? 'day' : 'days'} quiet`}
                     </span>
                   )}
                 </Link>
@@ -437,7 +516,7 @@ function DashboardPageContent() {
           )}
           {courses.length > 0 && (
             <TextButton tone="quiet" className="mt-2.5" onClick={() => setAddingCourse(true)}>
-              + add a course…
+              + add a course
             </TextButton>
           )}
         </div>
@@ -498,14 +577,49 @@ function dueWord(iso: string | null): string {
 }
 
 /**
- * What the day is like, in one line. Says the useful thing rather than
- * congratulating anybody: what is close, or what has been done, or that
- * neither is true — which is itself worth knowing.
+ * How late something is, in the words a person would use. The overdue
+ * sentence is the first thing on the page after the date, so it says "two
+ * weeks" rather than "15d": a number with a unit stuck to it is a reading,
+ * and this is meant to be a sentence.
  */
-function daySentence(dueSoon: number, loggedSeconds: number): string {
+const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'];
+
+function ageInWords(days: number): string {
+  if (days <= 1) return 'a day';
+  if (days < 7) return `${days} days`;
+  if (days >= 60) return `${Math.round(days / 30)} months`;
+  if (days >= 30) return 'a month';
+  const weeks = Math.round(days / 7);
+  if (weeks === 1) return 'a week';
+  return `${NUMBER_WORDS[weeks] ?? weeks} weeks`;
+}
+
+/**
+ * What the day is like, in one line. Says the useful thing rather than
+ * congratulating anybody: what is late, or what is close, or what has been
+ * done, or that none of those is true — which is itself worth knowing.
+ *
+ * Late work comes first and is never quietly dropped. The sentence used to
+ * count only what was due in the next two days, so a reader with seven things
+ * a fortnight overdue and nothing coming up was told "Nothing is urgent. A
+ * clean page to fill." — which is the single most misleading line the app
+ * could have printed at that moment.
+ */
+function daySentence(
+  overdueCount: number,
+  oldestOverdueDays: number,
+  dueSoon: number,
+  loggedSeconds: number,
+): string {
+  if (overdueCount > 0) {
+    const what = overdueCount === 1 ? 'One thing is' : `${overdueCount} things are`;
+    return `${what} overdue. The oldest is ${ageInWords(oldestOverdueDays)}.`;
+  }
   if (dueSoon > 0) {
     return `${dueSoon === 1 ? 'One thing is' : `${dueSoon} things are`} due in the next two days.`;
   }
-  if (loggedSeconds > 0) return `${formatHM(loggedSeconds)} down today. Nothing else is urgent.`;
-  return 'Nothing is urgent. A clean page to fill.';
+  if (loggedSeconds > 0) {
+    return `${formatHM(loggedSeconds)} down today. Nothing is overdue and nothing is due soon.`;
+  }
+  return 'Nothing is overdue and nothing is due soon.';
 }

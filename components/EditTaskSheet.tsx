@@ -131,7 +131,7 @@ export default function EditTaskSheet({
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             placeholder="Nothing written down."
-            className="ruled-note w-full resize-none border-y border-line bg-transparent py-3 font-serif text-[15.5px] text-ink outline-none"
+            className="ruled-note w-full resize-none border-y border-line bg-transparent py-3 font-serif text-[16px] text-ink"
           />
         </SheetField>
 
@@ -171,7 +171,7 @@ export default function EditTaskSheet({
                 setSubtaskDraft('');
               }}
               placeholder="+ another piece…"
-              className="mt-2 w-full bg-transparent py-1 font-serif text-[13.5px] italic text-ink outline-none placeholder:text-muted-soft"
+              className="mt-2 w-full bg-transparent py-1 font-serif text-[16px] italic text-ink placeholder:text-muted"
             />
           </div>
         </SheetField>
@@ -234,7 +234,7 @@ export default function EditTaskSheet({
               >
                 <CourseDot color={course.color} size={8} />
                 <span
-                  className="text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+                  className="text-[11px] font-semibold uppercase tracking-[0.12em]"
                   style={{ color: course.color }}
                 >
                   {course.code}

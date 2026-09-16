@@ -178,12 +178,12 @@ function SettingsPageContent() {
                 >
                   {on ? <span className="hl-swipe">{item.label}</span> : item.label}
                   {item.id === 'courses' && counts.courses > 0 && (
-                    <span className="ml-1.5 font-mono text-[11px] text-muted-soft">
+                    <span className="ml-1.5 font-mono text-[11px] text-muted">
                       {counts.courses}
                     </span>
                   )}
                   {item.id === 'term' && counts.term && (
-                    <span className="ml-1.5 font-mono text-[11px] text-muted-soft">
+                    <span className="ml-1.5 font-mono text-[11px] text-muted">
                       {counts.term}
                     </span>
                   )}
@@ -191,7 +191,7 @@ function SettingsPageContent() {
               );
             })}
           </div>
-          <p className="mt-9 hidden font-serif text-[12.5px] italic leading-[1.5] text-muted-soft lg:block">
+          <p className="mt-9 hidden font-serif text-[12.5px] italic leading-[1.5] text-muted lg:block">
             Akada keeps everything on your own row of the table. Nothing is shared.
           </p>
         </nav>

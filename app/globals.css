@@ -16,7 +16,11 @@
   --line-soft: #EAE4D3;
   --ink: #1A1714;
   --ink-soft: #4B4640;
-  --muted: #8C8576;
+  /* Every label and caption. 4.78:1 on the shipped paper's ground, which is
+     the tightest of the three daylight stocks — see scripts/check-contrast.mjs,
+     which fails the build rather than letting a text token drift under 4.5. */
+  --muted: #6F6A5D;
+  /* Never text. Rules, ghost tally strokes, disabled states. */
   --muted-soft: #B5AE99;
 
   --primary: var(--ink);
@@ -60,11 +64,14 @@
   /* Alarm ramp, muted terracottas, never red. `warn` is the quiet tone
      (an overdue date, a course gone untouched); `priority` is for errors,
      high-priority marks and destructive actions. */
-  --warn: #B5694C;
-  --warn-soft: #A38046;
+  /* These carry words as often as they carry marks, so they are set dark
+     enough to be read rather than only noticed: 4.67, 4.64, 4.80 and 6.08
+     against the shipped paper. */
+  --warn: #9E5A3F;
+  --warn-soft: #846836;
   --warn-tint: #F4ECDC;
-  --priority: #C97A6B;
-  --priority-soft: #A85C42;
+  --priority: #A8503C;
+  --priority-soft: #8F4531;
   --priority-tint: #F4DCD2;
 
   /* Course pastel highlighter palette. Mirrors PASTEL_PALETTE in
@@ -205,6 +212,27 @@ button,
   touch-action: manipulation;
 }
 
+/* One focus ring for the whole app, in the ink of the current paper. It is
+   :focus-visible, so it appears for a keyboard and stays out of the way of a
+   finger — which is why no element needs an `outline-none` of its own any
+   more, and why the ones that had it have had it taken off: on every field in
+   the app that class was the only thing standing between a keyboard reader
+   and a visible caret position. */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* iOS Safari zooms the whole page when a field under 16px takes focus, and
+   then leaves the reader zoomed in. The floor is set here as well as on each
+   field so a new field cannot reintroduce the jump; anything wanting to look
+   smaller should use a smaller box, not smaller text. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
 /* Range slider, notebook style; thumb slightly larger for touch targets */
 input[type='range'].pl-range {
   -webkit-appearance: none;
@@ -231,9 +259,11 @@ input[type='range'].pl-range::-moz-range-thumb {
   border: 1.5px solid currentColor;
 }
 
+/* A placeholder is text somebody has to read before they can answer, so it
+   takes the caption ink rather than the ghost one. */
 input::placeholder,
 textarea::placeholder {
-  color: var(--muted-soft);
+  color: var(--muted);
 }
 
 input[type='date']::-webkit-calendar-picker-indicator {
@@ -267,11 +297,11 @@ input[type='date']::-webkit-calendar-picker-indicator {
      alongside it (a colour, a mono family, a tighter tracking) still wins,
      because Tailwind's utilities layer comes after this one. */
   .eyebrow {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--muted);
+    letter-spacing: 0.12em;
+    color: var(--ink-soft);
   }
 
   /* The wash behind a sheet. Replaces `bg-ink/35`, which inverts along with

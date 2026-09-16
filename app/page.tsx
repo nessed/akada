@@ -118,7 +118,7 @@ export default function LandingPage() {
               </p>
             </div>
             <span className="hidden flex-none whitespace-nowrap bg-primary px-5 py-4 text-[13.5px] font-medium text-primary-contrast sm:block">
-              Sit down for 50 minutes
+              Start a session
             </span>
           </div>
 
@@ -196,7 +196,7 @@ export default function LandingPage() {
             <Eyebrow as="span" style={{ letterSpacing: '0.18em' }}>
               Week five · 28 Sep – 4 Oct
             </Eyebrow>
-            <span className="font-mono text-[10.5px] text-muted">11h 30m</span>
+            <span className="font-mono text-[11px] text-muted">11h 30m</span>
           </div>
           <p className="mt-5 font-serif text-[26px] font-normal leading-[1.08] tracking-[-0.03em] md:text-[32px]">
             You spent the week <em className="italic">on ECON</em>.
@@ -213,7 +213,7 @@ export default function LandingPage() {
             ].map((row) => (
               <span key={row.code} className="flex items-center gap-3">
                 <span
-                  className="w-[62px] text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+                  className="w-[62px] text-[11px] font-semibold uppercase tracking-[0.12em]"
                   style={{ color: row.color }}
                 >
                   {row.code}
@@ -232,7 +232,7 @@ export default function LandingPage() {
             ))}
             <span className="flex items-center gap-3">
               <span
-                className="w-[62px] text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+                className="w-[62px] text-[11px] font-semibold uppercase tracking-[0.12em]"
                 style={{ color: 'var(--rose)' }}
               >
                 POL 227

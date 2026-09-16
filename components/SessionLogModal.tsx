@@ -110,7 +110,7 @@ export default function SessionLogModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="session-note-question"
-        className="app-scroll relative max-h-[92dvh] w-full animate-slide-up overflow-y-auto border-t border-line-strong bg-bg px-6 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-4 outline-none md:mx-auto md:max-w-xl"
+        className="app-scroll relative max-h-[92dvh] w-full animate-slide-up overflow-y-auto border-t border-line-strong bg-bg px-6 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-4 md:mx-auto md:max-w-xl"
       >
         <span aria-hidden className="mx-auto mb-5 block h-1 w-9 rounded-sm bg-line-strong" />
 
@@ -143,7 +143,7 @@ export default function SessionLogModal({
           onChange={(e) => setNote(e.target.value)}
           rows={4}
           placeholder="Got through Q3 and Q4. Still shaky on tax incidence."
-          className="ruled-note min-h-[112px] w-full resize-none border-y border-line bg-transparent py-3 font-serif text-[15.5px] text-ink outline-none placeholder:text-muted-soft"
+          className="ruled-note min-h-[112px] w-full resize-none border-y border-line bg-transparent py-3 font-serif text-[16px] text-ink placeholder:text-muted"
         />
 
         <div className="mt-3.5 flex flex-wrap items-baseline gap-4">

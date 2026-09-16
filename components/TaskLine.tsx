@@ -23,6 +23,8 @@ export default function TaskLine({
   showCourse,
   meta,
   hoursLogged,
+  emphasis = 'normal',
+  startOnHover = false,
 }: {
   task: Task;
   course?: Course;
@@ -42,12 +44,34 @@ export default function TaskLine({
   meta?: string;
   /** Tally strokes for time already spent on this one thing. */
   hoursLogged?: number;
+  /**
+   * How loudly this row is set. `strong` is the one row in a list that most
+   * wants doing — the oldest overdue thing — and `soft` is a row that is
+   * technically late but only just. Everything else is `normal`.
+   */
+  emphasis?: 'strong' | 'normal' | 'soft';
+  /**
+   * Holds the start button back until the row is hovered or something in it
+   * takes focus. A list of ten rows each offering to start a timer is ten
+   * invitations and no recommendation, so only the first couple keep theirs
+   * on the page.
+   */
+  startOnHover?: boolean;
 }) {
   const label = dueLabel(task.dueDate);
   const done = task.completed;
+  const titleTone = done
+    ? 'text-ink-soft'
+    : emphasis === 'soft'
+      ? 'text-ink-soft'
+      : emphasis === 'strong'
+        ? 'font-medium text-ink'
+        : 'text-ink';
 
   return (
-    <div className={`row-rule flex items-center gap-3 px-0.5 py-3 ${done ? 'opacity-45' : ''}`}>
+    <div
+      className={`row-rule group flex items-center gap-3 px-0.5 py-3 ${done ? 'opacity-45' : ''}`}
+    >
       <button
         type="button"
         onClick={onToggle}
@@ -67,17 +91,13 @@ export default function TaskLine({
           onClick={onOpen}
           className="min-w-0 flex-1 bg-transparent text-left"
         >
-          <span className={`block text-[14.5px] ${done ? 'text-ink-soft' : 'text-ink'}`}>
-            {task.title}
-          </span>
-          {meta && <span className="mt-[3px] block text-[11.5px] text-muted">{meta}</span>}
+          <span className={`block text-[15px] ${titleTone}`}>{task.title}</span>
+          {meta && <span className="mt-[3px] block text-[13px] text-muted">{meta}</span>}
         </button>
       ) : (
         <span className="min-w-0 flex-1">
-          <span className={`block text-[14.5px] ${done ? 'text-ink-soft' : 'text-ink'}`}>
-            {task.title}
-          </span>
-          {meta && <span className="mt-[3px] block text-[11.5px] text-muted">{meta}</span>}
+          <span className={`block text-[15px] ${titleTone}`}>{task.title}</span>
+          {meta && <span className="mt-[3px] block text-[13px] text-muted">{meta}</span>}
         </span>
       )}
 
@@ -86,7 +106,7 @@ export default function TaskLine({
       )}
 
       {done ? (
-        <span className="flex-none font-serif text-[12.5px] italic text-muted">
+        <span className="flex-none font-serif text-[13px] italic text-muted">
           {task.completedAt ? `done ${clockOf(task.completedAt)}` : 'done'}
         </span>
       ) : label ? (
@@ -96,7 +116,7 @@ export default function TaskLine({
           </Swipe>
         ) : (
           <span
-            className="flex-none font-mono text-[11.5px]"
+            className="flex-none font-mono text-[13px]"
             style={{
               color:
                 label.category === 'overdue' || label.category === 'tomorrow'
@@ -112,14 +132,18 @@ export default function TaskLine({
           </span>
         )
       ) : (
-        <span className="flex-none font-serif text-[12.5px] italic text-muted-soft">no date</span>
+        <span className="flex-none font-serif text-[13px] italic text-muted">no date</span>
       )}
 
       {!done && onStart && (
         <button
           type="button"
           onClick={onStart}
-          className="hl-swipe flex-none bg-transparent font-serif text-[13px] text-ink"
+          className={`hl-swipe flex-none bg-transparent font-serif text-[13px] text-ink ${
+            startOnHover
+              ? 'opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100'
+              : ''
+          }`}
           style={
             course
               ? ({ '--hl': resolveTint(course.color, course.tint) } as React.CSSProperties)

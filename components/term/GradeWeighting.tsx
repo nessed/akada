@@ -33,14 +33,14 @@ export default function GradeWeighting({
       <div className="rule-ink pb-3.5 pt-4">
         <Eyebrow>Still to be decided</Eyebrow>
         <p className="mt-2 font-serif text-[18px] leading-[1.3] text-ink-soft">
-          Tell Akada how a course is marked and it will keep track of how much
-          of the grade is still unspent.
+          Enter how each course is graded and Akada will show how much of your
+          grade is still to come.
         </p>
         <Link
           href="/settings"
           className="mt-3 inline-block border-b border-line-strong pb-0.5 font-serif text-[13.5px] italic text-ink-soft"
         >
-          set the weighting →
+          enter grading →
         </Link>
       </div>
     );
@@ -78,7 +78,7 @@ export default function GradeWeighting({
             <div key={course.id} className={i === weighted.length - 1 ? 'py-3' : 'row-rule py-3'}>
               <div className="flex items-baseline gap-2.5">
                 <span
-                  className="text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+                  className="text-[11px] font-semibold uppercase tracking-[0.12em]"
                   style={{ color: course.color }}
                 >
                   {course.code}

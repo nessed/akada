@@ -2,9 +2,10 @@
  * The four places the app goes. One definition, drawn twice: as a 74px rail
  * down the left of a desktop, and as a bar across the foot of a phone.
  *
- * "Stats" is gone. The screen it pointed at is now Review — a week you close
- * rather than a dashboard you browse — and Term is new: the month, with the
- * weighted pieces marked on it.
+ * Each is named for what a reader would call it rather than for what the
+ * codebase calls it. "List" was a word about the shape of the screen; "Term"
+ * and "Review" were words this app had taught itself. A tab has one line to
+ * say where it goes, so it spends it on Tasks, Calendar and Week review.
  */
 
 export interface Tab {
@@ -45,7 +46,7 @@ export const TABS: Tab[] = [
   },
   {
     href: '/tasks',
-    label: 'List',
+    label: 'Tasks',
     icon: (s) =>
       svg(
         <>
@@ -60,7 +61,7 @@ export const TABS: Tab[] = [
   },
   {
     href: '/term',
-    label: 'Term',
+    label: 'Calendar',
     icon: (s) =>
       svg(
         <path d="M4 8h16M4 8v12h16V8M4 8l0-3h16v3M9 12h2M13 12h2M9 16h2M13 16h2" />,
@@ -70,7 +71,7 @@ export const TABS: Tab[] = [
   },
   {
     href: '/stats',
-    label: 'Review',
+    label: 'Week review',
     icon: (s) =>
       svg(
         <>

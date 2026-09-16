@@ -197,11 +197,11 @@ function TasksPageContent() {
         <div className="min-w-0">
           <Eyebrow style={{ letterSpacing: '0.18em' }}>Everything written down</Eyebrow>
           <h1 className="mt-2 font-serif text-[32px] font-normal leading-none tracking-[-0.03em] md:text-[42px]">
-            The list{' '}
+            Tasks{' '}
             <em className="text-[20px] italic text-muted md:text-[26px]">· {openCount} open</em>
           </h1>
         </div>
-        <TextButton onClick={() => setJotting(true)}>jot a task</TextButton>
+        <TextButton onClick={() => setJotting(true)}>add a task</TextButton>
       </div>
 
       {/* The filter is a swipe of highlighter, the order is a rule underneath:
@@ -223,7 +223,7 @@ function TasksPageContent() {
           ))}
         </span>
         <span className="ml-auto flex items-baseline gap-3.5">
-          <span className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-soft">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
             order
           </span>
           {ORDERS.map((s) => (
@@ -259,7 +259,7 @@ function TasksPageContent() {
             {filter === 'all' ? 'Nothing written down yet.' : 'Nothing here.'}
           </p>
           <TextButton className="mt-4" onClick={() => setJotting(true)}>
-            jot the first one
+            add the first task
           </TextButton>
         </div>
       ) : (
@@ -279,8 +279,8 @@ function TasksPageContent() {
               />
               {group.tone !== 'now' && (
                 <span
-                  className="font-mono text-[10.5px]"
-                  style={{ color: group.tone === 'late' ? 'var(--warn)' : 'var(--muted-soft)' }}
+                  className="font-mono text-[11px]"
+                  style={{ color: group.tone === 'late' ? 'var(--warn)' : 'var(--muted)' }}
                 >
                   {group.tasks.length}
                 </span>
@@ -313,7 +313,7 @@ function TasksPageContent() {
       )}
 
       <TextButton tone="quiet" className="mt-5" onClick={() => setJotting(true)}>
-        + jot a task…
+        + add a task
       </TextButton>
 
       <JotTaskSheet

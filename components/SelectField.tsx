@@ -64,7 +64,7 @@ export default function SelectField({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
-        className="flex w-full items-center gap-2 rounded-[10px] border border-line bg-bg-tint px-3 py-2.5 text-left outline-none transition-colors hover:border-line-strong focus:border-line-strong"
+        className="flex w-full items-center gap-2 rounded-[10px] border border-line bg-bg-tint px-3 py-2.5 text-left transition-colors hover:border-line-strong focus:border-line-strong"
       >
         {selected?.tag && (
           <span className="shrink-0 font-mono text-[11px] font-semibold text-ink">
@@ -73,7 +73,7 @@ export default function SelectField({
         )}
         <span
           className={`min-w-0 flex-1 truncate text-xs ${
-            selected ? 'text-ink-soft' : 'text-muted-soft'
+            selected ? 'text-ink-soft' : 'text-muted'
           }`}
         >
           {selected ? selected.label : placeholder}

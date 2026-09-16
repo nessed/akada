@@ -111,7 +111,7 @@ export default function StatsPage() {
         rows={4}
         placeholder="…"
         aria-label="Your answer"
-        className="ruled-note mt-4 min-h-[132px] w-full resize-none border-y border-line bg-transparent py-3.5 font-serif text-[15.5px] text-ink outline-none placeholder:text-muted-soft"
+        className="ruled-note mt-4 min-h-[132px] w-full resize-none border-y border-line bg-transparent py-3.5 font-serif text-[16px] text-ink placeholder:text-muted"
       />
 
       <Eyebrow className="mb-2 mt-5">How it felt</Eyebrow>
@@ -239,7 +239,7 @@ export default function StatsPage() {
         <div className="min-w-0 flex-1">
           <Eyebrow className="mb-2.5">Where it went</Eyebrow>
           {facts.byCourse.length === 0 ? (
-            <p className="font-serif text-[15px] italic text-muted-soft">No courses yet.</p>
+            <p className="font-serif text-[15px] italic text-muted">No courses yet.</p>
           ) : (
             facts.byCourse.map((row, i) => (
               <div
@@ -249,8 +249,7 @@ export default function StatsPage() {
                 }`}
               >
                 <span
-                  className="w-[64px] flex-none text-[9.5px] font-semibold uppercase tracking-[0.14em]"
-                  style={{ color: row.course.color }}
+                  className="w-[64px] flex-none text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-soft"
                 >
                   {row.course.code}
                 </span>
@@ -264,6 +263,7 @@ export default function StatsPage() {
                         gap={3}
                         color={row.course.color}
                         max={Math.max(8, Math.ceil(peak / 3600))}
+                        reading={false}
                       />
                     </span>
                     <span className="flex-none font-mono text-sm font-bold">
@@ -290,7 +290,7 @@ export default function StatsPage() {
         <div className="w-full flex-none lg:w-[300px]">
           <Eyebrow className="mb-2.5">Finished · carried over</Eyebrow>
           {facts.finished.length === 0 && facts.carried.length === 0 ? (
-            <p className="font-serif text-[15px] italic text-muted-soft">Nothing either way.</p>
+            <p className="font-serif text-[15px] italic text-muted">Nothing either way.</p>
           ) : (
             <>
               {facts.finished.slice(0, 4).map((task) => (

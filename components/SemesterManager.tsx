@@ -111,7 +111,7 @@ export default function SemesterManager({ onBack }: { onBack?: () => void } = {}
           </div>
         ) : (
           !isLoading && (
-            <p className="font-serif text-[13px] italic text-muted-soft">Not started yet.</p>
+            <p className="font-serif text-[13px] italic text-muted">Not started yet.</p>
           )
         )}
       </div>
@@ -123,7 +123,7 @@ export default function SemesterManager({ onBack }: { onBack?: () => void } = {}
       >
         Start new semester
       </button>
-      <p className={`mt-2.5 mb-0 text-center font-serif text-[12px] italic ${transitionNeedsCare ? 'text-warn' : 'text-muted-soft'}`}>
+      <p className={`mt-2.5 mb-0 text-center font-serif text-[12px] italic ${transitionNeedsCare ? 'text-warn' : 'text-muted'}`}>
         {transitionNeedsCare
           ? active?.endDate
             ? `${active?.label ?? 'This term'} is scheduled through ${formatSemesterDate(active.endDate)}.`
@@ -167,7 +167,7 @@ export default function SemesterManager({ onBack }: { onBack?: () => void } = {}
                     </p>
                   )}
                 </div>
-                <span className="text-muted-soft shrink-0" aria-hidden>
+                <span className="text-muted shrink-0" aria-hidden>
                   <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none">
                     <path
                       d="M9 6l6 6-6 6"
@@ -338,7 +338,7 @@ function StartSemesterForm({
             setSelectedPreset('');
           }}
           placeholder="Fall 2026"
-          className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary transition-colors placeholder:text-muted-soft"
+          className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[16px] text-ink focus:border-primary transition-colors placeholder:text-muted"
         />
       </div>
 
@@ -555,7 +555,7 @@ function SemesterArchive({
               Courses
             </p>
             {courses.length === 0 ? (
-              <p className="font-serif text-[13px] italic text-muted-soft">
+              <p className="font-serif text-[13px] italic text-muted">
                 This term was left blank.
               </p>
             ) : (

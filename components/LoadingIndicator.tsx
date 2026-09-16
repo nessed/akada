@@ -34,7 +34,7 @@ export default function LoadingIndicator({
           {label}
         </p>
         {detail && !compact && (
-          <p className="mt-1 mb-0 text-[12px] leading-[1.5] text-muted-soft">{detail}</p>
+          <p className="mt-1 mb-0 text-[12px] leading-[1.5] text-muted">{detail}</p>
         )}
       </div>
       <span className="sr-only">Please wait.</span>

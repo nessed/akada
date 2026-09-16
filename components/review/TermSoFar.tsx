@@ -122,12 +122,12 @@ export default function TermSoFar({
               )}
             </span>
             <span
-              className={`font-mono text-[9.5px] ${
+              className={`font-mono text-[11px] ${
                 row.isReading
                   ? 'border-b-[1.5px] border-ink pb-0.5 font-bold text-ink'
                   : row.isFuture
                     ? 'text-line-strong'
-                    : 'text-muted-soft'
+                    : 'text-muted'
               }`}
               style={row.hasExam && !row.isReading ? { color: 'var(--warn)' } : undefined}
             >

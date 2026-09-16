@@ -189,7 +189,7 @@ function CourseRow({
         <CourseSpine color={course.color} height={26} />
         <span className="min-w-0 flex-1">
           <span
-            className="block text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+            className="block text-[11px] font-semibold uppercase tracking-[0.12em]"
             style={{ color: course.color }}
           >
             {course.code}
@@ -210,7 +210,7 @@ function CourseRow({
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                className={`${RULED_FIELD} font-mono text-[14px]`}
+                className={`${RULED_FIELD} font-mono`}
               />
             </label>
             <label className="block min-w-0 flex-1">
@@ -272,7 +272,7 @@ function CourseRow({
                   value={row.label}
                   onChange={(e) => patchRow(row.id, { label: e.target.value })}
                   placeholder="Midterm"
-                  className="min-w-0 flex-1 border-0 bg-transparent text-[13.5px] text-ink outline-none placeholder:text-muted-soft"
+                  className="min-w-0 flex-1 border-0 bg-transparent text-[16px] text-ink placeholder:text-muted"
                 />
                 <input
                   value={row.weight || ''}
@@ -282,9 +282,9 @@ function CourseRow({
                   inputMode="decimal"
                   placeholder="0"
                   aria-label={`${row.label || 'This piece'} is worth, as a percentage`}
-                  className="w-[46px] border-0 bg-transparent text-right font-mono text-[12px] text-muted outline-none"
+                  className="w-[54px] border-0 bg-transparent text-right font-mono text-[16px] text-muted"
                 />
-                <span className="font-mono text-[12px] text-muted-soft">%</span>
+                <span className="font-mono text-[12px] text-muted">%</span>
                 <input
                   value={row.score ?? ''}
                   onChange={(e) =>
@@ -296,9 +296,9 @@ function CourseRow({
                   inputMode="decimal"
                   placeholder="—"
                   aria-label={`${row.label || 'This piece'}, what you scored`}
-                  className="w-[44px] border-0 bg-transparent text-right font-mono text-[13px] font-bold text-ink outline-none placeholder:font-normal placeholder:text-muted-soft"
+                  className="w-[52px] border-0 bg-transparent text-right font-mono text-[16px] font-bold text-ink placeholder:font-normal placeholder:text-muted"
                 />
-                <span className="font-mono text-[11px] text-muted-soft">/</span>
+                <span className="font-mono text-[11px] text-muted">/</span>
                 <input
                   value={row.outOf ?? ''}
                   onChange={(e) =>
@@ -307,13 +307,13 @@ function CourseRow({
                   inputMode="decimal"
                   placeholder="100"
                   aria-label={`${row.label || 'This piece'}, out of`}
-                  className="w-[42px] border-0 bg-transparent font-mono text-[12px] text-muted outline-none"
+                  className="w-[50px] border-0 bg-transparent font-mono text-[16px] text-muted"
                 />
                 <button
                   type="button"
                   onClick={() => setRows(rows.filter((r) => r.id !== row.id))}
                   aria-label={`Remove ${row.label || 'this piece'}`}
-                  className="flex-none bg-transparent font-mono text-[13px] text-muted-soft hover:text-priority"
+                  className="flex-none bg-transparent font-mono text-[13px] text-muted hover:text-priority"
                 >
                   ×
                 </button>

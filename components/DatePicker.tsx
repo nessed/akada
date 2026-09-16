@@ -101,13 +101,13 @@ export default function DatePicker({
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
-        className={`flex w-full items-center justify-between gap-2 border border-line bg-bg-tint text-left text-ink-soft outline-none transition-colors hover:border-line-strong focus:border-primary ${
+        className={`flex w-full items-center justify-between gap-2 border border-line bg-bg-tint text-left text-ink-soft transition-colors hover:border-line-strong focus:border-primary ${
           compact
             ? 'rounded-md px-2.5 py-1.5 text-[11px]'
             : 'rounded-lg px-3 py-2.5 text-xs'
         }`}
       >
-        <span className={value ? 'text-ink-soft' : 'text-muted-soft'}>
+        <span className={value ? 'text-ink-soft' : 'text-muted'}>
           {value ? formatDisplay(value) : placeholder}
         </span>
         <svg aria-hidden
@@ -180,7 +180,7 @@ export default function DatePicker({
               {WEEKDAYS.map((day, index) => (
                 <span
                   key={`${day}-${index}`}
-                  className="text-center text-[10px] font-semibold text-muted-soft"
+                  className="text-center text-[11px] font-semibold text-muted"
                 >
                   {day}
                 </span>
@@ -204,7 +204,7 @@ export default function DatePicker({
                           ? 'bg-bg-tint text-ink'
                           : inMonth
                             ? 'text-ink-soft hover:bg-bg-tint'
-                            : 'text-muted-soft/60 hover:bg-bg-tint'
+                            : 'text-muted hover:bg-bg-tint'
                     }`}
                   >
                     {date.getDate()}

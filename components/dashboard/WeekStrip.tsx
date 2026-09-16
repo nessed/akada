@@ -1,54 +1,42 @@
 'use client';
 
 import type { SpineDay } from '../notebook/WeekSpine';
+import { formatHM } from '@/lib/utils';
 
 /**
  * The week spine turned sideways, for a phone.
  *
- * Same seven days, same facts, but stacked vertically per day instead of
- * horizontally: tally strokes for hours already sat down, dots for what is
- * due, and the reader's own day ruled under its letter. It is the one place
- * in the app a whole week fits above the fold.
+ * Same seven days, same facts, and the same rule about who says what: the
+ * duration is written out under the day, because "1h 45m" is a fact anyone
+ * can read and a column of two-pixel strokes is not. The strokes belonged to
+ * a version of this strip that had nothing else in it; a day with work still
+ * owing now says how much, and the reader's own day is ruled under its name.
  */
 export default function WeekStrip({ days }: { days: SpineDay[] }) {
   return (
-    <div className="flex items-end justify-between border-b border-line pb-2.5">
+    <div className="flex items-end justify-between gap-1 border-b border-line pb-2.5">
       {days.map((day) => {
-        const hours = Math.round(day.loggedSeconds / 3600);
+        const due = day.items.length;
         return (
           <span
             key={day.iso}
-            className={`flex w-9 flex-col items-center gap-1.5 ${
-              day.isPast && !day.isToday ? 'opacity-55' : ''
-            }`}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1"
           >
-            <span aria-hidden className="flex h-5 items-end gap-[3px]">
-              {hours > 0
-                ? Array.from({ length: Math.min(hours, 4) }).map((_, i) => (
-                    <i
-                      key={i}
-                      className="block w-[2px]"
-                      style={{
-                        height: day.isToday ? 15 : 11,
-                        background: day.isToday ? 'var(--ink)' : 'var(--muted)',
-                      }}
-                    />
-                  ))
-                : day.items.slice(0, 3).map((item) => (
-                    <i
-                      key={item.id}
-                      className="block h-[5px] w-[5px] rounded-full"
-                      style={{ background: item.color }}
-                    />
-                  ))}
+            <span
+              // Past days step back in ink rather than in opacity: 55% of
+              // ink-soft is a contrast failure, `muted` is a token that has
+              // to clear 4.5:1 to ship.
+              className={`tnum whitespace-nowrap font-mono text-[11px] ${
+                day.isToday ? 'text-ink' : day.isPast ? 'text-muted' : 'text-ink-soft'
+              }`}
+            >
+              {day.loggedSeconds > 0 ? formatHM(day.loggedSeconds) : due > 0 ? `${due} due` : '·'}
             </span>
             <span
-              className={`text-[9px] uppercase tracking-[0.08em] ${
+              className={`text-[11px] uppercase tracking-[0.04em] ${
                 day.isToday
                   ? 'border-b-[1.5px] border-ink pb-0.5 font-bold text-ink'
-                  : day.items.length || hours
-                    ? 'font-semibold text-muted'
-                    : 'font-semibold text-muted-soft'
+                  : 'font-semibold text-muted'
               }`}
             >
               {day.weekday.charAt(0)}

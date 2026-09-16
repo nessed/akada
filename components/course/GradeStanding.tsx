@@ -40,7 +40,7 @@ export default function GradeStanding({
           href="/settings"
           className="mt-3 inline-block border-b border-line-strong pb-0.5 font-serif text-[13.5px] italic text-ink-soft"
         >
-          set the weighting →
+          enter grading →
         </Link>
       </div>
     );

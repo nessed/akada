@@ -131,4 +131,4 @@ export function SheetField({
  * goes to full ink when it has focus.
  */
 export const RULED_FIELD =
-  'w-full border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2.5 text-[15.5px] text-ink outline-none transition-colors focus:border-ink';
+  'w-full border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2.5 text-[16px] text-ink transition-colors focus:border-ink';

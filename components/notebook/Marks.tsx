@@ -15,7 +15,14 @@ import HandCheck from './HandCheck';
  * radius of `CheckBox`, which is a box someone drew.
  */
 
-/** Uppercase caption. Section headers, field labels, course codes, "WK 06". */
+/**
+ * Uppercase caption. Section headers, field labels, course codes, "WK 06".
+ *
+ * The spec lives in `.eyebrow` in globals.css and it grew up: 11px rather
+ * than 10, `ink-soft` rather than `muted`, and 0.12em of tracking rather than
+ * 0.16. A signpost that needs looking at twice is not a signpost, and this is
+ * the thing naming every section on every screen.
+ */
 export function Eyebrow({
   children,
   className = '',
@@ -176,7 +183,7 @@ export function PageButton({
       onClick={onClick}
       disabled={disabled}
       className={`flex w-full items-center justify-center gap-2.5 bg-primary font-sans font-medium text-primary-contrast transition-opacity disabled:opacity-40 ${
-        size === 'page' ? 'min-h-[56px] text-[15px]' : 'min-h-[52px] text-sm'
+        size === 'page' ? 'min-h-[56px] text-[15px]' : 'min-h-[52px] text-[15px]'
       } ${className}`}
     >
       {icon}
@@ -185,7 +192,7 @@ export function PageButton({
   );
 }
 
-/** The play triangle on every "sit down" button. */
+/** The play triangle on the button that starts a session. */
 export function PlayGlyph({ size = 11 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -210,7 +217,7 @@ export function TextButton({
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
-  /** `quiet` drops the rule and the ink: for "+ jot a task…" affordances. */
+  /** `quiet` drops the rule and the ink: for "+ add a task" affordances. */
   tone?: 'ink' | 'quiet';
   type?: 'button' | 'submit';
   disabled?: boolean;
@@ -222,8 +229,8 @@ export function TextButton({
       disabled={disabled}
       className={`font-serif disabled:opacity-40 ${
         tone === 'ink'
-          ? 'ink-underline text-[14px] text-ink'
-          : 'text-[13px] italic text-muted-soft hover:text-muted'
+          ? 'ink-underline text-[15px] text-ink'
+          : 'text-[13px] italic text-muted hover:text-ink-soft'
       } ${className}`}
     >
       {children}

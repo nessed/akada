@@ -33,12 +33,12 @@ export default function BottomNav({ reviewWaiting }: { reviewWaiting?: boolean }
               href={tab.href}
               aria-current={active ? 'page' : undefined}
               className={`relative flex flex-col items-center gap-1 px-3 py-1.5 ${
-                active ? 'text-ink' : 'pb-[18px] text-muted-soft'
+                active ? 'text-ink' : 'pb-[18px] text-muted'
               }`}
             >
               {tab.icon(active ? 1.8 : 1.4)}
               <span
-                className={`text-[9.5px] tracking-[0.04em] ${
+                className={`whitespace-nowrap text-[11px] tracking-[0.01em] ${
                   active ? 'font-semibold' : 'font-medium'
                 }`}
               >

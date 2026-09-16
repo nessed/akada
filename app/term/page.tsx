@@ -125,7 +125,7 @@ export default function TermPage() {
               />
             ))}
           </div>
-          <div className="mt-2 flex justify-between font-mono text-[9.5px] text-muted-soft">
+          <div className="mt-2 flex justify-between font-mono text-[11px] text-muted">
             <span>wk 01</span>
             <span>wk {String(weekNo ?? 1).padStart(2, '0')}</span>
             <span>wk 15</span>

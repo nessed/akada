@@ -161,7 +161,7 @@ export default function CourseSearchInput({
         onKeyDown={handleKeyDown}
         ref={inputRef}
         placeholder="Search course code or name…"
-        className="w-full bg-paper border border-line rounded-[10px] px-4 py-3 text-sm font-serif italic text-ink outline-none focus:border-line-strong placeholder:not-italic placeholder:font-sans"
+        className="w-full bg-paper border border-line rounded-[10px] px-4 py-3 text-[16px] font-serif italic text-ink focus:border-line-strong placeholder:not-italic placeholder:font-sans"
       />
 
       {showList && (
@@ -173,7 +173,7 @@ export default function CourseSearchInput({
           }`}
         >
           {results.length === 0 ? (
-            <li className="px-4 py-3 font-serif text-[13px] italic text-muted-soft">
+            <li className="px-4 py-3 font-serif text-[13px] italic text-muted">
               Not in the catalog. Press Enter to add it anyway.
             </li>
           ) : (
@@ -196,14 +196,14 @@ export default function CourseSearchInput({
                   <span className="shrink-0 font-mono text-[12px] font-semibold text-ink">
                     {course.code}
                   </span>
-                  <span className="text-muted-soft" aria-hidden>
+                  <span className="text-muted" aria-hidden>
                     ·
                   </span>
                   <span className="min-w-0 flex-1 truncate font-serif text-[14px] text-ink-soft">
                     {course.title}
                   </span>
                   {typeof course.credits === 'number' && (
-                    <span className="shrink-0 font-mono text-[11px] text-muted-soft">
+                    <span className="shrink-0 font-mono text-[11px] text-muted">
                       {course.credits} cr
                     </span>
                   )}
@@ -238,7 +238,7 @@ export default function CourseSearchInput({
                 }
               }}
               placeholder="Section (optional)"
-              className="w-full bg-paper border border-line rounded-[10px] px-4 py-3 text-sm text-ink outline-none focus:border-line-strong"
+              className="w-full bg-paper border border-line rounded-[10px] px-4 py-3 text-[16px] text-ink focus:border-line-strong"
             />
           )}
         </div>

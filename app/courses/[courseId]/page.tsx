@@ -265,7 +265,7 @@ export default function CoursePage() {
             onClick={handleStartSession}
             className="md:px-7"
           >
-            Sit down with {course.code.split(' ')[0]}
+            Start a session
           </PageButton>
         </div>
       </div>
@@ -290,6 +290,7 @@ export default function CoursePage() {
             width={3}
             gap={5}
             color={course.color}
+            reading={false}
           />
         </div>
       </div>
@@ -301,7 +302,7 @@ export default function CoursePage() {
           <span className="ml-auto font-mono text-[11px] text-muted">{open.length} open</span>
         </div>
         {open.length === 0 ? (
-          <p className="py-4 font-serif text-[15px] italic text-muted-soft">
+          <p className="py-4 font-serif text-[15px] italic text-muted">
             Nothing on the list for this one.
           </p>
         ) : (
@@ -318,11 +319,11 @@ export default function CoursePage() {
         )}
         <div className="mt-2.5 flex items-baseline gap-5">
           <TextButton tone="quiet" onClick={() => setJotting(true)}>
-            + jot a task…
+            + add a task
           </TextButton>
           <Link
             href={`/tasks?course=${course.id}`}
-            className="font-serif text-[13px] italic text-muted-soft hover:text-muted"
+            className="font-serif text-[13px] italic text-muted hover:text-muted"
           >
             see it in the list →
           </Link>

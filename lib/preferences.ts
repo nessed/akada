@@ -149,7 +149,11 @@ interface ToneTokens {
 const DAY_INK = {
   ink: '#1A1714',
   inkSoft: '#4B4640',
-  muted: '#8C8576',
+  // Every label and caption in the app. Dark enough to be read on the
+  // tightest of the three daylight stocks rather than only noticed there:
+  // 4.78:1 on Paper's ground. scripts/check-contrast.mjs is the gate.
+  muted: '#6F6A5D',
+  // Not text. Rules, ghost tally strokes, disabled states.
   mutedSoft: '#B5AE99',
 } as const;
 

@@ -192,7 +192,7 @@ export default function AddCourseSheet({
               value={manualName}
               onChange={(e) => setManualName(e.target.value)}
               placeholder="Course name"
-              className="mt-3 w-full animate-fade-in border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2 font-serif text-[15px] italic text-ink outline-none focus:border-ink"
+              className="mt-3 w-full animate-fade-in border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2 font-serif text-[16px] italic text-ink focus:border-ink"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleAdd();
               }}

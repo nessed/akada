@@ -255,7 +255,7 @@ export default function AuthPage() {
                 autoComplete={isSignUp ? 'new-password' : 'current-password'}
               />
               {isSignUp && (
-                <p className="mb-0 mt-2 text-[11.5px] text-muted-soft">
+                <p className="mb-0 mt-2 text-[11.5px] text-muted">
                   At least {MIN_PASSWORD_LENGTH} characters.
                 </p>
               )}
@@ -313,7 +313,7 @@ export default function AuthPage() {
             </p>
           )}
 
-          <p className="mb-8 mt-auto pt-10 font-serif text-[12.5px] italic text-muted-soft">
+          <p className="mb-8 mt-auto pt-10 font-serif text-[12.5px] italic text-muted">
             Your courses, tasks and hours are yours alone. No one at Akada can read them.
           </p>
         </div>
@@ -393,7 +393,7 @@ function RuledInput({
       autoFocus={autoFocus}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2.5 text-[15.5px] text-ink outline-none transition-colors placeholder:text-muted-soft focus:border-ink"
+      className="w-full border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2.5 text-[16px] text-ink transition-colors placeholder:text-muted focus:border-ink"
     />
   );
 }

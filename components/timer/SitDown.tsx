@@ -77,7 +77,7 @@ export default function SitDown({
       <div className="pt-7">
         {course && (
           <p
-            className="m-0 text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+            className="m-0 text-[11px] font-semibold uppercase tracking-[0.12em]"
             style={{ color: course.color }}
           >
             {course.code}
@@ -103,7 +103,7 @@ export default function SitDown({
               className={`bg-transparent font-mono ${
                 minutes === block
                   ? 'text-[26px] font-bold text-ink'
-                  : 'text-[15px] text-muted-soft hover:text-muted'
+                  : 'text-[15px] text-muted hover:text-muted'
               }`}
             >
               {minutes === block ? <Swipe color="var(--sage-tint)">{block}</Swipe> : block}

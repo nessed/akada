@@ -188,7 +188,6 @@ export function unmarkedShare(courses: Course[]): number | null {
 export interface DayBlock {
   id: string;
   label: string;
-  detail: string;
   color: string;
   /** Minutes from midnight. */
   start: number;
@@ -255,9 +254,6 @@ export function dayBlocks(
     blocks.push({
       id: `class-${course.id}`,
       label: course.code,
-      // Just the time. A 75-minute class is a narrow block on a 14-hour axis,
-      // and "09:30 · class" truncated to "09:30 · c…" says less than "09:30".
-      detail: formatClock(meeting.start),
       color: course.color,
       start: meeting.start,
       end: meeting.end,
@@ -274,7 +270,6 @@ export function dayBlocks(
     blocks.push({
       id: `study-${session.id}`,
       label: course?.code ?? 'Study',
-      detail: formatClock(start),
       color: course?.color ?? 'var(--ink)',
       start,
       end,

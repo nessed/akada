@@ -41,7 +41,7 @@ export default function SessionLog({
       </div>
 
       {log.length === 0 ? (
-        <p className="py-4 font-serif text-[15px] italic text-muted-soft">
+        <p className="py-4 font-serif text-[15px] italic text-muted">
           Nothing logged against this one yet.
         </p>
       ) : (
@@ -69,7 +69,7 @@ export default function SessionLog({
               </span>
               <span
                 className={`mt-1.5 block font-serif text-[14.5px] leading-[1.5] ${
-                  session.note ? 'text-ink-soft' : 'italic text-muted-soft'
+                  session.note ? 'text-ink-soft' : 'italic text-muted'
                 }`}
               >
                 {session.note || 'nothing written down'}
@@ -80,7 +80,7 @@ export default function SessionLog({
       )}
 
       {sessions.length > limit && (
-        <p className="mt-3 font-serif text-[13px] italic text-muted-soft">
+        <p className="mt-3 font-serif text-[13px] italic text-muted">
           {sessions.length - limit} older {sessions.length - limit === 1 ? 'session' : 'sessions'}{' '}
           not shown.
         </p>
