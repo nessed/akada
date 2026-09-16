@@ -2,6 +2,9 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { NextRequest } from 'next/server';
 import { readAccessToken } from '@/lib/mcp-auth';
+import { MAX_SESSION_SECONDS } from '@/lib/session-safety';
+import { SESSION_NOTE_MAX } from '@/lib/planner-safety';
+import { isoDate, startOfWeek, endOfWeek } from '@/lib/utils';
 import { mcpSupabase, mcpUrl, siteUrl } from './_shared';
 
 export const runtime = 'nodejs';
@@ -556,6 +559,198 @@ function createServer(token: AuthenticatedToken) {
         });
       } catch (cause) {
         return toolCrashed('complete_tasks', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'log_study_session',
+    {
+      title: 'Log study time in Akada',
+      description: 'Record time the student actually spent studying one active-semester course, optionally against a specific task, with a note about what the sitting covered. Only log time the student reports; never estimate it. `date` defaults to today and takes a past date for a sitting being written up after the fact.',
+      inputSchema: z.object({
+        course_id: z.string().uuid(),
+        duration_minutes: z.number().int().min(1).max(Math.floor(MAX_SESSION_SECONDS / 60)),
+        date: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional(),
+        task_id: z.string().uuid().optional(),
+        note: z.string().trim().max(SESSION_NOTE_MAX).optional(),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: false },
+    },
+    async ({ course_id, duration_minutes, date, task_id, note }) => {
+      try {
+        const semesterId = await activeSemesterId(token);
+        if (!semesterId) return toolError('No active semester is set in Akada.');
+        const supabase = mcpSupabase(token.supabaseAccessToken);
+        const { data: course, error: courseError } = await supabase
+          .from('courses')
+          .select('id, code, name')
+          .eq('id', course_id)
+          .eq('user_id', token.userId)
+          .eq('semester_id', semesterId)
+          .maybeSingle();
+        if (courseError) return queryFailed('log_study_session', 'course lookup', courseError, 'Akada could not look up that course.');
+        if (!course) return toolError('That course is not available in your active Akada semester. Find the course again first.');
+
+        // A task from another course would be accepted by the database and
+        // then read back as time spent on the wrong thing, because
+        // sessions.task_id is only `on delete set null` and nothing ties the
+        // pair together. Checked here rather than trusted.
+        if (task_id) {
+          const owned = await loadOwnTasks('log_study_session', token, [task_id]);
+          if (!owned.ok) return owned.error;
+          const task = owned.tasks[0];
+          if (String(task.course_id) !== course.id) {
+            return toolError('That task belongs to a different course. Log the session against the task’s own course, or leave task_id out.');
+          }
+        }
+
+        const { data: session, error: insertError } = await supabase
+          .from('sessions')
+          .insert({
+            user_id: token.userId,
+            course_id: course.id,
+            task_id: task_id ?? null,
+            // The server clock is UTC, which is a day boundary the student
+            // does not live in. Their own date wins whenever they give one.
+            date: date ?? isoDate(new Date()),
+            duration_seconds: duration_minutes * 60,
+            note: note ?? '',
+          })
+          // The semester_id column is filled by schema.sql's
+          // sessions_set_semester_id trigger, exactly as the app's own
+          // addSession relies on. `*` for the same reason as everywhere else
+          // here: an un-migrated project still answers.
+          .select('*');
+        if (insertError) return queryFailed('log_study_session', 'insert', insertError, 'Akada could not save that study session.');
+        const row = ((session ?? []) as Record<string, unknown>[])[0] ?? {};
+        return result({
+          session: {
+            id: String(row.id ?? ''),
+            date: (row.date as string | null) ?? null,
+            duration_minutes: Math.round(Number(row.duration_seconds ?? 0) / 60),
+            duration_seconds: Number(row.duration_seconds ?? 0),
+            note: typeof row.note === 'string' ? row.note : '',
+            task_id: (row.task_id as string | null) ?? null,
+            course: { id: course.id, code: course.code, name: course.name },
+          },
+        });
+      } catch (cause) {
+        return toolCrashed('log_study_session', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_weekly_stats',
+    {
+      title: 'Read an Akada study week',
+      description: 'Read how one week went: hours logged per course against each course’s weekly goal, tasks ticked off, and the student’s current run of consecutive studied days. `week_offset` is 0 for this week, -1 for last week. This tool never changes Akada data.',
+      inputSchema: z.object({
+        week_offset: z.number().int().min(-12).max(0).default(0),
+        course_id: z.string().uuid().optional(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ week_offset, course_id }) => {
+      try {
+        const semesterId = await activeSemesterId(token);
+        if (!semesterId) return result({ courses: [], message: 'No active semester is set in Akada.' });
+        const supabase = mcpSupabase(token.supabaseAccessToken);
+        // Monday-first, the same week the app's own weekBounds draws, so a
+        // number read here and a number read on the Stats screen agree.
+        const anchor = new Date();
+        anchor.setDate(anchor.getDate() + week_offset * 7);
+        const from = isoDate(startOfWeek(anchor));
+        const to = isoDate(endOfWeek(anchor));
+
+        const { data: courses, error: coursesError } = await supabase
+          .from('courses')
+          .select('id, code, name, weekly_goal_hours')
+          .eq('user_id', token.userId)
+          .eq('semester_id', semesterId)
+          .order('code');
+        if (coursesError) return queryFailed('get_weekly_stats', 'courses read', coursesError, 'Akada could not load courses.');
+        if (course_id && !(courses ?? []).some((course) => course.id === course_id)) {
+          return toolError('That course is not available in your active Akada semester.');
+        }
+
+        // The streak needs days before this week, so sessions are read over a
+        // wider window than the week being reported and filtered twice.
+        const streakFloor = new Date();
+        streakFloor.setDate(streakFloor.getDate() - 120);
+        const [{ data: sessions, error: sessionsError }, { data: tasks, error: tasksError }] = await Promise.all([
+          supabase
+            .from('sessions')
+            .select('course_id, date, duration_seconds, note')
+            .eq('user_id', token.userId)
+            .eq('semester_id', semesterId)
+            .gte('date', isoDate(streakFloor)),
+          supabase
+            .from('tasks')
+            .select('course_id, title, completed, completed_at')
+            .eq('user_id', token.userId)
+            .eq('semester_id', semesterId)
+            .eq('completed', true),
+        ]);
+        const readError = sessionsError ?? tasksError;
+        if (readError) {
+          return queryFailed('get_weekly_stats', sessionsError ? 'sessions read' : 'tasks read', readError, 'Akada could not load that week.');
+        }
+
+        const inWeek = (sessions ?? []).filter((session) => session.date >= from && session.date <= to);
+        const scoped = course_id ? inWeek.filter((session) => session.course_id === course_id) : inWeek;
+        const secondsByCourse = new Map<string, number>();
+        scoped.forEach((session) => {
+          secondsByCourse.set(session.course_id, (secondsByCourse.get(session.course_id) ?? 0) + Number(session.duration_seconds ?? 0));
+        });
+
+        // A day counts once, however many sittings it held. Today not having
+        // been studied yet does not break a run that is otherwise intact, so
+        // the count is allowed to start at yesterday.
+        const studied = new Set((sessions ?? []).map((session) => session.date));
+        const cursor = new Date();
+        if (!studied.has(isoDate(cursor))) cursor.setDate(cursor.getDate() - 1);
+        let streak = 0;
+        while (studied.has(isoDate(cursor)) && streak < 365) {
+          streak += 1;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+
+        const closed = (tasks ?? []).filter((task) => {
+          const day = typeof task.completed_at === 'string' ? task.completed_at.slice(0, 10) : '';
+          if (day < from || day > to) return false;
+          return !course_id || task.course_id === course_id;
+        });
+
+        const perCourse = (courses ?? [])
+          .filter((course) => !course_id || course.id === course_id)
+          .map((course) => {
+            const seconds = secondsByCourse.get(course.id) ?? 0;
+            const goalHours = Number(course.weekly_goal_hours);
+            return {
+              id: course.id,
+              code: course.code,
+              name: course.name,
+              hours_logged: Math.round((seconds / 3600) * 100) / 100,
+              weekly_study_goal_hours: goalHours,
+              goal_met: goalHours > 0 ? seconds >= goalHours * 3600 : null,
+            };
+          });
+
+        return result({
+          week: { from, to, offset: week_offset },
+          courses: perCourse,
+          totals: {
+            hours_logged: Math.round((scoped.reduce((sum, session) => sum + Number(session.duration_seconds ?? 0), 0) / 3600) * 100) / 100,
+            session_count: scoped.length,
+            tasks_completed: closed.length,
+          },
+          tasks_completed: closed.map((task) => ({ title: task.title, course_id: task.course_id })),
+          studied_day_streak: streak,
+        });
+      } catch (cause) {
+        return toolCrashed('get_weekly_stats', cause);
       }
     },
   );

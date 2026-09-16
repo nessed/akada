@@ -40,9 +40,11 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `create_tasks`: Bulk-insert tasks into an active course, with notes and subtasks.
 - `update_tasks`: Change tasks that already exist, including their notes and subtasks.
 - `complete_tasks`: Tick tasks off, or put them back on the list.
+- `log_study_session`: Record study time against a course, with an optional task and note.
+- `get_weekly_stats`: Read one week's hours against goal, tasks closed, and studied-day streak.
 - `delete_course`: Permanently delete a course and its associated tasks and sessions.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks` and `delete_course` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session` and `delete_course` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -103,7 +105,36 @@ Both tools refuse the whole request unless every id names a task the signed-in
 student owns in their active semester, checked through the owning course rather
 than the denormalized `tasks.semester_id`.
 
-### 5. `delete_course`
+### 5. `log_study_session`
+- **Title**: Log study time in Akada
+- **Description**: Record time actually spent on one active-semester course, optionally against a task, with a note about what the sitting covered.
+- **Annotations**: `destructiveHint: false`, `idempotentHint: false`
+- **Parameters**:
+  - `course_id` (`string`, UUID): Target course in the active semester.
+  - `duration_minutes` (`integer`, 1-1080): Minutes studied. The ceiling is `MAX_SESSION_SECONDS` in `lib/session-safety.ts`, which the `sessions_duration_seconds_range` constraint also enforces.
+  - `date` (`string`, optional, format `YYYY-MM-DD`): Defaults to today. The server clock is UTC, so a student writing up a late-night sitting should pass their own date.
+  - `task_id` (`string`, optional, UUID): Must belong to the same course. `sessions.task_id` is only `on delete set null`, so a mismatched pair would otherwise read back as time spent on the wrong course.
+  - `note` (`string`, optional, up to 800 chars): `SESSION_NOTE_MAX` in `lib/planner-safety.ts`.
+- **Output**: The session's `id`, `date`, `duration_minutes`, `duration_seconds`, `note`, `task_id`, and `course`.
+
+`semester_id` is filled by the `sessions_set_semester_id` trigger in
+`supabase/schema.sql`, exactly as the app's own `addSession` relies on.
+
+### 6. `get_weekly_stats`
+- **Title**: Read an Akada study week
+- **Description**: How one week went: hours per course against each course's weekly goal, tasks closed inside the week, and the current run of consecutive studied days.
+- **Annotations**: `readOnlyHint: true`
+- **Parameters**:
+  - `week_offset` (`integer`, -12 to 0, default: `0`): 0 for this week, -1 for last week.
+  - `course_id` (`string`, optional, UUID): Narrow every figure to one course.
+- **Output**: `week` (`from`, `to`, `offset`), per-course `hours_logged` / `weekly_study_goal_hours` / `goal_met`, `totals`, the titles closed that week, and `studied_day_streak`.
+
+Monday-first, matching `weekBounds` in `lib/derive.ts`, so a number read here
+and a number on the Stats screen agree. A day counts once however many
+sittings it held, and today not being studied yet does not break an otherwise
+intact streak.
+
+### 7. `delete_course`
 - **Title**: Delete an Akada course
 - **Description**: Permanently delete a course from the student's active Akada semester by its `course_id`. Also removes all associated tasks and study sessions.
 - **Annotations**: `destructiveHint: true`
@@ -137,8 +168,8 @@ than the denormalized `tasks.semester_id`.
 
 The following specifications define the next set of MCP tools planned for Akada:
 
-### 1. `list_tasks`
-- **Description**: Query tasks in the active semester, with flexible filters for course, completion status, and due dates.
+### 1. `list_tasks` (partly covered by `get_tasks`)
+- **Description**: Query tasks in the active semester, with flexible filters for course, completion status, and due dates. `get_tasks` covers the course and completion filters; the date, priority and limit filters are still unbuilt.
 - **Annotations**: `readOnlyHint: true`
 - **Input Schema**:
   ```typescript
@@ -193,8 +224,8 @@ The following specifications define the next set of MCP tools planned for Akada:
   }
   ```
 
-### 3. `log_study_session`
-- **Description**: Log study time for a course and optional task, updating course goal progress.
+### 3. `log_study_session` (shipped)
+- **Description**: Log study time for a course and optional task, updating course goal progress. Shipped as specified, with the added rule that `task_id` must belong to `course_id`. Kept here for the original specification.
 - **Annotations**: `destructiveHint: false`, `idempotentHint: false`
 - **Input Schema**:
   ```typescript
@@ -221,8 +252,8 @@ The following specifications define the next set of MCP tools planned for Akada:
   }
   ```
 
-### 4. `get_weekly_stats`
-- **Description**: Retrieve weekly study performance, goal attainment, and current streak for the active semester.
+### 4. `get_weekly_stats` (shipped)
+- **Description**: Retrieve weekly study performance, goal attainment, and current streak for the active semester. Shipped. Kept here for the original specification.
 - **Annotations**: `readOnlyHint: true`
 - **Input Schema**:
   ```typescript

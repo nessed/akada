@@ -1,7 +1,9 @@
 const COURSE_CODE_MAX = 18;
 const COURSE_NAME_MAX = 90;
 const TASK_TITLE_MAX = 140;
-const SESSION_NOTE_MAX = 800;
+// Exported because the MCP connector caps a note it is handed at the same
+// length before the insert, rather than trusting a second copy of the number.
+export const SESSION_NOTE_MAX = 800;
 const DISPLAY_NAME_MAX = 60;
 // Avatars are resized client-side to 160x160 JPEG at 0.7 quality, which lands
 // around 3-8 KB of base64. 64 KB is generous headroom and still keeps a row
