@@ -16,6 +16,13 @@ export interface Course {
   instructor?: string | null;
   /** Already formatted for display, e.g. "Mon/Wed 10:00". */
   meetingTime?: string | null;
+  /**
+   * Where this course sits in the order the student dragged their dashboard
+   * into, smallest first. Optional: a row written before the column existed,
+   * or a project that has not re-run supabase/schema.sql, has none and falls
+   * back to the implicit oldest-first order. See lib/data/course-order.ts.
+   */
+  position?: number;
 }
 
 export interface Session {

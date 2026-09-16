@@ -17,6 +17,15 @@ export interface DataProvider {
   addCourse(course: Omit<Course, 'id' | 'createdAt'>): Promise<Course>;
   updateCourse(id: string, updates: Partial<Course>): Promise<Course>;
   deleteCourse(id: string): Promise<void>;
+  /**
+   * Writes the order the student dragged their courses into. `orderedIds` is
+   * the whole visible list, first card first; anything not named keeps the
+   * position it had. Ordering is a preference rather than a fact, so this is
+   * the one course write that is allowed to be unavailable: against a
+   * database that has not run the latest supabase/schema.sql it throws, and
+   * the dashboard rolls the cards back and says the order did not save.
+   */
+  reorderCourses(orderedIds: string[]): Promise<void>;
 
   // Sessions, scoped to the active semester, same rule as courses.
   getSessions(filters?: SessionFilters): Promise<Session[]>;

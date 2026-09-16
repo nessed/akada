@@ -38,6 +38,14 @@ alter table courses add column if not exists section      text;
 alter table courses add column if not exists instructor   text;
 alter table courses add column if not exists meeting_time text;
 
+-- The order the student dragged their course cards into on the dashboard,
+-- smallest first, scoped to (user_id, semester_id). Nullable and purely
+-- additive: a row that predates it, or a deploy running against a database
+-- that has not had this file re-run, simply has no explicit order, and
+-- lib/data/course-order.ts falls back to oldest-course-first exactly as
+-- before. Existing rows are numbered by section 6, no manual step.
+alter table courses add column if not exists sort_order integer;
+
 -- ============================================================
 -- 2. TASKS  (FK -> courses)
 -- ============================================================
@@ -202,6 +210,24 @@ set semester_id = c.semester_id
 from courses c
 where t.semester_id is null and t.course_id = c.id;
 
+-- One-time backfill of the dashboard's course order: every course that has
+-- none is numbered by the order it was already being shown in, oldest first,
+-- within its own semester. Idempotent, a re-run finds no nulls left and does
+-- nothing, and a course that already carries an order keeps it.
+update courses c
+set sort_order = ranked.rn
+from (
+  select
+    id,
+    (row_number() over (
+      partition by user_id, semester_id
+      order by coalesce(sort_order, 2147483647), created_at, id
+    ))::int - 1 as rn
+  from courses
+) ranked
+where c.id = ranked.id
+  and c.sort_order is null;
+
 update sessions se
 set semester_id = c.semester_id
 from courses c
@@ -296,6 +322,8 @@ create policy "Users manage own settings"
 -- ============================================================
 create index if not exists courses_user_id_idx           on courses (user_id);
 create index if not exists courses_semester_id_idx        on courses (semester_id);
+-- The dashboard reads one semester's courses and shows them in sort_order.
+create index if not exists courses_semester_sort_order_idx on courses (user_id, semester_id, sort_order);
 create index if not exists tasks_user_id_due_date_idx     on tasks (user_id, due_date);
 create index if not exists tasks_course_id_idx            on tasks (course_id);
 create index if not exists tasks_semester_id_idx          on tasks (semester_id);

@@ -1,4 +1,5 @@
 import type { DataProvider } from './data-provider';
+import { nextCoursePosition, sortCourses } from './course-order';
 import type {
   Course,
   Session,
@@ -134,7 +135,19 @@ function sanitizeCourse(course: Course): Course {
     section: cleanSection(course.section),
     instructor: cleanInstructor(course.instructor),
     meetingTime: cleanMeetingTime(course.meetingTime),
+    position: cleanPosition(course.position),
   };
+}
+
+/**
+ * A course stored before ordering existed simply has none, and
+ * lib/data/course-order.ts drops it to the end of the explicitly ordered
+ * ones rather than to an arbitrary place. Nothing has to be migrated.
+ */
+function cleanPosition(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : undefined;
 }
 
 function sanitizeTask(task: Task): Task {
@@ -162,7 +175,7 @@ export class LocalAdapter implements DataProvider {
       .filter((course) => course.semesterId === activeId)
       .map(sanitizeCourse)
       .filter((course) => course.code && course.name);
-    return [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return sortCourses(list);
   }
 
   async getCoursesForSemester(semesterId: string): Promise<Course[]> {
@@ -170,16 +183,22 @@ export class LocalAdapter implements DataProvider {
       .filter((course) => course.semesterId === semesterId)
       .map(sanitizeCourse)
       .filter((course) => course.code && course.name);
-    return [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return sortCourses(list);
   }
 
   async addCourse(input: Omit<Course, 'id' | 'createdAt'>): Promise<Course> {
     const courses = read<StoredCourse[]>(KEYS.courses, []);
+    const semesterId = activeSemesterId();
     const draft: StoredCourse = {
       ...input,
       id: uid(),
       createdAt: nowIso(),
-      semesterId: activeSemesterId(),
+      semesterId,
+      // Lands at the bottom of whatever order this semester is already in,
+      // the same rule the Supabase adapter follows.
+      position:
+        input.position ??
+        nextCoursePosition(courses.filter((c) => c.semesterId === semesterId)),
     };
     const course: StoredCourse = { ...sanitizeCourse(draft), semesterId: draft.semesterId };
     if (!course.code || !course.name) throw new Error('Course code and name are required');
@@ -204,6 +223,16 @@ export class LocalAdapter implements DataProvider {
     }
     write(KEYS.courses, courses);
     return courses[idx];
+  }
+
+  async reorderCourses(orderedIds: string[]): Promise<void> {
+    if (orderedIds.length === 0) return;
+    const rank = new Map(orderedIds.map((id, index) => [id, index]));
+    const courses = read<StoredCourse[]>(KEYS.courses, []).map((course) => {
+      const position = rank.get(course.id);
+      return position === undefined ? course : { ...course, position };
+    });
+    write(KEYS.courses, courses);
   }
 
   async deleteCourse(id: string): Promise<void> {

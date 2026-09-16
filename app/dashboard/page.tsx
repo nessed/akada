@@ -7,6 +7,7 @@ import PageShell from '@/components/PageShell';
 import DailySummary from '@/components/DailySummary';
 import WeeklyProgressBanner from '@/components/WeeklyProgressBanner';
 import CourseCard from '@/components/CourseCard';
+import CourseReorderList from '@/components/dashboard/CourseReorderList';
 import DatePicker from '@/components/DatePicker';
 import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
@@ -18,6 +19,7 @@ import DueDateBadge from '@/components/DueDateBadge';
 import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
+import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
 import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
@@ -408,6 +410,46 @@ export default function DashboardPage() {
     }
   }
 
+  /**
+   * The order the cards were dragged into. The cache is rewritten before the
+   * write leaves, so letting go feels instant; if the write fails, SWR puts
+   * the old order back and the card returns to where it was.
+   */
+  async function handleReorderCourses(orderedIds: string[]) {
+    const rank = new Map(orderedIds.map((id, index) => [id, index]));
+    const place = (current: Course[] | undefined) =>
+      [...(current ?? [])]
+        .map((course) => {
+          const position = rank.get(course.id);
+          return position === undefined ? course : { ...course, position };
+        })
+        .sort(
+          (a, b) =>
+            (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+            (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+        );
+    try {
+      await revalidateCourses(
+        async (current: Course[] | undefined) => {
+          await db.reorderCourses(orderedIds);
+          return place(current);
+        },
+        {
+          optimisticData: place,
+          rollbackOnError: true,
+          populateCache: true,
+          revalidate: false,
+        },
+      );
+    } catch (error) {
+      console.error('Failed to reorder courses:', error);
+      // The most useful reason by far is a database that has not run the
+      // latest schema, and reorderCourses says exactly that.
+      notify(error instanceof Error ? error.message : 'That order was not saved.');
+      throw error;
+    }
+  }
+
   function openEditCourse(course: Course) {
     setEditingCourse({
       id: course.id,
@@ -731,10 +773,11 @@ export default function DashboardPage() {
       {courses.length === 0 ? (
         <EmptyPanel action="Add a course" onAction={openAddCourse} />
       ) : (
-        <div className="flex flex-col gap-3">
-          {courses.map((course) => (
+        <CourseReorderList
+          courses={courses}
+          onReorder={handleReorderCourses}
+          renderCourse={(course) => (
             <CourseCard
-              key={course.id}
               course={course}
               sessions={sessions.filter((s) => s.courseId === course.id)}
               tasks={tasks.filter((t) => t.courseId === course.id)}
@@ -743,8 +786,8 @@ export default function DashboardPage() {
               onDelete={setDeletingCourse}
               onAddTask={(courseId) => router.push(`/tasks?course=${encodeURIComponent(courseId)}&newTask=1`)}
             />
-          ))}
-        </div>
+          )}
+        />
       )}
 
       <FloatingActionButton

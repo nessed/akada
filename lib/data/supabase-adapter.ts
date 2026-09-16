@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase';
 import type { DataProvider } from './data-provider';
+import { sortCourses } from './course-order';
 import type {
   Course,
   Session,
@@ -46,6 +47,13 @@ interface CourseRow {
   section: string | null;
   instructor: string | null;
   meeting_time: string | null;
+  /**
+   * Absent entirely against a database that has not run the latest
+   * supabase/schema.sql, which is why the reads below never `.order()` on it
+   * and sort in memory instead: PostgREST would reject the whole query for an
+   * unknown column and the dashboard would show nothing at all.
+   */
+  sort_order?: number | null;
 }
 
 interface SessionRow {
@@ -92,6 +100,7 @@ function rowToCourse(r: CourseRow): Course {
     section: cleanSection(r.section),
     instructor: cleanInstructor(r.instructor),
     meetingTime: cleanMeetingTime(r.meeting_time),
+    position: typeof r.sort_order === 'number' ? r.sort_order : undefined,
   };
 }
 
@@ -158,6 +167,19 @@ function courseWriteError(error: { code?: string }, code: string): Error {
   return error as unknown as Error;
 }
 
+/**
+ * Postgres 42703 is "column does not exist". The only optional column the app
+ * writes is courses.sort_order, which a project that has not re-run
+ * supabase/schema.sql will not have, so this is how the course order degrades
+ * to "everything else still works" rather than taking the page down with it.
+ */
+function isMissingOrderColumn(error: { code?: string; message?: string }): boolean {
+  return error?.code === '42703' || Boolean(error?.message?.includes('sort_order'));
+}
+
+const COURSE_ORDER_UNAVAILABLE =
+  'Course order could not be saved. Run the latest supabase/schema.sql once and try again.';
+
 export class SupabaseAdapter implements DataProvider {
   private supabase = createClient();
 
@@ -208,7 +230,10 @@ export class SupabaseAdapter implements DataProvider {
       .eq('semester_id', semesterId)
       .order('created_at', { ascending: true });
     if (error) throw error;
-    return (data as CourseRow[]).map(rowToCourse);
+    // Sorted here rather than in the query: .order('sort_order') would be a
+    // hard error against a database that has not run the latest schema, and
+    // created_at is already the tie-break the ordering falls back to.
+    return sortCourses((data as CourseRow[]).map(rowToCourse));
   }
 
   async getCoursesForSemester(semesterId: string): Promise<Course[]> {
@@ -220,7 +245,10 @@ export class SupabaseAdapter implements DataProvider {
       .eq('semester_id', semesterId)
       .order('created_at', { ascending: true });
     if (error) throw error;
-    return (data as CourseRow[]).map(rowToCourse);
+    // Sorted here rather than in the query: .order('sort_order') would be a
+    // hard error against a database that has not run the latest schema, and
+    // created_at is already the tie-break the ordering falls back to.
+    return sortCourses((data as CourseRow[]).map(rowToCourse));
   }
 
   async addCourse(input: Omit<Course, 'id' | 'createdAt'>): Promise<Course> {
@@ -229,6 +257,7 @@ export class SupabaseAdapter implements DataProvider {
     const code = cleanCourseCode(input.code);
     const name = cleanCourseName(input.name);
     if (!code || !name) throw new Error('Course code and name are required');
+    const position = await this.nextCoursePosition(uid, semesterId);
     const { data, error } = await this.supabase
       .from('courses')
       .insert({
@@ -243,11 +272,59 @@ export class SupabaseAdapter implements DataProvider {
         section: cleanSection(input.section),
         instructor: cleanInstructor(input.instructor),
         meeting_time: cleanMeetingTime(input.meetingTime),
+        // A new course lands at the bottom of whatever order the student has
+        // already arranged. Omitted entirely when the column is not there yet.
+        ...(position === null ? {} : { sort_order: position }),
       })
       .select()
       .single();
     if (error) throw courseWriteError(error, code);
     return rowToCourse(data as CourseRow);
+  }
+
+  /**
+   * The position a new course should take, or null when this database has no
+   * sort_order column yet. Never throws: a course being added matters, the
+   * order it lands in does not.
+   */
+  private async nextCoursePosition(
+    uid: string,
+    semesterId: string,
+  ): Promise<number | null> {
+    const { data, error } = await this.supabase
+      .from('courses')
+      .select('sort_order')
+      .eq('user_id', uid)
+      .eq('semester_id', semesterId);
+    if (error) return null;
+    const rows = (data as { sort_order?: number | null }[] | null) ?? [];
+    let top = -1;
+    for (const row of rows) {
+      if (typeof row.sort_order === 'number' && row.sort_order > top) top = row.sort_order;
+    }
+    // A semester whose courses all predate the backfill has no positions at
+    // all; counting them keeps the newcomer behind them rather than in front.
+    return Math.max(top + 1, rows.length);
+  }
+
+  async reorderCourses(orderedIds: string[]): Promise<void> {
+    if (orderedIds.length === 0) return;
+    const uid = await this.userId();
+    const results = await Promise.all(
+      orderedIds.map((id, index) =>
+        this.supabase
+          .from('courses')
+          .update({ sort_order: index })
+          .eq('id', id)
+          .eq('user_id', uid),
+      ),
+    );
+    const failure = results.find((result) => result.error)?.error;
+    if (failure) {
+      throw isMissingOrderColumn(failure)
+        ? new Error(COURSE_ORDER_UNAVAILABLE)
+        : (failure as unknown as Error);
+    }
   }
 
   async updateCourse(id: string, updates: Partial<Course>): Promise<Course> {
@@ -273,6 +350,9 @@ export class SupabaseAdapter implements DataProvider {
     if (updates.section !== undefined) patch.section = cleanSection(updates.section);
     if (updates.instructor !== undefined) patch.instructor = cleanInstructor(updates.instructor);
     if (updates.meetingTime !== undefined) patch.meeting_time = cleanMeetingTime(updates.meetingTime);
+    if (typeof updates.position === 'number' && Number.isFinite(updates.position)) {
+      patch.sort_order = Math.max(0, Math.trunc(updates.position));
+    }
 
     const { data, error } = await this.supabase
       .from('courses')
