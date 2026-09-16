@@ -16,10 +16,9 @@ import { formatClock } from '@/lib/derive';
  * None of which a first-time reader can be expected to work out from the
  * picture, so the picture is not asked to carry it alone. A sentence above
  * the axis says how many classes there are and where the long free stretch
- * is, and every class is written out underneath with the hours it runs. A
- * 75-minute block on a fourteen-hour axis is around sixty pixels wide: it can
- * hold a course code and a start time and nothing else, which is why the full
- * "09:00 to 10:30" is set below the chart rather than inside the block.
+ * is. It used to be followed by every block written out again with its start
+ * and end time, which was the same day said three times on one screen; the
+ * sentence and the blocks are enough.
  *
  * With fewer than two blocks there is nothing for an axis to show that the
  * sentence does not already say, so the chart is not drawn at all.
@@ -177,26 +176,6 @@ export default function DayLine({ blocks }: { blocks: DayBlock[] }) {
         ))}
         <span className="flex-none">22</span>
       </div>
-
-      {/* Every block written out, because the chart cannot fit the times. */}
-      <ul className="m-0 mt-3 list-none p-0">
-        {blocks.map((block) => (
-          <li key={block.id} className="flex items-baseline gap-2.5 py-1">
-            <span
-              aria-hidden
-              className="block h-[11px] w-[3px] flex-none self-center"
-              style={{ background: block.color }}
-            />
-            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">
-              {block.label}
-              {block.kind === 'study' ? ' · sat down' : ''}
-            </span>
-            <span className="tnum flex-none font-mono text-[13px] text-ink-soft">
-              {formatClock(block.start)} to {formatClock(block.end)}
-            </span>
-          </li>
-        ))}
-      </ul>
     </>
   );
 }

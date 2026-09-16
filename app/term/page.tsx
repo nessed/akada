@@ -6,10 +6,11 @@ import Link from 'next/link';
 import PageShell from '@/components/PageShell';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import MonthGrid from '@/components/term/MonthGrid';
+import DayLine from '@/components/dashboard/DayLine';
 import GradeWeighting from '@/components/term/GradeWeighting';
 import { Eyebrow } from '@/components/notebook/Marks';
 import { isoDate, startOfWeek } from '@/lib/utils';
-import { loggable } from '@/lib/derive';
+import { countdowns, dayBlocks, loggable } from '@/lib/derive';
 import { termWeek } from '@/lib/review';
 import { usePreferences } from '@/lib/preferences';
 import {
@@ -89,6 +90,10 @@ export default function TermPage() {
     return bars;
   }, [termStart, sessions, weekNo]);
 
+  /** Today's classes and sittings, on one line above the month. */
+  const blocks = useMemo(() => dayBlocks(courses, sessions, today), [courses, sessions, today]);
+  const coming = useMemo(() => countdowns(tasks, courses, today, 1)[0], [tasks, courses, today]);
+
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || tasksLoading || sessionsLoading;
   if (loading) {
@@ -103,6 +108,54 @@ export default function TermPage() {
 
   const aside = (
     <>
+      {/* What is closest, and what it is worth. It sits above the weighting
+          because a date is the thing a reader came to the calendar for. */}
+      {coming ? (
+        <div className="pb-5">
+          <Eyebrow>Next deadline</Eyebrow>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p className="m-0 font-serif text-[18px] leading-[1.2]">{coming.task.title}</p>
+              <p className="mt-1 text-[13px] text-muted">
+                {[
+                  coming.course?.code,
+                  coming.task.weight ? `worth ${coming.task.weight}%` : null,
+                  longDate(coming.task.dueDate as string),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+            {/* A countdown of nothing is not a countdown. Zero days reads as
+                an error next to a heading that says "next deadline", so the
+                last two days are words. */}
+            {coming.days <= 1 ? (
+              <p
+                className="m-0 flex-none font-serif text-[18px] leading-[1.1]"
+                style={{ color: 'var(--warn)' }}
+              >
+                {coming.days === 0 ? 'today' : 'tomorrow'}
+              </p>
+            ) : (
+              <p
+                className="m-0 flex-none font-mono text-[27px] font-bold leading-[0.9] tracking-[-0.03em]"
+                style={{ color: coming.days <= 10 ? 'var(--warn)' : 'var(--ink)' }}
+              >
+                {coming.days}
+                <span className="text-[13px] font-normal text-muted"> days</span>
+              </p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="pb-5">
+          <Eyebrow>Next deadline</Eyebrow>
+          <p className="mt-2 font-serif text-[18px] leading-[1.3] text-muted">
+            No graded deadlines yet.
+          </p>
+        </div>
+      )}
+
       <GradeWeighting courses={courses} tasks={tasks} today={today} />
 
       {termBars.length > 0 && (
@@ -185,6 +238,13 @@ export default function TermPage() {
         </div>
       </div>
 
+      {blocks.length > 0 && (
+        <div className="mt-7">
+          <Eyebrow>Today</Eyebrow>
+          <DayLine blocks={blocks} />
+        </div>
+      )}
+
       <MonthGrid
         month={month}
         today={today}
@@ -199,4 +259,12 @@ export default function TermPage() {
       </p>
     </PageShell>
   );
+}
+
+function longDate(iso: string): string {
+  return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
 }
