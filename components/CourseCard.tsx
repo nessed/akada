@@ -72,10 +72,13 @@ export default function CourseCard({
       />
       {/* The whole card is the way into the course. It sits under the content
           rather than wrapping it, so the menu and the timer button stay real
-          buttons instead of controls nested inside a link. */}
+          buttons instead of controls nested inside a link. It opens the
+          course's own page, not the task list filtered to it: a card that
+          shows hours, a goal and a task count should not land somewhere that
+          can only answer the last of the three. */}
       <Link
-        href={`/tasks?course=${encodeURIComponent(course.id)}`}
-        aria-label={`Open ${course.name} tasks`}
+        href={`/courses/${encodeURIComponent(course.id)}`}
+        aria-label={`Open ${course.name}`}
         className="absolute inset-0 rounded-[14px]"
       />
       <div className="pointer-events-none relative py-[18px] pl-[22px] pr-[18px]">

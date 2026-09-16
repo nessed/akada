@@ -67,6 +67,20 @@ const tabs = [
   },
 ];
 
+// A course page is reached from the course cards on Today, and its back
+// button returns there, so it keeps that tab lit rather than leaving the bar
+// with nothing marked.
+const OWNED_BY: Record<string, string> = { '/courses': '/dashboard' };
+
+function isActive(pathname: string | null, href: string) {
+  if (!pathname) return false;
+  if (pathname === href || pathname.startsWith(href + '/')) return true;
+  return Object.entries(OWNED_BY).some(
+    ([prefix, owner]) =>
+      owner === href && (pathname === prefix || pathname.startsWith(prefix + '/')),
+  );
+}
+
 export default function BottomNav() {
   const pathname = usePathname();
   return (
@@ -84,7 +98,7 @@ export default function BottomNav() {
     >
       <div className="pointer-events-auto mx-auto max-w-2xl md:max-w-3xl w-full flex justify-around items-center">
         {tabs.map((tab) => {
-          const active = pathname === tab.href || pathname?.startsWith(tab.href + '/');
+          const active = isActive(pathname, tab.href);
           return (
             <Link
               key={tab.href}
