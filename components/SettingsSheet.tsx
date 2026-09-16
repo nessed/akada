@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Course, Session } from '@/lib/data';
 import { useActiveSemester } from '@/lib/data-hooks';
 import SemesterManager from './SemesterManager';
@@ -69,6 +70,7 @@ export default function SettingsSheet({
   onDeleteAccount,
 }: Props) {
   const [section, setSection] = useState<Section>('overview');
+  const router = useRouter();
   const { semester: activeSemester } = useActiveSemester();
   const [prefs, setPrefs] = usePreferences();
   const { notify } = useNotice();
@@ -383,6 +385,13 @@ export default function SettingsSheet({
             onSaved={() => {
               onCoursesChanged?.();
               setSection('overview');
+            }}
+            // There is one add-course flow, the catalog-backed sheet on the
+            // dashboard. Settings closes and hands the reader to it.
+            onAddCourse={() => {
+              onCoursesChanged?.();
+              onClose();
+              router.push('/dashboard?add=course');
             }}
           />
         )}

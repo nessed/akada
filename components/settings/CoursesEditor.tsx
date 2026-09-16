@@ -2,11 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Course } from '@/lib/data';
-import {
-  addCourseOptimistic,
-  deleteCourseOptimistic,
-  updateCourseOptimistic,
-} from '@/lib/data-hooks';
+import { deleteCourseOptimistic, updateCourseOptimistic } from '@/lib/data-hooks';
 import { PASTEL_PALETTE } from '@/lib/utils';
 import {
   clampWeeklyGoalHours,
@@ -29,7 +25,7 @@ import {
 } from './SettingsPrimitives';
 
 interface DraftCourse {
-  id: string | null;
+  id: string;
   code: string;
   name: string;
   color: string;
@@ -38,14 +34,25 @@ interface DraftCourse {
   weeklyGoalHours: number;
 }
 
+/**
+ * Courses already on the list, edited in place: the code, the name, the
+ * accent and the weekly goal.
+ *
+ * Adding is deliberately not here. There is one add-course flow in the app,
+ * the catalog-backed one on the dashboard, and this view hands the reader to
+ * it rather than keeping a second, blinder version of the same thing.
+ */
 export default function CoursesEditor({
   courses,
   onBack,
   onSaved,
+  onAddCourse,
 }: {
   courses: Course[];
   onBack: () => void;
   onSaved: () => void;
+  /** Leaves settings for the dashboard's add-course sheet. */
+  onAddCourse: () => void;
 }) {
   const { active, pendingLog } = useTimer();
   const original = useMemo(
@@ -79,42 +86,26 @@ export default function CoursesEditor({
   function remove(i: number) {
     setDrafts((cs) => (cs.length === 1 ? cs : cs.filter((_, idx) => idx !== i)));
   }
-  function add() {
-    const used = new Set(drafts.map((c) => c.color));
-    const next =
-      PASTEL_PALETTE.find((p) => !used.has(p.value)) ||
-      PASTEL_PALETTE[drafts.length % PASTEL_PALETTE.length];
-    setDrafts((cs) => [
-      ...cs,
-      {
-        id: null,
-        code: '',
-        name: '',
-        color: next.value,
-        tint: next.tint,
-        credits: 4,
-        weeklyGoalHours: 8,
-      },
-    ]);
-  }
 
-  async function save() {
+  const dirty = useMemo(
+    () => JSON.stringify(drafts) !== JSON.stringify(original),
+    [drafts, original],
+  );
+
+  /** Writes the drafts back. Returns false when something stopped it. */
+  async function persist(): Promise<boolean> {
     setSaving(true);
     setError('');
     try {
       const validDrafts = drafts.filter((d) => d.code.trim() && d.name.trim());
-      const incompleteDraft = drafts.some(
-        (d) =>
-          (Boolean(d.id) || Boolean(d.code.trim()) || Boolean(d.name.trim())) &&
-          (!d.code.trim() || !d.name.trim()),
-      );
+      const incompleteDraft = drafts.some((d) => !d.code.trim() || !d.name.trim());
       if (incompleteDraft) {
         setError('Every course needs both a code and a name.');
-        return;
+        return false;
       }
       if (hasDuplicateCourseCodes(validDrafts)) {
         setError('Course codes must be unique.');
-        return;
+        return false;
       }
       const draftIds = new Set(validDrafts.map((d) => d.id).filter(Boolean));
       const removed = originalRef.current.filter((o) => !draftIds.has(o.id));
@@ -125,14 +116,14 @@ export default function CoursesEditor({
             ? 'Stop or discard the active timer before deleting that course.'
             : 'Save or discard the pending timer log before deleting that course.',
         );
-        return;
+        return false;
       }
 
       // Delete removed
       for (const o of removed) {
-        await deleteCourseOptimistic(o.id!);
+        await deleteCourseOptimistic(o.id);
       }
-      // Add new + update existing
+      // Update what is left
       for (const d of validDrafts) {
         const payload = {
           code: cleanCourseCode(d.code),
@@ -142,19 +133,29 @@ export default function CoursesEditor({
           credits: d.credits,
           weeklyGoalHours: clampWeeklyGoalHours(d.weeklyGoalHours),
         };
-        if (d.id) {
-          await updateCourseOptimistic(d.id, payload);
-        } else {
-          await addCourseOptimistic(payload);
-        }
+        await updateCourseOptimistic(d.id, payload);
       }
-      onSaved();
+      return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to save courses';
       setError(msg);
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function save() {
+    if (await persist()) onSaved();
+  }
+
+  /**
+   * Edits in progress are kept before the reader is handed over, so leaving
+   * for the add-course sheet never quietly costs them a rename.
+   */
+  async function addCourse() {
+    if (dirty && !(await persist())) return;
+    onAddCourse();
   }
 
   return (
@@ -170,7 +171,7 @@ export default function CoursesEditor({
       <div className="mt-5 flex flex-col gap-[var(--density-gap)]">
         {drafts.map((c, i) => (
           <div
-            key={c.id || `new-${i}`}
+            key={c.id}
             className={`relative overflow-hidden border border-line bg-paper px-4 py-4 pl-[18px] ${PANEL_RADIUS}`}
           >
             <span
@@ -236,12 +237,22 @@ export default function CoursesEditor({
           </div>
         ))}
 
+        {drafts.length === 0 && (
+          <p className="py-6 text-center font-serif text-[13px] italic text-muted-soft">
+            Nothing on the list yet.
+          </p>
+        )}
+
+        {/* The one dashed affordance the guide allows: there is more you
+            could add here. It opens the catalog search rather than a second
+            pair of blank fields. */}
         <button
           type="button"
-          onClick={add}
-          className={`border border-dashed border-line-strong bg-transparent py-3 text-[13px] font-medium text-ink-soft ${FIELD_RADIUS}`}
+          onClick={addCourse}
+          disabled={saving}
+          className={`border border-dashed border-line-strong bg-transparent py-3 text-[13px] font-medium text-ink-soft disabled:opacity-50 ${FIELD_RADIUS}`}
         >
-          + Add another course
+          + Add a course
         </button>
       </div>
 
@@ -263,7 +274,7 @@ export default function CoursesEditor({
         <button
           type="button"
           onClick={save}
-          disabled={saving || drafts.filter((d) => d.code.trim() && d.name.trim()).length === 0}
+          disabled={saving || !dirty}
           className={SHEET_ACTION_PRIMARY}
         >
           {saving ? (
