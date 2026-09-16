@@ -1,331 +1,302 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
-import { PASTEL_PALETTE } from '@/lib/utils';
-import { CONTACT_EMAIL } from '@/lib/contact';
+import AkadaMark from '@/components/notebook/AkadaMark';
+import { Eyebrow } from '@/components/notebook/Marks';
 
-export const metadata: Metadata = {
-  // The one indexable page, so it carries the brand itself rather than
-  // relying on the layout's '%s - Akada' template.
-  title: 'Akada: a calm study planner for university',
+/**
+ * The landing page.
+ *
+ * The product runs off the right edge of the screen rather than sitting in a
+ * phone mock in the middle of a hero: a page of the app, cropped, reads as
+ * something real that carries on past the fold, where a device frame reads as
+ * a picture of software. There is no feature grid of icon-plus-heading cards
+ * either — the four things are a list of sentences, because that is what they
+ * are.
+ *
+ * The week shown on the right is the marketing illustration, and it is
+ * labelled as an example rather than dressed up as anybody's data.
+ */
+
+export const metadata = {
+  title: 'Akada — a quiet place to keep the term',
   description:
-    'Akada keeps your courses, deadlines and study hours on one quiet page. '
-    + 'Pick your sections from the course catalog, set a weekly goal, and log the time you actually study.',
-  alternates: { canonical: '/' },
-  openGraph: {
-    title: 'Akada: a calm study planner for university',
-    description:
-      'Your courses, deadlines and study hours on one quiet page.',
-    url: '/',
-  },
+    'Courses from your catalog, every deadline on the day it lands, and the hours you actually sat down for. On Sunday it reads the week back to you.',
 };
 
-// The three sample courses on the landing page, coloured from the real
-// palette so the marketing shot and the app cannot drift apart.
-const [SAGE, ROSE, LAVENDER] = PASTEL_PALETTE;
-
-const sampleCourses = [
-  {
-    code: 'POL 227',
-    name: 'Comparative Politics',
-    color: SAGE.value,
-    tint: SAGE.tint,
-    hours: '3.5',
-    goal: '6h',
-    pct: 58,
-  },
-  {
-    code: 'ENG 305',
-    name: 'Modernist Literature',
-    color: ROSE.value,
-    tint: ROSE.tint,
-    hours: '2.0',
-    goal: '5h',
-    pct: 40,
-  },
-  {
-    code: 'PSY 110',
-    name: 'Cognition & Memory',
-    color: LAVENDER.value,
-    tint: LAVENDER.tint,
-    hours: '4.0',
-    goal: '4h',
-    pct: 100,
-  },
+const WEEK = [
+  { day: '05', label: '3h · two courses', tone: 'past' as const },
+  { day: '06', label: 'Tilly ch. 4 before seminar', color: 'var(--rose)', tone: 'today' as const },
+  { day: '07', label: 'Problem set 3', color: 'var(--sage)', note: 'due 23:59', tone: 'ahead' as const },
+  { day: '08', label: 'Response paper, 800 words', color: 'var(--butter)', tone: 'ahead' as const },
+  { day: '15', label: 'ECON midterm', color: 'var(--sage)', note: '25%', tone: 'ahead' as const },
 ];
 
-const features = [
-  {
-    title: 'Courses',
-    text: 'Set weekly study goals and see which classes need attention.',
-  },
-  {
-    title: 'Tasks',
-    text: 'Track assignments with priorities and clear due dates.',
-  },
-  {
-    title: 'Timer',
-    text: 'Start focused sessions from a course or a specific task.',
-  },
-  {
-    title: 'Stats',
-    text: 'Review study streaks, weekly totals, heatmaps, and course averages.',
-  },
+const QUIETLY = [
+  [
+    'Your real timetable',
+    'Pick your sections out of the course catalog and the meeting times come with them, so the day is laid out around the classes you actually have.',
+  ],
+  [
+    'What each piece is worth',
+    'Enter the weighting once. Every deadline then carries its own percentage, and you can see how much of your grade is still unmarked.',
+  ],
+  [
+    'A clock you can hide behind',
+    'Set a block, bring the list for that course, and lock the screen down to the time passing. When you stop, you write one line about what you actually did.',
+  ],
+  [
+    'Reading you are behind on',
+    'Page counts, not vague guilt. It knows roughly how fast you read and tells you how many hours the backlog is.',
+  ],
 ];
 
 export default function LandingPage() {
   return (
-    <main className="min-h-[100dvh] bg-bg text-ink">
-      <section className="relative overflow-hidden">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-60"
-          style={{
-            backgroundImage:
-              'repeating-linear-gradient(to bottom, transparent 0, transparent 34px, var(--line) 34px, var(--line) 35px)',
-            maskImage:
-              'linear-gradient(to bottom, transparent, black 10%, black 84%, transparent)',
-            WebkitMaskImage:
-              'linear-gradient(to bottom, transparent, black 10%, black 84%, transparent)',
-          }}
-        />
+    <div className="min-h-[100dvh] bg-bg">
+      <header className="flex items-center justify-between gap-5 border-b border-line px-6 py-6 md:px-14">
+        <Link href="/" className="flex items-center gap-3">
+          <AkadaMark size={22} />
+          <span className="font-serif text-[19px] tracking-[-0.02em]">Akada</span>
+        </Link>
+        <div className="flex items-center gap-6">
+          <Link href="/auth" className="font-serif text-[14.5px] text-ink-soft">
+            Sign in
+          </Link>
+          <Link
+            href="/auth?mode=signup"
+            className="bg-primary px-5 py-3 text-sm font-medium text-primary-contrast"
+          >
+            Start the term
+          </Link>
+        </div>
+      </header>
 
-        <div className="relative mx-auto flex max-w-5xl flex-col px-6 pb-10 pt-6 sm:px-8 lg:px-10">
-          <header className="flex items-center justify-between gap-4">
-            <Link href="/" className="flex items-center gap-3">
-              <Mark size={34} />
-              <div>
-                <p className="m-0 font-serif text-[22px] font-medium leading-none tracking-[-0.02em]">
-                  Akada
-                </p>
-                <p className="eyebrow mt-1 mb-0 text-muted">
-                  Study Planner
-                </p>
-              </div>
+      {/* The page, cropped at the right edge. */}
+      <section className="flex flex-col items-stretch border-b border-line lg:flex-row">
+        <div className="w-full flex-none px-6 py-14 md:px-14 md:py-[74px] lg:w-[620px]">
+          <Eyebrow style={{ letterSpacing: '0.18em' }}>For university students</Eyebrow>
+          <h1 className="mt-5 font-serif text-[40px] font-normal leading-[1.02] tracking-[-0.035em] md:text-[60px]">
+            Fifteen weeks fit
+            <br />
+            on <em className="italic">one page.</em>
+          </h1>
+          <p className="mt-6 max-w-[44ch] font-serif text-[17px] leading-[1.6] text-ink-soft md:text-[18px]">
+            Your courses from the catalog, every deadline on the day it lands, and the hours you
+            actually sat down for. On Sunday it reads the week back to you and asks one question.
+          </p>
+
+          <div className="mt-9 max-w-[440px]">
+            <Link
+              href="/auth?mode=signup"
+              className="flex min-h-[56px] w-full items-center justify-center bg-primary px-6 text-[15px] font-medium text-primary-contrast sm:w-auto sm:min-w-[240px]"
+            >
+              Start the term
             </Link>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/auth"
-                className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-line-strong"
-              >
-                Log in
-              </Link>
-              <Link
-                href="/auth?mode=signup"
-                className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-contrast"
-              >
-                Create account
-              </Link>
-            </div>
-          </header>
+            <p className="mt-4 font-serif text-sm italic text-muted">
+              Free. Takes a minute. Your notes are readable by you and no one else.
+            </p>
+          </div>
+        </div>
 
-          <div className="mx-auto mt-14 max-w-3xl text-center sm:mt-16">
-            <p className="eyebrow m-0 text-muted">
-              Courses, tasks, timer, progress
-            </p>
-            <h1 className="mt-4 mb-0 font-serif text-[48px] font-medium leading-[0.98] tracking-[-0.03em] sm:text-[66px]">
-              Akada
-            </h1>
-            <p className="mx-auto mt-5 mb-0 max-w-xl text-[16px] leading-[1.65] text-ink-soft">
-              A calm academic planner for organizing courses, tracking assignments,
-              logging study sessions, and seeing where your semester time goes.
-            </p>
-            <div className="mt-8 flex flex-col justify-center gap-2.5 sm:flex-row">
-              <Link
-                href="/auth?mode=signup"
-                className="rounded-2xl bg-primary px-6 py-3.5 text-[15px] font-medium text-primary-contrast"
-              >
-                Create account
-              </Link>
-              <Link
-                href="/auth"
-                className="rounded-xl border border-line-strong bg-paper px-6 py-3.5 text-[15px] font-medium text-ink-soft"
-              >
-                Log in
-              </Link>
+        {/* No device frame: this is the page itself, running past the edge. */}
+        <div className="min-w-0 flex-1 border-t border-line bg-paper-2 py-11 pl-6 md:pl-11 lg:border-l lg:border-t-0">
+          <Eyebrow>Tuesday, week six — an example</Eyebrow>
+          <div className="rule-ink mt-3.5 flex items-start gap-7 pr-6 pt-4 md:pr-11">
+            <div className="min-w-0 flex-1">
+              <Eyebrow>Next</Eyebrow>
+              <p className="mt-2 font-serif text-[22px] leading-[1.18] md:text-[24px]">
+                Problem set 3, questions 3 to 5
+              </p>
+              <p className="mt-2 flex flex-wrap items-center gap-2.5 text-[12.5px] text-ink-soft">
+                <span
+                  aria-hidden
+                  className="block h-[7px] w-[7px] rounded-full"
+                  style={{ background: 'var(--sage)' }}
+                />
+                ECON 100
+                <span aria-hidden className="block h-[10px] w-px bg-line" />
+                <span className="font-mono text-warn">due tomorrow</span>
+              </p>
             </div>
+            <span className="hidden flex-none whitespace-nowrap bg-primary px-5 py-4 text-[13.5px] font-medium text-primary-contrast sm:block">
+              Sit down for 50 minutes
+            </span>
           </div>
 
-          <ProductPreview />
+          <div className="mt-9 pr-6 md:pr-11">
+            <Eyebrow className="mb-2.5">This week</Eyebrow>
+            {WEEK.map((row) => (
+              <div
+                key={row.day}
+                className={`relative flex gap-3.5 border-b border-line-soft py-2.5 ${
+                  row.tone === 'past' ? 'opacity-60' : ''
+                }`}
+                style={row.tone === 'today' ? { background: 'var(--paper)' } : undefined}
+              >
+                {row.tone === 'today' && (
+                  <span aria-hidden className="absolute -left-3.5 bottom-2 top-2 w-0.5 bg-ink" />
+                )}
+                <span
+                  className={`w-[34px] flex-none text-right font-mono ${
+                    row.tone === 'today' ? 'text-[15px] font-bold text-ink' : 'text-[13px] text-ink-soft'
+                  }`}
+                >
+                  {row.day}
+                </span>
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  {row.color ? (
+                    <span
+                      aria-hidden
+                      className="block h-[6px] w-[6px] flex-none rounded-full"
+                      style={{ background: row.color }}
+                    />
+                  ) : (
+                    <span aria-hidden className="flex flex-none gap-0.5">
+                      {[0, 1, 2].map((i) => (
+                        <i
+                          key={i}
+                          className="tally-stroke"
+                          style={{ height: 13, background: 'var(--muted)' }}
+                        />
+                      ))}
+                    </span>
+                  )}
+                  <span
+                    className={`min-w-0 flex-1 truncate ${
+                      row.color ? 'text-[13px] text-ink' : 'font-serif text-[13px] italic text-muted'
+                    }`}
+                  >
+                    {row.label}
+                  </span>
+                  {row.note && (
+                    <span className="flex-none font-mono text-[11px] text-warn">{row.note}</span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-5xl px-6 pb-16 sm:px-8 lg:px-10">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {features.map((feature) => (
-            <article
-              key={feature.title}
-              className="rounded-[14px] border border-line bg-paper px-5 py-5"
+      {/* The part nobody else does. */}
+      <section className="flex flex-col gap-10 border-b border-line px-6 py-16 md:px-14 lg:flex-row lg:gap-16">
+        <div className="w-full flex-none lg:w-[520px]">
+          <Eyebrow style={{ letterSpacing: '0.18em' }}>The part nobody else does</Eyebrow>
+          <h2 className="mt-4 font-serif text-[30px] font-normal leading-[1.1] tracking-[-0.03em] md:text-[38px]">
+            On Sunday it tells you where the week went.
+          </h2>
+          <p className="mt-5 max-w-[44ch] font-serif text-[16.5px] leading-[1.62] text-ink-soft">
+            Not a chart to interpret. A page in plain words: which course took the hours, which one
+            you dropped, what you moved for the third time. Then one question, and whatever you
+            answer becomes next week&apos;s list.
+          </p>
+        </div>
+
+        <div className="min-w-0 flex-1 border border-line bg-paper px-7 py-8 md:px-8">
+          <div className="flex items-baseline justify-between border-b-[1.5px] border-ink pb-2.5">
+            <Eyebrow as="span" style={{ letterSpacing: '0.18em' }}>
+              Week five · 28 Sep – 4 Oct
+            </Eyebrow>
+            <span className="font-mono text-[10.5px] text-muted">11h 30m</span>
+          </div>
+          <p className="mt-5 font-serif text-[26px] font-normal leading-[1.08] tracking-[-0.03em] md:text-[32px]">
+            You spent the week <em className="italic">on ECON</em>.
+          </p>
+          <p className="mt-3.5 font-serif text-[15.5px] leading-[1.6] text-ink-soft">
+            Two thirds of the hours went to one course. POL 227 got nothing after Tuesday, and its
+            reading is now nine days old.
+          </p>
+
+          <div className="mt-6 flex flex-col gap-2.5">
+            {[
+              { code: 'ECON', color: 'var(--sage)', marks: 8, total: '7h 30m' },
+              { code: 'CS 200', color: 'var(--sky)', marks: 3, total: '2h 15m' },
+            ].map((row) => (
+              <span key={row.code} className="flex items-center gap-3">
+                <span
+                  className="w-[62px] text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: row.color }}
+                >
+                  {row.code}
+                </span>
+                <span aria-hidden className="flex flex-1 gap-[3px]">
+                  {Array.from({ length: row.marks }).map((_, i) => (
+                    <i
+                      key={i}
+                      className="tally-stroke"
+                      style={{ width: 2.5, height: 18, background: row.color }}
+                    />
+                  ))}
+                </span>
+                <span className="font-mono text-[12.5px] font-bold">{row.total}</span>
+              </span>
+            ))}
+            <span className="flex items-center gap-3">
+              <span
+                className="w-[62px] text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+                style={{ color: 'var(--rose)' }}
+              >
+                POL 227
+              </span>
+              <span aria-hidden className="h-px flex-1 border-b border-dashed border-line-strong" />
+              <span className="font-serif text-[13px] italic text-warn">nothing since Tue</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Sentences, not a grid of cards. */}
+      <section className="border-b border-line px-6 py-14 md:px-14">
+        <div className="flex items-baseline gap-4">
+          <Eyebrow as="span" style={{ letterSpacing: '0.18em' }}>
+            Also, quietly
+          </Eyebrow>
+          <span aria-hidden className="h-px flex-1 bg-line" />
+        </div>
+        <div className="mt-2">
+          {QUIETLY.map(([title, detail]) => (
+            <div
+              key={title}
+              className="row-rule flex flex-col gap-2 py-5 md:flex-row md:items-baseline md:gap-7"
             >
-              <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">
-                {feature.title}
-              </h2>
-              <p className="mt-2 mb-0 text-[13px] leading-[1.55] text-ink-soft">
-                {feature.text}
-              </p>
-            </article>
+              <span className="w-full flex-none font-serif text-[19px] md:w-[230px] md:text-[21px]">
+                {title}
+              </span>
+              <span className="max-w-[62ch] flex-1 text-[14.5px] leading-[1.55] text-ink-soft">
+                {detail}
+              </span>
+            </div>
           ))}
         </div>
       </section>
 
-      {/* The page used to end on the feature grid, so anyone who read to the
-          bottom had to scroll back up to act. */}
-      <section className="mx-auto max-w-5xl px-6 pb-16 text-center sm:px-8 lg:px-10">
-        <h2 className="m-0 font-serif text-[26px] font-medium tracking-[-0.02em]">
-          Start the term <span className="italic">on one page</span>.
+      <section className="px-6 py-16 md:px-14">
+        <h2 className="m-0 font-serif text-[30px] font-normal leading-[1.08] tracking-[-0.03em] md:text-[40px]">
+          Start where the term is.
+          <br />
+          <em className="italic">Whatever week you are on.</em>
         </h2>
-        <p className="mx-auto mt-2.5 mb-0 max-w-[360px] text-[14px] leading-[1.6] text-ink-soft">
-          Free, and it takes a minute to set up.
-        </p>
         <Link
           href="/auth?mode=signup"
-          className="mt-6 inline-block rounded-2xl bg-primary px-6 py-3.5 text-[15px] font-medium text-primary-contrast"
+          className="mt-8 flex min-h-[56px] w-full items-center justify-center bg-primary px-6 text-[15px] font-medium text-primary-contrast sm:w-auto sm:min-w-[240px]"
         >
-          Create account
+          Start the term
         </Link>
       </section>
 
-      <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-7 sm:px-8 lg:px-10">
-          <p className="m-0 font-serif text-[13px] italic text-muted">
-            Akada, made with quiet hands.
-          </p>
-          <nav className="flex items-center gap-5 font-serif text-[13px] text-muted">
-            <Link className="hand-underline" href="/privacy">
-              Privacy
-            </Link>
-            <Link className="hand-underline" href="/terms">
-              Terms
-            </Link>
-            <a className="hand-underline" href={`mailto:${CONTACT_EMAIL}`}>
-              Contact
-            </a>
-          </nav>
-        </div>
+      <footer className="flex flex-wrap items-center justify-between gap-5 border-t border-line px-6 py-7 md:px-14">
+        <p className="m-0 font-serif text-[13.5px] italic text-muted">Akada</p>
+        <nav className="flex items-center gap-6 font-serif text-[13.5px] text-ink-soft">
+          <Link href="/privacy" className="border-b border-line-strong pb-px">
+            Privacy
+          </Link>
+          <Link href="/terms" className="border-b border-line-strong pb-px">
+            Terms
+          </Link>
+          <Link href="/auth" className="border-b border-line-strong pb-px">
+            Sign in
+          </Link>
+        </nav>
       </footer>
-    </main>
-  );
-}
-
-function ProductPreview() {
-  return (
-    <div className="mx-auto mt-12 w-full max-w-[430px] rounded-[28px] border border-line-strong bg-paper p-3 shadow-[0_24px_70px_rgba(26,25,21,0.12)]">
-      <div className="overflow-hidden rounded-[22px] border border-line bg-bg">
-        <div className="flex items-start justify-between gap-3 px-5 pt-5">
-          <div>
-            <p className="eyebrow m-0 font-mono text-muted">
-              Wk 17
-            </p>
-            <h2 className="mt-1 mb-0 font-serif text-[30px] font-normal leading-none tracking-[-0.02em]">
-              April <span className="italic">27</span>
-            </h2>
-            <p className="mt-2 mb-0 max-w-[230px] text-[12px] leading-[1.5] text-ink-soft">
-              2 tasks due today. 3h 25m logged this week.
-            </p>
-          </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-peach font-serif text-[17px] font-medium">
-            A
-          </div>
-        </div>
-
-        <div className="px-5 pt-5">
-          <div className="relative overflow-hidden rounded-[14px] border border-line bg-paper px-5 py-4">
-            <div
-              aria-hidden
-              className="absolute right-0 top-0 h-[22px] w-[22px]"
-              style={{
-                background:
-                  'linear-gradient(225deg, var(--bg-tint) 50%, transparent 50%)',
-              }}
-            />
-            <div className="flex items-baseline gap-2.5">
-              <span className="font-mono text-[32px] font-semibold leading-none tracking-[-0.02em]">
-                1h 35m
-              </span>
-              <span className="text-[12px] text-muted">today</span>
-            </div>
-            <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-bg-tint">
-              <span className="w-[54%] bg-sage" />
-              <span className="w-[28%] bg-rose" />
-              <span className="w-[18%] bg-lav" />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 px-5 py-5">
-          {sampleCourses.map((course) => (
-            <div
-              key={course.code}
-              className="relative overflow-hidden rounded-[14px] border border-line bg-paper"
-            >
-              <div
-                className="absolute left-0 top-0 bottom-0 w-1"
-                style={{ background: course.color }}
-              />
-              <div className="py-4 pl-5 pr-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p
-                      className="eyebrow m-0"
-                      style={{ color: course.color }}
-                    >
-                      {course.code}
-                    </p>
-                    <h3 className="mt-1 mb-0 truncate font-serif text-[17px] font-medium tracking-[-0.01em]">
-                      {course.name}
-                    </h3>
-                  </div>
-                  <span
-                    className="hl-swipe shrink-0 font-mono text-[11px] font-semibold text-ink"
-                    style={{ '--hl': course.tint } as React.CSSProperties}
-                  >
-                    {course.pct}%
-                  </span>
-                </div>
-                <div className="mt-3">
-                  <div className="mb-1.5">
-                    <span className="font-mono text-[13px] font-semibold">
-                      {course.hours}
-                    </span>
-                  </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-bg-tint">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${course.pct}%`, background: course.color }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
-  );
-}
-
-function Mark({ size = 34 }: { size?: number }) {
-  const w = size;
-  const h = Math.round(size * (68 / 56));
-  return (
-    <svg width={w} height={h} viewBox="0 0 56 68" fill="none" aria-hidden>
-      <path
-        d="M6 4 H50 V60 L28 48 L6 60 Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        fill="var(--paper)"
-      />
-      <text
-        x="28"
-        y="33"
-        textAnchor="middle"
-        fontFamily="var(--font-serif), Georgia, serif"
-        fontSize="22"
-        fontStyle="italic"
-        fontWeight="500"
-        fill="currentColor"
-      >
-        A
-      </text>
-    </svg>
   );
 }

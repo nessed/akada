@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { db } from '@/lib/data';
-import { ButtonSpinner } from '@/components/LoadingIndicator';
+import AkadaMark from '@/components/notebook/AkadaMark';
+import { Eyebrow, PageButton } from '@/components/notebook/Marks';
 import {
   MIN_PASSWORD_LENGTH,
   authRedirectErrorMessage,
@@ -177,204 +178,171 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="relative min-h-[100dvh] flex flex-col px-7 animate-fade-in">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-50"
-        style={{
-          backgroundImage:
-            'repeating-linear-gradient(to bottom, transparent 0, transparent 31px, var(--line) 31px, var(--line) 32px)',
-          maskImage:
-            'linear-gradient(to bottom, transparent, black 20%, black 80%, transparent)',
-          WebkitMaskImage:
-            'linear-gradient(to bottom, transparent, black 20%, black 80%, transparent)',
-        }}
-      />
+    <div className="flex min-h-[100dvh] animate-fade-in">
+      <div className="relative flex min-w-0 flex-1 flex-col px-7">
+        {/* Ruled paper behind the form, faded out at both ends so the rules
+            never run into the edge of the screen. */}
+        <span
+          aria-hidden
+          className="ruled pointer-events-none absolute inset-0 opacity-70"
+          style={{
+            maskImage: 'linear-gradient(to bottom, transparent, #000 25%, #000 75%, transparent)',
+            WebkitMaskImage:
+              'linear-gradient(to bottom, transparent, #000 25%, #000 75%, transparent)',
+          }}
+        />
 
-      <div className="relative mx-auto w-full max-w-[360px] flex flex-col flex-1">
-        <Link
-          href="/"
-          className="pt-[max(env(safe-area-inset-top),88px)] mb-9 flex items-center gap-3.5"
-        >
-          <Mark size={34} />
-          <div>
-            <p className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em] leading-none">
-              Akada
-            </p>
-            <p className="eyebrow mt-1 mb-0 text-muted">
-              Study Planner
-            </p>
-          </div>
-        </Link>
+        <div className="relative mx-auto flex w-full max-w-[380px] flex-1 flex-col">
+          <Link
+            href="/"
+            className="mb-12 flex items-center gap-3 pt-[max(env(safe-area-inset-top),56px)]"
+          >
+            <AkadaMark size={24} />
+            <span className="font-serif text-[20px] tracking-[-0.02em]">Akada</span>
+          </Link>
 
-        <div className="mb-8">
-          <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-line bg-paper p-1">
-            <button
-              type="button"
-              onClick={() => setAuthMode('signin')}
-              disabled={state === 'loading'}
-              aria-pressed={!isSignUp}
-              className={`rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
-                !isSignUp
-                  ? 'bg-primary text-primary-contrast'
-                  : 'text-ink-soft hover:bg-bg-tint'
-              }`}
-            >
-              Log in
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuthMode('signup')}
-              disabled={state === 'loading'}
-              aria-pressed={isSignUp}
-              className={`rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
-                isSignUp
-                  ? 'bg-primary text-primary-contrast'
-                  : 'text-ink-soft hover:bg-bg-tint'
-              }`}
-            >
-              Create account
-            </button>
-          </div>
-          <h1 className="m-0 font-serif font-medium text-[34px] tracking-[-0.025em] leading-[1.05]">
+          <h1 className="m-0 font-serif text-[32px] font-normal leading-[1.06] tracking-[-0.03em] md:text-[38px]">
             {isSignUp ? (
               <>
-                Create your<br />
-                <span className="italic font-normal">study plan.</span>
+                Start the term
+                <br />
+                <em className="italic">on one page.</em>
               </>
             ) : (
               <>
-                Welcome back<br />
-                <span className="italic font-normal">
-                  to <span className="hl">Akada</span>.
-                </span>
+                Back to the
+                <br />
+                <em className="italic">notebook.</em>
               </>
             )}
           </h1>
-          <p className="mt-3 mb-0 font-serif italic text-[14px] text-muted leading-[1.55] max-w-[300px]">
-            {isSignUp
-              ? 'Track courses, tasks, and focused study sessions in one calm workspace.'
-              : 'Sign in to manage your courses, tasks, timer, and progress.'}
-          </p>
-        </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-[18px]" aria-busy={state === 'loading'}>
-          {isSignUp && (
-            <Field label="Name" htmlFor="name">
-              <UnderlineInput
-                id="name"
-                value={name}
-                onChange={setName}
-                placeholder="Your name"
-                autoComplete="name"
-                autoFocus
+          <form
+            onSubmit={handleSubmit}
+            className="mt-9 flex flex-col gap-6"
+            aria-busy={state === 'loading'}
+          >
+            {isSignUp && (
+              <Field label="Name" htmlFor="name">
+                <RuledInput
+                  id="name"
+                  value={name}
+                  onChange={setName}
+                  placeholder="Your name"
+                  autoComplete="name"
+                  autoFocus
+                />
+              </Field>
+            )}
+            <Field label="Email" htmlFor="email">
+              <RuledInput
+                id="email"
+                value={email}
+                onChange={setEmail}
+                placeholder="you@university.edu"
+                type="email"
+                autoComplete="email"
+                autoFocus={!isSignUp}
               />
             </Field>
-          )}
-          <Field label="Email" htmlFor="email">
-            <UnderlineInput
-              id="email"
-              value={email}
-              onChange={setEmail}
-              placeholder="you@school.edu"
-              type="email"
-              autoComplete="email"
-              autoFocus={!isSignUp}
-            />
-          </Field>
-          <Field label="Password" htmlFor="password">
-            <UnderlineInput
-              id="password"
-              value={password}
-              onChange={setPassword}
-              placeholder="Password"
-              type="password"
-              autoComplete={isSignUp ? 'new-password' : 'current-password'}
-            />
-            {isSignUp && (
-              <p className="mt-2 mb-0 text-[11.5px] text-muted-soft">
-                At least {MIN_PASSWORD_LENGTH} characters.
-              </p>
-            )}
-          </Field>
+            <Field label="Password" htmlFor="password">
+              <RuledInput
+                id="password"
+                value={password}
+                onChange={setPassword}
+                placeholder="Password"
+                type="password"
+                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+              />
+              {isSignUp && (
+                <p className="mb-0 mt-2 text-[11.5px] text-muted-soft">
+                  At least {MIN_PASSWORD_LENGTH} characters.
+                </p>
+              )}
+            </Field>
 
-          <button
-            type="submit"
-            disabled={
-              state === 'loading' ||
-              !email.trim() ||
-              (isSignUp ? password.length < MIN_PASSWORD_LENGTH : password.length === 0) ||
-              (isSignUp && !name.trim())
-            }
-            className="mt-2.5 w-full min-h-[56px] py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em] disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
-          >
-            {state === 'loading'
-              ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />{loadingAction === 'signup' ? 'Creating your account…' : loadingAction === 'reset' ? 'Sending reset link…' : 'Signing you in…'}</span>
-              : isSignUp
-                ? 'Create account'
-                : 'Sign in'}
-          </button>
-
-          {!isSignUp && (
-            <button
-              type="button"
-              className="mt-1 self-center bg-transparent border-0 cursor-pointer font-serif italic text-[13px] text-muted underline underline-offset-4 decoration-line-strong min-h-[44px] px-3"
-              onClick={handleForgotPassword}
-              disabled={state === 'loading'}
+            <PageButton
+              type="submit"
+              className="mt-2"
+              disabled={
+                state === 'loading' ||
+                !email.trim() ||
+                (isSignUp ? password.length < MIN_PASSWORD_LENGTH : password.length === 0) ||
+                (isSignUp && !name.trim())
+              }
             >
-              Forgot password?
-            </button>
+              {state === 'loading'
+                ? loadingAction === 'signup'
+                  ? 'Creating your account…'
+                  : loadingAction === 'reset'
+                    ? 'Sending reset link…'
+                    : 'Signing you in…'
+                : isSignUp
+                  ? 'Create account'
+                  : 'Sign in'}
+            </PageButton>
+
+            {/* Two quiet words under the button rather than a second pair of
+                buttons: switching mode and forgetting a password are both
+                things you read your way to, not things you press. */}
+            <div className="flex items-baseline justify-between gap-4">
+              <button
+                type="button"
+                onClick={switchMode}
+                disabled={state === 'loading'}
+                className="border-b border-line-strong bg-transparent pb-px font-serif text-[13.5px] italic text-ink-soft"
+              >
+                {isSignUp ? 'I already have an account' : 'Create an account'}
+              </button>
+              {!isSignUp && (
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={state === 'loading'}
+                  className="bg-transparent font-serif text-[13.5px] italic text-muted"
+                >
+                  Forgot it?
+                </button>
+              )}
+            </div>
+          </form>
+
+          {state === 'error' && errorMsg && (
+            <p role="alert" className="mt-5 font-serif text-[13.5px] italic text-priority">
+              {errorMsg}
+            </p>
           )}
-        </form>
 
-        {state === 'error' && errorMsg && (
-          <p role="alert" className="mt-3 text-center text-[13px] text-priority font-serif italic">
-            {errorMsg}
+          <p className="mb-8 mt-auto pt-10 font-serif text-[12.5px] italic text-muted-soft">
+            Your courses, tasks and hours are yours alone. No one at Akada can read them.
           </p>
-        )}
-
-        <div className="mt-auto py-7 text-center">
-          <span className="text-[13px] text-muted">
-            {isSignUp ? 'Already have an account? ' : 'New here? '}
-          </span>
-          <button
-            type="button"
-            onClick={switchMode}
-            disabled={state === 'loading'}
-            className="bg-transparent border-0 cursor-pointer font-serif italic text-[14px] text-ink underline underline-offset-4 decoration-line-strong"
-          >
-            {isSignUp ? 'Log in' : 'Create account'}
-          </button>
         </div>
       </div>
-    </div>
-  );
-}
 
-function Mark({ size = 34 }: { size?: number }) {
-  const w = size;
-  const h = Math.round(size * (68 / 56));
-  return (
-    <svg width={w} height={h} viewBox="0 0 56 68" fill="none" aria-hidden>
-      <path
-        d="M6 4 H50 V60 L28 48 L6 60 Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        fill="var(--paper)"
-      />
-      <text
-        x="28"
-        y="33"
-        textAnchor="middle"
-        fontFamily="var(--font-serif), Georgia, serif"
-        fontSize="22"
-        fontStyle="italic"
-        fontWeight="500"
-        fill="currentColor"
-      >
-        A
-      </text>
-    </svg>
+      {/* What the notebook is, alongside. The design puts the reader\u2019s own
+          week here; before they have signed in the app does not have one, and
+          filling the panel with a plausible-looking term would be inventing
+          their data on the sign-in screen. So it says what is true instead. */}
+      <aside className="hidden w-[420px] flex-none border-l border-line bg-paper-2 py-14 pl-10 pr-10 lg:block">
+        <Eyebrow>What is in here</Eyebrow>
+        <p className="mt-2.5 max-w-[18ch] font-serif text-[24px] leading-[1.25]">
+          Fifteen weeks, on one page.
+        </p>
+        <div className="rule-ink mt-7">
+          {[
+            ['Your real timetable', 'Sections out of the course catalog, meeting times included.'],
+            ['What each piece is worth', 'Enter the weighting once and every deadline carries it.'],
+            ['A clock to hide behind', 'A block, the list for it, and the screen locked to the time.'],
+            ['The week, read back', 'On Sunday, in plain words, with one question.'],
+          ].map(([title, detail]) => (
+            <div key={title} className="row-rule py-3.5">
+              <p className="m-0 font-serif text-[16px]">{title}</p>
+              <p className="m-0 mt-1 text-[13px] leading-[1.5] text-muted">{detail}</p>
+            </div>
+          ))}
+        </div>
+      </aside>
+    </div>
   );
 }
 
@@ -389,7 +357,7 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="eyebrow block text-muted mb-2">
+      <label htmlFor={htmlFor} className="eyebrow mb-2 block">
         {label}
       </label>
       {children}
@@ -397,7 +365,8 @@ function Field({
   );
 }
 
-function UnderlineInput({
+/** A field is a ruled line, and the rule goes to full ink when it has focus. */
+function RuledInput({
   id,
   value,
   onChange,
@@ -424,7 +393,7 @@ function UnderlineInput({
       autoFocus={autoFocus}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary transition-colors placeholder:text-muted-soft"
+      className="w-full border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2.5 text-[15.5px] text-ink outline-none transition-colors placeholder:text-muted-soft focus:border-ink"
     />
   );
 }

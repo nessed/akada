@@ -21,7 +21,7 @@ import HandCheck from './notebook/HandCheck';
  * see what was in it without risking logging today's session into it by
  * mistake.
  */
-export default function SemesterManager({ onBack }: { onBack: () => void }) {
+export default function SemesterManager({ onBack }: { onBack?: () => void } = {}) {
   const router = useRouter();
   const { semesters, isLoading } = useSemesters();
   const [starting, setStarting] = useState(false);
@@ -88,7 +88,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
         }}
       />
 
-      <BackButton onClick={onBack} />
+      {onBack && <BackButton onClick={onBack} />}
       <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
         Semester
       </h3>
@@ -101,7 +101,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
           Active
         </p>
         {active ? (
-          <div className="rounded-xl border border-line bg-paper px-4 py-3.5">
+          <div className="border border-line bg-paper px-4 py-3.5">
             <p className="m-0 font-serif text-[16px] font-medium text-ink">{active.label}</p>
             <p className="mt-0.5 mb-0 text-[12px] text-muted">
               {active.startDate && active.endDate
@@ -119,7 +119,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
       <button
         type="button"
         onClick={() => setStarting(true)}
-        className="mt-4 w-full min-h-[52px] rounded-2xl bg-primary text-primary-contrast text-[14px] font-medium tracking-[0.01em]"
+        className="mt-4 w-full min-h-[52px] bg-primary text-primary-contrast text-[14px] font-medium tracking-[0.01em]"
       >
         Start new semester
       </button>
@@ -136,7 +136,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
           type="button"
           onClick={() => setPendingDelete(active)}
           disabled={deletingId === active.id}
-          className="mt-4 w-full min-h-[44px] rounded-xl border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
+          className="mt-4 w-full min-h-[44px] border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
         >
           {deletingId === active.id ? 'Deleting semester…' : 'Delete active semester'}
         </button>
@@ -149,7 +149,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
           <p className="eyebrow ml-1 mb-2 text-muted">
             Past semesters
           </p>
-          <div className="overflow-hidden rounded-xl border border-line bg-paper">
+          <div className="overflow-hidden border border-line bg-paper">
             {past.map((s, i) => (
               <button
                 key={s.id}
@@ -303,7 +303,7 @@ function StartSemesterForm({
                 type="button"
                 onClick={() => applyPreset(preset)}
                 aria-pressed={selected}
-                className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors ${
+                className={`flex items-center justify-between gap-3 border px-3.5 py-3 text-left transition-colors ${
                   selected
                     ? 'border-primary bg-primary/10 text-ink'
                     : 'border-line bg-paper text-ink-soft hover:border-line-strong'
@@ -400,7 +400,7 @@ function StartSemesterForm({
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 min-h-[52px] rounded-2xl border border-line-strong text-[14px] font-medium text-ink-soft"
+          className="flex-1 min-h-[52px] border border-line-strong text-[14px] font-medium text-ink-soft"
         >
           Cancel
         </button>
@@ -408,7 +408,7 @@ function StartSemesterForm({
           type="button"
           onClick={start}
           disabled={saving}
-          className="flex-1 min-h-[52px] rounded-2xl bg-primary text-primary-contrast text-[14px] font-medium tracking-[0.01em] disabled:opacity-40"
+          className="flex-1 min-h-[52px] bg-primary text-primary-contrast text-[14px] font-medium tracking-[0.01em] disabled:opacity-40"
         >
           {saving ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />Starting semester…</span> : 'Start semester'}
         </button>
@@ -535,14 +535,14 @@ function SemesterArchive({
         <div className="mt-5">
           <LoadingIndicator compact label="Opening semester archive" className="mb-4" />
           <div className="animate-pulse opacity-40" aria-hidden>
-            <div className="h-16 bg-paper border border-line rounded-xl mb-2" />
-            <div className="h-16 bg-paper border border-line rounded-xl" />
+            <div className="h-16 bg-paper border border-line mb-2" />
+            <div className="h-16 bg-paper border border-line" />
           </div>
         </div>
       ) : (
         courses && (
           <>
-            <div className="mt-5 rounded-xl border border-line bg-paper px-4 py-3.5">
+            <div className="mt-5 border border-line bg-paper px-4 py-3.5">
               <p className="eyebrow m-0 text-muted">
                 Total logged
               </p>
@@ -559,7 +559,7 @@ function SemesterArchive({
                 This term was left blank.
               </p>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-line bg-paper">
+              <div className="overflow-hidden border border-line bg-paper">
                 {courses.map((c, i) => (
                   <div
                     key={c.id}
@@ -588,7 +588,7 @@ function SemesterArchive({
               type="button"
               onClick={onDelete}
               disabled={deleting}
-              className="mt-6 w-full min-h-[44px] rounded-xl border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
+              className="mt-6 w-full min-h-[44px] border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
             >
               {deleting ? 'Deleting semester…' : 'Delete this semester'}
             </button>

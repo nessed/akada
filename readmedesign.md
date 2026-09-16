@@ -18,14 +18,15 @@ The color system is heavily curated to resemble premium paper, ink, and mild hig
 
 ### Core Foundation (Paper & Ink)
 The foundation is not one palette but four, the **paper tone** a reader picks
-in Appearance. `Paper` is what the app ships with; `Warm`, `Stone` and `White`
-are the alternatives. Every value below is the shipped `Paper` tone, and the
+in Settings → Paper. `Paper` is what the app ships with; `Warm`, `Stone` and
+`Night` are the alternatives. (`White` was a fifth and is gone; a stored
+record that still names it reads as `Stone`.) Every value below is the shipped `Paper` tone, and the
 authority for all of them is `PAPER_TONES` in `lib/preferences.ts`, mirrored
 into `:root` in `globals.css` so the first paint needs no correction.
 
 - **Backgrounds (`bg`, `bg-tint`, `paper`, `paper-2`)**: `#F5F1E8`, `#EDE7D8`,
   `#FBF8EF`, `#F7F3E6`. Warm cream throughout, cards are a lighter cream, not
-  white. True `#FFFFFF` appears only in the `Stone` and `White` tones.
+  white. True `#FFFFFF` appears only in the `Stone` tone.
 - **Lines (`line`, `line-soft`, `line-strong`)**: `#DDD6C2`, `#EAE4D3`,
   `#C9C0A8`. Borders and dividers resemble the faint ruled lines of a notebook
   rather than harsh digital borders.
@@ -33,8 +34,8 @@ into `:root` in `globals.css` so the first paint needs no correction.
   `#8C8576`, `#B5AE99`. Instead of pure black, text relies on deep, warm
   charcoals, mimicking pen ink and reducing eye strain. `muted` carries every
   label and caption; `muted-soft` is for text that should barely register.
-- **Primary (`primary`)**: resolves to `ink`. The "Sage" option in Appearance
-  swaps it for the sage pastel.
+- **Primary (`primary`)**: resolves to `ink`. It is the fill on the one
+  primary action a screen is allowed.
 
 ### The Pastel Highlighter Palette
 For course categorization and tags, Akada uses a beautifully crafted palette of muted pastels. Each color is paired with a soft "tint" version used for backgrounds, while the strong value is used for text, borders, or accents.
@@ -63,11 +64,28 @@ They are warm clays, and that is the point, see "No Alarmist Indicators".
   `#F4DCD2`. Inline errors, high-priority tasks, destructive affordances.
 
 ## 🖋️ Typography
-Typography in Akada blends modern readability with classic literary elegance.
-- **Sans-Serif (`Inter`)**: Used for the majority of the UI, providing clean, highly legible structure.
-- **Serif (`Fraunces`)**: Applied to headings, quotes, or focal points to give the application an elegant, editorial, and sophisticated character. It is the default; **Cormorant Garamond**, **Lora** and **Merriweather** are selectable in Appearance and swap in through `--font-serif`, so no component names a family.
-- **Monospace (`JetBrains Mono`)**: Used purposefully for data, durations, and the study timer, grounding the numbers in a precise, tool-like feel.
-- **Handwriting (`Caveat`)**: Reserved for marginalia, the `HandNote` primitive and the `.font-hand` utility. Never for UI text.
+Three families, and no choice to make. The heading-font picker is gone along
+with the faces it chose between: there is one serif now, and it carries every
+heading and every line of prose the app speaks in.
+- **Serif (`Source Serif 4`)**: Headings, prose, the quiet italic asides. It is
+  here for its optical sizing — the 52px review masthead and a 13px italic
+  caption are the same cut of type twice.
+- **Sans-Serif (`Schibsted Grotesk`)**: The structural layer. Labels, list
+  rows, buttons, anything that is furniture rather than voice.
+- **Monospace (`Space Mono`)**: Durations, dates, page counts, the clock.
+  Anything that is a measurement rather than a word.
+- **No script face.** `Caveat` and the `HandNote` primitive are gone.
+  Marginalia is *drawn* now (`Marginalia`, in `components/notebook`), because a
+  font pretending to be handwriting reads as a quirky UI font at small sizes,
+  not as something a person left on the page. Every mark it draws can be
+  turned off in Settings → Paper.
+
+> One trap worth knowing about: `'Source Serif 4'` must keep its quotes
+> wherever it is written into a font stack. An unquoted CSS family name is a
+> sequence of identifiers and `4` is not a valid one, so the bare form makes
+> the whole `font-family` declaration invalid at computed-value time. The
+> property then silently falls back to the inherited value, and every heading
+> in the app renders in the sans with nothing in the console to say so.
 
 ### The Eyebrow
 One caption spec, `.eyebrow` in `globals.css`: 10px, 600 weight, uppercase,
@@ -81,36 +99,50 @@ Two title tiers, so a screen title is recognisable as one:
 - **Screen title**, `text-[36px]` at `tracking-[-0.025em]`, serif.
 - **Section heading**, `text-[17px]`/`text-[20px]`, serif medium.
 
-Two deliberate exceptions: the stats masthead is `52px`, which is the one
-editorial flourish in the app, and the dashboard's date is `32px` because it
-is a date rather than a title. Everything else follows the tiers.
+Two deliberate exceptions: the Review masthead is `52px`, which is the one
+editorial flourish in the app, and the dashboard's date runs to `46px` because
+it is a date rather than a title. Everything else follows the tiers.
 
 ### Marks, not chips
-The app does not use pills. A capsule with a tinted fill is how software says
-"selected"; a page says it with a **swipe of highlighter** (`.hl`, or
-`.hl-swipe` with `--hl` set to a course's tint), a **hand-drawn underline**
-(`.hand-underline`), a **scribble box** and tick (`.scribble-box` +
-`HandCheck`), or a note in the margin (`HandNote`, Caveat). Filters, chosen
-courses, reflection tags, timer goals and priority marks all read this way.
+The app does not use pills, and **corners are square throughout**. The only
+curves left are circles (an avatar, a course dot) and the deliberately uneven
+radius of a hand-drawn checkbox.
+
+A capsule with a tinted fill is how software says "selected"; a page says it
+with a **swipe of highlighter** (`.hl`, or `.hl-swipe` with `--hl` set to a
+course's tint), a **rule bitten across the page** (`.rule-ink`, 1.5px of full
+ink, which is how every screen opens), a **dashed row divider** (`.row-rule`),
+a **tally stroke** (`Tally`, `.tally-stroke`), a **scribble box** and tick
+(`.scribble-box` + `HandCheck`), or a **drawn mark in the margin**
+(`Marginalia`). Filters, chosen courses, reflection tags, paper stocks, the
+review day and priority marks all read this way.
 
 The exceptions are deliberate: a **dashed outline** for "there is more you
-could add here", and the timer's single filled action.
+could add here", and the one filled action per screen.
+
+**Tally marks replace every progress bar.** A bar says "73% complete"; a row
+of strokes says "you did four, you said eight", which is the same fact without
+the arithmetic. The last stroke is allowed to be a stub, so half an hour reads
+as half a mark rather than rounding up to flatter anybody.
 
 ### Buttons
 Two shapes, not four:
-- **Page CTA**, full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
-- **Sheet action pair**, `flex-1`, `py-3.5`, `rounded-[10px]`, `text-sm`,
-  matching the radius of the fields above it in the same sheet.
+- **Page CTA**, full width, `min-h-[56px]`, square, `text-[15px]`.
+- **Sheet action pair**, the confirming half `flex-1` and the quiet half
+  `flex-none`, `py-3.5`, square, `text-sm`. See `SheetActions` in
+  `components/Sheet.tsx`, which is the only place either shape is written.
 
 Solid `bg-primary` fill belongs to the one primary action on a screen. A
 *selection* is never a solid fill: it is a `bg-tint` wash with an ink border
 or an accent tick (see `SectionPicker`).
 
 ### Density
-`Cozy` / `Comfy` / `Compact` in Appearance set `--density-gutter`,
+`Airy` / `Normal` / `Tight` in Settings → Paper set `--density-gutter`,
 `--density-gap` and `--density-section` on `:root`. Anything that wants to
 breathe with the reader's choice should use those rather than a fixed px
-value. `Comfy` is the shipped middle at a 22px gutter.
+value. `Normal` is the shipped middle at a 22px gutter. (These were `Cozy` /
+`Comfy` / `Compact`; the values did not change, only the names, and a stored
+record is migrated on read.)
 
 ## 🖼️ Textures & Custom UI Elements
 - **Radial Mesh Gradients**: The global background (`globals.css`) incorporates very subtle radial gradients `rgba(180, 170, 140, 0.10)`. This uneven lighting effect breathes life into the background, making the "paper" feel slightly textured and organic rather than a flat digital canvas.

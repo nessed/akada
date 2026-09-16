@@ -57,7 +57,14 @@ const config: Config = {
         // Three families, no picker. --font-serif resolves to Source Serif 4
         // (see :root in globals.css); the other two come straight from the
         // next/font variables layout.tsx puts on <html>.
-        serif: ['var(--font-serif)', 'Source Serif 4', 'Iowan Old Style', 'Georgia', 'serif'],
+        // 'Source Serif 4' has to keep its inner quotes. Tailwind writes the
+        // entries into the declaration verbatim, and an unquoted CSS family
+        // name is a sequence of identifiers — `4` is not a valid one, so the
+        // bare form makes the whole font-family declaration invalid at
+        // computed-value time. The property then falls back to the inherited
+        // value, which is the sans on <body>: every heading in the app was
+        // silently rendering in Schibsted Grotesk.
+        serif: ['var(--font-serif)', "'Source Serif 4'", 'Iowan Old Style', 'Georgia', 'serif'],
         sans: ['var(--font-sans)', 'Schibsted Grotesk', '-apple-system', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'Space Mono', 'ui-monospace', 'monospace'],
       },
