@@ -113,12 +113,30 @@ function TasksPageContent() {
     }
   }, [onboarded, onboardingLoading, onboardingError, router]);
 
-  // Two arrivals from a course card: `?course=` alone means "show me this
-  // course", `&newTask=1` means "and start typing". Keeping the course in the
-  // URL makes this a useful navigation state, while the ref stops SWR
-  // revalidations from repeatedly reopening the form.
+  // Three arrivals. `?course=` alone means "show me this course", `&newTask=1`
+  // means "and start typing", and `?task=` means "open this one", which is how
+  // the calendar hands a day's work over. Keeping them in the URL makes these
+  // useful navigation states, while the ref stops SWR revalidations from
+  // repeatedly reopening the sheet.
   useEffect(() => {
     if (handledTaskIntent.current || coursesLoading || courses.length === 0) return;
+
+    const taskId = searchParams.get('task');
+    if (taskId) {
+      // The task list loads separately from the courses, so there is a beat
+      // where the id is real and the task is not here yet. Waiting is right;
+      // treating it as missing would drop the intent on the floor.
+      if (tasksLoading) return;
+      const wanted = tasks.find((task) => task.id === taskId);
+      handledTaskIntent.current = true;
+      if (wanted) {
+        setFilter('all');
+        setCollapsed((current) => ({ ...current, [wanted.courseId]: false }));
+        setViewingTask(wanted);
+      }
+      return;
+    }
+
     const courseId = searchParams.get('course');
     if (!courseId || !courses.some((course) => course.id === courseId)) return;
     const wantsNewTask = searchParams.get('newTask') === '1';
@@ -138,7 +156,7 @@ function TasksPageContent() {
         block: 'center',
       });
     });
-  }, [courses, coursesLoading, searchParams]);
+  }, [courses, coursesLoading, tasks, tasksLoading, searchParams]);
 
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || tasksLoading;
