@@ -11,12 +11,13 @@ import { formatHM } from '@/lib/utils';
  * can read and a column of two-pixel strokes is not. The strokes belonged to
  * a version of this strip that had nothing else in it; a day with work still
  * owing now says how much, and the reader's own day is ruled under its name.
+ * A day with neither hours nor anything due holds its place and says nothing.
  */
 export default function WeekStrip({ days }: { days: SpineDay[] }) {
   return (
     <div className="flex items-end justify-between gap-1 border-b border-line pb-2.5">
       {days.map((day) => {
-        const due = day.items.length;
+        const due = day.dueCount;
         return (
           <span
             key={day.iso}
@@ -30,7 +31,7 @@ export default function WeekStrip({ days }: { days: SpineDay[] }) {
                 day.isToday ? 'text-ink' : day.isPast ? 'text-muted' : 'text-ink-soft'
               }`}
             >
-              {day.loggedSeconds > 0 ? formatHM(day.loggedSeconds) : due > 0 ? `${due} due` : '·'}
+              {day.loggedSeconds > 0 ? formatHM(day.loggedSeconds) : due > 0 ? `${due} due` : '\u00a0'}
             </span>
             <span
               className={`text-[11px] uppercase tracking-[0.04em] ${

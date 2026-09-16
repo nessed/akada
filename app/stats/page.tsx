@@ -7,11 +7,14 @@ import LoadingIndicator from '@/components/LoadingIndicator';
 import Tally from '@/components/notebook/Tally';
 import HandCheck from '@/components/notebook/HandCheck';
 import Marginalia from '@/components/notebook/Marginalia';
+import WeekSpine, { buildWeek } from '@/components/notebook/WeekSpine';
+import WeekStrip from '@/components/dashboard/WeekStrip';
 import { CheckBox, Eyebrow, PageButton, Swipe, TextButton } from '@/components/notebook/Marks';
 import { formatHM, isoDate, startOfWeek } from '@/lib/utils';
 import TermSoFar from '@/components/review/TermSoFar';
 import { loggable } from '@/lib/derive';
 import { termWeek, useReview } from '@/lib/review';
+import { usePreferences } from '@/lib/preferences';
 import { FEELINGS, headline, oneQuestion, summary, weekFacts } from '@/lib/review-prose';
 import {
   useOnboardingComplete,
@@ -42,6 +45,7 @@ export default function StatsPage() {
   const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
   const { tasks, isLoading: tasksLoading } = useTasks();
   const { semester } = useActiveSemester();
+  const [prefs] = usePreferences();
   const sessions = useMemo(() => loggable(rawSessions), [rawSessions]);
 
   const today = isoDate();
@@ -61,6 +65,13 @@ export default function StatsPage() {
   const facts = useMemo(
     () => weekFacts(courses, sessions, tasks, range.from, range.to),
     [courses, sessions, tasks, range.from, range.to],
+  );
+
+  // The seven days of whichever week is being read, which is not always the
+  // week today sits in.
+  const week = useMemo(
+    () => buildWeek(courses, tasks, sessions, prefs.hideWeekends, today, range.from),
+    [courses, tasks, sessions, prefs.hideWeekends, today, range.from],
   );
 
   useEffect(() => {
@@ -88,6 +99,18 @@ export default function StatsPage() {
 
   const aside = (
     <>
+      {/* The week itself, day by day. It was on Today, where it was a second
+          calendar on a screen that had one; here it is the thing being read. */}
+      <div className="mb-7">
+        <Eyebrow>Day by day</Eyebrow>
+        <div className="hidden lg:block">
+          <WeekSpine days={week} />
+        </div>
+        <div className="mt-3 lg:hidden">
+          <WeekStrip days={week} />
+        </div>
+      </div>
+
       {question ? (
         <>
           <Eyebrow>One question</Eyebrow>

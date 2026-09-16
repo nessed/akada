@@ -13,15 +13,13 @@ import type { Course, Session, Task } from '@/lib/data';
  * around: it earns the desktop width, and it is what turns a phone-shaped
  * planner into something worth opening on a laptop.
  *
- * Past days show what was sat down for; days ahead show what is due. A day
- * with nothing on it says so rather than sitting empty, since an empty row
- * reads as missing data and a day with nothing owing is information.
+ * Past days show what was sat down for; days ahead show what is due, and a
+ * day with neither says nothing at all.
  *
- * "Clear" is the strict word it looks like. A day is clear only when nothing
- * is owed on it — which includes work that was due before it and never got
- * done. A Tuesday with three things a week late is not a clear Tuesday, and
- * the spine used to say it was, because it only ever looked at tasks dated
- * that exact day.
+ * It used to print "7 still open" against every empty day, which is one
+ * running total repeated seven times: true of the week rather than of the
+ * Tuesday it was sitting on, and the loudest thing in the column. A day
+ * speaks for itself here or it stays quiet.
  */
 
 export interface SpineDay {
@@ -34,12 +32,8 @@ export interface SpineDay {
   loggedSeconds: number;
   courseCount: number;
   items: { id: string; title: string; color: string; time?: string | null }[];
-  /**
-   * Open tasks due on or before this day but not shown in `items` — the ones
-   * already late by the time this day comes round. What stops a day being
-   * called clear.
-   */
-  carriedOver: number;
+  /** Open tasks due on this day, which is more than `items` ever shows. */
+  dueCount: number;
 }
 
 export function buildWeek(
@@ -48,8 +42,10 @@ export function buildWeek(
   sessions: Session[],
   hideWeekends = false,
   today = isoDate(),
+  /** Which week to build, when it is not the one `today` falls in. */
+  weekOf = today,
 ): SpineDay[] {
-  const start = startOfWeek(new Date(today + 'T00:00:00'));
+  const start = startOfWeek(new Date(weekOf + 'T00:00:00'));
   const byId = new Map(courses.map((c) => [c.id, c]));
   const days: SpineDay[] = [];
 
@@ -62,6 +58,7 @@ export function buildWeek(
 
     const daySessions = sessions.filter((s) => s.date === iso);
     const open = tasks.filter((t) => !t.completed && t.dueDate);
+    const dueHere = open.filter((t) => t.dueDate === iso);
     days.push({
       iso,
       date: d.getDate(),
@@ -71,16 +68,13 @@ export function buildWeek(
       isWeekend: weekend,
       loggedSeconds: daySessions.reduce((a, s) => a + s.durationSeconds, 0),
       courseCount: new Set(daySessions.map((s) => s.courseId)).size,
-      items: open
-        .filter((t) => t.dueDate === iso)
-        .slice(0, 3)
-        .map((t) => ({
-          id: t.id,
-          title: t.title,
-          color: byId.get(t.courseId)?.color || 'var(--muted)',
-          time: null,
-        })),
-      carriedOver: open.filter((t) => (t.dueDate as string) < iso).length,
+      items: dueHere.slice(0, 3).map((t) => ({
+        id: t.id,
+        title: t.title,
+        color: byId.get(t.courseId)?.color || 'var(--muted)',
+        time: null,
+      })),
+      dueCount: dueHere.length,
     });
   }
   return days;
@@ -164,13 +158,10 @@ export default function WeekSpine({ days }: { days: SpineDay[] }) {
                 </span>
               )}
 
-              {day.items.length === 0 && hours === 0 && (
+              {/* More due on this day than there is room to name. */}
+              {day.dueCount > day.items.length && (
                 <span className="text-[13px] text-muted">
-                  {day.carriedOver > 0
-                    ? `${day.carriedOver} still open`
-                    : day.isPast
-                      ? 'Nothing due, nothing logged'
-                      : 'Clear'}
+                  {day.dueCount - day.items.length} more due
                 </span>
               )}
             </span>
