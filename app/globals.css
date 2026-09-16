@@ -31,6 +31,11 @@
      would veil the screen in cream. Use the `.scrim` utility below. */
   --scrim: rgba(26, 23, 20, 0.40);
 
+  /* Ink left in the margin by PaperDoodle. Multiplied into a light page so
+     the stroke sinks into the paper instead of sitting on top of it; the
+     night tone screens instead, because there the ink is the light value. */
+  --doodle-blend: multiply;
+
   /* Paper grain. Multiplied into a light page, screened onto a dark one. */
   --noise-blend: multiply;
   --noise-opacity: 0.32;
@@ -96,6 +101,19 @@
 :root[data-theme='night'],
 :root[data-theme='dark'] {
   color-scheme: dark;
+  --doodle-blend: screen;
+}
+
+/* The doodle layer. Sits over the page but under the bottom nav and the
+   timer dock, so a stroke passes beneath the chrome the way ink passes under
+   a ruler. It never takes a pointer event: PaperDoodle reads gestures from
+   the window instead. */
+.doodle-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  mix-blend-mode: var(--doodle-blend, multiply);
 }
 
 html,

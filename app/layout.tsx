@@ -13,6 +13,7 @@ import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import NoticeProvider from '@/components/Notice';
 import SWRRoot from '@/components/SWRRoot';
 import TimerDocumentTitle from '@/components/TimerDocumentTitle';
+import PaperDoodle from '@/components/notebook/PaperDoodle';
 import { SITE_URL } from '@/lib/site-url';
 import './globals.css';
 
@@ -138,6 +139,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <NoticeProvider>{children}</NoticeProvider>
           </TimerProvider>
         </SWRRoot>
+        <PaperDoodle />
       </body>
     </html>
   );
