@@ -26,8 +26,7 @@ export default function ActiveTimerDock() {
     router.push('/timer');
   }
 
-  function togglePaused(event: React.MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
+  function togglePaused() {
     if (!active) return;
     if (active.isPaused) {
       resume();
@@ -36,8 +35,7 @@ export default function ActiveTimerDock() {
     }
   }
 
-  function stopAndLog(event: React.MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
+  function stopAndLog() {
     stop();
     router.push('/timer');
   }
@@ -49,45 +47,52 @@ export default function ActiveTimerDock() {
       {/* pointer-events stay off the full-width row, it would otherwise be an
           invisible click blocker across the top of the page. */}
       <div className="mx-auto flex max-w-2xl md:max-w-3xl justify-end">
+        {/* The row used to be a div with role="button" wrapping two real
+            buttons, which is a control inside a control: a keyboard user
+            tabbed into the row and then into its own children, and Space
+            scrolled the page instead of opening the timer. The label is the
+            button now, and the two controls sit beside it. */}
         <div
-          role="button"
-          tabIndex={0}
-          onClick={openTimer}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') openTimer();
-          }}
-          aria-label={`${active.isPaused ? 'Paused' : 'Active'} timer for ${code}`}
-          className="pointer-events-auto flex items-center gap-2 rounded-[8px] border border-line bg-paper/90 px-2.5 py-2 text-left backdrop-blur"
+          className="pointer-events-auto flex items-center gap-1 rounded-[10px] border border-line bg-paper/90 p-1 backdrop-blur"
           style={{ boxShadow: `inset 0 0 0 1px ${tint}` }}
         >
-          <span
-            className={`h-1.5 w-1.5 shrink-0 rounded-full ${active.isPaused ? '' : 'animate-tick'}`}
-            style={{ background: color }}
-            aria-hidden
-          />
+          <button
+            type="button"
+            onClick={openTimer}
+            aria-label={`${active.isPaused ? 'Paused' : 'Running'} timer for ${code}, ${formatHHMMSS(elapsedSeconds)}. Open the timer.`}
+            className="flex min-h-[44px] items-center gap-2 rounded-[8px] bg-transparent px-1.5 text-left"
+          >
+            <span
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${active.isPaused ? '' : 'animate-tick'}`}
+              style={{ background: color }}
+              aria-hidden
+            />
+            <span className="min-w-0 block">
+              <span className="eyebrow block max-w-[74px] truncate" style={{ color }}>
+                {code}
+              </span>
+              <span className="block font-mono text-[13px] font-semibold leading-[1.15] tabular-nums text-ink">
+                {formatHHMMSS(elapsedSeconds)}
+              </span>
+            </span>
+          </button>
 
-          <div className="min-w-0">
-            <p className="eyebrow m-0 max-w-[74px] truncate" style={{ color }}>
-              {code}
-            </p>
-            <p className="m-0 font-mono text-[13px] font-semibold leading-[1.15] tabular-nums text-ink">
-              {formatHHMMSS(elapsedSeconds)}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center">
+            {/* 24px squares were below every touch-target guideline there
+                is, on the one control that has to be hit mid-session. The
+                visible mark stays small; the target is 44px. */}
             <button
               type="button"
               onClick={togglePaused}
               aria-label={active.isPaused ? 'Resume timer' : 'Pause timer'}
-              className="w-6 h-6 rounded-full border border-line bg-bg flex items-center justify-center text-ink-soft"
+              className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-transparent text-ink-soft"
             >
               {active.isPaused ? (
-                <svg aria-hidden width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M7 5l12 7-12 7V5z" />
                 </svg>
               ) : (
-                <svg aria-hidden width="10" height="10" viewBox="0 0 24 24" fill="none">
+                <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none">
                   <path
                     d="M9 5v14M15 5v14"
                     stroke="currentColor"
@@ -100,11 +105,11 @@ export default function ActiveTimerDock() {
             <button
               type="button"
               onClick={stopAndLog}
-              aria-label="Stop and log timer"
-              className="w-6 h-6 rounded-full border border-line bg-bg flex items-center justify-center"
+              aria-label="Stop the timer and log the session"
+              className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-transparent"
               style={{ color }}
             >
-              <svg aria-hidden width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+              <svg aria-hidden width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                 <rect x="6" y="6" width="12" height="12" rx="1.5" />
               </svg>
             </button>

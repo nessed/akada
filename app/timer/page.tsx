@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
-import { formatHHMMSS, resolveTint } from '@/lib/utils';
+import { resolveTint } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
@@ -12,6 +12,7 @@ import { useCourses, useTasks } from '@/lib/data-hooks';
 export default function TimerPage() {
   const router = useRouter();
   const {
+    hydrated,
     active,
     pendingLog,
     elapsedSeconds,
@@ -238,6 +239,11 @@ export default function TimerPage() {
   // If a timer points at a course we no longer have (e.g. deleted while
   // running), cancel + bounce so we don't render a stale screen.
   useEffect(() => {
+    // Nothing is known about the timer until the provider has read storage,
+    // and a provider's effects run after its children's. Redirecting before
+    // that point sent anyone who reloaded /timer mid-session back to the
+    // dashboard, with the session still running behind them.
+    if (!hydrated) return;
     if (!active && !pendingLog) {
       router.replace('/dashboard');
       return;
@@ -247,7 +253,17 @@ export default function TimerPage() {
       clearPendingLog();
       router.replace('/dashboard');
     }
-  }, [active, cancel, clearPendingLog, course, courses.length, pendingLog, router, timerCourseId]);
+  }, [
+    active,
+    cancel,
+    clearPendingLog,
+    course,
+    courses.length,
+    hydrated,
+    pendingLog,
+    router,
+    timerCourseId,
+  ]);
 
   function handleStop() {
     const result = stop();
@@ -262,7 +278,7 @@ export default function TimerPage() {
     }
   }
 
-  if (!course && !pendingLog) {
+  if (!hydrated || (!course && !pendingLog)) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center">
         <div className="flex flex-col items-center">
@@ -292,6 +308,15 @@ export default function TimerPage() {
   const hh = String(hrs).padStart(2, '0');
   const mm = String(mins).padStart(2, '0');
   const ss = String(secs).padStart(2, '0');
+  // A screen reader reading "00:48:23" character by character is not a
+  // reading of a clock. The digits stay visual; this is what is announced.
+  const spokenElapsed = [
+    hrs > 0 ? `${hrs} ${hrs === 1 ? 'hour' : 'hours'}` : '',
+    `${mins} ${mins === 1 ? 'minute' : 'minutes'}`,
+    `${secs} ${secs === 1 ? 'second' : 'seconds'}`,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div
@@ -302,7 +327,7 @@ export default function TimerPage() {
           : 'var(--bg)',
       }}
     >
-      <div className="flex items-center justify-between px-[22px] pt-[max(env(safe-area-inset-top),60px)]">
+      <div className="flex items-center justify-between px-[var(--density-gutter)] pt-[max(env(safe-area-inset-top),60px)]">
         <button
           type="button"
           onClick={() => router.push('/dashboard')}
@@ -320,17 +345,20 @@ export default function TimerPage() {
           </svg>
         </button>
 
+        {/* The goal was a bordered capsule with the numbers inside it, which
+            is a pill wearing a different name. The swipe of highlighter on
+            the chosen number is the whole mark; nothing has to hold it. */}
         {course && (
-          <div className="flex items-center gap-1.5 rounded-full border border-line bg-paper py-1.5 pl-3 pr-2">
-            <span className="eyebrow text-muted">
-              Goal
-            </span>
+          <div className="flex items-baseline gap-2.5">
+            <span className="eyebrow">Goal</span>
             {[25, 50, 90].map((goal) => (
               <button
                 key={goal}
                 type="button"
+                aria-pressed={goalMin === goal}
+                aria-label={`${goal} minute goal`}
                 onClick={() => setGoalMin(goal)}
-                className={`bg-transparent px-0.5 font-mono text-[11px] font-semibold ${
+                className={`min-h-[32px] bg-transparent px-1 font-mono text-[12px] font-semibold ${
                   goalMin === goal ? 'hl-swipe text-ink' : 'text-muted'
                 }`}
                 style={
@@ -364,16 +392,25 @@ export default function TimerPage() {
               </p>
             )}
 
-            <div className="relative mt-[34px] aspect-square w-full max-w-[284px] flex items-center justify-center">
-              {/* Subtle outer breathing pulse ring when active */}
+            <div className="relative mt-[var(--density-section)] aspect-square w-full max-w-[284px] flex items-center justify-center">
+              {/* The breathing ring. Tailwind's stock `animate-pulse` is a
+                  loading shimmer; the timer's own `tick` is the 2.4s breath
+                  the guide gives this screen, and it is the one the dock
+                  already uses. */}
               {!isPaused && (
                 <div
-                  className="absolute -inset-1 rounded-full pointer-events-none animate-pulse transition-opacity duration-700"
-                  style={{
-                    border: `1.5px solid ${course.color}`,
-                    opacity: 0.22,
-                  }}
-                />
+                  className="absolute -inset-1 pointer-events-none"
+                  style={{ opacity: 0.24 }}
+                  aria-hidden
+                >
+                  {/* The opacity lives on the wrapper so the animation's own
+                      opacity keyframes multiply into it rather than replace
+                      it. */}
+                  <div
+                    className="h-full w-full rounded-full animate-tick"
+                    style={{ border: `1.5px solid ${course.color}` }}
+                  />
+                </div>
               )}
 
               {/* Soft radial backdrop glow */}
@@ -385,8 +422,10 @@ export default function TimerPage() {
                 }}
               />
 
-              {/* Subtle tactile inner depth border */}
-              <div className="absolute inset-[14px] rounded-full border border-line/40 pointer-events-none shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]" />
+              {/* A faint ruled circle. The inset shadow that used to sit on
+                  it was a hardcoded black at 2%: invisible on paper, a grey
+                  smear on the night tone. */}
+              <div className="absolute inset-[14px] rounded-full border border-line/40 pointer-events-none" />
 
               {/* Smooth circular progress ring */}
               <svg
@@ -396,17 +435,6 @@ export default function TimerPage() {
                 viewBox="0 0 284 284"
                 className="absolute inset-0 -rotate-90 pointer-events-none"
               >
-                <defs>
-                  <filter id="timerRingGlow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow
-                      dx="0"
-                      dy="0"
-                      stdDeviation="2.5"
-                      floodColor={course.color}
-                      floodOpacity={isPaused ? "0" : "0.35"}
-                    />
-                  </filter>
-                </defs>
                 {/* Subtle soft track */}
                 <circle
                   cx="142"
@@ -417,7 +445,9 @@ export default function TimerPage() {
                   strokeWidth={stroke}
                   opacity="0.45"
                 />
-                {/* Crisp colored progress stroke with rounded caps */}
+                {/* The progress stroke. It used to carry an feDropShadow
+                    glow in the course colour, which is a drop shadow with a
+                    softer name. The stroke is the mark. */}
                 <circle
                   cx="142"
                   cy="142"
@@ -429,86 +459,48 @@ export default function TimerPage() {
                   strokeDashoffset={circumference * (1 - pct)}
                   strokeLinecap="round"
                   className="transition-[stroke-dashoffset] duration-700 ease-out"
-                  filter={isPaused ? undefined : 'url(#timerRingGlow)'}
+                  opacity={isPaused ? 0.5 : 1}
                 />
               </svg>
 
               {/* Clock face content */}
               <div className="relative z-10 flex flex-col items-center justify-center select-none">
-                {/* Clean, bold, balanced digital readout with clear hours/minutes/seconds styling */}
+                {/* One clock, read the way a clock is read. It used to be
+                    three stacked columns each with an "HR" / "MIN" / "SEC"
+                    caption under it, which is the interface explaining a
+                    colon. Hours only appear once there are hours. */}
                 <div
-                  className="font-mono flex items-baseline justify-center tracking-tight tabular-nums transition-opacity duration-300"
-                  style={{ opacity: isPaused ? 0.6 : 1 }}
+                  role="timer"
+                  aria-label={`${isPaused ? 'Paused at' : 'Elapsed'} ${spokenElapsed}`}
+                  className="font-mono text-[clamp(34px,10.5vw,46px)] font-semibold leading-none tracking-[-0.02em] tabular-nums transition-opacity duration-300"
+                  style={{ opacity: isPaused ? 0.55 : 1 }}
                 >
-                  <div className="flex flex-col items-center">
-                    <span
-                      className={`text-[clamp(26px,7.5vw,38px)] font-bold leading-none ${
-                        hrs > 0 ? 'text-ink' : 'text-muted-soft/60'
-                      }`}
-                    >
+                  {hrs > 0 && (
+                    <>
                       {hh}
-                    </span>
-                    <span className="text-[9px] font-sans font-semibold uppercase tracking-widest text-muted mt-1 select-none">
-                      hr
-                    </span>
-                  </div>
-
-                  <span className="text-[clamp(18px,4.5vw,24px)] text-muted-soft/60 font-light px-1.5 -translate-y-2 select-none">
-                    :
-                  </span>
-
-                  <div className="flex flex-col items-center">
-                    <span className="text-[clamp(26px,7.5vw,38px)] font-bold text-ink leading-none">
-                      {mm}
-                    </span>
-                    <span className="text-[9px] font-sans font-semibold uppercase tracking-widest text-muted mt-1 select-none">
-                      min
-                    </span>
-                  </div>
-
-                  <span className="text-[clamp(18px,4.5vw,24px)] text-muted-soft/60 font-light px-1.5 -translate-y-2 select-none">
-                    :
-                  </span>
-
-                  <div className="flex flex-col items-center">
-                    <span className="text-[clamp(26px,7.5vw,38px)] font-semibold text-ink-soft leading-none">
-                      {ss}
-                    </span>
-                    <span className="text-[9px] font-sans font-semibold uppercase tracking-widest text-muted mt-1 select-none">
-                      sec
-                    </span>
-                  </div>
+                      <span className="text-muted-soft">:</span>
+                    </>
+                  )}
+                  {mm}
+                  <span className="text-muted-soft">:</span>
+                  <span className="text-ink-soft">{ss}</span>
                 </div>
 
-                {/* Subtle visual polish for active vs paused status */}
-                {isPaused ? (
-                  <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-bg-tint/80 border border-line">
-                    <span className="inline-block w-2 h-2 rounded-full bg-muted-soft" />
-                    <span className="eyebrow tracking-[0.18em] text-muted font-medium">
-                      Paused
-                    </span>
-                  </div>
-                ) : (
-                  <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-paper/90 border border-line shadow-xs">
-                    <span className="relative flex h-2 w-2">
-                      <span
-                        className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-70"
-                        style={{ backgroundColor: course.color }}
-                      />
-                      <span
-                        className="relative inline-flex rounded-full h-2 w-2"
-                        style={{ backgroundColor: course.color }}
-                      />
-                    </span>
-                    <span className="eyebrow tracking-[0.18em] text-ink font-semibold">
-                      In session
-                    </span>
-                  </div>
-                )}
+                {/* The state, written in the margin rather than stamped into
+                    a capsule. The dot breathes on the timer's own `tick`;
+                    `animate-ping` was a notification badge. */}
+                <p className="mt-3.5 mb-0 flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className={`h-1.5 w-1.5 rounded-full ${isPaused ? '' : 'animate-tick'}`}
+                    style={{ background: isPaused ? 'var(--muted-soft)' : course.color }}
+                  />
+                  <span className="eyebrow">{isPaused ? 'Paused' : 'In session'}</span>
+                </p>
               </div>
             </div>
 
-            <p className="mt-9 max-w-[280px] font-serif italic text-sm text-muted leading-[1.6]">
+            <p className="mt-[var(--density-section)] mb-0 max-w-[280px] font-serif italic text-sm text-muted leading-[1.6]">
               {isPaused
                 ? '"The pause is part of the page."'
                 : '"Slow is smooth. Smooth is steady."'}
@@ -518,23 +510,31 @@ export default function TimerPage() {
       </div>
 
       {whiteNoiseError && (
-        <p className="m-0 px-[22px] text-center text-[12px] text-muted" role="status">
+        <p
+          className="m-0 px-[var(--density-gutter)] text-center font-serif text-[12px] italic text-muted"
+          role="status"
+        >
           {whiteNoiseError}
         </p>
       )}
 
+      {/* Three controls, one radius. They used to be two circles and a
+          stadium, which is three shapes for one row. The filled one is the
+          screen's single primary action, which is the exception the guide
+          grants the timer. */}
       {course && active && (
-        <div className="flex items-center justify-center gap-3.5 px-[22px] pt-4 pb-[calc(28px+env(safe-area-inset-bottom))]">
+        <div className="flex items-center justify-center gap-[var(--density-gap)] px-[var(--density-gutter)] pt-4 pb-[calc(28px+env(safe-area-inset-bottom))]">
           <button
             type="button"
             onClick={toggleWhiteNoise}
+            aria-pressed={whiteNoiseOn}
             aria-label={whiteNoiseOn ? 'Stop white noise' : 'Play white noise'}
-            title={whiteNoiseOn ? 'Stop white noise' : 'Play white noise'}
-            className="w-14 h-14 rounded-full border border-line bg-paper text-ink flex items-center justify-center transition-colors"
-            style={{
-              color: whiteNoiseOn ? course.color : 'var(--ink-soft)',
-              boxShadow: whiteNoiseOn ? `inset 0 0 0 1px ${course.color}` : 'none',
-            }}
+            className="h-14 w-14 shrink-0 rounded-2xl border border-line bg-paper flex items-center justify-center transition-colors"
+            style={
+              whiteNoiseOn
+                ? { color: course.color, borderColor: course.color, background: tint }
+                : { color: 'var(--ink-soft)' }
+            }
           >
             <svg aria-hidden width="19" height="19" viewBox="0 0 24 24" fill="none">
               <path
@@ -549,8 +549,8 @@ export default function TimerPage() {
           <button
             type="button"
             onClick={isPaused ? resume : pause}
-            aria-label={isPaused ? 'Resume' : 'Pause'}
-            className="w-14 h-14 rounded-full bg-paper border border-line text-ink flex items-center justify-center"
+            aria-label={isPaused ? 'Resume timer' : 'Pause timer'}
+            className="h-14 w-14 shrink-0 rounded-2xl border border-line bg-paper text-ink flex items-center justify-center"
           >
             {isPaused ? (
               <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -570,7 +570,7 @@ export default function TimerPage() {
           <button
             type="button"
             onClick={handleStop}
-            className="h-14 px-7 rounded-full text-sm font-semibold inline-flex items-center gap-2 tracking-[0.01em]"
+            className="h-14 flex-1 max-w-[220px] rounded-2xl text-[15px] font-semibold inline-flex items-center justify-center gap-2"
             style={{ background: course.color, color: 'var(--ink)' }}
           >
             <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">

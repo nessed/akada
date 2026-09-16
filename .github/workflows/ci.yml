@@ -1,0 +1,63 @@
+# The gate that was missing.
+#
+# A commit with a TypeScript error reached main, `next build` failed on
+# Vercel, the deploy was never promoted, and production quietly served the
+# previous commit for a day. Nothing in the repo ran `tsc`.
+#
+# Why this runs `tsc` and `eslint` rather than a full `next build`:
+#
+#   * The failure was a type error, and `next build` fails on type errors by
+#     running the very same TypeScript program this job runs. `tsc --noEmit`
+#     reproduces it exactly, in seconds rather than minutes.
+#   * A real build needs NEXT_PUBLIC_SUPABASE_URL and
+#     NEXT_PUBLIC_SUPABASE_ANON_KEY or it fails at prerender on purpose
+#     (lib/data/index.ts). Feeding it invented placeholder values would mean
+#     CI passing against a configuration nobody ships, and it teaches the
+#     wrong lesson about that guard.
+#   * next/font fetches Google Fonts at build time, so a build job goes red
+#     when fonts.googleapis.com has a bad minute. A gate that fails for
+#     reasons unrelated to the diff gets ignored, and an ignored gate is the
+#     same as no gate.
+#
+# `next typegen` is what makes plain `tsc` viable: next-env.d.ts references
+# .next/types/routes.d.ts, which does not exist on a fresh checkout. typegen
+# writes the route types without compiling or prerendering anything, and
+# needs no environment at all.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Runs even when the typecheck failed, so one push reports both
+      # problems instead of two round trips.
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: npm run lint

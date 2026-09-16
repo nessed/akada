@@ -32,7 +32,9 @@ export function weeklyGoalReading(hours: number, credits?: number | null): GoalR
   if (hours <= baseline + 8) {
     return { label: 'Ambitious', detail: `extra practice above the ${guide}`, color: 'var(--clay)' };
   }
-  return { label: 'Intensive', detail: `well above the ${guide}`, color: 'var(--priority)' };
+  // `priority` is the ramp for errors and destructive actions. An ambitious
+  // study goal is not an error, so this reads in the quiet clay instead.
+  return { label: 'Intensive', detail: `well above the ${guide}`, color: 'var(--warn)' };
 }
 
 export default function WeeklyGoalSlider({
@@ -54,6 +56,9 @@ export default function WeeklyGoalSlider({
       <div className="flex items-center gap-4">
         <input
           aria-label={label}
+          // The reading is a word on screen and a sentence to a screen
+          // reader. Announcing a bare "12" says nothing about what 12 is.
+          aria-valuetext={`${hours} hours a week, ${reading.label.toLowerCase()}, ${reading.detail}`}
           type="range"
           min="0.5"
           max="40"
@@ -64,18 +69,18 @@ export default function WeeklyGoalSlider({
           style={{ color: reading.color }}
         />
         <output
-          aria-live="polite"
+          aria-hidden
           className="w-14 text-right font-mono text-sm font-semibold tabular-nums"
           style={{ color: reading.color }}
         >
           {hours}<span className="ml-1 font-normal text-muted">h</span>
         </output>
       </div>
-      <p className="mt-2 mb-0 font-serif text-[11px] italic leading-[1.45]" style={{ color: reading.color }}>
-        <span className="font-sans text-[10px] font-semibold uppercase not-italic tracking-[0.12em]">
-          {reading.label}
-        </span>
-        <span className="opacity-80"> · {reading.detail}</span>
+      {/* One word, in the colour of the reading. It used to spell out
+          "below the 8h guide for this 4-credit course", which is the
+          interface reading the slider back to the person holding it. */}
+      <p className="eyebrow mt-2 mb-0" style={{ color: reading.color }}>
+        {reading.label}
       </p>
     </div>
   );

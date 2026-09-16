@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { clampSessionSeconds } from './session-safety';
+import { MAX_SESSION_SECONDS, clampSessionSeconds } from './session-safety';
 import { plannerDate } from './preferences';
 
 interface TimerState {
@@ -30,6 +30,14 @@ interface PendingTimerLog {
 }
 
 interface TimerContextValue {
+  /**
+   * False until the provider has read localStorage. Effects in a child run
+   * before effects in its provider, so a screen that mounts alongside a
+   * running timer sees `active: null` on its first pass. /timer read that as
+   * "no session" and bounced to the dashboard, which is precisely what a
+   * reload mid-session used to do.
+   */
+  hydrated: boolean;
   active: TimerState | null;
   pendingLog: PendingTimerLog | null;
   elapsedSeconds: number;
@@ -48,16 +56,55 @@ const STORAGE_KEY = 'lums.activeTimer';
 const PENDING_STORAGE_KEY = 'lums.pendingTimerLog';
 const NOTIFICATION_PROMPT_KEY = 'lums.timerNotificationPrompted';
 const PENDING_NOTIFICATION_KEY = 'lums.pendingTimerLogNotification';
-const TAB_STORAGE_KEY = 'lums.timerTabs';
-const MAX_TIMER_MS = 18 * 60 * 60 * 1000;
+const MAX_TIMER_MS = MAX_SESSION_SECONDS * 1000;
 const RUNNING_CHECKPOINT_MS = 10 * 1000;
 const STALE_RUNNING_MS = 4 * 60 * 60 * 1000;
-const TAB_HEARTBEAT_MS = 5 * 1000;
-const TAB_TTL_MS = 20 * 1000;
+const TICK_MS = 500;
 
-interface TimerTabRecord {
-  id: string;
-  lastSeenAt: number;
+/* localStorage is not always there to be written to: Safari's private mode
+   throws on setItem, a blocked-cookies setting throws on the property access
+   itself, and a full origin throws QuotaExceededError. Every one of those
+   used to surface as an exception thrown out of a click handler or an
+   interval, which is to say as a blank screen mid-session. The timer degrades
+   to memory-only instead. */
+function readStorage(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Memory-only for this session; the timer still runs.
+  }
+}
+
+function removeStorage(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // As above.
+  }
+}
+
+let storageProbe: boolean | null = null;
+
+/** Whether this browser will actually hold on to what we write. */
+function hasWorkingStorage(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (storageProbe !== null) return storageProbe;
+  try {
+    window.localStorage.setItem('lums.storageProbe', '1');
+    window.localStorage.removeItem('lums.storageProbe');
+    storageProbe = true;
+  } catch {
+    storageProbe = false;
+  }
+  return storageProbe;
 }
 
 function formatNotificationDuration(seconds: number): string {
@@ -81,13 +128,23 @@ function pendingLogSignature(log: PendingTimerLog): string {
 
 function maybeRequestTimerNotificationPermission(): void {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
-  if (window.Notification.permission !== 'default') return;
-  if (window.localStorage.getItem(NOTIFICATION_PROMPT_KEY) === 'true') return;
+  try {
+    if (window.Notification.permission !== 'default') return;
+    if (readStorage(NOTIFICATION_PROMPT_KEY) === 'true') return;
 
-  window.localStorage.setItem(NOTIFICATION_PROMPT_KEY, 'true');
-  window.Notification.requestPermission().catch(() => {
-    // Notification permission is optional; the in-app sheet still works.
-  });
+    writeStorage(NOTIFICATION_PROMPT_KEY, 'true');
+    // Older Safari hands back undefined and takes a callback instead of
+    // returning a promise, so `.catch` on the result is not a given.
+    const request = window.Notification.requestPermission();
+    if (request && typeof request.catch === 'function') {
+      request.catch(() => {
+        // Permission is optional; the in-app sheet still works without it.
+      });
+    }
+  } catch {
+    // A browser that refuses the request outright must not take the start of
+    // a study session down with it.
+  }
 }
 
 function notifyPendingLog(log: PendingTimerLog | null): void {
@@ -102,20 +159,25 @@ function notifyPendingLog(log: PendingTimerLog | null): void {
   }
 
   const signature = pendingLogSignature(log);
-  if (window.localStorage.getItem(PENDING_NOTIFICATION_KEY) === signature) return;
-  window.localStorage.setItem(PENDING_NOTIFICATION_KEY, signature);
+  if (readStorage(PENDING_NOTIFICATION_KEY) === signature) return;
+  writeStorage(PENDING_NOTIFICATION_KEY, signature);
 
-  const notification = new window.Notification('Study session ready to log', {
-    body: `${formatNotificationDuration(log.durationSeconds)} is waiting in Akada.`,
-    icon: '/icon.svg',
-    tag: 'akada-pending-session-log',
-  });
+  try {
+    const notification = new window.Notification('Study session ready to log', {
+      body: `${formatNotificationDuration(log.durationSeconds)} is waiting in Akada.`,
+      icon: '/icon.svg',
+      tag: 'akada-pending-session-log',
+    });
 
-  notification.onclick = () => {
-    window.focus();
-    window.location.href = '/timer';
-    notification.close();
-  };
+    notification.onclick = () => {
+      window.focus();
+      window.location.href = '/timer';
+      notification.close();
+    };
+  } catch {
+    // Some browsers only allow notifications from a service worker. Losing
+    // the nudge is fine; losing the session log would not be.
+  }
 }
 
 function isoDateFromMs(value: number): string {
@@ -171,10 +233,10 @@ function sanitizePendingLog(value: unknown): PendingTimerLog | null {
 function savePendingLog(log: PendingTimerLog | null): void {
   if (typeof window === 'undefined') return;
   if (log === null) {
-    window.localStorage.removeItem(PENDING_STORAGE_KEY);
-    window.localStorage.removeItem(PENDING_NOTIFICATION_KEY);
+    removeStorage(PENDING_STORAGE_KEY);
+    removeStorage(PENDING_NOTIFICATION_KEY);
   } else {
-    window.localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(log));
+    writeStorage(PENDING_STORAGE_KEY, JSON.stringify(log));
     notifyPendingLog(log);
   }
 }
@@ -187,7 +249,7 @@ export function clearStoredTimerState(): void {
 function loadPendingLog(): PendingTimerLog | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(PENDING_STORAGE_KEY);
+    const raw = readStorage(PENDING_STORAGE_KEY);
     if (!raw) return null;
     const parsed = sanitizePendingLog(JSON.parse(raw));
     if (!parsed) savePendingLog(null);
@@ -201,9 +263,9 @@ function loadPendingLog(): PendingTimerLog | null {
 function saveActive(state: TimerState | null): void {
   if (typeof window === 'undefined') return;
   if (state === null) {
-    window.localStorage.removeItem(STORAGE_KEY);
+    removeStorage(STORAGE_KEY);
   } else {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    writeStorage(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
@@ -220,45 +282,13 @@ function activeMatches(a: TimerState | null, b: TimerState): boolean {
 function saveActiveIfCurrent(state: TimerState): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    const current = sanitizeActive(JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null'));
+    const current = sanitizeActive(JSON.parse(readStorage(STORAGE_KEY) || 'null'));
     if (!activeMatches(current, state)) return false;
     saveActive(state);
     return true;
   } catch {
     return false;
   }
-}
-
-function readTimerTabs(now = Date.now()): TimerTabRecord[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(TAB_STORAGE_KEY) || '[]');
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((tab) => ({
-        id: typeof tab?.id === 'string' ? tab.id : '',
-        lastSeenAt: Number(tab?.lastSeenAt),
-      }))
-      .filter((tab) => tab.id && Number.isFinite(tab.lastSeenAt) && now - tab.lastSeenAt < TAB_TTL_MS);
-  } catch {
-    return [];
-  }
-}
-
-function writeTimerTabs(tabs: TimerTabRecord[]): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(tabs));
-}
-
-function markTimerTab(id: string, now = Date.now()): void {
-  const tabs = readTimerTabs(now).filter((tab) => tab.id !== id);
-  writeTimerTabs([...tabs, { id, lastSeenAt: now }]);
-}
-
-function unregisterTimerTab(id: string, now = Date.now()): TimerTabRecord[] {
-  const tabs = readTimerTabs(now).filter((tab) => tab.id !== id);
-  writeTimerTabs(tabs);
-  return tabs;
 }
 
 function computeElapsed(state: TimerState): number {
@@ -302,7 +332,7 @@ function loadActiveSnapshot(): { active: TimerState | null; pendingLog: PendingT
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = readStorage(STORAGE_KEY);
     if (!raw) return { active: null, pendingLog: null };
     const parsed = sanitizeActive(JSON.parse(raw));
     if (!parsed) {
@@ -332,9 +362,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const [active, setActive] = useState<TimerState | null>(null);
   const [pendingLog, setPendingLog] = useState<PendingTimerLog | null>(null);
   const [elapsedSeconds, setElapsed] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
   const tickRef = useRef<number | null>(null);
-  const tabHeartbeatRef = useRef<number | null>(null);
-  const tabIdRef = useRef(`timer-tab-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const activeRef = useRef<TimerState | null>(null);
   const pendingLogRef = useRef<PendingTimerLog | null>(null);
 
@@ -350,26 +379,20 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const snapshot = loadActiveSnapshot();
     if (snapshot.pendingLog) {
+      pendingLogRef.current = snapshot.pendingLog;
       setPendingLog(snapshot.pendingLog);
       setElapsed(0);
-      return;
-    }
-    if (snapshot.active) {
+    } else if (snapshot.active) {
+      activeRef.current = snapshot.active;
       setActive(snapshot.active);
       setElapsed(computeElapsed(snapshot.active));
     }
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
-    const tabId = tabIdRef.current;
-    markTimerTab(tabId);
-    tabHeartbeatRef.current = window.setInterval(() => {
-      markTimerTab(tabId);
-    }, TAB_HEARTBEAT_MS);
-
     const handlePageHide = () => {
       const current = activeRef.current;
-      unregisterTimerTab(tabId);
       if (current) {
         // Refreshes and accidental closes should preserve the timer. A later
         // hydrate decides whether the absence was short enough to keep running.
@@ -379,6 +402,14 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
     const syncFromStorage = () => {
       const snapshot = loadActiveSnapshot();
+      // Where storage is refused (Safari private browsing, blocked cookies)
+      // the timer lives in memory only, and an empty read means "nothing was
+      // saved", not "the timer stopped". Clearing a running session on that
+      // reading would throw the session away.
+      if (!snapshot.active && !snapshot.pendingLog && activeRef.current && !hasWorkingStorage()) {
+        setElapsed(computeElapsed(activeRef.current));
+        return;
+      }
       activeRef.current = snapshot.active;
       pendingLogRef.current = snapshot.pendingLog;
       setActive(snapshot.active);
@@ -388,7 +419,6 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
     const handlePageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
-      markTimerTab(tabId);
       syncFromStorage();
     };
 
@@ -397,15 +427,29 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       syncFromStorage();
     };
 
+    // A backgrounded tab has its intervals throttled to about once a minute,
+    // and a phone that sleeps stops firing them at all. Elapsed time is read
+    // from the wall clock rather than counted up, so nothing drifts, but the
+    // reading on screen would be as stale as the last fire. Re-reading on the
+    // way back is what makes the first frame after a return correct.
+    const handleVisibility = () => {
+      if (document.hidden) {
+        const current = activeRef.current;
+        if (current) saveActiveIfCurrent({ ...current, lastSeenAt: Date.now() });
+        return;
+      }
+      syncFromStorage();
+    };
+
     window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('pageshow', handlePageShow);
     window.addEventListener('storage', handleStorage);
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
-      if (tabHeartbeatRef.current) window.clearInterval(tabHeartbeatRef.current);
-      unregisterTimerTab(tabId);
       window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('storage', handleStorage);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 
@@ -419,30 +463,54 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     let lastCheckpoint = Date.now();
+    const closeOut = (
+      current: TimerState,
+      stoppedAt: number,
+      reason: PendingTimerLog['recoveryReason'],
+    ) => {
+      const log = buildPendingLog(current, stoppedAt, reason);
+      activeRef.current = null;
+      setActive(null);
+      saveActive(null);
+      setElapsed(0);
+      if (log) {
+        pendingLogRef.current = log;
+        setPendingLog(log);
+        savePendingLog(log);
+      }
+    };
+
     tickRef.current = window.setInterval(() => {
       const now = Date.now();
       const current = activeRef.current ?? active;
       if (!current.isPaused && now - current.lastSeenAt >= STALE_RUNNING_MS) {
-        const log = buildPendingLog(current, current.lastSeenAt, 'away');
-        activeRef.current = null;
-        setActive(null);
-        saveActive(null);
-        setElapsed(0);
-        if (log) {
-          pendingLogRef.current = log;
-          setPendingLog(log);
-          savePendingLog(log);
-        }
+        closeOut(current, current.lastSeenAt, 'away');
         return;
       }
-      setElapsed(computeElapsed(active));
+      // The 18h ceiling used to be enforced only on the way back from
+      // storage. A tab left open past it kept counting while the readout sat
+      // clamped at 18:00:00, so the number on screen stopped being the number
+      // being measured, and stopping then logged a silently truncated 18h.
+      // The ceiling has to close the session where it is reached.
+      const liveMs = now - current.startedAt;
+      if (!current.isPaused && current.accumulatedMs + liveMs >= MAX_TIMER_MS) {
+        closeOut(current, current.startedAt + (MAX_TIMER_MS - current.accumulatedMs), 'max');
+        return;
+      }
+      // setElapsed on every fire re-rendered every consumer four times a
+      // second to show the same digits. Only whole seconds are ever
+      // displayed, so only whole seconds are published.
+      setElapsed((prev) => {
+        const next = computeElapsed(current);
+        return next === prev ? prev : next;
+      });
       if (now - lastCheckpoint >= RUNNING_CHECKPOINT_MS) {
         lastCheckpoint = now;
-        const checkpoint = { ...active, lastSeenAt: now };
+        const checkpoint = { ...current, lastSeenAt: now };
         activeRef.current = checkpoint;
         saveActiveIfCurrent(checkpoint);
       }
-    }, 250);
+    }, TICK_MS);
     return () => {
       if (tickRef.current) window.clearInterval(tickRef.current);
       tickRef.current = null;
@@ -460,6 +528,17 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       setPendingLog(existingPending);
       saveActive(null);
       setElapsed(0);
+      return;
+    }
+    // Starting the timer on the course it is already running on is a no-op,
+    // not a restart. It used to build a fresh TimerState with accumulatedMs
+    // back at zero, so tapping "start" on the course already on the clock
+    // threw away everything logged so far without a word.
+    const running = activeRef.current ?? snapshot.active;
+    if (running && running.courseId === courseId && running.taskId === taskId) {
+      activeRef.current = running;
+      setActive(running);
+      setElapsed(computeElapsed(running));
       return;
     }
     if (snapshot.active && !activeMatches(activeRef.current, snapshot.active)) {
@@ -588,6 +667,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   return (
     <TimerContext.Provider
       value={{
+        hydrated,
         active,
         pendingLog,
         elapsedSeconds,
