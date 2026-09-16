@@ -8,6 +8,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MAX_TASKS_PER_REQUEST = 20;
+const MAX_TASKS_PER_READ = 100;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // This is deliberately independent of optional app-migration columns. MCP
@@ -33,7 +34,13 @@ const TasksReadResponseSchema = z.object({
   message: z.string().optional(),
 });
 
+type TaskRead = z.infer<typeof TaskReadSchema>;
+
 type AuthenticatedToken = ReturnType<typeof readAccessToken>;
+
+// Shape of a Supabase/PostgREST failure. Not imported from supabase-js
+// because these tools also funnel plain Errors through the same reporting.
+type QueryFailure = { message?: string; code?: string; details?: string; hint?: string } | null;
 
 function result(value: unknown) {
   return {
@@ -50,6 +57,36 @@ function toolError(message: string) {
   return { content: [{ type: 'text' as const, text: message }], isError: true };
 }
 
+// Every tool used to collapse a database failure into one generic sentence,
+// which is the reason a single broken query took three rounds to diagnose.
+// `queryFailed` puts the real cause in the runtime log and a short, safe
+// reason in the tool's reply. Never include `details` in the reply: PostgREST
+// puts row values in there. Codes, messages and hints are schema-level only.
+function describe(error: QueryFailure) {
+  return [error?.code, error?.message, error?.hint].filter(Boolean).join(' | ');
+}
+
+function queryFailed(tool: string, step: string, error: QueryFailure, message: string) {
+  console.error(`[mcp:${tool}] ${step} failed`, {
+    code: error?.code,
+    message: error?.message,
+    details: error?.details,
+    hint: error?.hint,
+  });
+  const reason = describe(error);
+  return toolError(reason ? `${message} (${reason})` : message);
+}
+
+// Same idea for the outer catch. A thrown error here is almost always a
+// missing env var or an expired session, but "almost always" is what made
+// the last three guesses expensive.
+function toolCrashed(tool: string, cause: unknown) {
+  const reason = cause instanceof Error ? cause.message : String(cause ?? '');
+  console.error(`[mcp:${tool}] unhandled failure`, reason);
+  const suffix = reason ? ` (${reason})` : '';
+  return toolError(`Akada is not configured or your session has expired. Reconnect the connector and try again.${suffix}`);
+}
+
 async function activeSemesterId(token: AuthenticatedToken) {
   const supabase = mcpSupabase(token.supabaseAccessToken);
   const { data, error } = await supabase
@@ -57,8 +94,34 @@ async function activeSemesterId(token: AuthenticatedToken) {
     .select('active_semester_id')
     .eq('user_id', token.userId)
     .maybeSingle();
-  if (error) throw new Error('Akada could not load your active semester.');
+  // Carry the cause up rather than flattening it: the outer catch logs it.
+  if (error) throw new Error(`Akada could not load your active semester. ${describe(error)}`);
   return data?.active_semester_id as string | null;
+}
+
+function readSubtasks(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as { id?: unknown; title?: unknown; completed?: unknown };
+    return typeof row.id === 'string' && typeof row.title === 'string'
+      ? [{ id: row.id, title: row.title, completed: Boolean(row.completed) }]
+      : [];
+  });
+}
+
+// Due date first with undated tasks last, newest first inside a date. This
+// used to be a two-key PostgREST `order` string plus `limit`, which made the
+// MCP request shape diverge from the app's proven task read for no gain.
+// A hundred rows sort in microseconds; keep the query boring.
+function byDueDate(a: TaskRead, b: TaskRead) {
+  if (a.due_date !== b.due_date) {
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return a.due_date < b.due_date ? -1 : 1;
+  }
+  if (a.created_at === b.created_at) return 0;
+  return a.created_at < b.created_at ? 1 : -1;
 }
 
 function createServer(token: AuthenticatedToken) {
@@ -82,7 +145,7 @@ function createServer(token: AuthenticatedToken) {
           .eq('user_id', token.userId)
           .eq('semester_id', semesterId)
           .order('code');
-        if (error) return toolError('Akada could not load courses.');
+        if (error) return queryFailed('find_course', 'courses read', error, 'Akada could not load courses.');
         const needle = normalize(query);
         const courses = (data ?? [])
           .filter((course) => normalize(`${course.code} ${course.name}`).includes(needle))
@@ -95,8 +158,8 @@ function createServer(token: AuthenticatedToken) {
             weekly_study_goal_hours: Number(course.weekly_goal_hours),
           }));
         return result({ courses });
-      } catch {
-        return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');
+      } catch (cause) {
+        return toolCrashed('find_course', cause);
       }
     },
   );
@@ -124,75 +187,55 @@ function createServer(token: AuthenticatedToken) {
           .select('id, code, name')
           .eq('user_id', token.userId)
           .eq('semester_id', semesterId);
-        if (courseError) return toolError('Akada could not load courses.');
+        if (courseError) return queryFailed('get_tasks', 'courses read', courseError, 'Akada could not load courses.');
         const allowed = new Map((courses ?? []).map((course) => [course.id, course]));
         if (course_id && !allowed.has(course_id)) return toolError('That course is not available in your active Akada semester.');
+        // Deliberately the same request shape the app itself uses
+        // (lib/data/supabase-adapter.ts listTasks): `select('*')` scoped by
+        // user and semester, no PostgREST ordering, no limit. Two earlier
+        // attempts at a cleverer query failed in production and could not be
+        // told apart, because a named column list breaks outright on a
+        // project whose schema.sql predates that column, while `*` simply
+        // returns what exists. Sorting and capping happen below.
         let query = supabase
           .from('tasks')
-          // Do not add optional columns here. `description` was introduced
-          // after the original deployment and made the whole tool fail on
-          // projects that had not yet run the migration.
-          .select('id, course_id, title, due_date, priority, completed, completed_at, created_at')
+          .select('*')
           .eq('user_id', token.userId)
-          .order('due_date', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false })
-          .limit(100);
+          .eq('semester_id', semesterId);
         if (course_id) query = query.eq('course_id', course_id);
         if (!include_completed) query = query.eq('completed', false);
         const { data, error } = await query;
-        if (error) return toolError('Akada could not load tasks.');
-        const baseTasks = (data ?? [])
-            .filter((task) => allowed.has(task.course_id))
-            .map((task) => ({
-              id: task.id,
-              title: task.title,
-              // Stable field for clients. It will be populated by a future
-              // versioned detail endpoint once the migration is universal.
-              description: '',
-              subtasks: [],
-              due_date: task.due_date,
-              priority: task.priority === 'high' ? 'high' : 'normal',
+        if (error) return queryFailed('get_tasks', 'tasks read', error, 'Akada could not load tasks.');
+        const rows = (data ?? []) as Record<string, unknown>[];
+        const tasks: TaskRead[] = rows
+          .flatMap((task) => {
+            const course = allowed.get(task.course_id as string);
+            if (!course) return [];
+            return [{
+              id: String(task.id),
+              title: String(task.title ?? ''),
+              // `description` and `subtasks` are additive columns. Reading
+              // with `*` means an un-migrated project yields undefined here
+              // instead of failing the whole tool.
+              description: typeof task.description === 'string' ? task.description : '',
+              subtasks: readSubtasks(task.subtasks),
+              due_date: (task.due_date as string | null) ?? null,
+              priority: task.priority === 'high' ? ('high' as const) : ('normal' as const),
               completed: Boolean(task.completed),
-              completed_at: task.completed_at,
-              created_at: task.created_at,
-              course: allowed.get(task.course_id),
-            }));
-        // The description/subtasks migration is additive. Try to hydrate
-        // richer task data, but never make an MCP read fail because a live
-        // project is still on the original tasks schema.
-        const ids = baseTasks.map((task) => task.id);
-        if (ids.length > 0) {
-          const { data: details, error: detailsError } = await supabase
-            .from('tasks')
-            .select('id, description, subtasks')
-            .in('id', ids)
-            .eq('user_id', token.userId);
-          if (!detailsError) {
-            const byId = new Map((details ?? []).map((detail) => [detail.id, detail]));
-            baseTasks.forEach((task) => {
-              const detail = byId.get(task.id);
-              if (!detail) return;
-              task.description = typeof detail.description === 'string' ? detail.description : '';
-              task.subtasks = Array.isArray(detail.subtasks)
-                ? detail.subtasks.flatMap((subtask) => {
-                    if (!subtask || typeof subtask !== 'object') return [];
-                    const row = subtask as { id?: unknown; title?: unknown; completed?: unknown };
-                    return typeof row.id === 'string' && typeof row.title === 'string'
-                      ? [{ id: row.id, title: row.title, completed: Boolean(row.completed) }]
-                      : [];
-                  })
-                : [];
-            });
-          }
-        }
-        const tasks = baseTasks;
+              completed_at: (task.completed_at as string | null) ?? null,
+              created_at: String(task.created_at),
+              course: { id: course.id, code: course.code, name: course.name },
+            }];
+          })
+          .sort(byDueDate)
+          .slice(0, MAX_TASKS_PER_READ);
         return result(TasksReadResponseSchema.parse({
           schema_version: 'akada.tasks.v1',
           tasks,
           meta: { include_completed, course_id: course_id ?? null, count: tasks.length },
         }));
-      } catch {
-        return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');
+      } catch (cause) {
+        return toolCrashed('get_tasks', cause);
       }
     },
   );
@@ -215,7 +258,11 @@ function createServer(token: AuthenticatedToken) {
           supabase.from('tasks').select('course_id, completed').eq('user_id', token.userId).eq('semester_id', semesterId),
           supabase.from('sessions').select('course_id, date, duration_seconds, note').eq('user_id', token.userId).eq('semester_id', semesterId).order('date', { ascending: false }).limit(12),
         ]);
-        if (coursesError || tasksError || sessionsError) return toolError('Akada could not load the study overview.');
+        const overviewError = coursesError ?? tasksError ?? sessionsError;
+        if (overviewError) {
+          const step = coursesError ? 'courses read' : tasksError ? 'tasks read' : 'sessions read';
+          return queryFailed('get_overview', step, overviewError, 'Akada could not load the study overview.');
+        }
         const openByCourse = new Map<string, number>();
         (tasks ?? []).filter((task) => !task.completed).forEach((task) => openByCourse.set(task.course_id, (openByCourse.get(task.course_id) ?? 0) + 1));
         const courseById = new Map((courses ?? []).map((course) => [course.id, course]));
@@ -223,8 +270,8 @@ function createServer(token: AuthenticatedToken) {
           courses: (courses ?? []).map((course) => ({ id: course.id, code: course.code, name: course.name, weekly_study_goal_hours: Number(course.weekly_goal_hours), open_task_count: openByCourse.get(course.id) ?? 0 })),
           recent_sessions: (sessions ?? []).map((session) => ({ date: session.date, duration_seconds: session.duration_seconds, note: session.note, course: courseById.get(session.course_id) ?? null })),
         });
-      } catch {
-        return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');
+      } catch (cause) {
+        return toolCrashed('get_overview', cause);
       }
     },
   );
@@ -256,7 +303,10 @@ function createServer(token: AuthenticatedToken) {
           .eq('user_id', token.userId)
           .eq('semester_id', semesterId)
           .maybeSingle();
-        if (courseError || !course) return toolError('That course is not available in your active Akada semester. Find the course again first.');
+        // A missing row and a failed query are different problems. Only the
+        // second one has a cause worth reporting.
+        if (courseError) return queryFailed('create_tasks', 'course lookup', courseError, 'Akada could not look up that course.');
+        if (!course) return toolError('That course is not available in your active Akada semester. Find the course again first.');
 
         const { data: existing, error: existingError } = await supabase
           .from('tasks')
@@ -264,7 +314,7 @@ function createServer(token: AuthenticatedToken) {
           .eq('course_id', course.id)
           .eq('user_id', token.userId)
           .eq('completed', false);
-        if (existingError) return toolError('Akada could not check your existing tasks.');
+        if (existingError) return queryFailed('create_tasks', 'duplicate check', existingError, 'Akada could not check your existing tasks.');
 
         const existingKeys = new Set((existing ?? []).map((task) => `${normalize(task.title)}|${task.due_date ?? ''}`));
         const seen = new Set<string>();
@@ -283,14 +333,14 @@ function createServer(token: AuthenticatedToken) {
           .from('tasks')
           .insert(toInsert)
           .select('id, title, due_date, priority');
-        if (insertError) return toolError('Akada could not save those tasks.');
+        if (insertError) return queryFailed('create_tasks', 'insert', insertError, 'Akada could not save those tasks.');
         return result({
           course: { id: course.id, code: course.code, name: course.name },
           created: (created ?? []).map((task) => ({ id: task.id, title: task.title, due_date: task.due_date, priority: task.priority })),
           skipped: tasks.length - toInsert.length,
         });
-      } catch {
-        return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');
+      } catch (cause) {
+        return toolCrashed('create_tasks', cause);
       }
     },
   );
@@ -317,7 +367,8 @@ function createServer(token: AuthenticatedToken) {
           .eq('user_id', token.userId)
           .eq('semester_id', semesterId)
           .maybeSingle();
-        if (courseError || !course) {
+        if (courseError) return queryFailed('delete_course', 'course lookup', courseError, 'Akada could not look up that course.');
+        if (!course) {
           return toolError('That course is not available in your active Akada semester. Find the course again first.');
         }
 
@@ -326,14 +377,14 @@ function createServer(token: AuthenticatedToken) {
           .delete()
           .eq('course_id', course.id)
           .eq('user_id', token.userId);
-        if (sessionsError) return toolError('Akada could not remove study sessions for this course.');
+        if (sessionsError) return queryFailed('delete_course', 'sessions delete', sessionsError, 'Akada could not remove study sessions for this course.');
 
         const { error: tasksError } = await supabase
           .from('tasks')
           .delete()
           .eq('course_id', course.id)
           .eq('user_id', token.userId);
-        if (tasksError) return toolError('Akada could not remove tasks for this course.');
+        if (tasksError) return queryFailed('delete_course', 'tasks delete', tasksError, 'Akada could not remove tasks for this course.');
 
         const { error: deleteError } = await supabase
           .from('courses')
@@ -341,7 +392,7 @@ function createServer(token: AuthenticatedToken) {
           .eq('id', course.id)
           .eq('user_id', token.userId)
           .eq('semester_id', semesterId);
-        if (deleteError) return toolError('Akada could not delete that course.');
+        if (deleteError) return queryFailed('delete_course', 'course delete', deleteError, 'Akada could not delete that course.');
 
         return result({
           deleted: true,
@@ -352,8 +403,8 @@ function createServer(token: AuthenticatedToken) {
           },
           message: `Deleted course ${course.code} (${course.name}) and all associated tasks and study sessions.`,
         });
-      } catch {
-        return toolError('Akada is not configured or your session has expired. Reconnect the connector and try again.');
+      } catch (cause) {
+        return toolCrashed('delete_course', cause);
       }
     },
   );
@@ -376,9 +427,20 @@ async function authenticate(request: NextRequest) {
   try {
     const token = readAccessToken(match[1]);
     const { data, error } = await mcpSupabase(token.supabaseAccessToken).auth.getUser();
-    if (error || data.user?.id !== token.userId) return null;
+    // A 401 from here is indistinguishable from a malformed bearer token
+    // once it reaches the client, so say which one it was in the log. No ids
+    // or token material, only the reason.
+    if (error) {
+      console.error('[mcp:auth] supabase session rejected', error.message);
+      return null;
+    }
+    if (data.user?.id !== token.userId) {
+      console.error('[mcp:auth] token subject does not match the supabase session');
+      return null;
+    }
     return { token: match[1], payload: token };
-  } catch {
+  } catch (cause) {
+    console.error('[mcp:auth] bearer token could not be read', cause instanceof Error ? cause.message : cause);
     return null;
   }
 }
