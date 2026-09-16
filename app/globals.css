@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  /* The shipped default: the "Paper" tone from Appearance. Kept in step with
+  /* The shipped default: the "Paper" stock from Settings. Kept in step with
      PAPER_TONES.paper in lib/preferences.ts so the first paint already looks
      the way the app settles, with no flash before preferences apply. */
   --bg: #F5F1E8;
@@ -29,7 +29,7 @@
   /* The wash behind a sheet or a modal. A token rather than an ink opacity,
      because on the night paper the ink is the light value and `bg-ink/35`
      would veil the screen in cream. Use the `.scrim` utility below. */
-  --scrim: rgba(26, 23, 20, 0.40);
+  --scrim: rgba(26, 23, 20, 0.32);
 
   /* Ink left in the margin by PaperDoodle. Multiplied into a light page so
      the stroke sinks into the paper instead of sitting on top of it; the
@@ -45,14 +45,17 @@
      into, so the whole url is the token. */
   --underline-svg: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%231A1714' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.6'/></svg>");
 
-  /* Highlighter swipe colors, uneven, lifted off the line */
-  --highlight-yellow: rgba(228, 197, 92, 0.42);
-  --highlight-pink: rgba(214, 132, 132, 0.32);
-  --highlight-mint: rgba(135, 181, 156, 0.36);
+  /* Highlighter. These are opaque tints now rather than alpha washes: a real
+     highlighter lays ink down on the page, it does not tint what is under it,
+     and the redesign's swipes are the pastel tints at full strength. */
+  --highlight-yellow: #F1E9C9;
+  --highlight-pink: #F1E2E2;
+  --highlight-mint: #E9EEE3;
+  --highlight-clay: #F4E1D2;
 
-  /* Default heading typeface. Fraunces. Overridden at runtime by
-     usePreferences() when the user picks Cormorant / Lora / Merriweather. */
-  --font-serif: var(--font-fraunces), 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  /* One serif, no picker. Source Serif 4 carries every heading and every line
+     of prose; --font-serif-family is what next/font wires up in layout.tsx. */
+  --font-serif: var(--font-serif-family), 'Source Serif 4', Georgia, serif;
 
   /* Alarm ramp, muted terracottas, never red. `warn` is the quiet tone
      (an overdue date, a course gone untouched); `priority` is for errors,
@@ -89,25 +92,23 @@
   --mauve-tint: #E8DCE3;
 }
 
-/* The night paper is a paper tone, not a second theme: every one of its
+/* The night paper is a paper stock, not a second theme: every one of its
    values lives in PAPER_TONES / NIGHT_TOKENS in lib/preferences.ts and is
    written onto the root element as an inline custom property, exactly the way
-   the four daylight papers are. A stylesheet rule could not have won against
-   those inline properties in any case, which is why the previous dark block
-   never actually took. All that is left here is the one thing no custom
-   property can carry: what the browser paints for form controls, scrollbars
-   and caret. `dark` is kept alongside `night` so a record written by an older
-   build still darkens its chrome. */
+   the daylight papers are. A stylesheet rule could not have won against those
+   inline properties in any case. All that is left here is the one thing no
+   custom property can carry: what the browser paints for form controls,
+   scrollbars and caret. `dark` is kept alongside `night` so a record written
+   by an older build still darkens its chrome. */
 :root[data-theme='night'],
 :root[data-theme='dark'] {
   color-scheme: dark;
   --doodle-blend: screen;
 }
 
-/* The doodle layer. Sits over the page but under the bottom nav and the
-   timer dock, so a stroke passes beneath the chrome the way ink passes under
-   a ruler. It never takes a pointer event: PaperDoodle reads gestures from
-   the window instead. */
+/* The doodle layer. Sits over the page but under the nav and the timer dock,
+   so a stroke passes beneath the chrome the way ink passes under a ruler. It
+   never takes a pointer event: PaperDoodle reads gestures from the window. */
 .doodle-layer {
   position: fixed;
   inset: 0;
@@ -154,21 +155,21 @@ input[type='number'] {
   -moz-appearance: textfield;
 }
 
-/* Density, the one preference that has to reach past a colour token.
-   Comfy is the shipped middle; cozy opens the page up, compact closes it.
-   Read by PageShell's gutter and the space between stacked cards. */
+/* Room to breathe, the one preference that has to reach past a colour token.
+   Normal is the shipped middle; airy opens the page up, tight closes it.
+   Read by PageShell's gutter and the space between stacked sections. */
 :root,
-:root[data-density='comfy'] {
+:root[data-density='normal'] {
   --density-gutter: 22px;
   --density-gap: 12px;
   --density-section: 32px;
 }
-:root[data-density='cozy'] {
+:root[data-density='airy'] {
   --density-gutter: 26px;
   --density-gap: 16px;
   --density-section: 40px;
 }
-:root[data-density='compact'] {
+:root[data-density='tight'] {
   --density-gutter: 18px;
   --density-gap: 9px;
   --density-section: 24px;
@@ -209,7 +210,6 @@ input[type='range'].pl-range {
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
-  border-radius: 999px;
   background: var(--line);
   outline: none;
 }
@@ -221,7 +221,6 @@ input[type='range'].pl-range::-webkit-slider-thumb {
   border-radius: 50%;
   background: var(--paper);
   border: 1.5px solid currentColor;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   cursor: pointer;
 }
 input[type='range'].pl-range::-moz-range-thumb {
@@ -243,10 +242,11 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   Refined notebook utilities, paper noise, deckle cards, highlighter
-   swipes, hand-drawn checkboxes, sticky notes, swipe-affordances, etc.
-   These mirror the tokens in the Akada Refined design bundle so future
-   handoffs stay on-theme.
+   Notebook marks. A page says "this one" with a swipe of highlighter, a
+   drawn box, a tally stroke or a rule bitten into the paper — never with a
+   filled pill or a rounded card. Corners are square throughout; the only
+   curves in the app are circles (an avatar, a dot) and the deliberately
+   uneven radius of a hand-drawn checkbox.
    ────────────────────────────────────────────────────────────────────── */
 
 /* Subtle paper noise overlay, drop into a relative ancestor as
@@ -261,11 +261,11 @@ input[type='date']::-webkit-calendar-picker-indicator {
   mix-blend-mode: var(--noise-blend, multiply);
 }
 
-/* The uppercase caption used for section headers, field labels and course
-   codes. One spec, so the same idea reads the same everywhere; anything set
-   alongside it (a colour, a mono family) still wins, because Tailwind's
-   utilities layer comes after this one. */
 @layer components {
+  /* The uppercase caption used for section headers, field labels and course
+     codes. One spec, so the same idea reads the same everywhere; anything set
+     alongside it (a colour, a mono family, a tighter tracking) still wins,
+     because Tailwind's utilities layer comes after this one. */
   .eyebrow {
     font-size: 10px;
     font-weight: 600;
@@ -275,10 +275,36 @@ input[type='date']::-webkit-calendar-picker-indicator {
   }
 
   /* The wash behind a sheet. Replaces `bg-ink/35`, which inverts along with
-     the ink on the night paper and veils the screen in cream. Pair it with
-     backdrop-blur-sm the way the sheets already do. */
+     the ink on the night paper and veils the screen in cream. */
   .scrim {
     background-color: var(--scrim);
+  }
+
+  /* The rule that opens a section: bitten into the paper, full ink weight.
+     Every screen's first heading sits under one of these. A lighter
+     `border-line` rule is the subordinate divider. */
+  .rule-ink {
+    border-top: 1.5px solid var(--ink);
+  }
+
+  /* The row divider inside a list. Dashed, because a list on paper is ruled
+     faintly and a solid line between every item would be a table. */
+  .row-rule {
+    border-bottom: 1px dashed var(--line);
+  }
+
+  /* Ruled writing area, for anywhere the reader is asked to write a sentence
+     rather than fill a field: the review answer, a session note. The lines
+     are the paper's, so text sits on them at 28px leading. */
+  .ruled-note {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 27px,
+      var(--line-soft) 27px,
+      var(--line-soft) 28px
+    );
+    line-height: 28px;
   }
 }
 
@@ -306,34 +332,106 @@ input[type='date']::-webkit-calendar-picker-indicator {
   );
 }
 
-/* Highlighter swipe, sits below text baseline, slightly off-square */
+/* Highlighter swipe, sits below the text baseline and stops short of the
+   descender, the way a real one does. .hl is the yellow; .hl-swipe takes any
+   colour through --hl, which is how a course tint marks its own row. */
+.hl,
+.hl-swipe,
+.hl-pink,
+.hl-mint,
+.hl-clay {
+  padding: 0 3px;
+}
 .hl {
   background-image: linear-gradient(
     180deg,
-    transparent 55%,
-    var(--highlight-yellow) 55% 92%,
-    transparent 92%
+    transparent 54%,
+    var(--highlight-yellow) 54% 94%,
+    transparent 94%
   );
-  padding: 0 2px;
-  background-position: 0 2px;
 }
 .hl-pink {
   background-image: linear-gradient(
     180deg,
-    transparent 55%,
-    var(--highlight-pink) 55% 92%,
-    transparent 92%
+    transparent 54%,
+    var(--highlight-pink) 54% 94%,
+    transparent 94%
   );
-  padding: 0 2px;
 }
 .hl-mint {
   background-image: linear-gradient(
     180deg,
-    transparent 55%,
-    var(--highlight-mint) 55% 92%,
-    transparent 92%
+    transparent 54%,
+    var(--highlight-mint) 54% 94%,
+    transparent 94%
   );
-  padding: 0 2px;
+}
+.hl-clay {
+  background-image: linear-gradient(
+    180deg,
+    transparent 54%,
+    var(--highlight-clay) 54% 94%,
+    transparent 94%
+  );
+}
+.hl-swipe {
+  background-image: linear-gradient(
+    180deg,
+    transparent 54%,
+    var(--hl, var(--highlight-yellow)) 54% 94%,
+    transparent 94%
+  );
+}
+
+/* Hand-drawn underline, wavy, slightly imperfect */
+.hand-underline {
+  background-image: var(
+    --underline-svg,
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%231A1714' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.6'/></svg>")
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 6px;
+  background-position: 0 100%;
+  padding-bottom: 6px;
+}
+
+/* The one straight underline: a text button, ruled under in ink. Used where
+   the design draws a serif word with a line beneath it ("jot a task"). */
+.ink-underline {
+  border-bottom: 1.4px solid var(--ink);
+  padding-bottom: 2px;
+}
+
+/* Hand-drawn rounded-rect (replaces a checkbox border). The uneven radius is
+   the point: it is a box someone drew, not one a browser rendered. */
+.scribble-box {
+  border: 1.4px solid var(--ink);
+  border-radius: 4px 5px 4px 6px / 5px 4px 6px 4px;
+  position: relative;
+  background: transparent;
+}
+
+/* A tally stroke: two pixels of ink, leaned over the way a pen leans. Five of
+   these is an hour's worth of sitting down. Tally in components/notebook
+   renders the groups; this is the single mark. */
+.tally-stroke {
+  display: block;
+  width: 2px;
+  background: currentColor;
+  transform: rotate(8deg);
+}
+
+/* Swipe-action affordance backgrounds (revealed under a translated row) */
+.swipe-bg-complete {
+  background: linear-gradient(90deg, var(--mint-tint), transparent 75%);
+}
+.swipe-bg-delete {
+  background: linear-gradient(-90deg, var(--rose-tint), transparent 75%);
+}
+
+/* Tabular numerals for digits */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 /* The privacy policy and the terms: read as documents, not as screens. */
@@ -372,111 +470,4 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .legal-prose strong {
   font-weight: 600;
   color: var(--ink);
-}
-
-/* Highlighter swipe in any colour, set --hl on the element. Same geometry
-   as .hl, which is this with the yellow baked in. Used wherever something is
-   picked: a filter, a course, a goal. A swipe of highlighter is how a page
-   marks a choice; a filled pill is how software does. */
-.hl-swipe {
-  background-image: linear-gradient(
-    180deg,
-    transparent 52%,
-    var(--hl, var(--highlight-yellow)) 52% 94%,
-    transparent 94%
-  );
-  padding: 0 3px;
-  background-position: 0 2px;
-}
-
-/* Hand-drawn underline, wavy, slightly imperfect */
-.hand-underline {
-  background-image: var(
-    --underline-svg,
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%231A1714' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.6'/></svg>")
-  );
-  background-repeat: no-repeat;
-  background-size: 100% 6px;
-  background-position: 0 100%;
-  padding-bottom: 6px;
-}
-
-/* Hand-drawn rounded-rect (replaces a checkbox border) */
-.scribble-box {
-  border: 1.4px solid var(--ink);
-  border-radius: 4px 5px 4px 6px / 5px 4px 6px 4px;
-  position: relative;
-  background: transparent;
-}
-
-/* Card with deckle (irregular) edges, applies to .deckle alongside other
-   border-radius rules. Use with bg-paper + border for a subtle hand-cut feel. */
-.deckle {
-  border-radius: 14px 13px 15px 13px / 13px 15px 13px 14px;
-}
-
-/* Tilt utilities for sticky-note / stamp affectations */
-.tilt-l { transform: rotate(-1.4deg); }
-.tilt-r { transform: rotate(1.6deg); }
-.tilt-l2 { transform: rotate(-0.6deg); }
-.tilt-r2 { transform: rotate(0.8deg); }
-
-/* Sticky note, bright butter yellow, asymmetric corners + warm shadow */
-.sticky {
-  background: linear-gradient(180deg, #F4E58A 0%, #EFDC72 100%);
-  box-shadow:
-    1px 2px 0 rgba(0, 0, 0, 0.04),
-    4px 6px 14px rgba(180, 150, 80, 0.18);
-  border-radius: 2px 14px 4px 12px / 12px 4px 14px 2px;
-  position: relative;
-}
-
-/* Tape strip, anchor sticky notes to the page */
-.tape {
-  position: absolute;
-  width: 56px;
-  height: 16px;
-  background: rgba(214, 206, 176, 0.75);
-  border-left: 1px dashed rgba(120, 100, 60, 0.15);
-  border-right: 1px dashed rgba(120, 100, 60, 0.15);
-  box-shadow: 0 1px 3px rgba(60, 40, 10, 0.08);
-}
-
-/* Swipe-action affordance backgrounds (revealed under a translated row) */
-.swipe-bg-complete {
-  background: linear-gradient(90deg, var(--mint-tint), transparent 75%);
-}
-.swipe-bg-delete {
-  background: linear-gradient(-90deg, var(--rose-tint), transparent 75%);
-}
-
-/* Postmark-style stamp pill, slightly tilted */
-.stamp {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 9px;
-  font-family: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--muted);
-  border: 1.2px solid var(--line-strong);
-  border-radius: 3px;
-  transform: rotate(-1.5deg);
-}
-
-/* Tabular numerals for digits */
-.tnum {
-  font-variant-numeric: tabular-nums;
-}
-
-/* Soft entrance animations (kept for legacy components) */
-/* Cormorant should default to medium weight when used as headings */
-.font-cormorant {
-  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
-  letter-spacing: -0.01em;
-}
-.font-hand {
-  font-family: var(--font-hand), 'Caveat', 'Patrick Hand', cursive;
 }

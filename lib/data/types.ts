@@ -17,6 +17,11 @@ export interface Course {
   /** Already formatted for display, e.g. "Mon/Wed 10:00". */
   meetingTime?: string | null;
   /**
+   * How the course is marked. Empty for a course nobody has told the app
+   * about, in which case the grade panels simply do not draw.
+   */
+  assessments?: Assessment[];
+  /**
    * Where this course sits in the order the student dragged their dashboard
    * into, smallest first. Optional: a row written before the column existed,
    * or a project that has not re-run supabase/schema.sql, has none and falls
@@ -37,6 +42,32 @@ export interface Session {
 
 export type TaskPriority = 'high' | 'normal';
 
+/**
+ * What a row on the list actually is.
+ *
+ * The redesign stopped treating every line as the same kind of thing. A
+ * reading has a page count and belongs in the backlog lane; an exam is
+ * circled on the month and counted down to; a plain task is neither. The
+ * default is `task`, so nothing written before this existed changes meaning.
+ */
+export type TaskKind = 'task' | 'reading' | 'exam';
+
+/**
+ * One marked piece of a course: a quiz, the midterm, the final.
+ *
+ * `weight` is what it is worth as a percentage of the course. `score` and
+ * `outOf` are filled in once it comes back — until then the row shows a dash
+ * and counts toward the part of the grade still unmarked, which is the number
+ * the Term screen leads with.
+ */
+export interface Assessment {
+  id: string;
+  label: string;
+  weight: number;
+  score: number | null;
+  outOf: number | null;
+}
+
 export interface TaskSubtask {
   id: string;
   title: string;
@@ -55,6 +86,12 @@ export interface Task {
   completed: boolean;
   completedAt: string | null;
   createdAt: string;
+  /** Plain task unless said otherwise. See TaskKind. */
+  kind?: TaskKind;
+  /** What this piece is worth, as a percentage of the course. */
+  weight?: number | null;
+  /** Pages, for a reading. What turns the backlog into hours. */
+  pages?: number | null;
 }
 
 export interface Semester {

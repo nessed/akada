@@ -1,13 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import {
-  Inter,
-  JetBrains_Mono,
-  Fraunces,
-  Lora,
-  Merriweather,
-  Cormorant_Garamond,
-  Caveat,
-} from 'next/font/google';
+import { Source_Serif_4, Schibsted_Grotesk, Space_Mono } from 'next/font/google';
 import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import NoticeProvider from '@/components/Notice';
@@ -17,63 +9,34 @@ import PaperDoodle from '@/components/notebook/PaperDoodle';
 import { SITE_URL } from '@/lib/site-url';
 import './globals.css';
 
-const inter = Inter({
+// The three families the redesign runs on. Source Serif 4 carries every
+// heading and every line of prose the app speaks in; Schibsted Grotesk is the
+// structural sans; Space Mono grounds durations, dates and the clock. There is
+// no fourth family and no picker: the old Inter / Fraunces / Caveat stack, and
+// the heading-font choice that went with it, are gone.
+const sans = Schibsted_Grotesk({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
   variable: '--font-sans',
   display: 'swap',
 });
 
-const mono = JetBrains_Mono({
+// Optical sizing is the reason this face is here: the 52px review masthead and
+// a 13px italic aside are the same type cut two different ways.
+const serif = Source_Serif_4({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-mono',
-  display: 'swap',
-});
-
-const fraunces = Fraunces({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['300', '400', '500', '600', '700'],
   style: ['normal', 'italic'],
-  variable: '--font-fraunces',
+  variable: '--font-serif-family',
   display: 'swap',
 });
 
-const lora = Lora({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  style: ['normal', 'italic'],
-  variable: '--font-lora',
-  display: 'swap',
-  // Only renders if chosen in Appearance, so it is not worth a preload on
-  // every page load. Same for the other two alternates below.
-  preload: false,
-});
-
-const merriweather = Merriweather({
+const mono = Space_Mono({
   subsets: ['latin'],
   weight: ['400', '700'],
   style: ['normal', 'italic'],
-  variable: '--font-merriweather',
-  display: 'swap',
-  preload: false,
-});
-
-// Editorial alternative to the default Fraunces, offered in Appearance.
-const cormorant = Cormorant_Garamond({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  style: ['normal', 'italic'],
-  variable: '--font-cormorant',
-  display: 'swap',
-  preload: false,
-});
-
-// Handwritten marginalia and notes (HandNote primitive, Caveat utility).
-const caveat = Caveat({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-hand',
+  variable: '--font-mono',
   display: 'swap',
 });
 
@@ -129,7 +92,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${mono.variable} ${fraunces.variable} ${lora.variable} ${merriweather.variable} ${cormorant.variable} ${caveat.variable}`}
+      className={`${sans.variable} ${serif.variable} ${mono.variable}`}
     >
       <body className="font-sans bg-bg text-ink antialiased">
         <PreferencesBootstrap />

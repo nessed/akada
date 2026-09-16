@@ -47,3 +47,21 @@ export function resizeAvatar(dataUrl: string, maxEdge = MAX_EDGE): Promise<strin
 export function isUploadedImage(value: string): boolean {
   return value.startsWith('data:');
 }
+
+/**
+ * The one or two letters that stand in for a face. Two words give two
+ * initials, one word gives one, and anything else gives nothing so the caller
+ * can fall back to the bookmark rather than printing a stray character.
+ *
+ * Was written out separately in the settings sheet and in onboarding, which
+ * disagreed: one took two initials, the other always took one.
+ */
+export function initialsFrom(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+}

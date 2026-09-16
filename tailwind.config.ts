@@ -54,17 +54,21 @@ const config: Config = {
         prioritySoft: 'var(--priority-soft)',
       },
       fontFamily: {
-        // Default serif points at the user's --font-serif preference (Fraunces
-        // by default; Cormorant/Lora/Merriweather selectable in Appearance).
-        serif: ['var(--font-serif)', 'var(--font-fraunces)', 'Fraunces', 'Iowan Old Style', 'Georgia', 'serif'],
-        sans: ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
-        hand: ['var(--font-hand)', 'Caveat', 'Patrick Hand', 'cursive'],
+        // Three families, no picker. --font-serif resolves to Source Serif 4
+        // (see :root in globals.css); the other two come straight from the
+        // next/font variables layout.tsx puts on <html>.
+        serif: ['var(--font-serif)', 'Source Serif 4', 'Iowan Old Style', 'Georgia', 'serif'],
+        sans: ['var(--font-sans)', 'Schibsted Grotesk', '-apple-system', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'Space Mono', 'ui-monospace', 'monospace'],
       },
       animation: {
         'slide-up': 'slideUp 0.26s cubic-bezier(0.2, 0.7, 0.2, 1)',
         'fade-in': 'fadeIn 0.22s ease-out',
+        rise: 'rise 0.3s cubic-bezier(0.2, 0.7, 0.2, 1)',
+        // The slow pulse under a running timer and beside a caret. Never
+        // faster than this: a frantic tick is the opposite of the point.
         tick: 'tick 2.4s ease-in-out infinite',
+        caret: 'tick 1.2s ease-in-out infinite',
       },
       keyframes: {
         slideUp: {
@@ -75,10 +79,14 @@ const config: Config = {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
+        rise: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
         tick: {
-          '0%': { opacity: '0.55' },
+          '0%': { opacity: '0.5' },
           '50%': { opacity: '1' },
-          '100%': { opacity: '0.55' },
+          '100%': { opacity: '0.5' },
         },
       },
     },
