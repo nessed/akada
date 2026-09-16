@@ -33,7 +33,7 @@ export default function FloatingActionButton({ courses, onStartTimer, onAddTask 
           type="button"
           aria-label="Close menu"
           onClick={() => setMode('closed')}
-          className="fixed inset-0 z-40 bg-ink/30 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-40 scrim backdrop-blur-sm animate-fade-in"
         />
       )}
 

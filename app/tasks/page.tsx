@@ -505,7 +505,7 @@ function TasksPageContent() {
             type="button"
             aria-label="Cancel editing"
             onClick={() => setEditingTask(null)}
-            className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+            className="absolute inset-0 scrim backdrop-blur-sm"
           />
           <div className="relative w-full md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
             <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
@@ -613,7 +613,7 @@ function TasksPageContent() {
               type="button"
               aria-label="Close task details"
               onClick={() => setViewingTask(null)}
-              className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+              className="absolute inset-0 scrim backdrop-blur-sm"
             />
             <section className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-bg px-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] animate-slide-up md:mx-auto md:max-w-xl">
               <div className="mx-auto mb-6 h-1 w-9 rounded-full bg-line-strong" />
@@ -794,7 +794,7 @@ function TasksPageContent() {
             type="button"
             aria-label="Close shortcuts"
             onClick={() => setShortcutHelpOpen(false)}
-            className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+            className="absolute inset-0 scrim backdrop-blur-sm"
           />
           <section className="relative w-full rounded-t-3xl bg-bg px-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] animate-slide-up md:mx-auto md:max-w-xl">
             <div className="mx-auto mb-6 h-1 w-9 rounded-full bg-line-strong" />

@@ -66,7 +66,7 @@ export default function ConfirmSheet({
         type="button"
         aria-label={cancelLabel}
         onClick={onCancel}
-        className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+        className="absolute inset-0 scrim backdrop-blur-sm"
       />
       <div
         role="dialog"

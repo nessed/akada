@@ -66,7 +66,7 @@ export default function SessionLogModal({
         type="button"
         aria-label="Session log backdrop"
         disabled={saving}
-        className="absolute inset-0 bg-ink/35 backdrop-blur-sm cursor-default"
+        className="absolute inset-0 scrim backdrop-blur-sm cursor-default"
       />
       <div className="relative w-full md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
         <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />

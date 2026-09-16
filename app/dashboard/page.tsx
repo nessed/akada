@@ -760,7 +760,7 @@ export default function DashboardPage() {
             type="button"
             aria-label="Cancel"
             onClick={() => setAddingTaskFor(null)}
-            className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+            className="absolute inset-0 scrim backdrop-blur-sm"
           />
           <div className="relative w-full md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
             <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
@@ -850,7 +850,7 @@ export default function DashboardPage() {
             type="button"
             aria-label="Cancel"
             onClick={() => setAddingCourse(false)}
-            className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+            className="absolute inset-0 scrim backdrop-blur-sm"
           />
           <div className="relative w-full md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
             <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
@@ -994,7 +994,7 @@ export default function DashboardPage() {
             type="button"
             aria-label="Cancel editing course"
             onClick={() => !savingCourseEdit && setEditingCourse(null)}
-            className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+            className="absolute inset-0 scrim backdrop-blur-sm"
           />
           <div className="relative max-h-[92dvh] w-full overflow-y-auto md:mx-auto md:max-w-xl rounded-t-3xl bg-bg px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
             <div className="mx-auto mb-[18px] h-1 w-9 rounded-full bg-line-strong" />
