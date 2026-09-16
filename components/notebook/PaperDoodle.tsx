@@ -22,6 +22,19 @@ const MAX_POINTS = 420;
 const MAX_STROKES = 6;
 /** Movement needed before a drag counts as a doodle rather than a tap. */
 const START_SLOP = 7;
+/**
+ * A finger has to hold still this long before the gesture becomes ink.
+ *
+ * A mouse drag cannot scroll the page, so a mouse draws straight away. A
+ * finger is ambiguous: the same movement is both "scroll the page" and "draw
+ * on it", and nothing here calls preventDefault, so the page wins and the
+ * scroll cancels the stroke. That left one short mark per touch and then
+ * nothing for the rest of it. Holding still is how a finger says which it
+ * meant, the same bargain the course cards strike for carrying a card.
+ */
+const HOLD_MS = 260;
+/** Wander further than this before the hold is up and it was a scroll. */
+const HOLD_SLOP = 10;
 /** How long a finished stroke sits before it starts to lift, in ms. */
 const DWELL = 900;
 /** How long the lift takes, in ms. */
@@ -121,6 +134,11 @@ export default function PaperDoodle() {
     let origin = { x: 0, y: 0 };
     let stroke: Stroke | null = null;
     let scrolled = false;
+    // Whether this gesture has earned the right to draw, and what kind of
+    // pointer is making it. Until it is armed, the page owns the gesture.
+    let armed = false;
+    let pointerKind = 'mouse';
+    let holdTimer = 0;
 
     const resize = () => {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -225,13 +243,33 @@ export default function PaperDoodle() {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       if (!isEmptyBackground(e.target)) return;
       pointerId = e.pointerId;
+      pointerKind = e.pointerType;
       origin = { x: e.clientX, y: e.clientY };
       stroke = null;
       scrolled = false;
+
+      if (e.pointerType === 'mouse') {
+        armed = true;
+        return;
+      }
+      armed = false;
+      holdTimer = window.setTimeout(() => {
+        holdTimer = 0;
+        armed = true;
+      }, HOLD_MS);
     };
 
     const onPointerMove = (e: PointerEvent) => {
       if (e.pointerId !== pointerId) return;
+
+      // Still deciding. Moving before the hold is up means the reader was
+      // reaching for the page, so hand the gesture back and draw nothing.
+      if (!armed) {
+        if (Math.hypot(e.clientX - origin.x, e.clientY - origin.y) > HOLD_SLOP) {
+          releaseGesture();
+        }
+        return;
+      }
 
       // A scroll means the reader was moving the page, not drawing on it.
       if (scrolled) {
@@ -272,8 +310,25 @@ export default function PaperDoodle() {
       });
     };
 
+    const clearHold = () => {
+      if (holdTimer) {
+        window.clearTimeout(holdTimer);
+        holdTimer = 0;
+      }
+    };
+
+    /** Give the gesture back to the page without leaving a mark. */
+    const releaseGesture = () => {
+      clearHold();
+      armed = false;
+      pointerId = null;
+      stroke = null;
+    };
+
     const endStroke = () => {
       if (stroke && stroke.endedAt === null) stroke.endedAt = performance.now();
+      clearHold();
+      armed = false;
       pointerId = null;
       stroke = null;
     };
@@ -284,6 +339,9 @@ export default function PaperDoodle() {
     };
 
     const onScroll = () => {
+      // An armed finger holds the page still, so a scroll here is not this
+      // gesture. A mouse never claims the page, so a wheel still cancels it.
+      if (armed && pointerKind !== 'mouse') return;
       scrolled = true;
       if (stroke && stroke.endedAt === null) {
         stroke.endedAt = performance.now();
@@ -291,6 +349,16 @@ export default function PaperDoodle() {
         pointerId = null;
         stroke = null;
       }
+    };
+
+    /**
+     * Registered for the whole session rather than switched on when a stroke
+     * arms, because the browser decides at touchstart whether preventDefault
+     * is even allowed. A listener added mid-gesture arrives after that
+     * decision and the page scrolls anyway. It only ever acts while armed.
+     */
+    const holdPageStill = (e: TouchEvent) => {
+      if (armed && pointerKind !== 'mouse' && e.cancelable) e.preventDefault();
     };
 
     const onHide = () => {
@@ -314,6 +382,7 @@ export default function PaperDoodle() {
       window.addEventListener('pointerup', onPointerUp, true);
       window.addEventListener('pointercancel', onPointerUp, true);
       window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('touchmove', holdPageStill, { passive: false });
       window.addEventListener('blur', onHide);
       document.addEventListener('visibilitychange', onHide);
     };
@@ -327,6 +396,7 @@ export default function PaperDoodle() {
       window.removeEventListener('pointerup', onPointerUp, true);
       window.removeEventListener('pointercancel', onPointerUp, true);
       window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('touchmove', holdPageStill);
       window.removeEventListener('blur', onHide);
       document.removeEventListener('visibilitychange', onHide);
       if (frame) cancelAnimationFrame(frame);
