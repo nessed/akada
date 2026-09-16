@@ -115,13 +115,13 @@ export default function LandingPage() {
             <div className="flex items-center gap-5">
               <Link
                 href="/auth"
-                className="hand-underline font-serif text-[15px] text-ink-soft"
+                className="hand-underline hidden whitespace-nowrap font-serif text-[15px] text-ink-soft sm:inline"
               >
                 Log in
               </Link>
               <Link
                 href="/auth?mode=signup"
-                className="rounded-[10px] border border-line-strong bg-paper px-4 py-2.5 text-sm font-medium text-ink-soft transition-colors hover:border-ink-soft"
+                className="whitespace-nowrap rounded-[10px] border border-line-strong bg-paper px-4 py-2.5 text-sm font-medium text-ink-soft transition-colors hover:border-ink-soft"
               >
                 Create account
               </Link>
@@ -135,7 +135,7 @@ export default function LandingPage() {
             <h1 className="m-0 font-serif text-[42px] font-medium leading-[1.04] tracking-[-0.03em] sm:text-[58px]">
               One page for the whole <span className="italic">semester</span>.
             </h1>
-            <p className="mx-auto mt-6 mb-0 max-w-[30rem] text-[16px] leading-[1.7] text-ink-soft">
+            <p className="mx-auto mt-6 mb-0 max-w-[34rem] text-[16px] leading-[1.7] text-ink-soft">
               Your courses, your deadlines, and the hours you actually studied,
               kept somewhere quiet enough to look at on a bad week.
             </p>
@@ -326,7 +326,7 @@ function ProductPreview() {
 
       <span
         aria-hidden
-        className="font-hand absolute -right-2 bottom-8 hidden text-[17px] leading-[1.05] text-muted lg:block"
+        className="font-hand absolute -right-[104px] bottom-16 hidden text-[17px] leading-[1.05] text-muted-soft lg:block"
         style={{ transform: 'rotate(-6deg)' }}
       >
         this is the whole app
