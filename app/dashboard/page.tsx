@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import NextImage from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import DailySummary from '@/components/DailySummary';
 import WeeklyProgressBanner from '@/components/WeeklyProgressBanner';
@@ -91,7 +91,27 @@ type CourseEditDraft = {
 };
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardFallback />}>
+      <DashboardPageContent />
+    </Suspense>
+  );
+}
+
+// useSearchParams opts the tree into dynamic rendering, so it needs a
+// boundary above it or the build fails to prerender this route. Same fix as
+// the Tasks page.
+function DashboardFallback() {
+  return (
+    <PageShell>
+      <LoadingIndicator compact label="Loading your planner" className="mb-6" />
+    </PageShell>
+  );
+}
+
+function DashboardPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { active, start, clearTimerState } = useTimer();
   const { notify } = useNotice();
 
@@ -324,6 +344,33 @@ export default function DashboardPage() {
     setNewCourseGoal(8);
     setAddingCourse(true);
   }
+
+  // Settings sends a reader here to add a course, because the catalog search
+  // and the section picker live on this sheet and nowhere else. Waiting for
+  // courses to load matters: openAddCourse picks the next unused pastel off
+  // the list, and on an empty list every course would arrive the same colour.
+  // The param is cleared on arrival so a second trip from settings fires
+  // again, and the ref stops an SWR revalidation reopening the sheet in
+  // between.
+  const handledAddCourseIntent = useRef(false);
+  useEffect(() => {
+    // The guard is armed only while the param is present. Settings is
+    // rendered from this page, so arriving here does not remount it: a ref
+    // left latched would swallow every trip after the first, and one cleared
+    // straight away would let an SWR revalidation reopen the sheet in the
+    // window before the URL settles.
+    if (searchParams.get('add') !== 'course') {
+      handledAddCourseIntent.current = false;
+      return;
+    }
+    if (handledAddCourseIntent.current || coursesLoading) return;
+    handledAddCourseIntent.current = true;
+    openAddCourse();
+    router.replace('/dashboard', { scroll: false });
+    // openAddCourse reads courses and the palette, both already in scope, and
+    // is stable for the life of the render, so it is not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, coursesLoading, router]);
 
   /**
    * A catalog pick supplies code/title/credits directly, and the chosen
