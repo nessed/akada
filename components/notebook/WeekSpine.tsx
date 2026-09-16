@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { CourseDot } from './Marks';
 import { TallyCount } from './Tally';
 import { formatHM, isoDate, startOfWeek } from '@/lib/utils';
@@ -169,23 +168,5 @@ export default function WeekSpine({ days }: { days: SpineDay[] }) {
         );
       })}
     </div>
-  );
-}
-
-/**
- * The invitation at the foot of the spine. A week that has been written up and
- * not yet read back is the only thing in the app that asks for attention, and
- * it asks in a sentence rather than with a badge.
- */
-export function ReviewInvitation({ weekNumber }: { weekNumber: number }) {
-  return (
-    <Link href="/stats" className="mb-7 mt-auto block border-t border-line-strong pt-4">
-      <span className="flex items-baseline justify-between gap-2.5">
-        <span className="max-w-[22ch] font-serif text-[18px] leading-[1.25]">
-          Your week {weekNumber} review is ready.
-        </span>
-        <span className="flex-none font-mono text-[11px] text-warn">READ →</span>
-      </span>
-    </Link>
   );
 }
