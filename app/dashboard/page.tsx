@@ -69,7 +69,7 @@ function DashboardFallback() {
 function DashboardPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { active, start } = useTimer();
+  const { active, cancel } = useTimer();
   const { notify } = useNotice();
   const [prefs] = usePreferences();
 
@@ -113,14 +113,18 @@ function DashboardPageContent() {
     router.replace('/dashboard', { scroll: false });
   }, [searchParams, coursesLoading, router]);
 
+  /**
+   * Opens the sit-down screen for this piece of work. It does not start
+   * anything: choosing the length of the block, and what is coming to the
+   * desk, happens there. A timer already on the clock is the one thing worth
+   * stopping to ask about, because starting another discards it.
+   */
   function beginTimer(courseId: string, taskId: string | null) {
-    start(courseId, taskId);
-    router.push('/timer');
+    const query = taskId ? `?course=${courseId}&task=${taskId}` : `?course=${courseId}`;
+    router.push(`/timer${query}`);
   }
 
   function handleStartTimer(courseId: string, taskId: string | null = null) {
-    // A timer already running on something else would be discarded, which is
-    // the one thing here worth stopping to ask about.
     if (active && (active.courseId !== courseId || active.taskId !== taskId)) {
       setPendingTimer({ courseId, taskId });
       return;
@@ -457,6 +461,9 @@ function DashboardPageContent() {
         confirmLabel="Start the new one"
         onCancel={() => setPendingTimer(null)}
         onConfirm={() => {
+          // The running session is discarded rather than logged: the reader
+          // just said they wanted this other one instead.
+          cancel();
           if (pendingTimer) beginTimer(pendingTimer.courseId, pendingTimer.taskId);
           setPendingTimer(null);
         }}

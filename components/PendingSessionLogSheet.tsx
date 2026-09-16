@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { addSessionOptimistic, useCourses } from '@/lib/data-hooks';
+import { addSessionOptimistic, useCourses, useTasks } from '@/lib/data-hooks';
 import { useTimer } from '@/lib/timer-context';
 import { isoDate } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
@@ -14,6 +14,7 @@ interface Props {
 export default function PendingSessionLogSheet({ onResolved }: Props) {
   const { pendingLog, clearPendingLog } = useTimer();
   const { courses, isLoading: coursesLoading } = useCourses();
+  const { tasks } = useTasks();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -94,10 +95,15 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     onResolved?.();
   }
 
+  // What was carried into the session, so the sheet can name it and show
+  // which of its pieces got ticked off along the way.
+  const task = pendingLog?.taskId ? tasks.find((t) => t.id === pendingLog.taskId) ?? null : null;
+
   return (
     <SessionLogModal
       open={open}
       course={course}
+      task={task}
       durationSeconds={pendingLog?.durationSeconds ?? 0}
       saving={saving}
       contextMessage={

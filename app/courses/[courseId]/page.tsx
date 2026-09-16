@@ -4,53 +4,43 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
-import BackButton from '@/components/BackButton';
 import ConfirmSheet from '@/components/ConfirmSheet';
-import DatePicker from '@/components/DatePicker';
 import LoadingIndicator from '@/components/LoadingIndicator';
-import TaskItem from '@/components/TaskItem';
-import Stamp from '@/components/notebook/Stamp';
-import { useNotice } from '@/components/Notice';
-import CourseSessionLog from '@/components/course/CourseSessionLog';
-import CourseWeekCard from '@/components/course/CourseWeekCard';
+import JotTaskSheet from '@/components/JotTaskSheet';
+import EditTaskSheet from '@/components/EditTaskSheet';
+import TaskLine from '@/components/TaskLine';
+import Tally from '@/components/notebook/Tally';
+import GradeStanding from '@/components/course/GradeStanding';
+import SessionLog from '@/components/course/SessionLog';
 import { useArchivedCourse } from '@/components/course/useArchivedCourse';
+import { Eyebrow, PageButton, PlayGlyph, Swipe, TextButton, Tick } from '@/components/notebook/Marks';
 import type { Course, Session, Task } from '@/lib/data';
-import { cleanTaskTitle } from '@/lib/planner-safety';
 import { isLoggableDuration } from '@/lib/session-safety';
 import { useTimer } from '@/lib/timer-context';
-import { formatHM, resolveTint, totalSeconds } from '@/lib/utils';
+import { formatHM, isoDate, resolveTint, startOfWeek } from '@/lib/utils';
+import { secondsInRange, weekBounds } from '@/lib/derive';
 import {
   useOnboardingComplete,
   useCourses,
   useSessions,
   useTasks,
-  addTaskOptimistic,
   toggleTaskOptimistic,
-  deleteTaskOptimistic,
-  updateCourseOptimistic,
 } from '@/lib/data-hooks';
 
 /**
  * One course, on its own page.
  *
- * A course card used to open the task list filtered to that course, which
- * answered one question out of the several a student actually has about a
- * course. This page is the whole answer: who teaches it and when it meets,
- * how the week is going against the goal set for it, what is still written
- * down, what has been studied, and the one button that starts the next
- * session.
- *
- * It deliberately does not become a second Tasks screen. The task list here
- * is this course's list and nothing else, with no filters and no sort: the
- * cross-course list, with its ordering, its editing and its reading view, is
- * still Tasks, and there is a link through to it at the foot of the section.
+ * The redesign gives this screen the two things it could not say before: what
+ * the course is worth, broken down piece by piece, and what the reader wrote
+ * down while studying it. A session used to be a duration and nothing else,
+ * which made the log a list of numbers; with the note attached it becomes the
+ * only record of what actually happened in those hours.
  */
 export default function CoursePage() {
   const params = useParams<{ courseId: string }>();
   const courseId = typeof params?.courseId === 'string' ? params.courseId : '';
   const router = useRouter();
-  const { notify } = useNotice();
-  const { active, start } = useTimer();
+  const { active, cancel } = useTimer();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
@@ -58,11 +48,8 @@ export default function CoursePage() {
   const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
   const { tasks, isLoading: tasksLoading } = useTasks();
 
-  const [draftTitle, setDraftTitle] = useState('');
-  const [draftDue, setDraftDue] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [showDone, setShowDone] = useState(false);
+  const [jotting, setJotting] = useState(false);
+  const [editing, setEditing] = useState<Task | null>(null);
   const [confirmSwitch, setConfirmSwitch] = useState(false);
 
   useEffect(() => {
@@ -70,9 +57,7 @@ export default function CoursePage() {
       router.replace('/auth');
       return;
     }
-    if (!onboardingLoading && onboarded === false) {
-      router.replace('/onboarding');
-    }
+    if (!onboardingLoading && onboarded === false) router.replace('/onboarding');
   }, [onboarded, onboardingLoading, onboardingError, router]);
 
   const loading =
@@ -87,40 +72,54 @@ export default function CoursePage() {
     !loading && !course && courseId !== '',
   );
 
-  const courseSessions = useMemo(() => {
-    if (!course) return [];
-    return rawSessions.filter(
-      (session) => session.courseId === course.id && isLoggableDuration(session.durationSeconds),
-    );
-  }, [rawSessions, course]);
+  const courseSessions = useMemo(
+    () =>
+      rawSessions.filter(
+        (s) => s.courseId === courseId && isLoggableDuration(s.durationSeconds),
+      ),
+    [rawSessions, courseId],
+  );
 
-  const log = useMemo(() => sortNewestFirst(courseSessions), [courseSessions]);
-
-  const { open, done } = useMemo(() => {
-    const mine = tasks.filter((task) => task.courseId === courseId);
-    return {
-      open: mine
-        .filter((task) => !task.completed)
+  const mine = useMemo(() => tasks.filter((t) => t.courseId === courseId), [tasks, courseId]);
+  const open = useMemo(
+    () =>
+      mine
+        .filter((t) => !t.completed && t.kind !== 'reading')
         .sort((a, b) => {
           if (a.priority !== b.priority) return a.priority === 'high' ? -1 : 1;
           return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
         }),
-      done: mine
-        .filter((task) => task.completed)
-        .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || '')),
-    };
-  }, [tasks, courseId]);
+    [mine],
+  );
+  const readings = useMemo(() => mine.filter((t) => t.kind === 'reading'), [mine]);
 
-  function goBack() {
-    // The course list lives on the dashboard, so that is where "back" means,
-    // whatever route happened to link here.
-    router.push('/dashboard');
-  }
+  const today = isoDate();
+  const weekSeconds = useMemo(() => {
+    const [from, to] = weekBounds(new Date());
+    return secondsInRange(courseSessions, from, to);
+  }, [courseSessions]);
+  const allSeconds = courseSessions.reduce((acc, s) => acc + s.durationSeconds, 0);
+
+  /** The last nine weeks of this course, for the bars in the aside. */
+  const weekBars = useMemo(() => {
+    const bars: { key: string; seconds: number; isNow: boolean }[] = [];
+    for (let i = 8; i >= 0; i -= 1) {
+      const start = startOfWeek(new Date());
+      start.setDate(start.getDate() - i * 7);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      bars.push({
+        key: isoDate(start),
+        seconds: secondsInRange(courseSessions, isoDate(start), isoDate(end)),
+        isNow: i === 0,
+      });
+    }
+    return bars;
+  }, [courseSessions]);
 
   function beginTimer() {
     if (!course) return;
-    start(course.id, null);
-    router.push('/timer');
+    router.push(`/timer?course=${course.id}`);
   }
 
   function handleStartSession() {
@@ -134,308 +133,226 @@ export default function CoursePage() {
     beginTimer();
   }
 
-  function handleStartTimerForTask(task: Task) {
+  function handleStartForTask(task: Task) {
+    // A session already on the clock keeps it.
     if (active) {
       router.push('/timer');
       return;
     }
-    start(task.courseId, task.id);
-    router.push('/timer');
+    router.push(`/timer?course=${task.courseId}&task=${task.id}`);
   }
 
-  async function toggleTask(id: string) {
-    const task = tasks.find((item) => item.id === id);
-    if (!task) return;
-    try {
-      await toggleTaskOptimistic(task);
-    } catch (error) {
-      console.error('Failed to update task:', error);
-      notify('That task did not update.');
-    }
-  }
-
-  async function removeTask(id: string) {
-    try {
-      await deleteTaskOptimistic(id);
-    } catch (error) {
-      console.error('Failed to delete task:', error);
-      notify('That task is still here. It did not delete.');
-    }
-  }
-
-  async function commitDraft() {
-    const title = cleanTaskTitle(draftTitle);
-    if (!course || !title) {
-      setAdding(false);
-      return;
-    }
-    if (saving) return;
-    setSaving(true);
-    try {
-      await addTaskOptimistic({
-        courseId: course.id,
-        title,
-        dueDate: draftDue || null,
-        priority: 'normal',
-      });
-      setDraftTitle('');
-      setDraftDue('');
-      setAdding(false);
-    } catch (error) {
-      console.error('Failed to add task:', error);
-      notify('That task was not added.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveGoal(hours: number) {
-    if (!course) return;
-    try {
-      await updateCourseOptimistic(course.id, { weeklyGoalHours: hours });
-    } catch (error) {
-      console.error('Failed to save weekly goal:', error);
-      notify('That goal did not save.');
-    }
-  }
-
-  if (loading || (!course && searching)) {
+  if (loading || searching) {
     return (
       <PageShell>
         <LoadingIndicator compact label="Opening the course" className="mb-6" />
-        <div className="opacity-30" aria-hidden>
-          <div className="mb-3 h-2 w-16 rounded-full bg-line" />
-          <div className="mb-8 h-7 w-[58%] rounded-full bg-line" />
-          <div className="deckle mb-[var(--density-gap)] h-[210px] border border-line bg-paper" />
-          <div className="deckle h-[140px] border border-line bg-paper" />
-        </div>
       </PageShell>
     );
   }
 
   if (!course && archived) {
-    return <ArchivedCourseView onBack={goBack} archived={archived} />;
+    return <ArchivedCourseView archived={archived} />;
   }
 
   if (!course) {
     return (
       <PageShell>
-        <BackButton onClick={goBack} label="Courses" />
-        <p className="eyebrow m-0 mt-4">Course</p>
-        <h1 className="mt-2 mb-0 font-serif text-[36px] font-medium leading-[1.05] tracking-[-0.025em]">
-          This page was <span className="italic">torn out</span>.
-        </h1>
-        <p className="mt-3 mb-0 max-w-[320px] font-serif text-[14px] italic leading-[1.6] text-muted">
-          The course this link points at is not in any of your terms. It may
-          have been deleted.
-        </p>
-        <Link
-          href="/dashboard"
-          className="hand-underline mt-7 inline-block font-serif text-[14px] text-ink"
-        >
-          Back to your courses
+        <Link href="/dashboard" className="font-serif text-[13.5px] italic text-muted">
+          ← courses
         </Link>
+        <p className="mt-8 font-serif text-[20px] text-ink-soft">
+          That course is not on this term&apos;s list.
+        </p>
       </PageShell>
     );
   }
 
-  const tint = resolveTint(course.color, course.tint);
-  const details = catalogDetails(course);
+  const peak = Math.max(1, ...weekBars.map((b) => b.seconds));
 
-  return (
-    <PageShell>
-      <BackButton onClick={goBack} label="Courses" />
+  const aside = (
+    <>
+      <GradeStanding course={course} tasks={mine} today={today} />
 
-      <header className="mb-[22px]">
-        <p className="eyebrow m-0" style={{ color: course.color }}>
-          {course.code}
-        </p>
-        <h1 className="mt-1.5 mb-0 font-serif text-[36px] font-medium leading-[1.05] tracking-[-0.025em]">
-          <span className="hl-swipe" style={{ '--hl': tint } as React.CSSProperties}>
-            {course.name}
-          </span>
-        </h1>
-
-        {details.length > 0 && (
-          <dl className="m-0 mt-4">
-            {details.map((row) => (
-              <div
-                key={row.label}
-                className="flex items-baseline gap-4 border-b border-dashed border-line py-2 last:border-0"
-              >
-                <dt className="eyebrow m-0 shrink-0">{row.label}</dt>
-                <dd className="m-0 ml-auto min-w-0 text-right font-serif text-[14px] text-ink-soft">
-                  {row.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </header>
-
-      <CourseWeekCard course={course} sessions={courseSessions} onGoalChange={saveGoal} />
-
-      {/* The one filled action on the page, per the guide. */}
-      <button
-        type="button"
-        onClick={handleStartSession}
-        className="mt-[var(--density-gap)] flex min-h-[56px] w-full items-center justify-center gap-2.5 rounded-2xl bg-primary text-[15px] font-medium text-primary-contrast transition-opacity active:opacity-90"
-      >
-        <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 5l12 7-12 7V5z" />
-        </svg>
-        Start a session
-      </button>
-
-      {/* Tasks. This course's list, and only this course's. */}
-      <section className="mt-[var(--density-section)]">
-        <div className="flex items-baseline gap-2.5 border-b border-line pb-2.5">
-          <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">Tasks</h2>
-          <span className="tnum ml-auto font-mono text-[12px] text-muted">
-            {open.length}
-          </span>
-        </div>
-
-        <div className="pt-1.5">
-          {open.map((task) => (
-            <TaskItem
+      {readings.length > 0 && (
+        <div className="mt-6 border-t border-line-strong pt-4">
+          <Eyebrow className="mb-2.5">To read</Eyebrow>
+          {readings.map((task, i) => (
+            <div
               key={task.id}
-              task={task}
-              course={course}
-              onToggle={toggleTask}
-              onStartTimer={handleStartTimerForTask}
-              onDelete={removeTask}
+              className={`flex items-baseline gap-2.5 py-2 ${
+                i === readings.length - 1 ? '' : 'row-rule'
+              } ${task.completed ? 'opacity-45' : ''}`}
+            >
+              <span className="min-w-0 flex-1 text-[13.5px]">{task.title}</span>
+              {task.pages ? (
+                <span
+                  className="flex-none font-mono text-[11px]"
+                  style={{
+                    color:
+                      !task.completed && task.dueDate && task.dueDate < today
+                        ? 'var(--warn)'
+                        : 'var(--muted)',
+                  }}
+                >
+                  {task.pages}p
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mb-8 mt-6 border-t border-line-strong pt-4">
+        <Eyebrow className="mb-3">Hours, week by week</Eyebrow>
+        <div className="flex h-[60px] items-end gap-1.5">
+          {weekBars.map((bar) => (
+            <span
+              key={bar.key}
+              title={`${formatHM(bar.seconds)}`}
+              className="flex-1"
+              style={{
+                height: `${Math.max(4, (bar.seconds / peak) * 100)}%`,
+                background: bar.isNow
+                  ? 'var(--ink)'
+                  : bar.seconds > 0
+                    ? course.color
+                    : 'var(--bg-tint)',
+              }}
             />
           ))}
+        </div>
+        <p className="mt-2.5 font-serif text-[13px] italic text-muted">
+          Nine weeks. The dark one is this week.
+        </p>
+      </div>
+    </>
+  );
 
-          {open.length === 0 && !adding && (
-            <button
-              type="button"
-              onClick={() => {
-                setAdding(true);
-                setDraftTitle('');
-                setDraftDue('');
-              }}
-              className="mt-3 w-full rounded-[10px] border border-dashed border-line px-4 py-9 text-center font-serif text-[14px] italic text-muted-soft transition-colors hover:text-ink-soft"
-            >
-              Nothing written down for this course yet.
-            </button>
-          )}
+  return (
+    <PageShell aside={aside} width="read">
+      <Link href="/dashboard" className="font-serif text-[13.5px] italic text-muted">
+        ← courses
+      </Link>
 
-          {adding ? (
-            <div
-              className="mt-2 animate-fade-in rounded-[10px] bg-paper px-3 py-2.5"
-              style={{ border: `1px solid ${course.color}` }}
-            >
-              <input
-                autoFocus
-                type="text"
-                value={draftTitle}
-                onChange={(event) => setDraftTitle(event.target.value)}
-                placeholder="New task"
-                className="w-full border-0 bg-transparent p-1 font-serif text-sm italic text-ink outline-none"
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitDraft();
-                  if (event.key === 'Escape') setAdding(false);
-                }}
-              />
-              <div className="mt-2 flex items-center gap-2">
-                <DatePicker
-                  value={draftDue}
-                  onChange={setDraftDue}
-                  placeholder="Due"
-                  compact
-                  className="w-[132px]"
-                />
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={commitDraft}
-                  className="hand-underline ml-auto bg-transparent px-0.5 font-serif text-[13px] text-ink disabled:opacity-40"
-                >
-                  {saving ? 'Adding' : 'Add'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            open.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setAdding(true);
-                  setDraftTitle('');
-                  setDraftDue('');
-                }}
-                className="w-full px-1 py-3 text-left font-serif text-[13px] italic text-muted-soft transition-colors hover:text-ink"
-              >
-                + jot a task…
-              </button>
-            )
+      <div className="mt-5 flex flex-col items-start justify-between gap-6 md:flex-row">
+        <div className="min-w-0">
+          <Eyebrow style={{ color: course.color }}>
+            {course.code}
+            {course.section ? ` · section ${course.section}` : ''}
+          </Eyebrow>
+          <h1 className="mt-2 font-serif text-[30px] font-normal leading-[1.03] tracking-[-0.03em] md:text-[40px]">
+            <Swipe color={resolveTint(course.color, course.tint)}>{course.name}</Swipe>
+          </h1>
+          {(course.instructor || course.meetingTime || course.credits) && (
+            <p className="mt-3 flex flex-wrap items-center gap-3.5 text-[13px] text-ink-soft">
+              {course.instructor && <span>{course.instructor}</span>}
+              {course.instructor && course.meetingTime && <Tick />}
+              {course.meetingTime && <span>{course.meetingTime}</span>}
+              {course.credits ? (
+                <>
+                  <Tick />
+                  <span className="font-mono text-xs">{course.credits} cr</span>
+                </>
+              ) : null}
+            </p>
           )}
         </div>
 
-        {done.length > 0 && (
-          <div className="mt-1">
-            <button
-              type="button"
-              aria-expanded={showDone}
-              onClick={() => setShowDone((current) => !current)}
-              className="bg-transparent p-0 font-serif text-[13px] italic text-muted transition-colors hover:text-ink"
-            >
-              {showDone ? 'hide' : 'show'} {done.length} finished
-            </button>
-            {showDone && (
-              <div className="mt-1.5 animate-fade-in">
-                {done.map((task) => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    course={course}
-                    onToggle={toggleTask}
-                    onStartTimer={handleStartTimerForTask}
-                    onDelete={removeTask}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <div className="w-full flex-none md:w-auto">
+          <PageButton
+            size="sheet"
+            icon={<PlayGlyph />}
+            onClick={handleStartSession}
+            className="md:px-7"
+          >
+            Sit down with {course.code.split(' ')[0]}
+          </PageButton>
+        </div>
+      </div>
 
-        <Link
-          href={`/tasks?course=${encodeURIComponent(course.id)}`}
-          className="mt-4 inline-block font-serif text-[13px] italic text-muted transition-colors hover:text-ink"
-        >
-          See this course beside the others →
-        </Link>
-      </section>
-
-      {/* The hours. The full log, and deleting from it, stay on Stats. */}
-      <section className="mt-[var(--density-section)]">
-        <div className="flex items-baseline gap-2.5 border-b border-line pb-2.5">
-          <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">Sessions</h2>
-          {log.length > 0 && (
-            <span className="tnum ml-auto font-mono text-[12px] text-muted">
-              {formatHM(totalSeconds(log))}
+      {/* The week against what was asked for. */}
+      <div className="rule-ink mt-7 flex flex-col items-start gap-6 pt-4 md:flex-row md:items-end md:gap-11">
+        <div>
+          <Eyebrow>This week</Eyebrow>
+          <p className="mt-2 font-mono text-[28px] font-bold leading-none tracking-[-0.03em] md:text-[34px]">
+            {formatHM(weekSeconds)}
+            <span className="font-serif text-[16px] font-normal italic text-muted">
+              {' '}
+              of {course.weeklyGoalHours}h you wanted
             </span>
-          )}
+          </p>
         </div>
-        <div className="pt-1.5">
-          <CourseSessionLog
-            sessions={log}
+        <div className="min-w-0 flex-1 pb-1.5">
+          <Tally
+            hours={weekSeconds / 3600}
+            goal={course.weeklyGoalHours}
+            height={30}
+            width={3}
+            gap={5}
             color={course.color}
-            emptyLine="No sessions yet. The button above starts the first one."
           />
         </div>
+      </div>
+
+      {/* Written down for this course. */}
+      <section className="mt-8">
+        <div className="flex items-baseline gap-3.5 border-b border-line pb-2.5">
+          <p className="m-0 font-serif text-[19px]">Written down for this course</p>
+          <span className="ml-auto font-mono text-[11px] text-muted">{open.length} open</span>
+        </div>
+        {open.length === 0 ? (
+          <p className="py-4 font-serif text-[15px] italic text-muted-soft">
+            Nothing on the list for this one.
+          </p>
+        ) : (
+          open.map((task) => (
+            <button
+              key={task.id}
+              type="button"
+              onClick={() => setEditing(task)}
+              className="block w-full bg-transparent text-left"
+            >
+              <TaskLine
+                task={task}
+                course={course}
+                onToggle={() => toggleTaskOptimistic(task).catch(() => {})}
+                onStart={() => handleStartForTask(task)}
+              />
+            </button>
+          ))
+        )}
+        <div className="mt-2.5 flex items-baseline gap-5">
+          <TextButton tone="quiet" onClick={() => setJotting(true)}>
+            + jot a task…
+          </TextButton>
+          <Link
+            href={`/tasks?course=${course.id}`}
+            className="font-serif text-[13px] italic text-muted-soft hover:text-muted"
+          >
+            see it in the list →
+          </Link>
+        </div>
       </section>
+
+      {/* What you wrote down while studying. */}
+      <SessionLog sessions={courseSessions} course={course} totalSeconds={allSeconds} />
+
+      <JotTaskSheet
+        open={jotting}
+        onClose={() => setJotting(false)}
+        courses={courses}
+        defaultCourseId={course.id}
+      />
+      <EditTaskSheet task={editing} courses={courses} onClose={() => setEditing(null)} />
 
       <ConfirmSheet
         open={confirmSwitch}
-        title="Start this one instead?"
-        body="The timer already running will be discarded."
-        confirmLabel="Start"
-        cancelLabel="Keep going"
+        title="A timer is already running"
+        body="Starting this one discards what is on the clock now."
+        confirmLabel="Start the new one"
         onCancel={() => setConfirmSwitch(false)}
         onConfirm={() => {
+          cancel();
           setConfirmSwitch(false);
           beginTimer();
         }}
@@ -444,96 +361,34 @@ export default function CoursePage() {
   );
 }
 
-/** A course whose term has finished: the record, with nothing left to change. */
+/**
+ * A course from a term that has already finished. Read-only by nature: there
+ * is nothing to start and nothing to add, only what was done at the time.
+ */
 function ArchivedCourseView({
   archived,
-  onBack,
 }: {
   archived: { course: Course; semester: { label: string }; sessions: Session[] };
-  onBack: () => void;
 }) {
   const { course, semester, sessions } = archived;
-  const tint = resolveTint(course.color, course.tint);
-  const log = sortNewestFirst(
-    sessions.filter((session) => isLoggableDuration(session.durationSeconds)),
-  );
-  const details = catalogDetails(course);
+  const total = sessions.reduce((acc, s) => acc + s.durationSeconds, 0);
 
   return (
-    <PageShell>
-      <BackButton onClick={onBack} label="Courses" />
-
-      <header className="mb-[22px]">
-        <div className="flex items-start justify-between gap-3">
-          <p className="eyebrow m-0" style={{ color: course.color }}>
-            {course.code}
-          </p>
-          <Stamp>{semester.label}</Stamp>
-        </div>
-        <h1 className="mt-1.5 mb-0 font-serif text-[36px] font-medium leading-[1.05] tracking-[-0.025em]">
-          <span className="hl-swipe" style={{ '--hl': tint } as React.CSSProperties}>
-            {course.name}
-          </span>
+    <PageShell width="read">
+      <Link href="/dashboard" className="font-serif text-[13.5px] italic text-muted">
+        ← courses
+      </Link>
+      <div className="mt-5">
+        <Eyebrow style={{ color: course.color }}>{course.code}</Eyebrow>
+        <h1 className="mt-2 font-serif text-[30px] font-normal leading-[1.03] tracking-[-0.03em] md:text-[40px]">
+          {course.name}
         </h1>
-        <p className="mt-3 mb-0 font-serif text-[13.5px] italic leading-[1.6] text-muted">
-          A closed term. What was written here is kept, not edited.
+        <p className="mt-3 font-serif text-[15px] italic text-muted">
+          {semester.label}, finished. {formatHM(total)} across{' '}
+          {sessions.length === 1 ? 'one sitting' : `${sessions.length} sittings`}.
         </p>
-
-        {details.length > 0 && (
-          <dl className="m-0 mt-4">
-            {details.map((row) => (
-              <div
-                key={row.label}
-                className="flex items-baseline gap-4 border-b border-dashed border-line py-2 last:border-0"
-              >
-                <dt className="eyebrow m-0 shrink-0">{row.label}</dt>
-                <dd className="m-0 ml-auto min-w-0 text-right font-serif text-[14px] text-ink-soft">
-                  {row.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </header>
-
-      <section className="deckle border border-line bg-paper px-[var(--density-gutter)] py-5">
-        <p className="eyebrow m-0">Logged in all</p>
-        <p className="mt-1.5 mb-0 font-mono text-[34px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-ink">
-          {formatHM(totalSeconds(log))}
-        </p>
-      </section>
-
-      <section className="mt-[var(--density-section)]">
-        <div className="flex items-baseline gap-2.5 border-b border-line pb-2.5">
-          <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">Sessions</h2>
-        </div>
-        <div className="pt-1.5">
-          <CourseSessionLog
-            sessions={log}
-            color={course.color}
-            limit={10}
-            emptyLine="This course was never studied against the clock."
-          />
-        </div>
-      </section>
+      </div>
+      <SessionLog sessions={sessions} course={course} totalSeconds={total} />
     </PageShell>
   );
-}
-
-function sortNewestFirst(sessions: Session[]): Session[] {
-  return sessions
-    .slice()
-    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
-}
-
-/** Only what the catalog actually supplied; a typed-in course has no rows. */
-function catalogDetails(course: Course): { label: string; value: string }[] {
-  const rows: { label: string; value: string }[] = [];
-  if (typeof course.credits === 'number' && course.credits > 0) {
-    rows.push({ label: 'Credits', value: String(course.credits) });
-  }
-  if (course.section) rows.push({ label: 'Section', value: course.section });
-  if (course.instructor) rows.push({ label: 'Taught by', value: course.instructor });
-  if (course.meetingTime) rows.push({ label: 'Meets', value: course.meetingTime });
-  return rows;
 }

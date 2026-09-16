@@ -60,7 +60,7 @@ function TasksFallback() {
 function TasksPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { active, start } = useTimer();
+  const { active } = useTimer();
   const { notify } = useNotice();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
@@ -138,8 +138,13 @@ function TasksPageContent() {
   }
 
   function handleStart(task: Task) {
-    if (!active) start(task.courseId, task.id);
-    router.push('/timer');
+    // A session already on the clock keeps it: the timer screen shows what is
+    // running rather than quietly swapping it for this one.
+    if (active) {
+      router.push('/timer');
+      return;
+    }
+    router.push(`/timer?course=${task.courseId}&task=${task.id}`);
   }
 
   const visible = useMemo(() => {
