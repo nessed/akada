@@ -49,7 +49,7 @@ export default function SwipeRow({
   }
 
   return (
-    <div className={`group relative overflow-hidden ${className}`}>
+    <div data-swipe-row className={`group relative overflow-hidden ${className}`}>
       {onComplete && (
         <div className="swipe-bg-complete pointer-events-none absolute inset-0 z-0 flex items-center justify-start px-4">
           <span
