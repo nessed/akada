@@ -9,6 +9,12 @@ export const dynamic = 'force-dynamic';
 
 const MAX_TASKS_PER_REQUEST = 20;
 const MAX_TASKS_PER_READ = 100;
+// The same ceilings lib/data/supabase-adapter.ts sanitizeSubtasks enforces on
+// the app's own writes, so a task built here and a task built in the sheet
+// cannot differ in shape.
+const MAX_SUBTASKS_PER_TASK = 50;
+const MAX_SUBTASK_TITLE = 300;
+const MAX_DESCRIPTION = 5000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // This is deliberately independent of optional app-migration columns. MCP
@@ -108,6 +114,58 @@ function readSubtasks(value: unknown) {
       ? [{ id: row.id, title: row.title, completed: Boolean(row.completed) }]
       : [];
   });
+}
+
+// The write side of the same document. Callers send plain strings, because a
+// model asked for `{ id, title, completed }` invents ids that then have to be
+// thrown away: a new task's pieces are always unticked, and the id only has to
+// be unique inside one task's array, which is what the sheet's own
+// `s-<timestamp>` ids are. The index keeps two pieces written in the same
+// millisecond apart. Duplicate titles within one task collapse, the way two
+// identical rows on a handwritten list would have been one.
+function buildSubtasks(pieces: (string | { title: string; completed?: boolean })[] | undefined) {
+  const seen = new Set<string>();
+  const stamp = Date.now().toString(36);
+  return (pieces ?? []).flatMap((piece, index) => {
+    const raw = typeof piece === 'string' ? piece : piece.title;
+    const title = raw.trim().replace(/\s+/g, ' ');
+    if (!title || seen.has(normalize(title))) return [];
+    seen.add(normalize(title));
+    const completed = typeof piece === 'string' ? false : Boolean(piece.completed);
+    return [{ id: `s-${stamp}-${index}`, title, completed }];
+  });
+}
+
+// Both write tools that take task ids have to answer the same question first:
+// is every one of these a task the signed-in student owns, in the semester
+// they are actually studying? Ownership alone is not enough, because a task
+// from a past semester is not something a connector should be reaching into.
+// Checked by the owning course rather than tasks.semester_id, which is a
+// denormalized column an un-migrated project may not have filled yet.
+async function loadOwnTasks(tool: string, token: AuthenticatedToken, ids: string[]) {
+  const semesterId = await activeSemesterId(token);
+  if (!semesterId) return { ok: false, error: toolError('No active semester is set in Akada.') } as const;
+  const supabase = mcpSupabase(token.supabaseAccessToken);
+  const { data: courses, error: coursesError } = await supabase
+    .from('courses')
+    .select('id, code, name')
+    .eq('user_id', token.userId)
+    .eq('semester_id', semesterId);
+  if (coursesError) return { ok: false, error: queryFailed(tool, 'courses read', coursesError, 'Akada could not load courses.') } as const;
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', token.userId)
+    .in('id', ids);
+  if (error) return { ok: false, error: queryFailed(tool, 'tasks read', error, 'Akada could not load those tasks.') } as const;
+  const allowed = new Map((courses ?? []).map((course) => [course.id, course]));
+  const rows = ((data ?? []) as Record<string, unknown>[]).filter((task) => allowed.has(task.course_id as string));
+  const found = new Set(rows.map((task) => String(task.id)));
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length > 0) {
+    return { ok: false, error: toolError(`${missing.length === ids.length ? 'No' : 'Not every'} task in that request is in your active Akada semester. Read your tasks again with get_tasks and use the ids it returns.`) } as const;
+  }
+  return { ok: true, supabase, courses: allowed, tasks: rows } as const;
 }
 
 // Due date first with undated tasks last, newest first inside a date. This
@@ -280,13 +338,15 @@ function createServer(token: AuthenticatedToken) {
     'create_tasks',
     {
       title: 'Add study tasks to Akada',
-      description: 'Add extracted readings, assignments, or preparation tasks to exactly one active-semester Akada course. Use find_course first. Only include a due date when the source explicitly gives one; do not invent deadlines. Existing unfinished tasks with the same title and due date are skipped.',
+      description: 'Add extracted readings, assignments, or preparation tasks to exactly one active-semester Akada course. Use find_course first. Only include a due date when the source explicitly gives one; do not invent deadlines. A task that the source breaks into steps can carry those steps as `subtasks`, which the student ticks off inside the task; use them for the real pieces of one piece of work, not as a way to add several unrelated tasks at once. `description` holds notes that belong with the task, such as the instructions or what the source said about it. Existing unfinished tasks with the same title and due date are skipped.',
       inputSchema: z.object({
         course_id: z.string().uuid(),
         tasks: z.array(z.object({
           title: z.string().trim().min(1).max(160),
           due_date: z.string().regex(DATE, 'Use YYYY-MM-DD.').nullable().optional(),
           priority: z.enum(['high', 'normal']).default('normal'),
+          description: z.string().trim().max(MAX_DESCRIPTION).optional(),
+          subtasks: z.array(z.string().trim().min(1).max(MAX_SUBTASK_TITLE)).max(MAX_SUBTASKS_PER_TASK).optional(),
         })).min(1).max(MAX_TASKS_PER_REQUEST),
       }),
       annotations: { destructiveHint: false, idempotentHint: true },
@@ -324,23 +384,178 @@ function createServer(token: AuthenticatedToken) {
           const taskKey = `${normalize(title)}|${dueDate ?? ''}`;
           if (existingKeys.has(taskKey) || seen.has(taskKey)) return [];
           seen.add(taskKey);
-          return [{ user_id: token.userId, course_id: course.id, title, due_date: dueDate, priority: task.priority }];
+          return [{
+            user_id: token.userId,
+            course_id: course.id,
+            title,
+            due_date: dueDate,
+            priority: task.priority,
+            description: (task.description ?? '').trim(),
+            subtasks: buildSubtasks(task.subtasks),
+          }];
         });
+        // `description` and `subtasks` are additive columns, so naming one is
+        // what would break an insert on a project whose schema.sql predates
+        // it. Drop a key from every row when nothing in the request uses it,
+        // and a deployment mid-rollout keeps creating plain tasks exactly as
+        // before; only a request that genuinely needs the column hits the
+        // error that says so. Uniformly present or uniformly absent across the
+        // batch, never mixed: PostgREST writes NULL for a key some rows omit,
+        // and both columns are `not null`.
         if (toInsert.length === 0) {
           return result({ course: { id: course.id, code: course.code, name: course.name }, created: [], skipped: tasks.length, message: 'Every task already exists in Akada.' });
         }
+        const withNotes = toInsert.some((row) => row.description.length > 0);
+        const withSubtasks = toInsert.some((row) => row.subtasks.length > 0);
+        const rowsToInsert = toInsert.map(({ description, subtasks, ...task }) => ({
+          ...task,
+          ...(withNotes ? { description } : {}),
+          ...(withSubtasks ? { subtasks } : {}),
+        }));
         const { data: created, error: insertError } = await supabase
           .from('tasks')
-          .insert(toInsert)
-          .select('id, title, due_date, priority');
+          .insert(rowsToInsert)
+          // `*` rather than a column list for the same reason get_tasks reads
+          // that way: `subtasks` is only there once schema.sql has been re-run,
+          // and naming it in the returning clause would fail the whole insert
+          // on a project that has not.
+          .select('*');
         if (insertError) return queryFailed('create_tasks', 'insert', insertError, 'Akada could not save those tasks.');
         return result({
           course: { id: course.id, code: course.code, name: course.name },
-          created: (created ?? []).map((task) => ({ id: task.id, title: task.title, due_date: task.due_date, priority: task.priority })),
+          created: ((created ?? []) as Record<string, unknown>[]).map((task) => ({
+            id: String(task.id),
+            title: String(task.title ?? ''),
+            due_date: (task.due_date as string | null) ?? null,
+            priority: task.priority === 'high' ? ('high' as const) : ('normal' as const),
+            description: typeof task.description === 'string' ? task.description : '',
+            subtasks: readSubtasks(task.subtasks),
+          })),
           skipped: tasks.length - toInsert.length,
         });
       } catch (cause) {
         return toolCrashed('create_tasks', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'update_tasks',
+    {
+      title: 'Change study tasks in Akada',
+      description: 'Change tasks that already exist in the signed-in student’s active semester. Read the tasks with get_tasks first and pass the ids it returns. Only the fields you name are changed; everything you leave out keeps its current value. `description` is the notes that sit with the task, and passing it replaces the existing notes, so include what should be kept. `subtasks` likewise replaces the whole list of pieces, so send every piece the task should end up with, carrying over the ones already ticked. To only tick a task off, prefer complete_tasks.',
+      inputSchema: z.object({
+        tasks: z.array(z.object({
+          task_id: z.string().uuid(),
+          title: z.string().trim().min(1).max(160).optional(),
+          due_date: z.string().regex(DATE, 'Use YYYY-MM-DD.').nullable().optional(),
+          priority: z.enum(['high', 'normal']).optional(),
+          description: z.string().trim().max(MAX_DESCRIPTION).optional(),
+          subtasks: z.array(z.object({
+            title: z.string().trim().min(1).max(MAX_SUBTASK_TITLE),
+            completed: z.boolean().default(false),
+          })).max(MAX_SUBTASKS_PER_TASK).optional(),
+          completed: z.boolean().optional(),
+        })).min(1).max(MAX_TASKS_PER_REQUEST),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ tasks }) => {
+      try {
+        const ids = [...new Set(tasks.map((task) => task.task_id))];
+        const owned = await loadOwnTasks('update_tasks', token, ids);
+        if (!owned.ok) return owned.error;
+
+        // One statement per task, because each carries a different patch, and
+        // in request order so a reply reads the way the request was written.
+        // Twenty round-trips at worst, which is the same ceiling create_tasks
+        // already accepts for a syllabus.
+        const updated: Record<string, unknown>[] = [];
+        for (const task of tasks) {
+          const patch: Record<string, unknown> = {};
+          if (task.title !== undefined) patch.title = task.title.trim().replace(/\s+/g, ' ');
+          if (task.due_date !== undefined) patch.due_date = task.due_date;
+          if (task.priority !== undefined) patch.priority = task.priority;
+          if (task.description !== undefined) patch.description = task.description;
+          if (task.subtasks !== undefined) patch.subtasks = buildSubtasks(task.subtasks);
+          if (task.completed !== undefined) {
+            patch.completed = task.completed;
+            // Written here rather than left to the app, so a task ticked off
+            // through the connector still lands on the right day in Stats.
+            patch.completed_at = task.completed ? new Date().toISOString() : null;
+          }
+          if (Object.keys(patch).length === 0) continue;
+          const { data, error } = await owned.supabase
+            .from('tasks')
+            .update(patch)
+            .eq('id', task.task_id)
+            .eq('user_id', token.userId)
+            .select('*')
+            .maybeSingle();
+          if (error) return queryFailed('update_tasks', 'task update', error, 'Akada could not change that task.');
+          if (data) updated.push(data as Record<string, unknown>);
+        }
+        if (updated.length === 0) return toolError('That request named no change to make. Include at least one field to change on a task.');
+        return result({
+          updated: updated.map((task) => {
+            const course = owned.courses.get(task.course_id as string);
+            return {
+              id: String(task.id),
+              title: String(task.title ?? ''),
+              due_date: (task.due_date as string | null) ?? null,
+              priority: task.priority === 'high' ? ('high' as const) : ('normal' as const),
+              description: typeof task.description === 'string' ? task.description : '',
+              subtasks: readSubtasks(task.subtasks),
+              completed: Boolean(task.completed),
+              course: course ? { id: course.id, code: course.code, name: course.name } : null,
+            };
+          }),
+        });
+      } catch (cause) {
+        return toolCrashed('update_tasks', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'complete_tasks',
+    {
+      title: 'Tick Akada tasks off',
+      description: 'Mark tasks in the signed-in student’s active semester as done, or put them back on the list with completed: false. Read the tasks with get_tasks first and pass the ids it returns. Ticking a task off is what feeds the student’s week in Stats, so only do it for work the student says is actually finished.',
+      inputSchema: z.object({
+        task_ids: z.array(z.string().uuid()).min(1).max(MAX_TASKS_PER_REQUEST),
+        completed: z.boolean().default(true),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ task_ids, completed }) => {
+      try {
+        const ids = [...new Set(task_ids)];
+        const owned = await loadOwnTasks('complete_tasks', token, ids);
+        if (!owned.ok) return owned.error;
+        const { data, error } = await owned.supabase
+          .from('tasks')
+          .update({ completed, completed_at: completed ? new Date().toISOString() : null })
+          .in('id', ids)
+          .eq('user_id', token.userId)
+          .select('*');
+        if (error) return queryFailed('complete_tasks', 'tasks update', error, 'Akada could not change those tasks.');
+        return result({
+          completed,
+          tasks: ((data ?? []) as Record<string, unknown>[]).map((task) => {
+            const course = owned.courses.get(task.course_id as string);
+            return {
+              id: String(task.id),
+              title: String(task.title ?? ''),
+              due_date: (task.due_date as string | null) ?? null,
+              completed: Boolean(task.completed),
+              completed_at: (task.completed_at as string | null) ?? null,
+              course: course ? { id: course.id, code: course.code, name: course.name } : null,
+            };
+          }),
+        });
+      } catch (cause) {
+        return toolCrashed('complete_tasks', cause);
       }
     },
   );

@@ -35,10 +35,14 @@ normally does not disconnect Claude, but revoking all sessions does.
 
 The connector provides tools for interacting with courses and tasks in your active semester:
 - `find_course`: Look up courses by code or title.
-- `create_tasks`: Bulk-insert tasks into an active course.
+- `get_tasks`: Read the active semester's tasks, optionally narrowed to one course.
+- `get_overview`: Read a snapshot of courses, open-task counts, and recent study sessions.
+- `create_tasks`: Bulk-insert tasks into an active course, with notes and subtasks.
+- `update_tasks`: Change tasks that already exist, including their notes and subtasks.
+- `complete_tasks`: Tick tasks off, or put them back on the list.
 - `delete_course`: Permanently delete a course and its associated tasks and sessions.
 
-In Claude's connector permissions, you can set `create_tasks` and `delete_course` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks` and `delete_course` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -62,9 +66,44 @@ In Claude's connector permissions, you can set `create_tasks` and `delete_course
     - `title` (`string`, 1-160 chars): Task name.
     - `due_date` (`string`, optional, format `YYYY-MM-DD`): Explicit due date.
     - `priority` (`"high" | "normal"`, default: `"normal"`).
-- **Output**: Structured list of created tasks (`id`, `title`, `due_date`, `priority`) and count of skipped duplicates.
+    - `description` (`string`, optional, up to 5000 chars): Notes that belong with the task, shown in the task reading view.
+    - `subtasks` (`array` of up to 50 strings, optional): The pieces of the task, each one a title the student ticks off inside the task. Ids are generated here, and every piece starts unticked.
+- **Output**: Structured list of created tasks (`id`, `title`, `due_date`, `priority`, `description`, `subtasks`) and count of skipped duplicates.
 
-### 3. `delete_course`
+`description` and `subtasks` are columns added by a later `supabase/schema.sql`,
+so they are only named in the insert when a request actually uses them. A
+project that has not re-run the schema keeps creating plain tasks; a request
+that asks for notes or pieces against such a project fails with the reason.
+
+### 3. `update_tasks`
+- **Title**: Change study tasks in Akada
+- **Description**: Patch tasks that already exist in the active semester. Only the named fields change. Both `description` and `subtasks` replace what is there rather than merging, so send the whole value the task should end up with.
+- **Annotations**: `destructiveHint: false`, `idempotentHint: true`
+- **Parameters**:
+  - `tasks` (`array` of 1-20 objects):
+    - `task_id` (`string`, UUID): The task to change, as returned by `get_tasks`.
+    - `title` (`string`, optional, 1-160 chars).
+    - `due_date` (`string | null`, optional, format `YYYY-MM-DD`): `null` clears the date.
+    - `priority` (`"high" | "normal"`, optional).
+    - `description` (`string`, optional, up to 5000 chars): Replaces the task's notes.
+    - `subtasks` (`array` of up to 50 `{ title, completed }` objects, optional): Replaces the whole list of pieces.
+    - `completed` (`boolean`, optional): Also stamps or clears `completed_at`.
+- **Output**: Each changed task with its `id`, `title`, `due_date`, `priority`, `description`, `subtasks`, `completed`, and `course`.
+
+### 4. `complete_tasks`
+- **Title**: Tick Akada tasks off
+- **Description**: Mark tasks in the active semester as done, or put them back on the list. One statement for the whole set.
+- **Annotations**: `destructiveHint: false`, `idempotentHint: true`
+- **Parameters**:
+  - `task_ids` (`array` of 1-20 UUIDs): Tasks to change, as returned by `get_tasks`.
+  - `completed` (`boolean`, default: `true`): `false` reopens them.
+- **Output**: `completed`, plus each task's `id`, `title`, `due_date`, `completed`, `completed_at`, and `course`.
+
+Both tools refuse the whole request unless every id names a task the signed-in
+student owns in their active semester, checked through the owning course rather
+than the denormalized `tasks.semester_id`.
+
+### 5. `delete_course`
 - **Title**: Delete an Akada course
 - **Description**: Permanently delete a course from the student's active Akada semester by its `course_id`. Also removes all associated tasks and study sessions.
 - **Annotations**: `destructiveHint: true`
@@ -131,8 +170,8 @@ The following specifications define the next set of MCP tools planned for Akada:
   }
   ```
 
-### 2. `mark_task_completed`
-- **Description**: Update the completion status of a task in the active semester.
+### 2. `mark_task_completed` (shipped as `complete_tasks`)
+- **Description**: Update the completion status of a task in the active semester. Shipped, in a form that takes a set of ids rather than one, and with `update_tasks` alongside it for every other field. Kept here for the original specification.
 - **Annotations**: `destructiveHint: false`, `idempotentHint: true`
 - **Input Schema**:
   ```typescript
