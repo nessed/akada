@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import LoadingIndicator from '@/components/LoadingIndicator';
+import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
+import { PageButton } from '@/components/notebook/Marks';
 import SitDown from '@/components/timer/SitDown';
 import LockedIn from '@/components/timer/LockedIn';
 import { useTimer } from '@/lib/timer-context';
@@ -38,6 +40,41 @@ function TimerFallback() {
   );
 }
 
+/**
+ * The end of every wait that is not going to end on its own.
+ *
+ * A spinner is a promise that something is still coming. When the courses
+ * read has already failed, or has come back without the course this screen
+ * was opened for, nothing is coming, and leaving the dots bouncing is how a
+ * student ends up staring at "Loading your timer" with a session they cannot
+ * write up and no way out but the browser's back button.
+ */
+function TimerDeadEnd({
+  message,
+  onRetry,
+  onLeave,
+}: {
+  message: string;
+  onRetry?: () => void;
+  onLeave: () => void;
+}) {
+  return (
+    <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col items-center justify-center gap-5 px-6 text-center">
+      <p className="m-0 font-serif text-[17px] italic leading-[1.4] text-ink-soft">{message}</p>
+      <div className="flex w-full flex-col gap-3">
+        {onRetry && <PageButton onClick={onRetry}>Try again</PageButton>}
+        <button
+          type="button"
+          onClick={onLeave}
+          className="bg-transparent py-2 font-serif text-[14px] italic text-muted underline decoration-line underline-offset-4"
+        >
+          Back to today
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Where the chosen block length survives a reload mid-session. */
 const BLOCK_KEY = 'akada.timer.block';
 
@@ -46,7 +83,7 @@ function TimerPageContent() {
   const searchParams = useSearchParams();
   const { hydrated, active, pendingLog, elapsedSeconds, start, pause, resume, cancel, clearPendingLog, stop } =
     useTimer();
-  const { courses } = useCourses();
+  const { courses, isLoading: coursesLoading, error: coursesError, revalidate } = useCourses();
   const { tasks } = useTasks();
   const noise = useAmbientNoise();
 
@@ -133,7 +170,63 @@ function TimerPageContent() {
     // Otherwise PendingSessionLogSheet takes over and asks what was done.
   }
 
-  if (!hydrated || (!course && !pendingLog)) return <TimerFallback />;
+  // A session that has stopped but not been written up. The note sheet lives
+  // in PageShell, which this route deliberately does not use, so it is
+  // mounted here too or pressing Stop would leave the page waiting on a sheet
+  // that never arrives. Resolving it, either way, sends you back to today.
+  if (pendingLog) {
+    // SessionLogModal renders nothing without a course, so a failed courses
+    // read would otherwise put a sheetless screen in front of a session that
+    // cannot be written up. The log itself is kept: a network blip is not a
+    // reason to throw a sitting away.
+    const sheetCanOpen = Boolean(course) || coursesLoading;
+    return (
+      <>
+        {sheetCanOpen ? (
+          <div className="flex min-h-[100dvh] items-center justify-center px-6">
+            <p className="m-0 font-serif text-[15px] italic text-muted">That is the block done.</p>
+          </div>
+        ) : (
+          <TimerDeadEnd
+            message="That is the block done. Your courses did not load, so it is kept on this device until they do."
+            onRetry={() => revalidate()}
+            onLeave={() => router.replace('/dashboard')}
+          />
+        )}
+        <PendingSessionLogSheet onResolved={() => router.replace('/dashboard')} />
+      </>
+    );
+  }
+
+  // The courses read failed, so `course` is never going to arrive.
+  if (!course && coursesError) {
+    return (
+      <TimerDeadEnd
+        message="Your courses did not load, so this session has nothing to attach to."
+        onRetry={() => revalidate()}
+        onLeave={() => router.replace('/dashboard')}
+      />
+    );
+  }
+
+  // Loaded, and the course this screen was opened for is not among them: it
+  // was deleted, or the link is stale, or there are no courses at all. The
+  // redirect effect above only covers the case where a timer is already
+  // running against it.
+  if (!course && !coursesLoading) {
+    return (
+      <TimerDeadEnd
+        message={
+          courses.length === 0
+            ? 'There are no courses to time yet.'
+            : 'That course is not here any more.'
+        }
+        onLeave={() => router.replace('/dashboard')}
+      />
+    );
+  }
+
+  if (!hydrated || !course) return <TimerFallback />;
 
   if (active) {
     return (
@@ -151,10 +244,6 @@ function TimerPageContent() {
       />
     );
   }
-
-  // A session that has stopped but not yet been written up. The note sheet is
-  // mounted globally; this is the page underneath it.
-  if (pendingLog) return <TimerFallback />;
 
   return (
     <SitDown
