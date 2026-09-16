@@ -281,7 +281,7 @@ function TasksPageContent() {
 
   return (
     <PageShell>
-      <header className="mb-[18px]">
+      <header className="mb-[var(--density-header)]">
         <p className="eyebrow m-0 text-muted">
           The list
         </p>
@@ -297,7 +297,7 @@ function TasksPageContent() {
           filter is a swipe of highlighter, the order is a hand underline, so
           the two rows are legible as two different questions. The `?` in the
           margin is all the interface says about the keyboard. */}
-      <div className="mb-[22px] flex flex-wrap items-baseline gap-x-5 gap-y-3">
+      <div className="mb-[var(--density-block)] flex flex-wrap items-baseline gap-x-5 gap-y-3">
         <div className="flex gap-1.5">
           {(
             [

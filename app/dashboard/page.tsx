@@ -638,7 +638,7 @@ function DashboardPageContent() {
   return (
     <PageShell>
       {/* Journal header */}
-      <header className="mb-[22px] flex items-start justify-between gap-3.5">
+      <header className="mb-[var(--density-block)] flex items-start justify-between gap-3.5">
         <div className="min-w-0 flex-1">
           <p className="eyebrow m-0 font-mono text-muted">{weekdayLabel}</p>
           <h1 className="mt-1.5 mb-0 font-serif text-[32px] font-normal leading-[1.05] tracking-[-0.02em]">
@@ -765,7 +765,7 @@ function DashboardPageContent() {
       )}
 
       {(urgentTasks.length > 0 || overdueCount > 0) && (
-        <section className="mt-[var(--density-section)] mb-[22px]">
+        <section className="mt-[var(--density-section)] mb-[var(--density-block)]">
           <div className="mb-2.5 flex items-baseline justify-between">
             <h2 className="m-0 font-serif text-[17px] font-medium tracking-[-0.01em]">
               {overdueCount > 0 && todayTasks.length > 0

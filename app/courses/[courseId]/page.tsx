@@ -246,7 +246,7 @@ export default function CoursePage() {
     <PageShell>
       <BackButton onClick={goBack} label="Courses" />
 
-      <header className="mb-[22px]">
+      <header className="mb-[var(--density-block)]">
         <p className="eyebrow m-0" style={{ color: course.color }}>
           {course.code}
         </p>
@@ -463,7 +463,7 @@ function ArchivedCourseView({
     <PageShell>
       <BackButton onClick={onBack} label="Courses" />
 
-      <header className="mb-[22px]">
+      <header className="mb-[var(--density-block)]">
         <div className="flex items-start justify-between gap-3">
           <p className="eyebrow m-0" style={{ color: course.color }}>
             {course.code}
