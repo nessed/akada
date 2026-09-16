@@ -39,31 +39,25 @@ export default function WeeklyProgressBanner({ courses, sessions }: Props) {
       (perCourseSec[s.courseId] || 0) + clampSessionSeconds(s.durationSeconds);
   }
 
-  // Determine motivational badge
-  let badgeText = 'Starting week';
-  let badgeColor = 'var(--muted)';
-  let badgeBg = 'var(--bg-tint)';
+  // Where the week stands, said in words rather than in a tinted capsule.
+  let standingText = 'Starting week';
+  let standingColor = 'var(--muted)';
 
   if (overallPct >= 100) {
-    badgeText = 'Goal reached!';
-    badgeColor = 'var(--sage)';
-    badgeBg = 'var(--sage-tint)';
+    standingText = 'Goal reached';
+    standingColor = 'var(--sage)';
   } else if (overallPct >= 75) {
-    badgeText = 'Almost there';
-    badgeColor = 'var(--clay)';
-    badgeBg = 'var(--clay-tint)';
+    standingText = 'Almost there';
+    standingColor = 'var(--clay)';
   } else if (overallPct >= 50) {
-    badgeText = 'Halfway';
-    badgeColor = 'var(--peach)';
-    badgeBg = 'var(--peach-tint)';
+    standingText = 'Halfway';
+    standingColor = 'var(--peach)';
   } else if (overallPct >= 25) {
-    badgeText = 'On track';
-    badgeColor = 'var(--lav)';
-    badgeBg = 'var(--lav-tint)';
+    standingText = 'On track';
+    standingColor = 'var(--lav)';
   } else if (totalWkSec > 0) {
-    badgeText = 'In progress';
-    badgeColor = 'var(--ink-soft)';
-    badgeBg = 'var(--bg-tint)';
+    standingText = 'In progress';
+    standingColor = 'var(--ink-soft)';
   }
 
   if (courses.length === 0) {
@@ -92,17 +86,12 @@ export default function WeeklyProgressBanner({ courses, sessions }: Props) {
             / {totalGoalHours}h goal
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide font-sans"
-            style={{ color: badgeColor, backgroundColor: badgeBg }}
-          >
-            {badgeText}
-          </span>
-          <span className="font-mono text-sm font-semibold tabular-nums text-ink-soft">
-            {overallPct}%
-          </span>
-        </div>
+        <span
+          className="font-serif text-[12.5px] italic"
+          style={{ color: standingColor }}
+        >
+          {standingText}
+        </span>
       </div>
 
       {/* Segmented multi-color progress bar by course */}

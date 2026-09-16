@@ -25,6 +25,12 @@ import {
   deleteSessionOptimistic,
 } from '@/lib/data-hooks';
 
+/** One line in the log: a session studied, a task written down, a task finished. */
+type JournalEntry =
+  | { kind: 'session'; id: string; at: string; session: Session; course?: Course }
+  | { kind: 'task-added'; id: string; at: string; task: Task; course?: Course }
+  | { kind: 'task-done'; id: string; at: string; task: Task; course?: Course };
+
 export default function StatsPage() {
   const { notify } = useNotice();
   const router = useRouter();
@@ -64,20 +70,75 @@ export default function StatsPage() {
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || sessionsLoading || tasksLoading;
 
-  const recentActivity = useMemo(() => {
-    const entries: Array<{ id: string; at: string; text: string; course?: Course }> = [];
-    sessions.forEach((session) => entries.push({
-      id: `session-${session.id}`,
-      at: session.createdAt,
-      text: `Logged ${formatHM(session.durationSeconds)} of study`,
-      course: courses.find((course) => course.id === session.courseId),
-    }));
-    tasks.forEach((task: Task) => {
+  /**
+   * One dated log instead of two lists. Sessions used to be printed twice,
+   * once as "Session history" and once as "Recent activity", so the two are
+   * folded into a single journal: a day, then what happened on it. Sessions
+   * file under the day they were studied, task events under the day they
+   * happened.
+   */
+  const journal = useMemo(() => {
+    const byDay = new Map<string, JournalEntry[]>();
+    const file = (day: string, entry: JournalEntry) => {
+      const existing = byDay.get(day);
+      if (existing) existing.push(entry);
+      else byDay.set(day, [entry]);
+    };
+
+    for (const session of sessions) {
+      file(session.date, {
+        kind: 'session',
+        id: `session-${session.id}`,
+        at: session.createdAt,
+        session,
+        course: courses.find((course) => course.id === session.courseId),
+      });
+    }
+    for (const task of tasks as Task[]) {
       const course = courses.find((item) => item.id === task.courseId);
-      entries.push({ id: `task-${task.id}`, at: task.createdAt, text: `Added task: ${task.title}`, course });
-      if (task.completed && task.completedAt) entries.push({ id: `done-${task.id}`, at: task.completedAt, text: `Completed task: ${task.title}`, course });
-    });
-    return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
+      if (task.createdAt) {
+        file(task.createdAt.slice(0, 10), {
+          kind: 'task-added',
+          id: `task-${task.id}`,
+          at: task.createdAt,
+          task,
+          course,
+        });
+      }
+      if (task.completed && task.completedAt) {
+        file(task.completedAt.slice(0, 10), {
+          kind: 'task-done',
+          id: `done-${task.id}`,
+          at: task.completedAt,
+          task,
+          course,
+        });
+      }
+    }
+
+    const days = Array.from(byDay.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([date, entries]) => ({
+        date,
+        entries: entries.slice().sort((a, b) => b.at.localeCompare(a.at)),
+        seconds: entries.reduce(
+          (sum, entry) =>
+            entry.kind === 'session'
+              ? sum + clampSessionSeconds(entry.session.durationSeconds)
+              : sum,
+          0,
+        ),
+      }));
+
+    // Whole days only, so a day is never printed half-told.
+    const recent: typeof days = [];
+    let printed = 0;
+    for (const day of days) {
+      if (printed >= 18) break;
+      recent.push(day);
+      printed += day.entries.length;
+    }
+    return recent;
   }, [courses, sessions, tasks]);
 
   async function deleteSession(id: string) {
@@ -152,6 +213,11 @@ export default function StatsPage() {
     });
   }, [courses, sessions, semester]);
 
+  // The longest-studied course sets the length of the rules beneath the codes,
+  // so each rule reads as a share of the term's attention rather than progress
+  // towards a number nobody set.
+  const heaviestCourseHours = totals.reduce((max, t) => Math.max(max, t.totalHours), 0);
+
   const totalSec = totalSeconds(sessions);
   const dayCount = new Set(sessions.map((s) => s.date)).size;
   const avgPerDay = dayCount ? totalSec / dayCount : 0;
@@ -206,16 +272,15 @@ export default function StatsPage() {
     return (
       <PageShell>
         <LoadingIndicator compact label="Compiling your semester" className="mb-6" />
-        <div className="animate-pulse opacity-40" aria-hidden>
-          <div className="h-3 w-32 bg-line rounded mb-2.5" />
-          <div className="h-8 w-24 bg-line rounded mb-8" />
-          <div className="grid grid-cols-3 gap-2 mb-8">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-[72px] bg-paper border border-line rounded-xl" />
-            ))}
-          </div>
-          <div className="h-48 bg-paper border border-line rounded-[14px] mb-4" />
-          <div className="h-32 bg-paper border border-line rounded-[14px]" />
+        {/* The shape of the page being set, not a grid of grey boxes. */}
+        <div className="opacity-30" aria-hidden>
+          <div className="mb-3 h-2 w-24 rounded-full bg-line" />
+          <div className="mb-2 h-7 w-[62%] rounded-full bg-line" />
+          <div className="mb-8 h-7 w-[40%] rounded-full bg-line" />
+          <div
+            className="deckle mb-[var(--density-gap)] h-[188px] border border-line bg-paper"
+          />
+          <div className="deckle h-[148px] border border-line bg-paper" />
         </div>
       </PageShell>
     );
@@ -271,7 +336,7 @@ export default function StatsPage() {
 
       {/* The term so far, as a line in a ledger under a newspaper rule. */}
       <div
-        className="mb-4 py-3.5"
+        className="mb-[var(--density-gap)] py-3.5"
         style={{
           borderTop: '1.5px solid var(--ink)',
           borderBottom: '1px solid var(--line)',
@@ -299,9 +364,9 @@ export default function StatsPage() {
       )}
 
       {/* Heatmap */}
-      <section className="deckle bg-paper border border-line py-5 px-[22px] mb-4">
-        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-          <h2 className="m-0 font-serif font-medium text-[17px]">Activity</h2>
+      <section className="deckle mb-[var(--density-gap)] border border-line bg-paper py-5 px-[var(--density-gutter)]">
+        <div className="mb-[18px] flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="m-0 font-serif font-medium text-[20px]">Every day so far</h2>
           <div className="flex gap-1 overflow-x-auto app-scroll">
             <FilterChip
               active={filter === 'all'}
@@ -328,36 +393,20 @@ export default function StatsPage() {
             hideWeekends={prefs.hideWeekends}
           />
         </div>
-        <div className="flex items-center gap-2 mt-3.5">
-          <span className="text-[10px] text-muted italic font-serif">less</span>
-          {[0.1, 0.3, 0.55, 0.8, 1].map((o) => (
-            <span
-              key={o}
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 3,
-                background: accent,
-                opacity: o,
-              }}
-            />
-          ))}
-          <span className="text-[10px] text-muted italic font-serif">more</span>
-        </div>
       </section>
 
       {/* Weekly bars, deckle card */}
-      <section className="deckle bg-paper border border-line py-5 px-[22px] mb-4">
+      <section className="deckle mb-[var(--density-gap)] border border-line bg-paper py-5 px-[var(--density-gutter)]">
         <h2 className="m-0 mb-[18px] font-serif font-medium text-[20px]">This week</h2>
         <WeeklyChart sessions={sessions} courses={courses} />
       </section>
 
       {/* Totals, deckle card with hand-drawn trend arrows */}
-      <section className="deckle bg-paper border border-line px-[22px]">
-        <h2 className="my-4 font-serif font-medium text-[20px]">Hours by course</h2>
+      <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
+        <h2 className="m-0 mb-1.5 font-serif font-medium text-[20px]">Hours by course</h2>
         <div>
           {totals.length === 0 && (
-            <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
+            <p className="mt-0 mb-3 text-[13px] text-muted font-serif italic">
               Nothing to weigh up yet...
             </p>
           )}
@@ -410,16 +459,18 @@ export default function StatsPage() {
                     <p className="mt-0.5 mb-0 font-serif font-medium text-[15px]">
                       {course.name}
                     </p>
-                    {totalHours > 0 && (
-                      <div className="mt-2 h-[3px] rounded-full bg-bg-tint overflow-hidden max-w-[140px]">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.min(100, (totalHours / 30) * 100)}%`,
-                            background: course.color,
-                          }}
-                        />
-                      </div>
+                    {totalHours > 0 && heaviestCourseHours > 0 && (
+                      <span
+                        aria-hidden
+                        className="mt-2 block h-[2px] rounded-full"
+                        style={{
+                          width: `${Math.max(
+                            8,
+                            (totalHours / heaviestCourseHours) * 140,
+                          )}px`,
+                          background: course.color,
+                        }}
+                      />
                     )}
                   </div>
                 </div>
@@ -453,11 +504,11 @@ export default function StatsPage() {
 
       {/* Marks & milestones, semester-shaped achievements */}
       {sessions.length > 0 && (
-        <section className="mt-4">
+        <section className="mt-[var(--density-gap)]">
           <h2 className="m-0 mb-3 font-serif font-medium text-[20px]">
             Marks &amp; milestones
           </h2>
-          <div className="deckle bg-paper border border-line px-[22px] py-2">
+          <div className="deckle border border-line bg-paper px-[var(--density-gutter)] py-2">
             {(() => {
               const totalHours = totalSec / 3600;
               const dayCountAll = new Set(sessions.map((s) => s.date)).size;
@@ -534,36 +585,45 @@ export default function StatsPage() {
         </section>
       )}
 
-      <section className="mt-4 deckle bg-paper border border-line px-[22px]">
-        <h2 className="my-4 font-serif font-medium text-[20px]">Session history</h2>
-        {sessions.length === 0 ? (
-          <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">
-            Nothing logged yet. The ledger starts with the first session.
-          </p>
+      {/* The log. One dated journal, sessions and task marks under the day
+          they belong to, rather than two lists that printed the same thing. */}
+      <section className="deckle mt-[var(--density-gap)] border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
+        <h2 className="m-0 mb-4 font-serif font-medium text-[20px]">The log</h2>
+        {journal.length === 0 ? (
+          <div className="rounded-[10px] border border-dashed border-line px-4 py-9 text-center">
+            <p className="m-0 font-serif text-[14px] italic text-muted-soft">
+              The first session you log opens this page.
+            </p>
+          </div>
         ) : (
-          <div>
-            {sessions.slice(0, 12).map((session) => (
-              <SessionItem 
-                key={session.id} 
-                session={session} 
-                course={courses.find((c) => c.id === session.courseId)} 
-                onDelete={deleteSession} 
-              />
-            ))}
-          </div>
+          journal.map((day) => (
+            <div key={day.date} className="pt-[18px] first:pt-0">
+              <div className="flex items-baseline gap-3">
+                <h3 className="eyebrow m-0 shrink-0">{formatRelativeDate(day.date)}</h3>
+                <span aria-hidden className="h-px flex-1 bg-line" />
+                {day.seconds > 0 && (
+                  <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-soft">
+                    {formatHM(day.seconds)}
+                  </span>
+                )}
+              </div>
+              <div className="mt-0.5">
+                {day.entries.map((entry) =>
+                  entry.kind === 'session' ? (
+                    <SessionEntry
+                      key={entry.id}
+                      session={entry.session}
+                      course={entry.course}
+                      onDelete={deleteSession}
+                    />
+                  ) : (
+                    <TaskEntry key={entry.id} entry={entry} />
+                  ),
+                )}
+              </div>
+            </div>
+          ))
         )}
-      </section>
-
-      <section className="mt-4 deckle bg-paper border border-line px-[22px]">
-        <h2 className="my-4 font-serif font-medium text-[20px]">Recent activity</h2>
-        {recentActivity.length === 0 ? (
-          <p className="mt-0 mb-5 text-[13px] text-muted font-serif italic">Your latest study and task updates will show up here.</p>
-        ) : recentActivity.map((entry) => (
-          <div key={entry.id} className="flex gap-3 border-t border-dashed border-line py-3 first:border-t-0">
-            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: entry.course?.color ?? 'var(--muted-soft)' }} />
-            <div className="min-w-0 flex-1"><p className="m-0 text-[13px] text-ink">{entry.text}</p><p className="mt-1 mb-0 text-[11px] text-muted">{entry.course?.code ? `${entry.course.code} · ` : ''}{formatRelativeDate(entry.at.slice(0, 10))}</p></div>
-          </div>
-        ))}
       </section>
 
       {/* Editorial footer, closes the issue */}
@@ -618,7 +678,7 @@ function Figure({ children }: { children: React.ReactNode }) {
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="py-12 mb-4 text-center">
+    <div className="mb-[var(--density-gap)] py-12 text-center">
       <p className="m-0 font-serif text-[16px] italic text-muted-soft">{text}</p>
     </div>
   );
@@ -651,25 +711,49 @@ function FilterChip({ active, onClick, label, color, tint }: ChipProps) {
   );
 }
 
-function SessionItem({ session, course, onDelete }: { session: Session; course?: Course; onDelete: (id: string) => void }) {
+/**
+ * The 12px margin every log row is written against, so the tally strokes,
+ * the ticks and the open rings all fall on the same vertical rule.
+ */
+function EntryMargin({ children }: { children: React.ReactNode }) {
+  return (
+    <span aria-hidden className="flex w-3 shrink-0 justify-center pt-[3px]">
+      {children}
+    </span>
+  );
+}
+
+function SessionEntry({
+  session,
+  course,
+  onDelete,
+}: {
+  session: Session;
+  course?: Course;
+  onDelete: (id: string) => void;
+}) {
   return (
     <SwipeRow
-      className="border-b border-line last:border-0"
+      className="border-b border-dashed border-line last:border-0"
       onDelete={() => onDelete(session.id)}
-      surfaceClassName="flex items-start justify-between gap-3 bg-paper py-3.5"
+      surfaceClassName="flex items-start gap-3 bg-paper py-3"
     >
       <>
+        <EntryMargin>
+          {/* A tally stroke, the way time spent gets marked in a ledger. */}
+          <span
+            className="mt-[1px] block h-[11px] w-[2px] rounded-[1px]"
+            style={{
+              background: course?.color || 'var(--muted-soft)',
+              transform: 'rotate(9deg)',
+            }}
+          />
+        </EntryMargin>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ background: course?.color || 'var(--muted)' }}
-            />
-            <p className="eyebrow m-0 text-muted">
-              {course?.code || 'Course'} · {formatRelativeDate(session.date)}
-            </p>
-          </div>
-          <p className="mt-1 mb-0 font-serif text-[15px] font-medium text-ink">
+          <p className="eyebrow m-0" style={course ? { color: course.color } : undefined}>
+            {course?.code || 'Session'}
+          </p>
+          <p className="mt-0.5 mb-0 font-serif text-[15px] font-medium text-ink">
             {course?.name || 'Study session'}
           </p>
           {session.note && (
@@ -678,7 +762,7 @@ function SessionItem({ session, course, onDelete }: { session: Session; course?:
             </p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
             {formatHM(clampSessionSeconds(session.durationSeconds))}
           </span>
@@ -701,5 +785,39 @@ function SessionItem({ session, course, onDelete }: { session: Session; course?:
         </div>
       </>
     </SwipeRow>
+  );
+}
+
+function TaskEntry({
+  entry,
+}: {
+  entry: Extract<JournalEntry, { kind: 'task-added' | 'task-done' }>;
+}) {
+  const finished = entry.kind === 'task-done';
+  const color = entry.course?.color;
+  return (
+    <div className="flex items-start gap-3 border-b border-dashed border-line py-3 last:border-0">
+      <EntryMargin>
+        {finished ? (
+          <HandCheck size={13} color={color || 'var(--muted)'} strokeWidth={1.5} />
+        ) : (
+          <span
+            className="mt-[3px] block h-[6px] w-[6px] rounded-full border"
+            style={{ borderColor: color || 'var(--muted-soft)' }}
+          />
+        )}
+      </EntryMargin>
+      <div className="min-w-0 flex-1">
+        <p className="eyebrow m-0" style={color ? { color } : undefined}>
+          {entry.course?.code || 'Task'}
+        </p>
+        <p className="mt-0.5 mb-0 font-serif text-[15px] font-medium text-ink">
+          {entry.task.title}
+        </p>
+      </div>
+      <span className="shrink-0 pt-[3px] font-serif text-[11.5px] italic text-muted-soft">
+        {finished ? 'finished' : 'written down'}
+      </span>
+    </div>
   );
 }
