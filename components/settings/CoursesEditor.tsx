@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import type { Assessment, Course } from '@/lib/data';
 import { deleteCourseOptimistic, updateCourseOptimistic } from '@/lib/data-hooks';
 import { PASTEL_PALETTE } from '@/lib/utils';
@@ -92,9 +93,17 @@ export default function CoursesEditor({
         )}
       </div>
 
-      <TextButton className="mt-5" onClick={onAddCourse}>
-        add a course
-      </TextButton>
+      <div className="mt-5 flex flex-wrap items-baseline gap-6">
+        <TextButton onClick={onAddCourse}>add a course</TextButton>
+        {courses.length > 0 && (
+          <Link
+            href="/courses"
+            className="font-serif text-[13.5px] italic text-muted hover:text-ink-soft"
+          >
+            the hours each one got →
+          </Link>
+        )}
+      </div>
 
       <ConfirmSheet
         open={Boolean(deleting)}
