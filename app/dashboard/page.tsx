@@ -15,7 +15,6 @@ import {
   PlayGlyph,
   TextButton,
 } from '@/components/notebook/Marks';
-import type { Course } from '@/lib/data';
 import { formatHM, isoDate, dueLabel } from '@/lib/utils';
 import {
   dayBlocks,
@@ -168,7 +167,11 @@ function DashboardPageContent() {
     return Object.values(secondsByCourse(sessions, from, to)).reduce((a, s) => a + s, 0);
   }, [sessions]);
 
+  // The Next block is already showing one of these, so it is not counted
+  // again below. Which one it is depends on the day: it is the oldest late
+  // piece of work when there is any, and otherwise the soonest thing due.
   const openOverdue = tasks.filter((t) => !t.completed && t.dueDate && t.dueDate < today).length;
+  const nextIsOverdue = Boolean(next?.dueDate && (next.dueDate as string) < today);
   const openDueToday = tasks.filter(
     (t) => !t.completed && t.dueDate === today && t.id !== next?.id,
   ).length;
@@ -191,13 +194,13 @@ function DashboardPageContent() {
       key: 'class',
       href: '/term',
       label: 'See the timetable',
-      text: classFragment(blocks, courses, nowMinutes),
+      text: classFragment(blocks, nowMinutes),
     },
     {
       key: 'work',
       href: '/tasks#late',
       label: 'Open the list of late work',
-      text: workFragment(openOverdue - (next ? 1 : 0), openDueToday),
+      text: workFragment(openOverdue - (nextIsOverdue ? 1 : 0), openDueToday),
     },
     {
       key: 'hours',
@@ -285,7 +288,7 @@ function DashboardPageContent() {
 
         {/* What else is true today. Counts, and where to go for them. */}
         {alsoToday.length > 0 && (
-          <div className="mt-16 border-b border-line pb-3.5 lg:mt-auto lg:pt-16">
+          <div className="mt-16 lg:mt-auto lg:pt-16">
             <Eyebrow className="mb-2">Also today</Eyebrow>
             <p className="m-0 flex flex-col gap-1.5 text-[14px] leading-[1.5] text-ink-soft sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-0">
               {alsoToday.map((fragment, i) => (
@@ -310,7 +313,7 @@ function DashboardPageContent() {
 
         {/* The week behind this one, if it has not been read back yet. */}
         {weekNo && weekNo > 1 && reviewWaiting && (
-          <p className="m-0 mt-3.5 text-[14px] leading-[1.5] text-ink-soft">
+          <p className="m-0 mt-4 border-t border-line pt-4 text-[14px] leading-[1.5] text-ink-soft">
             Your week {weekNo - 1} review is ready.{' '}
             <Link href="/stats" className="ink-underline text-ink">
               Read it
@@ -359,25 +362,12 @@ function dueWord(iso: string | null): string {
 }
 
 /**
- * Where the room comes from. `meetingTime` is one display string the catalog
- * wrote, "Mon & Wed, 14:00 - 15:50 · SS 3302", so the room is whatever
- * follows the time. A course typed in by hand has no room and says so by
- * saying nothing.
- */
-function roomOf(course: Course | undefined): string | null {
-  const parts = (course?.meetingTime ?? '').split(' · ');
-  if (parts.length < 2) return null;
-  return parts.slice(1).join(' · ') || null;
-}
-
-/**
- * The next class, or the one happening now. Written the way a person would
- * say it out loud, and omitted entirely once the last one is over: a reader
- * with no classes left today does not need to be told there are none.
+ * The next class, or the one happening now, named by the course it is. The
+ * whole fragment goes once the last class is over: a reader with nothing left
+ * today does not need to be told there is nothing left.
  */
 function classFragment(
   blocks: ReturnType<typeof dayBlocks>,
-  courses: Course[],
   nowMinutes: number | null,
 ): string | null {
   if (nowMinutes === null) return null;
@@ -388,9 +378,10 @@ function classFragment(
   const block = running ?? upcoming;
   if (!block) return null;
 
-  const room = roomOf(courses.find((c) => `class-${c.id}` === block.id));
-  const when = running ? `In class until ${formatClock(block.end)}` : `Class at ${formatClock(block.start)}`;
-  return room ? `${when}, ${room}` : when;
+  const when = running
+    ? `In class until ${formatClock(block.end)}`
+    : `Class at ${formatClock(block.start)}`;
+  return `${when}, ${block.label}`;
 }
 
 /**
