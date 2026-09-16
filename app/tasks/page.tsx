@@ -6,11 +6,14 @@ import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
 import SelectField from '@/components/SelectField';
 import HandCheck from '@/components/notebook/HandCheck';
+import HandNote from '@/components/notebook/HandNote';
+import Stamp from '@/components/notebook/Stamp';
+import DueDateBadge from '@/components/DueDateBadge';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskItem from '@/components/TaskItem';
 import type { Task } from '@/lib/data';
-import { isoDate, resolveTint } from '@/lib/utils';
+import { formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
 import {
@@ -92,6 +95,8 @@ function TasksPageContent() {
       if (event.key === 'Escape') {
         setAddingFor(null);
         setEditingTask(null);
+        setViewingTask(null);
+        setShortcutHelpOpen(false);
       }
     }
     window.addEventListener('keydown', onKeyDown);
@@ -288,39 +293,64 @@ function TasksPageContent() {
         </h1>
       </header>
 
-      {/* Filter pills */}
-      <div className="flex gap-1.5 mb-[22px]">
-        {(
-          [
-            { v: 'all', l: 'All' },
-            { v: 'today', l: 'Today' },
-            { v: 'overdue', l: 'Overdue' },
-          ] as const
-        ).map((f) => (
+      {/* What is shown, and in what order. Both are marks on the page: the
+          filter is a swipe of highlighter, the order is a hand underline, so
+          the two rows are legible as two different questions. The `?` in the
+          margin is all the interface says about the keyboard. */}
+      <div className="mb-[22px] flex flex-wrap items-baseline gap-x-5 gap-y-3">
+        <div className="flex gap-1.5">
+          {(
+            [
+              { v: 'all', l: 'All' },
+              { v: 'today', l: 'Today' },
+              { v: 'overdue', l: 'Overdue' },
+            ] as const
+          ).map((f) => (
+            <button
+              key={f.v}
+              type="button"
+              aria-pressed={filter === f.v}
+              onClick={() => setFilter(f.v)}
+              className={`bg-transparent px-0.5 py-1 font-serif text-[15px] transition-colors ${
+                filter === f.v ? 'hl-swipe text-ink' : 'text-muted-soft hover:text-ink-soft'
+              }`}
+            >
+              {f.l}
+            </button>
+          ))}
+        </div>
+
+        <div role="group" aria-label="Sort order" className="ml-auto flex items-baseline gap-3.5">
+          {(
+            [
+              { v: 'smart', l: 'Smart' },
+              { v: 'due', l: 'Due' },
+              { v: 'newest', l: 'Newest' },
+            ] as const
+          ).map((s) => (
+            <button
+              key={s.v}
+              type="button"
+              aria-pressed={sortMode === s.v}
+              onClick={() => setSortMode(s.v)}
+              className={`bg-transparent p-0 font-serif text-[13px] transition-colors ${
+                sortMode === s.v ? 'hand-underline text-ink' : 'text-muted-soft hover:text-ink-soft'
+              }`}
+            >
+              {s.l}
+            </button>
+          ))}
           <button
-            key={f.v}
             type="button"
-            onClick={() => setFilter(f.v)}
-            className={`bg-transparent px-0.5 py-1 font-serif text-[15px] transition-colors ${
-              filter === f.v ? 'hl-swipe text-ink' : 'text-muted-soft hover:text-ink-soft'
-            }`}
+            onClick={() => setShortcutHelpOpen(true)}
+            aria-label="Keyboard shortcuts"
+            className="bg-transparent p-0 text-muted-soft transition-colors hover:text-ink"
           >
-            {f.l}
+            <HandNote color="currentColor" size={19} rotate={-8}>
+              ?
+            </HandNote>
           </button>
-        ))}
-      </div>
-      <div className="mb-5 flex items-center justify-between gap-3 text-[12px] text-muted">
-        <button type="button" onClick={() => setShortcutHelpOpen(true)} className="bg-transparent p-0 font-serif italic text-muted hover:text-ink">N: new task · S: change sort · ?: shortcuts</button>
-        <select
-          value={sortMode}
-          onChange={(event) => setSortMode(event.target.value as SortMode)}
-          aria-label="Task sort order"
-          className="rounded border border-line bg-paper px-2 py-1 text-ink"
-        >
-          <option value="smart">Smart order</option>
-          <option value="due">Due date</option>
-          <option value="newest">Newest</option>
-        </select>
+        </div>
       </div>
 
       {/* Sections */}
@@ -486,22 +516,26 @@ function TasksPageContent() {
               Keep the assignment details current.
             </p>
 
-            <input
-              autoFocus
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              placeholder="Task title"
-              className="w-full bg-paper border border-line rounded-[10px] px-4 py-3 text-sm text-ink outline-none focus:border-line-strong"
-            />
-
-            <textarea
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-              placeholder="Notes or details (optional)"
-              rows={4}
-              className="mt-2.5 w-full resize-y rounded-[10px] border border-line bg-paper px-4 py-3 text-sm text-ink outline-none focus:border-line-strong"
-            />
+            {/* Title and notes are one sheet of paper with a ruled line
+                between them, not a field and a second field bolted under it. */}
+            <div className="rounded-[10px] border border-line bg-paper transition-colors focus-within:border-line-strong">
+              <input
+                autoFocus
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Task title"
+                className="w-full rounded-t-[10px] border-0 bg-transparent px-4 pb-2.5 pt-3 font-serif text-[16px] text-ink outline-none"
+              />
+              <div className="mx-4 border-t border-dashed border-line" />
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Notes, a page reference, what it is really asking for"
+                rows={4}
+                className="w-full resize-none rounded-b-[10px] border-0 bg-transparent px-4 pb-3 pt-2.5 text-sm leading-relaxed text-ink outline-none"
+              />
+            </div>
 
             <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-2">
               <SelectField
@@ -564,45 +598,237 @@ function TasksPageContent() {
         </div>
       )}
 
-      {viewingTask && (
-        <div className="fixed inset-0 z-[75] flex items-end animate-fade-in">
-          <button type="button" aria-label="Close task details" onClick={() => setViewingTask(null)} className="absolute inset-0 bg-ink/35 backdrop-blur-sm" />
-          <section className="relative w-full bg-bg rounded-t-3xl px-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] md:mx-auto md:max-w-xl animate-slide-up">
-            <div className="mx-auto mb-5 h-1 w-9 rounded-full bg-line-strong" />
-            <p className="eyebrow m-0 text-muted">Task details</p>
-            <h2 className="mt-2 font-serif text-[26px] font-medium leading-tight text-ink">{viewingTask.title}</h2>
-            {viewingTask.description && <p className="mt-3 whitespace-pre-wrap font-serif text-[14px] leading-relaxed text-ink-soft">{viewingTask.description}</p>}
-            <dl className="mt-5 divide-y divide-dashed divide-line border-y border-line text-[13px]">
-              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Course</dt><dd className="m-0 text-right">{(() => { const course = courses.find((item) => item.id === viewingTask.courseId); return course ? `${course.code} · ${course.name}` : 'Unknown course'; })()}</dd></div>
-              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Due</dt><dd className="m-0">{viewingTask.dueDate ?? 'No due date'}</dd></div>
-              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Priority</dt><dd className="m-0 capitalize">{viewingTask.priority}</dd></div>
-              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Status</dt><dd className="m-0">{viewingTask.completed ? 'Completed' : 'Open'}</dd></div>
-              <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Added</dt><dd className="m-0">{new Date(viewingTask.createdAt).toLocaleDateString()}</dd></div>
-              {viewingTask.completedAt && <div className="flex justify-between gap-4 py-3"><dt className="text-muted">Completed</dt><dd className="m-0">{new Date(viewingTask.completedAt).toLocaleDateString()}</dd></div>}
-            </dl>
-            <div className="mt-5">
-              <p className="eyebrow m-0 text-muted">Subtasks</p>
-              <div className="mt-2 divide-y divide-dashed divide-line border-y border-line">
-                {(viewingTask.subtasks ?? []).map((subtask) => <label key={subtask.id} className="flex items-center gap-2 py-2.5 text-[13px]"><input type="checkbox" checked={subtask.completed} onChange={() => saveSubtasks(viewingTask, (viewingTask.subtasks ?? []).map((item) => item.id === subtask.id ? { ...item, completed: !item.completed } : item))} /><span className={subtask.completed ? 'line-through text-muted' : ''}>{subtask.title}</span></label>)}
-                <form onSubmit={(event) => { event.preventDefault(); const title = subtaskDraft.trim(); if (!title) return; saveSubtasks(viewingTask, [...(viewingTask.subtasks ?? []), { id: `subtask-${Date.now()}`, title, completed: false }]); setSubtaskDraft(''); }} className="flex gap-2 py-2"><input value={subtaskDraft} onChange={(event) => setSubtaskDraft(event.target.value)} placeholder="Add a subtask" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" /><button type="submit" className="text-[13px] text-ink">Add</button></form>
+      {/* The reading view. Not a spec table: the course in its own colour,
+          the title set as a title, the notes as prose, the dates written the
+          way the rest of the app writes them, and the marks left in the
+          margin. */}
+      {viewingTask && (() => {
+        const course = courses.find((item) => item.id === viewingTask.courseId);
+        const subtasks = viewingTask.subtasks ?? [];
+        const done = subtasks.filter((item) => item.completed).length;
+
+        return (
+          <div className="fixed inset-0 z-[75] flex items-end animate-fade-in">
+            <button
+              type="button"
+              aria-label="Close task details"
+              onClick={() => setViewingTask(null)}
+              className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+            />
+            <section className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-bg px-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] animate-slide-up md:mx-auto md:max-w-xl">
+              <div className="mx-auto mb-6 h-1 w-9 rounded-full bg-line-strong" />
+
+              <div className="flex items-baseline gap-2.5">
+                <span className="eyebrow shrink-0" style={{ color: course?.color }}>
+                  {course?.code ?? 'Task'}
+                </span>
+                {course && (
+                  <span className="min-w-0 flex-1 truncate font-serif text-[13px] italic text-muted">
+                    <span
+                      className="hl-swipe"
+                      style={
+                        { '--hl': resolveTint(course.color, course.tint) } as React.CSSProperties
+                      }
+                    >
+                      {course.name}
+                    </span>
+                  </span>
+                )}
               </div>
-            </div>
-            <div className="mt-5 flex gap-2"><button type="button" onClick={() => { setViewingTask(null); openEditTask(viewingTask); }} className="flex-1 rounded-[10px] border border-line-strong py-3 text-sm text-ink">Edit</button>{!viewingTask.completed && <button type="button" onClick={() => { handleStartTimerForTask(viewingTask); setViewingTask(null); }} className="flex-1 rounded-[10px] bg-primary py-3 text-sm text-primary-contrast">Start focus</button>}{viewingTask.completed && <button type="button" onClick={() => setViewingTask(null)} className="flex-1 rounded-[10px] bg-primary py-3 text-sm text-primary-contrast">Done</button>}</div>
-          </section>
-        </div>
-      )}
+
+              <h2 className="mb-0 mt-3 font-serif text-[27px] font-medium leading-[1.16] tracking-[-0.015em] text-ink">
+                {viewingTask.title}
+              </h2>
+
+              {(viewingTask.completed || viewingTask.priority === 'high' || viewingTask.dueDate) && (
+                <div className="mt-3.5 flex flex-wrap items-center gap-3">
+                  {viewingTask.completed ? (
+                    <Stamp style={course ? { color: course.color } : undefined}>Done</Stamp>
+                  ) : (
+                    <>
+                      {viewingTask.priority === 'high' && (
+                        <span
+                          className="font-hand inline-block text-[16px] font-semibold tracking-wide text-priority"
+                          style={{ transform: 'rotate(-3deg)' }}
+                        >
+                          !! high
+                        </span>
+                      )}
+                      <DueDateBadge dueDate={viewingTask.dueDate} size="md" />
+                    </>
+                  )}
+                </div>
+              )}
+
+              {viewingTask.description && (
+                <p className="mb-0 mt-5 whitespace-pre-wrap font-serif text-[15px] leading-[1.7] text-ink-soft">
+                  {viewingTask.description}
+                </p>
+              )}
+
+              <div className="mt-8">
+                <div className="flex items-baseline gap-2 border-b border-line pb-2">
+                  <p className="eyebrow m-0">Subtasks</p>
+                  {subtasks.length > 0 && (
+                    <span className="tnum ml-auto font-mono text-[11px] text-muted">
+                      {done}/{subtasks.length}
+                    </span>
+                  )}
+                </div>
+
+                {subtasks.map((subtask) => (
+                  <button
+                    key={subtask.id}
+                    type="button"
+                    aria-pressed={subtask.completed}
+                    onClick={() =>
+                      saveSubtasks(
+                        viewingTask,
+                        subtasks.map((item) =>
+                          item.id === subtask.id ? { ...item, completed: !item.completed } : item,
+                        ),
+                      )
+                    }
+                    className={`flex w-full items-start gap-3 border-b border-dashed border-line bg-transparent px-0.5 py-2.5 text-left transition-opacity ${
+                      subtask.completed ? 'opacity-45' : ''
+                    }`}
+                  >
+                    <span className="scribble-box mt-[3px] flex h-[17px] w-[17px] shrink-0 items-center justify-center">
+                      {subtask.completed && (
+                        <HandCheck size={11} color="var(--ink)" strokeWidth={1.6} />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1 text-[14px] leading-[1.45] text-ink">
+                      {subtask.title}
+                    </span>
+                  </button>
+                ))}
+
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const title = subtaskDraft.trim();
+                    if (!title) return;
+                    saveSubtasks(viewingTask, [
+                      ...subtasks,
+                      { id: `subtask-${Date.now()}`, title, completed: false },
+                    ]);
+                    setSubtaskDraft('');
+                  }}
+                  className="flex items-center gap-3 px-0.5 py-2.5"
+                >
+                  <span
+                    aria-hidden
+                    className="h-[17px] w-[17px] shrink-0 rounded-[5px] border border-dashed border-line-strong opacity-60"
+                  />
+                  <input
+                    value={subtaskDraft}
+                    onChange={(event) => setSubtaskDraft(event.target.value)}
+                    placeholder="one more step…"
+                    aria-label="New subtask"
+                    className="min-w-0 flex-1 border-0 bg-transparent font-serif text-[14px] italic text-ink outline-none placeholder:text-muted-soft"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!subtaskDraft.trim()}
+                    className="hand-underline bg-transparent px-0.5 font-serif text-[13px] text-ink disabled:opacity-30"
+                  >
+                    Add
+                  </button>
+                </form>
+              </div>
+
+              <p className="mb-0 mt-7">
+                <HandNote color="var(--muted-soft)" size={16} rotate={-1.5}>
+                  added {formatRelativeDate(isoDate(new Date(viewingTask.createdAt)))}
+                  {viewingTask.completedAt
+                    ? ` · finished ${formatRelativeDate(
+                        isoDate(new Date(viewingTask.completedAt)),
+                      )}`
+                    : ''}
+                </HandNote>
+              </p>
+
+              <div className="mt-5 flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewingTask(null);
+                    openEditTask(viewingTask);
+                  }}
+                  className="flex-1 rounded-[10px] border border-line-strong bg-transparent py-3.5 text-sm font-medium text-ink-soft"
+                >
+                  Edit
+                </button>
+                {viewingTask.completed ? (
+                  <button
+                    type="button"
+                    onClick={() => setViewingTask(null)}
+                    className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast"
+                  >
+                    Close
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleStartTimerForTask(viewingTask);
+                      setViewingTask(null);
+                    }}
+                    className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast"
+                  >
+                    Start focus
+                  </button>
+                )}
+              </div>
+            </section>
+          </div>
+        );
+      })()}
+
+      {/* The keyboard, asked for rather than announced. Same chrome as every
+          other sheet in the app, and the keys are postmarks. */}
       {shortcutHelpOpen && (
-        <div className="fixed inset-0 z-[85] grid place-items-center p-5 animate-fade-in">
-          <button type="button" aria-label="Close shortcuts" onClick={() => setShortcutHelpOpen(false)} className="absolute inset-0 bg-ink/35 backdrop-blur-sm" />
-          <section className="relative w-full max-w-sm rounded-2xl border border-line bg-bg p-6 shadow-xl">
-            <p className="eyebrow m-0 text-muted">Keyboard shortcuts</p><h2 className="mt-2 font-serif text-[24px]">Stay in the flow</h2>
-            <dl className="mt-5 divide-y divide-dashed divide-line border-y border-line text-[13px]">
-              <div className="flex justify-between py-3"><dt>New task</dt><dd><kbd>N</kbd></dd></div>
-              <div className="flex justify-between py-3"><dt>Change sort</dt><dd><kbd>S</kbd></dd></div>
-              <div className="flex justify-between py-3"><dt>Close sheet</dt><dd><kbd>Esc</kbd></dd></div>
-              <div className="flex justify-between py-3"><dt>Save a new task</dt><dd><kbd>Enter</kbd></dd></div>
-            </dl>
-            <button type="button" onClick={() => setShortcutHelpOpen(false)} className="mt-5 w-full rounded-[10px] bg-primary py-3 text-sm text-primary-contrast">Got it</button>
+        <div className="fixed inset-0 z-[85] flex items-end animate-fade-in">
+          <button
+            type="button"
+            aria-label="Close shortcuts"
+            onClick={() => setShortcutHelpOpen(false)}
+            className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
+          />
+          <section className="relative w-full rounded-t-3xl bg-bg px-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] animate-slide-up md:mx-auto md:max-w-xl">
+            <div className="mx-auto mb-6 h-1 w-9 rounded-full bg-line-strong" />
+            <p className="eyebrow m-0">Keyboard</p>
+            <h2 className="mb-0 mt-2 font-serif text-[24px] font-medium tracking-[-0.01em]">
+              Shortcuts
+            </h2>
+            <ul className="mb-0 mt-5 list-none p-0">
+              {(
+                [
+                  { k: 'N', l: 'New task' },
+                  { k: 'S', l: 'Change order' },
+                  { k: 'Enter', l: 'Save what you are typing' },
+                  { k: 'Esc', l: 'Close the sheet' },
+                ] as const
+              ).map((row) => (
+                <li
+                  key={row.k}
+                  className="flex items-center gap-4 border-b border-dashed border-line py-3 last:border-b-0"
+                >
+                  <span className="min-w-0 flex-1 font-serif text-[15px] text-ink-soft">
+                    {row.l}
+                  </span>
+                  <Stamp>{row.k}</Stamp>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setShortcutHelpOpen(false)}
+              className="mt-6 w-full rounded-[10px] border border-line-strong bg-transparent py-3.5 text-sm font-medium text-ink-soft"
+            >
+              Close
+            </button>
           </section>
         </div>
       )}

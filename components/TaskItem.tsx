@@ -2,6 +2,7 @@
 
 import type { Course, Task } from '@/lib/data';
 import DueDateBadge from '@/components/DueDateBadge';
+import SwipeRow from '@/components/SwipeRow';
 import HandCheck from './notebook/HandCheck';
 
 interface Props {
@@ -14,20 +15,51 @@ interface Props {
   onOpen?: (task: Task) => void;
 }
 
-export default function TaskItem({ task, course, onToggle, onStartTimer, onDelete, onEdit, onOpen }: Props) {
-
+/**
+ * One line of the list.
+ *
+ * The row itself is the way into the task's reading view: a full-bleed
+ * button sits behind the line, and the marks on top of it are inert, so a
+ * tap anywhere that is not the box, the timer or an icon opens the sheet.
+ * A link-style underline on the title would have been a web page's idea of
+ * that; a page just lets you put a finger on the line.
+ *
+ * The row also opens sideways the way every other task row in the app does,
+ * right to complete, left to delete, with the two icon affordances kept for
+ * anyone on a keyboard.
+ */
+export default function TaskItem({
+  task,
+  course,
+  onToggle,
+  onStartTimer,
+  onDelete,
+  onEdit,
+  onOpen,
+}: Props) {
   return (
-    <div className="relative overflow-hidden border-b border-dashed border-line group">
-      <div
-        className={`relative z-10 flex items-start gap-3 px-1 py-3 bg-bg ${
-          task.completed ? 'opacity-50' : ''
-        }`}
-      >
+    <SwipeRow
+      className="border-b border-dashed border-line"
+      accent={course.color}
+      onComplete={task.completed ? undefined : () => onToggle(task.id)}
+      onDelete={() => onDelete(task.id)}
+      surfaceClassName={`relative bg-bg ${task.completed ? 'opacity-45' : ''}`}
+    >
+      <div className="flex items-start gap-3 px-1 py-3">
+        {onOpen && (
+          <button
+            type="button"
+            onClick={() => onOpen(task)}
+            aria-label={`Open ${task.title}`}
+            className="absolute inset-0 z-0 bg-transparent"
+          />
+        )}
+
         <button
           type="button"
           onClick={() => onToggle(task.id)}
           aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
-          className={`shrink-0 mt-0.5 w-5 h-5 flex items-center justify-center ${
+          className={`relative z-10 mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center ${
             task.completed ? 'rounded-md' : 'scribble-box'
           }`}
           style={
@@ -39,21 +71,19 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
           {task.completed && <HandCheck size={12} color="var(--paper)" strokeWidth={1.8} />}
         </button>
 
-        <div className="flex-1 min-w-0">
-          <button
-            type="button"
-            onClick={() => onOpen?.(task)}
-            className={`m-0 block max-w-full bg-transparent p-0 text-left text-[14.5px] leading-[1.4] ${
+        <div className="pointer-events-none relative z-10 min-w-0 flex-1">
+          <p
+            className={`m-0 text-[14.5px] leading-[1.4] ${
               task.completed ? 'text-ink-soft' : 'text-ink'
-            } ${onOpen ? 'hover:underline' : 'cursor-default'}`}
+            }`}
           >
             {task.title}
-          </button>
-          {(!task.completed && (task.priority === 'high' || task.dueDate)) && (
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          </p>
+          {!task.completed && (task.priority === 'high' || task.dueDate) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
               {task.priority === 'high' && (
                 <span
-                  className="font-hand inline-block text-[14px] text-priority font-semibold tracking-wide"
+                  className="font-hand inline-block text-[14px] font-semibold tracking-wide text-priority"
                   style={{ transform: 'rotate(-3deg)' }}
                 >
                   !! high
@@ -69,7 +99,7 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
             type="button"
             onClick={() => onStartTimer(task)}
             aria-label="Start timer for this task"
-            className="hl-swipe inline-flex shrink-0 items-center gap-1 bg-transparent font-serif text-[12px] text-ink"
+            className="hl-swipe relative z-10 inline-flex shrink-0 items-center gap-1 bg-transparent font-serif text-[12px] text-ink"
             style={{ '--hl': course.tint || 'var(--bg-tint)' } as React.CSSProperties}
           >
             <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -84,7 +114,7 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
             type="button"
             onClick={() => onEdit(task)}
             aria-label="Edit task"
-            className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-70 transition-opacity hover:text-ink"
+            className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-soft opacity-70 transition-colors hover:text-ink"
           >
             <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none">
               <path
@@ -102,7 +132,7 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
           type="button"
           onClick={() => onDelete(task.id)}
           aria-label="Delete task"
-          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-soft opacity-70 transition-opacity hover:text-priority"
+          className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-soft opacity-70 transition-colors hover:text-warn"
         >
           <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none">
             <path
@@ -115,6 +145,6 @@ export default function TaskItem({ task, course, onToggle, onStartTimer, onDelet
           </svg>
         </button>
       </div>
-    </div>
+    </SwipeRow>
   );
 }
