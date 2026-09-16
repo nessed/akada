@@ -4,8 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import NextImage from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
-import DailySummary from '@/components/DailySummary';
-import WeeklyProgressBanner from '@/components/WeeklyProgressBanner';
+import StudySummary from '@/components/StudySummary';
 import CourseCard from '@/components/CourseCard';
 import CourseReorderList from '@/components/dashboard/CourseReorderList';
 import DatePicker from '@/components/DatePicker';
@@ -706,11 +705,12 @@ function DashboardPageContent() {
         </div>
       )}
 
-      {/* Daily summary */}
-      <DailySummary todaysSessions={todaysSessions} courses={courses} />
-
-      {/* Weekly study progress across all courses */}
-      <WeeklyProgressBanner courses={courses} sessions={sessions} />
+      {/* The day, with the week under it. */}
+      <StudySummary
+        todaysSessions={todaysSessions}
+        sessions={sessions}
+        courses={courses}
+      />
 
       {semesterInfo && (
         <section className="mt-3 py-2">

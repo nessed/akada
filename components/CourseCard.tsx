@@ -55,14 +55,15 @@ export default function CourseCard({
   const sinceLabel =
     since === 0 ? 'today' : since === 1 ? 'yesterday' : `${since}d ago`;
 
-  const catalogLine = [
-    `${typeof course.credits === 'number' && course.credits > 0 ? course.credits : 4} cr`,
-    course.section ? `Sec ${course.section}` : null,
-    course.instructor,
-    course.meetingTime,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  // When it next meets, and nothing else.
+  //
+  // This line used to carry credits, section, instructor and meeting time
+  // joined with dots, which on a phone truncated mid-value -- "3 cr · S.
+  // Rahman · Mon & Wed, 12:30 PM - 1:45 ..." -- so the one fact a student
+  // checks daily was the one that got cut. The other three are reference
+  // data and the course page, one tap away through this very card, lists
+  // them properly in its details table.
+  const catalogLine = course.meetingTime ?? null;
 
   return (
     <article className="relative bg-paper rounded-[14px] border border-line overflow-hidden transition-colors focus-within:border-line-strong hover:border-line-strong">
@@ -161,15 +162,15 @@ export default function CourseCard({
 
         {/* Progress */}
         <div className="mt-4">
-          <div className="mb-1.5 flex items-baseline justify-between text-xs">
+          {/* "0.9h / 6h" on the left and "15%" on the right is one fact
+              said twice, and readmedesign.md names that exact shape as the
+              thing to avoid. The bar underneath is the percentage. */}
+          <div className="mb-1.5 flex items-baseline text-xs">
             <span className="font-mono text-sm font-semibold tabular-nums text-ink">
               {formatHours(wkSec, 1)}h
-              <span className="ml-1 text-xs font-normal text-muted font-sans">
+              <span className="ml-1 font-sans text-xs font-normal text-muted">
                 / {goalHours}h
               </span>
-            </span>
-            <span className="font-mono text-xs tabular-nums text-muted">
-              {Math.round(pct)}%
             </span>
           </div>
           <div className="h-1 rounded-full bg-bg-tint overflow-hidden">
