@@ -176,6 +176,21 @@ function TasksPageContent() {
   const focused = courseFilter ? courses.find((c) => c.id === courseFilter) : null;
 
   const loading = onboardingLoading || onboarded === false || coursesLoading || tasksLoading;
+
+  // Another screen can point at one group, as in `/tasks#late`. The sections
+  // are only in the DOM once the data has landed, so the browser cannot honour
+  // the hash by itself. The ref stops a later SWR revalidation yanking the page
+  // back up, and a hash naming a group this grouping does not show is left
+  // alone rather than fought.
+  const handledHash = useRef(false);
+  useEffect(() => {
+    if (handledHash.current || loading || groups.length === 0) return;
+    handledHash.current = true;
+    const key = window.location.hash.slice(1);
+    if (!key || !groups.some((g) => g.key === key)) return;
+    document.getElementById(key)?.scrollIntoView({ block: 'start' });
+  }, [loading, groups]);
+
   if (loading) {
     return (
       <PageShell>
@@ -264,7 +279,7 @@ function TasksPageContent() {
         </div>
       ) : (
         groups.map((group) => (
-          <section key={group.key} className="mt-7">
+          <section key={group.key} id={group.key} className="mt-7">
             <div className="flex items-baseline gap-3.5">
               <Eyebrow as="span" style={group.tone === 'late' ? { color: 'var(--warn)' } : group.tone === 'now' ? { color: 'var(--ink)' } : undefined}>
                 {group.label}
