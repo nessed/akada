@@ -72,9 +72,10 @@ export default function SelectField({
           </span>
         )}
         <span
-          className={`min-w-0 flex-1 truncate text-xs ${
-            selected ? 'text-ink-soft' : 'text-muted'
-          }`}
+          // Both states take ink-soft: this sits on --bg-tint, the darkest
+          // ground each stock has, and `muted` is set for the page rather
+          // than for a tinted well.
+          className="min-w-0 flex-1 truncate text-xs text-ink-soft"
         >
           {selected ? selected.label : placeholder}
         </span>

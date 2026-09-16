@@ -107,7 +107,8 @@ export default function DatePicker({
             : 'rounded-lg px-3 py-2.5 text-xs'
         }`}
       >
-        <span className={value ? 'text-ink-soft' : 'text-muted'}>
+        {/* ink-soft either way: the well is --bg-tint. See SelectField. */}
+        <span className="text-ink-soft">
           {value ? formatDisplay(value) : placeholder}
         </span>
         <svg aria-hidden
