@@ -71,9 +71,9 @@ export default function SideRail({ reviewWaiting }: { reviewWaiting?: boolean })
           }}
         >
           {settings?.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- a stored
-            // data URL, already shrunk by resizeAvatar; next/image would only
-            // add a loader round a string that is already in memory.
+            /* A stored data URL, already shrunk by resizeAvatar; next/image
+               would only wrap a loader round a string that is in memory. */
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={settings.avatarUrl} alt="" className="h-full w-full object-cover" />
           ) : (
             initialsFrom(settings?.displayName || '') || 'A'

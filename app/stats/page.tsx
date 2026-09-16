@@ -1,823 +1,334 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
-import { useNotice } from '@/components/Notice';
-import SwipeRow from '@/components/SwipeRow';
 import LoadingIndicator from '@/components/LoadingIndicator';
-import Heatmap from '@/components/Heatmap';
-import WeeklyChart from '@/components/WeeklyChart';
-import type { Course, Session, Task } from '@/lib/data';
-import { formatHM, formatRelativeDate, studyStreakDays, totalSeconds } from '@/lib/utils';
-import { usePreferences } from '@/lib/preferences';
-import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
-import HandNote from '@/components/notebook/HandNote';
+import Tally from '@/components/notebook/Tally';
 import HandCheck from '@/components/notebook/HandCheck';
-import Stamp from '@/components/notebook/Stamp';
+import Marginalia from '@/components/notebook/Marginalia';
+import { CheckBox, Eyebrow, PageButton, Swipe, TextButton } from '@/components/notebook/Marks';
+import { formatHM, isoDate, startOfWeek } from '@/lib/utils';
+import { loggable } from '@/lib/derive';
+import { termWeek, useReview } from '@/lib/review';
+import { FEELINGS, headline, oneQuestion, summary, weekFacts } from '@/lib/review-prose';
 import {
   useOnboardingComplete,
   useCourses,
   useSessions,
-  useActiveSemester,
   useTasks,
-  addSessionOptimistic,
-  deleteSessionOptimistic,
+  useActiveSemester,
+  toggleTaskOptimistic,
 } from '@/lib/data-hooks';
 
-/** One line in the log: a session studied, a task written down, a task finished. */
-type JournalEntry =
-  | { kind: 'session'; id: string; at: string; session: Session; course?: Course }
-  | { kind: 'task-added'; id: string; at: string; task: Task; course?: Course }
-  | { kind: 'task-done'; id: string; at: string; task: Task; course?: Course };
-
+/**
+ * Review. This was Stats.
+ *
+ * The difference is not cosmetic: Stats was a dashboard you browsed, with a
+ * heatmap and a streak and a set of totals that were the same shape every
+ * week. Review is a week you close — it reads the week back to you in
+ * sentences, asks one question, takes the answer, and then gets out of the
+ * way until the next one. The charts that survived are the two that say
+ * something a sentence cannot: where the hours went, and the shape of the
+ * term behind you.
+ */
 export default function StatsPage() {
-  const { notify } = useNotice();
   const router = useRouter();
+
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
   const { courses, isLoading: coursesLoading } = useCourses();
   const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
   const { tasks, isLoading: tasksLoading } = useTasks();
   const { semester } = useActiveSemester();
+  const sessions = useMemo(() => loggable(rawSessions), [rawSessions]);
 
-  const sessions = useMemo(
-    () => rawSessions.filter((s) => isLoggableDuration(s.durationSeconds)),
-    [rawSessions],
+  const today = isoDate();
+  // How many weeks back the reader is reading. 1 is last week, which is the
+  // week Review is actually for; 0 is the week still in progress.
+  const [back, setBack] = useState(1);
+
+  const range = useMemo(() => {
+    const start = startOfWeek(new Date());
+    start.setDate(start.getDate() - back * 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { from: isoDate(start), to: isoDate(end), start, end };
+  }, [back]);
+
+  const review = useReview(range.from);
+  const facts = useMemo(
+    () => weekFacts(courses, sessions, tasks, range.from, range.to),
+    [courses, sessions, tasks, range.from, range.to],
   );
-
-  const [filter, setFilter] = useState<string>('all');
-  const [prefs] = usePreferences();
-  const [deletedSession, setDeletedSession] = useState<Session | null>(null);
-  const undoTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (onboardingError) {
       router.replace('/auth');
       return;
     }
-    if (!onboardingLoading && onboarded === false) {
-      router.replace('/onboarding');
-    }
+    if (!onboardingLoading && onboarded === false) router.replace('/onboarding');
   }, [onboarded, onboardingLoading, onboardingError, router]);
-
-  useEffect(() => {
-    return () => {
-      if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
-    };
-  }, []);
 
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || sessionsLoading || tasksLoading;
-
-  /**
-   * One dated log instead of two lists. Sessions used to be printed twice,
-   * once as "Session history" and once as "Recent activity", so the two are
-   * folded into a single journal: a day, then what happened on it. Sessions
-   * file under the day they were studied, task events under the day they
-   * happened.
-   */
-  const journal = useMemo(() => {
-    const byDay = new Map<string, JournalEntry[]>();
-    const file = (day: string, entry: JournalEntry) => {
-      const existing = byDay.get(day);
-      if (existing) existing.push(entry);
-      else byDay.set(day, [entry]);
-    };
-
-    for (const session of sessions) {
-      file(session.date, {
-        kind: 'session',
-        id: `session-${session.id}`,
-        at: session.createdAt,
-        session,
-        course: courses.find((course) => course.id === session.courseId),
-      });
-    }
-    for (const task of tasks as Task[]) {
-      const course = courses.find((item) => item.id === task.courseId);
-      if (task.createdAt) {
-        file(task.createdAt.slice(0, 10), {
-          kind: 'task-added',
-          id: `task-${task.id}`,
-          at: task.createdAt,
-          task,
-          course,
-        });
-      }
-      if (task.completed && task.completedAt) {
-        file(task.completedAt.slice(0, 10), {
-          kind: 'task-done',
-          id: `done-${task.id}`,
-          at: task.completedAt,
-          task,
-          course,
-        });
-      }
-    }
-
-    const days = Array.from(byDay.entries())
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([date, entries]) => ({
-        date,
-        entries: entries.slice().sort((a, b) => b.at.localeCompare(a.at)),
-        seconds: entries.reduce(
-          (sum, entry) =>
-            entry.kind === 'session'
-              ? sum + clampSessionSeconds(entry.session.durationSeconds)
-              : sum,
-          0,
-        ),
-      }));
-
-    // Whole days only, so a day is never printed half-told.
-    const recent: typeof days = [];
-    let printed = 0;
-    for (const day of days) {
-      if (printed >= 18) break;
-      recent.push(day);
-      printed += day.entries.length;
-    }
-    return recent;
-  }, [courses, sessions, tasks]);
-
-  async function deleteSession(id: string) {
-    const session = rawSessions.find((s) => s.id === id) ?? null;
-    try {
-      await deleteSessionOptimistic(id);
-      if (session) {
-        if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
-        setDeletedSession(session);
-        undoTimerRef.current = window.setTimeout(() => {
-          setDeletedSession(null);
-          undoTimerRef.current = null;
-        }, 7000);
-      }
-    } catch (error) {
-      console.error('Failed to delete session:', error);
-      notify('That session is still here. It did not delete.');
-    }
-  }
-
-  async function undoDeleteSession() {
-    if (!deletedSession) return;
-    const session = deletedSession;
-    if (undoTimerRef.current) {
-      window.clearTimeout(undoTimerRef.current);
-      undoTimerRef.current = null;
-    }
-    setDeletedSession(null);
-    try {
-      await addSessionOptimistic({
-        courseId: session.courseId,
-        taskId: session.taskId,
-        date: session.date,
-        durationSeconds: session.durationSeconds,
-        note: session.note,
-      });
-    } catch (error) {
-      console.error('Failed to restore session:', error);
-      notify('That session did not come back.');
-    }
-  }
-
-  const filteredSessions = useMemo(
-    () => (filter === 'all' ? sessions : sessions.filter((s) => s.courseId === filter)),
-    [sessions, filter]
-  );
-
-  const accent =
-    filter === 'all'
-      ? 'var(--primary)'
-      : courses.find((c) => c.id === filter)?.color || 'var(--ink)';
-
-  const totals = useMemo(() => {
-    return courses.map((c) => {
-      const cs = sessions.filter((s) => s.courseId === c.id);
-      const sec = totalSeconds(cs);
-      const weeksObserved = semester?.startDate
-        ? Math.max(
-            1,
-            Math.ceil(
-              (Date.now() - new Date(semester.startDate + 'T00:00:00').getTime()) /
-                86400000 /
-                7
-            )
-          )
-        : 5;
-      return {
-        course: c,
-        totalHours: sec / 3600,
-        avg: sec / 3600 / weeksObserved,
-      };
-    });
-  }, [courses, sessions, semester]);
-
-  // The longest-studied course sets the length of the rules beneath the codes,
-  // so each rule reads as a share of the term's attention rather than progress
-  // towards a number nobody set.
-  const heaviestCourseHours = totals.reduce((max, t) => Math.max(max, t.totalHours), 0);
-
-  const totalSec = totalSeconds(sessions);
-  const dayCount = new Set(sessions.map((s) => s.date)).size;
-  const avgPerDay = dayCount ? totalSec / dayCount : 0;
-  const streak = studyStreakDays(sessions);
-
-  // Editorial computed bits, the Vol./Issue mark, totals, and "best day"
-  // headline that the redesigned stats page leans on.
-  const semesterLabel = useMemo(() => {
-    const now = new Date();
-    const month = now.getMonth(); // 0-11
-    const year = String(now.getFullYear()).slice(-2);
-    const seasonName = month <= 4 ? 'Spring' : month <= 7 ? 'Summer' : 'Fall';
-    return `${seasonName} '${year}`;
-  }, []);
-
-  const semesterWeekMark = useMemo(() => {
-    if (!semester?.startDate || !semester?.endDate) return null;
-    const start = new Date(semester.startDate + 'T00:00:00').getTime();
-    const end = new Date(semester.endDate + 'T00:00:00').getTime();
-    const now = Date.now();
-    const totalWeeks = Math.max(1, Math.ceil((end - start) / 86400000 / 7));
-    const elapsedDays = Math.max(0, (now - start) / 86400000);
-    const currentWeek = Math.min(totalWeeks, Math.max(1, Math.ceil(elapsedDays / 7)));
-    return { current: currentWeek, total: totalWeeks };
-  }, [semester]);
-
-  const totalHrs = totalSec / 3600;
-  const totalWhole = Math.floor(totalHrs);
-  const totalDecimal = `.${Math.round((totalHrs - totalWhole) * 10)}`;
-
-  // Best day of week, name + duration. Read out in the ledger line.
-  const bestDay = useMemo(() => {
-    const byDow: Record<number, number> = {};
-    for (const s of sessions) {
-      const d = new Date(s.date + 'T00:00:00').getDay();
-      byDow[d] = (byDow[d] || 0) + clampSessionSeconds(s.durationSeconds);
-    }
-    let bestDow = -1;
-    let bestSec = 0;
-    for (const [dow, sec] of Object.entries(byDow)) {
-      if (sec > bestSec) {
-        bestSec = sec;
-        bestDow = Number(dow);
-      }
-    }
-    if (bestDow === -1) return null;
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return { day: dayNames[bestDow], duration: formatHM(bestSec) };
-  }, [sessions]);
-
   if (loading) {
     return (
       <PageShell>
-        <LoadingIndicator compact label="Compiling your semester" className="mb-6" />
-        {/* The shape of the page being set, not a grid of grey boxes. */}
-        <div className="opacity-30" aria-hidden>
-          <div className="mb-3 h-2 w-24 rounded-full bg-line" />
-          <div className="mb-2 h-7 w-[62%] rounded-full bg-line" />
-          <div className="mb-8 h-7 w-[40%] rounded-full bg-line" />
-          <div
-            className="deckle mb-[var(--density-gap)] h-[188px] border border-line bg-paper"
-          />
-          <div className="deckle h-[148px] border border-line bg-paper" />
-        </div>
+        <LoadingIndicator compact label="Reading the week back" className="mb-6" />
       </PageShell>
     );
   }
 
-  return (
-    <PageShell>
-      {/* Vol. III editorial header */}
-      <header className="mb-[18px]">
-        <div className="flex items-center justify-between gap-3">
-          <p className="eyebrow m-0 text-muted">
-            Vol. III · {semesterLabel}
-          </p>
-          {semesterWeekMark && (
-            <Stamp>
-              Wk {semesterWeekMark.current} / {semesterWeekMark.total}
-            </Stamp>
-          )}
-        </div>
-        <h1 className="mt-3 mb-0 font-serif font-medium text-[52px] tracking-[-0.035em] leading-[0.95]">
-          The <span className="italic">Semester</span>
-          <br />
-          so far<span className="text-peach">.</span>
-        </h1>
-        <div className="mt-3.5 flex items-center gap-2.5">
-          <span className="flex-1 h-px bg-ink" />
-          <span className="font-serif italic text-[12px] text-muted">compiled by Akada</span>
-          <span className="flex-1 h-px bg-ink" />
-        </div>
-      </header>
+  const weekNo = termWeek(semester?.startDate ?? null, range.start);
+  const lead = headline(facts);
+  const question = oneQuestion(facts, today);
+  const peak = Math.max(1, ...facts.byCourse.map((r) => r.seconds));
 
-      {/* Hero number, total hours logged, big mono with a hand-note nudge */}
-      <section className="relative mb-5 mt-2">
-        <HandNote
-          color="var(--peach)"
-          size={18}
-          rotate={-6}
-          style={{ position: 'absolute', top: -2, right: 6 }}
-        >
-          {streak >= 7 ? '↑ on a roll' : streak >= 3 ? `${streak}-day streak` : '→ keep going'}
-        </HandNote>
-        <div className="flex items-baseline gap-3">
-          <span className="font-mono font-semibold tabular-nums text-[80px] leading-[0.9] tracking-[-0.04em] text-ink">
-            {totalWhole}
-            <span className="text-muted-soft">{totalDecimal}</span>
-          </span>
-          <div className="pb-2.5">
-            <span className="font-serif italic text-[22px] text-ink-soft">hours</span>
-            <p className="m-0 mt-0.5 text-[12px] text-muted">logged this semester</p>
-          </div>
-        </div>
-      </section>
+  const aside = (
+    <>
+      {question ? (
+        <>
+          <Eyebrow>One question</Eyebrow>
+          <h2 className="mt-2.5 font-serif text-[22px] font-normal leading-[1.28] tracking-[-0.015em]">
+            {question}
+          </h2>
+        </>
+      ) : (
+        <>
+          <Eyebrow>One question</Eyebrow>
+          <h2 className="mt-2.5 font-serif text-[22px] font-normal leading-[1.28] text-ink-soft">
+            Nothing stands out this week. Anything you want to note?
+          </h2>
+        </>
+      )}
 
-      {/* The term so far, as a line in a ledger under a newspaper rule. */}
-      <div
-        className="mb-[var(--density-gap)] py-3.5"
-        style={{
-          borderTop: '1.5px solid var(--ink)',
-          borderBottom: '1px solid var(--line)',
-        }}
-      >
-        <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1.5 font-serif text-[13px] italic text-muted">
-          <span>
-            <Figure>{streak}</Figure> day{streak === 1 ? '' : 's'} running
-          </span>
-          {avgPerDay > 0 && (
-            <span>
-              <Figure>{formatHM(avgPerDay)}</Figure> a day
-            </span>
-          )}
-          {bestDay && (
-            <span>
-              best on <Figure>{bestDay.day}</Figure>, {bestDay.duration}
-            </span>
-          )}
-        </p>
+      {/* Ruled paper, not a boxed textarea. The lines are the page's. */}
+      <textarea
+        value={review.answer}
+        onChange={(e) => review.save({ answer: e.target.value })}
+        rows={4}
+        placeholder="…"
+        aria-label="Your answer"
+        className="ruled-note mt-4 min-h-[132px] w-full resize-none border-y border-line bg-transparent py-3.5 font-serif text-[15.5px] text-ink outline-none placeholder:text-muted-soft"
+      />
+
+      <Eyebrow className="mb-2 mt-5">How it felt</Eyebrow>
+      <div className="flex flex-wrap items-baseline gap-4">
+        {FEELINGS.map((word, i) => {
+          const on = review.felt.includes(word);
+          return (
+            <button
+              key={word}
+              type="button"
+              aria-pressed={on}
+              onClick={() =>
+                review.save({
+                  felt: on ? review.felt.filter((f) => f !== word) : [...review.felt, word],
+                })
+              }
+              className={`bg-transparent font-serif text-[15px] ${on ? 'text-ink' : 'text-muted'}`}
+            >
+              {on ? (
+                <Swipe color={i % 2 === 0 ? 'var(--butter-tint)' : 'var(--peach-tint)'}>{word}</Swipe>
+              ) : (
+                word
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {sessions.length === 0 && (
-        <EmptyState text="Your history will map itself here..." />
-      )}
-
-      {/* Heatmap */}
-      <section className="deckle mb-[var(--density-gap)] border border-line bg-paper py-5 px-[var(--density-gutter)]">
-        <div className="mb-[18px] flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="m-0 font-serif font-medium text-[20px]">Every day so far</h2>
-          <div className="flex gap-1 overflow-x-auto app-scroll">
-            <FilterChip
-              active={filter === 'all'}
-              onClick={() => setFilter('all')}
-              label="All"
-            />
-            {courses.map((c) => (
-              <FilterChip
-                key={c.id}
-                active={filter === c.id}
-                onClick={() => setFilter(c.id)}
-                label={c.code}
-                color={c.color}
-                tint={c.tint}
+      {/* What is still open goes forward. Ticking one here is the same tick
+          as anywhere else in the app: it writes through to the task. */}
+      {facts.carried.length > 0 && (
+        <>
+          <Eyebrow className="mb-2 mt-7">
+            Carry into week {weekNo ? weekNo + 1 : 'next'}
+          </Eyebrow>
+          {facts.carried.slice(0, 5).map((task, i) => (
+            <button
+              key={task.id}
+              type="button"
+              onClick={() => toggleTaskOptimistic(task).catch(() => {})}
+              className={`flex w-full items-center gap-3 bg-transparent py-2.5 text-left ${
+                i === Math.min(facts.carried.length, 5) - 1 ? '' : 'row-rule'
+              }`}
+            >
+              <CheckBox
+                checked={task.completed}
+                color={courses.find((c) => c.id === task.courseId)?.color}
+                size={17}
               />
-            ))}
-          </div>
-        </div>
-        <div className="overflow-x-auto app-scroll">
-          <Heatmap
-            sessions={filteredSessions}
-            accent={accent}
-            weeks={13}
-            hideWeekends={prefs.hideWeekends}
-          />
-        </div>
-      </section>
-
-      {/* Weekly bars, deckle card */}
-      <section className="deckle mb-[var(--density-gap)] border border-line bg-paper py-5 px-[var(--density-gutter)]">
-        <h2 className="m-0 mb-[18px] font-serif font-medium text-[20px]">This week</h2>
-        <WeeklyChart sessions={sessions} courses={courses} />
-      </section>
-
-      {/* Totals, deckle card with hand-drawn trend arrows */}
-      <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
-        <h2 className="m-0 mb-1.5 font-serif font-medium text-[20px]">Hours by course</h2>
-        <div>
-          {totals.length === 0 && (
-            <p className="mt-0 mb-3 text-[13px] text-muted font-serif italic">
-              Nothing to weigh up yet...
-            </p>
-          )}
-          {totals.map(({ course, totalHours, avg }) => {
-            // Quick trend: compare last 7 days vs the 7 before that
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const eightDaysAgo = new Date(today);
-            eightDaysAgo.setDate(today.getDate() - 7);
-            const fifteenDaysAgo = new Date(today);
-            fifteenDaysAgo.setDate(today.getDate() - 14);
-            let recentSec = 0;
-            let priorSec = 0;
-            for (const s of sessions) {
-              if (s.courseId !== course.id) continue;
-              const d = new Date(s.date + 'T00:00:00');
-              if (d >= eightDaysAgo) recentSec += clampSessionSeconds(s.durationSeconds);
-              else if (d >= fifteenDaysAgo) priorSec += clampSessionSeconds(s.durationSeconds);
-            }
-            const trend: 'up' | 'flat' | 'down' =
-              recentSec > priorSec * 1.1
-                ? 'up'
-                : recentSec < priorSec * 0.9
-                  ? 'down'
-                  : 'flat';
-            const trendChar = trend === 'up' ? '↗' : trend === 'down' ? '↘' : '→';
-            const trendColor =
-              trend === 'up'
-                ? 'var(--sage)'
-                : trend === 'down'
-                  ? 'var(--rose)'
-                  : 'var(--muted-soft)';
-            return (
-              <div
-                key={course.id}
-                className="flex items-center justify-between py-3.5 border-b border-dashed border-line last:border-0"
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ background: course.color }}
-                  />
-                  <div className="min-w-0">
-                    <p
-                      className="eyebrow m-0"
-                      style={{ color: course.color }}
-                    >
-                      {course.code}
-                    </p>
-                    <p className="mt-0.5 mb-0 font-serif font-medium text-[15px]">
-                      {course.name}
-                    </p>
-                    {totalHours > 0 && heaviestCourseHours > 0 && (
-                      <span
-                        aria-hidden
-                        className="mt-2 block h-[2px] rounded-full"
-                        style={{
-                          width: `${Math.max(
-                            8,
-                            (totalHours / heaviestCourseHours) * 140,
-                          )}px`,
-                          background: course.color,
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
-                <div className="text-right shrink-0 pl-3">
-                  {totalHours > 0 ? (
-                    <>
-                      <p className="m-0 font-mono font-semibold text-[18px] tabular-nums leading-none tracking-[-0.02em]">
-                        {totalHours.toFixed(1)}
-                        <span className="text-muted font-sans font-normal text-[11px] ml-[3px]">
-                          h
-                        </span>
-                      </p>
-                      <p className="mt-1 mb-0 text-[10.5px] text-muted italic font-serif">
-                        {avg.toFixed(1)} h/wk
-                        <span className="ml-1.5" style={{ color: trendColor }}>
-                          {trendChar}
-                        </span>
-                      </p>
-                    </>
-                  ) : (
-                    <p className="m-0 text-[12px] text-muted-soft italic font-serif">
-                      No sessions yet
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Marks & milestones, semester-shaped achievements */}
-      {sessions.length > 0 && (
-        <section className="mt-[var(--density-gap)]">
-          <h2 className="m-0 mb-3 font-serif font-medium text-[20px]">
-            Marks &amp; milestones
-          </h2>
-          <div className="deckle border border-line bg-paper px-[var(--density-gutter)] py-2">
-            {(() => {
-              const totalHours = totalSec / 3600;
-              const dayCountAll = new Set(sessions.map((s) => s.date)).size;
-              const items = [
-                {
-                  label: 'First 10-hour week',
-                  achieved: streak >= 5 || totalHours >= 10,
-                  color: 'var(--sage)',
-                },
-                {
-                  label: '7-day streak',
-                  achieved: streak >= 7,
-                  detail: streak > 0 ? `currently ${streak}d` : undefined,
-                  color: 'var(--peach)',
-                },
-                {
-                  label: 'Reach 100 hours this semester',
-                  achieved: totalHours >= 100,
-                  detail:
-                    totalHours < 100
-                      ? `${(100 - totalHours).toFixed(1)} to go`
-                      : undefined,
-                  color: 'var(--lav)',
-                },
-                {
-                  label: '20 study days logged',
-                  achieved: dayCountAll >= 20,
-                  detail:
-                    dayCountAll < 20 ? `${20 - dayCountAll} to go` : undefined,
-                  color: 'var(--rose)',
-                },
-              ];
-              return items.map((m, i, arr) => (
-                <div
-                  key={m.label}
-                  className="flex items-start gap-3 py-3"
-                  style={{
-                    borderBottom: i < arr.length - 1 ? '1px dashed var(--line)' : 'none',
-                  }}
-                >
-                  <div
-                    className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center"
-                    style={{
-                      background: m.achieved ? m.color : 'transparent',
-                      border: m.achieved ? 'none' : `1.5px dashed ${m.color}`,
-                      color: m.achieved ? 'var(--ink)' : m.color,
-                    }}
-                  >
-                    {m.achieved ? (
-                      <HandCheck size={14} color="var(--ink)" />
-                    ) : (
-                      <svg aria-hidden width="9" height="9" viewBox="0 0 12 12">
-                        <circle cx="6" cy="6" r="2.5" fill="currentColor" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 pt-0.5">
-                    <p
-                      className="m-0 text-[13.5px] leading-[1.4]"
-                      style={{ color: m.achieved ? 'var(--ink)' : 'var(--muted)' }}
-                    >
-                      {m.label}
-                      {m.detail && (
-                        <span className="ml-2 font-serif italic text-[11.5px] text-muted-soft">
-                          ({m.detail})
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              ));
-            })()}
-          </div>
-        </section>
+              <span className="min-w-0 flex-1 text-[13.5px]">{task.title}</span>
+            </button>
+          ))}
+        </>
       )}
 
-      {/* The log. One dated journal, sessions and task marks under the day
-          they belong to, rather than two lists that printed the same thing. */}
-      <section className="deckle mt-[var(--density-gap)] border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
-        <h2 className="m-0 mb-4 font-serif font-medium text-[20px]">The log</h2>
-        {journal.length === 0 ? (
-          <div className="rounded-[10px] border border-dashed border-line px-4 py-9 text-center">
-            <p className="m-0 font-serif text-[14px] italic text-muted-soft">
-              The first session you log opens this page.
+      <div className="mb-8 mt-auto pt-8">
+        {review.closed ? (
+          <div className="text-center">
+            <p className="m-0 font-serif text-[15px] italic text-muted">
+              This week is closed.
             </p>
+            <TextButton tone="quiet" className="mt-2" onClick={review.reopen}>
+              open it again
+            </TextButton>
           </div>
         ) : (
-          journal.map((day) => (
-            <div key={day.date} className="pt-[18px] first:pt-0">
-              <div className="flex items-baseline gap-3">
-                <h3 className="eyebrow m-0 shrink-0">{formatRelativeDate(day.date)}</h3>
-                <span aria-hidden className="h-px flex-1 bg-line" />
-                {day.seconds > 0 && (
-                  <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-soft">
-                    {formatHM(day.seconds)}
-                  </span>
-                )}
-              </div>
-              <div className="mt-0.5">
-                {day.entries.map((entry) =>
-                  entry.kind === 'session' ? (
-                    <SessionEntry
-                      key={entry.id}
-                      session={entry.session}
-                      course={entry.course}
-                      onDelete={deleteSession}
-                    />
-                  ) : (
-                    <TaskEntry key={entry.id} entry={entry} />
-                  ),
-                )}
-              </div>
-            </div>
-          ))
+          <>
+            <PageButton onClick={review.close}>
+              Close week {weekNo ?? ''}
+            </PageButton>
+            <p className="mt-3 text-center font-serif text-[13px] italic text-muted">
+              Sunday evenings, or whenever you like.
+            </p>
+          </>
         )}
-      </section>
+      </div>
+    </>
+  );
 
-      {/* Editorial footer, closes the issue */}
-      {semester?.endDate && (
-        <p
-          className="mt-8 text-center text-[12px] text-muted-soft font-serif italic pt-4"
-          style={{ borderTop: '1px solid var(--line)' }}
+  return (
+    <PageShell aside={aside}>
+      <div className="flex items-baseline justify-between gap-4 border-b-[1.5px] border-ink pb-3">
+        <Eyebrow as="span" style={{ letterSpacing: '0.18em' }}>
+          {weekNo ? `Week ${weekNo} · ` : ''}
+          {spanLabel(range.start, range.end)}
+        </Eyebrow>
+        <span className="font-mono text-[11px] tracking-[0.1em] text-muted">
+          {review.closed ? 'CLOSED' : back === 0 ? 'STILL OPEN' : 'UNREAD'}
+        </span>
+      </div>
+
+      {/* Stepping back through the term. */}
+      <div className="mt-3 flex items-baseline gap-4">
+        <button
+          type="button"
+          onClick={() => setBack(back + 1)}
+          className="bg-transparent font-serif text-[13.5px] italic text-muted hover:text-ink-soft"
         >
-          End of issue ·{' '}
-          {(() => {
-            const end = new Date(semester.endDate + 'T00:00:00').getTime();
-            const days = Math.max(0, Math.ceil((end - Date.now()) / 86400000));
-            return `${days} day${days === 1 ? '' : 's'} remain${days === 1 ? 's' : ''} in the term`;
-          })()}
-          .
-        </p>
+          ← the week before
+        </button>
+        {back > 0 && (
+          <button
+            type="button"
+            onClick={() => setBack(back - 1)}
+            className="bg-transparent font-serif text-[13.5px] italic text-muted hover:text-ink-soft"
+          >
+            {back === 1 ? 'this week so far →' : 'the week after →'}
+          </button>
+        )}
+      </div>
+
+      {lead && (
+        <h1 className="mt-7 font-serif text-[34px] font-normal leading-none tracking-[-0.035em] md:text-[52px]">
+          {lead.lead} <em className="italic">{lead.emphasis}</em>
+        </h1>
       )}
 
-      {deletedSession && (
-        <div
-          className="fixed inset-x-0 z-50 px-[var(--density-gutter)] md:px-8 animate-fade-in"
-          style={{ bottom: 'calc(92px + env(safe-area-inset-bottom))' }}
-        >
-          <div className="mx-auto max-w-2xl md:max-w-3xl">
-            <div className="flex items-center gap-3 rounded-[10px] border border-line bg-paper/95 px-3.5 py-3 backdrop-blur">
-              <p className="m-0 flex-1 text-[13px] text-ink-soft">
-                Session deleted.
-              </p>
-              <button
-                type="button"
-                onClick={undoDeleteSession}
-                className="font-serif text-[13px] italic text-ink"
+      <p className="mt-4 max-w-[58ch] font-serif text-[16.5px] leading-[1.62] text-ink-soft">
+        {summary(facts, today)}
+      </p>
+
+      <div className="mt-8 flex flex-col gap-10 lg:flex-row">
+        {/* Where the hours went. Tally strokes rather than bars: the unit is
+            an hour, and a bar makes you measure it against an axis. */}
+        <div className="min-w-0 flex-1">
+          <Eyebrow className="mb-2.5">Where it went</Eyebrow>
+          {facts.byCourse.length === 0 ? (
+            <p className="font-serif text-[15px] italic text-muted-soft">No courses yet.</p>
+          ) : (
+            facts.byCourse.map((row, i) => (
+              <div
+                key={row.course.id}
+                className={`flex items-center gap-3.5 py-2.5 ${
+                  i === facts.byCourse.length - 1 ? '' : 'row-rule'
+                }`}
               >
-                Undo
-              </button>
-            </div>
-          </div>
+                <span
+                  className="w-[64px] flex-none text-[9.5px] font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: row.course.color }}
+                >
+                  {row.course.code}
+                </span>
+                {row.seconds > 0 ? (
+                  <>
+                    <span className="min-w-0 flex-1">
+                      <Tally
+                        hours={row.seconds / 3600}
+                        height={22}
+                        width={2.5}
+                        gap={3}
+                        color={row.course.color}
+                        max={Math.max(8, Math.ceil(peak / 3600))}
+                      />
+                    </span>
+                    <span className="flex-none font-mono text-sm font-bold">
+                      {formatHM(row.seconds)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      aria-hidden
+                      className="h-px flex-1 border-b border-dashed border-line-strong"
+                    />
+                    <span className="flex-none font-serif text-[13.5px] italic text-warn">
+                      {lastSeenLabel(facts.untouched.find((u) => u.course.id === row.course.id)?.lastDate ?? null)}
+                    </span>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* What got done, and what did not. */}
+        <div className="w-full flex-none lg:w-[300px]">
+          <Eyebrow className="mb-2.5">Finished · carried over</Eyebrow>
+          {facts.finished.length === 0 && facts.carried.length === 0 ? (
+            <p className="font-serif text-[15px] italic text-muted-soft">Nothing either way.</p>
+          ) : (
+            <>
+              {facts.finished.slice(0, 4).map((task) => (
+                <div key={task.id} className="row-rule flex items-baseline gap-2.5 py-2">
+                  <HandCheck size={13} color="var(--mint)" />
+                  <span className="flex-1 text-[13.5px] text-ink-soft">{task.title}</span>
+                </div>
+              ))}
+              {facts.carried.slice(0, 4).map((task) => (
+                <div key={task.id} className="row-rule flex items-baseline gap-2.5 py-2">
+                  {/* A carried task takes a dash, not a cross: it did not
+                      fail, it moved. */}
+                  <span aria-hidden className="flex w-[13px] flex-none justify-center">
+                    <i className="block h-[1.4px] w-[7px] bg-warn" />
+                  </span>
+                  <span className="flex-1 text-[13.5px]">{task.title}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+
+      {facts.totalSeconds === 0 && (
+        <div className="mt-8 flex justify-center">
+          <Marginalia mark="wave" width={150} color="var(--line-strong)" />
         </div>
       )}
     </PageShell>
   );
 }
 
-/** A number inside a sentence: mono, upright, the app's ink. */
-function Figure({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="font-mono text-[15px] font-semibold not-italic text-ink tabular-nums">
-      {children}
-    </span>
-  );
+function spanLabel(start: Date, end: Date): string {
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return `${fmt(start)} – ${fmt(end)}`;
 }
 
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="mb-[var(--density-gap)] py-12 text-center">
-      <p className="m-0 font-serif text-[16px] italic text-muted-soft">{text}</p>
-    </div>
-  );
-}
-
-interface ChipProps {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  color?: string;
-  tint?: string;
-}
-
-function FilterChip({ active, onClick, label, color, tint }: ChipProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`shrink-0 bg-transparent px-0.5 py-1 font-serif text-[14px] transition-colors ${
-        active ? 'hl-swipe text-ink' : 'text-muted-soft hover:text-ink-soft'
-      }`}
-      style={
-        active
-          ? ({ '--hl': tint || 'var(--highlight-yellow)' } as React.CSSProperties)
-          : undefined
-      }
-    >
-      {label}
-    </button>
-  );
-}
-
-/**
- * The 12px margin every log row is written against, so the tally strokes,
- * the ticks and the open rings all fall on the same vertical rule.
- */
-function EntryMargin({ children }: { children: React.ReactNode }) {
-  return (
-    <span aria-hidden className="flex w-3 shrink-0 justify-center pt-[3px]">
-      {children}
-    </span>
-  );
-}
-
-function SessionEntry({
-  session,
-  course,
-  onDelete,
-}: {
-  session: Session;
-  course?: Course;
-  onDelete: (id: string) => void;
-}) {
-  return (
-    <SwipeRow
-      className="border-b border-dashed border-line last:border-0"
-      onDelete={() => onDelete(session.id)}
-      surfaceClassName="flex items-start gap-3 bg-paper py-3"
-    >
-      <>
-        <EntryMargin>
-          {/* A tally stroke, the way time spent gets marked in a ledger. */}
-          <span
-            className="mt-[1px] block h-[11px] w-[2px] rounded-[1px]"
-            style={{
-              background: course?.color || 'var(--muted-soft)',
-              transform: 'rotate(9deg)',
-            }}
-          />
-        </EntryMargin>
-        <div className="min-w-0 flex-1">
-          <p className="eyebrow m-0" style={course ? { color: course.color } : undefined}>
-            {course?.code || 'Session'}
-          </p>
-          <p className="mt-0.5 mb-0 font-serif text-[15px] font-medium text-ink">
-            {course?.name || 'Study session'}
-          </p>
-          {session.note && (
-            <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-ink-soft">
-              {session.note}
-            </p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
-            {formatHM(clampSessionSeconds(session.durationSeconds))}
-          </span>
-          <button
-            type="button"
-            onClick={() => onDelete(session.id)}
-            aria-label="Delete session"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-priority"
-          >
-            <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-      </>
-    </SwipeRow>
-  );
-}
-
-function TaskEntry({
-  entry,
-}: {
-  entry: Extract<JournalEntry, { kind: 'task-added' | 'task-done' }>;
-}) {
-  const finished = entry.kind === 'task-done';
-  const color = entry.course?.color;
-  return (
-    <div className="flex items-start gap-3 border-b border-dashed border-line py-3 last:border-0">
-      <EntryMargin>
-        {finished ? (
-          <HandCheck size={13} color={color || 'var(--muted)'} strokeWidth={1.5} />
-        ) : (
-          <span
-            className="mt-[3px] block h-[6px] w-[6px] rounded-full border"
-            style={{ borderColor: color || 'var(--muted-soft)' }}
-          />
-        )}
-      </EntryMargin>
-      <div className="min-w-0 flex-1">
-        <p className="eyebrow m-0" style={color ? { color } : undefined}>
-          {entry.course?.code || 'Task'}
-        </p>
-        <p className="mt-0.5 mb-0 font-serif text-[15px] font-medium text-ink">
-          {entry.task.title}
-        </p>
-      </div>
-      <span className="shrink-0 pt-[3px] font-serif text-[11.5px] italic text-muted-soft">
-        {finished ? 'finished' : 'written down'}
-      </span>
-    </div>
-  );
+function lastSeenLabel(lastDate: string | null): string {
+  if (!lastDate) return 'not opened yet';
+  const day = new Date(lastDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' });
+  return `nothing since ${day}`;
 }

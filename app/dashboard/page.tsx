@@ -146,16 +146,15 @@ function DashboardPageContent() {
 
   const today = isoDate();
   const now = new Date();
-  const [weekFrom, weekTo] = weekBounds(now);
 
   const next = useMemo(() => nextUp(tasks, today), [tasks, today]);
   const nextCourse = courses.find((c) => c.id === next?.courseId);
   const quiet = useMemo(() => quietThisWeek(courses, sessions), [courses, sessions]);
   const quietDays = useMemo(() => daysQuiet(courses, sessions, today), [courses, sessions, today]);
-  const weekByCourse = useMemo(
-    () => secondsByCourse(sessions, weekFrom, weekTo),
-    [sessions, weekFrom, weekTo],
-  );
+  const weekByCourse = useMemo(() => {
+    const [from, to] = weekBounds(new Date());
+    return secondsByCourse(sessions, from, to);
+  }, [sessions]);
   const blocks = useMemo(() => dayBlocks(courses, sessions, today), [courses, sessions, today]);
   const coming = useMemo(() => countdowns(tasks, courses, today, 1)[0], [tasks, courses, today]);
   const week = useMemo(

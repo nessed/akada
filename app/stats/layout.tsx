@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Stats',
-  description: 'Hours logged, streaks and how the term has gone.',
+  title: 'Review',
+  description: 'A week you close: where the hours went, and one question.',
   robots: { index: false, follow: false },
 };
 
-export default function StatsLayout({ children }: { children: React.ReactNode }) {
+export default function ReviewLayout({ children }: { children: React.ReactNode }) {
   return children;
 }
