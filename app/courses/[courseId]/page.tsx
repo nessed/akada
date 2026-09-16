@@ -306,19 +306,14 @@ export default function CoursePage() {
           </p>
         ) : (
           open.map((task) => (
-            <button
+            <TaskLine
               key={task.id}
-              type="button"
-              onClick={() => setEditing(task)}
-              className="block w-full bg-transparent text-left"
-            >
-              <TaskLine
-                task={task}
-                course={course}
-                onToggle={() => toggleTaskOptimistic(task).catch(() => {})}
-                onStart={() => handleStartForTask(task)}
-              />
-            </button>
+              task={task}
+              course={course}
+              onToggle={() => toggleTaskOptimistic(task).catch(() => {})}
+              onOpen={() => setEditing(task)}
+              onStart={() => handleStartForTask(task)}
+            />
           ))
         )}
         <div className="mt-2.5 flex items-baseline gap-5">

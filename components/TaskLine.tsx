@@ -19,6 +19,7 @@ export default function TaskLine({
   course,
   onToggle,
   onStart,
+  onOpen,
   showCourse,
   meta,
   hoursLogged,
@@ -28,6 +29,13 @@ export default function TaskLine({
   onToggle?: () => void;
   /** Omitted where starting a timer makes no sense, e.g. a finished line. */
   onStart?: () => void;
+  /**
+   * Opens the line. This is a button around the title rather than a wrapper
+   * around the whole row, because the row already contains the checkbox and
+   * the start button: nesting those inside another button is invalid HTML,
+   * and it made ticking something off open the editor instead.
+   */
+  onOpen?: () => void;
   /** Draws the course's colour bar, for lists that mix courses together. */
   showCourse?: boolean;
   /** The second line: "ECON 100 · 40m in · 2 of 5 done". */
@@ -53,12 +61,25 @@ export default function TaskLine({
 
       {showCourse && course && <CourseSpine color={course.color} />}
 
-      <span className="min-w-0 flex-1">
-        <span className={`block text-[14.5px] ${done ? 'text-ink-soft' : 'text-ink'}`}>
-          {task.title}
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="min-w-0 flex-1 bg-transparent text-left"
+        >
+          <span className={`block text-[14.5px] ${done ? 'text-ink-soft' : 'text-ink'}`}>
+            {task.title}
+          </span>
+          {meta && <span className="mt-[3px] block text-[11.5px] text-muted">{meta}</span>}
+        </button>
+      ) : (
+        <span className="min-w-0 flex-1">
+          <span className={`block text-[14.5px] ${done ? 'text-ink-soft' : 'text-ink'}`}>
+            {task.title}
+          </span>
+          {meta && <span className="mt-[3px] block text-[11.5px] text-muted">{meta}</span>}
         </span>
-        {meta && <span className="mt-[3px] block text-[11.5px] text-muted">{meta}</span>}
-      </span>
+      )}
 
       {!done && hoursLogged !== undefined && hoursLogged > 0 && (
         <TallyCount count={Math.round(hoursLogged)} color="var(--ink)" height={14} />

@@ -9,6 +9,7 @@ import HandCheck from '@/components/notebook/HandCheck';
 import Marginalia from '@/components/notebook/Marginalia';
 import { CheckBox, Eyebrow, PageButton, Swipe, TextButton } from '@/components/notebook/Marks';
 import { formatHM, isoDate, startOfWeek } from '@/lib/utils';
+import TermSoFar from '@/components/review/TermSoFar';
 import { loggable } from '@/lib/derive';
 import { termWeek, useReview } from '@/lib/review';
 import { FEELINGS, headline, oneQuestion, summary, weekFacts } from '@/lib/review-prose';
@@ -312,6 +313,18 @@ export default function StatsPage() {
           )}
         </div>
       </div>
+
+      {/* The term behind this week. It is the one chart Review keeps that a
+          sentence cannot replace: the shape of fifteen weeks, with the week
+          you are reading marked in it. */}
+      <TermSoFar
+        courses={courses}
+        sessions={sessions}
+        tasks={tasks}
+        termStart={semester?.startDate ?? null}
+        readingWeek={range.from}
+        today={today}
+      />
 
       {facts.totalSeconds === 0 && (
         <div className="mt-8 flex justify-center">

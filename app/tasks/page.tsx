@@ -13,8 +13,8 @@ import WatchList from '@/components/list/WatchList';
 import { Eyebrow, Swipe, TextButton } from '@/components/notebook/Marks';
 import { useNotice } from '@/components/Notice';
 import type { Course, Task } from '@/lib/data';
-import { isoDate, daysBetween } from '@/lib/utils';
-import { loggable, secondsByCourse } from '@/lib/derive';
+import { formatHM, isoDate, daysBetween } from '@/lib/utils';
+import { loggable } from '@/lib/derive';
 import { useTimer } from '@/lib/timer-context';
 import {
   useOnboardingComplete,
@@ -165,10 +165,14 @@ function TasksPageContent() {
   );
 
   const openCount = tasks.filter((t) => !t.completed).length;
-  const weekByCourse = useMemo(() => secondsByCourse(sessions, addDays(today, -7), today), [
-    sessions,
-    today,
-  ]);
+  /** Seconds logged against each task, keyed by task id. */
+  const secondsByTask = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const s of sessions) {
+      if (s.taskId) out[s.taskId] = (out[s.taskId] || 0) + s.durationSeconds;
+    }
+    return out;
+  }, [sessions]);
   const focused = courseFilter ? courses.find((c) => c.id === courseFilter) : null;
 
   const loading = onboardingLoading || onboarded === false || coursesLoading || tasksLoading;
@@ -292,20 +296,15 @@ function TasksPageContent() {
                   onComplete={task.completed ? undefined : () => handleToggle(task)}
                   onDelete={() => handleDelete(task.id)}
                 >
-                  <button
-                    type="button"
-                    onClick={() => setEditing(task)}
-                    className="block w-full bg-transparent text-left"
-                  >
-                    <TaskLine
-                      task={task}
-                      course={course}
-                      showCourse={order !== 'course'}
-                      meta={metaFor(task, course, weekByCourse[task.courseId])}
-                      onToggle={() => handleToggle(task)}
-                      onStart={task.completed ? undefined : () => handleStart(task)}
-                    />
-                  </button>
+                  <TaskLine
+                    task={task}
+                    course={course}
+                    showCourse={order !== 'course'}
+                    meta={metaFor(task, course, secondsByTask[task.id])}
+                    onToggle={() => handleToggle(task)}
+                    onOpen={() => setEditing(task)}
+                    onStart={task.completed ? undefined : () => handleStart(task)}
+                  />
                 </SwipeRow>
               );
             })}
@@ -412,8 +411,12 @@ function addDays(iso: string, n: number): string {
   return isoDate(d);
 }
 
-/** The second line under a task: the course, then whatever else is true. */
-function metaFor(task: Task, course: Course | undefined, weekSeconds?: number): string {
+/**
+ * The second line under a task: the course, then whatever else is true of
+ * this one row. `spentSeconds` is time logged against *this task*, not against
+ * its course — the course's total here read as though one task had eaten it.
+ */
+function metaFor(task: Task, course: Course | undefined, spentSeconds?: number): string {
   const done = task.subtasks?.filter((s) => s.completed).length ?? 0;
   const total = task.subtasks?.length ?? 0;
   return [
@@ -421,8 +424,8 @@ function metaFor(task: Task, course: Course | undefined, weekSeconds?: number): 
     task.kind === 'reading' && task.pages ? `${task.pages} pages` : null,
     task.kind === 'exam' ? 'exam' : null,
     task.weight ? `counts for ${task.weight}%` : null,
+    spentSeconds && spentSeconds > 0 ? `${formatHM(spentSeconds)} in` : null,
     total > 0 ? `${done} of ${total} done` : null,
-    weekSeconds && weekSeconds > 0 ? `${Math.round(weekSeconds / 3600)}h this week` : null,
   ]
     .filter(Boolean)
     .join(' · ');

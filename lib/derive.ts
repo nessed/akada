@@ -255,7 +255,9 @@ export function dayBlocks(
     blocks.push({
       id: `class-${course.id}`,
       label: course.code,
-      detail: `${formatClock(meeting.start)} · class`,
+      // Just the time. A 75-minute class is a narrow block on a 14-hour axis,
+      // and "09:30 · class" truncated to "09:30 · c…" says less than "09:30".
+      detail: formatClock(meeting.start),
       color: course.color,
       start: meeting.start,
       end: meeting.end,

@@ -88,7 +88,7 @@ export default function MonthGrid({
       </div>
 
       <div
-        className="grid auto-rows-[minmax(86px,1fr)]"
+        className="grid auto-rows-[minmax(104px,1fr)]"
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
       >
         {cells.map((date, index) => {

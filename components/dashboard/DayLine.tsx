@@ -46,7 +46,7 @@ export default function DayLine({ blocks }: { blocks: DayBlock[] }) {
 
   return (
     <>
-      <div className="relative mt-3 h-[96px] border-b border-line-strong">
+      <div className="relative mt-3 h-[104px] border-b border-line-strong">
         {/* The hours, ruled faintly the way squared paper is. */}
         <div aria-hidden className="absolute inset-0 flex">
           {Array.from({ length: 7 }).map((_, i) => (
@@ -54,11 +54,11 @@ export default function DayLine({ blocks }: { blocks: DayBlock[] }) {
           ))}
         </div>
 
-        <div className="absolute inset-x-0 top-2 h-[34px]">
+        <div className="absolute inset-x-0 top-2 h-[42px]">
           {classes.map((block) => (
             <div
               key={block.id}
-              className="absolute box-border h-full overflow-hidden px-2 py-1.5"
+              className="absolute box-border h-full overflow-hidden px-2 py-[7px]"
               style={{
                 left: `${place(block.start)}%`,
                 width: `${Math.max(4, place(block.end) - place(block.start))}%`,

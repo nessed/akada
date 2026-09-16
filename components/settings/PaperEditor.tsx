@@ -52,7 +52,7 @@ export default function PaperEditor({
 
       <section className="rule-ink mt-7 pt-4">
         <Eyebrow className="mb-3.5">Stock</Eyebrow>
-        <div className="flex flex-wrap gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {STOCKS.map((stock) => {
             const tone = PAPER_TONES[stock.value];
             const chosen = prefs.paperTone === stock.value;
@@ -62,7 +62,7 @@ export default function PaperEditor({
                 type="button"
                 aria-pressed={chosen}
                 onClick={() => setPrefs({ paperTone: stock.value })}
-                className="w-[130px] bg-transparent text-left md:w-[150px]"
+                className="bg-transparent text-left"
               >
                 <span
                   className="box-border block h-[96px] px-3 py-2.5"
