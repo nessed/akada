@@ -58,6 +58,14 @@ had a quiz and a midterm returned has not scored 24%. A piece that hasn't been
 marked yet shows a dash, not a zero, and says how many days out it is if
 there's a dated task matching it.
 
+Typing the weights in is one way to fill that panel. The other is letting a
+model read them off the outline, which is the next section. Either way the
+panel knows if the course is curved rather than marked on a fixed scale, and
+it knows the rules where not everything counts: seven quizzes where the best
+six are kept come to 30% rather than 35%, and the piece that gets dropped is
+decided by score once enough of them have come back to say which is the worst.
+Before that, nothing you already hold is thrown away.
+
 **Stats** is the heatmap, the weekly chart, a journal of everything that
 happened in order, and a term-wide view of how much of your grade is still
 undecided.
@@ -95,10 +103,25 @@ Course Memo.xlsx"`, with `--refresh-planner` to re-pull the meeting times.
 
 Akada exposes a remote MCP endpoint at `/api/mcp` with its own OAuth flow, so
 you can connect it to Claude as a custom connector and hand it a syllabus.
-Nine tools: `find_course`, `get_tasks`, `get_overview`, `create_tasks`,
-`update_tasks`, `complete_tasks`, `log_study_session`, `get_weekly_stats` and
-`delete_course`. The connector authenticates as you and gets a session of its
-own, so signing out of the app in a browser doesn't disconnect it.
+Eleven tools: `find_course`, `get_tasks`, `get_overview`, `create_tasks`,
+`update_tasks`, `complete_tasks`, `log_study_session`, `get_weekly_stats`,
+`get_grading_scheme`, `set_grading_scheme` and `delete_course`. The connector
+authenticates as you and gets a session of its own, so signing out of the app
+in a browser doesn't disconnect it.
+
+The grading pair is the one place the app asks a model to read a document and
+believes the answer, so it is built not to. **Say how it is marked** on a
+course no longer opens the form: it copies a prompt with that course's id and
+code filled in, and the prompt tells the model to ask for the outline and to
+parse nothing and call nothing until a file has actually been attached. A
+model that starts from the course code alone writes a scheme that looks
+plausible and is invented.
+
+What comes back is a proposal, not a scheme. It sits in `courses.grading`
+beside the accepted one, the card shows you what was parsed with Accept and
+Discard, and nothing projects a grade until you accept it. That last part is
+not a rule the panel remembers to follow: `gradeStanding` only ever reads the
+accepted scheme, so a proposal has no way to move a number.
 
 `MCP_SETUP.md` walks through connecting it.
 

@@ -42,9 +42,11 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `complete_tasks`: Tick tasks off, or put them back on the list.
 - `log_study_session`: Record study time against a course, with an optional task and note.
 - `get_weekly_stats`: Read one week's hours against goal, tasks closed, and studied-day streak.
+- `get_grading_scheme`: Read how a course is marked, accepted and proposed.
+- `set_grading_scheme`: Propose how a course is marked, read off its outline.
 - `delete_course`: Permanently delete a course and its associated tasks and sessions.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session` and `delete_course` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `set_grading_scheme` and `delete_course` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -134,7 +136,82 @@ and a number on the Stats screen agree. A day counts once however many
 sittings it held, and today not being studied yet does not break an otherwise
 intact streak.
 
-### 7. `delete_course`
+### 7. `get_grading_scheme`
+- **Title**: Read how an Akada course is graded
+- **Description**: The grading scheme Akada holds for one course: every graded component and its weight, whether the course is graded absolutely or relatively, and any rule where not every item counts.
+- **Annotations**: `readOnlyHint: true`
+- **Parameters**:
+  - `course_id` (`string`, UUID): The course to read.
+- **Output**: `schema_version` (`akada.grading.v1`), `course`, an `accepted` block (`components`, `basis`, `drop_rules`), and a `pending` block or `null`.
+
+`accepted` is what the app actually projects from. `pending` is a scheme
+proposed by `set_grading_scheme` that the student has not accepted yet, and
+nothing in Akada reads it.
+
+### 8. `set_grading_scheme`
+- **Title**: Propose how an Akada course is graded
+- **Description**: Record how a course is graded, read off an outline or syllabus the student has attached. Writes a **proposal**, not a live scheme.
+- **Annotations**: `destructiveHint: false`, `idempotentHint: true`
+- **Parameters**:
+  - `course_id` (`string`, UUID): The course this scheme belongs to.
+  - `components` (array, 1-40): `label` (1-120 chars), `weight` (0-100, a percentage of the course), and optional `group` shared by items a drop rule covers.
+  - `basis` (`"absolute" | "relative"`): A fixed scale, or curved against the class.
+  - `drop_rules` (array, up to 20, default `[]`): `group` and `keep`, e.g. `{ "group": "quizzes", "keep": 6 }` for "best 6 of 7".
+  - `note` (`string`, up to 600 chars): Anything the outline was vague or silent about. Shown to the student under the rows.
+  - `source` (`string`, up to 200 chars): Where it came from, e.g. the outline's file name.
+- **Output**: `proposed: true`, the `course`, the `components` / `basis` / `drop_rules` as stored, `total_weight`, and a `message` telling the model to send the student to the course page.
+
+Example, for seven quizzes where the best six count:
+
+```json
+{
+  "course_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "components": [
+    { "label": "Quiz 1", "weight": 5, "group": "quizzes" },
+    { "label": "Quiz 2", "weight": 5, "group": "quizzes" },
+    { "label": "Midterm", "weight": 30 },
+    { "label": "Final", "weight": 40 }
+  ],
+  "basis": "absolute",
+  "drop_rules": [{ "group": "quizzes", "keep": 6 }],
+  "note": "The outline does not say whether the final is cumulative.",
+  "source": "MATH 101 outline.pdf"
+}
+```
+
+#### Nothing is projected until the student accepts
+
+`set_grading_scheme` writes to `courses.grading.pending`. It never touches
+`courses.assessments`, and `gradeStanding` in `lib/derive.ts` reads only the
+accepted scheme, so a proposal cannot move a number on any screen. The course
+page shows it with **Accept** and **Discard**; accepting copies it across and
+clears the proposal, discarding only clears it. Calling the tool again
+replaces an unaccepted proposal and leaves an accepted scheme alone.
+
+This is also why the tool description tells the model to send the student to
+the course page rather than reporting the grading as saved.
+
+#### Where the prompt comes from
+
+The student does not write the prompt. **Say how it is marked** on the course
+page copies one built from `lib/grading-prompt.ts` with that course's id and
+code filled in, and it instructs the model to ask for the outline and to parse
+nothing and call nothing until a file is actually attached. A model that
+starts from the course code alone produces a scheme that looks plausible and
+is invented, which is the failure this whole path is shaped to avoid.
+
+#### Drop rules
+
+A rule naming a group no component is in, or keeping more items than the group
+holds, is rejected with a message rather than written, because either would
+silently do nothing and the student would have no way to see why.
+
+A group's total is the `keep` heaviest pieces in it, so seven 5% quizzes
+keeping six come to 30%. Which piece is dropped is decided by score, worst
+first, and only among pieces that have come back: until more than `keep` have
+been marked, nothing the student already holds is thrown away.
+
+### 9. `delete_course`
 - **Title**: Delete an Akada course
 - **Description**: Permanently delete a course from the student's active Akada semester by its `course_id`. Also removes all associated tasks and study sessions.
 - **Annotations**: `destructiveHint: true`

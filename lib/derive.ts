@@ -1,4 +1,4 @@
-import type { Course, Task } from './data';
+import type { Assessment, Course, DropRule, Task } from './data';
 import { daysBetween, isoDate } from './utils';
 
 /**
@@ -17,23 +17,79 @@ import { daysBetween, isoDate } from './utils';
  * `percent` is the mark so far — out of what has been marked, not out of 100,
  * because a student who is 28% of the way through a course has not scored 24.
  */
-export function gradeStanding(course: Pick<Course, 'assessments'>) {
+export function gradeStanding(course: Pick<Course, 'assessments' | 'grading'>) {
   const rows = course.assessments ?? [];
-  const graded = rows.filter((a) => a.score !== null && a.outOf);
+  const counted = countedAssessments(rows, course.grading?.dropRules ?? []);
+  const graded = counted.filter((a) => a.score !== null && a.outOf);
   const marked = graded.reduce((acc, a) => acc + a.weight, 0);
   const earned = graded.reduce(
     (acc, a) => acc + a.weight * ((a.score as number) / (a.outOf as number)),
     0,
   );
-  const total = rows.reduce((acc, a) => acc + a.weight, 0);
+  const total = counted.reduce((acc, a) => acc + a.weight, 0);
+  // `dropped` is the ids the rules excluded, so the card can grey those rows
+  // rather than silently showing a piece that is not being counted.
+  const countedIds = new Set(counted.map((a) => a.id));
   return {
     rows,
+    counted,
+    dropped: rows.filter((a) => !countedIds.has(a.id)).map((a) => a.id),
+    basis: course.grading?.basis ?? 'absolute',
     total,
     marked,
     earned,
     unmarked: Math.max(0, total - marked),
     percent: marked > 0 ? Math.round((earned / marked) * 100) : null,
   };
+}
+
+/**
+ * The pieces that actually count, once "best 6 of 7" has been applied.
+ *
+ * Two different things get dropped, and they are decided differently. A
+ * group's *total* is the `keep` heaviest pieces in it, which is what makes
+ * seven 5% quizzes keeping six come to 30% rather than 35%. Which pieces are
+ * kept is decided by score, best first — but only among the ones that have
+ * come back, because a quiz that has not happened cannot be the one dropped.
+ * Until more than `keep` have been marked, nothing is dropped at all, which
+ * is the behaviour a student expects in week three.
+ *
+ * A group named by no rule, or a piece in no group, is returned untouched.
+ */
+function countedAssessments(rows: Assessment[], dropRules: DropRule[]): Assessment[] {
+  if (dropRules.length === 0) return rows;
+  const rules = new Map(dropRules.map((rule) => [rule.group, rule.keep]));
+  const dropped = new Set<string>();
+
+  for (const [group, keep] of rules) {
+    const members = rows.filter((row) => row.group === group);
+    if (members.length === 0 || keep >= members.length) continue;
+
+    // The lightest pieces leave the group's total, so the weight that remains
+    // is the one the outline states.
+    const byWeight = [...members].sort((a, b) => b.weight - a.weight);
+    const surplusWeight = byWeight.slice(keep);
+
+    const marked = members.filter((row) => row.score !== null && row.outOf);
+    if (marked.length > keep) {
+      // Enough have come back to say which are the worst. Drop those.
+      const byRatio = [...marked].sort(
+        (a, b) =>
+          (b.score as number) / (b.outOf as number) - (a.score as number) / (a.outOf as number),
+      );
+      byRatio.slice(keep).forEach((row) => dropped.add(row.id));
+    } else {
+      // Not yet. Trim the group's total instead, taking from the pieces still
+      // outstanding so no mark the student already holds is thrown away.
+      const markedIds = new Set(marked.map((row) => row.id));
+      surplusWeight
+        .filter((row) => !markedIds.has(row.id))
+        .slice(0, members.length - keep)
+        .forEach((row) => dropped.add(row.id));
+    }
+  }
+
+  return dropped.size === 0 ? rows : rows.filter((row) => !dropped.has(row.id));
 }
 
 /** The share of every course's grade still to be decided. */

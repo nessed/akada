@@ -52,6 +52,14 @@ alter table courses add column if not exists sort_order integer;
 -- course with an empty array simply does not draw a grade panel.
 alter table courses add column if not exists assessments jsonb not null default '[]'::jsonb;
 
+-- How the course is marked beyond the list of pieces: the basis it is graded
+-- on, any "best 6 of 7" drop rules, and a scheme proposed through the MCP
+-- connector that the student has not accepted yet. One column for the same
+-- reason assessments is one: it is only ever read and written whole, with the
+-- course. Additive with a default, so an older deploy reading these rows
+-- simply does not see it. Nothing projects a grade from a pending scheme.
+alter table courses add column if not exists grading jsonb not null default '{}'::jsonb;
+
 -- ============================================================
 -- 2. TASKS  (FK -> courses)
 -- ============================================================

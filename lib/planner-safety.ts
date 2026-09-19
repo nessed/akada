@@ -1,4 +1,11 @@
-import type { Assessment, TaskKind } from './data/types';
+import type {
+  Assessment,
+  CourseGrading,
+  DropRule,
+  GradingBasis,
+  PendingScheme,
+  TaskKind,
+} from './data/types';
 
 const COURSE_CODE_MAX = 18;
 const COURSE_NAME_MAX = 90;
@@ -105,6 +112,7 @@ export function sanitizeAssessments(value: unknown): Assessment[] {
     const weight = Number(row.weight);
     const score = row.score === null || row.score === undefined ? null : Number(row.score);
     const outOf = row.outOf === null || row.outOf === undefined ? null : Number(row.outOf);
+    const group = cleanText(String(row.group ?? ''), 80);
     return [
       {
         id,
@@ -112,9 +120,77 @@ export function sanitizeAssessments(value: unknown): Assessment[] {
         weight: Number.isFinite(weight) ? Math.min(100, Math.max(0, weight)) : 0,
         score: Number.isFinite(score as number) ? (score as number) : null,
         outOf: Number.isFinite(outOf as number) && (outOf as number) > 0 ? (outOf as number) : null,
+        // Omitted rather than written as '' so a piece in no group keeps the
+        // exact shape it had before drop rules existed.
+        ...(group ? { group } : {}),
       },
     ];
   });
+}
+
+/**
+ * One drop group's rule, e.g. "of the seven quizzes, keep the best six".
+ *
+ * `keep` of 0 would silently delete a whole group's worth of weight from the
+ * course, so it is floored at 1. It is not capped against the group's size
+ * here because the rule and the pieces are sanitized independently; the
+ * clamping that matters happens in gradeStanding, where both are in hand.
+ */
+function sanitizeDropRules(value: unknown): DropRule[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.slice(0, 20).flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Partial<DropRule>;
+    const group = cleanText(String(row.group ?? ''), 80);
+    const keep = Number(row.keep);
+    if (!group || seen.has(group) || !Number.isFinite(keep)) return [];
+    seen.add(group);
+    return [{ group, keep: Math.max(1, Math.trunc(keep)) }];
+  });
+}
+
+function sanitizeBasis(value: unknown): GradingBasis | undefined {
+  return value === 'relative' || value === 'absolute' ? value : undefined;
+}
+
+function sanitizePendingScheme(value: unknown): PendingScheme | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Partial<PendingScheme>;
+  const assessments = sanitizeAssessments(row.assessments);
+  // A proposal with nothing in it is not a proposal. Dropping it here means
+  // the card never has to render an empty review state.
+  if (assessments.length === 0) return null;
+  const createdAt = cleanText(String(row.createdAt ?? ''), 40);
+  return {
+    assessments,
+    basis: sanitizeBasis(row.basis) ?? 'absolute',
+    dropRules: sanitizeDropRules(row.dropRules),
+    source: cleanText(String(row.source ?? ''), 200),
+    note: cleanText(String(row.note ?? ''), 600),
+    createdAt: createdAt || new Date().toISOString(),
+  };
+}
+
+/**
+ * How a course is marked, beyond the list of pieces.
+ *
+ * Returns undefined rather than an empty object when there is nothing to say,
+ * so a course that has never been told anything keeps writing no grading at
+ * all and the column stays at its `{}` default.
+ */
+export function sanitizeGrading(value: unknown): CourseGrading | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const row = value as Partial<CourseGrading>;
+  const basis = sanitizeBasis(row.basis);
+  const dropRules = sanitizeDropRules(row.dropRules);
+  const pending = sanitizePendingScheme(row.pending);
+  if (!basis && dropRules.length === 0 && !pending) return undefined;
+  const grading: CourseGrading = {};
+  if (basis) grading.basis = basis;
+  if (dropRules.length > 0) grading.dropRules = dropRules;
+  if (pending) grading.pending = pending;
+  return grading;
 }
 
 export function cleanTaskTitle(value: unknown): string {

@@ -34,6 +34,7 @@ import {
   cleanText,
   cleanWeight,
   sanitizeAssessments,
+  sanitizeGrading,
   requireIsoDate,
 } from '@/lib/planner-safety';
 
@@ -60,6 +61,8 @@ interface CourseRow {
   sort_order?: number | null;
   /** Absent for the same reason, and for the same handling. */
   assessments?: unknown;
+  /** Absent for the same reason, and for the same handling. */
+  grading?: unknown;
 }
 
 interface SessionRow {
@@ -112,6 +115,7 @@ function rowToCourse(r: CourseRow): Course {
     meetingTime: cleanMeetingTime(r.meeting_time),
     position: typeof r.sort_order === 'number' ? r.sort_order : undefined,
     assessments: sanitizeAssessments(r.assessments),
+    grading: sanitizeGrading(r.grading),
   };
 }
 
@@ -445,6 +449,9 @@ export class SupabaseAdapter implements DataProvider {
     }
     if (updates.color !== undefined) patch.color = cleanText(updates.color, 32) || '#A8B89B';
     if (updates.assessments !== undefined) patch.assessments = sanitizeAssessments(updates.assessments);
+    // `{}` rather than null when there is nothing to say, to match the column
+    // default — a null would violate the not-null constraint.
+    if (updates.grading !== undefined) patch.grading = sanitizeGrading(updates.grading) ?? {};
     if (updates.tint !== undefined) patch.tint = updates.tint ? cleanText(updates.tint, 32) : null;
     if (updates.weeklyGoalHours !== undefined) {
       patch.weekly_goal_hours = clampWeeklyGoalHours(updates.weeklyGoalHours);

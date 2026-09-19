@@ -31,6 +31,7 @@ import {
   cleanText,
   cleanWeight,
   sanitizeAssessments,
+  sanitizeGrading,
   requireIsoDate,
 } from '@/lib/planner-safety';
 
@@ -141,6 +142,7 @@ function sanitizeCourse(course: Course): Course {
     meetingTime: cleanMeetingTime(course.meetingTime),
     position: cleanPosition(course.position),
     assessments: sanitizeAssessments(course.assessments),
+    grading: sanitizeGrading(course.grading),
   };
 }
 

@@ -35,6 +35,10 @@ export const db: DataProvider = hasSupabaseConfig
 export type { DataProvider } from './data-provider';
 export type {
   Assessment,
+  CourseGrading,
+  DropRule,
+  GradingBasis,
+  PendingScheme,
   Course,
   Session,
   Task,

@@ -18,6 +18,12 @@ const MAX_TASKS_PER_READ = 100;
 const MAX_SUBTASKS_PER_TASK = 50;
 const MAX_SUBTASK_TITLE = 300;
 const MAX_DESCRIPTION = 5000;
+// The same ceilings lib/planner-safety.ts sanitizeAssessments and
+// sanitizeGrading enforce on the app's own writes, so a scheme parsed here
+// and a scheme typed into the card cannot differ in shape.
+const MAX_COMPONENTS = 40;
+const MAX_DROP_RULES = 20;
+const MAX_GRADING_NOTE = 600;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // This is deliberately independent of optional app-migration columns. MCP
@@ -169,6 +175,130 @@ async function loadOwnTasks(tool: string, token: AuthenticatedToken, ids: string
     return { ok: false, error: toolError(`${missing.length === ids.length ? 'No' : 'Not every'} task in that request is in your active Akada semester. Read your tasks again with get_tasks and use the ids it returns.`) } as const;
   }
   return { ok: true, supabase, courses: allowed, tasks: rows } as const;
+}
+
+/**
+ * One course of the student's, in their active semester, or a refusal.
+ *
+ * The grading tools address a single course by id, so they need the same
+ * ownership check the task tools get from loadOwnTasks but without loading
+ * any tasks. `select('*')` because `grading` is an optional migration column:
+ * naming it would make every grading call fail outright against a project
+ * that has not applied the newer schema.sql, instead of simply reading no
+ * scheme.
+ */
+async function loadOwnCourse(tool: string, token: AuthenticatedToken, courseId: string) {
+  const semesterId = await activeSemesterId(token);
+  if (!semesterId) return { ok: false, error: toolError('No active semester is set in Akada.') } as const;
+  const supabase = mcpSupabase(token.supabaseAccessToken);
+  const { data, error } = await supabase
+    .from('courses')
+    .select('*')
+    .eq('id', courseId)
+    .eq('user_id', token.userId)
+    .eq('semester_id', semesterId)
+    .maybeSingle();
+  if (error) return { ok: false, error: queryFailed(tool, 'course lookup', error, 'Akada could not look up that course.') } as const;
+  if (!data) {
+    return { ok: false, error: toolError('That course is not in your active Akada semester. Find the course again with find_course and use the id it returns.') } as const;
+  }
+  const row = data as Record<string, unknown>;
+  return {
+    ok: true,
+    supabase,
+    course: {
+      id: String(row.id),
+      code: String(row.code ?? ''),
+      name: String(row.name ?? ''),
+      assessments: row.assessments,
+      grading: row.grading,
+    },
+  } as const;
+}
+
+type GradingRead = {
+  basis: 'absolute' | 'relative' | null;
+  dropRules: { group: string; keep: number }[];
+  pending: {
+    assessments: Record<string, unknown>[];
+    basis: 'absolute' | 'relative';
+    dropRules: { group: string; keep: number }[];
+    note: string;
+    source: string;
+    createdAt: string;
+  } | null;
+};
+
+/**
+ * The grading column, read defensively.
+ *
+ * Deliberately not importing lib/planner-safety.ts sanitizeGrading: that one
+ * is shaped for the app's camelCase model, while this route speaks to the
+ * database directly and has to survive the column being absent entirely on a
+ * project that has not applied the newer schema.sql.
+ */
+function readGrading(value: unknown): GradingRead {
+  const empty: GradingRead = { basis: null, dropRules: [], pending: null };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return empty;
+  const row = value as Record<string, unknown>;
+  const basis = row.basis === 'relative' || row.basis === 'absolute' ? row.basis : null;
+  const pendingRow =
+    row.pending && typeof row.pending === 'object' && !Array.isArray(row.pending)
+      ? (row.pending as Record<string, unknown>)
+      : null;
+  return {
+    basis,
+    dropRules: readDropRules(row.dropRules),
+    pending: pendingRow
+      ? {
+          assessments: Array.isArray(pendingRow.assessments)
+            ? (pendingRow.assessments as Record<string, unknown>[])
+            : [],
+          basis: pendingRow.basis === 'relative' ? 'relative' : 'absolute',
+          dropRules: readDropRules(pendingRow.dropRules),
+          note: typeof pendingRow.note === 'string' ? pendingRow.note : '',
+          source: typeof pendingRow.source === 'string' ? pendingRow.source : '',
+          createdAt: typeof pendingRow.createdAt === 'string' ? pendingRow.createdAt : '',
+        }
+      : null,
+  };
+}
+
+function readDropRules(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Record<string, unknown>;
+    const group = typeof row.group === 'string' ? row.group : '';
+    const keep = Number(row.keep);
+    if (!group || !Number.isFinite(keep)) return [];
+    return [{ group, keep: Math.max(1, Math.trunc(keep)) }];
+  });
+}
+
+/** Assessment rows as the connector states them: snake_case, no ids to guess. */
+function readComponents(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Record<string, unknown>;
+    const label = typeof row.label === 'string' ? row.label : '';
+    if (!label) return [];
+    const weight = Number(row.weight);
+    const score = row.score === null || row.score === undefined ? null : Number(row.score);
+    const outOf = row.outOf === null || row.outOf === undefined ? null : Number(row.outOf);
+    return [
+      {
+        label,
+        weight: Number.isFinite(weight) ? weight : 0,
+        group: typeof row.group === 'string' && row.group ? row.group : null,
+        // Null until the piece comes back, which is what "not marked yet"
+        // means here. A zero would read as a zero the student scored.
+        score: Number.isFinite(score as number) ? (score as number) : null,
+        out_of: Number.isFinite(outOf as number) ? (outOf as number) : null,
+      },
+    ];
+  });
 }
 
 // Due date first with undated tasks last, newest first inside a date. This
@@ -815,6 +945,181 @@ function createServer(token: AuthenticatedToken) {
         });
       } catch (cause) {
         return toolCrashed('delete_course', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_grading_scheme',
+    {
+      title: 'Read how an Akada course is graded',
+      description: 'Read the grading scheme Akada holds for one of the signed-in student’s courses: every graded component and its weight, whether the course is graded absolutely or relatively, and any rule where not every item counts. Returns both the accepted scheme and any scheme still waiting for the student to accept it. This tool never changes Akada data.',
+      inputSchema: z.object({ course_id: z.string().uuid() }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ course_id }) => {
+      try {
+        const owned = await loadOwnCourse('get_grading_scheme', token, course_id);
+        if (!owned.ok) return owned.error;
+        const { course } = owned;
+        const grading = readGrading(course.grading);
+        return result({
+          schema_version: 'akada.grading.v1',
+          course: { id: course.id, code: course.code, name: course.name },
+          accepted: {
+            components: readComponents(course.assessments),
+            basis: grading.basis ?? 'absolute',
+            drop_rules: grading.dropRules,
+          },
+          pending: grading.pending
+            ? {
+                components: readComponents(grading.pending.assessments),
+                basis: grading.pending.basis,
+                drop_rules: grading.pending.dropRules,
+                note: grading.pending.note,
+                source: grading.pending.source,
+                created_at: grading.pending.createdAt,
+              }
+            : null,
+          message: grading.pending
+            ? 'A proposed scheme is waiting for the student to accept it on the course page. Nothing is projected from it until they do.'
+            : undefined,
+        });
+      } catch (cause) {
+        return toolCrashed('get_grading_scheme', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'set_grading_scheme',
+    {
+      title: 'Propose how an Akada course is graded',
+      description:
+        'Record how one of the signed-in student’s courses is graded, read off a course outline or syllabus the student has given you. Do not call this from the course code alone or from what the course usually looks like: only call it against an outline the student has actually attached. Cover every graded component with what it is worth as a percentage of the course, say whether the course is graded absolutely or relatively, and give a drop rule wherever not every item counts (put those items in a shared `group` and name that group in `drop_rules`). This does NOT take effect on its own: it lands as a proposal on the course page and the student has to accept it before Akada projects anything from it. Tell the student to go and look at it. Calling this again replaces any proposal not yet accepted, and never touches a scheme the student already accepted.',
+      inputSchema: z.object({
+        course_id: z.string().uuid(),
+        components: z
+          .array(
+            z.object({
+              label: z.string().trim().min(1).max(120),
+              weight: z.number().min(0).max(100),
+              group: z
+                .string()
+                .trim()
+                .min(1)
+                .max(80)
+                .optional()
+                .describe('Items that share a drop rule share a group, e.g. "quizzes" on all seven quizzes.'),
+            }),
+          )
+          .min(1)
+          .max(MAX_COMPONENTS),
+        basis: z
+          .enum(['absolute', 'relative'])
+          .describe('absolute: a fixed scale. relative: curved, ranked against the class.'),
+        drop_rules: z
+          .array(
+            z.object({
+              group: z.string().trim().min(1).max(80),
+              keep: z.number().int().min(1).describe('How many of the group count, e.g. 6 for "best 6 of 7".'),
+            }),
+          )
+          .max(MAX_DROP_RULES)
+          .default([]),
+        note: z
+          .string()
+          .trim()
+          .max(MAX_GRADING_NOTE)
+          .default('')
+          .describe('Anything the outline was vague or silent about. Shown to the student under the rows.'),
+        source: z
+          .string()
+          .trim()
+          .max(200)
+          .default('')
+          .describe('Where this came from, e.g. the file name of the outline.'),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ course_id, components, basis, drop_rules, note, source }) => {
+      try {
+        const owned = await loadOwnCourse('set_grading_scheme', token, course_id);
+        if (!owned.ok) return owned.error;
+        const { course, supabase } = owned;
+
+        // A rule naming a group no component is in silently does nothing, and
+        // the student would have no way to see why their "best 6 of 7" was
+        // ignored. Say so rather than writing it.
+        const groups = new Set(components.flatMap((c) => (c.group ? [c.group] : [])));
+        const orphan = drop_rules.find((rule) => !groups.has(rule.group));
+        if (orphan) {
+          return toolError(
+            `No component is in the group "${orphan.group}", so that drop rule would do nothing. Give every item the rule covers that same group, then call this again.`,
+          );
+        }
+        const tooFew = drop_rules.find(
+          (rule) => rule.keep > components.filter((c) => c.group === rule.group).length,
+        );
+        if (tooFew) {
+          const size = components.filter((c) => c.group === tooFew.group).length;
+          return toolError(
+            `The group "${tooFew.group}" keeps ${tooFew.keep} items but only ${size} are in it. Check the outline and call this again.`,
+          );
+        }
+
+        const stamp = Date.now().toString(36);
+        const pending = {
+          assessments: components.map((component, index) => ({
+            // Ids are generated here rather than asked of the model, which
+            // would invent colliding ones. Accepting keeps these, so a score
+            // later typed against a row stays with that row.
+            id: `a-${stamp}-${index}`,
+            label: component.label,
+            weight: component.weight,
+            score: null,
+            outOf: 100,
+            ...(component.group ? { group: component.group } : {}),
+          })),
+          basis,
+          dropRules: drop_rules.map((rule) => ({ group: rule.group, keep: rule.keep })),
+          source,
+          note,
+          createdAt: new Date().toISOString(),
+        };
+
+        // Read-modify-write on one jsonb column: the accepted basis and rules
+        // live in the same object and have to survive a proposal being
+        // written beside them.
+        const existing = readGrading(course.grading);
+        const grading: Record<string, unknown> = { pending };
+        if (existing.basis) grading.basis = existing.basis;
+        if (existing.dropRules.length > 0) grading.dropRules = existing.dropRules;
+
+        const { error } = await supabase
+          .from('courses')
+          .update({ grading })
+          .eq('id', course.id)
+          .eq('user_id', token.userId);
+        if (error) return queryFailed('set_grading_scheme', 'grading write', error, 'Akada could not save that grading scheme.');
+
+        const total = components.reduce((acc, c) => acc + c.weight, 0);
+        const rounded = Math.round(total * 100) / 100;
+        return result({
+          proposed: true,
+          course: { id: course.id, code: course.code, name: course.name },
+          components: readComponents(pending.assessments),
+          basis,
+          drop_rules: pending.dropRules,
+          total_weight: rounded,
+          message:
+            `Proposed a grading scheme for ${course.code}. It is not live yet: the student has to open ${course.code} in Akada and accept it before anything is projected from it.` +
+            (Math.abs(total - 100) > 0.01
+              ? ` The weights come to ${rounded}%, not 100%. Tell the student, in case the outline was read wrong.`
+              : ''),
+        });
+      } catch (cause) {
+        return toolCrashed('set_grading_scheme', cause);
       }
     },
   );

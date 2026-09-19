@@ -22,6 +22,12 @@ export interface Course {
    */
   assessments?: Assessment[];
   /**
+   * How it is marked beyond the list of pieces: the basis, any drop rules,
+   * and a scheme proposed through the connector that is waiting to be
+   * accepted. Absent for a course nobody has told the app about.
+   */
+  grading?: CourseGrading;
+  /**
    * Where this course sits in the order the student dragged their dashboard
    * into, smallest first. Optional: a row written before the column existed,
    * or a project that has not re-run supabase/schema.sql, has none and falls
@@ -66,6 +72,65 @@ export interface Assessment {
   weight: number;
   score: number | null;
   outOf: number | null;
+  /**
+   * Which drop group this piece belongs to, if any. Seven quizzes where only
+   * the best six count all carry the same `group`, and the matching rule in
+   * `CourseGrading.dropRules` says how many of them are kept. A piece with no
+   * group always counts, which is every piece written before this existed.
+   */
+  group?: string;
+}
+
+/**
+ * Whether the course is marked against a fixed scale or against the class.
+ *
+ * Akada never guesses a letter either way; the distinction is recorded
+ * because a projected percentage means something different under a curve,
+ * and an outline almost always says which one it is.
+ */
+export type GradingBasis = 'absolute' | 'relative';
+
+/**
+ * "Best 6 of 7." `keep` pieces out of the group count, and the rest are
+ * dropped once enough of them have come back to say which are the rest.
+ */
+export interface DropRule {
+  group: string;
+  keep: number;
+}
+
+/**
+ * A scheme somebody proposed but nobody has accepted yet.
+ *
+ * This is the whole reason grading is its own field rather than more columns:
+ * a proposal has to be able to sit beside the accepted scheme without being
+ * read by anything that projects a grade. `gradeStanding` never looks here,
+ * so a pending scheme cannot move a number on any screen. Accepting copies it
+ * over the live fields and clears this; discarding only clears it.
+ */
+export interface PendingScheme {
+  assessments: Assessment[];
+  basis: GradingBasis;
+  dropRules: DropRule[];
+  /** Where it came from, shown on the card so an accept is an informed one. */
+  source: string;
+  /** Anything the parse was unsure about, shown under the rows. */
+  note: string;
+  createdAt: string;
+}
+
+/**
+ * Everything about how a course is marked that is not the list of pieces.
+ *
+ * `courses.assessments` stays exactly what it was — the accepted pieces — so
+ * every existing read keeps working untouched. This rides alongside it in one
+ * jsonb column for the same reason assessments is one column: it is only ever
+ * read and written whole, with the course.
+ */
+export interface CourseGrading {
+  basis?: GradingBasis;
+  dropRules?: DropRule[];
+  pending?: PendingScheme | null;
 }
 
 export interface TaskSubtask {

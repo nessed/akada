@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { Assessment, Course, Task } from '@/lib/data';
+import type { Assessment, Course, DropRule, Task } from '@/lib/data';
 import { gradeStanding } from '@/lib/derive';
 import { updateCourseOptimistic } from '@/lib/data-hooks';
+import { gradingPrompt } from '@/lib/grading-prompt';
 import { useNotice } from '@/components/Notice';
 import { ButtonSpinner } from '@/components/LoadingIndicator';
 import { daysBetween } from '@/lib/utils';
@@ -20,6 +21,13 @@ import { daysBetween } from '@/lib/utils';
  * the course page and the entry three screens away in settings, which meant
  * the moment you had a mark in your hand was never the moment you could type
  * it in. A piece that has not come back takes a dash, not a zero.
+ *
+ * There are two ways in. Typing it is one. The other is copying a prompt into
+ * an LLM session with the Akada connector attached and letting it read the
+ * outline, which lands here as a proposal: reviewed below with accept and
+ * discard, and projecting nothing until it is accepted. `gradeStanding` reads
+ * only the accepted scheme, so that guarantee is structural rather than a
+ * thing this component remembers to honour.
  */
 export default function GradeStanding({
   course,
@@ -34,9 +42,11 @@ export default function GradeStanding({
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<Assessment[]>(course.assessments ?? []);
   const [saving, setSaving] = useState(false);
+  const [resolving, setResolving] = useState<'accept' | 'discard' | null>(null);
 
   const standing = useMemo(() => gradeStanding(course), [course]);
   const draftTotal = rows.reduce((acc, r) => acc + r.weight, 0);
+  const pending = course.grading?.pending ?? null;
 
   function open() {
     setRows(course.assessments?.length ? course.assessments : [blankRow(0)]);
@@ -60,6 +70,60 @@ export default function GradeStanding({
       notify('That grading did not save.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Copy the prompt that fills this in from an outline.
+   *
+   * The clipboard write has to happen in the click's own task or Safari
+   * treats it as untrusted, so this does not await anything before it.
+   */
+  async function copyPrompt() {
+    const prompt = gradingPrompt({ courseId: course.id, courseCode: course.code });
+    try {
+      await navigator.clipboard.writeText(prompt);
+      notify(`Prompt copied. Paste it into a chat with the Akada connector on, and attach the ${course.code} outline.`);
+    } catch (error) {
+      console.error('Failed to copy the grading prompt:', error);
+      notify('Akada could not reach the clipboard. Type it in instead.');
+    }
+  }
+
+  /** Take the proposal as the real scheme, and clear it. */
+  async function accept() {
+    if (!pending || resolving) return;
+    setResolving('accept');
+    try {
+      await updateCourseOptimistic(course.id, {
+        assessments: pending.assessments,
+        grading: { basis: pending.basis, dropRules: pending.dropRules, pending: null },
+      });
+    } catch (error) {
+      console.error('Failed to accept the grading scheme:', error);
+      notify('That did not save. The scheme is still waiting.');
+    } finally {
+      setResolving(null);
+    }
+  }
+
+  /** Drop the proposal. Whatever was already accepted is left alone. */
+  async function discard() {
+    if (!pending || resolving) return;
+    setResolving('discard');
+    try {
+      await updateCourseOptimistic(course.id, {
+        grading: {
+          basis: course.grading?.basis,
+          dropRules: course.grading?.dropRules ?? [],
+          pending: null,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to discard the grading scheme:', error);
+      notify('That did not save. The scheme is still waiting.');
+    } finally {
+      setResolving(null);
     }
   }
 
@@ -175,6 +239,100 @@ export default function GradeStanding({
     );
   }
 
+  // A proposal takes the panel until it is dealt with. It is the only thing
+  // on this card that is asking a question, and leaving the standing above it
+  // would invite reading the two as one scheme.
+  if (pending) {
+    return (
+      <section className="rounded-[14px] border border-line bg-paper p-5">
+        <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+          <p className="eyebrow m-0">What was read off the outline</p>
+          <span className="tnum font-mono text-[11px] text-muted">
+            {round(pending.assessments.reduce((acc, r) => acc + r.weight, 0))}% of 100
+          </span>
+        </div>
+
+        <p className="m-0 pt-2.5 font-serif text-[13px] italic leading-[1.5] text-muted">
+          Nothing is projected from this until you accept it.
+          {pending.source && ` Read from ${pending.source}.`}
+        </p>
+
+        <div className="mt-2">
+          {pending.assessments.map((row) => (
+            <div
+              key={row.id}
+              className="flex items-baseline gap-2.5 border-b border-line-soft py-2 last:border-b-0"
+            >
+              <span className="min-w-0 flex-1 truncate text-[13px]">
+                {row.label}
+                {row.group && (
+                  <span className="ml-1.5 font-serif text-[12px] italic text-muted">{row.group}</span>
+                )}
+              </span>
+              <span className="tnum shrink-0 font-mono text-[11px] text-muted">{round(row.weight)}%</span>
+            </div>
+          ))}
+        </div>
+
+        <p className="m-0 mt-3 font-serif text-[13px] leading-[1.5] text-ink-soft">
+          {basisSentence(pending.basis, course.code)}
+        </p>
+        {pending.dropRules.map((rule) => (
+          <p key={rule.group} className="m-0 mt-1 font-serif text-[13px] leading-[1.5] text-ink-soft">
+            {dropSentence(rule, pending.assessments)}
+          </p>
+        ))}
+
+        {pending.note && (
+          <p className="m-0 mt-3 border-t border-line-soft pt-2.5 font-serif text-[13px] italic leading-[1.5] text-muted">
+            {pending.note}
+          </p>
+        )}
+
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={discard}
+            disabled={resolving !== null}
+            className="h-10 flex-1 rounded-[10px] border border-line-strong text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint disabled:opacity-40"
+          >
+            {resolving === 'discard' ? (
+              <span className="flex items-center justify-center gap-2">
+                <ButtonSpinner />
+                Discarding
+              </span>
+            ) : (
+              'Discard'
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={accept}
+            disabled={resolving !== null}
+            className="h-10 flex-1 rounded-[10px] bg-primary text-[13px] font-medium text-primary-contrast disabled:opacity-40"
+          >
+            {resolving === 'accept' ? (
+              <span className="flex items-center justify-center gap-2">
+                <ButtonSpinner />
+                Accepting
+              </span>
+            ) : (
+              'Accept'
+            )}
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={open}
+          className="mt-3 w-full bg-transparent p-0 font-serif text-[13px] italic text-muted transition-colors hover:text-ink"
+        >
+          or type it in yourself
+        </button>
+      </section>
+    );
+  }
+
   if (standing.rows.length === 0) {
     return (
       <section className="rounded-[14px] border border-line bg-paper p-5">
@@ -184,10 +342,23 @@ export default function GradeStanding({
         </p>
         <button
           type="button"
-          onClick={open}
+          onClick={copyPrompt}
           className="mt-3.5 h-10 w-full rounded-[10px] border border-dashed border-line-strong text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
         >
           Say how it is marked
+        </button>
+        <p className="m-0 mt-2 text-center font-serif text-[12px] italic leading-[1.4] text-muted">
+          Copies a prompt. Paste it into a chat with the Akada connector on and
+          attach the outline.
+        </p>
+        {/* The manual path is unchanged, and this is the only door left to it
+            on a course with no pieces yet. */}
+        <button
+          type="button"
+          onClick={open}
+          className="mt-2.5 w-full bg-transparent p-0 font-serif text-[13px] italic text-muted transition-colors hover:text-ink"
+        >
+          or type it in yourself
         </button>
       </section>
     );
@@ -223,6 +394,10 @@ export default function GradeStanding({
         {standing.rows.map((row) => {
           const marked = row.score !== null && row.outOf;
           const ratio = marked ? (row.score as number) / (row.outOf as number) : null;
+          // A piece a drop rule has excluded. It stays on the list, struck
+          // through, because "the quiz I bombed is the one being dropped" is
+          // the single most reassuring thing this panel can show.
+          const isDropped = standing.dropped.includes(row.id);
           // The dated piece this row is waiting on, so an unmarked midterm can
           // say how far off it is rather than sitting blank.
           const upcoming = tasks.find(
@@ -239,10 +414,18 @@ export default function GradeStanding({
             >
               <span
                 className="min-w-0 flex-1 truncate text-[13px]"
-                style={{ color: marked ? undefined : 'var(--ink-soft)' }}
+                style={{
+                  color: marked && !isDropped ? undefined : 'var(--ink-soft)',
+                  textDecoration: isDropped ? 'line-through' : undefined,
+                }}
               >
                 {row.label}
-                {upcoming && (
+                {isDropped && (
+                  <span className="ml-1.5 font-serif text-[12px] italic text-muted no-underline">
+                    dropped
+                  </span>
+                )}
+                {upcoming && !isDropped && (
                   <span className="ml-1.5 font-serif italic text-warn">
                     in {daysBetween(today, upcoming.dueDate as string)}d
                   </span>
@@ -253,7 +436,13 @@ export default function GradeStanding({
                 {marked ? (
                   <span
                     className="tnum font-mono text-[12px] font-semibold"
-                    style={{ color: (ratio as number) < 0.66 ? 'var(--warn)' : undefined }}
+                    style={{
+                      color: isDropped
+                        ? 'var(--muted)'
+                        : (ratio as number) < 0.66
+                          ? 'var(--warn)'
+                          : undefined,
+                    }}
                   >
                     {row.outOf === 100 ? row.score : `${row.score}/${row.outOf}`}
                   </span>
@@ -273,8 +462,26 @@ export default function GradeStanding({
           {round(standing.unmarked)}% of {course.code} has not happened yet.
         </p>
       )}
+
+      {standing.basis === 'relative' && (
+        <p className="m-0 mt-1 font-serif text-[13px] italic leading-[1.5] text-muted">
+          {course.code} is marked against the class, so this is a position
+          rather than a grade.
+        </p>
+      )}
     </section>
   );
+}
+
+function basisSentence(basis: 'absolute' | 'relative', code: string): string {
+  return basis === 'relative'
+    ? `${code} is graded relatively, against the class.`
+    : `${code} is graded absolutely, on a fixed scale.`;
+}
+
+function dropSentence(rule: DropRule, rows: Assessment[]): string {
+  const size = rows.filter((row) => row.group === rule.group).length;
+  return `Of the ${size} in ${rule.group}, the best ${rule.keep} count.`;
 }
 
 function blankRow(index: number): Assessment {
