@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Course, Task } from '@/lib/data';
 import { dueLabel } from '@/lib/utils';
 import SwipeRow from './SwipeRow';
@@ -19,6 +20,10 @@ import HandCheck from './notebook/HandCheck';
  * Below md the course column folds away, since the colour mark beside the
  * title already says which course it is.
  */
+
+/** The menu's own box, used to place it against the trigger. */
+const MENU_W = 176;
+const MENU_H = 184;
 
 interface Props {
   task: Task;
@@ -56,22 +61,56 @@ export default function TaskRow({
   hideCourse = false,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const playRef = useRef<HTMLButtonElement | null>(null);
+
+  /**
+   * Where the menu goes.
+   *
+   * It cannot be drawn inside the row. SwipeRow clips its children so the
+   * swipe wash does not bleed past the row's edges, and the list panel clips
+   * its own rounded corners, so a menu hanging below a 48px row was cut to
+   * nothing: the button worked, aria-expanded flipped, all four items
+   * rendered, and not one pixel of it was ever on screen. It is portalled to
+   * the body and placed against the trigger's box instead, pulled back inside
+   * the viewport and flipped above when a row near the bottom has no room.
+   */
+  function openMenu() {
+    const rect = menuRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const left = Math.min(Math.max(12, rect.right - MENU_W), window.innerWidth - MENU_W - 12);
+    const below = rect.bottom + 6;
+    const top = below + MENU_H > window.innerHeight ? Math.max(12, rect.top - MENU_H - 6) : below;
+    setMenuPos({ top, left });
+    setMenuOpen(true);
+  }
 
   useEffect(() => {
     if (!menuOpen) return;
     const onAway = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      const el = e.target as Node;
+      // The menu is portalled out of the row, so it is no longer inside
+      // menuRef; both it and the trigger have to be checked by hand.
+      if (menuRef.current?.contains(el) || panelRef.current?.contains(el)) return;
+      setMenuOpen(false);
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setMenuOpen(false);
     };
+    // The position is measured once, so anything that moves the row out from
+    // under the menu closes it rather than leaving it floating in place.
+    const close = () => setMenuOpen(false);
     document.addEventListener('mousedown', onAway);
     document.addEventListener('keydown', onEsc);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
     return () => {
       document.removeEventListener('mousedown', onAway);
       document.removeEventListener('keydown', onEsc);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
     };
   }, [menuOpen]);
 
@@ -216,7 +255,7 @@ export default function TaskRow({
         <div ref={menuRef} className="relative hidden md:block">
           <button
             type="button"
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
             aria-label="More actions"
             aria-expanded={menuOpen}
             className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-muted transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
@@ -227,61 +266,77 @@ export default function TaskRow({
               <circle cx="19" cy="12" r="1.6" />
             </svg>
           </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-11 z-30 w-44 animate-fade-in rounded-[10px] border border-line bg-paper p-1 shadow-[0_8px_20px_rgba(57,48,36,.12)]">
-              {onOpen && (
-                <MenuItem
-                  label="Open"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onOpen(task);
-                  }}
-                />
-              )}
-              {onReschedule && !task.completed && (
-                <MenuItem
-                  label="Reschedule"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onReschedule(task);
-                  }}
-                />
-              )}
-              {onSelect && (
-                <MenuItem
-                  label={selected ? 'Deselect' : 'Select'}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onSelect(task, true);
-                  }}
-                />
-              )}
-              {onDelete && (
-                <MenuItem
-                  label="Delete"
-                  tone="warn"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDelete(task);
-                  }}
-                />
-              )}
-            </div>
-          )}
         </div>
       </span>
     </div>
   );
 
   return (
-    <SwipeRow
-      accent={color}
-      onComplete={task.completed ? undefined : () => onToggle(task)}
-      onDelete={onDelete ? () => onDelete(task) : undefined}
-      surfaceClassName="relative bg-paper"
-    >
-      {row}
-    </SwipeRow>
+    <>
+      <SwipeRow
+        accent={color}
+        onComplete={task.completed ? undefined : () => onToggle(task)}
+        onDelete={onDelete ? () => onDelete(task) : undefined}
+        surfaceClassName="relative bg-paper"
+      >
+        {row}
+      </SwipeRow>
+
+      {menuOpen &&
+        menuPos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="menu"
+            aria-label={`Actions for ${task.title}`}
+            className="fixed z-[90] w-44 animate-fade-in rounded-[10px] border border-line bg-paper p-1 shadow-[0_8px_20px_rgba(57,48,36,.12)]"
+            style={{ top: menuPos.top, left: menuPos.left }}
+          >
+            {onOpen && (
+              <MenuItem
+                label="Open"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpen(task);
+                }}
+              />
+            )}
+            {/* Named for what it does. It moves the task to tomorrow and
+                asks nothing, which is what "Tomorrow" on the Today panel
+                already calls the same action; "Reschedule" promised a date
+                picker that never opened. */}
+            {onReschedule && !task.completed && (
+              <MenuItem
+                label="Tomorrow"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onReschedule(task);
+                }}
+              />
+            )}
+            {onSelect && (
+              <MenuItem
+                label={selected ? 'Deselect' : 'Select'}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onSelect(task, true);
+                }}
+              />
+            )}
+            {onDelete && (
+              <MenuItem
+                label="Delete"
+                tone="warn"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete(task);
+                }}
+              />
+            )}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
