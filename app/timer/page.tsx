@@ -1,13 +1,61 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
-import { resolveTint } from '@/lib/utils';
+import { useAmbientNoise } from '@/lib/use-ambient-noise';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
+import StudyFan from '@/components/StudyFan';
 import { useCourses, useTasks } from '@/lib/data-hooks';
+
+/**
+ * The timer.
+ *
+ * Two modes over one clock. A **block** has a target: it counts down inside a
+ * frame, and the study fan is sized so that touching the top edge is the
+ * completion. **Open** has none: the fan is sized to the screen instead and
+ * keeps unlocking depth for as long as the reader sits. Either way the state
+ * is the one in lib/timer-context; the mode is only whether a target is set.
+ *
+ * The fan replaced a countdown ring. A ring says what fraction is gone, which
+ * is the one thing a reader in the middle of a chapter does not want to be
+ * told; the fan only ever grows.
+ */
+
+const BLOCK_LENGTHS = [25, 45, 60] as const;
+
+function clockFace(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+function spoken(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return [
+    h > 0 ? `${h} ${h === 1 ? 'hour' : 'hours'}` : '',
+    `${m} ${m === 1 ? 'minute' : 'minutes'}`,
+    `${sec} ${sec === 1 ? 'second' : 'seconds'}`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function hhmm(ms: number): string {
+  return new Date(ms).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
 
 export default function TimerPage() {
   const router = useRouter();
@@ -16,6 +64,8 @@ export default function TimerPage() {
     active,
     pendingLog,
     elapsedSeconds,
+    start,
+    extend,
     pause,
     resume,
     cancel,
@@ -25,15 +75,9 @@ export default function TimerPage() {
 
   const { courses } = useCourses();
   const { tasks } = useTasks();
+  const noise = useAmbientNoise();
+  const [immersive, setImmersive] = useState(false);
 
-  const [goalMin, setGoalMin] = useState(50);
-  const [whiteNoiseOn, setWhiteNoiseOn] = useState(false);
-  const [whiteNoiseError, setWhiteNoiseError] = useState('');
-  const whiteNoiseContextRef = useRef<AudioContext | null>(null);
-  const whiteNoiseBufferRef = useRef<AudioBuffer | null>(null);
-  const whiteNoiseSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const whiteNoiseGainRef = useRef<GainNode | null>(null);
-  const whiteNoiseStartingRef = useRef(false);
   const timerCourseId = active?.courseId ?? pendingLog?.courseId ?? null;
   const timerTaskId = active?.taskId ?? pendingLog?.taskId ?? null;
 
@@ -46,226 +90,7 @@ export default function TimerPage() {
     [tasks, timerTaskId],
   );
 
-  useEffect(() => {
-    return () => {
-      try {
-        whiteNoiseSourceRef.current?.stop();
-      } catch {
-        // The source may already be stopped if the page unmounts after a toggle.
-      }
-      whiteNoiseSourceRef.current?.disconnect();
-      whiteNoiseGainRef.current?.disconnect();
-      whiteNoiseSourceRef.current = null;
-      whiteNoiseGainRef.current = null;
-      whiteNoiseContextRef.current?.close();
-      whiteNoiseContextRef.current = null;
-    };
-  }, []);
-
-  async function getWhiteNoiseContext() {
-    const AudioContextConstructor =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-
-    if (!AudioContextConstructor) return null;
-
-    const context = whiteNoiseContextRef.current ?? new AudioContextConstructor();
-    whiteNoiseContextRef.current = context;
-    if (context.state === 'suspended') await context.resume();
-    return context;
-  }
-
-  function createSeamlessLoopBuffer(context: AudioContext, source: AudioBuffer) {
-    const trimSamples = Math.min(
-      Math.floor(source.sampleRate * 0.04),
-      Math.floor(source.length / 12),
-    );
-    const crossfadeSamples = Math.min(
-      Math.floor(source.sampleRate * 0.65),
-      Math.floor((source.length - trimSamples * 2) / 3),
-    );
-    if (crossfadeSamples <= 1) return source;
-
-    const trimmedLength = source.length - trimSamples * 2;
-    const loopLength = trimmedLength - crossfadeSamples;
-    const loopBuffer = context.createBuffer(
-      source.numberOfChannels,
-      loopLength,
-      source.sampleRate,
-    );
-
-    for (let channel = 0; channel < source.numberOfChannels; channel += 1) {
-      const input = source.getChannelData(channel);
-      const output = loopBuffer.getChannelData(channel);
-      let mean = 0;
-
-      for (let i = 0; i < trimmedLength; i += 1) {
-        mean += input[trimSamples + i];
-      }
-      mean /= trimmedLength;
-
-      for (let i = 0; i < crossfadeSamples; i += 1) {
-        const progress = i / (crossfadeSamples - 1);
-        const fadeOut = Math.cos((progress * Math.PI) / 2);
-        const fadeIn = Math.sin((progress * Math.PI) / 2);
-        const tail = input[trimSamples + loopLength + i] - mean;
-        const head = input[trimSamples + i] - mean;
-        output[i] = tail * fadeOut + head * fadeIn;
-      }
-
-      for (let i = crossfadeSamples; i < loopLength; i += 1) {
-        output[i] = input[trimSamples + i] - mean;
-      }
-    }
-
-    return loopBuffer;
-  }
-
-  /**
-   * Noise is synthesised here rather than decoded from a shipped file.
-   * The app used to fetch /whitenoise.ogg and run it through
-   * decodeAudioData, which Safari and iOS cannot do. Ogg Vorbis is
-   * unsupported there, so white noise was silently dead for every iPhone
-   * user. Generating it works on every browser, drops a 191 KB download,
-   * and keeps working offline.
-   */
-  function createNoiseBuffer(context: AudioContext) {
-    const seconds = 5;
-    const length = Math.floor(context.sampleRate * seconds);
-    const buffer = context.createBuffer(2, length, context.sampleRate);
-
-    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
-      const data = buffer.getChannelData(channel);
-      // Paul Kellet's pink-noise filter. Flat white noise is harsh over a
-      // long session; pink rolls off the high end into the softer "shhh"
-      // people actually want to study to.
-      let b0 = 0;
-      let b1 = 0;
-      let b2 = 0;
-      let b3 = 0;
-      let b4 = 0;
-      let b5 = 0;
-      let b6 = 0;
-      for (let i = 0; i < length; i += 1) {
-        const white = Math.random() * 2 - 1;
-        b0 = 0.99886 * b0 + white * 0.0555179;
-        b1 = 0.99332 * b1 + white * 0.0750759;
-        b2 = 0.969 * b2 + white * 0.153852;
-        b3 = 0.8665 * b3 + white * 0.3104856;
-        b4 = 0.55 * b4 + white * 0.5329522;
-        b5 = -0.7616 * b5 - white * 0.016898;
-        data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
-        b6 = white * 0.115926;
-      }
-    }
-
-    return buffer;
-  }
-
-  async function getWhiteNoiseBuffer(context: AudioContext) {
-    if (whiteNoiseBufferRef.current) return whiteNoiseBufferRef.current;
-
-    const seamlessBuffer = createSeamlessLoopBuffer(context, createNoiseBuffer(context));
-    whiteNoiseBufferRef.current = seamlessBuffer;
-    return seamlessBuffer;
-  }
-
-  function stopWhiteNoise() {
-    const context = whiteNoiseContextRef.current;
-    const source = whiteNoiseSourceRef.current;
-    const gain = whiteNoiseGainRef.current;
-
-    if (context && gain) {
-      gain.gain.cancelScheduledValues(context.currentTime);
-      gain.gain.setTargetAtTime(0, context.currentTime, 0.025);
-    }
-
-    window.setTimeout(() => {
-      try {
-        source?.stop();
-      } catch {
-        // Already stopped by cleanup.
-      }
-      source?.disconnect();
-      gain?.disconnect();
-      if (whiteNoiseSourceRef.current === source) whiteNoiseSourceRef.current = null;
-      if (whiteNoiseGainRef.current === gain) whiteNoiseGainRef.current = null;
-    }, 90);
-    setWhiteNoiseOn(false);
-  }
-
-  async function toggleWhiteNoise() {
-    if (whiteNoiseStartingRef.current) return;
-
-    if (whiteNoiseOn) {
-      stopWhiteNoise();
-      return;
-    }
-
-    whiteNoiseStartingRef.current = true;
-    setWhiteNoiseError('');
-    try {
-      const context = await getWhiteNoiseContext();
-      if (!context) {
-        setWhiteNoiseError('Audio is unavailable on this device.');
-        return;
-      }
-
-      const source = context.createBufferSource();
-      const gain = context.createGain();
-      source.buffer = await getWhiteNoiseBuffer(context);
-      source.loop = true;
-      gain.gain.setValueAtTime(0, context.currentTime);
-      gain.gain.linearRampToValueAtTime(0.45, context.currentTime + 0.12);
-      source.connect(gain);
-      gain.connect(context.destination);
-      source.start();
-
-      whiteNoiseSourceRef.current = source;
-      whiteNoiseGainRef.current = gain;
-      setWhiteNoiseOn(true);
-    } catch (error) {
-      console.error('Failed to play white noise:', error);
-      setWhiteNoiseOn(false);
-      // Tapping a button and having nothing happen, with the reason only in
-      // the console, is indistinguishable from the app being broken.
-      setWhiteNoiseError('Audio is unavailable on this device.');
-    } finally {
-      whiteNoiseStartingRef.current = false;
-    }
-  }
-
-  // If neither timer nor pending log exists, bounce to dashboard.
-  // If a timer points at a course we no longer have (e.g. deleted while
-  // running), cancel + bounce so we don't render a stale screen.
-  useEffect(() => {
-    // Nothing is known about the timer until the provider has read storage,
-    // and a provider's effects run after its children's. Redirecting before
-    // that point sent anyone who reloaded /timer mid-session back to the
-    // dashboard, with the session still running behind them.
-    if (!hydrated) return;
-    if (!active && !pendingLog) {
-      router.replace('/dashboard');
-      return;
-    }
-    if (timerCourseId && courses.length > 0 && !course) {
-      cancel();
-      clearPendingLog();
-      router.replace('/dashboard');
-    }
-  }, [
-    active,
-    cancel,
-    clearPendingLog,
-    course,
-    courses.length,
-    hydrated,
-    pendingLog,
-    router,
-    timerCourseId,
-  ]);
-
-  function handleStop() {
+  const handleStop = useCallback(() => {
     const result = stop();
     if (!result) {
       router.replace('/dashboard');
@@ -276,312 +101,341 @@ export default function TimerPage() {
       clearPendingLog();
       router.replace('/dashboard');
     }
-  }
+  }, [clearPendingLog, router, stop]);
+
+  /* Dead ends. A timer pointing at a course that has since been deleted, or
+     an account with no courses at all, used to leave this screen spinning on
+     "Loading your timer" with the browser's back button as the only way out.
+     Both cases now land somewhere the reader can act. */
+  useEffect(() => {
+    // Nothing is known about the timer until the provider has read storage,
+    // and a provider's effects run after its children's. Redirecting before
+    // that point sent anyone who reloaded /timer mid-session back to the
+    // dashboard with the session still running behind them.
+    if (!hydrated) return;
+    if (!active && !pendingLog) {
+      router.replace('/dashboard');
+      return;
+    }
+    if (timerCourseId && courses.length > 0 && !course) {
+      cancel();
+      clearPendingLog();
+      router.replace('/dashboard');
+    }
+  }, [active, cancel, clearPendingLog, course, courses.length, hydrated, pendingLog, router, timerCourseId]);
+
+  const isPaused = active?.isPaused ?? false;
+  const elapsed = clampSessionSeconds(elapsedSeconds);
+  const target = active?.targetSeconds ?? null;
+  const isBlock = target != null;
+
+  /* Space pauses, F finishes, Escape goes back. Typed into a field they mean
+     what the field means, so the handler stands down for one. */
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (active.isPaused) resume();
+        else pause();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        handleStop();
+      } else if (e.key === 'Escape') {
+        if (immersive) setImmersive(false);
+        else router.push('/dashboard');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, handleStop, immersive, pause, resume, router]);
 
   if (!hydrated || (!course && !pendingLog)) {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center">
+      <div className="flex min-h-[100dvh] items-center justify-center">
         <div className="flex flex-col items-center">
           <LoadingIndicator compact label="Loading your timer" className="mb-8" />
-          <div className="animate-pulse opacity-40 flex flex-col items-center" aria-hidden>
-          <div className="h-5 w-20 bg-line rounded mb-2" />
-          <div className="h-8 w-48 bg-line rounded mb-16" />
-          <div className="h-[264px] w-[264px] rounded-full border-[2.5px] border-line border-dashed" />
+          <div className="flex animate-pulse flex-col items-center opacity-40" aria-hidden>
+            <div className="mb-2 h-5 w-20 rounded bg-line" />
+            <div className="mb-10 h-8 w-48 rounded bg-line" />
+            <div className="h-[200px] w-[340px] rounded-[14px] border-[1.5px] border-dashed border-line" />
           </div>
         </div>
       </div>
     );
   }
 
-  const isPaused = active?.isPaused ?? false;
-  const tint = course ? resolveTint(course.color, course.tint) : 'var(--bg-tint)';
-  const actualSeconds = clampSessionSeconds(elapsedSeconds);
-  const goalSec = Math.max(60, goalMin * 60);
-  const pct = Math.min(1, actualSeconds / goalSec);
-  const ringRadius = 126;
-  const stroke = 3.5;
-  const circumference = 2 * Math.PI * ringRadius;
-  const s = Math.max(0, Math.floor(actualSeconds));
-  const hrs = Math.floor(s / 3600);
-  const mins = Math.floor((s % 3600) / 60);
-  const secs = s % 60;
-  const hh = String(hrs).padStart(2, '0');
-  const mm = String(mins).padStart(2, '0');
-  const ss = String(secs).padStart(2, '0');
-  // A screen reader reading "00:48:23" character by character is not a
-  // reading of a clock. The digits stay visual; this is what is announced.
-  const spokenElapsed = [
-    hrs > 0 ? `${hrs} ${hrs === 1 ? 'hour' : 'hours'}` : '',
-    `${mins} ${mins === 1 ? 'minute' : 'minutes'}`,
-    `${secs} ${secs === 1 ? 'second' : 'seconds'}`,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const color = course?.color ?? '#A8B89B';
+  const code = course?.code ?? 'Session';
+  const startedAtMs = active ? active.startedAt - active.accumulatedMs : Date.now();
 
-  return (
-    <div
-      className="min-h-[100dvh] flex flex-col animate-fade-in"
-      style={{
-        background: course
-          ? `linear-gradient(180deg, ${tint} 0%, var(--bg) 60%)`
-          : 'var(--bg)',
-      }}
-    >
-      <div className="flex items-center justify-between px-[var(--density-gutter)] pt-[max(env(safe-area-inset-top),60px)]">
+  // Block mode counts down; open mode counts up. The fan reads the same
+  // number either way, as a fraction of the target or of a long sitting.
+  const remaining = isBlock ? Math.max(0, target - elapsed) : elapsed;
+  const overrun = isBlock && elapsed > target;
+  const progress = isBlock
+    ? Math.min(1, elapsed / Math.max(1, target))
+    : // An open session has nothing to fill, so it grows against a notional
+      // three hours: long enough that a normal sitting never tops out.
+      Math.min(1, elapsed / (3 * 60 * 60));
+
+  function setMode(next: 'block' | 'open') {
+    if (!active) return;
+    if (next === 'open') {
+      start(active.courseId, active.taskId, null);
+      return;
+    }
+    // Coming back to a block picks the shortest length that is still ahead of
+    // where the clock already is, so switching never lands already expired.
+    const mins = BLOCK_LENGTHS.find((n) => n * 60 > elapsed) ?? 60;
+    start(active.courseId, active.taskId, Math.max(mins * 60, Math.ceil(elapsed / 60) * 60 + 300));
+  }
+
+  const modeSwitch = (
+    <div className="flex gap-1">
+      <button
+        type="button"
+        onClick={() => setMode('block')}
+        aria-pressed={isBlock}
+        className={`h-10 rounded-[10px] px-3 text-[13px] font-medium transition-colors ${
+          isBlock ? 'text-ink' : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
+        }`}
+      >
+        <span
+          className={isBlock ? 'hl-swipe' : ''}
+          style={isBlock ? ({ '--hl': `${color}44` } as React.CSSProperties) : undefined}
+        >
+          Block
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode('open')}
+        aria-pressed={!isBlock}
+        className={`h-10 rounded-[10px] px-3 text-[13px] font-medium transition-colors ${
+          !isBlock ? 'text-ink' : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
+        }`}
+      >
+        <span
+          className={!isBlock ? 'hl-swipe' : ''}
+          style={!isBlock ? ({ '--hl': `${color}44` } as React.CSSProperties) : undefined}
+        >
+          Open
+        </span>
+      </button>
+    </div>
+  );
+
+  const controls = (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      <button
+        type="button"
+        onClick={() => (isPaused ? resume() : pause())}
+        className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-opacity hover:opacity-90"
+      >
+        {isPaused ? (
+          <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 5l12 7-12 7V5z" />
+          </svg>
+        ) : (
+          <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M9 5v14M15 5v14" />
+          </svg>
+        )}
+        {isPaused ? 'Resume' : 'Pause'}
+      </button>
+
+      {isBlock && (
         <button
           type="button"
-          onClick={() => router.push('/dashboard')}
-          aria-label="Back"
-          className="w-[38px] h-[38px] rounded-full border border-line bg-paper flex items-center justify-center text-ink-soft"
+          onClick={() => extend(5 * 60)}
+          className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
         >
-          <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M15 18l-6-6 6-6"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+          +5 min
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={handleStop}
+        className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+      >
+        Finish and log
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          cancel();
+          router.replace('/dashboard');
+        }}
+        className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-warn transition-colors hover:bg-warnTint"
+      >
+        Discard
+      </button>
+    </div>
+  );
+
+  const header = (
+    <div className="flex items-center justify-between px-5 pt-[max(env(safe-area-inset-top),16px)] md:pt-5">
+      <button
+        type="button"
+        onClick={() => router.push('/dashboard')}
+        className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-transparent px-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
+      >
+        <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <path d="M15 6l-6 6 6 6" />
+        </svg>
+        Today
+      </button>
+
+      {active && modeSwitch}
+
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={noise.toggle}
+          aria-pressed={noise.on}
+          aria-label={noise.on ? 'Stop ambient noise' : 'Play ambient noise'}
+          title={noise.error || 'Ambient noise'}
+          className={`grid h-10 w-10 place-items-center rounded-[10px] transition-colors hover:bg-bg-tint ${
+            noise.on ? 'text-ink' : 'text-muted'
+          }`}
+        >
+          <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M5 10v4M9 7v10M13 4v16M17 8v8M21 11v2" />
           </svg>
         </button>
-
-        {/* The goal was a bordered capsule with the numbers inside it, which
-            is a pill wearing a different name. The swipe of highlighter on
-            the chosen number is the whole mark; nothing has to hold it. */}
-        {course && (
-          <div className="flex items-baseline gap-2.5">
-            <span className="eyebrow">Goal</span>
-            {[25, 50, 90].map((goal) => (
-              <button
-                key={goal}
-                type="button"
-                aria-pressed={goalMin === goal}
-                aria-label={`${goal} minute goal`}
-                onClick={() => setGoalMin(goal)}
-                className={`min-h-[32px] bg-transparent px-1 font-mono text-[12px] font-semibold ${
-                  goalMin === goal ? 'hl-swipe text-ink' : 'text-muted'
-                }`}
-                style={
-                  goalMin === goal
-                    ? ({ '--hl': course.tint || course.color } as React.CSSProperties)
-                    : undefined
-                }
-              >
-                {goal}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center text-center px-7">
-        {course && (
-          <>
-            <p
-              className="eyebrow m-0"
-              style={{ color: course.color }}
-            >
-              {course.code}
-            </p>
-            <h1 className="mt-2 mb-0 font-serif font-medium text-[26px] tracking-[-0.01em]">
-              {course.name}
-            </h1>
-            {task && (
-              <p className="mt-2 mb-0 text-[13px] text-ink-soft font-serif italic">
-                {task.title}
-              </p>
-            )}
-
-            <div className="relative mt-[var(--density-section)] aspect-square w-full max-w-[284px] flex items-center justify-center">
-              {/* The breathing ring. Tailwind's stock `animate-pulse` is a
-                  loading shimmer; the timer's own `tick` is the 2.4s breath
-                  the guide gives this screen, and it is the one the dock
-                  already uses. */}
-              {!isPaused && (
-                <div
-                  className="absolute -inset-1 pointer-events-none"
-                  style={{ opacity: 0.24 }}
-                  aria-hidden
-                >
-                  {/* The opacity lives on the wrapper so the animation's own
-                      opacity keyframes multiply into it rather than replace
-                      it. */}
-                  <div
-                    className="h-full w-full rounded-full animate-tick"
-                    style={{ border: `1.5px solid ${course.color}` }}
-                  />
-                </div>
-              )}
-
-              {/* Soft radial backdrop glow */}
-              <div
-                className="absolute inset-[10px] rounded-full pointer-events-none transition-opacity duration-700 ease-out"
-                style={{
-                  background: `radial-gradient(circle, ${resolveTint(course.color, course.tint)} 0%, transparent 70%)`,
-                  opacity: isPaused ? 0.35 : 0.85,
-                }}
-              />
-
-              {/* A faint ruled circle. The inset shadow that used to sit on
-                  it was a hardcoded black at 2%: invisible on paper, a grey
-                  smear on the night tone. */}
-              <div className="absolute inset-[14px] rounded-full border border-line/40 pointer-events-none" />
-
-              {/* Smooth circular progress ring */}
-              <svg
-                aria-hidden
-                width="100%"
-                height="100%"
-                viewBox="0 0 284 284"
-                className="absolute inset-0 -rotate-90 pointer-events-none"
-              >
-                {/* Subtle soft track */}
-                <circle
-                  cx="142"
-                  cy="142"
-                  r={ringRadius}
-                  fill="none"
-                  stroke="var(--line)"
-                  strokeWidth={stroke}
-                  opacity="0.45"
-                />
-                {/* The progress stroke. It used to carry an feDropShadow
-                    glow in the course colour, which is a drop shadow with a
-                    softer name. The stroke is the mark. */}
-                <circle
-                  cx="142"
-                  cy="142"
-                  r={ringRadius}
-                  fill="none"
-                  stroke={course.color}
-                  strokeWidth={stroke * 1.3}
-                  strokeDasharray={circumference}
-                  strokeDashoffset={circumference * (1 - pct)}
-                  strokeLinecap="round"
-                  className="transition-[stroke-dashoffset] duration-700 ease-out"
-                  opacity={isPaused ? 0.5 : 1}
-                />
-              </svg>
-
-              {/* Clock face content */}
-              <div className="relative z-10 flex flex-col items-center justify-center select-none">
-                {/* One clock, read the way a clock is read. It used to be
-                    three stacked columns each with an "HR" / "MIN" / "SEC"
-                    caption under it, which is the interface explaining a
-                    colon. Hours only appear once there are hours. */}
-                <div
-                  role="timer"
-                  aria-label={`${isPaused ? 'Paused at' : 'Elapsed'} ${spokenElapsed}`}
-                  className="font-mono text-[clamp(34px,10.5vw,46px)] font-semibold leading-none tracking-[-0.02em] tabular-nums transition-opacity duration-300"
-                  style={{ opacity: isPaused ? 0.55 : 1 }}
-                >
-                  {hrs > 0 && (
-                    <>
-                      {hh}
-                      <span className="text-muted-soft">:</span>
-                    </>
-                  )}
-                  {mm}
-                  <span className="text-muted-soft">:</span>
-                  <span className="text-ink-soft">{ss}</span>
-                </div>
-
-                {/* The state, written in the margin rather than stamped into
-                    a capsule. The dot breathes on the timer's own `tick`;
-                    `animate-ping` was a notification badge. */}
-                <p className="mt-3.5 mb-0 flex items-center gap-2">
-                  <span
-                    aria-hidden
-                    className={`h-1.5 w-1.5 rounded-full ${isPaused ? '' : 'animate-tick'}`}
-                    style={{ background: isPaused ? 'var(--muted-soft)' : course.color }}
-                  />
-                  <span className="eyebrow">{isPaused ? 'Paused' : 'In session'}</span>
-                </p>
-              </div>
-            </div>
-
-            <p className="mt-[var(--density-section)] mb-0 max-w-[280px] font-serif italic text-sm text-muted leading-[1.6]">
-              {isPaused
-                ? '"The pause is part of the page."'
-                : '"Slow is smooth. Smooth is steady."'}
-            </p>
-          </>
-        )}
-      </div>
-
-      {whiteNoiseError && (
-        <p
-          className="m-0 px-[var(--density-gutter)] text-center font-serif text-[12px] italic text-muted"
-          role="status"
+        <button
+          type="button"
+          onClick={() => setImmersive((v) => !v)}
+          aria-label={immersive ? 'Exit full screen' : 'Full screen'}
+          className="grid h-10 w-10 place-items-center rounded-[10px] text-muted transition-colors hover:bg-bg-tint hover:text-ink"
         >
-          {whiteNoiseError}
-        </p>
-      )}
+          <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d={immersive ? 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5' : 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'} />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
 
-      {/* Three controls, one radius. They used to be two circles and a
-          stadium, which is three shapes for one row. The filled one is the
-          screen's single primary action, which is the exception the guide
-          grants the timer. */}
-      {course && active && (
-        <div className="flex items-center justify-center gap-[var(--density-gap)] px-[var(--density-gutter)] pt-4 pb-[calc(28px+env(safe-area-inset-bottom))]">
-          <button
-            type="button"
-            onClick={toggleWhiteNoise}
-            aria-pressed={whiteNoiseOn}
-            aria-label={whiteNoiseOn ? 'Stop white noise' : 'Play white noise'}
-            className="h-14 w-14 shrink-0 rounded-2xl border border-line bg-paper flex items-center justify-center transition-colors"
-            style={
-              whiteNoiseOn
-                ? { color: course.color, borderColor: course.color, background: tint }
-                : { color: 'var(--ink-soft)' }
-            }
-          >
-            <svg aria-hidden width="19" height="19" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M4 14.5c1.7 0 1.7-5 3.4-5s1.7 5 3.4 5 1.7-5 3.4-5 1.7 5 3.4 5 1.7-5 3.4-5"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={isPaused ? resume : pause}
-            aria-label={isPaused ? 'Resume timer' : 'Pause timer'}
-            className="h-14 w-14 shrink-0 rounded-2xl border border-line bg-paper text-ink flex items-center justify-center"
-          >
-            {isPaused ? (
-              <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7 5l12 7-12 7V5z" />
-              </svg>
-            ) : (
-              <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M9 5v14M15 5v14"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-              </svg>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={handleStop}
-            className="h-14 flex-1 max-w-[220px] rounded-2xl text-[15px] font-semibold inline-flex items-center justify-center gap-2"
-            style={{ background: course.color, color: 'var(--ink)' }}
-          >
-            <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="6" width="12" height="12" rx="1" />
-            </svg>
-            Stop &amp; log
-          </button>
+  /* Open mode goes to the night paper and lets the fan fill the whole screen.
+     It is the one place in the app that inverts, and it does it because a
+     long sitting in a dark room is what the mode is for. */
+  if (!isBlock) {
+    return (
+      <div
+        className="relative flex min-h-[100dvh] flex-col overflow-hidden"
+        style={{
+          background: '#1A1815',
+          backgroundImage:
+            'radial-gradient(circle at 18% 12%, rgba(196,168,106,.07), transparent 55%), radial-gradient(circle at 82% 88%, rgba(138,120,92,.05), transparent 60%)',
+          color: '#EFE9DC',
+        }}
+      >
+        <StudyFan
+          progress={progress}
+          seed={active?.sessionId}
+          color={color}
+          light
+          depth={10}
+          tripleP={0.3}
+          trunkWidth={30}
+          padTop={40}
+          widthFill={0.94}
+          className="pointer-events-none absolute inset-0 h-full w-full"
+        />
+
+        <div className="relative flex min-h-[100dvh] flex-col [&_button:hover]:bg-[#24211C]">
+          {header}
+          <div className="flex-1" />
+          <div className="flex flex-col gap-6 px-6 pb-[max(env(safe-area-inset-bottom),32px)] md:flex-row md:items-end md:justify-between md:px-12 md:pb-10">
+            <div>
+              <p className="eyebrow m-0 mb-2" style={{ color }}>
+                {code} · Open
+              </p>
+              <p
+                className="m-0 font-mono text-[56px] font-medium leading-none tracking-[-0.03em] tabular-nums md:text-[72px]"
+                aria-label={spoken(elapsed)}
+              >
+                {clockFace(elapsed)}
+              </p>
+              <p className="m-0 mt-3 font-mono text-[12px] tracking-[0.02em]" style={{ color: '#958D7E' }}>
+                since {hhmm(startedAtMs)}
+                {task ? <> · <span style={{ color: '#EFE9DC' }}>{task.title}</span></> : null}
+                {isPaused ? ' · paused' : ''}
+              </p>
+            </div>
+            <div className="[&_button]:border-[#4A4438] [&_button]:text-[#EFE9DC] [&_.bg-primary]:!bg-[#EFE9DC] [&_.bg-primary]:!text-[#1A1815]">
+              {controls}
+            </div>
+          </div>
         </div>
-      )}
+        <PendingSessionLogSheet />
+      </div>
+    );
+  }
 
-      <PendingSessionLogSheet onResolved={() => router.replace('/dashboard')} />
+  return (
+    <div className="flex min-h-[100dvh] flex-col bg-bg">
+      {!immersive && header}
+
+      <div className="flex flex-1 flex-col items-center justify-center gap-8 px-5 pb-10">
+        {/* The frame. The fan is scaled so it exactly fills this box at the
+            target, which is what makes "touched the top" mean "done". */}
+        <div
+          className="deckle relative w-full max-w-[720px] overflow-hidden border border-line bg-paper"
+          style={{ height: 'min(46vh, 400px)' }}
+        >
+          <span
+            aria-hidden
+            className="absolute right-0 top-0 h-[22px] w-[22px]"
+            style={{ background: 'linear-gradient(225deg, var(--bg-tint) 50%, transparent 50%)' }}
+          />
+          <span className="eyebrow absolute left-5 top-3.5 z-10" style={{ color }}>
+            {code}
+          </span>
+          <span className="absolute right-5 top-3.5 z-10 font-mono text-[10px] tracking-[0.06em] text-muted">
+            {hhmm(startedAtMs)} to {hhmm(startedAtMs + target * 1000)}
+          </span>
+          <StudyFan
+            progress={progress}
+            seed={active?.sessionId}
+            color={color}
+            depth={7}
+            trunkWidth={22}
+            padTop={90}
+            className="absolute inset-0 h-full w-full"
+          />
+        </div>
+
+        <div className="text-center">
+          <p
+            className={`m-0 font-mono text-[56px] font-medium leading-none tracking-[-0.03em] tabular-nums md:text-[72px] ${
+              isPaused ? 'opacity-60' : ''
+            }`}
+            aria-label={`${overrun ? 'Over by' : 'Remaining'} ${spoken(remaining)}`}
+          >
+            {clockFace(remaining)}
+          </p>
+          <p className="m-0 mt-3 font-mono text-[12px] tracking-[0.02em] text-muted">
+            {overrun ? 'over' : 'of'} {clockFace(target)}
+            {task ? <> · <span className="text-ink">{task.title}</span></> : null}
+            {isPaused ? ' · paused' : ''}
+          </p>
+        </div>
+
+        {controls}
+
+        <p className="m-0 -mt-3 font-mono text-[11px] text-muted-soft">
+          Space pause · F finish · Esc back
+        </p>
+      </div>
+
+      <PendingSessionLogSheet />
     </div>
   );
 }

@@ -65,6 +65,24 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    href: '/stamps',
+    label: 'Stamps',
+    icon: (
+      <svg aria-hidden
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="8" />
+        <circle cx="12" cy="12" r="3.5" />
+      </svg>
+    ),
+  },
 ];
 
 // A course page is reached from the course cards on Today, and its back
@@ -89,7 +107,7 @@ export default function BottomNav() {
        pt is the fade region, not padding around the icons, and the bar is
        click-through outside the tabs so it does not swallow taps on it. */
     <nav
-      className="pointer-events-none fixed bottom-0 inset-x-0 z-40 flex justify-around items-center px-4 pt-10"
+      className="pointer-events-none fixed bottom-0 inset-x-0 z-40 flex justify-around items-center px-4 pt-10 md:hidden"
       style={{
         paddingBottom: 'calc(20px + env(safe-area-inset-bottom))',
         background:

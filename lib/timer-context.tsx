@@ -19,6 +19,17 @@ interface TimerState {
   accumulatedMs: number; // ms accumulated across previous paused segments
   isPaused: boolean;
   lastSeenAt: number;
+  /**
+   * Block mode's target, in seconds, or null for an open-ended session. The
+   * timer counts the same either way; the target is what the screen counts
+   * down from and what the fan is sized to fill.
+   */
+  targetSeconds: number | null;
+  /**
+   * Stable for the life of one sitting. The study fan is seeded off it, so a
+   * session that is paused, reloaded or restored keeps the shape it grew.
+   */
+  sessionId: string;
 }
 
 interface PendingTimerLog {
@@ -41,7 +52,9 @@ interface TimerContextValue {
   active: TimerState | null;
   pendingLog: PendingTimerLog | null;
   elapsedSeconds: number;
-  start: (courseId: string, taskId?: string | null) => void;
+  start: (courseId: string, taskId?: string | null, targetSeconds?: number | null) => void;
+  /** Push a running block's target out, the timer's "+5 min". */
+  extend: (seconds: number) => void;
   pause: () => void;
   resume: () => void;
   cancel: () => void;
@@ -209,7 +222,24 @@ function sanitizeActive(value: unknown): TimerState | null {
     accumulatedMs: Math.min(MAX_TIMER_MS, Math.max(0, accumulatedMs)),
     isPaused: Boolean(state.isPaused),
     lastSeenAt: Number.isFinite(lastSeenAt) ? lastSeenAt : startedAt,
+    targetSeconds: sanitizeTarget(state.targetSeconds),
+    // A state written before blocks existed has no id. Deriving one from the
+    // start time keeps it stable across reloads, which is all the fan needs.
+    sessionId:
+      typeof state.sessionId === 'string' && state.sessionId.trim()
+        ? state.sessionId
+        : `s${startedAt}`,
   };
+}
+
+/**
+ * A block target has to be a positive number of seconds inside the same
+ * ceiling a session itself has; anything else means open-ended.
+ */
+function sanitizeTarget(value: unknown): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(MAX_SESSION_SECONDS, Math.round(n));
 }
 
 function sanitizePendingLog(value: unknown): PendingTimerLog | null {
@@ -517,7 +547,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     };
   }, [active]);
 
-  const start = useCallback((courseId: string, taskId: string | null = null) => {
+  const start = useCallback(
+    (courseId: string, taskId: string | null = null, targetSeconds: number | null = null) => {
     if (!courseId.trim()) return;
     const snapshot = loadActiveSnapshot();
     const existingPending = pendingLogRef.current ?? snapshot.pendingLog;
@@ -536,9 +567,13 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     // threw away everything logged so far without a word.
     const running = activeRef.current ?? snapshot.active;
     if (running && running.courseId === courseId && running.taskId === taskId) {
-      activeRef.current = running;
-      setActive(running);
-      setElapsed(computeElapsed(running));
+      // Same sitting, possibly re-armed with a different block length. The
+      // clock carries on; only the target it is measured against moves.
+      const next = { ...running, targetSeconds: sanitizeTarget(targetSeconds) };
+      activeRef.current = next;
+      setActive(next);
+      saveActive(next);
+      setElapsed(computeElapsed(next));
       return;
     }
     if (snapshot.active && !activeMatches(activeRef.current, snapshot.active)) {
@@ -556,6 +591,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       accumulatedMs: 0,
       isPaused: false,
       lastSeenAt: now,
+      targetSeconds: sanitizeTarget(targetSeconds),
+      sessionId: `s${now}-${Math.random().toString(36).slice(2, 8)}`,
     };
     maybeRequestTimerNotificationPermission();
     activeRef.current = next;
@@ -565,6 +602,24 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     setPendingLog(null);
     savePendingLog(null);
     setElapsed(0);
+    },
+    [],
+  );
+
+  /**
+   * "+5 min". Only means anything to a block: an open session has nothing to
+   * push out, so the call is dropped rather than silently turning it into one.
+   */
+  const extend = useCallback((seconds: number) => {
+    const running = activeRef.current;
+    if (!running || running.targetSeconds == null) return;
+    const next = {
+      ...running,
+      targetSeconds: sanitizeTarget(running.targetSeconds + seconds),
+    };
+    activeRef.current = next;
+    setActive(next);
+    saveActive(next);
   }, []);
 
   const recoverStaleRunningTimer = useCallback((state: TimerState, now: number): PendingTimerLog | null => {
@@ -672,6 +727,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         pendingLog,
         elapsedSeconds,
         start,
+        extend,
         pause,
         resume,
         cancel,

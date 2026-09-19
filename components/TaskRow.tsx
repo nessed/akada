@@ -1,0 +1,284 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import type { Course, Task } from '@/lib/data';
+import { dueLabel } from '@/lib/utils';
+import HandCheck from './notebook/HandCheck';
+
+/**
+ * One task on a desktop list: a 48px row on a grid, not a card.
+ *
+ * The phone keeps TaskItem, which is a soft line you swipe. A pointer wants
+ * something else: columns that line up down the page, the whole row as the
+ * way in, and the actions revealed on the row rather than behind a gesture
+ * nobody can discover with a mouse. The play mark here is what replaced the
+ * floating action button: a timer starts from the row it belongs to.
+ */
+
+interface Props {
+  task: Task;
+  course: Course | undefined;
+  selected?: boolean;
+  focused?: boolean;
+  running?: boolean;
+  /** Live clock, only passed for the row the timer is on. */
+  runningLabel?: string;
+  onToggle: (task: Task) => void;
+  onStartTimer: (task: Task, el: HTMLElement) => void;
+  onPause?: () => void;
+  onOpen?: (task: Task) => void;
+  onSelect?: (task: Task, additive: boolean) => void;
+  onReschedule?: (task: Task) => void;
+  onDelete?: (task: Task) => void;
+  /** Hide the course column on a screen that is already one course. */
+  hideCourse?: boolean;
+}
+
+export default function TaskRow({
+  task,
+  course,
+  selected = false,
+  focused = false,
+  running = false,
+  runningLabel,
+  onToggle,
+  onStartTimer,
+  onPause,
+  onOpen,
+  onSelect,
+  onReschedule,
+  onDelete,
+  hideCourse = false,
+}: Props) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const playRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onAway = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onAway);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onAway);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [menuOpen]);
+
+  const due = dueLabel(task.dueDate);
+  const color = course?.color ?? 'var(--muted)';
+
+  const columns = hideCourse
+    ? '40px minmax(0,1fr) 128px 88px'
+    : '40px minmax(0,1fr) 132px 128px 88px';
+
+  return (
+    <div
+      className={`group relative grid h-12 items-center border-b border-line-soft pl-1 pr-2 text-ink transition-colors last:border-b-0 ${
+        selected ? 'bg-bg-tint' : 'hover:bg-paper-2'
+      } ${task.completed ? 'opacity-50' : ''}`}
+      style={{
+        gridTemplateColumns: columns,
+        boxShadow: focused ? 'inset 0 0 0 1.5px var(--ink)' : undefined,
+        borderRadius: focused ? 6 : undefined,
+      }}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          if ((e.metaKey || e.ctrlKey || e.shiftKey) && onSelect) {
+            onSelect(task, true);
+            return;
+          }
+          onToggle(task);
+        }}
+        aria-label={task.completed ? 'Mark incomplete' : 'Complete'}
+        className="grid h-10 w-10 place-items-center bg-transparent"
+      >
+        <span
+          className={`grid h-[18px] w-[18px] place-items-center ${task.completed ? 'rounded-md' : 'scribble-box'}`}
+          style={task.completed ? { background: color, border: `1.4px solid ${color}` } : undefined}
+        >
+          {task.completed && <HandCheck size={12} color="var(--paper)" strokeWidth={1.8} />}
+        </span>
+      </button>
+
+      {/* The title is the way into the task. A full-bleed button behind the
+          row would swallow the controls beside it, so the title itself is the
+          target and everything else on the row keeps its own. */}
+      <span className="flex min-w-0 items-center gap-2">
+        {task.priority === 'high' && !task.completed && (
+          <span
+            aria-hidden
+            className="font-hand shrink-0 text-[13px] font-semibold text-priority"
+            style={{ transform: 'rotate(-3deg)' }}
+            title="High priority"
+          >
+            !!
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => onOpen?.(task)}
+          className="min-w-0 flex-1 truncate bg-transparent text-left text-[14px] leading-[1.3]"
+          title={task.title}
+        >
+          {task.title}
+        </button>
+        {running && (
+          <span
+            className="shrink-0 font-mono text-[11px] tabular-nums"
+            style={{ color }}
+            aria-label="Timer running on this task"
+          >
+            {runningLabel ?? 'running'}
+          </span>
+        )}
+      </span>
+
+      {!hideCourse && (
+        <span className="flex min-w-0 items-center gap-2 text-[12px] text-ink-soft">
+          <span
+            aria-hidden
+            className="block h-3.5 w-[3px] shrink-0 rounded-[1px]"
+            style={{ background: color }}
+          />
+          <span className="truncate">{course?.code ?? '—'}</span>
+        </span>
+      )}
+
+      <span
+        className={`tnum font-mono text-[11px] tracking-[0.02em] ${
+          due?.category === 'overdue'
+            ? 'text-warn'
+            : due?.category === 'today'
+              ? 'hl-swipe text-ink'
+              : 'text-muted'
+        }`}
+      >
+        {task.completed
+          ? 'done'
+          : due
+            ? due.category === 'overdue'
+              ? `${due.formattedDate} · ${-due.days}d`
+              : due.category === 'today'
+                ? 'today'
+                : due.formattedDate
+            : '—'}
+      </span>
+
+      <span className="flex justify-end gap-0.5">
+        {!task.completed &&
+          (running ? (
+            <button
+              type="button"
+              onClick={() => onPause?.()}
+              aria-label="Pause timer"
+              className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent transition-colors hover:bg-bg-tint"
+              style={{ color }}
+            >
+              <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M9 5v14M15 5v14" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              ref={playRef}
+              type="button"
+              onClick={() => playRef.current && onStartTimer(task, playRef.current)}
+              aria-label={`Start timer on ${task.title}`}
+              className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-ink-soft opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+            >
+              <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7 5l12 7-12 7V5z" />
+              </svg>
+            </button>
+          ))}
+
+        <div ref={menuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="More actions"
+            aria-expanded={menuOpen}
+            className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-muted opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="1.6" />
+              <circle cx="12" cy="12" r="1.6" />
+              <circle cx="19" cy="12" r="1.6" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-11 z-30 w-44 animate-fade-in rounded-[10px] border border-line bg-paper p-1 shadow-[0_8px_20px_rgba(57,48,36,.12)]">
+              {onOpen && (
+                <MenuItem
+                  label="Open"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpen(task);
+                  }}
+                />
+              )}
+              {onReschedule && !task.completed && (
+                <MenuItem
+                  label="Reschedule"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onReschedule(task);
+                  }}
+                />
+              )}
+              {onSelect && (
+                <MenuItem
+                  label={selected ? 'Deselect' : 'Select'}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onSelect(task, true);
+                  }}
+                />
+              )}
+              {onDelete && (
+                <MenuItem
+                  label="Delete"
+                  tone="warn"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete(task);
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </span>
+    </div>
+  );
+}
+
+function MenuItem({
+  label,
+  onClick,
+  tone,
+}: {
+  label: string;
+  onClick: () => void;
+  tone?: 'warn';
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-10 w-full items-center rounded-[8px] px-3 text-left text-[13px] transition-colors hover:bg-bg-tint ${
+        tone === 'warn' ? 'text-warn' : 'text-ink-soft hover:text-ink'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}

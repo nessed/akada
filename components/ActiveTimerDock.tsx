@@ -42,7 +42,9 @@ export default function ActiveTimerDock() {
 
   return (
     <div
-      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] z-50 px-[var(--density-gutter)] md:px-8 pointer-events-none animate-fade-in"
+      /* Phone chrome only. On desktop the rail carries the running clock, and
+         two of them on one screen is one too many. */
+      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] z-50 px-[var(--density-gutter)] pointer-events-none animate-fade-in md:hidden"
     >
       {/* pointer-events stay off the full-width row, it would otherwise be an
           invisible click blocker across the top of the page. */}

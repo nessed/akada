@@ -1,21 +1,24 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import NextImage from 'next/image';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
-import DailySummary from '@/components/DailySummary';
-import WeeklyProgressBanner from '@/components/WeeklyProgressBanner';
 import CourseCard from '@/components/CourseCard';
+import TaskRow from '@/components/TaskRow';
+import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
+import {
+  CoursesWeekPanel,
+  TodayHours,
+  UpNext,
+  WeekPanel,
+} from '@/components/today/TodayPanels';
 import CourseReorderList from '@/components/dashboard/CourseReorderList';
 import DatePicker from '@/components/DatePicker';
-import FloatingActionButton from '@/components/FloatingActionButton';
 import SettingsSheet from '@/components/SettingsSheet';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
-import SwipeRow from '@/components/SwipeRow';
 import HandCheck from '@/components/notebook/HandCheck';
-import DueDateBadge from '@/components/DueDateBadge';
 import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
@@ -61,6 +64,7 @@ import {
   addTaskOptimistic,
   deleteCourseOptimistic,
   toggleTaskOptimistic,
+  updateTaskOptimistic,
   updateCourseOptimistic,
   updateUserSettingsOptimistic,
   resetAllData,
@@ -172,6 +176,9 @@ function DashboardPageContent() {
   const [newTaskHigh, setNewTaskHigh] = useState(false);
 
   // Set while a running timer stands between a tap and the timer screen.
+  /** The play mark that opened the start popover, and what it points at. */
+  const [startTarget, setStartTarget] = useState<StartTarget | null>(null);
+
   const [pendingTimer, setPendingTimer] = useState<{
     courseId: string;
     taskId: string | null;
@@ -296,14 +303,68 @@ function DashboardPageContent() {
     beginTimer(courseId, taskId);
   }
 
-  async function handleToggleTask(id: string) {
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
+  async function handleToggleTask(task: Task) {
     try {
       await toggleTaskOptimistic(task);
     } catch (error) {
       console.error('Failed to update task:', error);
       notify('That task did not update.');
+    }
+  }
+
+  /**
+   * Every play mark on this screen opens the same popover. A task carries its
+   * own course; a course row passes one explicitly and leaves the task null.
+   * `openEnded` is the "Open ended" button beside Start, which skips the
+   * length picker and goes straight to an untargeted session.
+   */
+  function openStartFor(
+    task: Task | null,
+    anchor: HTMLElement,
+    openEnded: boolean,
+    course?: Course,
+  ) {
+    const resolved = course ?? courses.find((c) => c.id === task?.courseId);
+    if (!resolved) return;
+    if (openEnded) {
+      if (active && (active.courseId !== resolved.id || active.taskId !== (task?.id ?? null))) {
+        setPendingTimer({ courseId: resolved.id, taskId: task?.id ?? null });
+        return;
+      }
+      start(resolved.id, task?.id ?? null, null);
+      router.push('/timer');
+      return;
+    }
+    setStartTarget({ task, course: resolved, anchor });
+  }
+
+  /** "Tomorrow": the same move the row menu calls Reschedule. */
+  async function handleSnoozeTask(task: Task) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    try {
+      await updateTaskOptimistic(task.id, { dueDate: isoDate(tomorrow) });
+    } catch (error) {
+      console.error('Failed to reschedule task:', error);
+      notify('That task did not move.');
+    }
+  }
+
+  /**
+   * Pull the whole overdue pile onto today. Nine separate writes would be
+   * nine separate chances to half-fail, so a rejection is reported once and
+   * the rows that did land stay landed.
+   */
+  async function handleRescheduleOverdue() {
+    const todayIso = isoDate();
+    const stale = tasks.filter((t) => !t.completed && t.dueDate && t.dueDate < todayIso);
+    if (stale.length === 0) return;
+    try {
+      await Promise.all(stale.map((t) => updateTaskOptimistic(t.id, { dueDate: todayIso })));
+      notify(`Moved ${stale.length} ${stale.length === 1 ? 'task' : 'tasks'} to today.`);
+    } catch (error) {
+      console.error('Failed to reschedule overdue tasks:', error);
+      notify('Some of those did not move.');
     }
   }
 
@@ -611,6 +672,23 @@ function DashboardPageContent() {
   const urgentTasks = [...overdueTasks, ...todayTasks].slice(0, 5);
   const streak = studyStreakDays(sessions);
   const now = new Date();
+  const dateLine = now.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  /* The one task the screen asks for: oldest overdue first, then what is due
+     today, then whatever is nearest. Sorting by due date alone would put a
+     task due today above one that has been overdue for a fortnight. */
+  const upNext =
+    [...overdueTasks].sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))[0] ??
+    todayTasks[0] ??
+    null;
+  /* The week's goal is the sum of the course goals, which is what the course
+     panel is already measured against; a separate number would let the two
+     disagree. */
+  const weeklyGoalHours = courses.reduce((a, c) => a + (c.weeklyGoalHours || 0), 0) || 20;
   const weekdayLabel = now.toLocaleDateString(undefined, { weekday: 'long' });
   const monthLabel = now.toLocaleDateString(undefined, { month: 'long' });
   const dayNum = now.getDate();
@@ -636,212 +714,198 @@ function DashboardPageContent() {
   });
 
   return (
-    <PageShell>
-      {/* Journal header */}
-      <header className="mb-[22px] flex items-start justify-between gap-3.5">
-        <div className="min-w-0 flex-1">
-          <p className="eyebrow m-0 font-mono text-muted">{weekdayLabel}</p>
-          <h1 className="mt-1.5 mb-0 font-serif text-[32px] font-normal leading-[1.05] tracking-[-0.02em]">
-            {monthLabel} <span className="italic">{dayNum}</span>
-            <span className="ml-1.5 text-[18px] text-muted tracking-normal">
-              &apos;{yearLabel}
-            </span>
-          </h1>
-          <p className="mt-2 mb-0 max-w-[260px] text-[13px] leading-[1.5] text-ink-soft">
-            {todayTasks.length > 0 ? (
+    <PageShell wide>
+      {/* The page header. The date is a line of data above the title rather
+          than the title itself, "New task" lives here now that the floating
+          button is gone, and search is a field rather than an icon. */}
+      <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0">
+          <p className="m-0 mb-1.5 font-mono text-[12px] tracking-[0.02em] text-muted">
+            {dateLine}
+            {semesterInfo && (
               <>
-                <b className="text-ink">{todayTasks.length}</b>{' '}
-                {todayTasks.length === 1 ? 'task' : 'tasks'} on the page today.
-
+                {' · '}Week {semesterInfo.currentWeek} of {semesterInfo.totalWeeks}
+                {' · '}
+                {semesterInfo.daysRemaining} days left
               </>
-            ) : totalToday > 0 ? (
-              <>
-                Already <b className="text-ink">{formatHM(totalToday)}</b> in. Keep it
-                going.
-              </>
-            ) : (
-              <>Nothing pressing. A clean page to fill.</>
             )}
           </p>
+          <h1 className="m-0 font-serif text-[32px] font-medium leading-[1.05] tracking-[-0.025em] md:text-[36px]">
+            Today
+          </h1>
         </div>
-        <div className="flex items-center gap-2.5">
+
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            onClick={() => setShowSettings(true)}
-            className="relative w-[42px] h-[42px] rounded-full bg-bg-tint border border-line overflow-visible flex items-center justify-center shrink-0 hover:border-primary transition-colors"
+            onClick={() => router.push('/tasks?search=1')}
+            className="hidden h-10 w-[260px] items-center gap-2 rounded-[10px] border border-line bg-paper px-3 text-[13px] text-muted transition-colors hover:border-line-strong md:flex"
           >
-            <span className="block h-full w-full overflow-hidden rounded-full">
-              <NextImage
-                src={avatarUrl || '/default-avatar.svg'}
-                alt="Settings"
-                width={42}
-                height={42}
-                // Avatars are user-supplied base64 data URLs or arbitrary
-                // https URLs, neither of which the optimizer can handle
-                // without a remotePatterns allowlist per user.
-                unoptimized
-                className="w-full h-full object-cover"
-              />
-            </span>
-            {streak > 0 && (
-              <span className="absolute -bottom-1 -right-1.5 font-hand text-[15px] leading-none text-ink">
-                {streak}
-              </span>
-            )}
+            <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <circle cx="11" cy="11" r="6" />
+              <path d="M20 20l-4-4" />
+            </svg>
+            <span className="flex-1 text-left">Search tasks</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (courses.length === 0) openAddCourse();
+              else setAddingTaskFor(courses[0].id);
+            }}
+            className="h-10 rounded-[10px] border border-line-strong px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+          >
+            New task
           </button>
         </div>
       </header>
 
-      {/* Streak hand-note, only when there's a meaningful streak */}
-      {streak >= 3 && (
-        <div className="relative h-0">
-          <HandNote
-            color="var(--peach)"
-            size={18}
-            rotate={-7}
-            style={{ position: 'absolute', top: -54, right: 64 }}
-          >
-            {streak} day streak ↗
-          </HandNote>
-        </div>
-      )}
-
-      {/* Daily summary */}
-      <DailySummary todaysSessions={todaysSessions} courses={courses} />
-
-      {/* Weekly study progress across all courses */}
-      <WeeklyProgressBanner courses={courses} sessions={sessions} />
-
-      {semesterInfo && (
-        <section className="mt-3 py-2">
-          <div className="flex items-baseline justify-between gap-3">
-            <div>
-              <p className="eyebrow m-0 text-muted">
-                Semester
-              </p>
-              <h2 className="mt-1 mb-0 font-serif text-[18px] font-medium tracking-[-0.01em]">
-                Week {semesterInfo.currentWeek} of {semesterInfo.totalWeeks}
-              </h2>
-            </div>
-            <span className="font-mono text-[13px] font-semibold text-ink-soft">
-              {semesterInfo.daysRemaining}d left
-            </span>
-          </div>
-          {/* Semester bar with week markers, feels like a ruler/timeline */}
-          <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-bg-tint">
-            <div
-              className="h-full rounded-full bg-primary"
-              style={{ width: `${semesterInfo.percent}%` }}
-            />
-            {semesterInfo.totalWeeks > 1 && (
-              <div className="absolute inset-0 flex pointer-events-none">
-                {Array.from({ length: semesterInfo.totalWeeks - 1 }).map((_, i) => (
-                  <span
-                    key={i}
-                    className="flex-1"
-                    style={{
-                      borderRight: '1px solid var(--line-soft)',
-                    }}
-                  />
-                ))}
-                <span className="flex-1" />
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {smartPrompts.length > 0 && (
-        <section className="mt-4 grid gap-2">
-          {smartPrompts.map((prompt) => (
-            <div
-              key={prompt}
-              className="px-2 py-1.5 text-[14px] leading-[1.45] text-muted font-serif italic border-l-2 border-line pl-3"
-            >
-              {prompt}
-            </div>
-          ))}
-        </section>
-      )}
-
-      {(urgentTasks.length > 0 || overdueCount > 0) && (
-        <section className="mt-[var(--density-section)] mb-[22px]">
-          <div className="mb-2.5 flex items-baseline justify-between">
-            <h2 className="m-0 font-serif text-[17px] font-medium tracking-[-0.01em]">
-              {overdueCount > 0 && todayTasks.length > 0
-                ? 'Tasks to focus on'
-                : overdueCount > 0
-                ? 'Overdue tasks'
-                : 'Due today'}
-            </h2>
-            {overdueCount > 0 && (
-              <span className="font-hand text-[15px] text-priority" style={{ transform: 'rotate(-2deg)' }}>
-                {overdueCount} overdue
-              </span>
-            )}
-          </div>
-          <div className="overflow-hidden">
-            {urgentTasks.length === 0 ? (
-              <p className="m-0 px-4 py-3.5 font-serif text-[13px] italic text-muted">
-                Nothing due today. A clean page.
-              </p>
-            ) : (
-              urgentTasks.map((task, index) => (
-                <DashboardTaskItem
-                  key={task.id}
-                  task={task}
-                  course={courses.find((c) => c.id === task.courseId)}
-                  isLast={index === urgentTasks.length - 1}
-                  onToggle={handleToggleTask}
-                  onStartTimer={handleStartTimerForTask}
-                />
-              ))
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Section header */}
-      <div className={`${urgentTasks.length > 0 || overdueCount > 0 ? '' : 'mt-[26px]'} mb-3.5 flex items-baseline justify-between`}>
-        <h2 className="m-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
-          Courses
-        </h2>
-        <button
-          type="button"
-          onClick={openAddCourse}
-          className="flex items-center gap-1.5 text-xs text-muted font-serif italic hover:text-ink transition-colors"
-        >
-          <span className="text-[15px] leading-none font-light">+</span>
-          {courses.length} this term
-        </button>
-      </div>
-
-      {/* Course cards */}
       {courses.length === 0 ? (
         <EmptyPanel action="Add a course" onAction={openAddCourse} />
       ) : (
-        <CourseReorderList
-          courses={courses}
-          onReorder={handleReorderCourses}
-          renderCourse={(course) => (
-            <CourseCard
-              course={course}
-              sessions={sessions.filter((s) => s.courseId === course.id)}
-              tasks={tasks.filter((t) => t.courseId === course.id)}
-              onStartTimer={handleStartTimer}
-              onEdit={openEditCourse}
-              onDelete={setDeletingCourse}
-              onAddTask={(courseId) => router.push(`/tasks?course=${encodeURIComponent(courseId)}&newTask=1`)}
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
+            {upNext ? (
+              <UpNext
+                task={upNext}
+                course={courses.find((c) => c.id === upNext.courseId)}
+                onStart={(task, el, open) => openStartFor(task, el, open)}
+                onDone={handleToggleTask}
+                onSnooze={handleSnoozeTask}
+                onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
+              />
+            ) : (
+              <section className="deckle border border-dashed border-line-strong bg-paper px-7 py-8">
+                <p className="eyebrow m-0">Up next</p>
+                <p className="m-0 mt-3 font-serif text-[20px] text-ink-soft">
+                  Nothing overdue and nothing due today.
+                </p>
+                <p className="m-0 mt-2 text-[13px] text-muted">
+                  A clean page. Start a course timer when you are ready.
+                </p>
+              </section>
+            )}
+
+            {overdueTasks.length > 0 && (
+              <TaskSection
+                title="Overdue"
+                count={overdueTasks.length}
+                countTone="warn"
+                action={
+                  <button
+                    type="button"
+                    onClick={handleRescheduleOverdue}
+                    className="h-10 rounded-[10px] px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
+                  >
+                    Reschedule all to today
+                  </button>
+                }
+              >
+                {overdueTasks.slice(0, 5).map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    course={courses.find((c) => c.id === task.courseId)}
+                    running={active?.taskId === task.id}
+                    onToggle={handleToggleTask}
+                    onStartTimer={(t, el) => openStartFor(t, el, false)}
+                    onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
+                    onReschedule={handleSnoozeTask}
+                  />
+                ))}
+                {overdueTasks.length > 5 && (
+                  <Link
+                    href="/tasks?filter=overdue"
+                    className="flex h-11 items-center justify-center text-[12px] text-muted no-underline hover:text-ink"
+                  >
+                    {overdueTasks.length - 5} more overdue
+                  </Link>
+                )}
+              </TaskSection>
+            )}
+
+            {todayTasks.length > 0 && (
+              <TaskSection title="Due today" count={todayTasks.length}>
+                {todayTasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    course={courses.find((c) => c.id === task.courseId)}
+                    running={active?.taskId === task.id}
+                    onToggle={handleToggleTask}
+                    onStartTimer={(t, el) => openStartFor(t, el, false)}
+                    onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
+                    onReschedule={handleSnoozeTask}
+                  />
+                ))}
+              </TaskSection>
+            )}
+
+            {/* Courses keep their cards and their drag order on Today, below
+                the day's own work rather than above it. */}
+            <div className="mt-8 mb-3.5 flex items-baseline justify-between">
+              <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">Courses</h2>
+              <button
+                type="button"
+                onClick={openAddCourse}
+                className="flex items-center gap-1.5 font-serif text-xs italic text-muted transition-colors hover:text-ink"
+              >
+                <span className="text-[15px] font-light leading-none">+</span>
+                {courses.length} this term
+              </button>
+            </div>
+            <CourseReorderList
+              courses={courses}
+              onReorder={handleReorderCourses}
+              renderCourse={(course) => (
+                <CourseCard
+                  course={course}
+                  sessions={sessions.filter((s) => s.courseId === course.id)}
+                  tasks={tasks.filter((t) => t.courseId === course.id)}
+                  onStartTimer={handleStartTimer}
+                  onEdit={openEditCourse}
+                  onDelete={setDeletingCourse}
+                  onAddTask={(courseId) =>
+                    router.push(`/tasks?course=${encodeURIComponent(courseId)}&newTask=1`)
+                  }
+                />
+              )}
             />
-          )}
-        />
+          </div>
+
+          {/* The right column: the day, the week, the courses against their
+              goals, and the two numbers that only matter in passing. */}
+          <aside className="grid gap-4 lg:sticky lg:top-10">
+            <TodayHours
+              sessions={sessions}
+              courses={courses}
+              goalHours={settings?.dailyGoalHours ?? 4}
+            />
+            <WeekPanel sessions={sessions} courses={courses} goalHours={weeklyGoalHours} />
+            <CoursesWeekPanel
+              courses={courses}
+              sessions={sessions}
+              onStart={(course, el) => openStartFor(null, el, false, course)}
+            />
+            <div className="flex items-center justify-between px-1 font-mono text-[11px] text-muted">
+              <span>
+                Streak <span className="text-ink">{streak} days</span>
+              </span>
+              {semesterInfo && (
+                <span>
+                  Term{' '}
+                  <span className="text-ink">
+                    day {semesterInfo.totalWeeks * 7 - semesterInfo.daysRemaining} /{' '}
+                    {semesterInfo.totalWeeks * 7}
+                  </span>
+                </span>
+              )}
+            </div>
+          </aside>
+        </div>
       )}
 
-      <FloatingActionButton
-        courses={courses}
-        onStartTimer={handleStartTimer}
-        onAddTask={(courseId) => setAddingTaskFor(courseId)}
-      />
+      <StartTimerPopover target={startTarget} onClose={() => setStartTarget(null)} />
 
       {/* Quick task modal */}
       {addingTaskFor && (
@@ -1310,50 +1374,40 @@ function EmptyPanel({ action, onAction }: { action: string; onAction: () => void
   );
 }
 
-function DashboardTaskItem({ task, course, isLast, onToggle, onStartTimer }: { task: Task; course?: Course; isLast: boolean; onToggle: (id: string) => void; onStartTimer: (task: Task) => void; }) {
+
+/**
+ * A titled block of task rows. The heading carries its own count and, where
+ * there is one, the action that applies to the whole group.
+ */
+function TaskSection({
+  title,
+  count,
+  countTone,
+  action,
+  children,
+}: {
+  title: string;
+  count: number;
+  countTone?: 'warn';
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <SwipeRow
-      className={isLast ? '' : 'border-b border-dashed border-line'}
-      accent={course?.color}
-      onComplete={() => onToggle(task.id)}
-      surfaceClassName="flex items-center gap-3 bg-bg px-3.5 py-[11px]"
-    >
-      <>
-        <button
-          type="button"
-          onClick={() => onToggle(task.id)}
-          aria-label="Mark complete"
-          className="scribble-box h-5 w-5 shrink-0"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="m-0 text-[13.5px] leading-[1.4] text-ink">
-            {task.title}
-          </p>
-          {(task.dueDate || task.priority === 'high') && (
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              {task.priority === 'high' && (
-                <span
-                  className="font-hand inline-block text-[13px] text-priority font-semibold tracking-wide"
-                  style={{ transform: 'rotate(-3deg)' }}
-                >
-                  !! high
-                </span>
-              )}
-              {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
-            </div>
-          )}
-        </div>
-        {course && (
-          <button
-            type="button"
-            onClick={() => onStartTimer(task)}
-            className="hl-swipe eyebrow shrink-0 bg-transparent text-ink tracking-[0.04em]"
-            style={{ '--hl': course.tint || 'var(--bg-tint)' } as React.CSSProperties}
+    <section className="mt-8">
+      <div className="flex items-baseline justify-between gap-3 px-2 pb-2">
+        <p className="eyebrow m-0">
+          {title}
+          <span
+            className={`ml-1.5 font-mono tracking-normal ${
+              countTone === 'warn' ? 'text-warn' : 'text-ink-soft'
+            }`}
           >
-            {course.code}
-          </button>
-        )}
-      </>
-    </SwipeRow>
+            {count}
+          </span>
+        </p>
+        {action}
+      </div>
+      <div className="overflow-hidden rounded-[14px] border border-line bg-paper">{children}</div>
+    </section>
   );
 }
