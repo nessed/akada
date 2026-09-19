@@ -26,6 +26,10 @@ into `:root` in `globals.css` so the first paint needs no correction.
 - **Backgrounds (`bg`, `bg-tint`, `paper`, `paper-2`)**: `#F5F1E8`, `#EDE7D8`,
   `#FBF8EF`, `#F7F3E6`. Warm cream throughout, cards are a lighter cream, not
   white. True `#FFFFFF` appears only in the `Stone` and `White` tones.
+  `bg-tint` is the wash a selection, an active rail item, a hover or a
+  progress track is filled with. Most of those are drawn on a `paper` card
+  rather than on the ground, so a tone's tint has to stay a readable step off
+  its `paper`, in whichever direction its ink lies.
 - **Lines (`line`, `line-soft`, `line-strong`)**: `#DDD6C2`, `#EAE4D3`,
   `#C9C0A8`. Borders and dividers resemble the faint ruled lines of a notebook
   rather than harsh digital borders.
@@ -43,6 +47,15 @@ For course categorization and tags, Akada uses a beautifully crafted palette of 
 is actually coloured with. The `--sage`…`--mauve` variables in `globals.css`
 mirror it exactly, for the places that need a pastel without owning a course.
 If the two ever disagree again, `lib/utils.ts` wins.
+
+The strong value below is the course's colour and is the same object on every
+paper. The **tint is not**: it is a wash derived from a page, and the night
+paper needs a different one, so nothing paints with the hex a course record
+stores. Fill through `resolveTint(color, tint)`, which hands back the
+`--sage-tint`…`--mauve-tint` custom property for that pastel; the stored hex
+is only ever read to recognise which pastel was meant. Painting with it
+directly is what left the night page covered in near-white blocks with cream
+writing on them.
 - **Sage**: `#A8B89B`
 - **Rose**: `#D4A5A5`
 - **Lavender**: `#B5A8C9`

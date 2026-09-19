@@ -25,7 +25,7 @@ import {
   hasDuplicateCourseCodes,
   isIsoDate,
 } from '@/lib/planner-safety';
-import { isoDate, seasonLabel } from '@/lib/utils';
+import { isoDate, resolveTint, seasonLabel } from '@/lib/utils';
 import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
 import HandCheck from '@/components/notebook/HandCheck';
 import DatePicker from '@/components/DatePicker';
@@ -525,7 +525,9 @@ function CoursesStep({
                 i === editIdx ? 'hl-swipe text-ink' : 'text-muted-soft'
               }`}
               style={
-                i === editIdx ? ({ '--hl': c.tint } as React.CSSProperties) : undefined
+                i === editIdx
+                  ? ({ '--hl': resolveTint(c.color, c.tint) } as React.CSSProperties)
+                  : undefined
               }
             >
               {c.code || `Course ${i + 1}`}

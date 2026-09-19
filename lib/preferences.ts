@@ -182,8 +182,16 @@ export const PAPER_TONES: Record<PaperTone, ToneTokens> = {
     // Warm ink on a dark page, not an inversion. The ground is a deep brown
     // charcoal rather than black, the page sits a shade above it the way a
     // card sits above the desk in daylight, and the ruled lines stay faint.
+    //
+    // `tint` is the wash a selected filter, an active rail item, a hover or a
+    // progress track is filled with, and almost all of those are drawn on a
+    // `paper` card rather than on the ground. It used to be #24211C, two
+    // points off `paper`, which meant every one of those states was simply
+    // invisible on the night page. A daylight tint steps toward the ink from
+    // the page it sits on; here the ink is the light value, so the step is
+    // upward and has to be worth roughly as much.
     bg: '#1A1815',
-    tint: '#24211C',
+    tint: '#2E2A23',
     paper: '#221F1A',
     paper2: '#1E1B17',
     line: '#35312A',
@@ -204,7 +212,9 @@ export const PAPER_TONES: Record<PaperTone, ToneTokens> = {
  * The pastels themselves are left exactly as they are, because a course owns
  * its colour (PASTEL_PALETTE in lib/utils.ts) and that colour must be the
  * same object in either light. What changes is every value derived from a
- * white page: the pastel *tints*, which were near-white washes; the alarm
+ * white page: the pastel *tints*, which were near-white washes, and which
+ * reach a course through resolveTint rather than through the daylight hex its
+ * record stores, or these overrides never touch the thing they are for; the alarm
  * ramps, which are lifted so a muted terracotta still reads as one; the
  * highlighter alphas, which have to sit under light ink instead of dark; the
  * hand-drawn underline, which was stroked in daylight ink; and the scrim.
@@ -270,6 +280,32 @@ const PRIMARY_ACCENTS: Record<
   },
 };
 
+/**
+ * What the browser paints around the page: the address bar on Android, the
+ * status bar of an installed app, the strip either side of a phone in
+ * landscape. It is not a custom property, so it goes on the meta tag rather
+ * than the root element, and the tag is ours rather than Next's: a value in
+ * the `viewport` export is React-owned and came back as the shipped cream on
+ * every client navigation, leaving a dark page in a cream frame. The
+ * bootstrap script writes the tag before the first paint; this keeps it in
+ * step, and still creates one if it is somehow missing.
+ */
+function applyThemeColor(bg: string) {
+  const tags = document.head.querySelectorAll<HTMLMetaElement>(
+    'meta[name="theme-color"]:not([media])',
+  );
+  if (tags.length === 0) {
+    const meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    meta.content = bg;
+    document.head.appendChild(meta);
+    return;
+  }
+  tags.forEach((tag) => {
+    tag.content = bg;
+  });
+}
+
 function toneVariables(tone: ToneTokens): Record<string, string> {
   return {
     '--bg': tone.bg,
@@ -331,6 +367,7 @@ export function applyPreferences(prefs: Preferences) {
   // Kept for form controls and scrollbars, which follow color-scheme rather
   // than any custom property (see the [data-theme] rule in globals.css).
   root.dataset.theme = toneKey === 'night' ? 'night' : 'light';
+  applyThemeColor(tone.bg);
 
   // Everything above is now written inline, so the pre-paint stylesheet the
   // bootstrap injected has nothing left to say.
@@ -378,14 +415,24 @@ const ACCENT_CSS: Record<PrimaryAccent, string> = {
   green: '--primary:var(--sage);--primary-contrast:var(--ink);--primary-tint:var(--sage-tint);',
 };
 
+/** The ground of each paper, for the chrome the browser draws around it. */
+const TONE_THEME_COLOR: Record<PaperTone, string> = PAPER_TONE_VALUES.reduce(
+  (acc, key) => {
+    acc[key] = PAPER_TONES[key].bg;
+    return acc;
+  },
+  {} as Record<PaperTone, string>,
+);
+
 /**
  * A tiny synchronous script for the top of the document. It reads the stored
- * record, honours the legacy dark flag the same way the app does, and appends
- * one stylesheet of custom properties. applyPreferences takes it back off once
- * React is running and the values live inline instead.
+ * record, honours the legacy dark flag the same way the app does, appends one
+ * stylesheet of custom properties, and writes the theme-color tag so the
+ * browser chrome starts on the right paper too. applyPreferences takes the
+ * stylesheet back off once React is running and the values live inline.
  */
 export const PREFERENCE_BOOTSTRAP_SCRIPT = `(function(){try{
-var T=${JSON.stringify(TONE_CSS)},D=${JSON.stringify(DENSITY_CSS)},F=${JSON.stringify(FONT_CSS)},A=${JSON.stringify(ACCENT_CSS)};
+var T=${JSON.stringify(TONE_CSS)},D=${JSON.stringify(DENSITY_CSS)},F=${JSON.stringify(FONT_CSS)},A=${JSON.stringify(ACCENT_CSS)},C=${JSON.stringify(TONE_THEME_COLOR)};
 var p={};try{p=JSON.parse(window.localStorage.getItem(${JSON.stringify(STORAGE_KEY)}))||{};}catch(e){}
 var t=p.darkMode===true?'night':(T[p.paperTone]!==undefined?p.paperTone:'paper');
 var d=D[p.density]!==undefined?p.density:'comfy';
@@ -393,7 +440,11 @@ var f=F[p.headingFont]!==undefined?p.headingFont:'fraunces';
 var a=A[p.primaryAccent]!==undefined?p.primaryAccent:'classic';
 var s=document.createElement('style');s.id=${JSON.stringify(BOOT_STYLE_ID)};
 s.textContent=':root{'+T[t]+D[d]+F[f]+A[a]+'}';
-document.head.appendChild(s);}catch(e){}})();`;
+document.head.appendChild(s);
+var m=document.head.querySelectorAll('meta[name="theme-color"]:not([media])');
+if(m.length){for(var i=0;i<m.length;i++)m[i].setAttribute('content',C[t]);}
+else{var n=document.createElement('meta');n.setAttribute('name','theme-color');n.setAttribute('content',C[t]);document.head.appendChild(n);}
+}catch(e){}})();`;
 
 /** Reads the stored record, migrations applied. Safe on the server. */
 export function readPreferences(): Preferences {

@@ -11,7 +11,14 @@ import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
 import GradeWeighting from '@/components/term/GradeWeighting';
 import type { Course, Session, Task } from '@/lib/data';
-import { formatHM, formatRelativeDate, isoDate, studyStreakDays, totalSeconds } from '@/lib/utils';
+import {
+  formatHM,
+  formatRelativeDate,
+  isoDate,
+  resolveTint,
+  studyStreakDays,
+  totalSeconds,
+} from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import HandNote from '@/components/notebook/HandNote';
@@ -405,7 +412,7 @@ export default function StatsPage() {
                 onClick={() => setFilter(c.id)}
                 label={c.code}
                 color={c.color}
-                tint={c.tint}
+                tint={resolveTint(c.color, c.tint)}
               />
             ))}
           </div>
