@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Source_Serif_4, Schibsted_Grotesk, Space_Mono } from 'next/font/google';
+import { Inter, Fraunces, JetBrains_Mono, Caveat } from 'next/font/google';
 import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import NoticeProvider from '@/components/Notice';
@@ -9,34 +9,41 @@ import PaperDoodle from '@/components/notebook/PaperDoodle';
 import { SITE_URL } from '@/lib/site-url';
 import './globals.css';
 
-// The three families the redesign runs on. Source Serif 4 carries every
-// heading and every line of prose the app speaks in; Schibsted Grotesk is the
-// structural sans; Space Mono grounds durations, dates and the clock. There is
-// no fourth family and no picker: the old Inter / Fraunces / Caveat stack, and
-// the heading-font choice that went with it, are gone.
-const sans = Schibsted_Grotesk({
+// The stack the app is drawn in. Inter sets every row, label and control;
+// Fraunces carries the headings; JetBrains Mono carries durations, dates and
+// the clock, where tabular figures matter more than character; Caveat is the
+// marginalia and nothing else.
+//
+// This is the pre-overhaul stack, restored. Source Serif 4, Schibsted Grotesk
+// and Space Mono were the editorial redesign's, and the editorial redesign is
+// what we are undoing.
+const sans = Inter({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
-  style: ['normal', 'italic'],
   variable: '--font-sans',
   display: 'swap',
 });
 
-// Optical sizing is the reason this face is here: the 52px review masthead and
-// a 13px italic aside are the same type cut two different ways.
-const serif = Source_Serif_4({
+const serif = Fraunces({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700'],
   style: ['normal', 'italic'],
-  variable: '--font-serif-family',
+  variable: '--font-fraunces',
   display: 'swap',
 });
 
-const mono = Space_Mono({
+const mono = JetBrains_Mono({
   subsets: ['latin'],
-  weight: ['400', '700'],
-  style: ['normal', 'italic'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-mono',
+  display: 'swap',
+});
+
+// Handwritten marginalia (the HandNote primitive and the font-hand utility).
+const hand = Caveat({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-hand',
   display: 'swap',
 });
 
@@ -92,7 +99,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${sans.variable} ${serif.variable} ${mono.variable}`}
+      className={`${sans.variable} ${serif.variable} ${mono.variable} ${hand.variable}`}
     >
       <body className="font-sans bg-bg text-ink antialiased">
         <PreferencesBootstrap />

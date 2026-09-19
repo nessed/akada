@@ -57,9 +57,9 @@
   --highlight-mint: #E9EEE3;
   --highlight-clay: #F4E1D2;
 
-  /* One serif, no picker. Source Serif 4 carries every heading and every line
-     of prose; --font-serif-family is what next/font wires up in layout.tsx. */
-  --font-serif: var(--font-serif-family), 'Source Serif 4', Georgia, serif;
+  /* Fraunces carries the headings. `--font-fraunces` is what next/font wires
+     up in layout.tsx; Tailwind's font-serif resolves through this variable. */
+  --font-serif: var(--font-fraunces), Georgia, serif;
 
   /* Alarm ramp, muted terracottas, never red. `warn` is the quiet tone
      (an overdue date, a course gone untouched); `priority` is for errors,

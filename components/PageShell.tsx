@@ -1,7 +1,6 @@
 'use client';
 
 import BottomNav from './BottomNav';
-import SideRail from './nav/SideRail';
 import ActiveTimerDock from './ActiveTimerDock';
 import PendingSessionLogSheet from './PendingSessionLogSheet';
 import { useReviewWaiting } from '@/lib/data-hooks';
@@ -9,49 +8,49 @@ import { useReviewWaiting } from '@/lib/data-hooks';
 interface Props {
   children: React.ReactNode;
   /**
-   * The right-hand column: the week spine, the reading backlog, where the
-   * grade stands. On a desktop it is a 374px page of its own, on a phone it
-   * falls in underneath the main column. It is the same React tree in both
-   * cases — rendered twice, an aside with a textarea in it would keep two
-   * copies of what the reader typed.
+   * The secondary column: the week spine, the reading backlog, where the grade
+   * stands. It is not a second column any more. The sheet is one centred
+   * measure at every width, so this falls in underneath the main content the
+   * way it always did on a phone.
+   *
+   * It stays a single React tree rendered once. Rendering it twice, once per
+   * breakpoint, would keep two copies of anything the reader had typed into it.
    */
   aside?: React.ReactNode;
   hideNav?: boolean;
   /**
-   * Screens that are a single reading column (settings, a course) cap their
-   * width. The month grid and the dashboard want the whole page.
+   * Kept so callers do not all have to change at once. The sheet has one
+   * measure now, so this no longer widens anything.
    */
   width?: 'full' | 'read';
 }
 
-export default function PageShell({ children, aside, hideNav, width = 'full' }: Props) {
+/**
+ * One centred sheet, a bottom bar, and nothing pinned to an edge.
+ *
+ * The editorial redesign turned this into a 74px rail on the left and a 374px
+ * spine on the right with the content wedged between them, which on a wide
+ * display left the reading column hard against the left edge and most of the
+ * screen empty. This is the pre-overhaul shell restored: more room becomes
+ * margin, not more columns.
+ *
+ * BottomNav, ActiveTimerDock and the review's undo toast mirror this width so
+ * they stay aligned with the page. Change all four together.
+ */
+export default function PageShell({ children, aside, hideNav }: Props) {
   const reviewWaiting = useReviewWaiting();
 
   return (
     <div className="min-h-[100dvh] bg-bg">
-      {!hideNav && <SideRail reviewWaiting={reviewWaiting} />}
+      <main
+        className={`mx-auto w-full max-w-2xl md:max-w-3xl px-[var(--density-gutter)] md:px-8 ${
+          hideNav ? 'pb-8' : 'pb-[calc(152px+env(safe-area-inset-bottom))]'
+        } pt-[max(env(safe-area-inset-top),48px)] md:pt-16`}
+      >
+        {children}
 
-      <div className={hideNav ? '' : 'md:pl-[74px]'}>
-        <div className="flex flex-col lg:flex-row">
-          <main
-            className={`min-w-0 flex-1 px-[var(--density-gutter)] md:px-11 ${
-              width === 'read' ? 'max-w-[900px]' : ''
-            } pt-[max(env(safe-area-inset-top),22px)] md:pt-9 ${
-              hideNav ? 'pb-10' : 'pb-[calc(140px+env(safe-area-inset-bottom))] lg:pb-14'
-            }`}
-          >
-            {children}
-          </main>
-
-          {aside && (
-            <aside
-              className="app-scroll w-full flex-none border-t border-line bg-paper-2 px-[var(--density-gutter)] pb-10 pt-8 md:px-8 lg:sticky lg:top-0 lg:h-[100dvh] lg:w-[374px] lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pb-0 lg:pt-9"
-            >
-              <div className="flex min-h-full flex-col">{aside}</div>
-            </aside>
-          )}
-        </div>
-      </div>
+        {aside && <div className="mt-12 border-t border-line pt-8">{aside}</div>}
+      </main>
 
       {!hideNav && <ActiveTimerDock />}
       <PendingSessionLogSheet />
