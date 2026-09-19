@@ -96,7 +96,7 @@ fields and buttons, 14 for panels. Hit targets are 40px and a task row is
 The app is one design read at two widths.
 
 Below `md` it is the sheet it has always been: a centred column, `BottomNav`
-along the bottom (Today, Tasks, Stats, Stamps), and the timer dock floating
+along the bottom (Today, Tasks, Stats, Record), and the timer dock floating
 at the top while a session runs.
 
 At `md` and above a **232px rail** takes over and both of those hide

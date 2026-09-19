@@ -5,6 +5,8 @@ import { readAccessToken } from '@/lib/mcp-auth';
 import { MAX_SESSION_SECONDS } from '@/lib/session-safety';
 import { SESSION_NOTE_MAX } from '@/lib/planner-safety';
 import { isoDate, startOfWeek, endOfWeek } from '@/lib/utils';
+import { readCredit } from '@/lib/progression/credit';
+import { readRuns } from '@/lib/progression/runs';
 import { mcpSupabase, mcpUrl, siteUrl } from './_shared';
 
 export const runtime = 'nodejs';
@@ -775,7 +777,7 @@ function createServer(token: AuthenticatedToken) {
     'get_weekly_stats',
     {
       title: 'Read an Akada study week',
-      description: 'Read how one week went: hours logged per course against each course’s weekly goal, tasks ticked off, and the student’s current run of consecutive studied days. `week_offset` is 0 for this week, -1 for last week. This tool never changes Akada data.',
+      description: 'Read how one week went: hours logged per course against each course’s weekly goal, tasks ticked off, and the student’s current run of consecutive counting weeks. `week_offset` is 0 for this week, -1 for last week. This tool never changes Akada data.',
       inputSchema: z.object({
         week_offset: z.number().int().min(-12).max(0).default(0),
         course_id: z.string().uuid().optional(),
@@ -805,20 +807,20 @@ function createServer(token: AuthenticatedToken) {
           return toolError('That course is not available in your active Akada semester.');
         }
 
-        // The streak needs days before this week, so sessions are read over a
+        // The run needs weeks before this one, so sessions are read over a
         // wider window than the week being reported and filtered twice.
-        const streakFloor = new Date();
-        streakFloor.setDate(streakFloor.getDate() - 120);
+        const runFloor = new Date();
+        runFloor.setDate(runFloor.getDate() - 120);
         const [{ data: sessions, error: sessionsError }, { data: tasks, error: tasksError }] = await Promise.all([
           supabase
             .from('sessions')
-            .select('course_id, date, duration_seconds, note')
+            .select('id, course_id, task_id, date, duration_seconds, note')
             .eq('user_id', token.userId)
             .eq('semester_id', semesterId)
-            .gte('date', isoDate(streakFloor)),
+            .gte('date', isoDate(runFloor)),
           supabase
             .from('tasks')
-            .select('course_id, title, completed, completed_at')
+            .select('id, course_id, title, completed, completed_at, pages')
             .eq('user_id', token.userId)
             .eq('semester_id', semesterId)
             .eq('completed', true),
@@ -835,17 +837,45 @@ function createServer(token: AuthenticatedToken) {
           secondsByCourse.set(session.course_id, (secondsByCourse.get(session.course_id) ?? 0) + Number(session.duration_seconds ?? 0));
         });
 
-        // A day counts once, however many sittings it held. Today not having
-        // been studied yet does not break a run that is otherwise intact, so
-        // the count is allowed to start at yesterday.
-        const studied = new Set((sessions ?? []).map((session) => session.date));
-        const cursor = new Date();
-        if (!studied.has(isoDate(cursor))) cursor.setDate(cursor.getDate() - 1);
-        let streak = 0;
-        while (studied.has(isoDate(cursor)) && streak < 365) {
-          streak += 1;
-          cursor.setDate(cursor.getDate() - 1);
-        }
+        // Continuity is weeks, not days, and it is read through the very
+        // same engine the app draws from rather than reimplemented here. Two
+        // implementations of a rule this fiddly is two chances to tell the
+        // student a different number than their own screen shows.
+        const runCourses = (courses ?? []).map((course) => ({
+          id: course.id,
+          code: course.code,
+          name: course.name,
+          color: '',
+          weeklyGoalHours: Number(course.weekly_goal_hours ?? 0),
+          createdAt: '',
+        }));
+        const runs = readRuns(
+          runCourses,
+          readCredit(
+            runCourses,
+            (sessions ?? []).map((session) => ({
+              id: String(session.id),
+              courseId: session.course_id,
+              taskId: session.task_id ?? null,
+              date: session.date,
+              durationSeconds: Number(session.duration_seconds ?? 0),
+              note: '',
+              createdAt: '',
+            })),
+            (tasks ?? []).map((task) => ({
+              id: String(task.id),
+              courseId: task.course_id,
+              title: task.title,
+              dueDate: null,
+              priority: 'normal' as const,
+              completed: true,
+              completedAt: task.completed_at ?? null,
+              createdAt: '',
+              pages: task.pages ?? null,
+            })),
+          ),
+          isoDate(),
+        );
 
         const closed = (tasks ?? []).filter((task) => {
           const day = typeof task.completed_at === 'string' ? task.completed_at.slice(0, 10) : '';
@@ -877,7 +907,11 @@ function createServer(token: AuthenticatedToken) {
             tasks_completed: closed.length,
           },
           tasks_completed: closed.map((task) => ({ title: task.title, course_id: task.course_id })),
-          studied_day_streak: streak,
+          // Weeks, not days. A week counts on four study days, or on three
+          // spread across three courses; margin days are the grace layer and
+          // are reported separately rather than folded into the study count.
+          weekly_run: runs.current,
+          weekly_run_best: runs.best,
         });
       } catch (cause) {
         return toolCrashed('get_weekly_stats', cause);

@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { MAX_SESSION_SECONDS, clampSessionSeconds } from './session-safety';
 import { plannerDate } from './preferences';
+import { logSessionFollowed } from './progression/log';
 
 interface TimerState {
   courseId: string;
@@ -595,6 +596,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       sessionId: `s${now}-${Math.random().toString(36).slice(2, 8)}`,
     };
     maybeRequestTimerNotificationPermission();
+    // A new sitting is what "did the line work?" means. Fails silently and
+    // does nothing at all if no Next Mark was shown recently.
+    void logSessionFollowed();
     activeRef.current = next;
     setActive(next);
     saveActive(next);
