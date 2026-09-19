@@ -12,6 +12,7 @@ import {
   totalSeconds,
 } from '@/lib/utils';
 import { isLoggableDuration } from '@/lib/session-safety';
+import { backlogPages, countdowns, readingBacklog, readingRate } from '@/lib/derive';
 import HourStrokes from '@/components/HourStrokes';
 import HandNote from '@/components/notebook/HandNote';
 
@@ -120,6 +121,95 @@ export function UpNext({ task, course, onStart, onDone, onSnooze, onOpen }: UpNe
           Tomorrow
         </button>
       </div>
+    </section>
+  );
+}
+
+/* ── Coming ────────────────────────────────────────────────────────────── */
+
+/**
+ * What the kind column is for.
+ *
+ * A dated task and a dated exam are not the same news, and a list sorted
+ * purely by date buries the midterm under tomorrow's problem set. This says
+ * what is coming that actually carries weight, and what reading has piled up
+ * behind it, in pages and in the hours those pages have historically cost.
+ *
+ * It draws nothing at all when nothing has a kind or a weight, which is the
+ * state every account starts in. Today does not grow an empty box to prove a
+ * feature exists.
+ */
+export function ComingPanel({
+  tasks,
+  courses,
+  sessions,
+  onOpen,
+}: {
+  tasks: Task[];
+  courses: Course[];
+  sessions: Session[];
+  onOpen?: (task: Task) => void;
+}) {
+  const today = isoDate();
+  const coming = useMemo(() => countdowns(tasks, courses, today), [tasks, courses, today]);
+  const backlog = useMemo(() => readingBacklog(tasks), [tasks]);
+  const pages = useMemo(() => backlogPages(tasks), [tasks]);
+  const rate = useMemo(() => readingRate(tasks, sessions), [tasks, sessions]);
+
+  if (coming.length === 0 && pages === 0) return null;
+
+  return (
+    <section className="rounded-[14px] border border-line bg-paper p-5">
+      <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+        <p className="eyebrow m-0">Coming</p>
+        {coming.length > 0 && (
+          <span className="font-mono text-[11px] text-muted">
+            next {coming.length === 1 ? 'one' : coming.length}
+          </span>
+        )}
+      </div>
+
+      {coming.map(({ task, course, days }) => (
+        <button
+          key={task.id}
+          type="button"
+          onClick={() => onOpen?.(task)}
+          className="-mx-2 flex w-[calc(100%+1rem)] items-baseline gap-2.5 rounded-[8px] border-b border-line-soft px-2 py-2.5 text-left transition-colors last:border-b-0 hover:bg-bg-tint"
+        >
+          <span className="min-w-0 flex-1">
+            {/* Course, what it is and what it is worth all ride the eyebrow,
+                so the countdown is the only thing on the right and the title
+                keeps the width it needs. */}
+            <span className="eyebrow block truncate" style={{ color: course?.color }}>
+              {course?.code ?? '—'}
+              {task.kind === 'exam' && <span className="ml-1.5 text-warn">exam</span>}
+              {(task.weight ?? 0) > 0 && (
+                <span className="ml-1.5 text-muted">{Math.round(task.weight as number)}%</span>
+              )}
+            </span>
+            <span className="mt-0.5 block truncate text-[13px] text-ink">{task.title}</span>
+          </span>
+          <span
+            className={`tnum shrink-0 font-mono text-[13px] font-semibold ${
+              days <= 2 ? 'text-warn' : 'text-ink'
+            }`}
+          >
+            {days === 0 ? 'today' : days === 1 ? '1 day' : `${days} days`}
+          </span>
+        </button>
+      ))}
+
+      {pages > 0 && (
+        <p
+          className={`m-0 font-serif text-[13px] italic leading-[1.5] text-muted ${
+            coming.length > 0 ? 'mt-3.5 border-t border-line-soft pt-3.5' : 'mt-3'
+          }`}
+        >
+          {pages} pages of reading still open across {backlog.length}{' '}
+          {backlog.length === 1 ? 'reading' : 'readings'}, about{' '}
+          {formatHM(Math.round((pages / rate) * 3600))} at {rate} pages an hour.
+        </p>
+      )}
     </section>
   );
 }

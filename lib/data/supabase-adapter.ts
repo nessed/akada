@@ -213,7 +213,57 @@ const COURSE_ORDER_UNAVAILABLE =
 export class SupabaseAdapter implements DataProvider {
   private supabase = createClient();
 
-  private async userId(): Promise<string> {
+  /**
+   * Who is signed in, and which term they are studying, answered once.
+   *
+   * Every read on this adapter used to start with `auth.getSession()` and a
+   * `user_settings` lookup of its own. A dashboard opens six reads at once,
+   * so that was six identical `user_settings` queries plus six trips through
+   * Supabase's auth lock, which serializes them — courses, tasks, sessions
+   * and semesters queueing one behind the other, about seven seconds to
+   * first paint.
+   *
+   * The promise is cached rather than the value, so six callers in the same
+   * tick share one request instead of racing to fill the cache. A rejection
+   * is never kept: a read that failed because the network was down has to be
+   * allowed to succeed on the next try.
+   */
+  private cachedUserId: Promise<string> | null = null;
+  private cachedSemesterId: Promise<string> | null = null;
+  private cachedSemesterFor: string | null = null;
+
+  constructor() {
+    // A user id that outlived its session would read one account's rows
+    // under another's, so any change in who is signed in throws both away.
+    // A token refresh is the same person and keeps them.
+    this.supabase.auth.onAuthStateChange((event) => {
+      if (event !== 'TOKEN_REFRESHED') this.forget();
+    });
+  }
+
+  private forget() {
+    this.cachedUserId = null;
+    this.cachedSemesterId = null;
+    this.cachedSemesterFor = null;
+  }
+
+  /** Remembers a semester this adapter just made active, saving a re-read. */
+  private rememberSemester(uid: string, semesterId: string) {
+    this.cachedSemesterFor = uid;
+    this.cachedSemesterId = Promise.resolve(semesterId);
+  }
+
+  private userId(): Promise<string> {
+    if (this.cachedUserId) return this.cachedUserId;
+    const pending = this.readUserId();
+    this.cachedUserId = pending;
+    pending.catch(() => {
+      if (this.cachedUserId === pending) this.cachedUserId = null;
+    });
+    return pending;
+  }
+
+  private async readUserId(): Promise<string> {
     const { data: { session } } = await this.supabase.auth.getSession();
     if (session?.user) return session.user.id;
 
@@ -239,7 +289,23 @@ export class SupabaseAdapter implements DataProvider {
    * onboarding starts, or an old account mid-migration, gets a blank one
    * created and activated rather than being locked out of adding a course.
    */
-  private async activeSemesterId(uid: string): Promise<string> {
+  private activeSemesterId(uid: string): Promise<string> {
+    if (this.cachedSemesterId && this.cachedSemesterFor === uid) return this.cachedSemesterId;
+    const pending = this.resolveActiveSemesterId(uid);
+    this.cachedSemesterFor = uid;
+    this.cachedSemesterId = pending;
+    pending.catch(() => {
+      if (this.cachedSemesterId === pending) this.forgetSemester();
+    });
+    return pending;
+  }
+
+  private forgetSemester() {
+    this.cachedSemesterId = null;
+    this.cachedSemesterFor = null;
+  }
+
+  private async resolveActiveSemesterId(uid: string): Promise<string> {
     const existing = await this.readActiveSemesterId(uid);
     if (existing) return existing;
     const created = await this.createSemesterFor(uid, {});
@@ -670,6 +736,7 @@ export class SupabaseAdapter implements DataProvider {
       { onConflict: 'user_id' },
     );
     if (settingsError) throw settingsError;
+    this.rememberSemester(uid, created.id);
 
     return rowToSemester(created, created.id);
   }
@@ -730,6 +797,7 @@ export class SupabaseAdapter implements DataProvider {
         { onConflict: 'user_id' },
       );
       if (settingsError) throw settingsError;
+      this.rememberSemester(uid, nextActive.id);
     }
 
     const { error } = await this.supabase
@@ -810,6 +878,9 @@ export class SupabaseAdapter implements DataProvider {
     await this.supabase.from('courses').delete().eq('user_id', uid);
     await this.supabase.from('semesters').delete().eq('user_id', uid);
     await this.supabase.from('user_settings').delete().eq('user_id', uid);
+    // The remembered semester id now names a row that is gone. The next read
+    // re-reads, finds nothing, and the self-healing path makes a fresh term.
+    this.forgetSemester();
   }
 
   async deleteAccount(): Promise<void> {
@@ -818,6 +889,7 @@ export class SupabaseAdapter implements DataProvider {
     // auth.uid() and nothing else, and the FK cascades do the rest.
     const { error } = await this.supabase.rpc('delete_own_account');
     if (error) throw new Error(error.message || 'Could not delete the account.');
+    this.forget();
     await this.supabase.auth.signOut();
   }
 }

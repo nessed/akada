@@ -13,7 +13,7 @@ import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskRow from '@/components/TaskRow';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
-import type { Task } from '@/lib/data';
+import type { Task, TaskKind } from '@/lib/data';
 import { formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
@@ -37,6 +37,12 @@ const FILTERS: { v: Filter; l: string }[] = [
   { v: 'today', l: 'Today' },
   { v: 'week', l: 'This week' },
   { v: 'done', l: 'Done' },
+];
+
+const KINDS: { v: TaskKind; l: string }[] = [
+  { v: 'task', l: 'Task' },
+  { v: 'reading', l: 'Reading' },
+  { v: 'exam', l: 'Exam' },
 ];
 
 const BULK_BUTTON =
@@ -92,6 +98,9 @@ function TasksPageContent() {
   const [editCourseId, setEditCourseId] = useState('');
   const [editDue, setEditDue] = useState('');
   const [editHigh, setEditHigh] = useState(false);
+  const [editKind, setEditKind] = useState<TaskKind>('task');
+  const [editWeight, setEditWeight] = useState('');
+  const [editPages, setEditPages] = useState('');
   const handledTaskIntent = useRef(false);
 
   useEffect(() => {
@@ -405,6 +414,9 @@ function TasksPageContent() {
     setEditCourseId(task.courseId);
     setEditDue(task.dueDate || '');
     setEditHigh(task.priority === 'high');
+    setEditKind(task.kind ?? 'task');
+    setEditWeight(task.weight == null ? '' : String(task.weight));
+    setEditPages(task.pages == null ? '' : String(task.pages));
   }
 
   async function saveEditTask() {
@@ -418,6 +430,12 @@ function TasksPageContent() {
         courseId: editCourseId,
         dueDate: editDue || null,
         priority: editHigh ? 'high' : 'normal',
+        kind: editKind,
+        weight: numberOrNull(editWeight),
+        // Pages only mean anything on a reading, and leaving a stale count on
+        // a row someone has just retyped as an exam would make the backlog
+        // claim hours that are not there.
+        pages: editKind === 'reading' ? numberOrNull(editPages) : null,
       });
       setEditingTask(null);
     } catch (error) {
@@ -836,6 +854,56 @@ function TasksPageContent() {
               <DatePicker value={editDue} onChange={setEditDue} placeholder="Due date" />
             </div>
 
+            {/* What this row actually is. A reading carries pages, anything
+                graded carries a weight, a plain task carries neither — and
+                plain is the default, so nothing already written down changes
+                meaning by this existing. */}
+            <div className="mt-2.5 flex items-center gap-2">
+              <div className="flex h-11 flex-1 items-center rounded-[10px] border border-line bg-paper p-1">
+                {KINDS.map((kind) => (
+                  <button
+                    key={kind.v}
+                    type="button"
+                    onClick={() => setEditKind(kind.v)}
+                    aria-pressed={editKind === kind.v}
+                    className={`h-9 flex-1 rounded-[7px] text-[13px] transition-colors ${
+                      editKind === kind.v
+                        ? 'bg-bg-tint font-medium text-ink'
+                        : 'bg-transparent text-muted hover:text-ink'
+                    }`}
+                  >
+                    {kind.l}
+                  </button>
+                ))}
+              </div>
+
+              {editKind === 'reading' && (
+                <label className="flex h-11 w-[92px] shrink-0 items-center gap-1 rounded-[10px] border border-line bg-paper px-3">
+                  <input
+                    value={editPages}
+                    onChange={(e) => setEditPages(e.target.value.replace(/[^\d]/g, ''))}
+                    inputMode="numeric"
+                    placeholder="—"
+                    aria-label="Pages"
+                    className="w-full min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[14px] text-ink outline-none placeholder:text-muted-soft"
+                  />
+                  <span aria-hidden className="font-mono text-[11px] text-muted">pp</span>
+                </label>
+              )}
+
+              <label className="flex h-11 w-[80px] shrink-0 items-center gap-1 rounded-[10px] border border-line bg-paper px-3">
+                <input
+                  value={editWeight}
+                  onChange={(e) => setEditWeight(e.target.value.replace(/[^\d.]/g, ''))}
+                  inputMode="decimal"
+                  placeholder="—"
+                  aria-label="Worth, as a percentage of the course grade"
+                  className="w-full min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[14px] text-ink outline-none placeholder:text-muted-soft"
+                />
+                <span aria-hidden className="font-mono text-[11px] text-muted">%</span>
+              </label>
+            </div>
+
             <div className="mt-4 flex gap-2.5">
               <button
                 type="button"
@@ -906,7 +974,11 @@ function TasksPageContent() {
                 {viewingTask.title}
               </h2>
 
-              {(viewingTask.completed || viewingTask.priority === 'high' || viewingTask.dueDate) && (
+              {(viewingTask.completed ||
+                viewingTask.priority === 'high' ||
+                viewingTask.dueDate ||
+                viewingTask.kind !== 'task' ||
+                (viewingTask.weight ?? 0) > 0) && (
                 <div className="mt-3.5 flex flex-wrap items-center gap-3">
                   {viewingTask.completed ? (
                     <Stamp style={course ? { color: course.color } : undefined}>Done</Stamp>
@@ -922,6 +994,21 @@ function TasksPageContent() {
                       )}
                       <DueDateBadge dueDate={viewingTask.dueDate} size="md" />
                     </>
+                  )}
+                  {/* What it is and what it is worth, in the margin the way a
+                      mark would be, rather than as a row of chips. */}
+                  {viewingTask.kind && viewingTask.kind !== 'task' && (
+                    <span className="eyebrow text-muted">
+                      {viewingTask.kind}
+                      {viewingTask.kind === 'reading' && viewingTask.pages
+                        ? ` · ${viewingTask.pages}pp`
+                        : ''}
+                    </span>
+                  )}
+                  {(viewingTask.weight ?? 0) > 0 && (
+                    <span className="font-mono text-[11px] text-muted">
+                      worth {Math.round(viewingTask.weight as number)}% of {course?.code ?? 'the course'}
+                    </span>
                   )}
                 </div>
               )}
@@ -1100,6 +1187,13 @@ function TasksPageContent() {
       )}
     </PageShell>
   );
+}
+
+/** An empty numeric field means "not set", which is not the same as zero. */
+function numberOrNull(value: string): number | null {
+  if (!value.trim()) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function TasksPageFallback() {

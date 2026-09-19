@@ -77,6 +77,7 @@ export default function TaskRow({
 
   const due = dueLabel(task.dueDate);
   const color = course?.color ?? 'var(--muted)';
+  const mark = kindMark(task);
 
   const row = (
     <div
@@ -134,6 +135,14 @@ export default function TaskRow({
         >
           {task.title}
         </button>
+        {mark && !running && (
+          <span
+            className="hidden shrink-0 pr-3.5 font-mono text-[10px] tracking-[0.04em] text-muted md:inline"
+            title={mark.title}
+          >
+            {mark.label}
+          </span>
+        )}
         {running && (
           <span
             className="shrink-0 font-mono text-[11px] tabular-nums"
@@ -274,6 +283,34 @@ export default function TaskRow({
       {row}
     </SwipeRow>
   );
+}
+
+/**
+ * What a row is, when it is not just a task: an exam, the pages of a reading,
+ * or what a piece is worth. One mark rather than three, because the row has
+ * 40-odd characters of title to protect and this is the margin note beside
+ * it, not a column. Hidden on a phone, where the title already crowds the
+ * date.
+ */
+function kindMark(task: Task): { label: string; title: string } | null {
+  const weight = task.weight ?? 0;
+  if (task.kind === 'exam') {
+    return {
+      label: weight > 0 ? `EXAM ${trim(weight)}%` : 'EXAM',
+      title: weight > 0 ? `Exam, worth ${trim(weight)}% of the course` : 'Exam',
+    };
+  }
+  if (task.kind === 'reading' && task.pages) {
+    return { label: `${task.pages}pp`, title: `Reading, ${task.pages} pages` };
+  }
+  if (weight > 0) {
+    return { label: `${trim(weight)}%`, title: `Worth ${trim(weight)}% of the course` };
+  }
+  return null;
+}
+
+function trim(value: number): string {
+  return String(Math.round(value * 10) / 10);
 }
 
 function MenuItem({

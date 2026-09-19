@@ -16,6 +16,7 @@ import Stamp from '@/components/notebook/Stamp';
 import { useNotice } from '@/components/Notice';
 import CourseSessionLog from '@/components/course/CourseSessionLog';
 import CourseWeekCard from '@/components/course/CourseWeekCard';
+import GradeStanding from '@/components/course/GradeStanding';
 import { useArchivedCourse } from '@/components/course/useArchivedCourse';
 import type { Course, Session, Task } from '@/lib/data';
 import { cleanTaskTitle } from '@/lib/planner-safety';
@@ -107,8 +108,13 @@ export default function CoursePage() {
 
   const log = useMemo(() => sortNewestFirst(courseSessions), [courseSessions]);
 
+  const courseTasks = useMemo(
+    () => tasks.filter((task) => task.courseId === courseId),
+    [tasks, courseId],
+  );
+
   const { open, done } = useMemo(() => {
-    const mine = tasks.filter((task) => task.courseId === courseId);
+    const mine = courseTasks;
     return {
       open: mine
         .filter((task) => !task.completed)
@@ -120,7 +126,7 @@ export default function CoursePage() {
         .filter((task) => task.completed)
         .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || '')),
     };
-  }, [tasks, courseId]);
+  }, [courseTasks]);
 
   function goBack() {
     // The course list lives on the dashboard, so that is where "back" means,
@@ -488,8 +494,10 @@ export default function CoursePage() {
           </section>
         </div>
 
-        <aside className="grid gap-4 lg:sticky lg:top-10">
+        <aside className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">
           <CourseWeekCard course={course} sessions={courseSessions} onGoalChange={saveGoal} />
+
+          <GradeStanding course={course} tasks={courseTasks} today={today} />
 
           {/* The hours. The full log, and deleting from it, stay on Stats. */}
           <section className="rounded-[14px] border border-line bg-paper p-5">

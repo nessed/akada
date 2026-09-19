@@ -9,8 +9,9 @@ import SwipeRow from '@/components/SwipeRow';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import Heatmap from '@/components/Heatmap';
 import WeeklyChart from '@/components/WeeklyChart';
+import GradeWeighting from '@/components/term/GradeWeighting';
 import type { Course, Session, Task } from '@/lib/data';
-import { formatHM, formatRelativeDate, studyStreakDays, totalSeconds } from '@/lib/utils';
+import { formatHM, formatRelativeDate, isoDate, studyStreakDays, totalSeconds } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import HandNote from '@/components/notebook/HandNote';
@@ -429,7 +430,7 @@ export default function StatsPage() {
 
         {/* The aside: what the week came to, per course, and the marks it
             earned. On a phone it simply follows the charts. */}
-        <aside className="grid gap-4 lg:sticky lg:top-10">
+        <aside className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">
       {/* Totals, deckle card with hand-drawn trend arrows */}
       <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
         <h2 className="m-0 mb-1.5 font-serif font-medium text-[20px]">Hours by course</h2>
@@ -530,6 +531,8 @@ export default function StatsPage() {
           })}
         </div>
       </section>
+
+      <GradeWeighting courses={courses} tasks={tasks} today={isoDate()} />
 
       {/* Achievements live on Stamps now. A second, differently worded copy
           here was two readings of the same sessions with two chances to

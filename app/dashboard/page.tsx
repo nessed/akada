@@ -8,6 +8,7 @@ import CourseCard from '@/components/CourseCard';
 import TaskRow from '@/components/TaskRow';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import {
+  ComingPanel,
   CoursesWeekPanel,
   TodayHours,
   UpNext,
@@ -878,11 +879,17 @@ function DashboardPageContent() {
 
           {/* The right column: the day, the week, the courses against their
               goals, and the two numbers that only matter in passing. */}
-          <aside className="grid gap-4 lg:sticky lg:top-10">
+          <aside className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">
             <TodayHours
               sessions={sessions}
               courses={courses}
               goalHours={settings?.dailyGoalHours ?? 4}
+            />
+            <ComingPanel
+              tasks={tasks}
+              courses={courses}
+              sessions={sessions}
+              onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
             />
             <WeekPanel sessions={sessions} courses={courses} goalHours={weeklyGoalHours} />
             <CoursesWeekPanel
