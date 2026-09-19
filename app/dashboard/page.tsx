@@ -672,12 +672,15 @@ function DashboardPageContent() {
   const urgentTasks = [...overdueTasks, ...todayTasks].slice(0, 5);
   const streak = studyStreakDays(sessions);
   const now = new Date();
-  const dateLine = now.toLocaleDateString(undefined, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  /* "Sat, Sep 19, 2026" is how a receipt writes a date. The app writes it
+     the way a diary does, so the parts are assembled rather than handed to
+     toLocaleDateString whole. */
+  const dateLine = [
+    now.toLocaleDateString(undefined, { weekday: 'short' }),
+    now.getDate(),
+    now.toLocaleDateString(undefined, { month: 'short' }),
+    now.getFullYear(),
+  ].join(' ');
   /* The one task the screen asks for: oldest overdue first, then what is due
      today, then whatever is nearest. Sorting by due date alone would put a
      task due today above one that has been overdue for a fortnight. */

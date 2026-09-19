@@ -106,7 +106,7 @@ export default function LandingPage() {
                 href="/auth"
                 className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-line-strong"
               >
-                Log in
+                Sign in
               </Link>
               <Link
                 href="/auth?mode=signup"
@@ -123,7 +123,7 @@ export default function LandingPage() {
           <div className="mt-12 grid items-center gap-12 sm:mt-16 lg:grid-cols-[minmax(0,1fr)_430px]">
             <div className="min-w-0">
               <p className="eyebrow m-0">Study planner</p>
-              <h1 className="m-0 mt-4 font-serif text-[40px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[54px]">
+              <h1 className="m-0 mt-4 font-serif text-[36px] font-medium leading-[1.05] tracking-[-0.03em] sm:text-[44px]">
                 Courses, tasks, hours.
                 <br />
                 One term at a time.
@@ -201,8 +201,8 @@ export default function LandingPage() {
               color={SAGE.value}
               depth={9}
               tripleP={0.3}
-              trunkWidth={26}
-              padTop={48}
+              trunkWidth={13}
+              padTop={24}
               widthFill={0.92}
               className="absolute inset-0 h-full w-full"
             />

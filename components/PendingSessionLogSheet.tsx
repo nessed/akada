@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { addSessionOptimistic, useCourses } from '@/lib/data-hooks';
+import {
+  addSessionOptimistic,
+  updateTaskOptimistic,
+  useCourses,
+  useTasks,
+} from '@/lib/data-hooks';
 import { useTimer } from '@/lib/timer-context';
 import { isoDate } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
@@ -14,6 +19,7 @@ interface Props {
 export default function PendingSessionLogSheet({ onResolved }: Props) {
   const { pendingLog, clearPendingLog } = useTimer();
   const { courses, isLoading: coursesLoading } = useCourses();
+  const { tasks } = useTasks();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -25,6 +31,12 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
         ? courses.find((item) => item.id === pendingLog.courseId) ?? null
         : null,
     [courses, pendingLog],
+  );
+
+  const task = useMemo(
+    () =>
+      pendingLog?.taskId ? tasks.find((item) => item.id === pendingLog.taskId) ?? null : null,
+    [pendingLog, tasks],
   );
 
   useEffect(() => {
@@ -55,7 +67,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     }
   }, [clearPendingLog, course, courses.length, coursesLoading, onResolved, pendingLog]);
 
-  async function handleSave(note: string) {
+  async function handleSave(note: string, markTaskDone: boolean) {
     if (!pendingLog) return;
     setSaveError('');
     if (!online) {
@@ -76,6 +88,18 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
         durationSeconds,
         note,
       });
+      // The session is what must not be lost, so it is written first and a
+      // failure to tick the task off afterwards does not undo it.
+      if (markTaskDone && task && !task.completed) {
+        try {
+          await updateTaskOptimistic(task.id, {
+            completed: true,
+            completedAt: new Date().toISOString(),
+          });
+        } catch (error) {
+          console.error('Failed to complete the task:', error);
+        }
+      }
       setOpen(false);
       clearPendingLog();
       onResolved?.();
@@ -98,6 +122,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     <SessionLogModal
       open={open}
       course={course}
+      task={task}
       durationSeconds={pendingLog?.durationSeconds ?? 0}
       saving={saving}
       contextMessage={

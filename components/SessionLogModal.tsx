@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Course } from '@/lib/data';
+import type { Course, Task } from '@/lib/data';
 import { formatHHMMSS } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import HandCheck from '@/components/notebook/HandCheck';
@@ -14,17 +14,20 @@ const REFLECTION_TAGS = ['focused', 'distracted', 'reading', 'writing', 'practic
 interface Props {
   open: boolean;
   course: Course | null;
+  /** The task the session was against, when it was against one. */
+  task?: Task | null;
   durationSeconds: number;
   saving?: boolean;
   errorMessage?: string;
   contextMessage?: string;
   onCancel: () => void;
-  onSave: (note: string) => void;
+  onSave: (note: string, markTaskDone: boolean) => void;
 }
 
 export default function SessionLogModal({
   open,
   course,
+  task = null,
   durationSeconds,
   saving = false,
   errorMessage = '',
@@ -33,10 +36,17 @@ export default function SessionLogModal({
   onSave,
 }: Props) {
   const [note, setNote] = useState('');
+  const [markDone, setMarkDone] = useState(false);
   const sheetRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (open) setNote('');
+    if (open) {
+      setNote('');
+      // Never pre-ticked. Finishing a block is not the same as finishing the
+      // chapter, and a box that arrives ticked gets confirmed without being
+      // read.
+      setMarkDone(false);
+    }
   }, [open]);
 
   // Opening a sheet without moving focus into it leaves a keyboard or screen
@@ -122,6 +132,30 @@ export default function SessionLogModal({
           <p className="mt-2 text-[12px] leading-[1.45] text-muted">{contextMessage}</p>
         )}
 
+        {/* What the session was against, and the one thing worth asking at
+            the end of it. */}
+        {task && (
+          <button
+            type="button"
+            onClick={() => setMarkDone((v) => !v)}
+            role="switch"
+            aria-checked={markDone}
+            className="mt-4 flex w-full items-center gap-3 rounded-[10px] border border-line bg-transparent px-3 py-2.5 text-left transition-colors hover:bg-paper-2"
+          >
+            <span
+              aria-hidden
+              className="scribble-box grid h-[21px] w-[21px] shrink-0 place-items-center"
+              style={{ borderColor: markDone ? 'var(--ink)' : 'var(--line-strong)' }}
+            >
+              {markDone && <HandCheck size={14} color="var(--ink)" strokeWidth={1.7} />}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[14px] text-ink">Mark the task done</span>
+              <span className="mt-0.5 block truncate text-[12px] text-muted">{task.title}</span>
+            </span>
+          </button>
+        )}
+
         <div className="mt-4">
           <label htmlFor="session-log-note" className="eyebrow m-0 mb-2 block">
             What did you do?
@@ -179,7 +213,7 @@ export default function SessionLogModal({
           <button
             type="button"
             disabled={!canSave}
-            onClick={() => onSave(note)}
+            onClick={() => onSave(note, markDone)}
             className="flex-1 min-h-[50px] py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-35"
           >
             <HandCheck size={14} color="currentColor" />

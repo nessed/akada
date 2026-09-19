@@ -307,7 +307,7 @@ export default function AuthPage() {
             disabled={state === 'loading'}
             className="bg-transparent border-0 cursor-pointer font-serif italic text-[14px] text-ink underline underline-offset-4 decoration-line-strong"
           >
-            {isSignUp ? 'Log in' : 'Create account'}
+            {isSignUp ? 'Sign in' : 'Create account'}
           </button>
         </div>
       </div>

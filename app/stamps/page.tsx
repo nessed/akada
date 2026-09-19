@@ -238,7 +238,12 @@ function StampCard({ stamp }: { stamp: Stamp }) {
       }`}
     >
       <span
-        className="grid h-[68px] w-[68px] place-items-center rounded-full font-serif text-[17px] italic"
+        className={`grid h-[68px] w-[68px] place-items-center rounded-full px-1 text-center font-serif italic ${
+          // "33 / 100h" wrapped to two lines inside the ring at the full size.
+          (stamp.earned ? stamp.mark : (stamp.progress ?? stamp.mark)).length > 6
+            ? 'text-[12px] leading-[1.2]'
+            : 'text-[17px]'
+        }`}
         style={
           stamp.earned
             ? { border: '1.6px solid var(--ink)', color: 'var(--ink)' }

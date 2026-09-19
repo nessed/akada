@@ -76,19 +76,26 @@ export default function SettingsPage() {
     }
   }, [settings]);
 
-  // The address is only ever shown, never edited here, so it is read once
-  // rather than held in a hook that would re-run on every preference change.
+  /* The address is only ever shown, never edited here, so it is read once
+     rather than held in a hook that would re-run on every preference change.
+     createClient() throws outright when the app is running on the local
+     adapter with no Supabase configured, and it is called here on mount
+     rather than from a click, so it has to be inside the try: an unhandled
+     throw in an effect takes the whole page down. */
   useEffect(() => {
     let cancelled = false;
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => {
-        if (!cancelled) setEmail(data.user?.email ?? '');
-      })
-      .catch(() => {
-        // Signed out, or offline on the local adapter. The header just
-        // carries the name in that case.
-      });
+    try {
+      createClient()
+        .auth.getUser()
+        .then(({ data }) => {
+          if (!cancelled) setEmail(data.user?.email ?? '');
+        })
+        .catch(() => {
+          // Signed out. The header just carries the name in that case.
+        });
+    } catch {
+      // No backend configured. Same outcome: no address to show.
+    }
     return () => {
       cancelled = true;
     };
@@ -137,6 +144,7 @@ export default function SettingsPage() {
     try {
       await createClient().auth.signOut();
     } catch {
+      // Includes the local adapter, where there is no Supabase to sign out of.
       // Falls through either way: a failed server sign-out must not leave
       // someone stuck signed in on this device.
     }

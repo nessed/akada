@@ -80,12 +80,12 @@ export default function TaskRow({
 
   const row = (
     <div
-      className={`group relative grid h-12 items-center border-b border-line-soft pl-1 pr-2 text-ink transition-colors last:border-b-0 ${
-        selected ? 'bg-bg-tint' : 'bg-paper md:bg-transparent md:hover:bg-paper-2'
+      className={`group relative grid h-12 items-center gap-x-2 border-b border-line-soft pl-1 pr-2 text-ink transition-colors last:border-b-0 md:gap-x-0 ${
+        selected ? 'bg-bg-tint' : 'bg-paper hover:bg-paper-2'
       } ${task.completed ? 'opacity-50' : ''} ${
         hideCourse
-          ? 'grid-cols-[40px_minmax(0,1fr)_96px_44px] md:grid-cols-[40px_minmax(0,1fr)_128px_88px]'
-          : 'grid-cols-[40px_minmax(0,1fr)_96px_44px] md:grid-cols-[40px_minmax(0,1fr)_132px_128px_88px]'
+          ? 'grid-cols-[40px_minmax(0,1fr)_78px_40px] md:grid-cols-[40px_minmax(0,1fr)_128px_88px]'
+          : 'grid-cols-[40px_minmax(0,1fr)_78px_40px] md:grid-cols-[40px_minmax(0,1fr)_132px_128px_88px]'
       }`}
       style={{
         boxShadow: focused ? 'inset 0 0 0 1.5px var(--ink)' : undefined,
@@ -157,7 +157,7 @@ export default function TaskRow({
       )}
 
       <span
-        className={`tnum font-mono text-[11px] tracking-[0.02em] ${
+        className={`tnum font-mono text-[10px] tracking-[0.02em] md:text-[11px] ${
           due?.category === 'overdue'
             ? 'text-warn'
             : due?.category === 'today'
@@ -269,7 +269,7 @@ export default function TaskRow({
       accent={color}
       onComplete={task.completed ? undefined : () => onToggle(task)}
       onDelete={onDelete ? () => onDelete(task) : undefined}
-      surfaceClassName="relative"
+      surfaceClassName="relative bg-paper"
     >
       {row}
     </SwipeRow>

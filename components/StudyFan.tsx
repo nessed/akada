@@ -13,7 +13,9 @@ interface Props {
   /** How many splits deep. 7 inside the block frame, 10 for an open screen. */
   depth?: number;
   tripleP?: number;
+  /** Stem thickness in CSS pixels; every branch scales down from it. */
   trunkWidth?: number;
+  /** Headroom above the fan at full growth, in CSS pixels. */
   padTop?: number;
   widthFill?: number;
   baseOffset?: number;
@@ -36,8 +38,8 @@ export default function StudyFan({
   color = '#A8B89B',
   depth = 7,
   tripleP = 0.2,
-  trunkWidth = 22,
-  padTop = 90,
+  trunkWidth = 11,
+  padTop = 45,
   widthFill = 0.86,
   baseOffset = -2,
   light = false,

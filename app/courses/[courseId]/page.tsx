@@ -352,7 +352,7 @@ export default function CoursePage() {
             )}
           </p>
           <p className="m-0 mt-2 text-[11px] text-muted">
-            {done.length} finished so far
+            {done.length > 0 ? `${done.length} finished so far` : 'Nothing finished yet'}
           </p>
         </div>
 
@@ -620,12 +620,18 @@ function sortNewestFirst(sessions: Session[]): Session[] {
 }
 
 /** Only what the catalog actually supplied; a typed-in course has no rows. */
+/**
+ * The catalog line under the course code. `label` is for the archived view,
+ * which still sets these out as a list; `value` carries its own unit, because
+ * run together on one line a bare "4" beside a section number reads as
+ * neither. Only what the course actually has appears.
+ */
 function catalogDetails(course: Course): { label: string; value: string }[] {
   const rows: { label: string; value: string }[] = [];
   if (typeof course.credits === 'number' && course.credits > 0) {
-    rows.push({ label: 'Credits', value: String(course.credits) });
+    rows.push({ label: 'Credits', value: `${course.credits} cr` });
   }
-  if (course.section) rows.push({ label: 'Section', value: course.section });
+  if (course.section) rows.push({ label: 'Section', value: `Sec ${course.section}` });
   if (course.instructor) rows.push({ label: 'Taught by', value: course.instructor });
   if (course.meetingTime) rows.push({ label: 'Meets', value: course.meetingTime });
   return rows;

@@ -78,12 +78,68 @@ the timer's display caption keep their own letterspacing.
 
 ### Type scale
 Two title tiers, so a screen title is recognisable as one:
-- **Screen title**, `text-[36px]` at `tracking-[-0.025em]`, serif.
+- **Screen title**, `text-[36px]` at `tracking-[-0.025em]`, serif, dropping
+  to `32px` on phone.
 - **Section heading**, `text-[17px]`/`text-[20px]`, serif medium.
 
-Two deliberate exceptions: the stats masthead is `52px`, which is the one
-editorial flourish in the app, and the dashboard's date is `32px` because it
-is a date rather than a title. Everything else follows the tiers.
+One deliberate exception: the stats masthead is `52px`, which is the one
+editorial flourish in the app. Every screen title now sits under a line of
+mono at `12px` carrying the date, the week and the counts, rather than
+turning that information into the title.
+
+Scales the desktop screens are built on: type 10 / 11 / 12 / 13 / 14 / 17 /
+20 / 28 / 36; space 4 / 8 / 12 / 16 / 24 / 32 / 48; radii 4 for marks, 10 for
+fields and buttons, 14 for panels. Hit targets are 40px and a task row is
+48px.
+
+### Layout: the rail and the sheet
+The app is one design read at two widths.
+
+Below `md` it is the sheet it has always been: a centred column, `BottomNav`
+along the bottom (Today, Tasks, Stats, Stamps), and the timer dock floating
+at the top while a session runs.
+
+At `md` and above a **232px rail** takes over and both of those hide
+themselves. The rail carries the five screens, the term's courses under them
+in the order the dashboard was dragged into, the timer, and Settings. It
+collapses to a 64px strip of icons, the choice is remembered, and `PageShell`
+mirrors its width so the content recentres rather than staying pinned to a
+phone column in the middle of a 1440px screen. Pages that lay themselves out
+in two columns pass `wide` to opt out of the phone measure.
+
+Two things follow from the rail. Settings is a **page** on desktop, because a
+modal reached from a permanent nav item is a screen pretending to be an
+interruption; the sheet is still what phone gets. And the
+`FloatingActionButton` is gone: "New task" lives in the page header, and a
+timer starts from the row it belongs to, through a popover that takes a
+length without a trip to `/timer` first.
+
+### Hours, not percentages
+Nothing in the app draws a percentage bar. A week against a goal is **one
+stroke per hour**, filled in the course colour, with a part hour filling its
+own stroke from the bottom: `HourStrokes`. "Four of six" is the shape of an
+afternoon; "68%" is a number nobody asked for and cannot act on. The label
+beside the strokes carries the exact figure, and what is left to go.
+
+### The study fan
+The timer draws a fan rather than a ring. One stem from the bottom edge
+splitting two or three ways at each step, in the course colour, round tips.
+Every segment is born at a depth and the session's progress unlocks depths,
+so it extends and branches the longer the reader sits. A ring says what
+fraction is gone, which is the one thing a reader in the middle of a chapter
+has no use for; the fan only ever grows.
+
+The geometry is in `lib/fan.ts` and is deterministic per seed, so a session
+that is paused, reloaded or restored comes back as the same shape.
+`StudyFan` eases toward its target rather than snapping, and parks the
+animation frame once it arrives. Block mode sizes the fan to fill its frame
+exactly at the target, which is what makes touching the top edge the
+completion; open mode sizes it to the screen and keeps going. `trunkWidth`
+and `padTop` are CSS pixels and are scaled by the device ratio internally.
+
+Open mode is the **one screen in the app that inverts**, and it does so with
+literal values rather than the paper tokens, because on the night ground
+`text-ink` is still the daylight ink.
 
 ### Marks, not chips
 The app does not use pills. A capsule with a tinted fill is how software says
@@ -101,6 +157,10 @@ Two shapes, not four:
 - **Page CTA**, full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
 - **Sheet action pair**, `flex-1`, `py-3.5`, `rounded-[10px]`, `text-sm`,
   matching the radius of the fields above it in the same sheet.
+
+Desktop adds a third, which is the same idea at pointer scale: a **header
+action** at `h-10`/`h-11`, `rounded-[10px]`, `text-[13px]`, bordered in
+`line-strong` or filled for the one primary action on the screen.
 
 Solid `bg-primary` fill belongs to the one primary action on a screen. A
 *selection* is never a solid fill: it is a `bg-tint` wash with an ink border

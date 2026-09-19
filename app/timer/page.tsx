@@ -193,38 +193,44 @@ export default function TimerPage() {
     start(active.courseId, active.taskId, Math.max(mins * 60, Math.ceil(elapsed / 60) * 60 + 300));
   }
 
+  /* Open mode is the one screen in the app that inverts, so the chrome takes
+     its ink as a value rather than a token: on the night paper `text-ink` is
+     still the daylight ink and the switch read as dark on dark. */
+  const night = !isBlock;
+  const ink = night ? '#EFE9DC' : 'var(--ink)';
+  const inkSoft = night ? '#C8C0B0' : 'var(--ink-soft)';
+  const inkFaint = night ? '#958D7E' : 'var(--muted)';
+  const hoverBg = night ? '#24211C' : 'var(--bg-tint)';
+
+  const modeButton = (label: string, on: boolean, go: () => void) => (
+    <button
+      type="button"
+      onClick={go}
+      aria-pressed={on}
+      className="h-10 rounded-[10px] px-3 text-[13px] font-medium transition-colors"
+      style={{ color: on ? ink : inkSoft }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = hoverBg;
+        e.currentTarget.style.color = ink;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+        e.currentTarget.style.color = on ? ink : inkSoft;
+      }}
+    >
+      <span
+        className={on ? 'hl-swipe' : ''}
+        style={on ? ({ '--hl': night ? '#3E4238' : `${color}55` } as React.CSSProperties) : undefined}
+      >
+        {label}
+      </span>
+    </button>
+  );
+
   const modeSwitch = (
     <div className="flex gap-1">
-      <button
-        type="button"
-        onClick={() => setMode('block')}
-        aria-pressed={isBlock}
-        className={`h-10 rounded-[10px] px-3 text-[13px] font-medium transition-colors ${
-          isBlock ? 'text-ink' : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
-        }`}
-      >
-        <span
-          className={isBlock ? 'hl-swipe' : ''}
-          style={isBlock ? ({ '--hl': `${color}44` } as React.CSSProperties) : undefined}
-        >
-          Block
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={() => setMode('open')}
-        aria-pressed={!isBlock}
-        className={`h-10 rounded-[10px] px-3 text-[13px] font-medium transition-colors ${
-          !isBlock ? 'text-ink' : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
-        }`}
-      >
-        <span
-          className={!isBlock ? 'hl-swipe' : ''}
-          style={!isBlock ? ({ '--hl': `${color}44` } as React.CSSProperties) : undefined}
-        >
-          Open
-        </span>
-      </button>
+      {modeButton('Block', isBlock, () => setMode('block'))}
+      {modeButton('Open', !isBlock, () => setMode('open'))}
     </div>
   );
 
@@ -233,6 +239,9 @@ export default function TimerPage() {
       <button
         type="button"
         onClick={() => (isPaused ? resume() : pause())}
+        style={
+          night ? { background: '#EFE9DC', color: '#1A1815' } : undefined
+        }
         className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-opacity hover:opacity-90"
       >
         {isPaused ? (
@@ -251,6 +260,7 @@ export default function TimerPage() {
         <button
           type="button"
           onClick={() => extend(5 * 60)}
+          style={night ? { borderColor: '#4A4438', color: ink } : undefined}
           className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
         >
           +5 min
@@ -260,6 +270,7 @@ export default function TimerPage() {
       <button
         type="button"
         onClick={handleStop}
+        style={night ? { borderColor: '#4A4438', color: ink } : undefined}
         className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
       >
         Finish and log
@@ -271,6 +282,7 @@ export default function TimerPage() {
           cancel();
           router.replace('/dashboard');
         }}
+        style={night ? { color: '#CC8462' } : undefined}
         className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-warn transition-colors hover:bg-warnTint"
       >
         Discard
@@ -283,7 +295,8 @@ export default function TimerPage() {
       <button
         type="button"
         onClick={() => router.push('/dashboard')}
-        className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-transparent px-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
+        style={{ color: inkSoft }}
+        className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-transparent px-2.5 text-[13px] font-medium transition-colors"
       >
         <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
           <path d="M15 6l-6 6 6 6" />
@@ -300,9 +313,8 @@ export default function TimerPage() {
           aria-pressed={noise.on}
           aria-label={noise.on ? 'Stop ambient noise' : 'Play ambient noise'}
           title={noise.error || 'Ambient noise'}
-          className={`grid h-10 w-10 place-items-center rounded-[10px] transition-colors hover:bg-bg-tint ${
-            noise.on ? 'text-ink' : 'text-muted'
-          }`}
+          style={{ color: noise.on ? ink : inkFaint }}
+          className="grid h-10 w-10 place-items-center rounded-[10px] transition-colors"
         >
           <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M5 10v4M9 7v10M13 4v16M17 8v8M21 11v2" />
@@ -312,7 +324,8 @@ export default function TimerPage() {
           type="button"
           onClick={() => setImmersive((v) => !v)}
           aria-label={immersive ? 'Exit full screen' : 'Full screen'}
-          className="grid h-10 w-10 place-items-center rounded-[10px] text-muted transition-colors hover:bg-bg-tint hover:text-ink"
+          style={{ color: inkFaint }}
+          className="grid h-10 w-10 place-items-center rounded-[10px] transition-colors"
         >
           <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d={immersive ? 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5' : 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'} />
@@ -343,13 +356,13 @@ export default function TimerPage() {
           light
           depth={10}
           tripleP={0.3}
-          trunkWidth={30}
-          padTop={40}
+          trunkWidth={15}
+          padTop={20}
           widthFill={0.94}
           className="pointer-events-none absolute inset-0 h-full w-full"
         />
 
-        <div className="relative flex min-h-[100dvh] flex-col [&_button:hover]:bg-[#24211C]">
+        <div className="relative flex min-h-[100dvh] flex-col">
           {header}
           <div className="flex-1" />
           <div className="flex flex-col gap-6 px-6 pb-[max(env(safe-area-inset-bottom),32px)] md:flex-row md:items-end md:justify-between md:px-12 md:pb-10">
@@ -369,9 +382,7 @@ export default function TimerPage() {
                 {isPaused ? ' · paused' : ''}
               </p>
             </div>
-            <div className="[&_button]:border-[#4A4438] [&_button]:text-[#EFE9DC] [&_.bg-primary]:!bg-[#EFE9DC] [&_.bg-primary]:!text-[#1A1815]">
-              {controls}
-            </div>
+            <div>{controls}</div>
           </div>
         </div>
         <PendingSessionLogSheet />
@@ -406,8 +417,8 @@ export default function TimerPage() {
             seed={active?.sessionId}
             color={color}
             depth={7}
-            trunkWidth={22}
-            padTop={90}
+            trunkWidth={11}
+            padTop={45}
             className="absolute inset-0 h-full w-full"
           />
         </div>

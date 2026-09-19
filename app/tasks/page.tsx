@@ -564,7 +564,7 @@ function TasksPageContent() {
           ))}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:ml-auto">
           <label className="sr-only" htmlFor="task-course-filter">
             Course
           </label>
