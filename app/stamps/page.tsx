@@ -10,7 +10,7 @@ import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopo
 import { useCourses, useSessions, useTasks } from '@/lib/data-hooks';
 import { readChallenge, readStamps, readStreak, STREAK_MINUTES, type Stamp } from '@/lib/stamps';
 import { sortCourses } from '@/lib/data/course-order';
-import { isoDate } from '@/lib/utils';
+import { isoDate, resolveTint } from '@/lib/utils';
 
 /**
  * Stamps.
@@ -150,7 +150,7 @@ export default function StampsPage() {
               <span
                 key={course.id}
                 className="flex h-9 items-center gap-1.5 rounded-[8px] px-3 text-[12px] font-medium text-ink"
-                style={{ background: course.tint || 'var(--bg-tint)' }}
+                style={{ background: resolveTint(course.color, course.tint) }}
               >
                 <HandCheck size={12} />
                 {course.code}

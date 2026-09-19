@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Course, Task } from '@/lib/data';
-import { formatHHMMSS } from '@/lib/utils';
+import { formatHHMMSS, resolveTint } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import HandCheck from '@/components/notebook/HandCheck';
 import { ButtonSpinner } from './LoadingIndicator';
@@ -184,7 +184,7 @@ export default function SessionLogModal({
                 }`}
                 style={
                   active
-                    ? ({ '--hl': course.tint || 'var(--bg-tint)' } as React.CSSProperties)
+                    ? ({ '--hl': resolveTint(course.color, course.tint) } as React.CSSProperties)
                     : undefined
                 }
               >

@@ -176,29 +176,62 @@ export function rgba(hex: string, alpha: number): string {
 export interface Pastel {
   name: string;
   value: string;
+  /**
+   * The daylight wash. This is the value a course record stores, and it is
+   * what the colour picker shows, but nothing should paint with it directly,
+   * see `token` and resolveTint below.
+   */
   tint: string;
+  /**
+   * The same wash as a custom property. globals.css carries the daylight
+   * value and NIGHT_TOKENS in lib/preferences.ts swaps in the dark one, so
+   * anything that fills with the token follows the paper the reader chose
+   * while `value`, the colour the course owns, stays the same object.
+   */
+  token: string;
 }
 
 export const PASTEL_PALETTE: Pastel[] = [
-  { name: 'Sage', value: '#A8B89B', tint: '#E9EEE3' },
-  { name: 'Rose', value: '#D4A5A5', tint: '#F1E2E2' },
-  { name: 'Lavender', value: '#B5A8C9', tint: '#E8E2F0' },
-  { name: 'Peach', value: '#E2B594', tint: '#F4E1D2' },
-  { name: 'Sky', value: '#A8BCC9', tint: '#E2EAEF' },
-  { name: 'Clay', value: '#C99B7E', tint: '#EFDDCD' },
-  { name: 'Butter', value: '#D9C58C', tint: '#F1E9C9' },
-  { name: 'Mint', value: '#9FC1B0', tint: '#DCEAE2' },
-  { name: 'Slate', value: '#9AA3AB', tint: '#DEE2E6' },
-  { name: 'Mauve', value: '#B89BAA', tint: '#E8DCE3' },
+  { name: 'Sage', value: '#A8B89B', tint: '#E9EEE3', token: 'var(--sage-tint)' },
+  { name: 'Rose', value: '#D4A5A5', tint: '#F1E2E2', token: 'var(--rose-tint)' },
+  { name: 'Lavender', value: '#B5A8C9', tint: '#E8E2F0', token: 'var(--lav-tint)' },
+  { name: 'Peach', value: '#E2B594', tint: '#F4E1D2', token: 'var(--peach-tint)' },
+  { name: 'Sky', value: '#A8BCC9', tint: '#E2EAEF', token: 'var(--sky-tint)' },
+  { name: 'Clay', value: '#C99B7E', tint: '#EFDDCD', token: 'var(--clay-tint)' },
+  { name: 'Butter', value: '#D9C58C', tint: '#F1E9C9', token: 'var(--butter-tint)' },
+  { name: 'Mint', value: '#9FC1B0', tint: '#DCEAE2', token: 'var(--mint-tint)' },
+  { name: 'Slate', value: '#9AA3AB', tint: '#DEE2E6', token: 'var(--slate-tint)' },
+  { name: 'Mauve', value: '#B89BAA', tint: '#E8DCE3', token: 'var(--mauve-tint)' },
 ];
 
-// Resolve a tint for a course. If the course color matches a palette entry, use
-// its paired tint; otherwise fall back to a light wash of the color.
-export function resolveTint(color: string, fallbackTint?: string | null): string {
-  if (fallbackTint) return fallbackTint;
-  const match = PASTEL_PALETTE.find((p) => p.value.toLowerCase() === color.toLowerCase());
-  if (match) return match.tint;
-  return rgba(color, 0.22);
+/**
+ * The wash to fill with for a course, in the light the reader is working in.
+ *
+ * A course record stores a daylight hex in its `tint` column, written when the
+ * colour was picked. Painting with that hex directly is what broke the night
+ * paper: the wash stayed a near-white while `--ink` became cream, so every
+ * course chip, the play button on a course card and the week's challenge were
+ * pale blocks with invisible writing on them. The stored hex is therefore only
+ * ever used to recognise which pastel was meant; what comes back is that
+ * pastel's custom property, which the night tone already redefines.
+ *
+ * A colour that is not one of the ten is washed with its own alpha instead, so
+ * it composites over whichever paper is underneath rather than over an assumed
+ * white one.
+ */
+export function resolveTint(color: string, storedTint?: string | null): string {
+  const lower = (color || '').toLowerCase();
+  const byColor = PASTEL_PALETTE.find((p) => p.value.toLowerCase() === lower);
+  if (byColor) return byColor.token;
+  if (storedTint) {
+    const stored = storedTint.toLowerCase();
+    const byTint = PASTEL_PALETTE.find((p) => p.tint.toLowerCase() === stored);
+    if (byTint) return byTint.token;
+    // A wash nobody in the app can currently pick. Left alone rather than
+    // guessed at, since it is the only record of what was chosen.
+    return storedTint;
+  }
+  return color ? rgba(color, 0.22) : 'var(--bg-tint)';
 }
 
 // ---- Aggregation helpers

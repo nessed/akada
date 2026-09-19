@@ -11,6 +11,7 @@ import {
   daysBetween,
   isoDate,
   lastSeenByCourse,
+  resolveTint,
 } from '@/lib/utils';
 
 interface Props {
@@ -202,7 +203,7 @@ export default function CourseCard({
             aria-label={`Start timer for ${course.code}`}
             className="pointer-events-auto relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95"
             style={{
-              background: course.tint || 'var(--bg-tint)',
+              background: resolveTint(course.color, course.tint),
               color: course.color || 'var(--ink)',
             }}
           >

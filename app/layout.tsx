@@ -115,9 +115,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // The shipped default paper tone. Kept in step with --bg in globals.css and
-  // PAPER_TONES.paper, so the browser and PWA chrome match the page.
-  themeColor: '#F5F1E8',
+  // theme-color is deliberately absent here. It has to follow the paper the
+  // reader chose, and a value in this export is a React-owned tag that Next
+  // re-renders on every client navigation: it came back as the shipped cream
+  // the moment someone on the night paper moved between pages, so the page
+  // was dark inside a cream frame again. PREFERENCE_BOOTSTRAP_SCRIPT writes
+  // the tag instead, before the first paint and out of React's hands, and
+  // applyPreferences keeps it in step when the tone changes.
   width: 'device-width',
   initialScale: 1,
   // maximumScale / userScalable are deliberately not set: blocking pinch-zoom
