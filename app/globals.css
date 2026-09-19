@@ -306,34 +306,31 @@ input[type='date']::-webkit-calendar-picker-indicator {
   );
 }
 
-/* Highlighter swipe, sits below text baseline, slightly off-square */
+/* Highlighter swipe, sits below text baseline, slightly off-square. The band
+   is a nib width, not a share of the line: a real marker draws the same
+   stroke over a heading as over a label, so the thickness is capped rather
+   than scaled with the type. */
+.hl,
+.hl-pink,
+.hl-mint,
+.hl-swipe {
+  --hl-nib: clamp(6px, 0.45em, 12px);
+  background-repeat: no-repeat;
+  background-size: 100% var(--hl-nib);
+  background-position: 0 calc(100% - 0.08em);
+  padding: 0 2px;
+}
 .hl {
   background-image: linear-gradient(
     180deg,
-    transparent 55%,
-    var(--highlight-yellow) 55% 92%,
-    transparent 92%
+    var(--highlight-yellow) 0 100%
   );
-  padding: 0 2px;
-  background-position: 0 2px;
 }
 .hl-pink {
-  background-image: linear-gradient(
-    180deg,
-    transparent 55%,
-    var(--highlight-pink) 55% 92%,
-    transparent 92%
-  );
-  padding: 0 2px;
+  background-image: linear-gradient(180deg, var(--highlight-pink) 0 100%);
 }
 .hl-mint {
-  background-image: linear-gradient(
-    180deg,
-    transparent 55%,
-    var(--highlight-mint) 55% 92%,
-    transparent 92%
-  );
-  padding: 0 2px;
+  background-image: linear-gradient(180deg, var(--highlight-mint) 0 100%);
 }
 
 /* The privacy policy and the terms: read as documents, not as screens. */
@@ -381,12 +378,9 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .hl-swipe {
   background-image: linear-gradient(
     180deg,
-    transparent 52%,
-    var(--hl, var(--highlight-yellow)) 52% 94%,
-    transparent 94%
+    var(--hl, var(--highlight-yellow)) 0 100%
   );
   padding: 0 3px;
-  background-position: 0 2px;
 }
 
 /* Hand-drawn underline, wavy, slightly imperfect */
