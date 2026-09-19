@@ -78,8 +78,12 @@ export default function CoursesPage() {
             Courses
           </h1>
         </div>
+        {/* The one add-course flow in the app is the catalog-backed sheet on
+            Today, so this hands the reader to it rather than keeping a
+            second, blinder copy. `?add=course` is what opens it; a bare
+            /dashboard link just drops you on Today with nothing open. */}
         <Link
-          href="/dashboard"
+          href="/dashboard?add=course"
           className="flex h-10 shrink-0 items-center rounded-[10px] border border-line-strong px-3.5 text-[13px] font-medium text-ink no-underline transition-colors hover:bg-bg-tint"
         >
           Add a course
@@ -90,7 +94,7 @@ export default function CoursesPage() {
         <div className="deckle border border-dashed border-line-strong bg-paper px-7 py-10 text-center">
           <p className="m-0 font-serif text-[20px] text-ink-soft">No courses this term yet.</p>
           <Link
-            href="/dashboard"
+            href="/dashboard?add=course"
             className="mt-4 inline-flex h-11 items-center rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast no-underline"
           >
             Add the first one

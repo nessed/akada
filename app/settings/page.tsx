@@ -346,7 +346,7 @@ export default function SettingsPage() {
               courses={courses}
               onBack={() => setSection('goals')}
               onSaved={() => void revalidateCourses()}
-              onAddCourse={() => router.push('/dashboard?addCourse=1')}
+              onAddCourse={() => router.push('/dashboard?add=course')}
             />
           )}
 
