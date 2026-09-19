@@ -316,18 +316,19 @@ function DashboardPageContent() {
   /**
    * Every play mark on this screen opens the same popover. A task carries its
    * own course; a course row passes one explicitly and leaves the task null.
-   * `openEnded` is the "Open ended" button beside Start, which skips the
-   * length picker and goes straight to an untargeted session.
+   * `untimed` is the "Untimed" button beside Start, which skips the length
+   * picker and goes straight to a session with no target. It is not the same
+   * idea as an open-ended task, which is one carrying no due date.
    */
   function openStartFor(
     task: Task | null,
     anchor: HTMLElement,
-    openEnded: boolean,
+    untimed: boolean,
     course?: Course,
   ) {
     const resolved = course ?? courses.find((c) => c.id === task?.courseId);
     if (!resolved) return;
-    if (openEnded) {
+    if (untimed) {
       if (active && (active.courseId !== resolved.id || active.taskId !== (task?.id ?? null))) {
         setPendingTimer({ courseId: resolved.id, taskId: task?.id ?? null });
         return;
@@ -337,6 +338,17 @@ function DashboardPageContent() {
       return;
     }
     setStartTarget({ task, course: resolved, anchor });
+  }
+
+  /** "Open ended": the task stays, the date comes off. */
+  async function handleOpenEndTask(task: Task) {
+    if (!task.dueDate) return;
+    try {
+      await updateTaskOptimistic(task.id, { dueDate: null });
+    } catch (error) {
+      console.error('Failed to clear the due date:', error);
+      notify('That date did not come off.');
+    }
   }
 
   /** "Tomorrow": the same move the row menu calls Reschedule. */
@@ -773,7 +785,7 @@ function DashboardPageContent() {
               <UpNext
                 task={upNext}
                 course={courses.find((c) => c.id === upNext.courseId)}
-                onStart={(task, el, open) => openStartFor(task, el, open)}
+                onStart={(task, el, untimed) => openStartFor(task, el, untimed)}
                 onDone={handleToggleTask}
                 onSnooze={handleSnoozeTask}
                 onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
@@ -815,6 +827,7 @@ function DashboardPageContent() {
                     onStartTimer={(t, el) => openStartFor(t, el, false)}
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
                     onReschedule={handleSnoozeTask}
+                    onOpenEnded={handleOpenEndTask}
                   />
                 ))}
                 {overdueTasks.length > 5 && (
@@ -840,6 +853,7 @@ function DashboardPageContent() {
                     onStartTimer={(t, el) => openStartFor(t, el, false)}
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
                     onReschedule={handleSnoozeTask}
+                    onOpenEnded={handleOpenEndTask}
                   />
                 ))}
               </TaskSection>
@@ -961,6 +975,7 @@ function DashboardPageContent() {
                 value={newTaskDue}
                 onChange={setNewTaskDue}
                 placeholder="Due date"
+                clearLabel="Open ended"
                 className="flex-1"
               />
               <button

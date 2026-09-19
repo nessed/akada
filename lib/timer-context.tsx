@@ -20,7 +20,7 @@ interface TimerState {
   isPaused: boolean;
   lastSeenAt: number;
   /**
-   * Block mode's target, in seconds, or null for an open-ended session. The
+   * Block mode's target, in seconds, or null for an untimed session. The
    * timer counts the same either way; the target is what the screen counts
    * down from and what the fan is sized to fill.
    */
@@ -234,7 +234,7 @@ function sanitizeActive(value: unknown): TimerState | null {
 
 /**
  * A block target has to be a positive number of seconds inside the same
- * ceiling a session itself has; anything else means open-ended.
+ * ceiling a session itself has; anything else means untimed.
  */
 function sanitizeTarget(value: unknown): number | null {
   const n = Number(value);

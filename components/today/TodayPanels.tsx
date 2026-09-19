@@ -29,7 +29,8 @@ import HandNote from '@/components/notebook/HandNote';
 interface UpNextProps {
   task: Task;
   course: Course | undefined;
-  onStart: (task: Task, el: HTMLElement, open: boolean) => void;
+  /** The third argument starts the session with no target length. */
+  onStart: (task: Task, el: HTMLElement, untimed: boolean) => void;
   onDone: (task: Task) => void;
   onSnooze: (task: Task) => void;
   onOpen?: (task: Task) => void;
@@ -104,7 +105,7 @@ export function UpNext({ task, course, onStart, onDone, onSnooze, onOpen }: UpNe
           onClick={(e) => onStart(task, e.currentTarget, true)}
           className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
         >
-          Open ended
+          Untimed
         </button>
         <button
           type="button"

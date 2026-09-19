@@ -183,7 +183,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut 
               : 'border border-line bg-transparent text-ink-soft hover:bg-bg-tint'
           }`}
         >
-          Open
+          Untimed
         </button>
       </div>
 
@@ -197,7 +197,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut 
         <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
           <path d="M7 5l12 7-12 7V5z" />
         </svg>
-        {minutes == null ? 'Start open ended' : `Start ${minutes} min`}
+        {minutes == null ? 'Start untimed' : `Start ${minutes} min`}
       </button>
 
       <p className="m-0 mt-2.5 text-center font-mono text-[11px] text-muted-soft">

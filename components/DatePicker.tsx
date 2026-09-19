@@ -9,6 +9,9 @@ interface Props {
   placeholder?: string;
   compact?: boolean;
   allowClear?: boolean;
+  /** What clearing the field means here. A task with no date is open ended;
+      a term with no date is simply unset, so the word is passed in. */
+  clearLabel?: string;
   className?: string;
 }
 
@@ -44,6 +47,7 @@ export default function DatePicker({
   placeholder = 'Pick date',
   compact = false,
   allowClear = true,
+  clearLabel = 'Clear',
   className = '',
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -234,7 +238,7 @@ export default function DatePicker({
                   onClick={() => selectDate('')}
                   className="flex-1 bg-transparent py-1 font-serif text-[13px] italic text-muted"
                 >
-                  Clear
+                  {clearLabel}
                 </button>
               )}
             </div>

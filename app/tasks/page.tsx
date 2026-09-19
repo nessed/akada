@@ -250,7 +250,7 @@ function TasksPageContent() {
       today: 'Today',
       week: 'This week',
       later: 'Later',
-      someday: 'No date',
+      someday: 'Open ended',
       done: 'Done',
     };
     return ['overdue', 'today', 'week', 'later', 'someday', 'done']
@@ -386,6 +386,28 @@ function TasksPageContent() {
     } catch (error) {
       console.error('Failed to reschedule task:', error);
       notify('That task did not move.');
+    }
+  }
+
+  /**
+   * Open ended: the task keeps its place on the list and gives up its date.
+   * A date is a promise to a day, and taking it back is a real edit, so it
+   * goes through the same undo every other bulk move on this screen does.
+   */
+  async function openEndTask(task: Task) {
+    if (!task.dueDate) return;
+    const before = task.dueDate;
+    try {
+      await updateTaskOptimistic(task.id, { dueDate: null });
+      setUndo({
+        label: `${task.title} is open ended`,
+        restore: async () => {
+          await updateTaskOptimistic(task.id, { dueDate: before });
+        },
+      });
+    } catch (error) {
+      console.error('Failed to clear the due date:', error);
+      notify('That date did not come off.');
     }
   }
 
@@ -655,6 +677,7 @@ function TasksPageContent() {
                   onOpen={setViewingTask}
                   onSelect={toggleSelected}
                   onReschedule={snoozeTask}
+                  onOpenEnded={openEndTask}
                   onDelete={(t) => deleteTask(t.id)}
                 />
               ))}
@@ -698,6 +721,7 @@ function TasksPageContent() {
               onChange={setDraftDue}
               placeholder="Due"
               compact
+              clearLabel="Open ended"
               className="w-[132px]"
             />
             <button
@@ -851,7 +875,12 @@ function TasksPageContent() {
             </div>
 
             <div className="mt-2.5">
-              <DatePicker value={editDue} onChange={setEditDue} placeholder="Due date" />
+              <DatePicker
+                value={editDue}
+                onChange={setEditDue}
+                placeholder="Due date"
+                clearLabel="Open ended"
+              />
             </div>
 
             {/* What this row actually is. A reading carries pages, anything
@@ -974,44 +1003,47 @@ function TasksPageContent() {
                 {viewingTask.title}
               </h2>
 
-              {(viewingTask.completed ||
-                viewingTask.priority === 'high' ||
-                viewingTask.dueDate ||
-                viewingTask.kind !== 'task' ||
-                (viewingTask.weight ?? 0) > 0) && (
-                <div className="mt-3.5 flex flex-wrap items-center gap-3">
-                  {viewingTask.completed ? (
-                    <Stamp style={course ? { color: course.color } : undefined}>Done</Stamp>
-                  ) : (
-                    <>
-                      {viewingTask.priority === 'high' && (
-                        <span
-                          className="font-hand inline-block text-[16px] font-semibold tracking-wide text-priority"
-                          style={{ transform: 'rotate(-3deg)' }}
-                        >
-                          !! high
-                        </span>
-                      )}
+              {/* The strip always draws now: every task says what it is due
+                  for, and a task with no date says that. */}
+              <div className="mt-3.5 flex flex-wrap items-center gap-3">
+                {viewingTask.completed ? (
+                  <Stamp style={course ? { color: course.color } : undefined}>Done</Stamp>
+                ) : (
+                  <>
+                    {viewingTask.priority === 'high' && (
+                      <span
+                        className="font-hand inline-block text-[16px] font-semibold tracking-wide text-priority"
+                        style={{ transform: 'rotate(-3deg)' }}
+                      >
+                        !! high
+                      </span>
+                    )}
+                    {viewingTask.dueDate ? (
                       <DueDateBadge dueDate={viewingTask.dueDate} size="md" />
-                    </>
-                  )}
-                  {/* What it is and what it is worth, in the margin the way a
-                      mark would be, rather than as a row of chips. */}
-                  {viewingTask.kind && viewingTask.kind !== 'task' && (
-                    <span className="eyebrow text-muted">
-                      {viewingTask.kind}
-                      {viewingTask.kind === 'reading' && viewingTask.pages
-                        ? ` · ${viewingTask.pages}pp`
-                        : ''}
-                    </span>
-                  )}
-                  {(viewingTask.weight ?? 0) > 0 && (
-                    <span className="font-mono text-[11px] text-muted">
-                      worth {Math.round(viewingTask.weight as number)}% of {course?.code ?? 'the course'}
-                    </span>
-                  )}
-                </div>
-              )}
+                    ) : (
+                      /* No date is a state the task is in, not a blank. */
+                      <span className="font-serif text-[13px] italic text-muted">
+                        open ended
+                      </span>
+                    )}
+                  </>
+                )}
+                {/* What it is and what it is worth, in the margin the way a
+                    mark would be, rather than as a row of chips. */}
+                {viewingTask.kind && viewingTask.kind !== 'task' && (
+                  <span className="eyebrow text-muted">
+                    {viewingTask.kind}
+                    {viewingTask.kind === 'reading' && viewingTask.pages
+                      ? ` · ${viewingTask.pages}pp`
+                      : ''}
+                  </span>
+                )}
+                {(viewingTask.weight ?? 0) > 0 && (
+                  <span className="font-mono text-[11px] text-muted">
+                    worth {Math.round(viewingTask.weight as number)}% of {course?.code ?? 'the course'}
+                  </span>
+                )}
+              </div>
 
               {viewingTask.description && (
                 <p className="mb-0 mt-5 whitespace-pre-wrap font-serif text-[15px] leading-[1.7] text-ink-soft">

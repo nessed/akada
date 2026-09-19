@@ -183,7 +183,7 @@ export default function LandingPage() {
           <div className="px-7 py-8 md:px-10">
             <p className="eyebrow m-0">The timer</p>
             <h2 className="m-0 mt-3 font-serif text-[26px] font-medium leading-[1.15] tracking-[-0.02em]">
-              A block with a target, or open ended.
+              A block with a target, or untimed.
             </h2>
             <p className="mt-3 mb-0 max-w-[420px] text-[14px] leading-[1.6] text-ink-soft">
               The fan grows while you read: one stem splitting two or three ways at

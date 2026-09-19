@@ -23,7 +23,7 @@ import HandCheck from './notebook/HandCheck';
 
 /** The menu's own box, used to place it against the trigger. */
 const MENU_W = 176;
-const MENU_H = 184;
+const MENU_H = 224;
 
 interface Props {
   task: Task;
@@ -39,6 +39,8 @@ interface Props {
   onOpen?: (task: Task) => void;
   onSelect?: (task: Task, additive: boolean) => void;
   onReschedule?: (task: Task) => void;
+  /** Take the date off the task and leave it open ended. */
+  onOpenEnded?: (task: Task) => void;
   onDelete?: (task: Task) => void;
   /** Hide the course column on a screen that is already one course. */
   hideCourse?: boolean;
@@ -57,6 +59,7 @@ export default function TaskRow({
   onOpen,
   onSelect,
   onReschedule,
+  onOpenEnded,
   onDelete,
   hideCourse = false,
 }: Props) {
@@ -210,7 +213,9 @@ export default function TaskRow({
             ? 'text-warn'
             : due?.category === 'today'
               ? 'hl-swipe text-ink'
-              : 'text-muted'
+              : !due && !task.completed
+                ? 'text-muted-soft'
+                : 'text-muted'
         }`}
       >
         {task.completed
@@ -221,7 +226,7 @@ export default function TaskRow({
               : due.category === 'today'
                 ? 'today'
                 : due.formattedDate
-            : '—'}
+            : 'open ended'}
       </span>
 
       <span className="flex justify-end gap-0.5">
@@ -314,6 +319,20 @@ export default function TaskRow({
                 }}
               />
             )}
+            {/* A task with no date is open ended: it is still on the list,
+                it just is not promised to a day. The item is drawn under
+                every task so the state is visible either way, and does
+                nothing on one that is already open ended. */}
+            {onOpenEnded && !task.completed && (
+              <MenuItem
+                label="Open ended"
+                disabled={!task.dueDate}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenEnded(task);
+                }}
+              />
+            )}
             {onSelect && (
               <MenuItem
                 label={selected ? 'Deselect' : 'Select'}
@@ -372,17 +391,22 @@ function MenuItem({
   label,
   onClick,
   tone,
+  disabled = false,
 }: {
   label: string;
   onClick: () => void;
   tone?: 'warn';
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-10 w-full items-center rounded-[8px] px-3 text-left text-[13px] transition-colors hover:bg-bg-tint ${
-        tone === 'warn' ? 'text-warn' : 'text-ink-soft hover:text-ink'
+      disabled={disabled}
+      className={`flex h-10 w-full items-center rounded-[8px] px-3 text-left text-[13px] transition-colors ${
+        disabled
+          ? 'cursor-default text-muted-soft'
+          : `hover:bg-bg-tint ${tone === 'warn' ? 'text-warn' : 'text-ink-soft hover:text-ink'}`
       }`}
     >
       {label}

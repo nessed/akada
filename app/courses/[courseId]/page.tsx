@@ -38,6 +38,7 @@ import {
   addTaskOptimistic,
   toggleTaskOptimistic,
   deleteTaskOptimistic,
+  updateTaskOptimistic,
   updateCourseOptimistic,
 } from '@/lib/data-hooks';
 
@@ -166,6 +167,17 @@ export default function CoursePage() {
     } catch (error) {
       console.error('Failed to update task:', error);
       notify('That task did not update.');
+    }
+  }
+
+  /** "Open ended": the task stays on the course, the date comes off. */
+  async function openEndTask(task: Task) {
+    if (!task.dueDate) return;
+    try {
+      await updateTaskOptimistic(task.id, { dueDate: null });
+    } catch (error) {
+      console.error('Failed to clear the due date:', error);
+      notify('That date did not come off.');
     }
   }
 
@@ -413,6 +425,7 @@ export default function CoursePage() {
                   running={active?.taskId === task.id}
                   onToggle={toggleTask}
                   onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
+                  onOpenEnded={openEndTask}
                   onDelete={(t) => removeTask(t.id)}
                 />
               ))}
@@ -458,6 +471,7 @@ export default function CoursePage() {
                       onChange={setDraftDue}
                       placeholder="Due"
                       compact
+                      clearLabel="Open ended"
                       className="w-[132px]"
                     />
                     <button
