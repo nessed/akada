@@ -2,6 +2,9 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { NextRequest } from 'next/server';
 import { readAccessToken } from '@/lib/mcp-auth';
+import { MAX_SESSION_SECONDS } from '@/lib/session-safety';
+import { SESSION_NOTE_MAX } from '@/lib/planner-safety';
+import { isoDate, startOfWeek, endOfWeek } from '@/lib/utils';
 import { mcpSupabase, mcpUrl, siteUrl } from './_shared';
 
 export const runtime = 'nodejs';
@@ -9,6 +12,12 @@ export const dynamic = 'force-dynamic';
 
 const MAX_TASKS_PER_REQUEST = 20;
 const MAX_TASKS_PER_READ = 100;
+// The same ceilings lib/data/supabase-adapter.ts sanitizeSubtasks enforces on
+// the app's own writes, so a task built here and a task built in the sheet
+// cannot differ in shape.
+const MAX_SUBTASKS_PER_TASK = 50;
+const MAX_SUBTASK_TITLE = 300;
+const MAX_DESCRIPTION = 5000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // This is deliberately independent of optional app-migration columns. MCP
@@ -108,6 +117,58 @@ function readSubtasks(value: unknown) {
       ? [{ id: row.id, title: row.title, completed: Boolean(row.completed) }]
       : [];
   });
+}
+
+// The write side of the same document. Callers send plain strings, because a
+// model asked for `{ id, title, completed }` invents ids that then have to be
+// thrown away: a new task's pieces are always unticked, and the id only has to
+// be unique inside one task's array, which is what the sheet's own
+// `s-<timestamp>` ids are. The index keeps two pieces written in the same
+// millisecond apart. Duplicate titles within one task collapse, the way two
+// identical rows on a handwritten list would have been one.
+function buildSubtasks(pieces: (string | { title: string; completed?: boolean })[] | undefined) {
+  const seen = new Set<string>();
+  const stamp = Date.now().toString(36);
+  return (pieces ?? []).flatMap((piece, index) => {
+    const raw = typeof piece === 'string' ? piece : piece.title;
+    const title = raw.trim().replace(/\s+/g, ' ');
+    if (!title || seen.has(normalize(title))) return [];
+    seen.add(normalize(title));
+    const completed = typeof piece === 'string' ? false : Boolean(piece.completed);
+    return [{ id: `s-${stamp}-${index}`, title, completed }];
+  });
+}
+
+// Both write tools that take task ids have to answer the same question first:
+// is every one of these a task the signed-in student owns, in the semester
+// they are actually studying? Ownership alone is not enough, because a task
+// from a past semester is not something a connector should be reaching into.
+// Checked by the owning course rather than tasks.semester_id, which is a
+// denormalized column an un-migrated project may not have filled yet.
+async function loadOwnTasks(tool: string, token: AuthenticatedToken, ids: string[]) {
+  const semesterId = await activeSemesterId(token);
+  if (!semesterId) return { ok: false, error: toolError('No active semester is set in Akada.') } as const;
+  const supabase = mcpSupabase(token.supabaseAccessToken);
+  const { data: courses, error: coursesError } = await supabase
+    .from('courses')
+    .select('id, code, name')
+    .eq('user_id', token.userId)
+    .eq('semester_id', semesterId);
+  if (coursesError) return { ok: false, error: queryFailed(tool, 'courses read', coursesError, 'Akada could not load courses.') } as const;
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', token.userId)
+    .in('id', ids);
+  if (error) return { ok: false, error: queryFailed(tool, 'tasks read', error, 'Akada could not load those tasks.') } as const;
+  const allowed = new Map((courses ?? []).map((course) => [course.id, course]));
+  const rows = ((data ?? []) as Record<string, unknown>[]).filter((task) => allowed.has(task.course_id as string));
+  const found = new Set(rows.map((task) => String(task.id)));
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length > 0) {
+    return { ok: false, error: toolError(`${missing.length === ids.length ? 'No' : 'Not every'} task in that request is in your active Akada semester. Read your tasks again with get_tasks and use the ids it returns.`) } as const;
+  }
+  return { ok: true, supabase, courses: allowed, tasks: rows } as const;
 }
 
 // Due date first with undated tasks last, newest first inside a date. This
@@ -280,13 +341,15 @@ function createServer(token: AuthenticatedToken) {
     'create_tasks',
     {
       title: 'Add study tasks to Akada',
-      description: 'Add extracted readings, assignments, or preparation tasks to exactly one active-semester Akada course. Use find_course first. Only include a due date when the source explicitly gives one; do not invent deadlines. Existing unfinished tasks with the same title and due date are skipped.',
+      description: 'Add extracted readings, assignments, or preparation tasks to exactly one active-semester Akada course. Use find_course first. Only include a due date when the source explicitly gives one; do not invent deadlines. A task that the source breaks into steps can carry those steps as `subtasks`, which the student ticks off inside the task; use them for the real pieces of one piece of work, not as a way to add several unrelated tasks at once. `description` holds notes that belong with the task, such as the instructions or what the source said about it. Existing unfinished tasks with the same title and due date are skipped.',
       inputSchema: z.object({
         course_id: z.string().uuid(),
         tasks: z.array(z.object({
           title: z.string().trim().min(1).max(160),
           due_date: z.string().regex(DATE, 'Use YYYY-MM-DD.').nullable().optional(),
           priority: z.enum(['high', 'normal']).default('normal'),
+          description: z.string().trim().max(MAX_DESCRIPTION).optional(),
+          subtasks: z.array(z.string().trim().min(1).max(MAX_SUBTASK_TITLE)).max(MAX_SUBTASKS_PER_TASK).optional(),
         })).min(1).max(MAX_TASKS_PER_REQUEST),
       }),
       annotations: { destructiveHint: false, idempotentHint: true },
@@ -324,23 +387,370 @@ function createServer(token: AuthenticatedToken) {
           const taskKey = `${normalize(title)}|${dueDate ?? ''}`;
           if (existingKeys.has(taskKey) || seen.has(taskKey)) return [];
           seen.add(taskKey);
-          return [{ user_id: token.userId, course_id: course.id, title, due_date: dueDate, priority: task.priority }];
+          return [{
+            user_id: token.userId,
+            course_id: course.id,
+            title,
+            due_date: dueDate,
+            priority: task.priority,
+            description: (task.description ?? '').trim(),
+            subtasks: buildSubtasks(task.subtasks),
+          }];
         });
+        // `description` and `subtasks` are additive columns, so naming one is
+        // what would break an insert on a project whose schema.sql predates
+        // it. Drop a key from every row when nothing in the request uses it,
+        // and a deployment mid-rollout keeps creating plain tasks exactly as
+        // before; only a request that genuinely needs the column hits the
+        // error that says so. Uniformly present or uniformly absent across the
+        // batch, never mixed: PostgREST writes NULL for a key some rows omit,
+        // and both columns are `not null`.
         if (toInsert.length === 0) {
           return result({ course: { id: course.id, code: course.code, name: course.name }, created: [], skipped: tasks.length, message: 'Every task already exists in Akada.' });
         }
+        const withNotes = toInsert.some((row) => row.description.length > 0);
+        const withSubtasks = toInsert.some((row) => row.subtasks.length > 0);
+        const rowsToInsert = toInsert.map(({ description, subtasks, ...task }) => ({
+          ...task,
+          ...(withNotes ? { description } : {}),
+          ...(withSubtasks ? { subtasks } : {}),
+        }));
         const { data: created, error: insertError } = await supabase
           .from('tasks')
-          .insert(toInsert)
-          .select('id, title, due_date, priority');
+          .insert(rowsToInsert)
+          // `*` rather than a column list for the same reason get_tasks reads
+          // that way: `subtasks` is only there once schema.sql has been re-run,
+          // and naming it in the returning clause would fail the whole insert
+          // on a project that has not.
+          .select('*');
         if (insertError) return queryFailed('create_tasks', 'insert', insertError, 'Akada could not save those tasks.');
         return result({
           course: { id: course.id, code: course.code, name: course.name },
-          created: (created ?? []).map((task) => ({ id: task.id, title: task.title, due_date: task.due_date, priority: task.priority })),
+          created: ((created ?? []) as Record<string, unknown>[]).map((task) => ({
+            id: String(task.id),
+            title: String(task.title ?? ''),
+            due_date: (task.due_date as string | null) ?? null,
+            priority: task.priority === 'high' ? ('high' as const) : ('normal' as const),
+            description: typeof task.description === 'string' ? task.description : '',
+            subtasks: readSubtasks(task.subtasks),
+          })),
           skipped: tasks.length - toInsert.length,
         });
       } catch (cause) {
         return toolCrashed('create_tasks', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'update_tasks',
+    {
+      title: 'Change study tasks in Akada',
+      description: 'Change tasks that already exist in the signed-in student’s active semester. Read the tasks with get_tasks first and pass the ids it returns. Only the fields you name are changed; everything you leave out keeps its current value. `description` is the notes that sit with the task, and passing it replaces the existing notes, so include what should be kept. `subtasks` likewise replaces the whole list of pieces, so send every piece the task should end up with, carrying over the ones already ticked. To only tick a task off, prefer complete_tasks.',
+      inputSchema: z.object({
+        tasks: z.array(z.object({
+          task_id: z.string().uuid(),
+          title: z.string().trim().min(1).max(160).optional(),
+          due_date: z.string().regex(DATE, 'Use YYYY-MM-DD.').nullable().optional(),
+          priority: z.enum(['high', 'normal']).optional(),
+          description: z.string().trim().max(MAX_DESCRIPTION).optional(),
+          subtasks: z.array(z.object({
+            title: z.string().trim().min(1).max(MAX_SUBTASK_TITLE),
+            completed: z.boolean().default(false),
+          })).max(MAX_SUBTASKS_PER_TASK).optional(),
+          completed: z.boolean().optional(),
+        })).min(1).max(MAX_TASKS_PER_REQUEST),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ tasks }) => {
+      try {
+        const ids = [...new Set(tasks.map((task) => task.task_id))];
+        const owned = await loadOwnTasks('update_tasks', token, ids);
+        if (!owned.ok) return owned.error;
+
+        // One statement per task, because each carries a different patch, and
+        // in request order so a reply reads the way the request was written.
+        // Twenty round-trips at worst, which is the same ceiling create_tasks
+        // already accepts for a syllabus.
+        const updated: Record<string, unknown>[] = [];
+        for (const task of tasks) {
+          const patch: Record<string, unknown> = {};
+          if (task.title !== undefined) patch.title = task.title.trim().replace(/\s+/g, ' ');
+          if (task.due_date !== undefined) patch.due_date = task.due_date;
+          if (task.priority !== undefined) patch.priority = task.priority;
+          if (task.description !== undefined) patch.description = task.description;
+          if (task.subtasks !== undefined) patch.subtasks = buildSubtasks(task.subtasks);
+          if (task.completed !== undefined) {
+            patch.completed = task.completed;
+            // Written here rather than left to the app, so a task ticked off
+            // through the connector still lands on the right day in Stats.
+            patch.completed_at = task.completed ? new Date().toISOString() : null;
+          }
+          if (Object.keys(patch).length === 0) continue;
+          const { data, error } = await owned.supabase
+            .from('tasks')
+            .update(patch)
+            .eq('id', task.task_id)
+            .eq('user_id', token.userId)
+            .select('*')
+            .maybeSingle();
+          if (error) return queryFailed('update_tasks', 'task update', error, 'Akada could not change that task.');
+          if (data) updated.push(data as Record<string, unknown>);
+        }
+        if (updated.length === 0) return toolError('That request named no change to make. Include at least one field to change on a task.');
+        return result({
+          updated: updated.map((task) => {
+            const course = owned.courses.get(task.course_id as string);
+            return {
+              id: String(task.id),
+              title: String(task.title ?? ''),
+              due_date: (task.due_date as string | null) ?? null,
+              priority: task.priority === 'high' ? ('high' as const) : ('normal' as const),
+              description: typeof task.description === 'string' ? task.description : '',
+              subtasks: readSubtasks(task.subtasks),
+              completed: Boolean(task.completed),
+              course: course ? { id: course.id, code: course.code, name: course.name } : null,
+            };
+          }),
+        });
+      } catch (cause) {
+        return toolCrashed('update_tasks', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'complete_tasks',
+    {
+      title: 'Tick Akada tasks off',
+      description: 'Mark tasks in the signed-in student’s active semester as done, or put them back on the list with completed: false. Read the tasks with get_tasks first and pass the ids it returns. Ticking a task off is what feeds the student’s week in Stats, so only do it for work the student says is actually finished.',
+      inputSchema: z.object({
+        task_ids: z.array(z.string().uuid()).min(1).max(MAX_TASKS_PER_REQUEST),
+        completed: z.boolean().default(true),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ task_ids, completed }) => {
+      try {
+        const ids = [...new Set(task_ids)];
+        const owned = await loadOwnTasks('complete_tasks', token, ids);
+        if (!owned.ok) return owned.error;
+        const { data, error } = await owned.supabase
+          .from('tasks')
+          .update({ completed, completed_at: completed ? new Date().toISOString() : null })
+          .in('id', ids)
+          .eq('user_id', token.userId)
+          .select('*');
+        if (error) return queryFailed('complete_tasks', 'tasks update', error, 'Akada could not change those tasks.');
+        return result({
+          completed,
+          tasks: ((data ?? []) as Record<string, unknown>[]).map((task) => {
+            const course = owned.courses.get(task.course_id as string);
+            return {
+              id: String(task.id),
+              title: String(task.title ?? ''),
+              due_date: (task.due_date as string | null) ?? null,
+              completed: Boolean(task.completed),
+              completed_at: (task.completed_at as string | null) ?? null,
+              course: course ? { id: course.id, code: course.code, name: course.name } : null,
+            };
+          }),
+        });
+      } catch (cause) {
+        return toolCrashed('complete_tasks', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'log_study_session',
+    {
+      title: 'Log study time in Akada',
+      description: 'Record time the student actually spent studying one active-semester course, optionally against a specific task, with a note about what the sitting covered. Only log time the student reports; never estimate it. `date` defaults to today and takes a past date for a sitting being written up after the fact.',
+      inputSchema: z.object({
+        course_id: z.string().uuid(),
+        duration_minutes: z.number().int().min(1).max(Math.floor(MAX_SESSION_SECONDS / 60)),
+        date: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional(),
+        task_id: z.string().uuid().optional(),
+        note: z.string().trim().max(SESSION_NOTE_MAX).optional(),
+      }),
+      annotations: { destructiveHint: false, idempotentHint: false },
+    },
+    async ({ course_id, duration_minutes, date, task_id, note }) => {
+      try {
+        const semesterId = await activeSemesterId(token);
+        if (!semesterId) return toolError('No active semester is set in Akada.');
+        const supabase = mcpSupabase(token.supabaseAccessToken);
+        const { data: course, error: courseError } = await supabase
+          .from('courses')
+          .select('id, code, name')
+          .eq('id', course_id)
+          .eq('user_id', token.userId)
+          .eq('semester_id', semesterId)
+          .maybeSingle();
+        if (courseError) return queryFailed('log_study_session', 'course lookup', courseError, 'Akada could not look up that course.');
+        if (!course) return toolError('That course is not available in your active Akada semester. Find the course again first.');
+
+        // A task from another course would be accepted by the database and
+        // then read back as time spent on the wrong thing, because
+        // sessions.task_id is only `on delete set null` and nothing ties the
+        // pair together. Checked here rather than trusted.
+        if (task_id) {
+          const owned = await loadOwnTasks('log_study_session', token, [task_id]);
+          if (!owned.ok) return owned.error;
+          const task = owned.tasks[0];
+          if (String(task.course_id) !== course.id) {
+            return toolError('That task belongs to a different course. Log the session against the task’s own course, or leave task_id out.');
+          }
+        }
+
+        const { data: session, error: insertError } = await supabase
+          .from('sessions')
+          .insert({
+            user_id: token.userId,
+            course_id: course.id,
+            task_id: task_id ?? null,
+            // The server clock is UTC, which is a day boundary the student
+            // does not live in. Their own date wins whenever they give one.
+            date: date ?? isoDate(new Date()),
+            duration_seconds: duration_minutes * 60,
+            note: note ?? '',
+          })
+          // The semester_id column is filled by schema.sql's
+          // sessions_set_semester_id trigger, exactly as the app's own
+          // addSession relies on. `*` for the same reason as everywhere else
+          // here: an un-migrated project still answers.
+          .select('*');
+        if (insertError) return queryFailed('log_study_session', 'insert', insertError, 'Akada could not save that study session.');
+        const row = ((session ?? []) as Record<string, unknown>[])[0] ?? {};
+        return result({
+          session: {
+            id: String(row.id ?? ''),
+            date: (row.date as string | null) ?? null,
+            duration_minutes: Math.round(Number(row.duration_seconds ?? 0) / 60),
+            duration_seconds: Number(row.duration_seconds ?? 0),
+            note: typeof row.note === 'string' ? row.note : '',
+            task_id: (row.task_id as string | null) ?? null,
+            course: { id: course.id, code: course.code, name: course.name },
+          },
+        });
+      } catch (cause) {
+        return toolCrashed('log_study_session', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_weekly_stats',
+    {
+      title: 'Read an Akada study week',
+      description: 'Read how one week went: hours logged per course against each course’s weekly goal, tasks ticked off, and the student’s current run of consecutive studied days. `week_offset` is 0 for this week, -1 for last week. This tool never changes Akada data.',
+      inputSchema: z.object({
+        week_offset: z.number().int().min(-12).max(0).default(0),
+        course_id: z.string().uuid().optional(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ week_offset, course_id }) => {
+      try {
+        const semesterId = await activeSemesterId(token);
+        if (!semesterId) return result({ courses: [], message: 'No active semester is set in Akada.' });
+        const supabase = mcpSupabase(token.supabaseAccessToken);
+        // Monday-first, the same week the app's own weekBounds draws, so a
+        // number read here and a number read on the Stats screen agree.
+        const anchor = new Date();
+        anchor.setDate(anchor.getDate() + week_offset * 7);
+        const from = isoDate(startOfWeek(anchor));
+        const to = isoDate(endOfWeek(anchor));
+
+        const { data: courses, error: coursesError } = await supabase
+          .from('courses')
+          .select('id, code, name, weekly_goal_hours')
+          .eq('user_id', token.userId)
+          .eq('semester_id', semesterId)
+          .order('code');
+        if (coursesError) return queryFailed('get_weekly_stats', 'courses read', coursesError, 'Akada could not load courses.');
+        if (course_id && !(courses ?? []).some((course) => course.id === course_id)) {
+          return toolError('That course is not available in your active Akada semester.');
+        }
+
+        // The streak needs days before this week, so sessions are read over a
+        // wider window than the week being reported and filtered twice.
+        const streakFloor = new Date();
+        streakFloor.setDate(streakFloor.getDate() - 120);
+        const [{ data: sessions, error: sessionsError }, { data: tasks, error: tasksError }] = await Promise.all([
+          supabase
+            .from('sessions')
+            .select('course_id, date, duration_seconds, note')
+            .eq('user_id', token.userId)
+            .eq('semester_id', semesterId)
+            .gte('date', isoDate(streakFloor)),
+          supabase
+            .from('tasks')
+            .select('course_id, title, completed, completed_at')
+            .eq('user_id', token.userId)
+            .eq('semester_id', semesterId)
+            .eq('completed', true),
+        ]);
+        const readError = sessionsError ?? tasksError;
+        if (readError) {
+          return queryFailed('get_weekly_stats', sessionsError ? 'sessions read' : 'tasks read', readError, 'Akada could not load that week.');
+        }
+
+        const inWeek = (sessions ?? []).filter((session) => session.date >= from && session.date <= to);
+        const scoped = course_id ? inWeek.filter((session) => session.course_id === course_id) : inWeek;
+        const secondsByCourse = new Map<string, number>();
+        scoped.forEach((session) => {
+          secondsByCourse.set(session.course_id, (secondsByCourse.get(session.course_id) ?? 0) + Number(session.duration_seconds ?? 0));
+        });
+
+        // A day counts once, however many sittings it held. Today not having
+        // been studied yet does not break a run that is otherwise intact, so
+        // the count is allowed to start at yesterday.
+        const studied = new Set((sessions ?? []).map((session) => session.date));
+        const cursor = new Date();
+        if (!studied.has(isoDate(cursor))) cursor.setDate(cursor.getDate() - 1);
+        let streak = 0;
+        while (studied.has(isoDate(cursor)) && streak < 365) {
+          streak += 1;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+
+        const closed = (tasks ?? []).filter((task) => {
+          const day = typeof task.completed_at === 'string' ? task.completed_at.slice(0, 10) : '';
+          if (day < from || day > to) return false;
+          return !course_id || task.course_id === course_id;
+        });
+
+        const perCourse = (courses ?? [])
+          .filter((course) => !course_id || course.id === course_id)
+          .map((course) => {
+            const seconds = secondsByCourse.get(course.id) ?? 0;
+            const goalHours = Number(course.weekly_goal_hours);
+            return {
+              id: course.id,
+              code: course.code,
+              name: course.name,
+              hours_logged: Math.round((seconds / 3600) * 100) / 100,
+              weekly_study_goal_hours: goalHours,
+              goal_met: goalHours > 0 ? seconds >= goalHours * 3600 : null,
+            };
+          });
+
+        return result({
+          week: { from, to, offset: week_offset },
+          courses: perCourse,
+          totals: {
+            hours_logged: Math.round((scoped.reduce((sum, session) => sum + Number(session.duration_seconds ?? 0), 0) / 3600) * 100) / 100,
+            session_count: scoped.length,
+            tasks_completed: closed.length,
+          },
+          tasks_completed: closed.map((task) => ({ title: task.title, course_id: task.course_id })),
+          studied_day_streak: streak,
+        });
+      } catch (cause) {
+        return toolCrashed('get_weekly_stats', cause);
       }
     },
   );

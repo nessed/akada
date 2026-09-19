@@ -23,10 +23,14 @@ import {
   cleanMeetingTime,
   cleanSection,
   cleanDisplayName,
+  cleanKind,
   cleanOptionalDate,
+  cleanPages,
   cleanSessionNote,
   cleanTaskTitle,
   cleanText,
+  cleanWeight,
+  sanitizeAssessments,
   requireIsoDate,
 } from '@/lib/planner-safety';
 
@@ -136,6 +140,7 @@ function sanitizeCourse(course: Course): Course {
     instructor: cleanInstructor(course.instructor),
     meetingTime: cleanMeetingTime(course.meetingTime),
     position: cleanPosition(course.position),
+    assessments: sanitizeAssessments(course.assessments),
   };
 }
 
@@ -161,6 +166,9 @@ function sanitizeTask(task: Task): Task {
     priority: task.priority === 'high' ? 'high' : 'normal',
     completed: Boolean(task.completed),
     completedAt: task.completed ? task.completedAt : null,
+    kind: cleanKind(task.kind),
+    weight: cleanWeight(task.weight),
+    pages: cleanPages(task.pages),
   };
 }
 

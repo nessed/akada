@@ -1,7 +1,9 @@
+import type { Assessment, TaskKind } from './data/types';
+
 const COURSE_CODE_MAX = 18;
 const COURSE_NAME_MAX = 90;
 const TASK_TITLE_MAX = 140;
-const SESSION_NOTE_MAX = 800;
+export const SESSION_NOTE_MAX = 800;
 const DISPLAY_NAME_MAX = 60;
 // Avatars are resized client-side to 160x160 JPEG at 0.7 quality, which lands
 // around 3-8 KB of base64. 64 KB is generous headroom and still keeps a row
@@ -61,6 +63,58 @@ export function cleanCredits(value: unknown): number | null {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return null;
   return Math.min(12, Math.round(parsed * 2) / 2);
+}
+
+const TASK_KINDS: TaskKind[] = ['task', 'reading', 'exam'];
+
+/** A row's kind. Anything unrecognised is a plain task, which is the default. */
+export function cleanKind(value: unknown): TaskKind {
+  return TASK_KINDS.includes(value as TaskKind) ? (value as TaskKind) : 'task';
+}
+
+/**
+ * A percentage, or null. Numbers arrive as strings from PostgREST's `numeric`,
+ * so this parses rather than assumes.
+ */
+export function cleanWeight(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
+}
+
+export function cleanPages(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.min(10000, Math.round(n)) : null;
+}
+
+/**
+ * The weighting a course is marked on. Kept to a sane length and to numbers
+ * that are actually percentages, because this drives a headline figure ("72%
+ * of your grade is still unmarked") and a row of bad data would make the app
+ * state something untrue rather than merely look wrong.
+ */
+export function sanitizeAssessments(value: unknown): Assessment[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 40).flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Partial<Assessment>;
+    const id = cleanText(String(row.id ?? ''), 80);
+    const label = cleanText(String(row.label ?? ''), 120);
+    if (!id || !label) return [];
+    const weight = Number(row.weight);
+    const score = row.score === null || row.score === undefined ? null : Number(row.score);
+    const outOf = row.outOf === null || row.outOf === undefined ? null : Number(row.outOf);
+    return [
+      {
+        id,
+        label,
+        weight: Number.isFinite(weight) ? Math.min(100, Math.max(0, weight)) : 0,
+        score: Number.isFinite(score as number) ? (score as number) : null,
+        outOf: Number.isFinite(outOf as number) && (outOf as number) > 0 ? (outOf as number) : null,
+      },
+    ];
+  });
 }
 
 export function cleanTaskTitle(value: unknown): string {

@@ -26,10 +26,14 @@ import {
   cleanMeetingTime,
   cleanSection,
   cleanDisplayName,
+  cleanKind,
   cleanOptionalDate,
+  cleanPages,
   cleanSessionNote,
   cleanTaskTitle,
   cleanText,
+  cleanWeight,
+  sanitizeAssessments,
   requireIsoDate,
 } from '@/lib/planner-safety';
 
@@ -54,6 +58,8 @@ interface CourseRow {
    * unknown column and the dashboard would show nothing at all.
    */
   sort_order?: number | null;
+  /** Absent for the same reason, and for the same handling. */
+  assessments?: unknown;
 }
 
 interface SessionRow {
@@ -77,6 +83,10 @@ interface TaskRow {
   completed: boolean;
   completed_at: string | null;
   created_at: string;
+  /** Added after the fact, so absent on a database still on an older schema. */
+  kind?: string | null;
+  weight?: number | string | null;
+  pages?: number | string | null;
 }
 
 interface SemesterRow {
@@ -101,6 +111,7 @@ function rowToCourse(r: CourseRow): Course {
     instructor: cleanInstructor(r.instructor),
     meetingTime: cleanMeetingTime(r.meeting_time),
     position: typeof r.sort_order === 'number' ? r.sort_order : undefined,
+    assessments: sanitizeAssessments(r.assessments),
   };
 }
 
@@ -128,6 +139,9 @@ function rowToTask(r: TaskRow): Task {
     completed: Boolean(r.completed),
     completedAt: r.completed_at,
     createdAt: r.created_at,
+    kind: cleanKind(r.kind),
+    weight: cleanWeight(r.weight),
+    pages: cleanPages(r.pages),
   };
 }
 
@@ -175,6 +189,22 @@ function courseWriteError(error: { code?: string }, code: string): Error {
  */
 function isMissingOrderColumn(error: { code?: string; message?: string }): boolean {
   return error?.code === '42703' || Boolean(error?.message?.includes('sort_order'));
+}
+
+/**
+ * The columns a task only sometimes has. Sent as a spread rather than as
+ * fixed keys so a plain, undated, unweighted task writes exactly the insert
+ * it always did — which is also what keeps it working against a project that
+ * has not re-run supabase/schema.sql, since the columns are never mentioned.
+ */
+function taskExtras(input: Partial<Task>): Record<string, unknown> {
+  const extras: Record<string, unknown> = {};
+  if (input.kind && input.kind !== 'task') extras.kind = cleanKind(input.kind);
+  const weight = cleanWeight(input.weight);
+  if (weight !== null) extras.weight = weight;
+  const pages = cleanPages(input.pages);
+  if (pages !== null) extras.pages = pages;
+  return extras;
 }
 
 const COURSE_ORDER_UNAVAILABLE =
@@ -272,9 +302,15 @@ export class SupabaseAdapter implements DataProvider {
         section: cleanSection(input.section),
         instructor: cleanInstructor(input.instructor),
         meeting_time: cleanMeetingTime(input.meetingTime),
-        // A new course lands at the bottom of whatever order the student has
-        // already arranged. Omitted entirely when the column is not there yet.
+        // Both of these are omitted entirely when they carry nothing, which
+        // is what lets the insert still run against a database that has not
+        // re-run supabase/schema.sql: an unmentioned column cannot be
+        // rejected as unknown. A new course lands at the bottom of whatever
+        // order the student has already arranged.
         ...(position === null ? {} : { sort_order: position }),
+        ...(input.assessments?.length
+          ? { assessments: sanitizeAssessments(input.assessments) }
+          : {}),
       })
       .select()
       .single();
@@ -342,6 +378,7 @@ export class SupabaseAdapter implements DataProvider {
       patch.name = name;
     }
     if (updates.color !== undefined) patch.color = cleanText(updates.color, 32) || '#A8B89B';
+    if (updates.assessments !== undefined) patch.assessments = sanitizeAssessments(updates.assessments);
     if (updates.tint !== undefined) patch.tint = updates.tint ? cleanText(updates.tint, 32) : null;
     if (updates.weeklyGoalHours !== undefined) {
       patch.weekly_goal_hours = clampWeeklyGoalHours(updates.weeklyGoalHours);
@@ -521,6 +558,7 @@ export class SupabaseAdapter implements DataProvider {
         subtasks: sanitizeSubtasks(input.subtasks),
         due_date: cleanOptionalDate(input.dueDate),
         priority: input.priority === 'high' ? 'high' : 'normal',
+        ...taskExtras(input),
       })
       .select()
       .single();
@@ -550,6 +588,9 @@ export class SupabaseAdapter implements DataProvider {
       patch.completed_at = updates.completed ? new Date().toISOString() : null;
     }
     if (updates.completedAt !== undefined) patch.completed_at = updates.completedAt;
+    if (updates.kind !== undefined) patch.kind = cleanKind(updates.kind);
+    if (updates.weight !== undefined) patch.weight = cleanWeight(updates.weight);
+    if (updates.pages !== undefined) patch.pages = cleanPages(updates.pages);
 
     const { data, error } = await this.supabase
       .from('tasks')
