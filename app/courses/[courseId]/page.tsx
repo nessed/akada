@@ -7,8 +7,11 @@ import PageShell from '@/components/PageShell';
 import BackButton from '@/components/BackButton';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import DatePicker from '@/components/DatePicker';
+import DueDateBadge from '@/components/DueDateBadge';
 import LoadingIndicator from '@/components/LoadingIndicator';
-import TaskItem from '@/components/TaskItem';
+import TaskRow from '@/components/TaskRow';
+import HourStrokes from '@/components/HourStrokes';
+import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import Stamp from '@/components/notebook/Stamp';
 import { useNotice } from '@/components/Notice';
 import CourseSessionLog from '@/components/course/CourseSessionLog';
@@ -18,7 +21,14 @@ import type { Course, Session, Task } from '@/lib/data';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { isLoggableDuration } from '@/lib/session-safety';
 import { useTimer } from '@/lib/timer-context';
-import { formatHM, resolveTint, totalSeconds } from '@/lib/utils';
+import {
+  formatHM,
+  formatRelativeDate,
+  isoDate,
+  resolveTint,
+  sessionsThisWeek,
+  totalSeconds,
+} from '@/lib/utils';
 import {
   useOnboardingComplete,
   useCourses,
@@ -64,6 +74,7 @@ export default function CoursePage() {
   const [saving, setSaving] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [confirmSwitch, setConfirmSwitch] = useState(false);
+  const [startTarget, setStartTarget] = useState<StartTarget | null>(null);
 
   useEffect(() => {
     if (onboardingError) {
@@ -143,9 +154,7 @@ export default function CoursePage() {
     router.push('/timer');
   }
 
-  async function toggleTask(id: string) {
-    const task = tasks.find((item) => item.id === id);
-    if (!task) return;
+  async function toggleTask(task: Task) {
     try {
       await toggleTaskOptimistic(task);
     } catch (error) {
@@ -241,193 +250,277 @@ export default function CoursePage() {
 
   const tint = resolveTint(course.color, course.tint);
   const details = catalogDetails(course);
+  const today = isoDate();
+  const weekSeconds = totalSeconds(sessionsThisWeek(courseSessions));
+  const overdueCount = open.filter((t) => t.dueDate && t.dueDate < today).length;
+  // The earliest dated task still open. Open is already sorted by due date,
+  // so this is the first one that has a date at all.
+  const nextDue = open.find((t) => t.dueDate) ?? null;
+  const lastSession = log[0] ?? null;
+  const lastSessionLabel = lastSession ? formatRelativeDate(lastSession.date).toLowerCase() : null;
 
   return (
-    <PageShell>
+    <PageShell wide>
       <BackButton onClick={goBack} label="Courses" />
 
-      <header className="mb-[22px]">
-        <p className="eyebrow m-0" style={{ color: course.color }}>
-          {course.code}
-        </p>
-        <h1 className="mt-1.5 mb-0 font-serif text-[36px] font-medium leading-[1.05] tracking-[-0.025em]">
-          <span className="hl-swipe" style={{ '--hl': tint } as React.CSSProperties}>
-            {course.name}
-          </span>
-        </h1>
+      <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0">
+          <p className="m-0 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <span className="eyebrow" style={{ color: course.color }}>
+              {course.code}
+            </span>
+            {details.length > 0 && (
+              <span className="font-mono text-[11px] text-muted">
+                {details.map((row) => row.value).join(' · ')}
+              </span>
+            )}
+          </p>
+          <h1 className="m-0 mt-1.5 font-serif text-[32px] font-medium leading-[1.05] tracking-[-0.025em] md:text-[36px]">
+            <span className="hl-swipe" style={{ '--hl': tint } as React.CSSProperties}>
+              {course.name}
+            </span>
+          </h1>
+        </div>
 
-        {details.length > 0 && (
-          <dl className="m-0 mt-4">
-            {details.map((row) => (
-              <div
-                key={row.label}
-                className="flex items-baseline gap-4 border-b border-dashed border-line py-2 last:border-0"
-              >
-                <dt className="eyebrow m-0 shrink-0">{row.label}</dt>
-                <dd className="m-0 ml-auto min-w-0 text-right font-serif text-[14px] text-ink-soft">
-                  {row.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={handleStartSession}
+            className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-opacity hover:opacity-90"
+          >
+            <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M7 5l12 7-12 7V5z" />
+            </svg>
+            Start timer
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAdding(true);
+              setDraftTitle('');
+              setDraftDue('');
+            }}
+            className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+          >
+            Add task
+          </button>
+        </div>
       </header>
 
-      <CourseWeekCard course={course} sessions={courseSessions} onGoalChange={saveGoal} />
-
-      {/* The one filled action on the page, per the guide. */}
-      <button
-        type="button"
-        onClick={handleStartSession}
-        className="mt-[var(--density-gap)] flex min-h-[56px] w-full items-center justify-center gap-2.5 rounded-2xl bg-primary text-[15px] font-medium text-primary-contrast transition-opacity active:opacity-90"
-      >
-        <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 5l12 7-12 7V5z" />
-        </svg>
-        Start a session
-      </button>
-
-      {/* Tasks. This course's list, and only this course's. */}
-      <section className="mt-[var(--density-section)]">
-        <div className="flex items-baseline gap-2.5 border-b border-line pb-2.5">
-          <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">Tasks</h2>
-          <span className="tnum ml-auto font-mono text-[12px] text-muted">
-            {open.length}
-          </span>
+      {/* The four numbers the course is actually judged on, across the top
+          rather than stacked down the side of a phone column. */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="rounded-[14px] border border-line bg-paper p-4">
+          <p className="eyebrow m-0">This week</p>
+          <p className="m-0 mt-2 font-mono text-[20px] font-semibold tabular-nums">
+            {formatHM(weekSeconds)}
+            <span className="ml-1 text-[12px] font-normal text-muted">
+              / {course.weeklyGoalHours}h
+            </span>
+          </p>
+          <HourStrokes
+            seconds={weekSeconds}
+            goalHours={course.weeklyGoalHours}
+            color={course.color}
+            height={12}
+            width={7}
+            max={12}
+            className="mt-2.5"
+            label={`${formatHM(weekSeconds)} of ${course.weeklyGoalHours} hours this week`}
+          />
         </div>
 
-        <div className="pt-1.5">
-          {open.map((task) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              course={course}
-              onToggle={toggleTask}
-              onStartTimer={handleStartTimerForTask}
-              onDelete={removeTask}
-            />
-          ))}
+        <div className="rounded-[14px] border border-line bg-paper p-4">
+          <p className="eyebrow m-0">Term</p>
+          <p className="m-0 mt-2 font-mono text-[20px] font-semibold tabular-nums">
+            {formatHM(totalSeconds(log))}
+          </p>
+          <p className="m-0 mt-2 text-[11px] text-muted">
+            {log.length} {log.length === 1 ? 'session' : 'sessions'}
+            {lastSessionLabel && ` · last ${lastSessionLabel}`}
+          </p>
+        </div>
 
-          {open.length === 0 && !adding && (
-            <button
-              type="button"
-              onClick={() => {
-                setAdding(true);
-                setDraftTitle('');
-                setDraftDue('');
-              }}
-              className="mt-3 w-full rounded-[10px] border border-dashed border-line px-4 py-9 text-center font-serif text-[14px] italic text-muted-soft transition-colors hover:text-ink-soft"
-            >
-              Nothing written down for this course yet.
-            </button>
+        <div className="rounded-[14px] border border-line bg-paper p-4">
+          <p className="eyebrow m-0">Open tasks</p>
+          <p className="m-0 mt-2 font-mono text-[20px] font-semibold tabular-nums">
+            {open.length}
+            {overdueCount > 0 && (
+              <span className="ml-1.5 text-[12px] font-normal text-warn">
+                {overdueCount} overdue
+              </span>
+            )}
+          </p>
+          <p className="m-0 mt-2 text-[11px] text-muted">
+            {done.length} finished so far
+          </p>
+        </div>
+
+        <div className="rounded-[14px] border border-line bg-paper p-4">
+          <p className="eyebrow m-0">Next due</p>
+          {nextDue ? (
+            <>
+              <p className="m-0 mt-2">
+                <DueDateBadge dueDate={nextDue.dueDate} size="md" />
+              </p>
+              <p className="m-0 mt-1.5 line-clamp-2 text-[12px] leading-[1.4] text-ink">
+                {nextDue.title}
+              </p>
+            </>
+          ) : (
+            <p className="m-0 mt-2 font-serif text-[15px] italic text-muted">Nothing dated</p>
           )}
+        </div>
+      </div>
 
-          {adding ? (
-            <div
-              className="mt-2 animate-fade-in rounded-[10px] bg-paper px-3 py-2.5"
-              style={{ border: `1px solid ${course.color}` }}
-            >
-              <input
-                autoFocus
-                type="text"
-                value={draftTitle}
-                onChange={(event) => setDraftTitle(event.target.value)}
-                placeholder="New task"
-                className="w-full border-0 bg-transparent p-1 font-serif text-sm italic text-ink outline-none"
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitDraft();
-                  if (event.key === 'Escape') setAdding(false);
-                }}
-              />
-              <div className="mt-2 flex items-center gap-2">
-                <DatePicker
-                  value={draftDue}
-                  onChange={setDraftDue}
-                  placeholder="Due"
-                  compact
-                  className="w-[132px]"
-                />
+      <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0">
+          {/* Tasks. This course's list, and only this course's, so the rows
+              drop the course column they would otherwise all repeat. */}
+          <section>
+            <div className="flex items-baseline justify-between gap-3 px-2 pb-2">
+              <p className="eyebrow m-0">
+                Tasks
+                <span className="ml-1.5 font-mono tracking-normal text-ink-soft">
+                  {open.length}
+                </span>
+              </p>
+              {done.length > 0 && (
                 <button
                   type="button"
-                  disabled={saving}
-                  onClick={commitDraft}
-                  className="hand-underline ml-auto bg-transparent px-0.5 font-serif text-[13px] text-ink disabled:opacity-40"
+                  aria-expanded={showDone}
+                  onClick={() => setShowDone((current) => !current)}
+                  className="h-10 rounded-[10px] px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
                 >
-                  {saving ? 'Adding' : 'Add'}
+                  {showDone ? 'Hide' : 'Done'} {done.length}
                 </button>
-              </div>
+              )}
             </div>
-          ) : (
-            open.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setAdding(true);
-                  setDraftTitle('');
-                  setDraftDue('');
-                }}
-                className="w-full px-1 py-3 text-left font-serif text-[13px] italic text-muted-soft transition-colors hover:text-ink"
-              >
-                + jot a task…
-              </button>
-            )
-          )}
-        </div>
 
-        {done.length > 0 && (
-          <div className="mt-1">
-            <button
-              type="button"
-              aria-expanded={showDone}
-              onClick={() => setShowDone((current) => !current)}
-              className="bg-transparent p-0 font-serif text-[13px] italic text-muted transition-colors hover:text-ink"
-            >
-              {showDone ? 'hide' : 'show'} {done.length} finished
-            </button>
-            {showDone && (
-              <div className="mt-1.5 animate-fade-in">
-                {done.map((task) => (
-                  <TaskItem
+            <div className="overflow-hidden rounded-[14px] border border-line bg-paper">
+              {open.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  course={course}
+                  hideCourse
+                  running={active?.taskId === task.id}
+                  onToggle={toggleTask}
+                  onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
+                  onDelete={(t) => removeTask(t.id)}
+                />
+              ))}
+
+              {showDone &&
+                done.map((task) => (
+                  <TaskRow
                     key={task.id}
                     task={task}
                     course={course}
+                    hideCourse
                     onToggle={toggleTask}
-                    onStartTimer={handleStartTimerForTask}
-                    onDelete={removeTask}
+                    onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
+                    onDelete={(t) => removeTask(t.id)}
                   />
                 ))}
-              </div>
+
+              {open.length === 0 && !showDone && !adding && (
+                <p className="m-0 px-4 py-9 text-center font-serif text-[14px] italic text-muted-soft">
+                  Nothing written down for this course yet.
+                </p>
+              )}
+
+              {/* The inline add sits inside the panel, on the line where the
+                  next task will appear. */}
+              {adding ? (
+                <div className="border-t border-line-soft px-3 py-2.5">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={draftTitle}
+                    onChange={(event) => setDraftTitle(event.target.value)}
+                    placeholder={`Add a task to ${course.code}`}
+                    className="w-full border-0 bg-transparent p-1 font-serif text-sm italic text-ink outline-none"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') commitDraft();
+                      if (event.key === 'Escape') setAdding(false);
+                    }}
+                  />
+                  <div className="mt-2 flex items-center gap-2">
+                    <DatePicker
+                      value={draftDue}
+                      onChange={setDraftDue}
+                      placeholder="Due"
+                      compact
+                      className="w-[132px]"
+                    />
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={commitDraft}
+                      className="hand-underline ml-auto bg-transparent px-0.5 font-serif text-[13px] text-ink disabled:opacity-40"
+                    >
+                      {saving ? 'Adding' : 'Add'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdding(true);
+                    setDraftTitle('');
+                    setDraftDue('');
+                  }}
+                  className="w-full border-t border-line-soft px-4 py-3 text-left font-serif text-[13px] italic text-muted-soft transition-colors hover:text-ink"
+                >
+                  + jot a task…
+                </button>
+              )}
+            </div>
+
+            <Link
+              href={`/tasks?course=${encodeURIComponent(course.id)}`}
+              className="mt-4 inline-block font-serif text-[13px] italic text-muted no-underline transition-colors hover:text-ink"
+            >
+              See this course beside the others →
+            </Link>
+          </section>
+        </div>
+
+        <aside className="grid gap-4 lg:sticky lg:top-10">
+          <CourseWeekCard course={course} sessions={courseSessions} onGoalChange={saveGoal} />
+
+          {/* The hours. The full log, and deleting from it, stay on Stats. */}
+          <section className="rounded-[14px] border border-line bg-paper p-5">
+            <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+              <p className="eyebrow m-0">Sessions</p>
+              {log.length > 0 && (
+                <span className="tnum font-mono text-[11px] text-muted">
+                  {formatHM(totalSeconds(log))}
+                </span>
+              )}
+            </div>
+            <div className="pt-1.5">
+              <CourseSessionLog
+                sessions={log.slice(0, 6)}
+                color={course.color}
+                emptyLine="No sessions yet. Start timer begins the first one."
+              />
+            </div>
+            {log.length > 6 && (
+              <Link
+                href="/stats"
+                className="mt-2 inline-block font-serif text-[13px] italic text-muted no-underline hover:text-ink"
+              >
+                All {log.length} on Stats →
+              </Link>
             )}
-          </div>
-        )}
+          </section>
+        </aside>
+      </div>
 
-        <Link
-          href={`/tasks?course=${encodeURIComponent(course.id)}`}
-          className="mt-4 inline-block font-serif text-[13px] italic text-muted transition-colors hover:text-ink"
-        >
-          See this course beside the others →
-        </Link>
-      </section>
-
-      {/* The hours. The full log, and deleting from it, stay on Stats. */}
-      <section className="mt-[var(--density-section)]">
-        <div className="flex items-baseline gap-2.5 border-b border-line pb-2.5">
-          <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">Sessions</h2>
-          {log.length > 0 && (
-            <span className="tnum ml-auto font-mono text-[12px] text-muted">
-              {formatHM(totalSeconds(log))}
-            </span>
-          )}
-        </div>
-        <div className="pt-1.5">
-          <CourseSessionLog
-            sessions={log}
-            color={course.color}
-            emptyLine="No sessions yet. The button above starts the first one."
-          />
-        </div>
-      </section>
-
+      <StartTimerPopover target={startTarget} onClose={() => setStartTarget(null)} />
       <ConfirmSheet
         open={confirmSwitch}
         title="Start this one instead?"

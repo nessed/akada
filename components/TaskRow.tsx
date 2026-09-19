@@ -3,16 +3,21 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Course, Task } from '@/lib/data';
 import { dueLabel } from '@/lib/utils';
+import SwipeRow from './SwipeRow';
 import HandCheck from './notebook/HandCheck';
 
 /**
- * One task on a desktop list: a 48px row on a grid, not a card.
+ * One task on a list: a 48px row on a grid, not a card.
  *
- * The phone keeps TaskItem, which is a soft line you swipe. A pointer wants
- * something else: columns that line up down the page, the whole row as the
- * way in, and the actions revealed on the row rather than behind a gesture
- * nobody can discover with a mouse. The play mark here is what replaced the
- * floating action button: a timer starts from the row it belongs to.
+ * It is the same row on both, read two ways. A pointer gets columns that line
+ * up down the page and actions that appear on hover, because a swipe is not
+ * something anyone discovers with a mouse. A finger gets the row opening
+ * sideways, right to complete and left to delete, the way every task row in
+ * the app has always opened. The play mark is what replaced the floating
+ * action button: a timer starts from the row it belongs to.
+ *
+ * Below md the course column folds away, since the colour mark beside the
+ * title already says which course it is.
  */
 
 interface Props {
@@ -73,17 +78,16 @@ export default function TaskRow({
   const due = dueLabel(task.dueDate);
   const color = course?.color ?? 'var(--muted)';
 
-  const columns = hideCourse
-    ? '40px minmax(0,1fr) 128px 88px'
-    : '40px minmax(0,1fr) 132px 128px 88px';
-
-  return (
+  const row = (
     <div
       className={`group relative grid h-12 items-center border-b border-line-soft pl-1 pr-2 text-ink transition-colors last:border-b-0 ${
-        selected ? 'bg-bg-tint' : 'hover:bg-paper-2'
-      } ${task.completed ? 'opacity-50' : ''}`}
+        selected ? 'bg-bg-tint' : 'bg-paper md:bg-transparent md:hover:bg-paper-2'
+      } ${task.completed ? 'opacity-50' : ''} ${
+        hideCourse
+          ? 'grid-cols-[40px_minmax(0,1fr)_96px_44px] md:grid-cols-[40px_minmax(0,1fr)_128px_88px]'
+          : 'grid-cols-[40px_minmax(0,1fr)_96px_44px] md:grid-cols-[40px_minmax(0,1fr)_132px_128px_88px]'
+      }`}
       style={{
-        gridTemplateColumns: columns,
         boxShadow: focused ? 'inset 0 0 0 1.5px var(--ink)' : undefined,
         borderRadius: focused ? 6 : undefined,
       }}
@@ -142,7 +146,7 @@ export default function TaskRow({
       </span>
 
       {!hideCourse && (
-        <span className="flex min-w-0 items-center gap-2 text-[12px] text-ink-soft">
+        <span className="hidden min-w-0 items-center gap-2 text-[12px] text-ink-soft md:flex">
           <span
             aria-hidden
             className="block h-3.5 w-[3px] shrink-0 rounded-[1px]"
@@ -192,7 +196,7 @@ export default function TaskRow({
               type="button"
               onClick={() => playRef.current && onStartTimer(task, playRef.current)}
               aria-label={`Start timer on ${task.title}`}
-              className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-ink-soft opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+              className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-ink-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
             >
               <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 5l12 7-12 7V5z" />
@@ -200,13 +204,13 @@ export default function TaskRow({
             </button>
           ))}
 
-        <div ref={menuRef} className="relative">
+        <div ref={menuRef} className="relative hidden md:block">
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="More actions"
             aria-expanded={menuOpen}
-            className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-muted opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+            className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-muted transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
           >
             <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="5" cy="12" r="1.6" />
@@ -258,6 +262,17 @@ export default function TaskRow({
         </div>
       </span>
     </div>
+  );
+
+  return (
+    <SwipeRow
+      accent={color}
+      onComplete={task.completed ? undefined : () => onToggle(task)}
+      onDelete={onDelete ? () => onDelete(task) : undefined}
+      surfaceClassName="relative"
+    >
+      {row}
+    </SwipeRow>
   );
 }
 
