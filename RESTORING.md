@@ -1,34 +1,31 @@
-# What the revert took out, and how to put it back
+# What the revert took out, and what is back
 
 On 2026-09-19 `main` was reverted to `37d7304`, the last commit before the
-editorial redesign landed. The redesign was unwanted and the app went back to
-the notebook-paper design that preceded it.
+editorial redesign landed. The revert was a whole-tree revert, so it did not
+only undo the look: sixteen commits of function went with it.
 
-The revert was a whole-tree revert, so it did not only undo the look. Sixteen
-commits of function went with it. This file is the inventory and the recipe.
+This file was the inventory. It is now the record of working through it. Every
+numbered section below says what happened, so nothing here needs re-diagnosing.
 
 ```
-9e121b2  Revert the app to the pre-overhaul design   <- main is here
-7814ad4  Put the paper stack and the centred sheet back
-  ...    the sixteen commits below
+9e121b2  Revert the app to the pre-overhaul design
+7814ad4  Put the paper stack and the centred sheet back   <- the full pre-revert tree
+  ...    the sixteen commits
 8f99c03  Rebuild the foundation and Today on the redesign
-37d7304  Let a finger keep drawing past the first mark   <- the tree main now has
+37d7304  Let a finger keep drawing past the first mark    <- what the revert left
 ```
 
 Everything reverted is still in the repository. Nothing was force-pushed and no
 history was rewritten.
 
 - `before-full-revert` — branch pinned at `7814ad4`, the full pre-revert state.
-- `git revert 9e121b2` — puts the entire pre-revert tree back in one commit,
-  design included. Use this only if the design is wanted back too.
 - `git show 7814ad4:<path>` — read any single file as it was.
 - `git checkout 7814ad4 -- <path>` — take a single file back.
 
-## The important thing about the database
+## The database
 
-**The revert changed repository code only. The live Supabase database still has
-every column the reverted work added.** `supabase/schema.sql` in the repo no
-longer describes them, but the project itself is unchanged:
+**The revert changed repository code only. The live Supabase database kept
+every column the reverted work added.**
 
 | Table | Column | Type |
 | --- | --- | --- |
@@ -37,164 +34,95 @@ longer describes them, but the project itself is unchanged:
 | `tasks` | `weight` | `numeric`, check 0–100 or null |
 | `tasks` | `pages` | `integer`, check 0–10000 or null |
 
-All four are additive with defaults, which is why the reverted code reads every
-row without noticing them. It also means **no migration is needed to restore any
-of this**. Bringing a feature back is a code-only change. If the schema file is
-ever re-run from the reverted version it will simply not re-add these columns;
-copy the block back from `git show 7814ad4:supabase/schema.sql` first.
+All four are additive with defaults, so no migration was needed to start
+reading them again and none is needed now. They are described in
+`supabase/schema.sql` again, and the adapters read and write all four.
 
-Data written into those columns before the revert is still there and is not
-being read by anything right now.
+## The inventory
 
-## What was lost
+### 1. The MCP connector dropped from 9 tools to 5 — **restored** (`27d9946`)
 
-Ordered by how expensive it is to live without.
+`update_tasks`, `complete_tasks`, `log_study_session` and `get_weekly_stats`
+are back, along with `subtasks` and `description` on `create_tasks`, from
+`7814ad4` unchanged. `SESSION_NOTE_MAX` is exported from
+`lib/planner-safety.ts` because the route imports it.
 
-### 1. The MCP connector dropped from 9 tools to 5
+**Still to do after deploying:** disconnect and reconnect the connector in
+Settings, then start a new chat. A connector's tool list is fetched once at
+connect time, so the four new tools will not appear otherwise. This is not a
+bug in the route; do not re-diagnose it.
 
-`app/api/mcp/route.ts`. Introduced by `36ae744` and `85d8ece`.
+**Not done:** the connector still cannot set `kind`, `weight` or `pages` on a
+task. Neither could the pre-revert route, so nothing was lost — but it is the
+obvious next thing, since a syllabus import is exactly where a reading with a
+page count and an exam with a weight would come from.
 
-Still working: `find_course`, `create_tasks`, `delete_course`, `get_tasks`,
-`get_overview`.
+### 2. CI typecheck and lint gate — **was never lost**
 
-Gone:
+`.github/workflows/ci.yml` is on `main` and `git log` has it last touched by
+`060c8fb`. The revert did not take it. The earlier claim here was wrong.
 
-- `update_tasks` — edit a task's title, due date, priority, description
-- `complete_tasks` — mark tasks done
-- `log_study_session` — write a sitting from a chat
-- `get_weekly_stats` — read the week back
+### 3. Timer correctness fixes — **done during the redesign**
 
-Also gone: `create_tasks` no longer accepts `subtasks` (plain strings, ids
-generated server-side) or `description`.
+The dead-end guards and the mounted `PendingSessionLogSheet` were ported onto
+the rebuilt timer rather than copied from `7814ad4`, since that file's
+`SitDown` / `LockedIn` split is a design the redesign replaced. See
+`app/timer/page.tsx`.
 
-**To restore:** `git checkout 7814ad4 -- app/api/mcp/route.ts MCP_SETUP.md`.
-The route is self-contained and does not depend on any reverted UI. This is the
-single highest value restore in the list and should be first.
+### 4. Semesters and the term archive — **nothing was lost**
 
-After deploying it, the connector must be disconnected and reconnected in
-Settings, then a new chat started. A connector's tool list is fetched once at
-connect time, so the new tools will not appear otherwise. This is not a bug in
-the route; do not re-diagnose it.
+The data layer survived the revert, and so did the UI: `SemesterManager` has
+the archive list and reads a past term back through `getCoursesForSemester` /
+`getSessionsForSemester`, mounted in both the settings page and the settings
+sheet. There is no `setActiveSemester` on the provider — and there was none at
+`7814ad4` either, so re-activating a finished term is a feature that has never
+existed, not one the revert took.
 
-### 2. CI typecheck and lint gate
+### 5. Course grading and weights — **restored, reshaped** (`926ecd0`)
 
-`.github/workflows/ci.yml`. Introduced by `060c8fb`.
+`lib/derive.ts` is back, trimmed to what is actually consumed. Reading and
+editing are one panel on the course page (`components/course/GradeStanding.tsx`)
+rather than a read on the course and an editor three screens away in settings.
+The term-wide view is `components/term/GradeWeighting.tsx`, on Stats.
 
-`main` currently has no gate. A push that fails `tsc` or `eslint` will deploy.
+### 6. Task kinds: readings and exams — **restored, reshaped** (`926ecd0`)
 
-**To restore:** `git checkout 7814ad4 -- .github/workflows/ci.yml` and, if the
-`contrast` script is wanted with it,
-`git checkout 7814ad4 -- scripts/check-contrast.mjs` plus the `contrast` entry
-in `package.json` scripts.
+Kind, weight and pages are edited in the task sheet on `/tasks`, marked in the
+margin of a task row, and read on Today by `ComingPanel` in
+`components/today/TodayPanels.tsx` — weighted work counted down, and the
+reading backlog in pages and in hours at the measured rate.
 
-Independent of everything else. Restore it second, so whatever comes after is
-gated.
+`ReadingBacklog.tsx` and `WatchList.tsx` from `7814ad4` were not taken back;
+the panel covers both in one place.
 
-### 3. Timer correctness fixes
+### 7. Task subtasks and the reading view — **present**
 
-`lib/timer-context.tsx`, `lib/session-safety.ts`, `app/timer/page.tsx`.
-Introduced by `060c8fb` and `1f28ed9`.
-
-Gone with the revert:
-
-- The dead-end guards on `/timer`. A failed courses read, a deleted course id,
-  or an account with no courses now leaves the screen spinning on
-  "Loading your timer" with no way out but the browser's back button.
-- `PendingSessionLogSheet` mounted on the timer route itself. `/timer` does not
-  use `PageShell`, so pressing Stop waits on a sheet that is never mounted.
-
-These are behaviour fixes, not design, and they are worth taking back even if
-nothing else is.
-
-**To restore:** the timer split (`SitDown` / `LockedIn`) came in the same era
-and is a design change, so do not take `app/timer/page.tsx` wholesale. Read
-`git show 1f28ed9` and `git show 060c8fb` and port the guards onto the current
-single-screen timer.
-
-### 4. Semesters as a first-class thing, and the term archive
-
-`lib/data/*`, settings panels. The data layer at `37d7304` already has
-semesters, `activeSemesterId` and the self-healing "create one if none exists"
-path, so the model survived the revert. What was lost is the UI around it: the
-archive list, switching the active semester, and reading a past term back.
-
-**To restore:** `components/settings/*` from `7814ad4`, which is where the
-semester panels live. They were built for the settings *page* that the revert
-removed, so they need re-hosting in the current `SettingsSheet`.
-
-### 5. Course grading and weights
-
-`components/course/GradeStanding.tsx`, `components/term/GradeWeighting.tsx`,
-`lib/derive.ts`. Introduced by `27eb522` and `02e8a5b`.
-
-Enter how a course is marked, and the app says how much of the grade is still
-unmarked. Reads `courses.assessments` and `tasks.weight`, both of which are
-still in the database.
-
-**To restore:** `git checkout 7814ad4 -- components/course/GradeStanding.tsx components/term/GradeWeighting.tsx lib/derive.ts`, then re-add the `assessments`
-and `weight` fields to the types in `lib/data/types.ts` and the read/write paths
-in `lib/data/supabase-adapter.ts` and `lib/data/local-adapter.ts`. Take those
-adapter hunks from `7814ad4` rather than rewriting them.
-
-### 6. Task kinds: readings and exams
-
-`tasks.kind`, `tasks.pages`. Introduced by `02e8a5b`.
-
-A reading carries a page count and feeds a backlog view; an exam is circled on
-the month grid and counted down to. Same restore shape as grading: columns are
-live, types and adapters need the fields back.
-
-Related components, all at `7814ad4`: `components/list/ReadingBacklog.tsx`,
-`components/list/WatchList.tsx`.
-
-### 7. Task subtasks and the reading view
-
-`components/EditTaskSheet.tsx` and the task detail view. `tasks.subtasks` has
-existed since before the revert, so the column and any data in it are intact;
-only the UI for editing pieces and notes is gone.
-
-**To restore:** `git checkout 7814ad4 -- components/EditTaskSheet.tsx` and
-re-host it. Pairs with restoring `update_tasks` and `create_tasks` subtask
-support in the MCP route, since those write the same field.
+The redesign's `/tasks` already carries the reading view, the notes and
+subtask editing. `components/EditTaskSheet.tsx` was not restored because the
+page it would be hosted in no longer exists.
 
 ### 8. Screens that no longer exist
 
-These were built after the revert point and have no equivalent in the current
-tree. They are design work as much as function, so they are listed last: if the
-new design replaces them with something better, they do not need porting.
+| Screen | Status |
+| --- | --- |
+| Courses index | Replaced — `app/courses/page.tsx` |
+| Settings as a page | Replaced — `app/settings/*` |
+| Timer split into setup and desk | Replaced — the block/open timer, with `lib/use-ambient-noise.ts` |
+| Term / month calendar | **Not replaced.** `app/term/*`, `components/term/MonthGrid.tsx` at `7814ad4` |
+| Week review | **Not restored, deliberately.** `lib/review-prose.ts` generates the narrated weekly summary and is the source of the editorial voice the redesign was rejected for. Do not restore it as-is. |
 
-| Screen | Path at `7814ad4` | Introduced |
-| --- | --- | --- |
-| Term / month calendar | `app/term/*`, `components/term/MonthGrid.tsx` | `02e8a5b`, `13b8773` |
-| Courses index | `app/courses/page.tsx`, `components/course/CourseRow.tsx` | `90702ab` |
-| Settings as a page | `app/settings/*`, `components/settings/*` | `423bac1` |
-| Week review | `lib/review.ts`, `lib/review-prose.ts`, `components/review/TermSoFar.tsx` | `02e8a5b`, `279f2ab` |
-| Timer split into setup and desk | `components/timer/SitDown.tsx`, `LockedIn.tsx`, `lib/use-ambient-noise.ts` | `27eb522` |
+The month grid is the one genuine gap. Exams now count down on Today, which is
+most of what it was for, but nothing draws the term as a month.
 
-`lib/review-prose.ts` generates the narrated weekly summary and is the source of
-the editorial voice the redesign was rejected for. Do not restore it as-is.
+### The read path — **fixed** (`926ecd0`)
 
-## Suggested order
+Every read used to call `auth.getSession()` and then `activeSemesterId(uid)`,
+its own `user_settings` round trip. A dashboard opens six reads at once, so
+that was six identical semester queries plus six trips through Supabase's auth
+lock, which serializes them: about 6.9 seconds to first paint, measured.
 
-1. `app/api/mcp/route.ts` and `MCP_SETUP.md`. No UI coupling, biggest daily loss.
-2. `.github/workflows/ci.yml`. Gate everything after it.
-3. Timer guards, ported rather than copied.
-4. Types and adapter fields for `assessments`, `weight`, `kind`, `pages`. No UI
-   yet, just stop dropping the columns on read and write.
-5. Grading, readings and exams UI, in whatever form the new design gives them.
-6. The screens in section 8, only if the redesign does not replace them.
-
-Steps 1 to 4 are mechanical and safe to do while a redesign is in flight,
-because none of them touch how anything looks.
-
-## Known issue the revert did not cause
-
-The reverted build reads data the same way the newer one did: every read calls
-`activeSemesterId(uid)`, which is its own `user_settings` round trip, and every
-read also calls `auth.getSession()`, which serializes them behind Supabase's
-auth lock. Measured on the newer build: six identical `user_settings` queries
-firing at once, then `courses`, `tasks`, `sessions` and `semesters` queueing one
-behind the other, about 6.9 seconds to first paint.
-
-Memoizing the user id and the active semester id on the adapter fixes it. It is
-a backend change with no UI surface and can be done at any time.
+Both are memoized on the adapter, as promises rather than values, so callers in
+the same tick share one request instead of racing. A rejection is never cached,
+a token refresh keeps the cache, and any other auth event throws it away —
+a user id that outlived its session would read one account's rows under
+another's.
