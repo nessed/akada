@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { Course, Session, Task } from '@/lib/data';
+import HourStrokes from '@/components/HourStrokes';
 import {
   formatHours,
   sessionsThisWeek,
@@ -44,7 +45,7 @@ export default function CourseCard({
       ? course.weeklyGoalHours
       : defaultGoal;
   const goalSec = goalHours * 3600;
-  const pct = Math.min(100, (wkSec / goalSec) * 100);
+  const remainingHours = Math.max(0, (goalSec - wkSec) / 3600);
 
   const last = lastSeenByCourse(sessions)[course.id];
   const since = last ? daysBetween(last, isoDate()) : Infinity;
@@ -159,25 +160,32 @@ export default function CourseCard({
           </div>
         </div>
 
-        {/* Progress */}
+        {/* The week against the goal, one stroke per hour. A bar and a
+            percentage said the same thing twice and neither said how many
+            hours were left, which is the only part anyone acts on. */}
         <div className="mt-4">
-          <div className="mb-1.5 flex items-baseline justify-between text-xs">
+          <div className="mb-2 flex items-baseline justify-between text-xs">
             <span className="font-mono text-sm font-semibold tabular-nums text-ink">
               {formatHours(wkSec, 1)}h
-              <span className="ml-1 text-xs font-normal text-muted font-sans">
+              <span className="ml-1 font-sans text-xs font-normal text-muted">
                 / {goalHours}h
               </span>
             </span>
-            <span className="font-mono text-xs tabular-nums text-muted">
-              {Math.round(pct)}%
-            </span>
+            {remainingHours > 0 && (
+              <span className="font-mono text-xs tabular-nums text-muted">
+                {remainingHours.toFixed(remainingHours < 1 ? 1 : 0)}h to go
+              </span>
+            )}
           </div>
-          <div className="h-1 rounded-full bg-bg-tint overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-200"
-              style={{ width: `${pct}%`, background: course.color }}
-            />
-          </div>
+          <HourStrokes
+            seconds={wkSec}
+            goalHours={goalHours}
+            color={course.color}
+            height={16}
+            width={8}
+            max={12}
+            label={`${formatHours(wkSec, 1)} of ${goalHours} hours this week`}
+          />
         </div>
 
         <div className="mt-3.5 flex items-center justify-between gap-2">
