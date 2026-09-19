@@ -207,54 +207,18 @@ export default function AuthPage() {
           </div>
         </Link>
 
+        {/* The mode used to be a segmented control with a solid fill on the
+            chosen half, which is how software says "selected" and not how
+            this app does. The title says which screen this is, and the line
+            at the foot of the page is how you get to the other one. */}
         <div className="mb-8">
-          <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-line bg-paper p-1">
-            <button
-              type="button"
-              onClick={() => setAuthMode('signin')}
-              disabled={state === 'loading'}
-              aria-pressed={!isSignUp}
-              className={`rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
-                !isSignUp
-                  ? 'bg-primary text-primary-contrast'
-                  : 'text-ink-soft hover:bg-bg-tint'
-              }`}
-            >
-              Log in
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuthMode('signup')}
-              disabled={state === 'loading'}
-              aria-pressed={isSignUp}
-              className={`rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
-                isSignUp
-                  ? 'bg-primary text-primary-contrast'
-                  : 'text-ink-soft hover:bg-bg-tint'
-              }`}
-            >
-              Create account
-            </button>
-          </div>
-          <h1 className="m-0 font-serif font-medium text-[34px] tracking-[-0.025em] leading-[1.05]">
-            {isSignUp ? (
-              <>
-                Create your<br />
-                <span className="italic font-normal">study plan.</span>
-              </>
-            ) : (
-              <>
-                Welcome back<br />
-                <span className="italic font-normal">
-                  to <span className="hl">Akada</span>.
-                </span>
-              </>
-            )}
+          <h1 className="m-0 font-serif text-[34px] font-medium leading-[1.05] tracking-[-0.025em]">
+            {isSignUp ? 'Create account' : 'Sign in'}
           </h1>
-          <p className="mt-3 mb-0 font-serif italic text-[14px] text-muted leading-[1.55] max-w-[300px]">
+          <p className="mt-3 mb-0 max-w-[300px] font-serif text-[14px] italic leading-[1.55] text-muted">
             {isSignUp
-              ? 'Track courses, tasks, and focused study sessions in one calm workspace.'
-              : 'Sign in to manage your courses, tasks, timer, and progress.'}
+              ? 'Courses and term dates come next.'
+              : 'Your courses, tasks and hours, where you left them.'}
           </p>
         </div>
 

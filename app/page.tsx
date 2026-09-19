@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import StudyFan from '@/components/StudyFan';
 import { PASTEL_PALETTE } from '@/lib/utils';
 import { CONTACT_EMAIL } from '@/lib/contact';
 
@@ -20,7 +21,8 @@ export const metadata: Metadata = {
 };
 
 // The three sample courses on the landing page, coloured from the real
-// palette so the marketing shot and the app cannot drift apart.
+// palette and drawn with the app's own hour strokes, so the shot and the
+// screen it is selling cannot drift apart.
 const [SAGE, ROSE, LAVENDER] = PASTEL_PALETTE;
 
 const sampleCourses = [
@@ -31,7 +33,6 @@ const sampleCourses = [
     tint: SAGE.tint,
     hours: '3.5',
     goal: '6h',
-    pct: 58,
   },
   {
     code: 'ENG 305',
@@ -40,7 +41,6 @@ const sampleCourses = [
     tint: ROSE.tint,
     hours: '2.0',
     goal: '5h',
-    pct: 40,
   },
   {
     code: 'PSY 110',
@@ -49,7 +49,6 @@ const sampleCourses = [
     tint: LAVENDER.tint,
     hours: '4.0',
     goal: '4h',
-    pct: 100,
   },
 ];
 
@@ -118,34 +117,44 @@ export default function LandingPage() {
             </div>
           </header>
 
-          <div className="mx-auto mt-14 max-w-3xl text-center sm:mt-16">
-            <p className="eyebrow m-0 text-muted">
-              Courses, tasks, timer, progress
-            </p>
-            <h1 className="mt-4 mb-0 font-serif text-[48px] font-medium leading-[0.98] tracking-[-0.03em] sm:text-[66px]">
-              Akada
-            </h1>
-            <p className="mx-auto mt-5 mb-0 max-w-xl text-[16px] leading-[1.65] text-ink-soft">
-              A calm academic planner for organizing courses, tracking assignments,
-              logging study sessions, and seeing where your semester time goes.
-            </p>
-            <div className="mt-8 flex flex-col justify-center gap-2.5 sm:flex-row">
-              <Link
-                href="/auth?mode=signup"
-                className="rounded-2xl bg-primary px-6 py-3.5 text-[15px] font-medium text-primary-contrast"
-              >
-                Create account
-              </Link>
-              <Link
-                href="/auth"
-                className="rounded-xl border border-line-strong bg-paper px-6 py-3.5 text-[15px] font-medium text-ink-soft"
-              >
-                Log in
-              </Link>
-            </div>
-          </div>
+          {/* The page's own two columns. The claim on the left, the thing
+              itself on the right: a screenshot argues better than a
+              paragraph about what the screenshot would contain. */}
+          <div className="mt-12 grid items-center gap-12 sm:mt-16 lg:grid-cols-[minmax(0,1fr)_430px]">
+            <div className="min-w-0">
+              <p className="eyebrow m-0">Study planner</p>
+              <h1 className="m-0 mt-4 font-serif text-[40px] font-medium leading-[1.02] tracking-[-0.03em] sm:text-[54px]">
+                Courses, tasks, hours.
+                <br />
+                One term at a time.
+              </h1>
+              <p className="mt-5 mb-0 max-w-xl text-[16px] leading-[1.65] text-ink-soft">
+                Keep readings in order, start a timer on any of them in one click, and
+                watch the week fill in against a goal you set.
+              </p>
 
-          <ProductPreview />
+              <div className="mt-8 flex flex-col gap-2.5 sm:flex-row">
+                <Link
+                  href="/auth?mode=signup"
+                  className="rounded-[10px] bg-primary px-6 py-3.5 text-center text-[15px] font-medium text-primary-contrast no-underline"
+                >
+                  Create account
+                </Link>
+                <Link
+                  href="/auth"
+                  className="rounded-[10px] border border-line-strong bg-paper px-6 py-3.5 text-center text-[15px] font-medium text-ink-soft no-underline"
+                >
+                  Sign in
+                </Link>
+              </div>
+
+              <p className="mt-5 mb-0 font-mono text-[12px] text-muted">
+                Free. Works offline. Your data stays yours.
+              </p>
+            </div>
+
+            <ProductPreview />
+          </div>
         </div>
       </section>
 
@@ -164,6 +173,40 @@ export default function LandingPage() {
               </p>
             </article>
           ))}
+        </div>
+      </section>
+
+      {/* The timer, shown rather than described. The fan is the one part of
+          the app that has to be watched to be understood. */}
+      <section className="mx-auto max-w-5xl px-6 pb-16 sm:px-8 lg:px-10">
+        <div className="grid items-center gap-8 overflow-hidden rounded-[14px] border border-line bg-paper md:grid-cols-2">
+          <div className="px-7 py-8 md:px-10">
+            <p className="eyebrow m-0">The timer</p>
+            <h2 className="m-0 mt-3 font-serif text-[26px] font-medium leading-[1.15] tracking-[-0.02em]">
+              A block with a target, or open ended.
+            </h2>
+            <p className="mt-3 mb-0 max-w-[420px] text-[14px] leading-[1.6] text-ink-soft">
+              The fan grows while you read: one stem splitting two or three ways at
+              every step, in the colour of the course you are on. A block fills its
+              frame exactly when the time is up. An open session just keeps going.
+            </p>
+            <p className="mt-5 mb-0 font-mono text-[13px] tabular-nums text-muted">
+              Open · <span className="text-ink">1:12:38</span>
+            </p>
+          </div>
+          <div className="relative h-[260px] w-full overflow-hidden bg-bg-tint md:h-[320px]">
+            <StudyFan
+              progress={0.82}
+              seed="landing"
+              color={SAGE.value}
+              depth={9}
+              tripleP={0.3}
+              trunkWidth={26}
+              padTop={48}
+              widthFill={0.92}
+              className="absolute inset-0 h-full w-full"
+            />
+          </div>
         </div>
       </section>
 
@@ -278,20 +321,34 @@ function ProductPreview() {
                     className="hl-swipe shrink-0 font-mono text-[11px] font-semibold text-ink"
                     style={{ '--hl': course.tint } as React.CSSProperties}
                   >
-                    {course.pct}%
+                    {course.goal}
                   </span>
                 </div>
+                {/* Strokes, the same as the app draws. A percentage bar in
+                    the shot would be advertising a screen that no longer
+                    exists. */}
                 <div className="mt-3">
-                  <div className="mb-1.5">
-                    <span className="font-mono text-[13px] font-semibold">
-                      {course.hours}
-                    </span>
-                  </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-bg-tint">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${course.pct}%`, background: course.color }}
-                    />
+                  <span className="font-mono text-[13px] font-semibold">{course.hours}</span>
+                  <span className="ml-1 font-mono text-[11px] text-muted">/ {course.goal}</span>
+                  <div className="mt-1.5 flex h-3 items-end gap-1">
+                    {Array.from({ length: Number(course.goal.replace('h', '')) }, (_, i) => {
+                      const filled = Math.min(1, Math.max(0, Number(course.hours) - i));
+                      return (
+                        <span
+                          key={i}
+                          className="block h-3 w-[7px] rounded-[2px]"
+                          style={{
+                            border: filled < 1 ? '1px solid var(--line)' : undefined,
+                            background:
+                              filled >= 1
+                                ? course.color
+                                : filled > 0
+                                  ? `linear-gradient(180deg, transparent ${(1 - filled) * 100}%, ${course.color} ${(1 - filled) * 100}%)`
+                                  : undefined,
+                          }}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               </div>

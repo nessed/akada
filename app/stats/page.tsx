@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
 import SwipeRow from '@/components/SwipeRow';
@@ -245,6 +246,34 @@ export default function StatsPage() {
   }, [semester]);
 
   const totalHrs = totalSec / 3600;
+  /**
+   * The session log as a spreadsheet. Settings has the same export; this is
+   * the copy that belongs beside the numbers it describes, which is where
+   * anyone who wants it is already standing.
+   */
+  function exportCsv() {
+    const rows = [
+      ['date', 'course', 'duration_minutes', 'note'].join(','),
+      ...sessions.map((session) => {
+        const course = courses.find((c) => c.id === session.courseId);
+        const note = (session.note ?? '').replace(/"/g, '""');
+        return [
+          session.date,
+          course ? `"${course.code}"` : '',
+          Math.round(clampSessionSeconds(session.durationSeconds) / 60).toString(),
+          `"${note}"`,
+        ].join(',');
+      }),
+    ];
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `akada-sessions-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const totalWhole = Math.floor(totalHrs);
   const totalDecimal = `.${Math.round((totalHrs - totalWhole) * 10)}`;
 
@@ -287,52 +316,45 @@ export default function StatsPage() {
   }
 
   return (
-    <PageShell>
-      {/* Vol. III editorial header */}
-      <header className="mb-[18px]">
-        <div className="flex items-center justify-between gap-3">
-          <p className="eyebrow m-0 text-muted">
-            Vol. III · {semesterLabel}
-          </p>
-          {semesterWeekMark && (
-            <Stamp>
-              Wk {semesterWeekMark.current} / {semesterWeekMark.total}
-            </Stamp>
-          )}
+    <PageShell wide>
+      {/* The masthead is the one editorial flourish in the app, and it stays.
+          What moved is everything that was only there to fill a phone
+          column: the week's own numbers now sit beside it rather than under
+          it, which is the whole point of having the width. */}
+      <header className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <p className="eyebrow m-0">{semesterLabel}</p>
+            {semesterWeekMark && (
+              <Stamp>
+                Wk {semesterWeekMark.current} / {semesterWeekMark.total}
+              </Stamp>
+            )}
+          </div>
+          <h1 className="m-0 mt-3 font-serif text-[40px] font-medium leading-[0.95] tracking-[-0.035em] md:text-[52px]">
+            The <span className="italic">Semester</span>
+            <br />
+            so far<span className="text-peach">.</span>
+          </h1>
         </div>
-        <h1 className="mt-3 mb-0 font-serif font-medium text-[52px] tracking-[-0.035em] leading-[0.95]">
-          The <span className="italic">Semester</span>
-          <br />
-          so far<span className="text-peach">.</span>
-        </h1>
-        <div className="mt-3.5 flex items-center gap-2.5">
-          <span className="flex-1 h-px bg-ink" />
-          <span className="font-serif italic text-[12px] text-muted">compiled by Akada</span>
-          <span className="flex-1 h-px bg-ink" />
+
+        <div className="flex shrink-0 items-end gap-6">
+          <div>
+            <span className="font-mono text-[44px] font-semibold leading-[0.9] tracking-[-0.04em] tabular-nums text-ink md:text-[56px]">
+              {totalWhole}
+              <span className="text-muted-soft">{totalDecimal}</span>
+            </span>
+            <p className="m-0 mt-1 text-[12px] text-muted">hours logged</p>
+          </div>
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="h-10 rounded-[10px] border border-line-strong px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+          >
+            Export CSV
+          </button>
         </div>
       </header>
-
-      {/* Hero number, total hours logged, big mono with a hand-note nudge */}
-      <section className="relative mb-5 mt-2">
-        <HandNote
-          color="var(--peach)"
-          size={18}
-          rotate={-6}
-          style={{ position: 'absolute', top: -2, right: 6 }}
-        >
-          {streak >= 7 ? '↑ on a roll' : streak >= 3 ? `${streak}-day streak` : '→ keep going'}
-        </HandNote>
-        <div className="flex items-baseline gap-3">
-          <span className="font-mono font-semibold tabular-nums text-[80px] leading-[0.9] tracking-[-0.04em] text-ink">
-            {totalWhole}
-            <span className="text-muted-soft">{totalDecimal}</span>
-          </span>
-          <div className="pb-2.5">
-            <span className="font-serif italic text-[22px] text-ink-soft">hours</span>
-            <p className="m-0 mt-0.5 text-[12px] text-muted">logged this semester</p>
-          </div>
-        </div>
-      </section>
 
       {/* The term so far, as a line in a ledger under a newspaper rule. */}
       <div
@@ -363,6 +385,8 @@ export default function StatsPage() {
         <EmptyState text="Your history will map itself here..." />
       )}
 
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0">
       {/* Heatmap */}
       <section className="deckle mb-[var(--density-gap)] border border-line bg-paper py-5 px-[var(--density-gutter)]">
         <div className="mb-[18px] flex flex-wrap items-baseline justify-between gap-2">
@@ -401,6 +425,11 @@ export default function StatsPage() {
         <WeeklyChart sessions={sessions} courses={courses} />
       </section>
 
+        </div>
+
+        {/* The aside: what the week came to, per course, and the marks it
+            earned. On a phone it simply follows the charts. */}
+        <aside className="grid gap-4 lg:sticky lg:top-10">
       {/* Totals, deckle card with hand-drawn trend arrows */}
       <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
         <h2 className="m-0 mb-1.5 font-serif font-medium text-[20px]">Hours by course</h2>
@@ -502,88 +531,23 @@ export default function StatsPage() {
         </div>
       </section>
 
-      {/* Marks & milestones, semester-shaped achievements */}
+      {/* Achievements live on Stamps now. A second, differently worded copy
+          here was two readings of the same sessions with two chances to
+          disagree about what had been earned. */}
       {sessions.length > 0 && (
-        <section className="mt-[var(--density-gap)]">
-          <h2 className="m-0 mb-3 font-serif font-medium text-[20px]">
-            Marks &amp; milestones
-          </h2>
-          <div className="deckle border border-line bg-paper px-[var(--density-gutter)] py-2">
-            {(() => {
-              const totalHours = totalSec / 3600;
-              const dayCountAll = new Set(sessions.map((s) => s.date)).size;
-              const items = [
-                {
-                  label: 'First 10-hour week',
-                  achieved: streak >= 5 || totalHours >= 10,
-                  color: 'var(--sage)',
-                },
-                {
-                  label: '7-day streak',
-                  achieved: streak >= 7,
-                  detail: streak > 0 ? `currently ${streak}d` : undefined,
-                  color: 'var(--peach)',
-                },
-                {
-                  label: 'Reach 100 hours this semester',
-                  achieved: totalHours >= 100,
-                  detail:
-                    totalHours < 100
-                      ? `${(100 - totalHours).toFixed(1)} to go`
-                      : undefined,
-                  color: 'var(--lav)',
-                },
-                {
-                  label: '20 study days logged',
-                  achieved: dayCountAll >= 20,
-                  detail:
-                    dayCountAll < 20 ? `${20 - dayCountAll} to go` : undefined,
-                  color: 'var(--rose)',
-                },
-              ];
-              return items.map((m, i, arr) => (
-                <div
-                  key={m.label}
-                  className="flex items-start gap-3 py-3"
-                  style={{
-                    borderBottom: i < arr.length - 1 ? '1px dashed var(--line)' : 'none',
-                  }}
-                >
-                  <div
-                    className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center"
-                    style={{
-                      background: m.achieved ? m.color : 'transparent',
-                      border: m.achieved ? 'none' : `1.5px dashed ${m.color}`,
-                      color: m.achieved ? 'var(--ink)' : m.color,
-                    }}
-                  >
-                    {m.achieved ? (
-                      <HandCheck size={14} color="var(--ink)" />
-                    ) : (
-                      <svg aria-hidden width="9" height="9" viewBox="0 0 12 12">
-                        <circle cx="6" cy="6" r="2.5" fill="currentColor" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 pt-0.5">
-                    <p
-                      className="m-0 text-[13.5px] leading-[1.4]"
-                      style={{ color: m.achieved ? 'var(--ink)' : 'var(--muted)' }}
-                    >
-                      {m.label}
-                      {m.detail && (
-                        <span className="ml-2 font-serif italic text-[11.5px] text-muted-soft">
-                          ({m.detail})
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              ));
-            })()}
-          </div>
-        </section>
+        <Link
+          href="/stamps"
+          className="mt-[var(--density-gap)] block rounded-[14px] border border-dashed border-line-strong px-5 py-4 no-underline transition-colors hover:bg-paper-2"
+        >
+          <p className="eyebrow m-0">Stamps</p>
+          <p className="m-0 mt-1.5 font-serif text-[15px] italic text-ink-soft">
+            The streak, this week&rsquo;s challenge and what has been earned &rarr;
+          </p>
+        </Link>
       )}
+
+        </aside>
+      </div>
 
       {/* The log. One dated journal, sessions and task marks under the day
           they belong to, rather than two lists that printed the same thing. */}
