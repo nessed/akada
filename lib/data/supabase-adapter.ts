@@ -2,11 +2,9 @@ import { createClient } from '@/lib/supabase';
 import type { DataProvider } from './data-provider';
 import { sortCourses } from './course-order';
 import type {
-  Assessment,
   Course,
   Session,
   Task,
-  TaskKind,
   TaskSubtask,
   Semester,
   NewSemesterInput,
@@ -56,8 +54,6 @@ interface CourseRow {
    * unknown column and the dashboard would show nothing at all.
    */
   sort_order?: number | null;
-  /** Absent for the same reason, and for the same handling. */
-  assessments?: unknown;
 }
 
 interface SessionRow {
@@ -81,10 +77,6 @@ interface TaskRow {
   completed: boolean;
   completed_at: string | null;
   created_at: string;
-  /** Added after the fact, so absent on a database still on an older schema. */
-  kind?: string | null;
-  weight?: number | string | null;
-  pages?: number | string | null;
 }
 
 interface SemesterRow {
@@ -109,56 +101,7 @@ function rowToCourse(r: CourseRow): Course {
     instructor: cleanInstructor(r.instructor),
     meetingTime: cleanMeetingTime(r.meeting_time),
     position: typeof r.sort_order === 'number' ? r.sort_order : undefined,
-    assessments: sanitizeAssessments(r.assessments),
   };
-}
-
-/**
- * The weighting a course is marked on. Kept to a sane length and to numbers
- * that are actually percentages, because this drives a headline figure ("72%
- * of your grade is still unmarked") and a row of bad data would make the app
- * state something untrue rather than merely look wrong.
- */
-function sanitizeAssessments(value: unknown): Assessment[] {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, 40).flatMap((item) => {
-    if (!item || typeof item !== 'object') return [];
-    const row = item as Partial<Assessment>;
-    const id = cleanText(String(row.id ?? ''), 80);
-    const label = cleanText(String(row.label ?? ''), 120);
-    if (!id || !label) return [];
-    const weight = Number(row.weight);
-    const score = row.score === null || row.score === undefined ? null : Number(row.score);
-    const outOf = row.outOf === null || row.outOf === undefined ? null : Number(row.outOf);
-    return [
-      {
-        id,
-        label,
-        weight: Number.isFinite(weight) ? Math.min(100, Math.max(0, weight)) : 0,
-        score: Number.isFinite(score as number) ? (score as number) : null,
-        outOf: Number.isFinite(outOf as number) && (outOf as number) > 0 ? (outOf as number) : null,
-      },
-    ];
-  });
-}
-
-const TASK_KINDS: TaskKind[] = ['task', 'reading', 'exam'];
-
-function cleanKind(value: unknown): TaskKind {
-  return TASK_KINDS.includes(value as TaskKind) ? (value as TaskKind) : 'task';
-}
-
-/** A percentage, or null. Strings because numeric comes back as one. */
-function cleanWeight(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
-}
-
-function cleanPages(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.min(10000, Math.round(n)) : null;
 }
 
 function rowToSession(r: SessionRow): Session {
@@ -185,9 +128,6 @@ function rowToTask(r: TaskRow): Task {
     completed: Boolean(r.completed),
     completedAt: r.completed_at,
     createdAt: r.created_at,
-    kind: cleanKind(r.kind),
-    weight: cleanWeight(r.weight),
-    pages: cleanPages(r.pages),
   };
 }
 
@@ -235,22 +175,6 @@ function courseWriteError(error: { code?: string }, code: string): Error {
  */
 function isMissingOrderColumn(error: { code?: string; message?: string }): boolean {
   return error?.code === '42703' || Boolean(error?.message?.includes('sort_order'));
-}
-
-/**
- * The columns a task only sometimes has. Sent as a spread rather than as
- * fixed keys so a plain, undated, unweighted task writes exactly the insert
- * it always did — which is also what keeps it working against a project that
- * has not re-run supabase/schema.sql, since the columns are never mentioned.
- */
-function taskExtras(input: Partial<Task>): Record<string, unknown> {
-  const extras: Record<string, unknown> = {};
-  if (input.kind && input.kind !== 'task') extras.kind = cleanKind(input.kind);
-  const weight = cleanWeight(input.weight);
-  if (weight !== null) extras.weight = weight;
-  const pages = cleanPages(input.pages);
-  if (pages !== null) extras.pages = pages;
-  return extras;
 }
 
 const COURSE_ORDER_UNAVAILABLE =
@@ -348,15 +272,9 @@ export class SupabaseAdapter implements DataProvider {
         section: cleanSection(input.section),
         instructor: cleanInstructor(input.instructor),
         meeting_time: cleanMeetingTime(input.meetingTime),
-        // Both of these are omitted entirely when they carry nothing, which
-        // is what lets the insert still run against a database that has not
-        // re-run supabase/schema.sql: an unmentioned column cannot be
-        // rejected as unknown. A new course lands at the bottom of whatever
-        // order the student has already arranged.
+        // A new course lands at the bottom of whatever order the student has
+        // already arranged. Omitted entirely when the column is not there yet.
         ...(position === null ? {} : { sort_order: position }),
-        ...(input.assessments?.length
-          ? { assessments: sanitizeAssessments(input.assessments) }
-          : {}),
       })
       .select()
       .single();
@@ -424,7 +342,6 @@ export class SupabaseAdapter implements DataProvider {
       patch.name = name;
     }
     if (updates.color !== undefined) patch.color = cleanText(updates.color, 32) || '#A8B89B';
-    if (updates.assessments !== undefined) patch.assessments = sanitizeAssessments(updates.assessments);
     if (updates.tint !== undefined) patch.tint = updates.tint ? cleanText(updates.tint, 32) : null;
     if (updates.weeklyGoalHours !== undefined) {
       patch.weekly_goal_hours = clampWeeklyGoalHours(updates.weeklyGoalHours);
@@ -604,7 +521,6 @@ export class SupabaseAdapter implements DataProvider {
         subtasks: sanitizeSubtasks(input.subtasks),
         due_date: cleanOptionalDate(input.dueDate),
         priority: input.priority === 'high' ? 'high' : 'normal',
-        ...taskExtras(input),
       })
       .select()
       .single();
@@ -634,9 +550,6 @@ export class SupabaseAdapter implements DataProvider {
       patch.completed_at = updates.completed ? new Date().toISOString() : null;
     }
     if (updates.completedAt !== undefined) patch.completed_at = updates.completedAt;
-    if (updates.kind !== undefined) patch.kind = cleanKind(updates.kind);
-    if (updates.weight !== undefined) patch.weight = cleanWeight(updates.weight);
-    if (updates.pages !== undefined) patch.pages = cleanPages(updates.pages);
 
     const { data, error } = await this.supabase
       .from('tasks')

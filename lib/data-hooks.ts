@@ -14,7 +14,6 @@
 // Cache keys are simple strings since this app is single-user. If we ever
 // went multi-tenant on the client we'd want to scope keys per user.
 
-import { useEffect, useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import type {
   Course,
@@ -26,7 +25,6 @@ import type {
 } from './data';
 import { db } from './data';
 import { clearStoredTimerState } from './timer-context';
-import { isWeekWaiting, lastWeekKey, weekKey } from './review';
 
 const KEY = {
   onboarding: 'onboarding-complete',
@@ -87,28 +85,6 @@ export function useUserSettings() {
     db.getUserSettings(),
   );
   return { settings: data ?? null, error, isLoading };
-}
-
-/**
- * Whether last week is written up and still unread. The nav asks this so it
- * can put the one dot the app is allowed to show next to Review.
- *
- * It resolves to false on the server and on the first client render, then
- * settles in an effect: `isWeekWaiting` reads localStorage, and deciding it
- * during render would have the server and the browser draw different nav.
- */
-export function useReviewWaiting(): boolean {
-  const { sessions } = useSessions();
-  const [waiting, setWaiting] = useState(false);
-
-  useEffect(() => {
-    const start = lastWeekKey();
-    const end = weekKey();
-    const had = sessions.some((s) => s.date >= start && s.date < end);
-    setWaiting(isWeekWaiting(had));
-  }, [sessions]);
-
-  return waiting;
 }
 
 /* ───────── Helpers ───────── */

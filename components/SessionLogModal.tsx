@@ -1,39 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Course, Task } from '@/lib/data';
-import { formatHM } from '@/lib/utils';
+import type { Course } from '@/lib/data';
+import { formatHHMMSS } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import HandCheck from '@/components/notebook/HandCheck';
-import { Eyebrow } from '@/components/notebook/Marks';
+import { ButtonSpinner } from './LoadingIndicator';
 
-/**
- * What did you actually do?
- *
- * The note is the point of this sheet. A duration on its own is a number that
- * will mean nothing in a week; one line about where you got to is the thing
- * the course page can hand back to you next time you sit down, and it is what
- * the "you left off at Q3" line on Today is made of.
- *
- * So the sheet asks one question, on ruled paper, with the writing area
- * already focused — and Skip is a real answer, in the smaller of the two
- * buttons. Nothing here nags: a session with no note is still a session.
- */
-
-/**
- * Quick marks, appended to the note as `#tag`. The data shape stays a plain
- * string, so this needed no migration and none of it is a schema decision.
- */
-const MARKS = ['focused', 'scattered', 'reading', 'writing', 'practice'];
+// Quick-reflection tag chips. Tapping appends `#tag` into the note so the
+// data shape stays the same, no schema migration needed for this flourish.
+const REFLECTION_TAGS = ['focused', 'distracted', 'reading', 'writing', 'practice'];
 
 interface Props {
   open: boolean;
   course: Course | null;
-  /** What was being worked on, when a task was carried into the session. */
-  task?: Task | null;
   durationSeconds: number;
-  /** True when the block ran without a pause, which is worth saying. */
-  unbroken?: boolean;
   saving?: boolean;
   errorMessage?: string;
   contextMessage?: string;
@@ -44,9 +25,7 @@ interface Props {
 export default function SessionLogModal({
   open,
   course,
-  task = null,
   durationSeconds,
-  unbroken = false,
   saving = false,
   errorMessage = '',
   contextMessage = '',
@@ -55,7 +34,6 @@ export default function SessionLogModal({
 }: Props) {
   const [note, setNote] = useState('');
   const sheetRef = useRef<HTMLDivElement | null>(null);
-  const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (open) setNote('');
@@ -63,151 +41,149 @@ export default function SessionLogModal({
 
   // Opening a sheet without moving focus into it leaves a keyboard or screen
   // reader user still standing on the page behind, with no way to know a
-  // question was asked. The writing area takes it, since writing is the ask.
+  // question was asked.
   useEffect(() => {
     if (!open) return;
-    const id = window.setTimeout(() => {
-      (noteRef.current ?? sheetRef.current)?.focus();
-    }, 60);
-    return () => window.clearTimeout(id);
+    sheetRef.current?.focus();
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onCancel]);
-
   if (!open || !course) return null;
-
-  const safeSeconds = clampSessionSeconds(durationSeconds);
   const canSave = isLoggableDuration(durationSeconds) && !saving;
-  const finished = task?.subtasks?.filter((s) => s.completed) ?? [];
+  const safeSeconds = clampSessionSeconds(durationSeconds);
+  // Big mono digits, same `00:48:23` shape as the timer ring so the user sees
+  // the same number style they were watching mid-session.
+  // A recovered session can run to the 18h ceiling, and the old readout was
+  // total minutes, so that arrived as "1080:00". Hours get their own place
+  // once there are any, the way the ring shows them.
+  const hoursPart = Math.floor(safeSeconds / 3600);
+  const minutesPart = String(
+    hoursPart > 0 ? Math.floor((safeSeconds % 3600) / 60) : Math.floor(safeSeconds / 60),
+  ).padStart(2, '0');
+  const secondsPart = String(safeSeconds % 60).padStart(2, '0');
 
-  function toggleMark(mark: string) {
-    const tag = `#${mark}`;
-    setNote((current) =>
-      current.includes(tag)
-        ? current.replace(tag, '').replace(/\s{2,}/g, ' ').trim()
-        : `${current.trim()} ${tag}`.trim(),
-    );
+  function toggleTag(tag: string) {
+    const token = `#${tag}`;
+    const has = new RegExp(`(^|\\s)${token}(\\s|$)`).test(note);
+    if (has) {
+      setNote((current) =>
+        current.replace(new RegExp(`(^|\\s)${token}(\\s|$)`, 'g'), ' ').trim(),
+      );
+    } else {
+      setNote((current) => (current ? `${current.trim()} ${token}` : token));
+    }
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex animate-fade-in items-end">
-      <button
-        type="button"
-        aria-label="Discard this session"
-        onClick={onCancel}
-        className="scrim absolute inset-0 backdrop-blur-sm"
-      />
+    <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+      {/* The scrim was a real <button> with an aria-label and no onClick: a
+          focus stop that announced itself and then did nothing. Dismissing
+          here discards a session, which is not something a stray tap on the
+          backdrop should decide, so it is a surface now, not a control. */}
+      <div aria-hidden className="absolute inset-0 scrim backdrop-blur-sm" />
       <div
         ref={sheetRef}
-        tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="session-note-question"
-        className="app-scroll relative max-h-[92dvh] w-full animate-slide-up overflow-y-auto border-t border-line-strong bg-bg px-6 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-4 md:mx-auto md:max-w-xl"
+        aria-labelledby="session-log-heading"
+        tabIndex={-1}
+        className="relative w-full md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up outline-none"
       >
-        <span aria-hidden className="mx-auto mb-5 block h-1 w-9 rounded-sm bg-line-strong" />
+        <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
 
-        <Eyebrow style={{ color: course.color }}>
-          {course.code}
-          {task ? ` · ${task.title}` : ''}
-        </Eyebrow>
-
-        <div className="mt-2.5 flex items-end gap-3">
-          <p className="m-0 font-mono text-[40px] font-bold leading-none tracking-[-0.03em]">
-            {formatHM(safeSeconds)}
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ background: course.color }}
+          />
+          <p
+            className="eyebrow m-0"
+            style={{ color: course.color }}
+          >
+            {course.code} · {course.name}
           </p>
-          {unbroken && (
-            <p className="m-0 mb-1.5 font-serif text-[15px] italic text-muted">
-              the whole block, no pauses
-            </p>
-          )}
+        </div>
+        <h3
+          id="session-log-heading"
+          className="mt-2 mb-0 font-serif font-medium text-[26px] tracking-[-0.015em]"
+        >
+          Log this <span className="italic">session</span>?
+        </h3>
+
+        <div className="mt-3.5 flex items-baseline gap-3">
+          <span className="font-mono font-semibold tabular-nums text-[52px] leading-[0.95] tracking-[-0.03em] text-ink">
+            {hoursPart > 0 && `${hoursPart}:`}
+            {minutesPart}
+            <span className="text-muted-soft">:{secondsPart}</span>
+          </span>
+          <span className="font-serif italic text-[13px] text-muted">focused</span>
         </div>
 
         {contextMessage && (
-          <p className="mt-2 font-serif text-[13px] italic text-muted">{contextMessage}</p>
+          <p className="mt-2 text-[12px] leading-[1.45] text-muted">{contextMessage}</p>
         )}
 
-        <p id="session-note-question" className="eyebrow mb-2.5 mt-6">
-          What did you actually do?
-        </p>
-        <textarea
-          ref={noteRef}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={4}
-          placeholder="Got through Q3 and Q4. Still shaky on tax incidence."
-          className="ruled-note min-h-[112px] w-full resize-none border-y border-line bg-transparent py-3 font-serif text-[16px] text-ink placeholder:text-muted"
-        />
+        <div className="mt-4">
+          <label htmlFor="session-log-note" className="eyebrow m-0 mb-2 block">
+            What did you do?
+          </label>
+          <textarea
+            id="session-log-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            placeholder="Optional reflection…"
+            className="w-full resize-none bg-paper border border-line rounded-[10px] p-3.5 text-[14px] font-serif italic text-ink leading-[1.5] outline-none focus:border-line-strong"
+          />
+        </div>
 
-        <div className="mt-3.5 flex flex-wrap items-baseline gap-4">
-          {MARKS.map((mark) => {
-            const on = note.includes(`#${mark}`);
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {REFLECTION_TAGS.map((tag) => {
+            const active = new RegExp(`(^|\\s)#${tag}(\\s|$)`).test(note);
             return (
               <button
-                key={mark}
+                key={tag}
                 type="button"
-                aria-pressed={on}
-                onClick={() => toggleMark(mark)}
-                className={`bg-transparent font-serif text-[14.5px] ${
-                  on ? 'hl-swipe text-ink' : 'text-muted hover:text-ink-soft'
+                aria-pressed={active}
+                onClick={() => toggleTag(tag)}
+                className={`inline-flex min-h-[30px] items-center bg-transparent px-0.5 font-serif text-[13px] transition-colors ${
+                  active ? 'hl-swipe text-ink' : 'text-muted-soft'
                 }`}
+                style={
+                  active
+                    ? ({ '--hl': course.tint || 'var(--bg-tint)' } as React.CSSProperties)
+                    : undefined
+                }
               >
-                {mark}
+                #{tag}
               </button>
             );
           })}
         </div>
 
-        {/* What got ticked off during the session, so the sheet confirms the
-            work rather than only the time. */}
-        {finished.length > 0 && (
-          <div className="mt-5">
-            {finished.map((sub, i) => (
-              <div
-                key={sub.id}
-                className={`flex items-center gap-3 py-2.5 ${
-                  i === finished.length - 1 ? '' : 'row-rule'
-                }`}
-              >
-                <span
-                  aria-hidden
-                  className="flex h-[17px] w-[17px] flex-none items-center justify-center"
-                  style={{ background: course.color, borderRadius: 4 }}
-                >
-                  <HandCheck size={11} color="var(--paper)" strokeWidth={1.8} />
-                </span>
-                <span className="flex-1 text-[13.5px] text-ink-soft">{sub.title}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
         {errorMessage && (
-          <p className="mt-4 font-serif text-[13.5px] italic text-priority">{errorMessage}</p>
+          <p role="alert" className="mt-3 mb-0 text-[12px] leading-[1.45] text-priority font-serif italic">
+            {errorMessage}
+          </p>
         )}
 
-        <div className="mt-6 flex gap-2.5">
+        <div className="flex gap-2.5 mt-5">
           <button
             type="button"
-            onClick={onCancel}
-            className="min-h-[52px] flex-none border border-line-strong bg-transparent px-[18px] text-sm text-ink-soft"
+            onClick={saving ? undefined : onCancel}
+            disabled={saving}
+            aria-label="Discard pending session log"
+            className="flex-1 min-h-[50px] py-3.5 rounded-[10px] bg-transparent border border-line-strong text-muted text-sm font-medium"
           >
-            Skip
+            Discard
           </button>
           <button
             type="button"
-            onClick={() => onSave(note.trim())}
             disabled={!canSave}
-            className="min-h-[52px] flex-1 bg-primary text-sm font-medium text-primary-contrast disabled:opacity-30"
+            onClick={() => onSave(note)}
+            className="flex-1 min-h-[50px] py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-35"
           >
-            {saving ? 'Logging…' : `Log ${formatHM(safeSeconds)}`}
+            <HandCheck size={14} color="currentColor" />
+            {saving ? <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving session…</span> : 'Save to journal'}
           </button>
         </div>
       </div>

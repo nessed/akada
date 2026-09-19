@@ -100,7 +100,7 @@ export default function SectionPicker({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
-        className="flex w-full items-center gap-3 rounded-[10px] border px-4 py-3 text-left transition-colors"
+        className="flex w-full items-center gap-3 rounded-[10px] border px-4 py-3 text-left outline-none transition-colors"
         style={
           selected
             ? undefined
@@ -178,7 +178,7 @@ export default function SectionPicker({
                       {primary}
                     </span>
                     {secondary && (
-                      <span className="mt-0.5 block truncate text-[11px] text-muted">
+                      <span className="mt-0.5 block truncate text-[11px] text-muted-soft">
                         {secondary}
                       </span>
                     )}

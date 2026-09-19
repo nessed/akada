@@ -1,20 +1,37 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import HandCheck from '@/components/notebook/HandCheck';
 
 /**
- * The pieces settings is built from.
+ * The pieces the settings sheet is built from.
  *
- * Settings used to be a stack of sheets sliding over one another from the
- * dashboard avatar, which meant the reader was always one level deep in
- * something with no address. It is a page now, and these are its rows: ruled
- * lines rather than boxed panels, square throughout, with a choice said by a
- * tick or a swipe of highlighter.
+ * One rhythm for every section (an eyebrow, then a sheet of paper with ruled
+ * rows), one radius for the panels and one for the fields and actions inside
+ * them, and selection said with a tick or a swipe of highlighter rather than
+ * a filled capsule.
  */
 
-/** A settings section: a heading, a rule, then rows. */
+/** Panels, cards. */
+export const PANEL_RADIUS = 'rounded-[14px]';
+/** Fields, choices, and the sheet action pair, which matches them. */
+export const FIELD_RADIUS = 'rounded-[10px]';
+
+/** The sheet action pair, per the button spec. */
+export const SHEET_ACTION = `flex-1 ${FIELD_RADIUS} py-3.5 text-sm font-medium`;
+export const SHEET_ACTION_PRIMARY = `${SHEET_ACTION} bg-primary text-primary-contrast disabled:opacity-40`;
+export const SHEET_ACTION_QUIET = `${SHEET_ACTION} border border-line-strong bg-transparent text-ink-soft disabled:opacity-50`;
+
+/** Every nested view opens on the same gutter and the same breathing room. */
+export const VIEW_PADDING =
+  'px-[var(--density-gutter)] pt-5 pb-[var(--density-section)]';
+
+export function SectionHeading({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="m-0 font-serif text-[20px] font-medium tracking-[-0.02em]">{children}</h3>
+  );
+}
+
 export function SettingGroup({
   label,
   children,
@@ -22,169 +39,179 @@ export function SettingGroup({
 }: {
   label: string;
   children: ReactNode;
+  /** The first group after the profile card sets its own distance. */
   first?: boolean;
 }) {
   return (
-    <section className={first ? 'mt-7' : 'mt-[var(--density-section)]'}>
-      <p className="eyebrow mb-1 border-t border-line pt-4">{label}</p>
-      <div>{children}</div>
+    <section className={first ? '' : 'mt-[var(--density-section)]'}>
+      <p className="eyebrow mb-2.5 ml-1">{label}</p>
+      <div className={`overflow-hidden border border-line bg-paper ${PANEL_RADIUS}`}>
+        {children}
+      </div>
     </section>
   );
 }
 
-export function SectionHeading({ children }: { children: ReactNode }) {
-  return <h2 className="m-0 font-serif text-[20px] font-normal tracking-[-0.02em]">{children}</h2>;
-}
+const ROW_BASE =
+  'flex w-full items-center gap-3 bg-transparent px-[18px] py-3.5 text-left [&+*]:border-t [&+*]:border-line-soft';
 
-const ROW = 'row-rule flex w-full items-center gap-4 bg-transparent py-3.5 text-left';
-
-function RowBody({ label, sub }: { label: string; sub?: ReactNode }) {
+function RowBody({
+  label,
+  sub,
+  tone,
+  trailing,
+}: {
+  label: string;
+  sub?: string;
+  tone?: 'warn';
+  trailing?: ReactNode;
+}) {
   return (
-    <span className="min-w-0 flex-1">
-      <span className="block text-[14.5px] text-ink">{label}</span>
-      {sub && <span className="mt-[3px] block text-[12px] text-muted">{sub}</span>}
-    </span>
+    <>
+      <span className="min-w-0 flex-1">
+        <span
+          className={`block text-sm font-medium ${tone === 'warn' ? 'text-warn' : 'text-ink'}`}
+        >
+          {label}
+        </span>
+        {sub && <span className="mt-0.5 block text-[11px] text-muted">{sub}</span>}
+      </span>
+      {trailing}
+    </>
   );
 }
 
-const CHEVRON = (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden className="flex-none">
-    <path
-      d="M9 6l6 6-6 6"
-      stroke="var(--muted-soft)"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+function Chevron() {
+  return (
+    <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none" className="shrink-0 text-muted-soft">
+      <path
+        d="M9 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
-/** A row that goes somewhere, or does something. */
 export function SettingRow({
   label,
   sub,
   onClick,
   href,
-  value,
   tone,
 }: {
   label: string;
-  sub?: ReactNode;
+  sub?: string;
   onClick?: () => void;
+  /** For the rows that lead somewhere real: a policy page, a mailto. */
   href?: string;
-  /** A value shown on the right instead of a chevron. */
-  value?: ReactNode;
-  /** `care` marks the destructive rows. Clay, never red. */
-  tone?: 'care';
+  tone?: 'warn';
 }) {
-  const body = (
-    <>
-      <RowBody label={label} sub={sub} />
-      {value ? <span className="flex-none font-mono text-[12px] text-muted">{value}</span> : null}
-      {(onClick || href) && !value ? CHEVRON : null}
-    </>
-  );
-  const className = `${ROW} ${tone === 'care' ? '[&_span]:text-priority' : ''}`;
+  const body = <RowBody label={label} sub={sub} tone={tone} trailing={<Chevron />} />;
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <a
+        href={href}
+        target={href.startsWith('mailto:') ? undefined : '_blank'}
+        rel="noreferrer"
+        className={ROW_BASE}
+      >
         {body}
-      </Link>
+      </a>
     );
   }
+
   return (
-    <button type="button" onClick={onClick} className={className}>
+    <button type="button" onClick={onClick} className={ROW_BASE}>
       {body}
     </button>
   );
 }
 
 /**
- * A switch. Drawn as an outline with a filled knob rather than a coloured
- * track — the app has one solid fill and it is not this.
+ * A setting that is either kept or not, written in the hand the rest of the
+ * app uses for a choice: a drawn box with a tick in it. A switch is operating
+ * system chrome, and it was the only capsule left on the sheet.
  */
 export function SettingToggleRow({
   label,
   sub,
-  checked,
+  value,
   onChange,
 }: {
   label: string;
-  sub?: ReactNode;
-  checked: boolean;
-  onChange: (next: boolean) => void;
+  sub?: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
 }) {
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={ROW}
+      aria-checked={value}
+      onClick={() => onChange(!value)}
+      className={ROW_BASE}
     >
-      <RowBody label={label} sub={sub} />
-      <span
-        aria-hidden
-        className="box-border flex h-[22px] w-[44px] flex-none items-center rounded-full px-0.5"
-        style={{
-          border: `1.4px solid ${checked ? 'var(--ink)' : 'var(--line-strong)'}`,
-          justifyContent: checked ? 'flex-end' : 'flex-start',
-        }}
-      >
-        <i
-          className="block h-4 w-4 rounded-full"
-          style={{ background: checked ? 'var(--ink)' : 'var(--line-strong)' }}
-        />
-      </span>
+      <RowBody
+        label={label}
+        sub={sub}
+        trailing={
+          <span
+            aria-hidden
+            className="scribble-box flex h-[21px] w-[21px] shrink-0 items-center justify-center"
+            style={{ borderColor: value ? 'var(--ink)' : 'var(--line-strong)' }}
+          >
+            {value && <HandCheck size={14} color="var(--ink)" strokeWidth={1.7} />}
+          </span>
+        }
+      />
     </button>
   );
 }
 
-/**
- * A choice among a few, as words with a swipe under the chosen one. Used for
- * the review day, the day-end hour, anything with a handful of options.
- */
-export function ChoiceLine<T extends string | number>({
-  options,
-  value,
-  onChange,
-  format,
-  className = '',
-}: {
-  options: readonly T[];
-  value: T;
-  onChange: (next: T) => void;
-  format?: (option: T) => string;
-  className?: string;
-}) {
+/** A number kept from the record, under its eyebrow. */
+export function StatMark({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`flex flex-wrap items-baseline gap-4 ${className}`}>
-      {options.map((option) => {
-        const on = option === value;
-        return (
-          <button
-            key={String(option)}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onChange(option)}
-            className={`bg-transparent font-serif text-[15px] ${
-              on ? 'hl-swipe text-ink' : 'text-muted hover:text-ink-soft'
-            }`}
-          >
-            {format ? format(option) : String(option)}
-          </button>
-        );
-      })}
+    <div className={`border border-line bg-paper px-3 py-2.5 ${FIELD_RADIUS}`}>
+      <p className="m-0 font-mono text-[15px] font-semibold tracking-[-0.01em] tabular-nums text-ink">
+        {value}
+      </p>
+      <p className="eyebrow mt-1 mb-0">{label}</p>
     </div>
   );
 }
 
-/** A ticked line, for a list where one item is the current one. */
-export function ChosenTick({ shown }: { shown: boolean }) {
-  if (!shown) return <span aria-hidden className="w-[15px] flex-none" />;
-  return <HandCheck size={15} color="var(--ink)" strokeWidth={1.6} />;
+/**
+ * One option in a row of them. Unchosen, it is a hairline box on the page;
+ * chosen, it carries a swipe of highlighter under its name, the way a reader
+ * marks the one they mean.
+ */
+export function ChoiceCell({
+  selected,
+  onClick,
+  ariaLabel,
+  className = '',
+  children,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  ariaLabel?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      aria-label={ariaLabel}
+      onClick={onClick}
+      className={`border border-line bg-transparent text-center transition-colors ${FIELD_RADIUS} ${className}`}
+    >
+      {children}
+    </button>
+  );
 }
-
-/** Every settings view opens on the same gutter. */
-export const VIEW_PADDING = 'px-[var(--density-gutter)] pb-[var(--density-section)] pt-5';

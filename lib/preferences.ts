@@ -11,27 +11,21 @@ import { useEffect, useState, useCallback } from 'react';
  * custom properties, a stylesheet-level dark theme could never win against
  * them anyway.
  */
-export type PaperTone = 'warm' | 'paper' | 'stone' | 'night';
-export type Density = 'airy' | 'normal' | 'tight';
+export type PaperTone = 'warm' | 'paper' | 'stone' | 'white' | 'night';
+// Fraunces on the Paper tone is the default the app ships in; Cormorant /
+// Lora / Merriweather remain selectable in Appearance.
+export type HeadingFont = 'cormorant' | 'fraunces' | 'lora' | 'merriweather';
+export type Density = 'cozy' | 'comfy' | 'compact';
 export type PrimaryAccent = 'classic' | 'green';
 
 export interface Preferences {
   paperTone: PaperTone;
+  headingFont: HeadingFont;
   density: Density;
   primaryAccent: PrimaryAccent;
   dailyReminder: boolean;
   sessionSound: boolean;
   hideWeekends: boolean;
-  /**
-   * The pencil in the margin: drawn squiggles, tally strokes, the hand-drawn
-   * underlines. Off leaves the structure and the type exactly as they are and
-   * takes only the marks away, for a reader who wants the page plainer.
-   */
-  marginalia: boolean;
-  /** The one nudge the app gives: a week is written up and ready to read. */
-  sundayNudge: boolean;
-  /** Which day the week is read back on. 0 is Sunday, -1 never. */
-  reviewDay: number;
   /**
    * Derived, never set directly: true exactly when the chosen paper is the
    * night tone. Kept on the record so anything that wants to know whether the
@@ -45,66 +39,47 @@ export interface Preferences {
 
 const DEFAULTS: Preferences = {
   paperTone: 'paper',
-  density: 'normal',
+  headingFont: 'fraunces',
+  density: 'comfy',
   primaryAccent: 'classic',
   dailyReminder: true,
   sessionSound: false,
   hideWeekends: false,
-  marginalia: true,
-  sundayNudge: true,
-  reviewDay: 0,
   darkMode: false,
   dayEndingHour: 0,
 };
 
 const STORAGE_KEY = 'akada.preferences.v1';
 
-const PAPER_TONE_VALUES: PaperTone[] = ['warm', 'paper', 'stone', 'night'];
-const DENSITY_VALUES: Density[] = ['airy', 'normal', 'tight'];
+const PAPER_TONE_VALUES: PaperTone[] = ['warm', 'paper', 'stone', 'white', 'night'];
+const HEADING_FONT_VALUES: HeadingFont[] = ['cormorant', 'fraunces', 'lora', 'merriweather'];
+const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
 const PRIMARY_ACCENT_VALUES: PrimaryAccent[] = ['classic', 'green'];
-
-/**
- * Records written by earlier builds. `white` was a fifth stock the redesign
- * drops, and it is nearest to `stone`; the density scale was renamed rather
- * than re-tuned, so each old name maps straight onto its replacement. Applied
- * on read, so nobody's page changes shape because a name changed under them.
- */
-const LEGACY_TONES: Record<string, PaperTone> = { white: 'stone' };
-const LEGACY_DENSITY: Record<string, Density> = {
-  cozy: 'airy',
-  comfy: 'normal',
-  compact: 'tight',
-};
 
 function sanitizePreferences(value: unknown): Preferences {
   const parsed = value && typeof value === 'object' ? (value as Partial<Preferences>) : {};
-
-  const rawTone = parsed.paperTone as string | undefined;
-  const tone = (rawTone && LEGACY_TONES[rawTone]) || (rawTone as PaperTone | undefined);
-  const paperTone = PAPER_TONE_VALUES.includes(tone as PaperTone)
-    ? (tone as PaperTone)
+  const paperTone = PAPER_TONE_VALUES.includes(parsed.paperTone as PaperTone)
+    ? (parsed.paperTone as PaperTone)
     : DEFAULTS.paperTone;
-
-  const rawDensity = parsed.density as string | undefined;
-  const scale = (rawDensity && LEGACY_DENSITY[rawDensity]) || (rawDensity as Density | undefined);
-
-  const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
-
   return {
     paperTone,
-    density: DENSITY_VALUES.includes(scale as Density) ? (scale as Density) : DEFAULTS.density,
+    headingFont: HEADING_FONT_VALUES.includes(parsed.headingFont as HeadingFont)
+      ? (parsed.headingFont as HeadingFont)
+      : DEFAULTS.headingFont,
+    density: DENSITY_VALUES.includes(parsed.density as Density)
+      ? (parsed.density as Density)
+      : DEFAULTS.density,
     primaryAccent: PRIMARY_ACCENT_VALUES.includes(parsed.primaryAccent as PrimaryAccent)
       ? (parsed.primaryAccent as PrimaryAccent)
       : DEFAULTS.primaryAccent,
-    dailyReminder: bool(parsed.dailyReminder, DEFAULTS.dailyReminder),
-    sessionSound: bool(parsed.sessionSound, DEFAULTS.sessionSound),
-    hideWeekends: bool(parsed.hideWeekends, DEFAULTS.hideWeekends),
-    marginalia: bool(parsed.marginalia, DEFAULTS.marginalia),
-    sundayNudge: bool(parsed.sundayNudge, DEFAULTS.sundayNudge),
-    reviewDay:
-      typeof parsed.reviewDay === 'number' && parsed.reviewDay >= -1 && parsed.reviewDay <= 6
-        ? Math.round(parsed.reviewDay)
-        : DEFAULTS.reviewDay,
+    dailyReminder:
+      typeof parsed.dailyReminder === 'boolean'
+        ? parsed.dailyReminder
+        : DEFAULTS.dailyReminder,
+    sessionSound:
+      typeof parsed.sessionSound === 'boolean' ? parsed.sessionSound : DEFAULTS.sessionSound,
+    hideWeekends:
+      typeof parsed.hideWeekends === 'boolean' ? parsed.hideWeekends : DEFAULTS.hideWeekends,
     darkMode: paperTone === 'night',
     dayEndingHour:
       typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 6
@@ -149,11 +124,7 @@ interface ToneTokens {
 const DAY_INK = {
   ink: '#1A1714',
   inkSoft: '#4B4640',
-  // Every label and caption in the app. Dark enough to be read on the
-  // tightest of the three daylight stocks rather than only noticed there:
-  // 4.78:1 on Paper's ground. scripts/check-contrast.mjs is the gate.
-  muted: '#6F6A5D',
-  // Not text. Rules, ghost tally strokes, disabled states.
+  muted: '#8C8576',
   mutedSoft: '#B5AE99',
 } as const;
 
@@ -195,23 +166,34 @@ export const PAPER_TONES: Record<PaperTone, ToneTokens> = {
     glowA: 'rgba(130, 132, 120, 0.08)',
     glowB: 'rgba(110, 112, 104, 0.06)',
   },
+  white: {
+    bg: '#FFFFFF',
+    tint: '#F2F2F0',
+    paper: '#FFFFFF',
+    paper2: '#FBFBFA',
+    line: '#E8E5DC',
+    lineSoft: '#F1F0EA',
+    lineStrong: '#DDD8CB',
+    ...DAY_INK,
+    glowA: 'rgba(180, 180, 170, 0.05)',
+    glowB: 'rgba(150, 150, 145, 0.04)',
+  },
   night: {
-    // Warm ink on a dark page, not an inversion. Same values the locked-in
-    // clock is drawn in, because that screen is this stock at full bleed: the
-    // ground is a deep brown charcoal, the page sits a shade above it, and
-    // the ruled lines stay faint enough to read as paper rather than borders.
-    bg: '#14120F',
-    tint: '#1C1915',
-    paper: '#1E1B17',
-    paper2: '#191612',
-    line: '#2B2723',
-    lineSoft: '#26221E',
-    lineStrong: '#332E28',
-    ink: '#F2EDE0',
-    inkSoft: '#E7E1D4',
-    muted: '#8A857A',
-    mutedSoft: '#6F6A5F',
-    glowA: 'rgba(168, 184, 155, 0.08)',
+    // Warm ink on a dark page, not an inversion. The ground is a deep brown
+    // charcoal rather than black, the page sits a shade above it the way a
+    // card sits above the desk in daylight, and the ruled lines stay faint.
+    bg: '#1A1815',
+    tint: '#24211C',
+    paper: '#221F1A',
+    paper2: '#1E1B17',
+    line: '#35312A',
+    lineSoft: '#2A2721',
+    lineStrong: '#4A4438',
+    ink: '#EFE9DC',
+    inkSoft: '#C8C0B0',
+    muted: '#958D7E',
+    mutedSoft: '#6B6459',
+    glowA: 'rgba(196, 168, 106, 0.07)',
     glowB: 'rgba(138, 120, 92, 0.05)',
   },
 };
@@ -246,20 +228,30 @@ const NIGHT_TOKENS: Record<string, string> = {
   '--priority-soft': '#E0A294',
   '--priority-tint': '#44332D',
 
-  // The swipes are opaque tints now, so on the night stock they have to be
-  // dark bands that light ink still reads on, not the daylight pastels.
-  '--highlight-yellow': '#443E2F',
-  '--highlight-pink': '#433735',
-  '--highlight-mint': '#393B32',
-  '--highlight-clay': '#463B31',
+  '--highlight-yellow': 'rgba(228, 197, 92, 0.26)',
+  '--highlight-pink': 'rgba(214, 132, 132, 0.24)',
+  '--highlight-mint': 'rgba(135, 181, 156, 0.26)',
 
   // The whole url, not a colour inside it: a custom property cannot reach
   // into a data URI. globals.css reads this through .hand-underline.
   '--underline-svg':
     "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%23EFE9DC' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.55'/></svg>\")",
-  '--scrim': 'rgba(6, 5, 4, 0.58)',
+  '--scrim': 'rgba(8, 7, 6, 0.55)',
   '--noise-blend': 'screen',
   '--noise-opacity': '0.14',
+};
+
+// Maps user choice -> the next/font CSS variable that wires to that family.
+// We override --font-serif (which Tailwind's font-serif resolves to) so the
+// switch ripples through every heading without per-component changes.
+//
+// `fraunces` (the default) clears the override and lets globals.css's :root
+// rule provide the Fraunces stack, so the first paint already matches.
+const HEADING_VAR_OVERRIDE: Record<HeadingFont, string | null> = {
+  fraunces: null,
+  cormorant: 'var(--font-cormorant)',
+  lora: 'var(--font-lora)',
+  merriweather: 'var(--font-merriweather)',
 };
 
 const PRIMARY_ACCENTS: Record<
@@ -329,10 +321,12 @@ export function applyPreferences(prefs: Preferences) {
   root.style.setProperty('--primary-contrast', accent.contrast);
   root.style.setProperty('--primary-tint', accent.tint);
 
-  // A record written by an older build may still carry a --font-serif
-  // override for a family this app no longer loads. Clearing it is what keeps
-  // such a reader on Source Serif 4 rather than on the browser's last resort.
-  root.style.removeProperty('--font-serif');
+  const override = HEADING_VAR_OVERRIDE[prefs.headingFont];
+  if (override) {
+    root.style.setProperty('--font-serif', override);
+  } else {
+    root.style.removeProperty('--font-serif');
+  }
   root.dataset.density = prefs.density;
   // Kept for form controls and scrollbars, which follow color-scheme rather
   // than any custom property (see the [data-theme] rule in globals.css).
@@ -367,9 +361,16 @@ const TONE_CSS: Record<PaperTone, string> = PAPER_TONE_VALUES.reduce(
 );
 
 const DENSITY_CSS: Record<Density, string> = {
-  normal: '--density-gutter:22px;--density-gap:12px;--density-section:32px;',
-  airy: '--density-gutter:26px;--density-gap:16px;--density-section:40px;',
-  tight: '--density-gutter:18px;--density-gap:9px;--density-section:24px;',
+  comfy: '--density-gutter:22px;--density-gap:12px;--density-section:32px;',
+  cozy: '--density-gutter:26px;--density-gap:16px;--density-section:40px;',
+  compact: '--density-gutter:18px;--density-gap:9px;--density-section:24px;',
+};
+
+const FONT_CSS: Record<HeadingFont, string> = {
+  fraunces: '',
+  cormorant: '--font-serif:var(--font-cormorant);',
+  lora: '--font-serif:var(--font-lora);',
+  merriweather: '--font-serif:var(--font-merriweather);',
 };
 
 const ACCENT_CSS: Record<PrimaryAccent, string> = {
@@ -384,16 +385,14 @@ const ACCENT_CSS: Record<PrimaryAccent, string> = {
  * React is running and the values live inline instead.
  */
 export const PREFERENCE_BOOTSTRAP_SCRIPT = `(function(){try{
-var T=${JSON.stringify(TONE_CSS)},D=${JSON.stringify(DENSITY_CSS)},A=${JSON.stringify(ACCENT_CSS)};
-var LT=${JSON.stringify(LEGACY_TONES)},LD=${JSON.stringify(LEGACY_DENSITY)};
+var T=${JSON.stringify(TONE_CSS)},D=${JSON.stringify(DENSITY_CSS)},F=${JSON.stringify(FONT_CSS)},A=${JSON.stringify(ACCENT_CSS)};
 var p={};try{p=JSON.parse(window.localStorage.getItem(${JSON.stringify(STORAGE_KEY)}))||{};}catch(e){}
-var t=LT[p.paperTone]||p.paperTone;
-t=p.darkMode===true?'night':(T[t]!==undefined?t:'paper');
-var d=LD[p.density]||p.density;
-d=D[d]!==undefined?d:'normal';
+var t=p.darkMode===true?'night':(T[p.paperTone]!==undefined?p.paperTone:'paper');
+var d=D[p.density]!==undefined?p.density:'comfy';
+var f=F[p.headingFont]!==undefined?p.headingFont:'fraunces';
 var a=A[p.primaryAccent]!==undefined?p.primaryAccent:'classic';
 var s=document.createElement('style');s.id=${JSON.stringify(BOOT_STYLE_ID)};
-s.textContent=':root{'+T[t]+D[d]+A[a]+'}';
+s.textContent=':root{'+T[t]+D[d]+F[f]+A[a]+'}';
 document.head.appendChild(s);}catch(e){}})();`;
 
 /** Reads the stored record, migrations applied. Safe on the server. */

@@ -137,7 +137,7 @@ export default function ResetPasswordPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="New password"
-              className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[16px] text-ink focus:border-primary transition-colors placeholder:text-muted"
+              className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary transition-colors placeholder:text-muted-soft"
             />
           </div>
           <div>
@@ -154,7 +154,7 @@ export default function ResetPasswordPage() {
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               placeholder="Repeat password"
-              className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[16px] text-ink focus:border-primary transition-colors placeholder:text-muted"
+              className="w-full bg-transparent border-0 border-b border-line-strong rounded-none px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary transition-colors placeholder:text-muted-soft"
             />
           </div>
 

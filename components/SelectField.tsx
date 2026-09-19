@@ -64,7 +64,7 @@ export default function SelectField({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
-        className="flex w-full items-center gap-2 rounded-[10px] border border-line bg-bg-tint px-3 py-2.5 text-left transition-colors hover:border-line-strong focus:border-line-strong"
+        className="flex w-full items-center gap-2 rounded-[10px] border border-line bg-bg-tint px-3 py-2.5 text-left outline-none transition-colors hover:border-line-strong focus:border-line-strong"
       >
         {selected?.tag && (
           <span className="shrink-0 font-mono text-[11px] font-semibold text-ink">
@@ -72,10 +72,9 @@ export default function SelectField({
           </span>
         )}
         <span
-          // Both states take ink-soft: this sits on --bg-tint, the darkest
-          // ground each stock has, and `muted` is set for the page rather
-          // than for a tinted well.
-          className="min-w-0 flex-1 truncate text-xs text-ink-soft"
+          className={`min-w-0 flex-1 truncate text-xs ${
+            selected ? 'text-ink-soft' : 'text-muted-soft'
+          }`}
         >
           {selected ? selected.label : placeholder}
         </span>

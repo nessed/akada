@@ -1,60 +1,38 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import AkadaMark from '@/components/notebook/AkadaMark';
-import Marginalia from '@/components/notebook/Marginalia';
-import CourseSearchInput from '@/components/CourseSearchInput';
-import DatePicker from '@/components/DatePicker';
-import LoadingIndicator from '@/components/LoadingIndicator';
-import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
-import { useNotice } from '@/components/Notice';
-import {
-  CheckBox,
-  CheckedOption,
-  CourseSpine,
-  Eyebrow,
-  PageButton,
-  Swipe,
-  TextButton,
-} from '@/components/notebook/Marks';
+import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
-import type { CatalogCourse } from '@/lib/catalog';
-import { deriveCourseCode, parseCourseInput } from '@/lib/catalog';
-import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
-import { PASTEL_PALETTE, isoDate, seasonLabel, startOfWeek } from '@/lib/utils';
-import { usePreferences } from '@/lib/preferences';
-import {
-  clampWeeklyGoalHours,
-  cleanCourseCode,
-  cleanCourseName,
-  hasDuplicateCourseCodes,
-  isIsoDate,
-  MEETING_TIME_MAX,
-} from '@/lib/planner-safety';
+import { PASTEL_PALETTE } from '@/lib/utils';
+import AkadaMark from '@/components/notebook/AkadaMark';
+import HandNote from '@/components/notebook/HandNote';
+import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
+import { useNotice } from '@/components/Notice';
 import {
   addCourseOptimistic,
   createSemesterOptimistic,
   markOnboardingComplete,
   updateUserSettingsOptimistic,
 } from '@/lib/data-hooks';
+import {
+  clampDailyGoalHours,
+  clampWeeklyGoalHours,
+  cleanCourseCode,
+  cleanCourseName,
+  cleanDisplayName,
+  hasDuplicateCourseCodes,
+  isIsoDate,
+} from '@/lib/planner-safety';
+import { isoDate, seasonLabel } from '@/lib/utils';
+import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
+import HandCheck from '@/components/notebook/HandCheck';
+import DatePicker from '@/components/DatePicker';
 
-/**
- * Setting up the term, in three questions.
- *
- * It was five screens: a welcome, your name, your courses, the semester
- * dates, and a study routine. Two of those were the app asking for things it
- * did not need up front — a display name it can read off the account, and a
- * pair of term dates almost nobody knows on the day they sign up. Both are in
- * Settings, where they can be changed by someone who cares, and the dates
- * default to a fifteen-week term from this Monday.
- *
- * The last question is the one that is new, and it is the most important: the
- * day the week gets read back. Review only works if a reader has agreed to it
- * once, and agreeing to it here is why the nudge is not a notification.
- */
+type Step = 'welcome' | 'name' | 'courses' | 'semester' | 'routine';
+
+const STEPS: Step[] = ['welcome', 'name', 'courses', 'semester', 'routine'];
 
 interface DraftCourse {
   code: string;
@@ -62,92 +40,63 @@ interface DraftCourse {
   color: string;
   tint: string;
   weeklyGoalHours: number;
-  section: string | null;
-  instructor: string | null;
-  meetingTime: string | null;
-  credits: number;
 }
 
-const SLOTS = [
-  { id: 'early', label: 'Early, before class', hours: '06–09' },
-  { id: 'afternoon', label: 'Afternoons between classes', hours: '13–17' },
-  { id: 'evening', label: 'Late evening', hours: '21–01' },
-  { id: 'weekend', label: 'Weekend blocks', hours: 'Sat–Sun' },
-];
-
-const REVIEW_DAYS = [
-  { value: 5, label: 'Fri' },
-  { value: 6, label: 'Sat' },
-  { value: 0, label: 'Sun' },
-  { value: 1, label: 'Mon' },
-];
+const emptyDraft = (): DraftCourse => ({
+  code: '',
+  name: '',
+  color: PASTEL_PALETTE[0].value,
+  tint: PASTEL_PALETTE[0].tint,
+  weeklyGoalHours: 8,
+});
 
 export default function OnboardingPage() {
   return (
-    <Suspense fallback={<Gate label="Loading your setup" />}>
+    <Suspense
+      fallback={
+        <div className="min-h-[100dvh] flex items-center justify-center px-8">
+          <LoadingIndicator label="Loading your setup" detail="Getting your planner ready." />
+        </div>
+      }
+    >
       <OnboardingContent />
     </Suspense>
   );
 }
 
-function Gate({ label }: { label: string }) {
-  return (
-    <div className="flex min-h-[100dvh] items-center justify-center px-8">
-      <LoadingIndicator label={label} detail="Getting your planner ready." />
-    </div>
-  );
-}
-
 function OnboardingContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { notify } = useNotice();
-  const [, setPrefs] = usePreferences();
-
-  // Settings → Term sends people here to start the next semester, which skips
-  // the welcome and keeps the reader's existing profile untouched.
-  const newSemesterMode = searchParams.get('mode') === 'semester';
-
-  const [step, setStep] = useState(newSemesterMode ? 1 : 0);
+  const searchParams = useSearchParams();
+  const newSemesterMode = searchParams.get('newSemester') === '1';
+  const setupSteps: Step[] = newSemesterMode ? ['courses', 'routine'] : STEPS;
+  const [step, setStep] = useState<Step>(() => (newSemesterMode ? 'courses' : 'welcome'));
+  const [displayName, setDisplayName] = useState('');
+  const [courses, setCourses] = useState<DraftCourse[]>([emptyDraft()]);
+  const [editIdx, setEditIdx] = useState(0);
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [dailyGoal, setDailyGoal] = useState(4);
+  const [avatarPreview, setAvatarPreview] = useState('');
   const [gate, setGate] = useState<'checking' | 'open'>('checking');
-  const [saving, setSaving] = useState(false);
-
-  const [courses, setCourses] = useState<DraftCourse[]>([]);
-  const [query, setQuery] = useState('');
-  const [picked, setPicked] = useState<CatalogCourse | null>(null);
-  const [section, setSection] = useState('');
-  const [manualName, setManualName] = useState('');
-  const [goal, setGoal] = useState(8);
-
-  const [slots, setSlots] = useState<string[]>(['afternoon']);
-  const [reviewDay, setReviewDay] = useState(0);
-  const [avatar, setAvatar] = useState('');
-
-  // A fifteen-week term from this Monday, which is right often enough that
-  // most people will never open Settings → Term to correct it.
-  const [start, setStart] = useState(() => isoDate(startOfWeek(new Date())));
-  const [end, setEnd] = useState(() => {
-    const d = startOfWeek(new Date());
-    d.setDate(d.getDate() + 15 * 7 - 1);
-    return isoDate(d);
-  });
 
   useEffect(() => {
-    let alive = true;
+    let active = true;
     (async () => {
       // The gate is decided on its own. Bundling it with the prefill calls
-      // meant any one of them failing (createClient() throws when Supabase is
-      // unconfigured) opened setup to an already-onboarded user.
+      // meant any one of them failing (createClient() throws when Supabase
+      // is unconfigured) opened setup to an already-onboarded user.
       let onboarded = false;
       try {
         onboarded = await db.isOnboardingComplete();
       } catch {
         onboarded = false;
       }
-      if (!alive) return;
+      if (!active) return;
 
       // Someone who has already finished setup must not be able to run it
-      // again by typing the URL: it would duplicate every course.
+      // again by typing the URL, it would duplicate every course and
+      // overwrite their profile.
       if (onboarded && !newSemesterMode) {
         router.replace('/dashboard');
         return;
@@ -155,89 +104,88 @@ function OnboardingContent() {
 
       // Prefill is best-effort and must never block the form.
       try {
-        const settings = await db.getUserSettings();
-        if (alive) setAvatar((current) => current || settings?.avatarUrl || '');
+        const [settings, auth] = await Promise.all([
+          db.getUserSettings(),
+          createClient().auth.getUser(),
+        ]);
+        if (!active) return;
+        const metadataName =
+          typeof auth.data.user?.user_metadata?.display_name === 'string'
+            ? auth.data.user.user_metadata.display_name
+            : '';
+        setDisplayName((current) => current || settings?.displayName || metadataName || '');
+        setAvatarPreview((current) => current || settings?.avatarUrl || '');
       } catch {
-        // Local mode or an unauthenticated edge: keep the form usable.
+        // Local mode or unauthenticated edge: keep the form empty but usable.
       }
-      if (alive) setGate('open');
+
+      if (active) setGate('open');
     })();
     return () => {
-      alive = false;
+      active = false;
     };
   }, [newSemesterMode, router]);
 
-  function nextColor() {
+  const editing = courses[editIdx];
+  function update(patch: Partial<DraftCourse>) {
+    setCourses((prev) => prev.map((c, i) => (i === editIdx ? { ...c, ...patch } : c)));
+  }
+
+  function addAnother() {
     const used = new Set(courses.map((c) => c.color));
-    return PASTEL_PALETTE.find((p) => !used.has(p.value)) ||
+    const next =
+      PASTEL_PALETTE.find((p) => !used.has(p.value)) ||
       PASTEL_PALETTE[courses.length % PASTEL_PALETTE.length];
+    setCourses((prev) => [
+      ...prev,
+      { code: '', name: '', color: next.value, tint: next.tint, weeklyGoalHours: 8 },
+    ]);
+    setEditIdx(courses.length);
   }
 
-  /** What the search box and the section picker currently add up to. */
-  function resolveDraft(): DraftCourse | null {
-    const pastel = nextColor();
-    if (picked) {
-      const chosen = picked.sections?.find((sec) => sec.id === section);
-      const withRoom = [chosen?.meets, chosen?.room].filter(Boolean).join(' · ');
-      return {
-        code: cleanCourseCode(picked.code),
-        name: cleanCourseName(picked.title),
-        color: pastel.value,
-        tint: pastel.tint,
-        weeklyGoalHours: clampWeeklyGoalHours(goal),
-        section: section || null,
-        instructor: chosen?.instructor ?? null,
-        meetingTime: (withRoom.length <= MEETING_TIME_MAX ? withRoom : chosen?.meets) || null,
-        credits: picked.credits ?? 4,
-      };
-    }
-    const parsed = parseCourseInput(query);
-    const name = cleanCourseName(manualName || parsed.name);
-    if (!name) return null;
-    return {
-      code: cleanCourseCode(parsed.code || deriveCourseCode(name)),
-      name,
-      color: pastel.value,
-      tint: pastel.tint,
-      weeklyGoalHours: clampWeeklyGoalHours(goal),
-      section: null,
-      instructor: null,
-      meetingTime: null,
-      credits: 4,
-    };
+  function removeCourse(i: number) {
+    if (courses.length === 1) return;
+    setCourses((prev) => prev.filter((_, idx) => idx !== i));
+    setEditIdx(Math.max(0, editIdx - (i <= editIdx ? 1 : 0)));
   }
 
-  const draft = resolveDraft();
+  const validCourses = courses
+    .map((course) => ({
+      ...course,
+      code: cleanCourseCode(course.code),
+      name: cleanCourseName(course.name),
+      weeklyGoalHours: clampWeeklyGoalHours(course.weeklyGoalHours),
+    }))
+    .filter((course) => course.code && course.name);
+  const valid = validCourses.length >= 1 && !hasDuplicateCourseCodes(validCourses);
+  const canFinishSemester = isIsoDate(start) && isIsoDate(end) && end >= start;
 
-  function addDraft() {
-    if (!draft?.code || !draft.name) return;
-    if (courses.some((c) => c.code === draft.code)) {
-      notify(`${draft.code} is already on the list.`);
-      return;
-    }
-    setCourses([...courses, draft]);
-    setQuery('');
-    setPicked(null);
-    setSection('');
-    setManualName('');
-    setGoal(8);
-  }
-
-  const valid = courses.length >= 1 && !hasDuplicateCourseCodes(courses);
-  const datesValid = isIsoDate(start) && isIsoDate(end) && end >= start;
 
   async function finish() {
-    if (!valid || !datesValid || saving) return;
-    setSaving(true);
+    if (!valid || (!newSemesterMode && !canFinishSemester)) return;
     try {
-      const stored = avatar && isUploadedImage(avatar) ? await resizeAvatar(avatar) : avatar;
-      await updateUserSettingsOptimistic(
-        newSemesterMode ? {} : { avatarUrl: stored },
-      );
+      let finalAvatar = avatarPreview;
+      if (avatarPreview && isUploadedImage(avatarPreview)) {
+        finalAvatar = await resizeAvatar(avatarPreview);
+      }
 
-      // The semester has to exist and be active *before* any course is added:
-      // every course attaches to whichever semester is active, so adding them
-      // first would create a nameless placeholder and strand them in it.
+      // Use the optimistic helpers so the SWR cache is hot before we navigate
+      // to /dashboard, otherwise the dashboard would briefly read a stale
+      // "not onboarded" / empty-courses cache and bounce or flash.
+      await updateUserSettingsOptimistic(
+        newSemesterMode
+          ? { dailyGoalHours: clampDailyGoalHours(dailyGoal) }
+          : {
+              displayName: cleanDisplayName(displayName),
+              dailyGoalHours: clampDailyGoalHours(dailyGoal),
+              avatarUrl: finalAvatar,
+            },
+      );
+      // The semester has to exist and be active *before* any course is
+      // added, every course attaches to whichever semester is currently
+      // active, so adding them first would silently create a nameless
+      // placeholder semester and then strand the courses there when this
+      // one activates right after.
       if (!newSemesterMode) {
         await createSemesterOptimistic({
           label: seasonLabel(new Date(start + 'T00:00:00')),
@@ -245,113 +193,100 @@ function OnboardingContent() {
           endDate: end,
         });
       }
-
-      for (const course of courses) {
+      for (const c of validCourses) {
         await addCourseOptimistic({
-          code: course.code,
-          name: course.name,
-          color: course.color,
-          tint: course.tint,
-          weeklyGoalHours: course.weeklyGoalHours,
-          credits: course.credits,
-          section: course.section,
-          instructor: course.instructor,
-          meetingTime: course.meetingTime,
+          code: c.code,
+          name: c.name,
+          color: c.color,
+          tint: c.tint,
+          weeklyGoalHours: c.weeklyGoalHours,
         });
       }
-
-      // The review day is a preference, not a record, so it is written last
-      // and a failure here cannot cost anybody their courses.
-      setPrefs({ reviewDay });
       await markOnboardingComplete();
       router.replace('/dashboard');
-    } catch (error) {
-      console.error('Onboarding setup failed:', error);
-      notify(error instanceof Error ? error.message : 'Setup did not finish.');
-      setSaving(false);
+    } catch (err: unknown) {
+      console.error('Onboarding setup failed:', err);
+      notify(err instanceof Error ? err.message : 'Setup did not finish.');
     }
   }
 
-  if (gate === 'checking') return <Gate label="Loading your setup" />;
-
-  const totalSteps = newSemesterMode ? 2 : 3;
-  const shownStep = newSemesterMode ? step : step;
+  if (gate === 'checking') {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center px-8">
+        <LoadingIndicator
+          label="Loading your setup"
+          detail="Getting your planner ready."
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="relative flex min-h-[100dvh] flex-col">
-      {step === 0 && (
-        <span
-          aria-hidden
-          className="ruled pointer-events-none absolute inset-0"
-          style={{
-            maskImage: 'linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent)',
-            WebkitMaskImage:
-              'linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent)',
-          }}
-        />
-      )}
+    <div className="min-h-[100dvh] flex flex-col">
+      {/* Step dots */}
+      {/* Capped to the same width as the content below, so the progress
+          bar tracks the card it belongs to instead of stretching the
+          full width of a laptop screen. */}
+      <div className="mx-auto flex w-full max-w-xl gap-1.5 px-6 pt-[max(env(safe-area-inset-top),3.5rem)]">
+        {setupSteps.map((s, i) => {
+          const active = i <= setupSteps.indexOf(step);
+          return (
+            <span
+              key={s}
+              className={`h-0.5 flex-1 rounded-full transition-colors duration-200 ${
+                active ? 'bg-primary' : 'bg-line'
+              }`}
+            />
+          );
+        })}
+      </div>
 
-      <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col px-7">
-        {/* The rule at the top is the progress: three strokes, one filled per
-            answered question. No percentage and no "step 2 of 3" chip. */}
-        {step > 0 && (
-          <div className="flex gap-1.5 pt-[max(env(safe-area-inset-top),26px)]">
-            {Array.from({ length: totalSteps }).map((_, i) => (
-              <span
-                key={i}
-                className="h-0.5 flex-1"
-                style={{ background: i < shownStep ? 'var(--ink)' : 'var(--line)' }}
-              />
-            ))}
-          </div>
-        )}
-
-        {step === 0 && (
-          <Welcome onNext={() => setStep(1)} />
-        )}
-
-        {step === 1 && (
-          <CoursesStep
-            courses={courses}
-            draft={draft}
-            query={query}
-            picked={picked}
-            section={section}
-            manualName={manualName}
-            goal={goal}
-            onQuery={(v) => {
-              setQuery(v);
-              setManualName('');
-            }}
-            onPick={(course) => {
-              setPicked(course);
-              setSection('');
-              if (course?.credits) setGoal(clampWeeklyGoalHours(course.credits * 2));
-            }}
-            onSection={setSection}
-            onManualName={setManualName}
-            onGoal={setGoal}
-            onAdd={addDraft}
-            onRemove={(code) => setCourses(courses.filter((c) => c.code !== code))}
-            onNext={() => setStep(2)}
+      <div className="flex-1 flex flex-col mx-auto w-full max-w-xl">
+        {step === 'welcome' && <Welcome onNext={() => setStep('name')} />}
+        {step === 'name' && (
+          <NameStep
+            name={displayName}
+            setName={setDisplayName}
+            avatarPreview={avatarPreview}
+            setAvatarPreview={setAvatarPreview}
+            onBack={() => setStep('welcome')}
+            onNext={() => setStep('courses')}
           />
         )}
-
-        {step === 2 && (
-          <RoutineStep
-            slots={slots}
-            onToggleSlot={(id) =>
-              setSlots(slots.includes(id) ? slots.filter((s) => s !== id) : [...slots, id])
-            }
-            reviewDay={reviewDay}
-            onReviewDay={setReviewDay}
+        {step === 'courses' && (
+          <CoursesStep
+            courses={courses}
+            editIdx={editIdx}
+            setEditIdx={setEditIdx}
+            editing={editing}
+            update={update}
+            addAnother={addAnother}
+            removeCourse={removeCourse}
+            valid={valid}
+            onBack={() => (newSemesterMode ? router.replace('/dashboard') : setStep('name'))}
+            onNext={() => setStep(newSemesterMode ? 'routine' : 'semester')}
+          />
+        )}
+        {step === 'semester' && (
+          <SemesterStep
             start={start}
             end={end}
-            onStart={setStart}
-            onEnd={setEnd}
-            datesValid={datesValid}
-            showDates={!newSemesterMode}
-            saving={saving}
+            setStart={setStart}
+            setEnd={setEnd}
+            canFinish={canFinishSemester}
+            onBack={() => setStep('courses')}
+            onNext={() => setStep('routine')}
+          />
+        )}
+        {step === 'routine' && (
+          <RoutineStep
+            dailyGoal={dailyGoal}
+            setDailyGoal={setDailyGoal}
+            displayName={displayName}
+            totalWeeklyGoal={courses
+              .filter((c) => c.code.trim() && c.name.trim())
+              .reduce((sum, c) => sum + clampWeeklyGoalHours(c.weeklyGoalHours), 0)}
+            onBack={() => setStep(newSemesterMode ? 'courses' : 'semester')}
             onFinish={finish}
           />
         )}
@@ -360,311 +295,647 @@ function OnboardingContent() {
   );
 }
 
-/* ───────── the three screens ───────── */
-
 function Welcome({ onNext }: { onNext: () => void }) {
   return (
-    <>
-      <div className="pt-[max(env(safe-area-inset-top),72px)]">
-        <AkadaMark size={44} />
-        <h1 className="mt-9 font-serif text-[34px] font-normal leading-[1.06] tracking-[-0.03em] md:text-[40px]">
-          A quiet place
+    <div className="relative flex-1 flex flex-col items-center justify-center text-center px-8 animate-fade-in">
+      {/* Off-grid arrow pointing toward the title, quiet hand-drawn touch */}
+      <div
+        aria-hidden
+        className="absolute"
+        style={{ top: 64, left: 28, transform: 'rotate(-9deg)', opacity: 0.7 }}
+      >
+        <svg aria-hidden width="42" height="42" viewBox="0 0 36 36" fill="none">
+          <path
+            d="M6 4 C 14 16, 18 22, 30 28 M22 22 L30 28 L24 32"
+            stroke="var(--muted-soft)"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+
+      <AkadaMark size={62} />
+      <h1 className="font-serif font-medium text-[44px] leading-[1.04] tracking-[-0.025em] m-0 mt-7">
+        A quiet place
+        <br />
+        <span className="italic font-normal">to study.</span>
+      </h1>
+      <p className="mt-5 font-serif italic text-[15px] text-ink-soft max-w-[280px] leading-[1.55]">
+        Track courses, tasks, and study sessions. Stay close to the work that matters.
+      </p>
+
+      <div className="mt-7">
+        <HandNote color="var(--peach)" size={22} rotate={-3}>
+          ~ a minute to set up
+        </HandNote>
+      </div>
+
+      <button
+        type="button"
+        onClick={onNext}
+        className="mt-9 w-full max-w-[280px] min-h-[56px] py-4 px-6 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em]"
+      >
+        Start planning
+      </button>
+    </div>
+  );
+}
+
+/* ─── Name step ─── */
+function NameStep({
+  name,
+  setName,
+  avatarPreview,
+  setAvatarPreview,
+  onBack,
+  onNext,
+}: {
+  name: string;
+  setName: (v: string) => void;
+  avatarPreview: string;
+  setAvatarPreview: (v: string) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  const { notify } = useNotice();
+
+  function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      notify('That file is not an image.');
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      notify('That image is over 6 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setAvatarPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  const initials = name.trim() ? name.trim().charAt(0).toUpperCase() : '?';
+
+  return (
+    <div className="flex-1 flex flex-col animate-fade-in">
+      <div className="px-7 pt-2">
+        <button type="button" onClick={onBack} className="text-[13px] text-muted mb-[18px]">
+          ← Back
+        </button>
+        <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
+          Set up your
           <br />
-          <em className="italic">to keep the term.</em>
-        </h1>
-        <p className="mt-5 max-w-[30ch] font-serif text-[16px] leading-[1.6] text-ink-soft">
-          Courses, deadlines and the hours you actually sit down for. Nothing else, and nothing
-          shared.
+          <span className="italic font-normal">profile</span>
+        </h2>
+        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
+          Add a photo and your name.
         </p>
-        <div className="mt-7 flex items-center gap-2.5">
-          <Marginalia mark="squiggle" width={34} />
-          <span className="font-serif text-sm italic text-muted">about a minute</span>
+      </div>
+
+      <div className="px-7 pt-8 flex flex-col items-center">
+        {/* Avatar upload */}
+        <label className="relative cursor-pointer group mb-6">
+          <div
+            className="w-24 h-24 rounded-full border-2 border-dashed border-line-strong flex items-center justify-center overflow-hidden transition-colors group-hover:border-primary"
+            style={avatarPreview ? { borderStyle: 'solid', borderColor: 'var(--line)' } : {}}
+          >
+            {avatarPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <span className="font-serif italic text-[32px] text-muted-soft">{initials}</span>
+            )}
+          </div>
+          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-primary-contrast flex items-center justify-center text-sm shadow-sm">
+            <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </div>
+          <input type="file" accept="image/*" onChange={handleAvatar} className="hidden" />
+        </label>
+
+        <div className="w-full">
+          <Field label="Your name">
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Ali"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && name.trim()) onNext();
+              }}
+              className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary rounded-none"
+            />
+          </Field>
         </div>
       </div>
 
-      <div className="mt-auto pb-[calc(40px+env(safe-area-inset-bottom))]">
-        <PageButton onClick={onNext}>Set up the term</PageButton>
-        <p className="mt-4 text-center text-[13px] text-muted">
-          Already have an account?{' '}
-          <Link href="/auth" className="border-b border-line-strong pb-px text-ink">
-            Sign in
-          </Link>
-        </p>
+      <div className="px-7 pt-8 pb-7 mt-auto">
+        <button
+          type="button"
+          disabled={!name.trim()}
+          onClick={onNext}
+          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          Continue
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setName('');
+            onNext();
+          }}
+          className="w-full mt-2 py-3 text-[13px] text-muted font-serif italic"
+        >
+          Skip for now
+        </button>
       </div>
-    </>
+    </div>
   );
+}
+
+interface CoursesStepProps {
+  courses: DraftCourse[];
+  editIdx: number;
+  setEditIdx: (i: number) => void;
+  editing: DraftCourse;
+  update: (patch: Partial<DraftCourse>) => void;
+  addAnother: () => void;
+  removeCourse: (i: number) => void;
+  valid: boolean;
+  onBack: () => void;
+  onNext: () => void;
 }
 
 function CoursesStep({
   courses,
-  draft,
-  query,
-  picked,
-  section,
-  manualName,
-  goal,
-  onQuery,
-  onPick,
-  onSection,
-  onManualName,
-  onGoal,
-  onAdd,
-  onRemove,
+  editIdx,
+  setEditIdx,
+  editing,
+  update,
+  addAnother,
+  removeCourse,
+  valid,
+  onBack,
   onNext,
-}: {
-  courses: DraftCourse[];
-  draft: DraftCourse | null;
-  query: string;
-  picked: CatalogCourse | null;
-  section: string;
-  manualName: string;
-  goal: number;
-  onQuery: (v: string) => void;
-  onPick: (c: CatalogCourse | null) => void;
-  onSection: (v: string) => void;
-  onManualName: (v: string) => void;
-  onGoal: (v: number) => void;
-  onAdd: () => void;
-  onRemove: (code: string) => void;
-  onNext: () => void;
-}) {
-  const canAdd = Boolean(draft?.code && draft?.name);
+}: CoursesStepProps) {
+  // Which code is repeated, so the block can say so rather than just
+  // greying the button out.
+  const duplicateCode = (() => {
+    const seen = new Set<string>();
+    for (const course of courses) {
+      const code = cleanCourseCode(course.code);
+      if (!code) continue;
+      if (seen.has(code)) return code;
+      seen.add(code);
+    }
+    return '';
+  })();
+
   return (
-    <>
-      <div className="pt-8">
-        <Eyebrow>One of two</Eyebrow>
-        <h1 className="mt-2 font-serif text-[30px] font-normal leading-[1.1] tracking-[-0.025em]">
-          What are you
-          <br />
-          taking?
-        </h1>
-      </div>
-
-      <div className="pt-6">
-        <CourseSearchInput
-          autoFocus
-          query={query}
-          onQueryChange={onQuery}
-          picked={picked}
-          onPick={onPick}
-          section={section}
-          onSectionChange={onSection}
-          accent={draft?.color ?? PASTEL_PALETTE[0].value}
-          accentTint={draft?.tint ?? PASTEL_PALETTE[0].tint}
-          onSubmit={onAdd}
-        />
-
-        {!picked && query.trim().length > 0 && !canAdd && (
-          <input
-            value={manualName}
-            onChange={(e) => onManualName(e.target.value)}
-            placeholder="Course name"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onAdd();
-            }}
-            className="mt-3 w-full animate-fade-in border-0 border-b-[1.4px] border-line-strong bg-transparent px-0.5 pb-2 font-serif text-[16px] italic text-ink focus:border-ink"
-          />
-        )}
-
-        {canAdd && (
-          <div className="mt-5 animate-fade-in">
-            <Eyebrow className="mb-2">Hours a week</Eyebrow>
-            <WeeklyGoalSlider
-              value={goal}
-              onChange={onGoal}
-              credits={draft?.credits ?? 4}
-              label="Weekly study goal for this course"
-            />
-            <PageButton size="sheet" className="mt-4" onClick={onAdd}>
-              Add {draft?.code}
-            </PageButton>
-          </div>
-        )}
-      </div>
-
-      {courses.length > 0 && (
-        <div className="pt-7">
-          <Eyebrow className="mb-1.5">On the list so far</Eyebrow>
-          {courses.map((course) => (
-            <div key={course.code} className="row-rule flex items-center gap-3 py-2.5">
-              <CourseSpine color={course.color} />
-              <span className="min-w-0 flex-1">
-                <span
-                  className="block text-[11px] font-semibold uppercase tracking-[0.12em]"
-                  style={{ color: course.color }}
-                >
-                  {course.code}
-                </span>
-                <span className="block truncate font-serif text-sm">{course.name}</span>
-              </span>
-              <span className="flex-none font-mono text-[11px] text-muted">
-                {course.weeklyGoalHours}h/wk
-              </span>
-              <button
-                type="button"
-                onClick={() => onRemove(course.code)}
-                aria-label={`Remove ${course.code}`}
-                className="flex-none bg-transparent font-mono text-[13px] text-muted hover:text-priority"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-          <p className="mt-3.5 font-serif text-[13px] italic text-muted">
-            Weekly hours come from the credits. Change them whenever.
-          </p>
-        </div>
-      )}
-
-      <div className="mt-auto pb-[calc(34px+env(safe-area-inset-bottom))] pt-8">
-        <PageButton onClick={onNext} disabled={courses.length === 0}>
-          {courses.length === 0 ? 'Add a course to carry on' : 'Next'}
-        </PageButton>
-      </div>
-    </>
-  );
-}
-
-function RoutineStep({
-  slots,
-  onToggleSlot,
-  reviewDay,
-  onReviewDay,
-  start,
-  end,
-  onStart,
-  onEnd,
-  datesValid,
-  showDates,
-  saving,
-  onFinish,
-}: {
-  slots: string[];
-  onToggleSlot: (id: string) => void;
-  reviewDay: number;
-  onReviewDay: (day: number) => void;
-  start: string;
-  end: string;
-  onStart: (v: string) => void;
-  onEnd: (v: string) => void;
-  datesValid: boolean;
-  showDates: boolean;
-  saving: boolean;
-  onFinish: () => void;
-}) {
-  const [datesOpen, setDatesOpen] = useState(false);
-  return (
-    <>
-      <div className="pt-8">
-        <Eyebrow>Last one</Eyebrow>
-        <h1 className="mt-2 font-serif text-[30px] font-normal leading-[1.1] tracking-[-0.025em]">
-          When do you
-          <br />
-          actually study?
-        </h1>
-        <p className="mt-3 font-serif text-[14.5px] leading-[1.55] text-ink-soft">
-          So the day has your hours on it, not an office schedule.
+    <div className="flex-1 flex flex-col overflow-y-auto app-scroll animate-fade-in">
+      <div className="px-7 pt-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-[13px] text-muted mb-[18px]"
+        >
+          ← Back
+        </button>
+        <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
+          Add your courses
+        </h2>
+        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
+          Set a weekly goal for each. You can edit anytime.
         </p>
       </div>
 
-      <div className="pt-6">
-        {SLOTS.map((slot) => {
-          const on = slots.includes(slot.id);
+      {courses.length > 1 && (
+        <div className="flex gap-2 px-7 pt-5 pb-1 overflow-x-auto app-scroll">
+          {courses.map((c, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setEditIdx(i)}
+              className={`shrink-0 bg-transparent px-0.5 py-1 font-mono text-[12px] font-semibold transition-colors ${
+                i === editIdx ? 'hl-swipe text-ink' : 'text-muted-soft'
+              }`}
+              style={
+                i === editIdx ? ({ '--hl': c.tint } as React.CSSProperties) : undefined
+              }
+            >
+              {c.code || `Course ${i + 1}`}
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeCourse(i);
+                }}
+                className="ml-1 text-muted-soft text-sm leading-none"
+              >
+                ×
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="px-7 pt-6 flex flex-col gap-[18px]">
+        <Field label="Course code">
+          <TextInput
+            value={editing.code}
+            onChange={(v) => update({ code: v.toUpperCase() })}
+            placeholder="e.g. POL 227"
+          />
+        </Field>
+        <Field label="Course name">
+          <TextInput
+            value={editing.name}
+            onChange={(v) => update({ name: v })}
+            placeholder="e.g. Comparative Politics"
+          />
+        </Field>
+        <Field label="Accent color">
+          <div className="flex flex-wrap gap-2.5">
+            {PASTEL_PALETTE.map((p) => {
+              const sel = editing.color === p.value;
+              return (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => update({ color: p.value, tint: p.tint })}
+                  aria-label={p.name}
+                  className="w-8 h-8 rounded-full border-0 transition-transform"
+                  style={{
+                    background: p.value,
+                    boxShadow: sel
+                      ? `0 0 0 2px var(--bg), 0 0 0 3.5px ${p.value}`
+                      : 'none',
+                    transform: sel ? 'scale(1.05)' : 'scale(1)',
+                  }}
+                />
+              );
+            })}
+          </div>
+        </Field>
+        <Field label="Weekly study goal">
+          <WeeklyGoalSlider
+            value={editing.weeklyGoalHours}
+            onChange={(weeklyGoalHours) => update({ weeklyGoalHours })}
+          />
+        </Field>
+
+
+        {/* WYSIWYG preview */}
+        <div className="relative bg-paper rounded-[14px] border border-line overflow-hidden mt-1">
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1"
+            style={{ background: editing.color }}
+          />
+          <div className="py-[18px] pl-6 pr-5">
+            <p
+              className="eyebrow m-0"
+              style={{ color: editing.color }}
+            >
+              {editing.code || 'COURSE CODE'}
+            </p>
+            <h3 className="mt-1 mb-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
+              {editing.name || 'Course name'}
+            </h3>
+            <p className="mt-2.5 mb-0 text-xs text-muted font-serif italic">
+              {editing.weeklyGoalHours} hrs a week
+            </p>
+          </div>
+        </div>
+
+        {courses.length === 1 ? (
+          <button
+            type="button"
+            onClick={addAnother}
+            className="mt-1 py-3.5 rounded-xl border border-dashed border-line-strong text-ink-soft text-[13px] font-medium"
+          >
+            + Add another course
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={addAnother}
+            className="self-start rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-2 font-serif text-[13px] text-muted transition-colors hover:text-ink"
+          >
+            + Add another
+          </button>
+        )}
+      </div>
+
+      <div className="px-7 pt-8 pb-7 mt-auto">
+        {duplicateCode && (
+          <p role="alert" className="mb-3 text-center font-serif text-[13px] italic text-priority">
+            Two courses share the code {duplicateCode}.
+          </p>
+        )}
+        <button
+          type="button"
+          disabled={!valid}
+          onClick={onNext}
+          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface SemesterStepProps {
+  start: string;
+  end: string;
+  setStart: (s: string) => void;
+  setEnd: (s: string) => void;
+  canFinish: boolean;
+  onBack: () => void;
+  onNext: () => void;
+}
+
+/** Roughly when each term runs, as month/day pairs. */
+const TERM_SHAPES = [
+  { season: 'Spring', start: [0, 19], end: [4, 20] },
+  { season: 'Summer', start: [5, 1], end: [7, 13] },
+  { season: 'Fall', start: [7, 31], end: [11, 18] },
+];
+
+function iso(year: number, [month, day]: number[]): string {
+  return isoDate(new Date(year, month, day));
+}
+
+/**
+ * The next three terms, counted from today. Hardcoding them meant that by
+ * September the list offered two terms that had already finished and one
+ * that had started, with no way to say anything else.
+ */
+function upcomingSemesters(today = new Date()) {
+  const options = [];
+  for (let year = today.getFullYear(); options.length < 3; year += 1) {
+    for (const shape of TERM_SHAPES) {
+      const start = iso(year, shape.start);
+      const end = iso(year, shape.end);
+      // A term already over is no longer upcoming; one in progress still is.
+      if (end < isoDate(today) || options.length >= 3) continue;
+      options.push({
+        label: `${shape.season} ${year}`,
+        range: `${new Date(start + 'T00:00:00').toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        })} to ${new Date(end + 'T00:00:00').toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        })}`,
+        start,
+        end,
+      });
+    }
+  }
+  return options;
+}
+
+function SemesterStep({
+  start,
+  end,
+  setStart,
+  setEnd,
+  canFinish,
+  onBack,
+  onNext,
+}: SemesterStepProps) {
+  const semesters = useMemo(() => upcomingSemesters(), []);
+  const onAPreset = semesters.some((sem) => sem.start === start && sem.end === end);
+  // Opened by hand, or already open because the dates came from somewhere
+  // other than a preset.
+  const [custom, setCustom] = useState(false);
+  const showCustom = custom || (Boolean(start || end) && !onAPreset);
+
+  const weeks = canFinish
+    ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000 / 7)
+    : null;
+  return (
+    <div className="flex-1 flex flex-col animate-fade-in">
+      <div className="px-7 pt-2">
+        <button type="button" onClick={onBack} className="text-[13px] text-muted mb-[18px]">
+          ← Back
+        </button>
+        <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
+          The semester
+        </h2>
+        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
+          Select your upcoming term for countdowns and stats.
+        </p>
+      </div>
+
+      <div className="px-7 pt-8 flex flex-col gap-3">
+        {semesters.map((sem) => {
+          const active = start === sem.start && end === sem.end;
           return (
             <button
-              key={slot.id}
+              key={sem.label}
               type="button"
-              aria-pressed={on}
-              onClick={() => onToggleSlot(slot.id)}
-              className="row-rule flex w-full items-center gap-3.5 bg-transparent py-3.5 text-left"
+              onClick={() => {
+                setStart(sem.start);
+                setEnd(sem.end);
+              }}
+              className="flex items-center justify-between p-5 rounded-[14px] transition-all duration-150 text-left border"
+              style={{
+                background: active ? 'var(--bg-tint)' : 'var(--paper)',
+                borderColor: active ? 'var(--line-strong)' : 'var(--line)',
+              }}
             >
-              {on ? <CheckedOption /> : <CheckBox tone="soft" />}
-              <span className={`flex-1 font-serif text-[16px] ${on ? 'text-ink' : 'text-ink-soft'}`}>
-                {slot.label}
-              </span>
-              <span
-                className="flex-none font-mono text-[11px]"
-                style={{ color: on ? 'var(--ink-soft)' : 'var(--muted)' }}
+              <div>
+                <p className="m-0 font-serif font-medium text-[20px] text-ink tracking-[-0.01em]">
+                  {sem.label}
+                </p>
+                <p className="m-0 text-[13px] text-ink-soft mt-1 leading-[1.5]">
+                  {sem.range}
+                </p>
+              </div>
+              <div
+                className="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-colors border"
+                style={{ borderColor: active ? 'var(--ink)' : 'var(--line-strong)' }}
               >
-                {slot.hours}
-              </span>
+                {active && <HandCheck size={13} color="var(--ink)" />}
+              </div>
             </button>
           );
         })}
-      </div>
 
-      <div className="rule-ink mt-7 pt-4">
-        <Eyebrow>Read the week back on</Eyebrow>
-        <div className="mt-3 flex items-baseline gap-4">
-          {REVIEW_DAYS.map((day) => (
-            <button
-              key={day.value}
-              type="button"
-              aria-pressed={reviewDay === day.value}
-              onClick={() => onReviewDay(day.value)}
-              className={`bg-transparent font-serif text-[17px] ${
-                reviewDay === day.value ? 'text-ink' : 'text-muted'
-              }`}
-            >
-              {reviewDay === day.value ? <Swipe>{day.label}</Swipe> : day.label}
-            </button>
-          ))}
+        {showCustom ? (
+          <div className="mt-1 grid grid-cols-2 gap-3 animate-fade-in">
+            <div>
+              <label className="eyebrow mb-2 block">Starts</label>
+              <DateInput value={start} onChange={setStart} />
+            </div>
+            <div>
+              <label className="eyebrow mb-2 block">Ends</label>
+              <DateInput value={end} onChange={setEnd} />
+            </div>
+          </div>
+        ) : (
           <button
             type="button"
-            aria-pressed={reviewDay === -1}
-            onClick={() => onReviewDay(-1)}
-            className={`ml-auto bg-transparent font-serif text-sm italic ${
-              reviewDay === -1 ? 'text-ink' : 'text-muted'
-            }`}
+            onClick={() => setCustom(true)}
+            className="self-start rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-2 font-serif text-[13px] text-muted transition-colors hover:text-ink"
           >
-            never
+            + Other dates
           </button>
+        )}
+
+        <div className="mt-4 py-5 px-[22px] bg-paper rounded-[14px] border border-line">
+          <p className="eyebrow m-0 text-muted">
+            Term length
+          </p>
+          <p className="mt-1.5 mb-0 font-serif font-medium italic text-[22px]">
+            {weeks !== null ? `${weeks} weeks ahead` : 'Select a term'}
+          </p>
         </div>
-        <p className="mt-3.5 font-serif text-[13.5px] italic leading-[1.5] text-muted">
-          {reviewDay === -1
-            ? 'Review stays there whenever you want it. It just will not ask.'
-            : 'One page: where the week went and one thing to change.'}
-        </p>
       </div>
 
-      {/* The term's own dates. Prefilled with a fifteen-week span from this
-          Monday, folded away because almost nobody knows them on day one. */}
-      {showDates && (
-        <div className="mt-6">
-          {datesOpen ? (
-            <div className="animate-fade-in">
-              <Eyebrow className="mb-2">The term runs</Eyebrow>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <DatePicker value={start} onChange={onStart} />
-                <DatePicker value={end} onChange={onEnd} />
-              </div>
-              {!datesValid && (
-                <p className="mt-2 font-serif text-[13px] italic text-priority">
-                  The end has to come after the start.
-                </p>
-              )}
-            </div>
-          ) : (
-            <TextButton tone="quiet" onClick={() => setDatesOpen(true)}>
-              the term runs {shortDate(start)} – {shortDate(end)}, change it →
-            </TextButton>
-          )}
-        </div>
-      )}
-
-      <div className="mt-auto pb-[calc(34px+env(safe-area-inset-bottom))] pt-8">
-        <PageButton onClick={onFinish} disabled={!datesValid || saving}>
-          {saving ? 'Opening…' : 'Open the notebook'}
-        </PageButton>
+      <div className="px-7 pt-8 pb-7 mt-auto">
+        <button
+          type="button"
+          disabled={!canFinish}
+          onClick={onNext}
+          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          Continue
+        </button>
       </div>
-    </>
+    </div>
   );
 }
 
-function shortDate(iso: string): string {
-  if (!isIsoDate(iso)) return '—';
-  return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-  });
+/* ─── Routine step (daily goal) ─── */
+function RoutineStep({
+  dailyGoal,
+  setDailyGoal,
+  displayName,
+  totalWeeklyGoal,
+  onBack,
+  onFinish,
+}: {
+  dailyGoal: number;
+  setDailyGoal: (v: number) => void;
+  displayName: string;
+  totalWeeklyGoal: number;
+  onBack: () => void;
+  onFinish: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  async function handleFinish() {
+    setSaving(true);
+    try {
+      await onFinish();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex-1 flex flex-col animate-fade-in">
+      <div className="px-7 pt-2">
+        <button type="button" onClick={onBack} className="text-[13px] text-muted mb-[18px]">
+          ← Back
+        </button>
+        <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
+          Your daily rhythm
+        </h2>
+        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
+          How much study time feels right each day?
+        </p>
+      </div>
+
+      <div className="px-7 pt-8 flex flex-col gap-6">
+        <Field label="Daily study target">
+          <div className="flex items-center gap-4">
+            <input
+              type="range"
+              min="1"
+              max="12"
+              step="0.5"
+              value={dailyGoal}
+              onChange={(e) => setDailyGoal(clampDailyGoalHours(e.target.value))}
+              className="pl-range flex-1"
+              style={{ color: 'var(--ink)' }}
+            />
+            <div className="font-mono font-semibold text-sm text-ink w-14 text-right">
+              {dailyGoal}
+              <span className="text-muted ml-1">h</span>
+            </div>
+          </div>
+        </Field>
+
+        <HandNote className="self-start" rotate={-1.5}>
+          {dailyGoal >= 7 ? 'exam season' : dailyGoal >= 4 ? 'most students' : 'easy days'}
+        </HandNote>
+
+        {/* Summary card */}
+        <div className="py-5 px-[22px] bg-paper rounded-[14px] border border-line">
+          <p className="eyebrow m-0 text-muted">
+            Your plan
+          </p>
+          <p className="mt-1.5 mb-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
+            {dailyGoal}h daily · {totalWeeklyGoal}h weekly
+          </p>
+        </div>
+      </div>
+
+      <div className="px-7 pt-8 pb-7 mt-auto">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={handleFinish}
+          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />Setting up your planner…</span> : displayName ? `Let's go, ${cleanDisplayName(displayName)}` : 'Begin'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="eyebrow block text-muted mb-2.5">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary rounded-none"
+    />
+  );
+}
+
+function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return <DatePicker value={value} onChange={onChange} allowClear={false} placeholder="Pick a date" />;
 }

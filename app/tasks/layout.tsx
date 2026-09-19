@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'The list',
-  description: 'Everything written down, grouped by when.',
+  title: 'Tasks',
+  description: 'Everything due, by course.',
   robots: { index: false, follow: false },
 };
 

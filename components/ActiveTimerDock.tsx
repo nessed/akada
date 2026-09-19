@@ -42,27 +42,25 @@ export default function ActiveTimerDock() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] z-50 animate-fade-in px-[var(--density-gutter)] md:pl-[calc(74px+44px)] md:pr-11"
+      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] z-50 px-[var(--density-gutter)] md:px-8 pointer-events-none animate-fade-in"
     >
       {/* pointer-events stay off the full-width row, it would otherwise be an
-          invisible click blocker across the top of the page. The left padding
-          clears the rail, so the dock sits over the page rather than over the
-          nav; PageShell sets the same 74px. */}
-      <div className="flex justify-end">
+          invisible click blocker across the top of the page. */}
+      <div className="mx-auto flex max-w-2xl md:max-w-3xl justify-end">
         {/* The row used to be a div with role="button" wrapping two real
             buttons, which is a control inside a control: a keyboard user
             tabbed into the row and then into its own children, and Space
             scrolled the page instead of opening the timer. The label is the
             button now, and the two controls sit beside it. */}
         <div
-          className="pointer-events-auto flex items-center gap-1 border border-line-strong bg-paper/95 p-1 backdrop-blur"
+          className="pointer-events-auto flex items-center gap-1 rounded-[10px] border border-line bg-paper/90 p-1 backdrop-blur"
           style={{ boxShadow: `inset 0 0 0 1px ${tint}` }}
         >
           <button
             type="button"
             onClick={openTimer}
             aria-label={`${active.isPaused ? 'Paused' : 'Running'} timer for ${code}, ${formatHHMMSS(elapsedSeconds)}. Open the timer.`}
-            className="flex min-h-[44px] items-center gap-2 bg-transparent px-1.5 text-left"
+            className="flex min-h-[44px] items-center gap-2 rounded-[8px] bg-transparent px-1.5 text-left"
           >
             <span
               className={`h-1.5 w-1.5 shrink-0 rounded-full ${active.isPaused ? '' : 'animate-tick'}`}
@@ -87,7 +85,7 @@ export default function ActiveTimerDock() {
               type="button"
               onClick={togglePaused}
               aria-label={active.isPaused ? 'Resume timer' : 'Pause timer'}
-              className="flex h-11 w-11 items-center justify-center bg-transparent text-ink-soft"
+              className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-transparent text-ink-soft"
             >
               {active.isPaused ? (
                 <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -108,11 +106,11 @@ export default function ActiveTimerDock() {
               type="button"
               onClick={stopAndLog}
               aria-label="Stop the timer and log the session"
-              className="flex h-11 w-11 items-center justify-center bg-transparent"
+              className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-transparent"
               style={{ color }}
             >
               <svg aria-hidden width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="6" width="12" height="12" />
+                <rect x="6" y="6" width="12" height="12" rx="1.5" />
               </svg>
             </button>
           </div>

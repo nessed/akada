@@ -94,7 +94,7 @@ export default function ConfirmSheet({
             }}
             placeholder={requirePhrase}
             aria-label={`Type ${requirePhrase} to confirm`}
-            className="mt-4 w-full rounded-[10px] border border-line bg-paper px-4 py-3 text-[16px] text-ink focus:border-line-strong"
+            className="mt-4 w-full rounded-[10px] border border-line bg-paper px-4 py-3 text-sm text-ink outline-none focus:border-line-strong"
           />
         )}
 

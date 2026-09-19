@@ -46,12 +46,6 @@ alter table courses add column if not exists meeting_time text;
 -- before. Existing rows are numbered by section 6, no manual step.
 alter table courses add column if not exists sort_order integer;
 
--- How a course is marked: [{ id, label, weight, score, outOf }, …]. Held as
--- one document rather than a table of its own because it is only ever read
--- and written whole, with the course, exactly like tasks.subtasks above. A
--- course with an empty array simply does not draw a grade panel.
-alter table courses add column if not exists assessments jsonb not null default '[]'::jsonb;
-
 -- ============================================================
 -- 2. TASKS  (FK -> courses)
 -- ============================================================
@@ -78,19 +72,6 @@ alter table tasks add column if not exists subtasks jsonb not null default '[]':
 -- trigger in section 6. Lets the app filter tasks by semester with a plain
 -- .eq() instead of a join through courses on every read.
 alter table tasks add column if not exists semester_id uuid;
-
--- What a row on the list actually is, and what it is worth. A reading carries
--- a page count and feeds the backlog; an exam is circled on the month and
--- counted down to; `weight` is the percentage of the course a piece is worth,
--- which is what lets the app say how much of a grade is still unmarked.
--- Additive, so every row written before this reads as a plain, unweighted
--- task and nothing changes meaning underneath anyone.
-alter table tasks add column if not exists kind text not null default 'task'
-  check (kind in ('task', 'reading', 'exam'));
-alter table tasks add column if not exists weight numeric
-  check (weight is null or (weight >= 0 and weight <= 100));
-alter table tasks add column if not exists pages integer
-  check (pages is null or (pages >= 0 and pages <= 10000));
 
 -- ============================================================
 -- 3. SESSIONS  (FK -> courses, FK -> tasks)
