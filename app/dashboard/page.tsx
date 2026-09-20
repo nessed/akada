@@ -25,6 +25,8 @@ import HandCheck from '@/components/notebook/HandCheck';
 import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
+import { pickUpNext } from '@/lib/derive';
+import { usePreferences } from '@/lib/preferences';
 import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
@@ -129,6 +131,7 @@ function DashboardPageContent() {
   const { tasks, isLoading: tasksLoading } = useTasks();
   const { semester } = useActiveSemester();
   const { settings } = useUserSettings();
+  const [prefs, updatePrefs] = usePreferences();
 
   const courses = rawCourses;
   const sessions = useMemo(
@@ -699,13 +702,10 @@ function DashboardPageContent() {
     now.toLocaleDateString(undefined, { month: 'short' }),
     now.getFullYear(),
   ].join(' ');
-  /* The one task the screen asks for: oldest overdue first, then what is due
-     today, then whatever is nearest. Sorting by due date alone would put a
-     task due today above one that has been overdue for a fortnight. */
-  const upNext =
-    [...overdueTasks].sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))[0] ??
-    todayTasks[0] ??
-    null;
+  /* The one task the screen asks for. Which one depends on the reader's rule,
+     see pickUpNext: by default the course that has gone longest without a
+     session, or the oldest overdue thing if they have said they want that. */
+  const upNext = pickUpNext(prefs.upNextSort, overdueTasks, todayTasks, sessions);
   /* The week's goal is the sum of the course goals, which is what the course
      panel is already measured against; a separate number would let the two
      disagree. */
@@ -798,6 +798,8 @@ function DashboardPageContent() {
                 onDone={handleToggleTask}
                 onSnooze={handleSnoozeTask}
                 onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
+                sort={prefs.upNextSort}
+                onSortChange={(upNextSort) => updatePrefs({ upNextSort })}
               />
             ) : (
               <section className="deckle border border-dashed border-line-strong bg-paper px-7 py-8">
