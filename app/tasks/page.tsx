@@ -834,6 +834,9 @@ function TasksPageContent() {
                 onChange={(e) => setEditTitle(e.target.value)}
                 placeholder="Task title"
                 className="w-full rounded-t-[10px] border-0 bg-transparent px-4 pb-2.5 pt-3 font-serif text-[16px] text-ink outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveEditTask();
+                }}
               />
               <div className="mx-4 border-t border-dashed border-line" />
               <textarea
