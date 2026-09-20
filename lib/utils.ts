@@ -1,16 +1,25 @@
 // ---- Time / date helpers
 
+/**
+ * Now, pulled back into the day it still belongs to. Someone who ends their
+ * day at 6am and is still reading at 2am on Monday is working on Sunday — so
+ * it is still Sunday's date, and still the week Sunday closes.
+ */
+function logicalNow(): Date {
+  const date = new Date();
+  if (typeof window === 'undefined') return date;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem('akada.preferences.v1') || '{}');
+    const cutoff = Number(stored.dayEndingHour);
+    if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= 6) date.setHours(date.getHours() - cutoff);
+  } catch { /* a normal calendar day is a safe fallback */ }
+  return date;
+}
+
 export function isoDate(d?: Date): string {
   // Explicit dates are calendar dates (calendar grids / due dates). The
   // implicit "today" honors the user's chosen late-night day boundary.
-  const date = new Date(d ?? new Date());
-  if (!d && typeof window !== 'undefined') {
-    try {
-      const stored = JSON.parse(window.localStorage.getItem('akada.preferences.v1') || '{}');
-      const cutoff = Number(stored.dayEndingHour);
-      if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= 6) date.setHours(date.getHours() - cutoff);
-    } catch { /* a normal calendar day is a safe fallback */ }
-  }
+  const date = d ? new Date(d) : logicalNow();
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -28,9 +37,11 @@ export function seasonLabel(d: Date = new Date()): string {
   return `${season} ${d.getFullYear()}`;
 }
 
-export function startOfWeek(d: Date = new Date()): Date {
-  // Monday as start of week
-  const date = new Date(d);
+export function startOfWeek(d?: Date): Date {
+  // Monday as start of week. Like isoDate, an implicit "now" is the logical
+  // day rather than the wall clock: the week has to turn over when the
+  // reader's day does, or a late night rolls their week over underneath them.
+  const date = d ? new Date(d) : logicalNow();
   date.setHours(0, 0, 0, 0);
   const day = date.getDay();
   const diff = (day + 6) % 7;
@@ -38,7 +49,7 @@ export function startOfWeek(d: Date = new Date()): Date {
   return date;
 }
 
-export function endOfWeek(d: Date = new Date()): Date {
+export function endOfWeek(d?: Date): Date {
   const start = startOfWeek(d);
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
