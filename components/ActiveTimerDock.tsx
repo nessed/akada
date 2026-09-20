@@ -42,13 +42,20 @@ export default function ActiveTimerDock() {
 
   return (
     <div
-      /* Phone chrome only. On desktop the rail carries the running clock, and
-         two of them on one screen is one too many. */
-      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] z-50 px-[var(--density-gutter)] pointer-events-none animate-fade-in md:hidden"
+      /* Floats over the page at every size. On a phone it sits at the top,
+         where the content's own 64px of head room leaves it a lane. On
+         desktop the content starts 40px down and every page puts its actions
+         on that line, so the dock goes to the foot of the screen instead,
+         which is empty there: the bottom bar is phone-only.
+
+         The left padding clears the rail by the same width the content does.
+         --rail is set on the frame in PageShell and is absent on phone, where
+         the rail is never rendered, hence the 0px fallback. */
+      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] md:top-auto md:bottom-8 z-50 px-[var(--density-gutter)] md:pl-[calc(var(--rail,0px)+3rem)] md:pr-12 pointer-events-none animate-fade-in"
     >
       {/* pointer-events stay off the full-width row, it would otherwise be an
           invisible click blocker across the top of the page. */}
-      <div className="mx-auto flex max-w-2xl md:max-w-3xl justify-end">
+      <div className="mx-auto flex max-w-2xl md:max-w-none justify-end">
         {/* The row used to be a div with role="button" wrapping two real
             buttons, which is a control inside a control: a keyboard user
             tabbed into the row and then into its own children, and Space

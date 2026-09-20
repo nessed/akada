@@ -58,16 +58,19 @@ export default function PageShell({ children, hideNav, wide }: Props) {
   }, [hideNav]);
 
   return (
-    <div className="min-h-[100dvh] bg-bg">
+    <div
+      className="min-h-[100dvh] bg-bg"
+      /* --rail lives on the frame rather than on the content wrapper, because
+         the timer dock is a sibling of that wrapper and has to clear the rail
+         by the same width the content does. */
+      style={
+        hideNav
+          ? undefined
+          : ({ ['--rail' as string]: `${railWidth}px` } as React.CSSProperties)
+      }
+    >
       {!hideNav && <DesktopRail />}
-      <div
-        className="transition-[padding] duration-200 md:pl-[var(--rail)]"
-        style={
-          hideNav
-            ? undefined
-            : ({ ['--rail' as string]: `${railWidth}px` } as React.CSSProperties)
-        }
-      >
+      <div className="transition-[padding] duration-200 md:pl-[var(--rail)]">
         <main
           className={`mx-auto px-[var(--density-gutter)] md:px-12 ${
             wide ? 'md:max-w-[1136px]' : 'max-w-2xl md:max-w-3xl'
@@ -76,8 +79,9 @@ export default function PageShell({ children, hideNav, wide }: Props) {
           {children}
         </main>
       </div>
-      {/* The dock is the phone's timer chrome. On desktop the rail carries the
-          clock instead, so the dock hides itself there rather than doubling it. */}
+      {/* The running clock, on every size. The rail keeps the dashed box that
+          starts a timer; once one is running the dock is the only clock, so
+          there is never a second one to disagree with it. */}
       {!hideNav && <ActiveTimerDock />}
       <PendingSessionLogSheet />
       {!hideNav && <BottomNav />}

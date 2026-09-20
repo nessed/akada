@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useCourses, useTasks } from '@/lib/data-hooks';
 import { useTimer } from '@/lib/timer-context';
-import { formatHHMMSS, isoDate } from '@/lib/utils';
+import { isoDate } from '@/lib/utils';
 import { sortCourses } from '@/lib/data/course-order';
 import AkadaMark from './notebook/AkadaMark';
 
@@ -138,11 +138,10 @@ function isActive(pathname: string | null, href: string): boolean {
 
 export default function DesktopRail() {
   const pathname = usePathname();
-  const router = useRouter();
   const [collapsed, setCollapsed] = useRailCollapsed();
   const { courses } = useCourses();
   const { tasks } = useTasks();
-  const { active, elapsedSeconds, pause, resume, stop } = useTimer();
+  const { active } = useTimer();
 
   const ordered = useMemo(() => sortCourses(courses), [courses]);
 
@@ -157,10 +156,6 @@ export default function DesktopRail() {
     }
     return { per, total };
   }, [tasks]);
-
-  const runningCourse = active
-    ? courses.find((c) => c.id === active.courseId) ?? null
-    : null;
 
   const width = collapsed ? RAIL_NARROW : RAIL_WIDE;
 
@@ -266,72 +261,10 @@ export default function DesktopRail() {
       )}
       {ordered.length === 0 && <div className="flex-1" />}
 
-      {/* The timer lives in the rail on desktop rather than floating over the
-          page. Idle it is a dashed box offering a start; running it is the
-          clock with pause and stop beside it. */}
-      {active ? (
-        <div
-          className="mt-2 rounded-[10px] border border-line bg-paper p-2"
-          style={{ boxShadow: `inset 0 0 0 1px ${runningCourse?.color ?? 'transparent'}22` }}
-        >
-          {collapsed ? (
-            <Link
-              href="/timer"
-              aria-label={`Timer running, ${runningCourse?.code ?? 'session'}, ${formatHHMMSS(elapsedSeconds)}`}
-              className="grid h-10 w-full place-items-center rounded-[8px] no-underline"
-            >
-              <span
-                aria-hidden
-                className={`h-2 w-2 rounded-full ${active.isPaused ? '' : 'animate-tick'}`}
-                style={{ background: runningCourse?.color ?? 'var(--ink)' }}
-              />
-            </Link>
-          ) : (
-            <>
-              <Link href="/timer" className="block no-underline">
-                <span className="eyebrow block truncate" style={{ color: runningCourse?.color }}>
-                  {runningCourse?.code ?? 'Timer'}
-                </span>
-                <span className="mt-0.5 block font-mono text-[15px] font-medium tabular-nums text-ink">
-                  {formatHHMMSS(elapsedSeconds)}
-                </span>
-              </Link>
-              <div className="mt-1 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => (active.isPaused ? resume() : pause())}
-                  aria-label={active.isPaused ? 'Resume timer' : 'Pause timer'}
-                  className="grid h-10 flex-1 place-items-center rounded-[8px] text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
-                >
-                  {active.isPaused ? (
-                    <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M7 5l12 7-12 7V5z" />
-                    </svg>
-                  ) : (
-                    <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="M9 5v14M15 5v14" />
-                    </svg>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    stop();
-                    router.push('/timer');
-                  }}
-                  aria-label="Stop the timer and log the session"
-                  className="grid h-10 flex-1 place-items-center rounded-[8px] transition-colors hover:bg-bg-tint"
-                  style={{ color: runningCourse?.color ?? 'var(--ink)' }}
-                >
-                  <svg aria-hidden width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="6" width="12" height="12" rx="1.5" />
-                  </svg>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      ) : (
+      {/* The rail offers a start; it no longer draws a second clock. Once a
+          timer is running the floating dock is the only one on screen, so the
+          two can never disagree about the elapsed time. */}
+      {active ? null : (
         <Link
           href="/timer"
           aria-label="Start a timer"
