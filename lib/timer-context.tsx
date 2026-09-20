@@ -111,6 +111,16 @@ interface TimerContextValue {
   endBreak: () => void;
   /** Re-arm the break length mid-sitting. Null means stop taking them. */
   setBreakLength: (seconds: number | null) => void;
+  /**
+   * Write what the block that just ended covered, onto that block.
+   *
+   * Only means anything on a break, which is the point: the question is
+   * asked while the answer is still there, rather than at the end of the
+   * sitting when the first block was two hours and two breaks ago.
+   */
+  noteLastBlock: (note: string) => void;
+  /** What has been written about the block the current break follows. */
+  lastBlockNote: string;
   pause: () => void;
   resume: () => void;
   cancel: () => void;
@@ -1036,6 +1046,36 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     applyActive(toFocusState(running, Date.now()));
   }, [applyActive]);
 
+  /**
+   * The block a note written now belongs to: the last focus stretch in the
+   * chain. Finding it by walking back rather than assuming `length - 1`,
+   * because a break of zero seconds is dropped rather than recorded and the
+   * positions do not always alternate.
+   */
+  const noteLastBlock = useCallback(
+    (note: string) => {
+      const running = activeRef.current;
+      if (!running || running.phase !== 'break') return;
+      let index = -1;
+      for (let i = running.segments.length - 1; i >= 0; i -= 1) {
+        if (running.segments[i].kind === 'focus') {
+          index = i;
+          break;
+        }
+      }
+      if (index === -1) return;
+      const current = running.segments[index].note ?? '';
+      if (current === note) return;
+      applyActive({
+        ...running,
+        segments: running.segments.map((segment, i) =>
+          i === index ? { ...segment, note } : segment,
+        ),
+      });
+    },
+    [applyActive],
+  );
+
   /** Re-arm the break length mid-sitting. Null stops the sitting taking them. */
   const setBreakLength = useCallback(
     (seconds: number | null) => {
@@ -1175,6 +1215,16 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [active, elapsedSeconds],
   );
 
+  /* Seeds the field on the break screen, so a reload mid-break comes back to
+     what was already typed rather than to an empty line. */
+  const lastBlockNote = useMemo(() => {
+    if (!active || active.phase !== 'break') return '';
+    for (let i = active.segments.length - 1; i >= 0; i -= 1) {
+      if (active.segments[i].kind === 'focus') return active.segments[i].note ?? '';
+    }
+    return '';
+  }, [active]);
+
   return (
     <TimerContext.Provider
       value={{
@@ -1191,6 +1241,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         startBreak,
         endBreak,
         setBreakLength,
+        noteLastBlock,
+        lastBlockNote,
         pause,
         resume,
         cancel,

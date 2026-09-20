@@ -30,6 +30,20 @@ export function isLoggableDuration(value: unknown): boolean {
  */
 export const MAX_BREAK_SECONDS = 45 * 60;
 
+/**
+ * A block note is a phrase, not the session's own note. It is written on a
+ * break with one hand, and if it is running past a couple of hundred
+ * characters the reader wants the note field at the end of the sitting.
+ */
+export const BLOCK_NOTE_MAX = 200;
+
+function cleanBlockNote(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  // Collapsed to one line: this is written into a single-line field and read
+  // back in a row, and a pasted paragraph of newlines would break both.
+  return value.replace(/\s+/g, ' ').trim().slice(0, BLOCK_NOTE_MAX);
+}
+
 /** The break lengths the timer offers, in minutes. */
 export const BREAK_LENGTHS = [5, 10, 15] as const;
 
@@ -76,6 +90,9 @@ export function sanitizeSegments(value: unknown): SessionSegment[] {
             ? clampBreakSeconds(target)
             : clampSessionSeconds(target)
           : null,
+      // Only a block is ever asked what it covered, so a note that somehow
+      // arrives on a break is dropped rather than stored and never shown.
+      note: kind === 'focus' ? cleanBlockNote(item.note) : '',
     });
   }
   return out;

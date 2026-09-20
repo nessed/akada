@@ -943,7 +943,7 @@ function createServer(token: AuthenticatedToken) {
     'get_focus_pattern',
     {
       title: 'Read the shape of Akada study sittings',
-      description: 'Read how the student actually studies rather than how much: how long their blocks run, how often they finish the block they set, how long their breaks run against how long they meant them to, how much focus they get before the first break, and when in the day the work happens. Use this for questions about habits, rhythm, breaks and drift. For hours against goals use get_weekly_stats instead. `utc_offset_minutes` is the student’s offset from UTC (300 for UTC+5); without it the hourly breakdown is in UTC and says so. Only sittings timed in Akada with continuous mode have a shape to read; time logged after the fact contributes its totals but not its chain. This tool never changes Akada data.',
+      description: 'Read how the student actually studies rather than how much: how long their blocks run, how often they finish the block they set, how long their breaks run against how long they meant them to, how much focus they get before the first break, and when in the day the work happens. Use this for questions about habits, rhythm, breaks and drift. For hours against goals use get_weekly_stats instead. `utc_offset_minutes` is the student’s offset from UTC (300 for UTC+5); without it the hourly breakdown is in UTC and says so. `recent_sittings` carries what each block actually covered, written by the student on the break straight after it, so questions about rhythm and questions about content can be answered together. Only sittings timed in Akada with continuous mode have a shape to read; time logged after the fact contributes its totals but not its chain. This tool never changes Akada data.',
       inputSchema: z.object({
         days: z.number().int().min(1).max(180).default(28),
         course_id: z.string().uuid().optional(),
@@ -1013,11 +1013,15 @@ function createServer(token: AuthenticatedToken) {
         }
 
         const courseOf = new Map(rows.map((row) => [String(row.id), String(row.course_id ?? '')]));
+        const dateOf = new Map(rows.map((row) => [String(row.id), String(row.date ?? '')]));
         const codeOf = new Map((courses ?? []).map((course) => [course.id, course.code]));
 
         const { data: segmentRows, error: segmentsError } = await supabase
           .from('session_segments')
-          .select('session_id, kind, ordinal, started_at, seconds, target_seconds')
+          // `*` rather than a column list, so a project that ran the first
+          // version of the schema script and therefore has no `note` column
+          // still answers instead of failing the whole call.
+          .select('*')
           .eq('user_id', token.userId)
           .in('session_id', [...courseOf.keys()])
           .order('ordinal', { ascending: true });
@@ -1040,6 +1044,7 @@ function createServer(token: AuthenticatedToken) {
           started_at: string;
           seconds: number;
           target_seconds: number | null;
+          note?: string | null;
         }
         const segments = (segmentRows ?? []) as SegmentRow[];
 
@@ -1125,6 +1130,30 @@ function createServer(token: AuthenticatedToken) {
         const rate = (part: number, whole: number) =>
           whole > 0 ? Math.round((part / whole) * 1000) / 1000 : null;
 
+        // What the blocks actually covered, written on the break after each
+        // one. The aggregates above say the shape of a sitting; these say
+        // what was in it, which is what makes "the afternoons where the
+        // breaks ran long were all the same chapter" answerable at all.
+        const recentSittings = [...chains.entries()]
+          .map(([sessionId, chain]) => ({
+            date: dateOf.get(sessionId) ?? '',
+            course: codeOf.get(courseOf.get(sessionId) ?? '') ?? '',
+            blocks: chain
+              .filter(
+                (segment) =>
+                  segment.kind === 'focus' && String(segment.note ?? '').trim() !== '',
+              )
+              .map((segment) => ({
+                minutes: minutes(segment.seconds),
+                covered: String(segment.note ?? '').trim(),
+              })),
+          }))
+          .filter((sitting) => sitting.blocks.length > 0)
+          .sort((a, b) => b.date.localeCompare(a.date))
+          // Newest first and capped: this is context for a question, not an
+          // export of the term.
+          .slice(0, 20);
+
         return result({
           window,
           totals,
@@ -1171,6 +1200,10 @@ function createServer(token: AuthenticatedToken) {
             }))
             .filter((row) => row.focus_minutes > 0 || row.break_minutes > 0),
           by_hour_offset_minutes: utc_offset_minutes,
+          // Only sittings where at least one block was written about, newest
+          // first. The last block of a sitting has no break after it and so
+          // is never here; the session's own note covers it.
+          recent_sittings: recentSittings,
           by_course: [...perCourse.entries()]
             .filter(([id]) => id !== '')
             .map(([id, bucket]) => ({

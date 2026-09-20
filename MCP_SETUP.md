@@ -151,7 +151,14 @@ ever breaking it.
   - `days` (`integer`, 1-180, default: `28`): How far back to read.
   - `course_id` (`string`, optional, UUID): Narrow to one course.
   - `utc_offset_minutes` (`integer`, -840 to 840, default: `0`): The student's offset from UTC, `300` for UTC+5. Without it the hourly breakdown is in UTC, and `by_hour_offset_minutes` in the output says which was used.
-- **Output**: `window`, `totals` (sittings, focus hours, break hours, break share), `blocks` (count, average, median, longest, how many had a set length, how many ran to the end, completion rate), `breaks` (the same plus `ran_over`, `overrun_rate` and `avg_overrun_minutes`), `rhythm` (focus before the first break, blocks per sitting, focus-to-break ratio), `by_hour`, and `by_course`.
+- **Output**: `window`, `totals` (sittings, focus hours, break hours, break share), `blocks` (count, average, median, longest, how many had a set length, how many ran to the end, completion rate), `breaks` (the same plus `ran_over`, `overrun_rate` and `avg_overrun_minutes`), `rhythm` (focus before the first break, blocks per sitting, focus-to-break ratio), `by_hour`, `by_course`, and `recent_sittings`.
+
+`recent_sittings` is what each block actually covered, written by the student
+on the break straight after it: newest first, capped at 20, and only sittings
+where at least one block was written about. It is what lets a question about
+rhythm and a question about content be answered together. The last block of a
+sitting has no break after it and so never appears; the session's own note
+covers it.
 
 Reads `session_segments`, which the timer writes for a sitting it ran through
 continuous mode. Time logged after the fact contributes its totals but has no
