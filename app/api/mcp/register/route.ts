@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   if (!clientName) {
     return oauthError(
       'invalid_redirect_uri',
-      'This connector only accepts a registered callback URL from Claude, ChatGPT, or Gemini.',
+      `This connector only accepts a registered callback URL from Claude, ChatGPT, or Gemini. Got: ${JSON.stringify(redirectUris)}`,
     );
   }
 
