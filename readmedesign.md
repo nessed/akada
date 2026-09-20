@@ -144,6 +144,21 @@ own stroke from the bottom: `HourStrokes`. "Four of six" is the shape of an
 afternoon; "68%" is a number nobody asked for and cannot act on. The label
 beside the strokes carries the exact figure, and what is left to go.
 
+### The sitting as a chain
+A finished sitting is drawn as a row of marks, `SessionChain`: the blocks as
+strokes in the course colour, sized by how long they ran, and the breaks
+between them as the thin rules that separate them. Same reasoning as
+`HourStrokes` — "two blocks of forty-five with ten in the middle" is the shape
+of an afternoon, and there is no percentage anywhere in it to read. Widths are
+proportional rather than absolute so the row fills what it is given, with a
+four-pixel floor so a short break does not vanish between its neighbours.
+
+It appears twice: under the controls while a break runs, and in the log sheet
+at the end, where the rest total sits beneath the focus total in a quieter
+mono. **Rest is reported and never added in.** The hours a course is credited
+with are the hours that were worked, and every goal, count and run in the app
+reads that one figure.
+
 ### The study fan
 The timer draws a fan rather than a ring. One stem from the bottom edge
 splitting two or three ways at each step, in the course colour, round tips.
@@ -163,6 +178,57 @@ and `padTop` are CSS pixels and are scaled by the device ratio internally.
 Open mode is the **one screen in the app that inverts**, and it does so with
 literal values rather than the paper tokens, because on the night ground
 `text-ink` is still the daylight ink.
+
+### The break
+A block that runs out does not stop. It chimes, turns into a **break**, and
+the sitting carries on as a chain of blocks and the rests between them.
+
+The break does not bring a screen of its own. It borrows the timer's: the same
+frame, the same deckle, the same two-line clock. Three things change and
+nothing else does.
+
+- **The fan holds.** It does not grow during a break and it never runs
+  backwards. Rest is not progress, and a fan that shrank back would be telling
+  a reader they had lost the block they just finished. Each *new* block grows
+  its own fan from a seed of `sessionId-blockIndex`, so the second block is not
+  a replay of the first and a completed block is still a completed block.
+- **The eyebrow says so.** `CODE · Break`, in the same 10px uppercase the
+  open-mode screen uses for `CODE · Open`. That line is the whole announcement.
+- **The two swap slots take the break's version.** The header's `Block / Open`
+  marks become the break's `5m / 10m / 15m`, and `NextMarkLine` under the
+  controls becomes the sitting's chain. Neither is added to; both are
+  exchanged, so the break screen is exactly as dense as the block screen.
+
+A break that runs past its length turns the digits `warn`, the muted
+terracotta, and never `priority` or anything redder. See "No Alarmist
+Indicators": a reader who is four minutes over a break does not need to be
+shouted at, and the number going quietly warm is enough.
+
+No dialog is raised at the end of a block. A question at the exact moment a
+reader has stopped deciding things is the wrong thing to hand them; "Back to
+it" is one tap, or the space bar.
+
+### The chime
+The one sound the app makes, beyond the ambient noise a reader turns on
+themselves. It is a **struck glass**: three sine partials over a 1.5s
+exponential tail, two notes settling downward into a break and three opening
+upward out of one. Not an alarm, for the same reason nothing else in the app
+raises its voice, and a timer that jolts a reader out of a break has defeated
+the break.
+
+The mechanics are in `lib/chime.ts` and matter as much as the sound. The note
+that ends a break is put on the **Web Audio clock the moment the break
+starts**, because `setInterval` is throttled to roughly once a minute in a
+backgrounded tab and stops altogether on a sleeping phone. A locked iPhone
+suspends the audio context along with the screen, which no web page can
+prevent; `flushChime` notices a note whose moment passed unplayed and rings it
+late, and a Notification goes out alongside, which is the only thing that
+reaches a phone in a pocket.
+
+Both the chime and the break length are the reader's to set, in Settings.
+`BreakLengthPicker` is written in `DayEndPicker`'s idiom: a sentence about
+their own habit, with the marks appearing only once the line is touched, so
+the panel stays a page of sentences until something is being changed.
 
 ### Marks, not chips
 The app does not use pills. A capsule with a tinted fill is how software says

@@ -699,17 +699,18 @@ function createServer(token: AuthenticatedToken) {
     'log_study_session',
     {
       title: 'Log study time in Akada',
-      description: 'Record time the student actually spent studying one active-semester course, optionally against a specific task, with a note about what the sitting covered. Only log time the student reports; never estimate it. `date` defaults to today and takes a past date for a sitting being written up after the fact.',
+      description: 'Record time the student actually spent studying one active-semester course, optionally against a specific task, with a note about what the sitting covered. Only log time the student reports; never estimate it. `date` defaults to today and takes a past date for a sitting being written up after the fact. `duration_minutes` is focus time and must never include breaks; put rest in `break_minutes`, which is reported separately and does not count toward any goal.',
       inputSchema: z.object({
         course_id: z.string().uuid(),
         duration_minutes: z.number().int().min(1).max(Math.floor(MAX_SESSION_SECONDS / 60)),
         date: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional(),
         task_id: z.string().uuid().optional(),
         note: z.string().trim().max(SESSION_NOTE_MAX).optional(),
+        break_minutes: z.number().int().min(0).max(Math.floor(MAX_SESSION_SECONDS / 60)).optional(),
       }),
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async ({ course_id, duration_minutes, date, task_id, note }) => {
+    async ({ course_id, duration_minutes, date, task_id, note, break_minutes }) => {
       try {
         const semesterId = await activeSemesterId(token);
         if (!semesterId) return toolError('No active semester is set in Akada.');
@@ -748,6 +749,11 @@ function createServer(token: AuthenticatedToken) {
             date: date ?? isoDate(new Date()),
             duration_seconds: duration_minutes * 60,
             note: note ?? '',
+            // Left out entirely when there were none, so the insert still
+            // runs against a project that has not re-run supabase/schema.sql.
+            // Rest is never added into duration_seconds: the weekly goal and
+            // the run both read that column and would inflate together.
+            ...(break_minutes ? { break_seconds: break_minutes * 60 } : {}),
           })
           // The semester_id column is filled by schema.sql's
           // sessions_set_semester_id trigger, exactly as the app's own
@@ -762,6 +768,7 @@ function createServer(token: AuthenticatedToken) {
             date: (row.date as string | null) ?? null,
             duration_minutes: Math.round(Number(row.duration_seconds ?? 0) / 60),
             duration_seconds: Number(row.duration_seconds ?? 0),
+            break_minutes: Math.round(Number(row.break_seconds ?? 0) / 60),
             note: typeof row.note === 'string' ? row.note : '',
             task_id: (row.task_id as string | null) ?? null,
             course: { id: course.id, code: course.code, name: course.name },
@@ -777,7 +784,7 @@ function createServer(token: AuthenticatedToken) {
     'get_weekly_stats',
     {
       title: 'Read an Akada study week',
-      description: 'Read how one week went: hours logged per course against each course’s weekly goal, tasks ticked off, and the student’s current run of consecutive counting weeks. `week_offset` is 0 for this week, -1 for last week. This tool never changes Akada data.',
+      description: 'Read how one week went: hours logged per course against each course’s weekly goal, break time taken alongside them, tasks ticked off, and the student’s current run of consecutive counting weeks. `week_offset` is 0 for this week, -1 for last week. `hours_logged` is focus only and `break_hours` is rest, which never counts toward a goal. For how the sittings themselves were shaped — block lengths, how often breaks ran over — use get_focus_pattern. This tool never changes Akada data.',
       inputSchema: z.object({
         week_offset: z.number().int().min(-12).max(0).default(0),
         course_id: z.string().uuid().optional(),
@@ -814,7 +821,10 @@ function createServer(token: AuthenticatedToken) {
         const [{ data: sessions, error: sessionsError }, { data: tasks, error: tasksError }] = await Promise.all([
           supabase
             .from('sessions')
-            .select('id, course_id, task_id, date, duration_seconds, note')
+            // `*` rather than a column list so a project that has not re-run
+            // supabase/schema.sql, and therefore has no break_seconds, still
+            // answers instead of failing the whole week.
+            .select('*')
             .eq('user_id', token.userId)
             .eq('semester_id', semesterId)
             .gte('date', isoDate(runFloor)),
@@ -833,8 +843,13 @@ function createServer(token: AuthenticatedToken) {
         const inWeek = (sessions ?? []).filter((session) => session.date >= from && session.date <= to);
         const scoped = course_id ? inWeek.filter((session) => session.course_id === course_id) : inWeek;
         const secondsByCourse = new Map<string, number>();
+        const breakSecondsByCourse = new Map<string, number>();
         scoped.forEach((session) => {
           secondsByCourse.set(session.course_id, (secondsByCourse.get(session.course_id) ?? 0) + Number(session.duration_seconds ?? 0));
+          breakSecondsByCourse.set(
+            session.course_id,
+            (breakSecondsByCourse.get(session.course_id) ?? 0) + Number(session.break_seconds ?? 0),
+          );
         });
 
         // Continuity is weeks, not days, and it is read through the very
@@ -887,12 +902,16 @@ function createServer(token: AuthenticatedToken) {
           .filter((course) => !course_id || course.id === course_id)
           .map((course) => {
             const seconds = secondsByCourse.get(course.id) ?? 0;
+            const restSeconds = breakSecondsByCourse.get(course.id) ?? 0;
             const goalHours = Number(course.weekly_goal_hours);
             return {
               id: course.id,
               code: course.code,
               name: course.name,
               hours_logged: Math.round((seconds / 3600) * 100) / 100,
+              // Rest, beside the hours and never inside them. A goal is met
+              // on time worked, so this never moves `goal_met`.
+              break_hours: Math.round((restSeconds / 3600) * 100) / 100,
               weekly_study_goal_hours: goalHours,
               goal_met: goalHours > 0 ? seconds >= goalHours * 3600 : null,
             };
@@ -903,6 +922,7 @@ function createServer(token: AuthenticatedToken) {
           courses: perCourse,
           totals: {
             hours_logged: Math.round((scoped.reduce((sum, session) => sum + Number(session.duration_seconds ?? 0), 0) / 3600) * 100) / 100,
+            break_hours: Math.round((scoped.reduce((sum, session) => sum + Number(session.break_seconds ?? 0), 0) / 3600) * 100) / 100,
             session_count: scoped.length,
             tasks_completed: closed.length,
           },
@@ -915,6 +935,256 @@ function createServer(token: AuthenticatedToken) {
         });
       } catch (cause) {
         return toolCrashed('get_weekly_stats', cause);
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_focus_pattern',
+    {
+      title: 'Read the shape of Akada study sittings',
+      description: 'Read how the student actually studies rather than how much: how long their blocks run, how often they finish the block they set, how long their breaks run against how long they meant them to, how much focus they get before the first break, and when in the day the work happens. Use this for questions about habits, rhythm, breaks and drift. For hours against goals use get_weekly_stats instead. `utc_offset_minutes` is the student’s offset from UTC (300 for UTC+5); without it the hourly breakdown is in UTC and says so. Only sittings timed in Akada with continuous mode have a shape to read; time logged after the fact contributes its totals but not its chain. This tool never changes Akada data.',
+      inputSchema: z.object({
+        days: z.number().int().min(1).max(180).default(28),
+        course_id: z.string().uuid().optional(),
+        utc_offset_minutes: z.number().int().min(-840).max(840).default(0),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ days, course_id, utc_offset_minutes }) => {
+      try {
+        const semesterId = await activeSemesterId(token);
+        if (!semesterId) return toolError('No active semester is set in Akada.');
+        const supabase = mcpSupabase(token.supabaseAccessToken);
+
+        const floor = new Date();
+        floor.setDate(floor.getDate() - (days - 1));
+        const from = isoDate(floor);
+        const to = isoDate(new Date());
+        const window = { from, to, days };
+
+        let sessionQuery = supabase
+          .from('sessions')
+          // `*` for the same reason as everywhere else here: a project that
+          // has not re-run supabase/schema.sql has no break_seconds and
+          // should still answer.
+          .select('*')
+          .eq('user_id', token.userId)
+          .eq('semester_id', semesterId)
+          .gte('date', from)
+          .lte('date', to)
+          .order('date', { ascending: false })
+          // A term of daily study is a few hundred rows; the cap is here so
+          // one pathological account cannot turn this into an unbounded read.
+          .limit(500);
+        if (course_id) sessionQuery = sessionQuery.eq('course_id', course_id);
+
+        const [{ data: sessions, error: sessionsError }, { data: courses, error: coursesError }] =
+          await Promise.all([
+            sessionQuery,
+            supabase
+              .from('courses')
+              .select('id, code, name')
+              .eq('user_id', token.userId)
+              .eq('semester_id', semesterId),
+          ]);
+        const readError = sessionsError ?? coursesError;
+        if (readError) {
+          return queryFailed('get_focus_pattern', sessionsError ? 'sessions read' : 'courses read', readError, 'Akada could not load that window.');
+        }
+        if (course_id && !(courses ?? []).some((course) => course.id === course_id)) {
+          return toolError('That course is not available in your active Akada semester.');
+        }
+
+        const rows = (sessions ?? []) as Record<string, unknown>[];
+        const focusSeconds = rows.reduce((sum, row) => sum + Number(row.duration_seconds ?? 0), 0);
+        const restSeconds = rows.reduce((sum, row) => sum + Number(row.break_seconds ?? 0), 0);
+        const totals = {
+          sittings: rows.length,
+          focus_hours: Math.round((focusSeconds / 3600) * 100) / 100,
+          break_hours: Math.round((restSeconds / 3600) * 100) / 100,
+          break_share_of_sitting:
+            focusSeconds + restSeconds > 0
+              ? Math.round((restSeconds / (focusSeconds + restSeconds)) * 1000) / 1000
+              : 0,
+        };
+        if (rows.length === 0) {
+          return result({ window, totals, message: 'No study sessions in that window.' });
+        }
+
+        const courseOf = new Map(rows.map((row) => [String(row.id), String(row.course_id ?? '')]));
+        const codeOf = new Map((courses ?? []).map((course) => [course.id, course.code]));
+
+        const { data: segmentRows, error: segmentsError } = await supabase
+          .from('session_segments')
+          .select('session_id, kind, ordinal, started_at, seconds, target_seconds')
+          .eq('user_id', token.userId)
+          .in('session_id', [...courseOf.keys()])
+          .order('ordinal', { ascending: true });
+        if (segmentsError) {
+          // Where a project that has not re-run supabase/schema.sql lands:
+          // the table is not there. The totals above are still real, so they
+          // are returned rather than failing the call outright.
+          return result({
+            window,
+            totals,
+            message:
+              'Akada is not recording the shape of sittings on this project yet. Run the latest supabase/schema.sql once; sittings timed after that will be broken down here.',
+          });
+        }
+
+        interface SegmentRow {
+          session_id: string;
+          kind: string;
+          ordinal: number;
+          started_at: string;
+          seconds: number;
+          target_seconds: number | null;
+        }
+        const segments = (segmentRows ?? []) as SegmentRow[];
+
+        const blocks: number[] = [];
+        const breaks: number[] = [];
+        const overruns: number[] = [];
+        const openers: number[] = [];
+        const blocksPerSitting: number[] = [];
+        const perCourse = new Map<string, { blocks: number[]; breaks: number[] }>();
+        const hourFocus = new Array<number>(24).fill(0);
+        const hourBreak = new Array<number>(24).fill(0);
+        let blocksWithTarget = 0;
+        let blocksFinished = 0;
+        let breaksWithTarget = 0;
+        let breaksRunOver = 0;
+
+        const chains = new Map<string, SegmentRow[]>();
+        for (const segment of segments) {
+          const chain = chains.get(segment.session_id) ?? [];
+          chain.push(segment);
+          chains.set(segment.session_id, chain);
+        }
+
+        for (const [sessionId, chain] of chains) {
+          chain.sort((a, b) => a.ordinal - b.ordinal);
+          const courseKey = courseOf.get(sessionId) ?? '';
+          const bucket = perCourse.get(courseKey) ?? { blocks: [], breaks: [] };
+          let restedYet = false;
+          let blockCount = 0;
+
+          for (const segment of chain) {
+            const seconds = Math.max(0, Number(segment.seconds ?? 0));
+            const target = Number(segment.target_seconds);
+            const hasTarget = Number.isFinite(target) && target > 0;
+            // Shifted into the student's own day before it is bucketed; an
+            // hourly breakdown in UTC answers a question nobody asked.
+            const at = new Date(segment.started_at);
+            const hour = Number.isNaN(at.getTime())
+              ? null
+              : (((at.getUTCHours() * 60 + at.getUTCMinutes() + utc_offset_minutes) / 60) % 24 + 24) % 24;
+
+            if (segment.kind === 'break') {
+              breaks.push(seconds);
+              bucket.breaks.push(seconds);
+              if (hour !== null) hourBreak[Math.floor(hour)] += seconds;
+              if (hasTarget) {
+                breaksWithTarget += 1;
+                overruns.push(seconds - target);
+                if (seconds > target) breaksRunOver += 1;
+              }
+              restedYet = true;
+              continue;
+            }
+
+            blocks.push(seconds);
+            bucket.blocks.push(seconds);
+            blockCount += 1;
+            if (hour !== null) hourFocus[Math.floor(hour)] += seconds;
+            // How long the student goes before reaching for the first break,
+            // which is the number the whole feature exists to surface.
+            if (!restedYet) openers.push(seconds);
+            if (hasTarget) {
+              blocksWithTarget += 1;
+              if (seconds >= target) blocksFinished += 1;
+            }
+          }
+
+          if (blockCount > 0) blocksPerSitting.push(blockCount);
+          perCourse.set(courseKey, bucket);
+        }
+
+        const minutes = (seconds: number) => Math.round((seconds / 60) * 10) / 10;
+        const mean = (values: number[]) =>
+          values.length ? minutes(values.reduce((a, b) => a + b, 0) / values.length) : 0;
+        const median = (values: number[]) => {
+          if (values.length === 0) return 0;
+          const sorted = [...values].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return minutes(
+            sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2,
+          );
+        };
+        const rate = (part: number, whole: number) =>
+          whole > 0 ? Math.round((part / whole) * 1000) / 1000 : null;
+
+        return result({
+          window,
+          totals,
+          sittings_with_a_recorded_shape: chains.size,
+          blocks: {
+            count: blocks.length,
+            avg_minutes: mean(blocks),
+            median_minutes: median(blocks),
+            longest_minutes: blocks.length ? minutes(Math.max(...blocks)) : 0,
+            // Only blocks that were armed with a length can be said to have
+            // been finished or cut short; an open sitting has no such claim.
+            with_a_set_length: blocksWithTarget,
+            ran_to_the_end: blocksFinished,
+            completion_rate: rate(blocksFinished, blocksWithTarget),
+          },
+          breaks: {
+            count: breaks.length,
+            avg_minutes: mean(breaks),
+            median_minutes: median(breaks),
+            longest_minutes: breaks.length ? minutes(Math.max(...breaks)) : 0,
+            with_a_set_length: breaksWithTarget,
+            ran_over: breaksRunOver,
+            overrun_rate: rate(breaksRunOver, breaksWithTarget),
+            // Negative means breaks are typically cut short. This is the pair
+            // a break total on its own can never give you.
+            avg_overrun_minutes: mean(overruns),
+          },
+          rhythm: {
+            avg_focus_before_first_break_minutes: mean(openers),
+            avg_blocks_per_sitting:
+              blocksPerSitting.length
+                ? Math.round(
+                    (blocksPerSitting.reduce((a, b) => a + b, 0) / blocksPerSitting.length) * 10,
+                  ) / 10
+                : 0,
+            focus_to_break_ratio:
+              restSeconds > 0 ? Math.round((focusSeconds / restSeconds) * 100) / 100 : null,
+          },
+          by_hour: hourFocus
+            .map((seconds, hour) => ({
+              hour,
+              focus_minutes: minutes(seconds),
+              break_minutes: minutes(hourBreak[hour]),
+            }))
+            .filter((row) => row.focus_minutes > 0 || row.break_minutes > 0),
+          by_hour_offset_minutes: utc_offset_minutes,
+          by_course: [...perCourse.entries()]
+            .filter(([id]) => id !== '')
+            .map(([id, bucket]) => ({
+              id,
+              code: codeOf.get(id) ?? '',
+              blocks: bucket.blocks.length,
+              avg_block_minutes: mean(bucket.blocks),
+              breaks: bucket.breaks.length,
+              avg_break_minutes: mean(bucket.breaks),
+            }))
+            .sort((a, b) => b.blocks - a.blocks),
+        });
+      } catch (cause) {
+        return toolCrashed('get_focus_pattern', cause);
       }
     },
   );

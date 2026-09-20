@@ -12,7 +12,13 @@ import type {
   TaskFilters,
   UserSettings,
 } from './types';
-import { clampSessionSeconds, isLoggableDuration, sanitizeSession } from '@/lib/session-safety';
+import {
+  clampSessionSeconds,
+  isLoggableDuration,
+  sanitizeSegments,
+  sanitizeSession,
+  totalBreakSeconds,
+} from '@/lib/session-safety';
 import { seasonLabel } from '@/lib/utils';
 import {
   clampDailyGoalHours,
@@ -73,6 +79,9 @@ interface SessionRow {
   duration_seconds: number;
   note: string;
   created_at: string;
+  /** Added with continuous mode, so absent on a database still on an older
+      schema. Read as zero there rather than as missing. */
+  break_seconds?: number | string | null;
 }
 
 interface TaskRow {
@@ -120,6 +129,7 @@ function rowToCourse(r: CourseRow): Course {
 }
 
 function rowToSession(r: SessionRow): Session {
+  const rest = Number(r.break_seconds);
   return sanitizeSession({
     id: r.id,
     courseId: r.course_id,
@@ -128,6 +138,7 @@ function rowToSession(r: SessionRow): Session {
     durationSeconds: r.duration_seconds,
     note: r.note,
     createdAt: r.created_at,
+    breakSeconds: Number.isFinite(rest) ? clampSessionSeconds(rest) : 0,
   });
 }
 
@@ -532,6 +543,10 @@ export class SupabaseAdapter implements DataProvider {
     const courseId = cleanText(input.courseId, 80);
     if (!courseId) throw new Error('Course is required');
     const uid = await this.userId();
+    const segments = sanitizeSegments(input.segments);
+    const breakSeconds = segments.length
+      ? totalBreakSeconds(segments)
+      : clampSessionSeconds(input.breakSeconds ?? 0);
     const { data, error } = await this.supabase
       .from('sessions')
       .insert({
@@ -541,11 +556,45 @@ export class SupabaseAdapter implements DataProvider {
         date: requireIsoDate(input.date, 'Session date'),
         duration_seconds: clampSessionSeconds(input.durationSeconds),
         note: cleanSessionNote(input.note),
+        // Omitted entirely when the sitting took no breaks, for the same
+        // reason courses.sort_order is: an unmentioned column cannot be
+        // rejected as unknown, so a plain session still writes exactly the
+        // insert it always did against a database that has not re-run
+        // supabase/schema.sql.
+        ...(breakSeconds > 0 ? { break_seconds: breakSeconds } : {}),
       })
       .select()
       .single();
     if (error) throw error;
-    return rowToSession(data as SessionRow);
+    const session = rowToSession(data as SessionRow);
+
+    // The hours are what must not be lost, so the sitting is written first
+    // and a failure to record its shape afterwards does not undo it. Same
+    // reasoning as ticking the task off after the log in
+    // PendingSessionLogSheet: one of these is the record, the other is
+    // commentary on it.
+    if (segments.length > 0) {
+      const { error: segmentError } = await this.supabase.from('session_segments').insert(
+        segments.map((segment) => ({
+          user_id: uid,
+          session_id: session.id,
+          kind: segment.kind,
+          ordinal: segment.ordinal,
+          started_at: segment.startedAt,
+          seconds: segment.seconds,
+          target_seconds: segment.targetSeconds,
+        })),
+      );
+      if (segmentError) {
+        // Also where a project that has not re-run supabase/schema.sql lands,
+        // since session_segments will not be there. The hours are saved
+        // either way; only the shape of the sitting is lost.
+        console.error('Failed to record the shape of the session:', segmentError);
+      } else {
+        return { ...session, segments };
+      }
+    }
+    return session;
   }
 
   async updateSession(id: string, updates: Partial<Session>): Promise<Session> {

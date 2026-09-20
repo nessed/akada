@@ -87,6 +87,8 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
         date: pendingLog.date || isoDate(),
         durationSeconds,
         note,
+        breakSeconds: pendingLog.breakSeconds,
+        segments: pendingLog.segments,
       });
       // The session is what must not be lost, so it is written first and a
       // failure to tick the task off afterwards does not undo it.
@@ -124,13 +126,17 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       course={course}
       task={task}
       durationSeconds={pendingLog?.durationSeconds ?? 0}
+      breakSeconds={pendingLog?.breakSeconds ?? 0}
+      segments={pendingLog?.segments ?? []}
       saving={saving}
       contextMessage={
         pendingLog?.recoveryReason === 'away'
           ? 'Recovered while you were away.'
           : pendingLog?.recoveryReason === 'max'
             ? 'Reached the session limit.'
-            : ''
+            : pendingLog?.recoveryReason === 'break'
+              ? 'The break ran long, so the sitting was closed at that point.'
+              : ''
       }
       errorMessage={
         saveError ||

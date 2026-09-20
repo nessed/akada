@@ -36,14 +36,50 @@ export interface Course {
   position?: number;
 }
 
+/**
+ * One stretch of a continuous sitting: a focus block, or the break after it.
+ *
+ * `ordinal` numbers the stretches of one sitting in the order they happened,
+ * focus and break sharing the run, so 1-2-3 is block, break, block.
+ * `targetSeconds` is what the stretch was armed for and `seconds` is what it
+ * actually ran; a break set to five minutes that took nineteen is the pair
+ * worth having, and a total on its own cannot tell you about it.
+ */
+export interface SessionSegment {
+  kind: 'focus' | 'break';
+  ordinal: number;
+  /** When the stretch began, ISO 8601. */
+  startedAt: string;
+  seconds: number;
+  /** Null for an open block, or a break the reader ended by hand. */
+  targetSeconds: number | null;
+}
+
 export interface Session {
   id: string;
   courseId: string;
   taskId: string | null;
   date: string;
+  /**
+   * Focus time only. Rest never lands here: the weekly goal, the streak and
+   * every hour count in the app read this field, so counting breaks in it
+   * would inflate all of them at once.
+   */
   durationSeconds: number;
   note: string;
   createdAt: string;
+  /**
+   * Rest taken during the sitting. Optional for the same reason
+   * `Course.position` is: a row written before continuous mode existed, or a
+   * project still on an older schema, has none and reads as zero.
+   */
+  breakSeconds?: number;
+  /**
+   * The shape of the sitting, oldest first. Written when a continuous session
+   * is logged and not read back by the app, which has the totals above; it is
+   * read over MCP, where the pattern questions get asked.
+   */
+  segments?: SessionSegment[];
 }
 
 export type TaskPriority = 'high' | 'normal';

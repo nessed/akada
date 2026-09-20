@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Course, Task } from '@/lib/data';
-import { formatHHMMSS, resolveTint } from '@/lib/utils';
+import type { Course, SessionSegment, Task } from '@/lib/data';
+import { resolveTint } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import HandCheck from '@/components/notebook/HandCheck';
+import SessionChain from '@/components/SessionChain';
 import { ButtonSpinner } from './LoadingIndicator';
 
 // Quick-reflection tag chips. Tapping appends `#tag` into the note so the
@@ -16,7 +17,12 @@ interface Props {
   course: Course | null;
   /** The task the session was against, when it was against one. */
   task?: Task | null;
+  /** Focus time. The headline figure, and the only one that gets logged. */
   durationSeconds: number;
+  /** Rest taken during the sitting, reported beside the hours, never in them. */
+  breakSeconds?: number;
+  /** The shape of the sitting, when it had one. */
+  segments?: SessionSegment[];
   saving?: boolean;
   errorMessage?: string;
   contextMessage?: string;
@@ -29,6 +35,8 @@ export default function SessionLogModal({
   course,
   task = null,
   durationSeconds,
+  breakSeconds = 0,
+  segments = [],
   saving = false,
   errorMessage = '',
   contextMessage = '',
@@ -70,6 +78,14 @@ export default function SessionLogModal({
     hoursPart > 0 ? Math.floor((safeSeconds % 3600) / 60) : Math.floor(safeSeconds / 60),
   ).padStart(2, '0');
   const secondsPart = String(safeSeconds % 60).padStart(2, '0');
+  const rest = clampSessionSeconds(breakSeconds);
+  // The rest figure is set the same way as the headline above it rather than
+  // through formatHHMMSS, which always writes the hours place: "00:05:00"
+  // beside "20:03" reads as two different kinds of number.
+  const restFace = `${Math.floor(rest / 3600) > 0 ? `${Math.floor(rest / 3600)}:` : ''}${String(
+    Math.floor(rest / 3600) > 0 ? Math.floor((rest % 3600) / 60) : Math.floor(rest / 60),
+  ).padStart(2, '0')}:${String(rest % 60).padStart(2, '0')}`;
+  const breakCount = segments.filter((segment) => segment.kind === 'break').length;
 
   function toggleTag(tag: string) {
     const token = `#${tag}`;
@@ -127,6 +143,27 @@ export default function SessionLogModal({
           </span>
           <span className="font-serif italic text-[13px] text-muted">focused</span>
         </div>
+
+        {/* Rest, reported and never added in. The hours a course is credited
+            with are the hours that were worked; what the afternoon cost in
+            breaks is a different question and gets a quieter line. */}
+        {rest > 0 && (
+          <div className="mt-1.5 flex items-baseline gap-2.5">
+            <span className="font-mono tabular-nums text-[15px] text-muted">{restFace}</span>
+            <span className="font-serif italic text-[13px] text-muted-soft">
+              rest over {breakCount} {breakCount === 1 ? 'break' : 'breaks'}
+            </span>
+          </div>
+        )}
+
+        {segments.length > 1 && (
+          <SessionChain
+            segments={segments}
+            color={course.color}
+            className="mt-3.5"
+            height={10}
+          />
+        )}
 
         {contextMessage && (
           <p className="mt-2 text-[12px] leading-[1.45] text-muted">{contextMessage}</p>

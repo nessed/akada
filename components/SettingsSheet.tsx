@@ -20,6 +20,7 @@ import { CONTACT_EMAIL } from '@/lib/contact';
 import { useNotice } from './Notice';
 import AppearanceEditor from './settings/AppearanceEditor';
 import CoursesEditor from './settings/CoursesEditor';
+import BreakLengthPicker from './settings/BreakLengthPicker';
 import DayEndPicker from './settings/DayEndPicker';
 import ProfileEditor from './settings/ProfileEditor';
 import {
@@ -313,9 +314,13 @@ export default function SettingsSheet({
                 onChange={(v) => setPrefs({ dailyReminder: v })}
               />
               <SettingToggleRow
-                label="Sound on session end"
+                label="Chime on a block and a break"
                 value={prefs.sessionSound}
                 onChange={(v) => setPrefs({ sessionSound: v })}
+              />
+              <BreakLengthPicker
+                value={prefs.breakMinutes}
+                onChange={(breakMinutes) => setPrefs({ breakMinutes })}
               />
               <SettingToggleRow
                 label="Hide weekends from heatmap"

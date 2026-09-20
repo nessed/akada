@@ -41,6 +41,7 @@ export type {
   PendingScheme,
   Course,
   Session,
+  SessionSegment,
   Task,
   TaskKind,
   TaskSubtask,

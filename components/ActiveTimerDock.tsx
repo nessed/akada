@@ -8,7 +8,8 @@ import { formatHHMMSS, resolveTint } from '@/lib/utils';
 
 export default function ActiveTimerDock() {
   const router = useRouter();
-  const { active, elapsedSeconds, pause, resume, stop } = useTimer();
+  const { active, elapsedSeconds, focusSeconds, onBreak, breakTarget, endBreak, pause, resume, stop } =
+    useTimer();
   const { courses } = useCourses();
 
   const course = useMemo(
@@ -21,6 +22,14 @@ export default function ActiveTimerDock() {
   const color = course?.color ?? 'var(--ink)';
   const tint = course ? resolveTint(course.color, course.tint) : 'var(--bg-tint)';
   const code = course?.code ?? 'Timer';
+
+  /* Two different numbers, because the dock answers a different question in
+     each state. While a block runs it is "how long have I studied", which is
+     the sitting's focus total and not this one block. While a break runs it
+     is "how long have I got", which is the break. */
+  const breakLeft = breakTarget != null ? breakTarget - elapsedSeconds : 0;
+  const shown = onBreak ? Math.abs(breakLeft) : focusSeconds;
+  const breakOver = onBreak && breakLeft <= 0;
 
   function openTimer() {
     router.push('/timer');
@@ -68,20 +77,37 @@ export default function ActiveTimerDock() {
           <button
             type="button"
             onClick={openTimer}
-            aria-label={`${active.isPaused ? 'Paused' : 'Running'} timer for ${code}, ${formatHHMMSS(elapsedSeconds)}. Open the timer.`}
+            aria-label={
+              onBreak
+                ? `${code} on a break, ${breakOver ? 'over by' : 'remaining'} ${formatHHMMSS(shown)}. Open the timer.`
+                : `${active.isPaused ? 'Paused' : 'Running'} timer for ${code}, ${formatHHMMSS(shown)}. Open the timer.`
+            }
             className="flex min-h-[44px] items-center gap-2 rounded-[8px] bg-transparent px-1.5 text-left"
           >
+            {/* Filled and ticking while the work is happening; an outline,
+                still, while it is not. The dot is the one thing on the dock
+                that says which of the two is going on. */}
             <span
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${active.isPaused ? '' : 'animate-tick'}`}
-              style={{ background: color }}
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                active.isPaused || onBreak ? '' : 'animate-tick'
+              }`}
+              style={
+                onBreak
+                  ? { border: `1.5px solid ${color}` }
+                  : { background: color }
+              }
               aria-hidden
             />
             <span className="min-w-0 block">
               <span className="eyebrow block max-w-[74px] truncate" style={{ color }}>
                 {code}
               </span>
-              <span className="block font-mono text-[13px] font-semibold leading-[1.15] tabular-nums text-ink">
-                {formatHHMMSS(elapsedSeconds)}
+              <span
+                className={`block font-mono text-[13px] font-semibold leading-[1.15] tabular-nums ${
+                  breakOver ? 'text-warn' : 'text-ink'
+                }`}
+              >
+                {formatHHMMSS(shown)}
               </span>
             </span>
           </button>
@@ -92,11 +118,13 @@ export default function ActiveTimerDock() {
                 visible mark stays small; the target is 44px. */}
             <button
               type="button"
-              onClick={togglePaused}
-              aria-label={active.isPaused ? 'Resume timer' : 'Pause timer'}
+              onClick={onBreak ? endBreak : togglePaused}
+              aria-label={
+                onBreak ? 'End the break and start the next block' : active.isPaused ? 'Resume timer' : 'Pause timer'
+              }
               className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-transparent text-ink-soft"
             >
-              {active.isPaused ? (
+              {active.isPaused || onBreak ? (
                 <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M7 5l12 7-12 7V5z" />
                 </svg>

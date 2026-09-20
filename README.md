@@ -111,9 +111,10 @@ Course Memo.xlsx"`, with `--refresh-planner` to re-pull the meeting times.
 
 Akada exposes a remote MCP endpoint at `/api/mcp` with its own OAuth flow, so
 you can connect it to Claude as a custom connector and hand it a syllabus.
-Eleven tools: `find_course`, `get_tasks`, `get_overview`, `create_tasks`,
+Twelve tools: `find_course`, `get_tasks`, `get_overview`, `create_tasks`,
 `update_tasks`, `complete_tasks`, `log_study_session`, `get_weekly_stats`,
-`get_grading_scheme`, `set_grading_scheme` and `delete_course`. The connector
+`get_focus_pattern`, `get_grading_scheme`, `set_grading_scheme` and
+`delete_course`. The connector
 authenticates as you and gets a session of its own, so signing out of the app
 in a browser doesn't disconnect it.
 

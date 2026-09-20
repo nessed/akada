@@ -119,6 +119,43 @@ alter table sessions enable row level security;
 -- Same denormalization as tasks.semester_id, same trigger keeps it in sync.
 alter table sessions add column if not exists semester_id uuid;
 
+-- Continuous mode's rest total. `duration_seconds` stays focus-only on
+-- purpose: the weekly goal, the streak and every hour count in the app read
+-- that column, so folding rest into it would inflate all of them at once.
+-- Denormalized here for the same reason semester_id is, so a week still reads
+-- in one query; the shape of the chain lives in session_segments.
+alter table sessions add column if not exists break_seconds integer not null default 0;
+
+-- ============================================================
+-- 3a. SESSION SEGMENTS  (FK -> sessions)
+--
+-- One row per stretch of a continuous sitting: a focus block, or the break
+-- after it. Keeping only a break total on `sessions` was the cheaper option
+-- and cannot answer the question the feature exists for, because three
+-- five-minute breaks and one fifteen-minute break are the same total and are
+-- not the same afternoon.
+--
+-- `target_seconds` is what the stretch was armed for, against `seconds` for
+-- what it actually ran. A break set to five minutes that took nineteen is the
+-- most useful pair of numbers in the table.
+--
+-- The app writes these and does not read them back. They are read over MCP,
+-- which is where the study-pattern questions get asked.
+-- ============================================================
+create table if not exists session_segments (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null default auth.uid(),
+  session_id     uuid not null references sessions(id) on delete cascade,
+  kind           text not null check (kind in ('focus', 'break')),
+  ordinal        smallint not null,
+  started_at     timestamptz not null,
+  seconds        integer not null,
+  target_seconds integer,
+  created_at     timestamptz not null default now()
+);
+
+alter table session_segments enable row level security;
+
 -- ============================================================
 -- 4. SEMESTERS
 --
@@ -358,6 +395,7 @@ create trigger sessions_set_semester_id
 drop policy if exists "Users manage own courses"  on courses;
 drop policy if exists "Users manage own tasks"    on tasks;
 drop policy if exists "Users manage own sessions" on sessions;
+drop policy if exists "Users manage own session segments" on session_segments;
 drop policy if exists "Users manage own semester" on semesters;
 drop policy if exists "Users manage own settings" on user_settings;
 drop policy if exists "Users manage own mark candidates" on mark_candidates;
@@ -377,6 +415,12 @@ create policy "Users manage own tasks"
 
 create policy "Users manage own sessions"
   on sessions for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "Users manage own session segments"
+  on session_segments for all
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
@@ -423,6 +467,10 @@ create index if not exists sessions_user_id_date_idx      on sessions (user_id, 
 create index if not exists sessions_course_id_idx         on sessions (course_id);
 create index if not exists sessions_task_id_idx           on sessions (task_id);
 create index if not exists sessions_semester_id_idx       on sessions (semester_id);
+-- Segments are read a sitting at a time, in the order they happened, and
+-- swept across a term when MCP asks how the breaks have been going.
+create index if not exists session_segments_session_idx    on session_segments (session_id, ordinal);
+create index if not exists session_segments_user_kind_idx  on session_segments (user_id, kind, started_at);
 create index if not exists user_settings_active_semester_id_idx on user_settings (active_semester_id);
 
 -- ============================================================
@@ -453,6 +501,36 @@ begin
   ) then
     alter table sessions add constraint sessions_duration_seconds_range
       check (duration_seconds > 0 and duration_seconds <= 64800);
+  end if;
+end $$;
+
+-- Break time is bounded by the same 18h ceiling, and one individual break by
+-- a far tighter one (MAX_BREAK_SECONDS in lib/session-safety.ts): a timer
+-- left sitting on "break" overnight should close the session out, not record
+-- eight hours of rest.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'sessions_break_seconds_range'
+  ) then
+    alter table sessions add constraint sessions_break_seconds_range
+      check (break_seconds >= 0 and break_seconds <= 64800);
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'session_segments_seconds_range'
+  ) then
+    alter table session_segments add constraint session_segments_seconds_range
+      check (
+        seconds > 0
+        and seconds <= 64800
+        and (kind <> 'break' or seconds <= 2700)
+      );
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'session_segments_ordinal_positive'
+  ) then
+    alter table session_segments add constraint session_segments_ordinal_positive
+      check (ordinal > 0);
   end if;
 end $$;
 
@@ -505,7 +583,8 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['courses', 'tasks', 'sessions', 'semesters', 'user_settings',
+  foreach t in array array['courses', 'tasks', 'sessions', 'session_segments',
+                           'semesters', 'user_settings',
                            'mark_candidates', 'trust_pulse']
   loop
     if not exists (

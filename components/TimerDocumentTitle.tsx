@@ -17,7 +17,7 @@ function formatTimerTitle(seconds: number): string {
 }
 
 export default function TimerDocumentTitle() {
-  const { active, pendingLog, elapsedSeconds } = useTimer();
+  const { active, pendingLog, elapsedSeconds, focusSeconds, onBreak, breakTarget } = useTimer();
   // What the router last put in the tab, as opposed to what this component
   // last put there. Capturing the base title once on mount meant that every
   // navigation made while a timer ran was forgotten: stopping the timer on
@@ -30,17 +30,22 @@ export default function TimerDocumentTitle() {
       baseTitleRef.current = document.title || 'Akada';
     }
 
+    const breakLeft = breakTarget != null ? breakTarget - elapsedSeconds : 0;
     const next = pendingLog
       ? 'Log session | Akada'
       : active
-        ? active.isPaused
-          ? `Paused ${formatTimerTitle(elapsedSeconds)} | Timer`
-          : `${formatTimerTitle(elapsedSeconds)} | Timer`
+        ? onBreak
+          ? // The tab is where a reader on a break is actually looking, so it
+            // carries the break rather than the hours behind it.
+            `${breakLeft <= 0 ? 'Break over' : 'Break'} ${formatTimerTitle(Math.abs(breakLeft))} | Timer`
+          : active.isPaused
+            ? `Paused ${formatTimerTitle(focusSeconds)} | Timer`
+            : `${formatTimerTitle(focusSeconds)} | Timer`
         : baseTitleRef.current;
 
     if (next && document.title !== next) document.title = next;
     appliedRef.current = next;
-  }, [active, elapsedSeconds, pendingLog]);
+  }, [active, breakTarget, elapsedSeconds, focusSeconds, onBreak, pendingLog]);
 
   // Leaving the app on a timer title after this component goes away would
   // strand the tab on a frozen clock.
