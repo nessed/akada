@@ -178,33 +178,53 @@ export function readingRate(
   return Math.round(pages / (seconds / 3600));
 }
 
+/** How recently a session has to have happened to count as "just now". */
+const RESUME_WINDOW_DAYS = 1;
+
 /**
  * The one task the Today screen puts its weight behind.
+ *
+ * `in-progress` is the default, and the only rule that answers the question a
+ * student actually has when they reopen the app: what was I doing? If a timer
+ * ran on a task today or yesterday and that task is still open, it is the
+ * answer, whatever its due date — a calculus problem set you were halfway
+ * through does not stop being the live work because something else is due
+ * sooner. If the task got finished, the course still holds: the next open
+ * thing in it comes up rather than throwing the reader somewhere new.
  *
  * `overdue` is the original rule: whatever has waited longest, then what is
  * due today. It is honest but it has a failure mode — four overdue readings
  * in one course means that course is the answer every day, and the courses
  * quietly going untouched never surface at all.
  *
- * `last-done` fixes that by asking a different question: of the work that is
+ * `last-done` asks the opposite question to `in-progress`: of the work that is
  * actually due, which course has gone longest without a session? A course
  * never studied sorts first, because "not started" is the longest wait there
- * is. Due date breaks a tie, so within a neglected course this still reaches
- * for the oldest thing.
+ * is. Due date breaks a tie.
  *
- * Both modes choose from the same pool — overdue first, then due today — so
- * the panel never reaches past live work for something that is not yet due.
+ * `overdue` and `last-done` choose from the same pool — overdue first, then
+ * due today — so neither reaches past live work for something not yet due.
+ * `in-progress` is the exception by design, and only for the one task a timer
+ * has actually been run on; with nothing recent it falls back to `last-done`.
  */
 export function pickUpNext(
-  sort: 'last-done' | 'overdue',
+  sort: 'in-progress' | 'last-done' | 'overdue',
   overdueTasks: Task[],
   todayTasks: Task[],
   sessions: Session[] = [],
+  openTasks: Task[] = [],
 ): Task | null {
   const oldestDueFirst = (a: Task, b: Task) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '');
 
   if (sort === 'overdue') {
     return [...overdueTasks].sort(oldestDueFirst)[0] ?? todayTasks[0] ?? null;
+  }
+
+  if (sort === 'in-progress') {
+    const resumed = pickResumed(sessions, overdueTasks, todayTasks, openTasks);
+    if (resumed) return resumed;
+    // Nothing worked on lately, so there is no thread to pick back up and the
+    // question falls back to which course has been left alone the longest.
   }
 
   // Latest session date per course. Sessions carry a taskId, but the question
@@ -229,4 +249,43 @@ export function pickUpNext(
       return byStudied !== 0 ? byStudied : oldestDueFirst(a, b);
     })[0] ?? null
   );
+}
+
+/**
+ * The task a timer was last run on, if it is still open and still recent.
+ *
+ * Sessions are ordered by `createdAt` rather than `date`, because two
+ * sessions logged on the same day are only separable by the timestamp, and
+ * "the last thing I did" is exactly that distinction.
+ */
+function pickResumed(
+  sessions: Session[],
+  overdueTasks: Task[],
+  todayTasks: Task[],
+  openTasks: Task[],
+): Task | null {
+  const today = isoDate();
+  const recent = sessions
+    .filter((s) => s.date <= today && daysBetween(s.date, today) <= RESUME_WINDOW_DAYS)
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  if (recent.length === 0) return null;
+
+  // Every task the reader could still be handed, newest session first.
+  const byId = new Map(openTasks.map((t) => [t.id, t]));
+  for (const session of recent) {
+    if (!session.taskId) continue;
+    const task = byId.get(session.taskId);
+    if (task) return task;
+  }
+
+  // The task is finished, or the session was untargeted. Stay in the course
+  // anyway and reach for its most pressing open thing: overdue, then due
+  // today, then whatever is next by date.
+  const courseId = recent[0].courseId;
+  const inCourse = (list: Task[]) =>
+    [...list]
+      .filter((t) => t.courseId === courseId)
+      .sort((a, b) => (a.dueDate ?? '9999-99-99').localeCompare(b.dueDate ?? '9999-99-99'))[0] ??
+    null;
+  return inCourse(overdueTasks) ?? inCourse(todayTasks) ?? inCourse(openTasks);
 }

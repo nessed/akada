@@ -18,16 +18,22 @@ export type HeadingFont = 'cormorant' | 'fraunces' | 'lora' | 'merriweather';
 /**
  * What the Up next panel reaches for first.
  *
- * `last-done` is the default: the task whose course has gone longest without
- * a study session, so the panel rotates through the term instead of pinning
- * itself to one course. A reader with four overdue readings in one course
- * would otherwise see that same course every time they opened Today, while
- * the courses they were actually neglecting stayed invisible.
+ * `in-progress` is the default: whatever a timer last ran on, if that task is
+ * still open and the session was today or yesterday. Reopening the app in the
+ * middle of a problem set and being handed something else is the one thing
+ * the panel can do that is plainly wrong, and neither of the other two rules
+ * could avoid it, because both only ever looked at what was due.
  *
- * `overdue` is the old behaviour, kept because "whatever has waited longest"
- * is the right answer in the week before a deadline.
+ * `last-done` picks the task whose course has gone longest without a study
+ * session, so the panel rotates through the term instead of pinning itself to
+ * one course. A reader with four overdue readings in one course would
+ * otherwise see that same course every time they opened Today, while the
+ * courses they were actually neglecting stayed invisible.
+ *
+ * `overdue` is the oldest behaviour, kept because "whatever has waited
+ * longest" is the right answer in the week before a deadline.
  */
-export type UpNextSort = 'last-done' | 'overdue';
+export type UpNextSort = 'in-progress' | 'last-done' | 'overdue';
 export type Density = 'cozy' | 'comfy' | 'compact';
 export type PrimaryAccent = 'classic' | 'green';
 
@@ -54,7 +60,7 @@ export interface Preferences {
 const DEFAULTS: Preferences = {
   paperTone: 'paper',
   headingFont: 'fraunces',
-  upNextSort: 'last-done',
+  upNextSort: 'in-progress',
   density: 'comfy',
   primaryAccent: 'classic',
   dailyReminder: true,
@@ -68,7 +74,7 @@ const STORAGE_KEY = 'akada.preferences.v1';
 
 const PAPER_TONE_VALUES: PaperTone[] = ['warm', 'paper', 'stone', 'white', 'night'];
 const HEADING_FONT_VALUES: HeadingFont[] = ['cormorant', 'fraunces', 'lora', 'merriweather'];
-const UP_NEXT_SORT_VALUES: UpNextSort[] = ['last-done', 'overdue'];
+const UP_NEXT_SORT_VALUES: UpNextSort[] = ['in-progress', 'last-done', 'overdue'];
 const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
 const PRIMARY_ACCENT_VALUES: PrimaryAccent[] = ['classic', 'green'];
 
