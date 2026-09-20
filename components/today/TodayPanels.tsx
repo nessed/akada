@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo } from 'react';
 import type { Course, Session, Task } from '@/lib/data';
+import type { UpNextSort } from '@/lib/preferences';
 import {
   dueLabel,
   formatHM,
@@ -34,13 +35,35 @@ interface UpNextProps {
   onDone: (task: Task) => void;
   onSnooze: (task: Task) => void;
   onOpen?: (task: Task) => void;
+  sort?: UpNextSort;
+  onSortChange?: (sort: UpNextSort) => void;
 }
 
+// What the marginal note says for each rule, in its own voice rather than the
+// name of the setting.
+const SORT_NOTE: Record<UpNextSort, string> = {
+  'last-done': 'least studied first',
+  overdue: 'oldest overdue first',
+};
+
 /**
- * The one task the screen actually asks for. Oldest overdue first, because
- * the thing that has been waiting longest is the thing that will keep waiting.
+ * The one task the screen actually asks for.
+ *
+ * Which one that is depends on `sort`, and the handwritten note in the corner
+ * is the control: it says which rule is running and switching is a click on
+ * it. A dropdown here would have been the heaviest piece of chrome on the
+ * page, for a choice between two things.
  */
-export function UpNext({ task, course, onStart, onDone, onSnooze, onOpen }: UpNextProps) {
+export function UpNext({
+  task,
+  course,
+  onStart,
+  onDone,
+  onSnooze,
+  onOpen,
+  sort = 'last-done',
+  onSortChange,
+}: UpNextProps) {
   const due = dueLabel(task.dueDate);
   const color = course?.color ?? 'var(--ink)';
 
@@ -55,9 +78,26 @@ export function UpNext({ task, course, onStart, onDone, onSnooze, onOpen }: UpNe
 
       <div className="flex items-baseline justify-between gap-4">
         <p className="eyebrow m-0">Up next</p>
-        <HandNote color="var(--ink-soft)" size={17}>
-          oldest overdue first
-        </HandNote>
+        {onSortChange ? (
+          <button
+            type="button"
+            onClick={() => onSortChange(sort === 'last-done' ? 'overdue' : 'last-done')}
+            // The note is already the label, so it says what it is rather
+            // than "sort by", and the title carries what a click will do.
+            title={`Showing ${SORT_NOTE[sort]}. Switch to ${
+              SORT_NOTE[sort === 'last-done' ? 'overdue' : 'last-done']
+            }.`}
+            className="shrink-0 bg-transparent p-0 text-right transition-opacity hover:opacity-70"
+          >
+            <HandNote color="var(--ink-soft)" size={17}>
+              {SORT_NOTE[sort]}
+            </HandNote>
+          </button>
+        ) : (
+          <HandNote color="var(--ink-soft)" size={17}>
+            {SORT_NOTE[sort]}
+          </HandNote>
+        )}
       </div>
 
       {course && (

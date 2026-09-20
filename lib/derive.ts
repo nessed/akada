@@ -1,4 +1,4 @@
-import type { Assessment, Course, DropRule, Task } from './data';
+import type { Assessment, Course, DropRule, Session, Task } from './data';
 import { daysBetween, isoDate } from './utils';
 
 /**
@@ -176,4 +176,57 @@ export function readingRate(
     .reduce((acc, s) => acc + s.durationSeconds, 0);
   if (pages < 20 || seconds < 3600) return 20;
   return Math.round(pages / (seconds / 3600));
+}
+
+/**
+ * The one task the Today screen puts its weight behind.
+ *
+ * `overdue` is the original rule: whatever has waited longest, then what is
+ * due today. It is honest but it has a failure mode — four overdue readings
+ * in one course means that course is the answer every day, and the courses
+ * quietly going untouched never surface at all.
+ *
+ * `last-done` fixes that by asking a different question: of the work that is
+ * actually due, which course has gone longest without a session? A course
+ * never studied sorts first, because "not started" is the longest wait there
+ * is. Due date breaks a tie, so within a neglected course this still reaches
+ * for the oldest thing.
+ *
+ * Both modes choose from the same pool — overdue first, then due today — so
+ * the panel never reaches past live work for something that is not yet due.
+ */
+export function pickUpNext(
+  sort: 'last-done' | 'overdue',
+  overdueTasks: Task[],
+  todayTasks: Task[],
+  sessions: Session[] = [],
+): Task | null {
+  const oldestDueFirst = (a: Task, b: Task) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '');
+
+  if (sort === 'overdue') {
+    return [...overdueTasks].sort(oldestDueFirst)[0] ?? todayTasks[0] ?? null;
+  }
+
+  // Latest session date per course. Sessions carry a taskId, but the question
+  // is which *course* has been neglected, so a session on any of its tasks
+  // counts as having touched it.
+  const lastStudied = new Map<string, string>();
+  for (const session of sessions) {
+    const seen = lastStudied.get(session.courseId);
+    if (!seen || session.date > seen) lastStudied.set(session.courseId, session.date);
+  }
+
+  // Overdue still outranks due-today: falling behind is the louder signal.
+  // The rotation happens within each tier, not across them.
+  const pool = overdueTasks.length ? overdueTasks : todayTasks;
+  return (
+    [...pool].sort((a, b) => {
+      // '' sorts before any ISO date, which is what puts a course with no
+      // sessions at the front without a special case.
+      const byStudied = (lastStudied.get(a.courseId) ?? '').localeCompare(
+        lastStudied.get(b.courseId) ?? '',
+      );
+      return byStudied !== 0 ? byStudied : oldestDueFirst(a, b);
+    })[0] ?? null
+  );
 }

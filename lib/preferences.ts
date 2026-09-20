@@ -15,12 +15,26 @@ export type PaperTone = 'warm' | 'paper' | 'stone' | 'white' | 'night';
 // Fraunces on the Paper tone is the default the app ships in; Cormorant /
 // Lora / Merriweather remain selectable in Appearance.
 export type HeadingFont = 'cormorant' | 'fraunces' | 'lora' | 'merriweather';
+/**
+ * What the Up next panel reaches for first.
+ *
+ * `last-done` is the default: the task whose course has gone longest without
+ * a study session, so the panel rotates through the term instead of pinning
+ * itself to one course. A reader with four overdue readings in one course
+ * would otherwise see that same course every time they opened Today, while
+ * the courses they were actually neglecting stayed invisible.
+ *
+ * `overdue` is the old behaviour, kept because "whatever has waited longest"
+ * is the right answer in the week before a deadline.
+ */
+export type UpNextSort = 'last-done' | 'overdue';
 export type Density = 'cozy' | 'comfy' | 'compact';
 export type PrimaryAccent = 'classic' | 'green';
 
 export interface Preferences {
   paperTone: PaperTone;
   headingFont: HeadingFont;
+  upNextSort: UpNextSort;
   density: Density;
   primaryAccent: PrimaryAccent;
   dailyReminder: boolean;
@@ -40,6 +54,7 @@ export interface Preferences {
 const DEFAULTS: Preferences = {
   paperTone: 'paper',
   headingFont: 'fraunces',
+  upNextSort: 'last-done',
   density: 'comfy',
   primaryAccent: 'classic',
   dailyReminder: true,
@@ -53,6 +68,7 @@ const STORAGE_KEY = 'akada.preferences.v1';
 
 const PAPER_TONE_VALUES: PaperTone[] = ['warm', 'paper', 'stone', 'white', 'night'];
 const HEADING_FONT_VALUES: HeadingFont[] = ['cormorant', 'fraunces', 'lora', 'merriweather'];
+const UP_NEXT_SORT_VALUES: UpNextSort[] = ['last-done', 'overdue'];
 const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
 const PRIMARY_ACCENT_VALUES: PrimaryAccent[] = ['classic', 'green'];
 
@@ -66,6 +82,9 @@ function sanitizePreferences(value: unknown): Preferences {
     headingFont: HEADING_FONT_VALUES.includes(parsed.headingFont as HeadingFont)
       ? (parsed.headingFont as HeadingFont)
       : DEFAULTS.headingFont,
+    upNextSort: UP_NEXT_SORT_VALUES.includes(parsed.upNextSort as UpNextSort)
+      ? (parsed.upNextSort as UpNextSort)
+      : DEFAULTS.upNextSort,
     density: DENSITY_VALUES.includes(parsed.density as Density)
       ? (parsed.density as Density)
       : DEFAULTS.density,
