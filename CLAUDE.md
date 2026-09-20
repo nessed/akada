@@ -53,14 +53,25 @@ Vercel deployment on the PR — that's the check that proves a build works.
 
 ## Design
 
-The app is a paper notebook: cream tones, deckle edges, doodles in the
-margin, Fraunces for headings, handwriting for marginalia. Small type has a
-job — the serif sets prose and standfirsts, `.eyebrow` (10px uppercase sans)
-sets labels and section headers, and mono is for digits only: the timer face,
-hour counts, grades, anything tabular.
+**Read [`readmedesign.md`](./readmedesign.md) before changing anything the
+user sees.** It is the design spec — the palette, the paper tones, the type
+scale, the layout system, and a list of anti-patterns the app deliberately
+rejects. It is not background reading; it is the thing that decides whether a
+change belongs. Treat its "What We Strictly Avoid" section as binding.
 
-Don't reach for a mono kicker above a serif heading. That shape is what makes
-an app look machine-made, and it was deliberately removed.
+The short version, so a wrong turn is obvious before you open it: the app is a
+paper notebook — cream tones, deckle edges, doodles in the margin, Fraunces
+for headings, handwriting for marginalia. Small type has a job. The serif sets
+prose and standfirsts, `.eyebrow` (10px uppercase sans) sets labels and section
+headers, and mono is digits only: the timer face, hour counts, grades, anything
+tabular. Mono never sets prose, and never sits as a kicker above a serif
+heading — that shape is what makes an app look machine-made and it was
+deliberately removed.
+
+**When a change alters any of that, update `readmedesign.md` in the same
+commit.** A spec that lags the code is worse than no spec, because the next
+session trusts it. This has already bitten once: the file claimed every screen
+title sat under a line of 12px mono for as long as it took to notice.
 
 Paper tones, the night paper, and the heading-font choice all live in
 `lib/preferences.ts` and are written onto the root element as inline custom
