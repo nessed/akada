@@ -450,8 +450,8 @@ input[type='date']::-webkit-calendar-picker-indicator {
   align-items: center;
   gap: 6px;
   padding: 4px 9px;
-  font-family: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 9.5px;
+  font-family: var(--font-mono), 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);

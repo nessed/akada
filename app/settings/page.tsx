@@ -223,7 +223,7 @@ export default function SettingsPage() {
       />
 
       <header className="mb-8">
-        <p className="m-0 mb-1.5 font-mono text-[12px] tracking-[0.02em] text-muted">
+        <p className="m-0 mb-1.5 font-serif italic text-[13.5px] text-muted">
           {name || 'Akada'}
           {email && ` · ${email}`}
         </p>

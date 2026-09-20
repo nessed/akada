@@ -79,7 +79,7 @@ export function UpNext({ task, course, onStart, onDone, onSnooze, onOpen }: UpNe
         )}
       </h2>
 
-      <p className="m-0 mt-2.5 font-mono text-[12px] tracking-[0.02em] text-muted">
+      <p className="m-0 mt-2.5 font-serif italic text-[13.5px] text-muted">
         {due && (
           <span className={due.category === 'overdue' ? 'text-warn' : 'text-ink'}>
             Due {due.formattedDate}
@@ -353,7 +353,7 @@ export function WeekPanel({
         ))}
       </div>
 
-      <div className="mt-2 flex gap-1.5 font-mono text-[9.5px] text-muted-soft">
+      <div className="mt-2 flex gap-1.5 font-mono text-[10px] text-muted-soft">
         {days.map((day) => (
           <span key={day.iso} className="flex-1 text-center">
             <span className={day.isToday ? 'text-ink' : ''}>{day.label}</span>

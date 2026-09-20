@@ -70,7 +70,7 @@ export default function CoursesPage() {
     <PageShell wide>
       <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="m-0 mb-1.5 font-mono text-[12px] tracking-[0.02em] text-muted">
+          <p className="m-0 mb-1.5 font-serif italic text-[13.5px] text-muted">
             {rows.length} {rows.length === 1 ? 'course' : 'courses'} · {formatHM(termTotal)} this
             term · {formatHM(weekTotal)} of {weekGoal}h this week
           </p>

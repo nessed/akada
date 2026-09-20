@@ -43,7 +43,7 @@ export default function WeeklyChart({ sessions, courses }: Props) {
     <div className="flex h-[130px] items-end gap-2">
       {totals.map((t, idx) => (
         <div key={idx} className="flex-1 flex flex-col items-center gap-2">
-          <span className="h-3 font-mono text-[9px] text-muted-soft">
+          <span className="h-3 font-mono text-[9.5px] text-muted-soft">
             {t.total > 0 ? formatHours(t.total, 1) : ''}
           </span>
           <div
@@ -67,7 +67,7 @@ export default function WeeklyChart({ sessions, courses }: Props) {
                 );
               })}
           </div>
-          <span className="text-[10px] text-muted font-mono">{t.label}</span>
+          <span className="text-[10.5px] text-muted font-mono">{t.label}</span>
         </div>
       ))}
     </div>

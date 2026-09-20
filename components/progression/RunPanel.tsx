@@ -86,7 +86,7 @@ export default function RunPanel({
 function WeekRow({ week }: { week: RunWeek }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="w-[52px] shrink-0 font-mono text-[10px] text-muted-soft">
+      <span className="w-[52px] shrink-0 font-mono text-[10.5px] text-muted-soft">
         {new Date(week.start + 'T12:00:00').toLocaleDateString(undefined, {
           day: 'numeric',
           month: 'short',
@@ -113,7 +113,7 @@ function WeekRow({ week }: { week: RunWeek }) {
         ))}
       </div>
 
-      <span className="w-[112px] shrink-0 text-right font-mono text-[10px] text-muted-soft">
+      <span className="w-[112px] shrink-0 text-right font-mono text-[10.5px] text-muted-soft">
         {week.inProgress ? 'this week' : describeWeek(week)}
       </span>
     </div>

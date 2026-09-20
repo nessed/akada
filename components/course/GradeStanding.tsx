@@ -158,7 +158,7 @@ export default function GradeStanding({
                 aria-label={`${row.label || 'This piece'} is worth, as a percentage of the course`}
                 className="w-[34px] min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[13px] text-muted outline-none"
               />
-              <span aria-hidden className="font-mono text-[10px] text-muted-soft">%</span>
+              <span aria-hidden className="font-mono text-[10.5px] text-muted-soft">%</span>
               {/* Score and out-of sit together so an empty score reads as
                   "not back yet" rather than as a zero. */}
               <input
@@ -174,7 +174,7 @@ export default function GradeStanding({
                 aria-label={`${row.label || 'This piece'}, what you scored`}
                 className="ml-1.5 w-[36px] min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[13px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-muted-soft"
               />
-              <span aria-hidden className="font-mono text-[10px] text-muted-soft">/</span>
+              <span aria-hidden className="font-mono text-[10.5px] text-muted-soft">/</span>
               <input
                 value={row.outOf ?? ''}
                 onChange={(e) =>

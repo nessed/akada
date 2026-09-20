@@ -179,7 +179,7 @@ export default function TaskRow({
         </button>
         {mark && !running && (
           <span
-            className="hidden shrink-0 pr-3.5 font-mono text-[10px] tracking-[0.04em] text-muted md:inline"
+            className="hidden shrink-0 pr-3.5 font-mono text-[10.5px] tracking-[0.04em] text-muted md:inline"
             title={mark.title}
           >
             {mark.label}
@@ -208,7 +208,7 @@ export default function TaskRow({
       )}
 
       <span
-        className={`tnum font-mono text-[10px] tracking-[0.02em] md:text-[11px] ${
+        className={`tnum font-mono text-[10.5px] tracking-[0.02em] md:text-[11.5px] ${
           due?.category === 'overdue'
             ? 'text-warn'
             : due?.category === 'today'

@@ -58,7 +58,7 @@ const config: Config = {
         // by default; Cormorant/Lora/Merriweather selectable in Appearance).
         serif: ['var(--font-serif)', 'var(--font-fraunces)', 'Fraunces', 'Iowan Old Style', 'Georgia', 'serif'],
         sans: ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
+        mono: ['var(--font-mono)', 'IBM Plex Mono', 'ui-monospace', 'monospace'],
         hand: ['var(--font-hand)', 'Caveat', 'Patrick Hand', 'cursive'],
       },
       animation: {
