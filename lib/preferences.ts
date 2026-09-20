@@ -44,7 +44,17 @@ export interface Preferences {
   density: Density;
   primaryAccent: PrimaryAccent;
   dailyReminder: boolean;
+  /**
+   * Whether the timer chimes when a block ends and when a break is up. The
+   * toggle predates continuous mode and did nothing until there was something
+   * to announce; it now gates both notes (lib/chime.ts).
+   */
   sessionSound: boolean;
+  /**
+   * How long the break after a block runs, in minutes. `0` turns the break
+   * off, so a block that ends just keeps counting the way it always did.
+   */
+  breakMinutes: number;
   hideWeekends: boolean;
   /**
    * Derived, never set directly: true exactly when the chosen paper is the
@@ -64,7 +74,10 @@ const DEFAULTS: Preferences = {
   density: 'comfy',
   primaryAccent: 'classic',
   dailyReminder: true,
-  sessionSound: false,
+  // On, now that it has a job. A break whose end is not announced is a break
+  // the reader has to sit and watch, which is not a break.
+  sessionSound: true,
+  breakMinutes: 5,
   hideWeekends: false,
   darkMode: false,
   dayEndingHour: 0,
@@ -77,6 +90,8 @@ const HEADING_FONT_VALUES: HeadingFont[] = ['cormorant', 'fraunces', 'lora', 'me
 const UP_NEXT_SORT_VALUES: UpNextSort[] = ['in-progress', 'last-done', 'overdue'];
 const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
 const PRIMARY_ACCENT_VALUES: PrimaryAccent[] = ['classic', 'green'];
+/** Zero is "no break"; the rest are what the timer offers. */
+const BREAK_MINUTE_VALUES = [0, 5, 10, 15];
 
 function sanitizePreferences(value: unknown): Preferences {
   const parsed = value && typeof value === 'object' ? (value as Partial<Preferences>) : {};
@@ -105,6 +120,9 @@ function sanitizePreferences(value: unknown): Preferences {
       typeof parsed.sessionSound === 'boolean' ? parsed.sessionSound : DEFAULTS.sessionSound,
     hideWeekends:
       typeof parsed.hideWeekends === 'boolean' ? parsed.hideWeekends : DEFAULTS.hideWeekends,
+    breakMinutes: BREAK_MINUTE_VALUES.includes(Number(parsed.breakMinutes))
+      ? Number(parsed.breakMinutes)
+      : DEFAULTS.breakMinutes,
     darkMode: paperTone === 'night',
     dayEndingHour:
       typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 6

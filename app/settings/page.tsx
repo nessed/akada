@@ -7,6 +7,7 @@ import LoadingIndicator from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import AppearanceEditor from '@/components/settings/AppearanceEditor';
 import CoursesEditor from '@/components/settings/CoursesEditor';
+import BreakLengthPicker from '@/components/settings/BreakLengthPicker';
 import DayEndPicker from '@/components/settings/DayEndPicker';
 import ProfileEditor from '@/components/settings/ProfileEditor';
 import SemesterManager from '@/components/SemesterManager';
@@ -303,6 +304,22 @@ export default function SettingsPage() {
                   sub="Streak and weekly pace ignore Sat and Sun"
                   value={prefs.hideWeekends}
                   onChange={(v) => setPrefs({ hideWeekends: v })}
+                />
+              </SettingGroup>
+
+              {/* The timer's own two preferences. They lived only on the
+                  phone sheet, which left a desktop reader unable to turn the
+                  chime off or change how long a break runs. */}
+              <SettingGroup label="Timer">
+                <SettingToggleRow
+                  label="Chime on a block and a break"
+                  sub="A soft note when a block ends and when the rest is up"
+                  value={prefs.sessionSound}
+                  onChange={(v) => setPrefs({ sessionSound: v })}
+                />
+                <BreakLengthPicker
+                  value={prefs.breakMinutes}
+                  onChange={(breakMinutes) => setPrefs({ breakMinutes })}
                 />
               </SettingGroup>
 

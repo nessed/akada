@@ -5,11 +5,21 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
-import { MAX_SESSION_SECONDS, clampSessionSeconds } from './session-safety';
-import { plannerDate } from './preferences';
+import {
+  MAX_BREAK_SECONDS,
+  MAX_SESSION_SECONDS,
+  clampBreakSeconds,
+  clampSessionSeconds,
+  sanitizeSegments,
+  totalBreakSeconds,
+} from './session-safety';
+import type { SessionSegment } from './data';
+import { plannerDate, readPreferences } from './preferences';
+import { cancelChime, flushChime, primeChime, ringChime, scheduleChime } from './chime';
 import { logSessionFollowed } from './progression/log';
 
 interface TimerState {
@@ -31,14 +41,41 @@ interface TimerState {
    * session that is paused, reloaded or restored keeps the shape it grew.
    */
   sessionId: string;
+  /**
+   * Which kind of stretch the clock is measuring. A sitting alternates: a
+   * block of focus, the break after it, the next block. `startedAt`,
+   * `accumulatedMs` and `isPaused` all describe the *current stretch* only;
+   * everything finished is in `segments`.
+   *
+   * A break is not a pause and the two are deliberately separate. Pause means
+   * "I have stepped away, count nothing"; break means "I am resting on
+   * purpose, count it as rest". Folding one into the other would make the
+   * record unreadable, which is the whole reason for keeping it.
+   */
+  phase: 'focus' | 'break';
+  /**
+   * How long this sitting's breaks run, in seconds, or null for a sitting
+   * that does not take them and simply runs past its block target the way it
+   * always did. Seeded from the reader's preference when the session starts.
+   */
+  breakSeconds: number | null;
+  /** When the whole sitting began. Only the "since 14:20" line reads it. */
+  sittingStartedAt: number;
+  /** When the current stretch began, pauses included. */
+  stretchStartedAt: number;
+  /** Stretches already finished, oldest first. */
+  segments: SessionSegment[];
 }
 
 interface PendingTimerLog {
   courseId: string;
   taskId: string | null;
   date: string;
+  /** Focus only. Rest is reported beside it, never folded into it. */
   durationSeconds: number;
-  recoveryReason?: 'away' | 'max';
+  breakSeconds: number;
+  segments: SessionSegment[];
+  recoveryReason?: 'away' | 'max' | 'break';
 }
 
 interface TimerContextValue {
@@ -52,10 +89,28 @@ interface TimerContextValue {
   hydrated: boolean;
   active: TimerState | null;
   pendingLog: PendingTimerLog | null;
+  /**
+   * The current stretch, which is what the clock face shows: time into this
+   * block, or time into this break. For the sitting's running totals, which
+   * is what the dock and the log sheet want, use `focusSeconds`.
+   */
   elapsedSeconds: number;
+  /** Focus across the whole sitting, breaks excluded. What gets logged. */
+  focusSeconds: number;
+  /** Rest across the whole sitting. */
+  breakSeconds: number;
+  onBreak: boolean;
+  /** How long this sitting's breaks run, or null when it takes none. */
+  breakTarget: number | null;
   start: (courseId: string, taskId?: string | null, targetSeconds?: number | null) => void;
-  /** Push a running block's target out, the timer's "+5 min". */
+  /** Push the running stretch's target out, the timer's "+5 min". */
   extend: (seconds: number) => void;
+  /** End the block here and rest. Defaults to the sitting's break length. */
+  startBreak: (seconds?: number) => void;
+  /** End the break and open the next block. */
+  endBreak: () => void;
+  /** Re-arm the break length mid-sitting. Null means stop taking them. */
+  setBreakLength: (seconds: number | null) => void;
   pause: () => void;
   resume: () => void;
   cancel: () => void;
@@ -73,6 +128,8 @@ const PENDING_NOTIFICATION_KEY = 'lums.pendingTimerLogNotification';
 const MAX_TIMER_MS = MAX_SESSION_SECONDS * 1000;
 const RUNNING_CHECKPOINT_MS = 10 * 1000;
 const STALE_RUNNING_MS = 4 * 60 * 60 * 1000;
+/** What "take a break" means when the reader has breaks switched off. */
+const DEFAULT_BREAK_SECONDS = 5 * 60;
 const TICK_MS = 500;
 
 /* localStorage is not always there to be written to: Safari's private mode
@@ -136,6 +193,7 @@ function pendingLogSignature(log: PendingTimerLog): string {
     log.taskId ?? '',
     log.date,
     log.durationSeconds,
+    log.breakSeconds,
     log.recoveryReason ?? '',
   ].join('|');
 }
@@ -194,6 +252,42 @@ function notifyPendingLog(log: PendingTimerLog | null): void {
   }
 }
 
+/**
+ * The only thing that reaches a phone lying face down.
+ *
+ * The chime is scheduled on the audio clock and survives a backgrounded tab,
+ * but not a locked screen, because iOS suspends the audio context along with
+ * it. This is the fallback, and it is deliberately not a second alarm: it
+ * says what happened and goes quiet.
+ */
+function notifyBreakOver(): void {
+  if (
+    typeof window === 'undefined' ||
+    !document.hidden ||
+    !('Notification' in window) ||
+    window.Notification.permission !== 'granted'
+  ) {
+    return;
+  }
+
+  try {
+    const notification = new window.Notification("Break\u2019s up", {
+      body: 'Akada is holding the next block.',
+      icon: '/icon.svg',
+      tag: 'akada-break-over',
+    });
+
+    notification.onclick = () => {
+      window.focus();
+      window.location.href = '/timer';
+      notification.close();
+    };
+  } catch {
+    // Some browsers only allow notifications from a service worker. Losing
+    // the nudge is survivable; the chime and the screen both still say so.
+  }
+}
+
 function isoDateFromMs(value: number): string {
   const date = new Date(Number.isFinite(value) ? value : Date.now());
   const y = date.getFullYear();
@@ -230,7 +324,47 @@ function sanitizeActive(value: unknown): TimerState | null {
       typeof state.sessionId === 'string' && state.sessionId.trim()
         ? state.sessionId
         : `s${startedAt}`,
+    // A state written before continuous mode has none of what follows, and
+    // reads back as a single unbroken focus stretch, which is exactly what it
+    // was. Nothing in storage changes meaning under an upgrade.
+    phase: state.phase === 'break' ? 'break' : 'focus',
+    breakSeconds: sanitizeBreak(state.breakSeconds),
+    sittingStartedAt: Number.isFinite(Number(state.sittingStartedAt))
+      ? Number(state.sittingStartedAt)
+      : startedAt - Math.max(0, accumulatedMs),
+    stretchStartedAt: Number.isFinite(Number(state.stretchStartedAt))
+      ? Number(state.stretchStartedAt)
+      : startedAt - Math.max(0, accumulatedMs),
+    segments: sanitizeSegments(state.segments),
   };
+}
+
+/**
+ * A break length, which is bounded far tighter than a session (see
+ * MAX_BREAK_SECONDS). Zero and below mean this sitting takes no breaks.
+ */
+function sanitizeBreak(value: unknown): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(MAX_BREAK_SECONDS, Math.round(n));
+}
+
+/** The reader's chosen break length, in seconds, or null for none. */
+function preferredBreakSeconds(): number | null {
+  try {
+    return sanitizeBreak(readPreferences().breakMinutes * 60);
+  } catch {
+    return null;
+  }
+}
+
+/** Whether the chime should sound at all. Off is a supported answer. */
+function soundOn(): boolean {
+  try {
+    return readPreferences().sessionSound;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -249,13 +383,20 @@ function sanitizePendingLog(value: unknown): PendingTimerLog | null {
   if (typeof log.courseId !== 'string' || log.courseId.trim() === '') return null;
   const durationSeconds = clampSessionSeconds(log.durationSeconds);
   if (durationSeconds <= 0) return null;
+  const segments = sanitizeSegments(log.segments);
   return {
     courseId: log.courseId,
     taskId: typeof log.taskId === 'string' ? log.taskId : null,
     date: typeof log.date === 'string' && log.date.trim() ? log.date : isoDateFromMs(Date.now()),
     durationSeconds,
+    // The chain is the authority where there is one: a hand-edited total
+    // should not be able to disagree with the stretches it is made of.
+    breakSeconds: segments.length
+      ? totalBreakSeconds(segments)
+      : clampSessionSeconds(log.breakSeconds),
+    segments,
     recoveryReason:
-      log.recoveryReason === 'away' || log.recoveryReason === 'max'
+      log.recoveryReason === 'away' || log.recoveryReason === 'max' || log.recoveryReason === 'break'
         ? log.recoveryReason
         : undefined,
   };
@@ -322,18 +463,116 @@ function saveActiveIfCurrent(state: TimerState): boolean {
   }
 }
 
+/**
+ * How long the *current stretch* has run. A break is clamped to its own much
+ * tighter ceiling, so the number on screen can never claim more rest than the
+ * database would accept.
+ */
+function stretchSecondsAt(state: TimerState, atMs: number): number {
+  const liveMs = state.isPaused ? 0 : Math.max(0, atMs - state.startedAt);
+  const seconds = (state.accumulatedMs + liveMs) / 1000;
+  return state.phase === 'break' ? clampBreakSeconds(seconds) : clampSessionSeconds(seconds);
+}
+
 function computeElapsed(state: TimerState): number {
   const safeState = sanitizeActive(state);
   if (!safeState) return 0;
-  const liveMs = safeState.isPaused ? 0 : Math.max(0, Date.now() - safeState.startedAt);
-  return clampSessionSeconds((safeState.accumulatedMs + liveMs) / 1000);
+  return stretchSecondsAt(safeState, Date.now());
 }
 
 function computeElapsedAt(state: TimerState, atMs: number): number {
   const safeState = sanitizeActive(state);
   if (!safeState) return 0;
-  const liveMs = safeState.isPaused ? 0 : Math.max(0, atMs - safeState.startedAt);
-  return clampSessionSeconds((safeState.accumulatedMs + liveMs) / 1000);
+  return stretchSecondsAt(safeState, atMs);
+}
+
+/** Focus and rest across the whole sitting, the stretch in progress included. */
+function sittingTotals(
+  state: TimerState,
+  atMs: number,
+): { focusSeconds: number; breakSeconds: number } {
+  let focus = 0;
+  let rest = 0;
+  for (const segment of state.segments) {
+    if (segment.kind === 'break') rest += segment.seconds;
+    else focus += segment.seconds;
+  }
+  const current = stretchSecondsAt(state, atMs);
+  if (state.phase === 'break') rest += current;
+  else focus += current;
+  return { focusSeconds: clampSessionSeconds(focus), breakSeconds: clampSessionSeconds(rest) };
+}
+
+/** Focus this sitting has accumulated against the 18h ceiling. */
+function focusSecondsAt(state: TimerState, atMs: number): number {
+  return sittingTotals(state, atMs).focusSeconds;
+}
+
+/**
+ * Write the stretch in progress into the chain and hand back the new one.
+ *
+ * A stretch that rounds to nothing is dropped rather than recorded: tapping
+ * "back to it" the instant the chime lands should not leave a zero-second
+ * break in the record, and the database would refuse it anyway.
+ */
+function closeStretch(state: TimerState, atMs: number): SessionSegment[] {
+  const seconds = stretchSecondsAt(state, atMs);
+  if (seconds <= 0) return state.segments;
+  return [
+    ...state.segments,
+    {
+      kind: state.phase,
+      ordinal: state.segments.length + 1,
+      startedAt: new Date(state.stretchStartedAt).toISOString(),
+      seconds,
+      targetSeconds: state.phase === 'break' ? state.breakSeconds : state.targetSeconds,
+    },
+  ];
+}
+
+/** End the block here and rest. The clock restarts on the break. */
+function toBreakState(state: TimerState, atMs: number, breakSeconds: number): TimerState {
+  return {
+    ...state,
+    phase: 'break',
+    segments: closeStretch(state, atMs),
+    breakSeconds,
+    startedAt: atMs,
+    stretchStartedAt: atMs,
+    accumulatedMs: 0,
+    // A break inherits nothing from the block: a session paused at the moment
+    // its block ran out should come back to a break that is actually running,
+    // not one frozen behind a pause the reader has forgotten about.
+    isPaused: false,
+    lastSeenAt: atMs,
+  };
+}
+
+/** End the break and open the next block, at the same length as the last. */
+function toFocusState(state: TimerState, atMs: number): TimerState {
+  return {
+    ...state,
+    phase: 'focus',
+    segments: closeStretch(state, atMs),
+    startedAt: atMs,
+    stretchStartedAt: atMs,
+    accumulatedMs: 0,
+    isPaused: false,
+    lastSeenAt: atMs,
+  };
+}
+
+/**
+ * Ring for the break now and arrange the note that ends it.
+ *
+ * Both are set going in, because the second one has to be on the audio clock
+ * before the tab has any chance to be backgrounded. See lib/chime.ts.
+ */
+function announceBreak(breakSeconds: number): void {
+  cancelChime();
+  if (!soundOn()) return;
+  ringChime('break');
+  scheduleChime('back', breakSeconds);
 }
 
 function buildPendingLog(
@@ -343,13 +582,20 @@ function buildPendingLog(
 ): PendingTimerLog | null {
   const safeState = sanitizeActive(state);
   if (!safeState) return null;
-  const durationSeconds = computeElapsedAt(safeState, stoppedAt);
+  const segments = sanitizeSegments(closeStretch(safeState, stoppedAt));
+  const durationSeconds = clampSessionSeconds(
+    segments.reduce((sum, segment) => (segment.kind === 'focus' ? sum + segment.seconds : sum), 0),
+  );
+  // A sitting that was nothing but a break has no hours to log and nothing
+  // worth keeping the shape of.
   if (durationSeconds <= 0) return null;
   return {
     courseId: safeState.courseId,
     taskId: safeState.taskId,
     date: safeState.startedDate,
     durationSeconds,
+    breakSeconds: totalBreakSeconds(segments),
+    segments,
     recoveryReason,
   };
 }
@@ -372,11 +618,25 @@ function loadActiveSnapshot(): { active: TimerState | null; pendingLog: PendingT
     }
 
     const now = Date.now();
-    const liveMs = parsed.isPaused ? 0 : Math.max(0, now - parsed.startedAt);
     const staleRunning = !parsed.isPaused && now - parsed.lastSeenAt >= STALE_RUNNING_MS;
-    if (staleRunning || parsed.accumulatedMs + liveMs >= MAX_TIMER_MS) {
-      const stoppedAt = staleRunning ? parsed.lastSeenAt : now;
-      const pendingLog = buildPendingLog(parsed, stoppedAt, staleRunning ? 'away' : 'max');
+    // A break past its ceiling closes the sitting where the ceiling was
+    // reached. Returning to the tab the next morning should log yesterday's
+    // study, not the night as rest.
+    const breakOverrun =
+      parsed.phase === 'break' && stretchSecondsAt(parsed, now) >= MAX_BREAK_SECONDS;
+    const maxReached = focusSecondsAt(parsed, now) >= MAX_SESSION_SECONDS;
+    if (staleRunning || breakOverrun || maxReached) {
+      const stoppedAt = staleRunning
+        ? parsed.lastSeenAt
+        : breakOverrun
+          ? parsed.startedAt + (MAX_BREAK_SECONDS * 1000 - parsed.accumulatedMs)
+          : now;
+      const reason: PendingTimerLog['recoveryReason'] = staleRunning
+        ? 'away'
+        : breakOverrun
+          ? 'break'
+          : 'max';
+      const pendingLog = buildPendingLog(parsed, stoppedAt, reason);
       saveActive(null);
       savePendingLog(pendingLog);
       return { active: null, pendingLog };
@@ -397,6 +657,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const tickRef = useRef<number | null>(null);
   const activeRef = useRef<TimerState | null>(null);
   const pendingLogRef = useRef<PendingTimerLog | null>(null);
+  /** Which break the "break's up" notice has already been raised for. */
+  const breakNoticeRef = useRef<string | null>(null);
 
   useEffect(() => {
     activeRef.current = active;
@@ -417,6 +679,16 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       activeRef.current = snapshot.active;
       setActive(snapshot.active);
       setElapsed(computeElapsed(snapshot.active));
+      // A reload mid-break took the old page's audio clock with it, and the
+      // note that was sitting on it. Put it back on the new one. The context
+      // may be suspended until the reader next touches the page, since this
+      // is not a user gesture; that is what flushChime and the notification
+      // are for.
+      const resting = snapshot.active;
+      if (resting.phase === 'break' && resting.breakSeconds != null && soundOn()) {
+        const left = resting.breakSeconds - computeElapsed(resting);
+        if (left > 0) scheduleChime('back', left);
+      }
     }
     setHydrated(true);
   }, []);
@@ -469,6 +741,10 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         if (current) saveActiveIfCurrent({ ...current, lastSeenAt: Date.now() });
         return;
       }
+      // A note whose moment passed while the audio context was suspended,
+      // which is what a locked phone does to it, never arrived and never
+      // will. Ringing it a minute late still tells the reader what happened.
+      flushChime();
       syncFromStorage();
     };
 
@@ -499,6 +775,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       stoppedAt: number,
       reason: PendingTimerLog['recoveryReason'],
     ) => {
+      cancelChime();
+      breakNoticeRef.current = null;
       const log = buildPendingLog(current, stoppedAt, reason);
       activeRef.current = null;
       setActive(null);
@@ -511,6 +789,13 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    const commit = (next: TimerState) => {
+      activeRef.current = next;
+      setActive(next);
+      saveActive(next);
+      setElapsed(computeElapsed(next));
+    };
+
     tickRef.current = window.setInterval(() => {
       const now = Date.now();
       const current = activeRef.current ?? active;
@@ -518,15 +803,70 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         closeOut(current, current.lastSeenAt, 'away');
         return;
       }
-      // The 18h ceiling used to be enforced only on the way back from
-      // storage. A tab left open past it kept counting while the readout sat
-      // clamped at 18:00:00, so the number on screen stopped being the number
-      // being measured, and stopping then logged a silently truncated 18h.
-      // The ceiling has to close the session where it is reached.
-      const liveMs = now - current.startedAt;
-      if (!current.isPaused && current.accumulatedMs + liveMs >= MAX_TIMER_MS) {
-        closeOut(current, current.startedAt + (MAX_TIMER_MS - current.accumulatedMs), 'max');
-        return;
+
+      // A note whose moment passed while the context was asleep is rung late
+      // here rather than not at all.
+      flushChime();
+
+      const stretch = stretchSecondsAt(current, now);
+
+      if (current.phase === 'break') {
+        // Rest has its own, much tighter ceiling: a timer left sitting on a
+        // break overnight closes the sitting out at the last believable
+        // moment instead of recording the night as considered rest.
+        if (!current.isPaused && stretch >= MAX_BREAK_SECONDS) {
+          closeOut(
+            current,
+            current.startedAt + (MAX_BREAK_SECONDS * 1000 - current.accumulatedMs),
+            'break',
+          );
+          return;
+        }
+        // The break is up. The chime was arranged when it started; this is
+        // the nudge for a phone that is face down, and it fires once.
+        if (current.breakSeconds != null && stretch >= current.breakSeconds) {
+          const key = `${current.sessionId}:${current.segments.length}`;
+          if (breakNoticeRef.current !== key) {
+            breakNoticeRef.current = key;
+            notifyBreakOver();
+          }
+        }
+      } else {
+        // The 18h ceiling used to be enforced only on the way back from
+        // storage. A tab left open past it kept counting while the readout sat
+        // clamped at 18:00:00, so the number on screen stopped being the number
+        // being measured, and stopping then logged a silently truncated 18h.
+        // The ceiling has to close the session where it is reached. It counts
+        // focus, because rest is not what it is protecting.
+        const priorFocusMs = current.segments.reduce(
+          (sum, segment) => (segment.kind === 'focus' ? sum + segment.seconds * 1000 : sum),
+          0,
+        );
+        const liveMs = now - current.startedAt;
+        if (!current.isPaused && priorFocusMs + current.accumulatedMs + liveMs >= MAX_TIMER_MS) {
+          closeOut(
+            current,
+            current.startedAt + (MAX_TIMER_MS - priorFocusMs - current.accumulatedMs),
+            'max',
+          );
+          return;
+        }
+        // The block is done and the sitting takes breaks, so it takes one.
+        // Nothing is asked: a dialog at the end of a block is a second thing
+        // to decide at the exact moment the reader has stopped deciding.
+        // "Back to it" is one tap away on the break screen.
+        if (
+          !current.isPaused &&
+          current.targetSeconds != null &&
+          current.breakSeconds != null &&
+          stretch >= current.targetSeconds
+        ) {
+          const at = current.startedAt + (current.targetSeconds * 1000 - current.accumulatedMs);
+          announceBreak(current.breakSeconds);
+          breakNoticeRef.current = null;
+          commit(toBreakState(current, Math.min(at, now), current.breakSeconds));
+          return;
+        }
       }
       // setElapsed on every fire re-rendered every consumer four times a
       // second to show the same digits. Only whole seconds are ever
@@ -594,8 +934,20 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       lastSeenAt: now,
       targetSeconds: sanitizeTarget(targetSeconds),
       sessionId: `s${now}-${Math.random().toString(36).slice(2, 8)}`,
+      phase: 'focus',
+      // Read once, at the start, so changing the preference mid-sitting does
+      // not silently move the break the reader is already counting on.
+      breakSeconds: preferredBreakSeconds(),
+      sittingStartedAt: now,
+      stretchStartedAt: now,
+      segments: [],
     };
     maybeRequestTimerNotificationPermission();
+    // Every browser refuses to open an audio context outside a user gesture,
+    // and one opened later is born suspended, so the chime arranged half an
+    // hour from now would never sound. This click is the gesture.
+    primeChime();
+    breakNoticeRef.current = null;
     // A new sitting is what "did the line work?" means. Fails silently and
     // does nothing at all if no Next Mark was shown recently.
     void logSessionFollowed();
@@ -610,21 +962,105 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  /**
-   * "+5 min". Only means anything to a block: an open session has nothing to
-   * push out, so the call is dropped rather than silently turning it into one.
-   */
-  const extend = useCallback((seconds: number) => {
-    const running = activeRef.current;
-    if (!running || running.targetSeconds == null) return;
-    const next = {
-      ...running,
-      targetSeconds: sanitizeTarget(running.targetSeconds + seconds),
-    };
+  const applyActive = useCallback((next: TimerState) => {
     activeRef.current = next;
     setActive(next);
     saveActive(next);
+    setElapsed(computeElapsed(next));
   }, []);
+
+  /**
+   * "+5 min", on whichever stretch is running. Only means anything to a
+   * stretch with a target: an open session has nothing to push out, so the
+   * call is dropped rather than silently turning it into one.
+   */
+  const extend = useCallback(
+    (seconds: number) => {
+      const running = activeRef.current;
+      if (!running) return;
+
+      if (running.phase === 'break') {
+        if (running.breakSeconds == null) return;
+        const breakSeconds = sanitizeBreak(running.breakSeconds + seconds);
+        if (breakSeconds == null) return;
+        const next = { ...running, breakSeconds };
+        // The note that ends the break went onto the audio clock when the
+        // break started, so pushing the break out has to move it too.
+        cancelChime();
+        if (soundOn()) {
+          const left = breakSeconds - stretchSecondsAt(next, Date.now());
+          if (left > 0) scheduleChime('back', left);
+        }
+        breakNoticeRef.current = null;
+        applyActive(next);
+        return;
+      }
+
+      if (running.targetSeconds == null) return;
+      applyActive({ ...running, targetSeconds: sanitizeTarget(running.targetSeconds + seconds) });
+    },
+    [applyActive],
+  );
+
+  /**
+   * End the block here and rest.
+   *
+   * Reached by hand from the timer, and by the tick when a block runs out on
+   * a sitting that takes breaks. Turning breaks off in Appearance and then
+   * asking for one explicitly is not a contradiction, so it falls back to a
+   * sensible five rather than refusing.
+   */
+  const startBreak = useCallback(
+    (seconds?: number) => {
+      const running = activeRef.current;
+      if (!running || running.phase === 'break') return;
+      const breakSeconds =
+        sanitizeBreak(seconds) ??
+        running.breakSeconds ??
+        preferredBreakSeconds() ??
+        DEFAULT_BREAK_SECONDS;
+      primeChime();
+      announceBreak(breakSeconds);
+      breakNoticeRef.current = null;
+      applyActive(toBreakState(running, Date.now(), breakSeconds));
+    },
+    [applyActive],
+  );
+
+  /** End the break, open the next block at the same length as the last. */
+  const endBreak = useCallback(() => {
+    const running = activeRef.current;
+    if (!running || running.phase !== 'break') return;
+    cancelChime();
+    breakNoticeRef.current = null;
+    applyActive(toFocusState(running, Date.now()));
+  }, [applyActive]);
+
+  /** Re-arm the break length mid-sitting. Null stops the sitting taking them. */
+  const setBreakLength = useCallback(
+    (seconds: number | null) => {
+      const running = activeRef.current;
+      if (!running) return;
+      const breakSeconds = seconds == null ? null : sanitizeBreak(seconds);
+      const next = { ...running, breakSeconds };
+
+      if (running.phase === 'break') {
+        cancelChime();
+        breakNoticeRef.current = null;
+        // Switching breaks off while resting is a way of saying "back to it".
+        if (breakSeconds == null) {
+          applyActive(toFocusState(next, Date.now()));
+          return;
+        }
+        if (soundOn()) {
+          const left = breakSeconds - stretchSecondsAt(next, Date.now());
+          if (left > 0) scheduleChime('back', left);
+        }
+      }
+      applyActive(next);
+    },
+    [applyActive],
+  );
 
   const recoverStaleRunningTimer = useCallback((state: TimerState, now: number): PendingTimerLog | null => {
     const safeState = sanitizeActive(state);
@@ -683,6 +1119,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const cancel = useCallback(() => {
+    cancelChime();
+    breakNoticeRef.current = null;
     activeRef.current = null;
     setActive(null);
     saveActive(null);
@@ -692,6 +1130,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const stop = useCallback(() => {
     const current = activeRef.current;
     if (!current) return null;
+    cancelChime();
+    breakNoticeRef.current = null;
     const now = Date.now();
     const staleRecovered = recoverStaleRunningTimer(current, now);
     if (staleRecovered) return staleRecovered;
@@ -715,6 +1155,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearTimerState = useCallback(() => {
+    cancelChime();
+    breakNoticeRef.current = null;
     activeRef.current = null;
     pendingLogRef.current = null;
     setActive(null);
@@ -723,6 +1165,16 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     clearStoredTimerState();
   }, []);
 
+  /* The sitting's running totals. `elapsedSeconds` only ever publishes whole
+     seconds, so this recomputes once a second rather than four times. */
+  const totals = useMemo(
+    () => (active ? sittingTotals(active, Date.now()) : { focusSeconds: 0, breakSeconds: 0 }),
+    // elapsedSeconds is the clock these are read against; it is a dependency
+    // even though the expression does not name it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [active, elapsedSeconds],
+  );
+
   return (
     <TimerContext.Provider
       value={{
@@ -730,8 +1182,15 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         active,
         pendingLog,
         elapsedSeconds,
+        focusSeconds: totals.focusSeconds,
+        breakSeconds: totals.breakSeconds,
+        onBreak: active?.phase === 'break',
+        breakTarget: active?.breakSeconds ?? null,
         start,
         extend,
+        startBreak,
+        endBreak,
+        setBreakLength,
         pause,
         resume,
         cancel,

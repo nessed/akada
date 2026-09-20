@@ -10,7 +10,13 @@ import type {
   TaskFilters,
   UserSettings,
 } from './types';
-import { clampSessionSeconds, isLoggableDuration, sanitizeSession } from '@/lib/session-safety';
+import {
+  clampSessionSeconds,
+  isLoggableDuration,
+  sanitizeSegments,
+  sanitizeSession,
+  totalBreakSeconds,
+} from '@/lib/session-safety';
 import { seasonLabel } from '@/lib/utils';
 import {
   clampDailyGoalHours,
@@ -284,6 +290,7 @@ export class LocalAdapter implements DataProvider {
     if (!courseId) throw new Error('Course is required');
     const sessions = read<StoredSession[]>(KEYS.sessions, []);
     const course = read<StoredCourse[]>(KEYS.courses, []).find((c) => c.id === courseId);
+    const segments = sanitizeSegments(input.segments);
     const session: StoredSession = {
       ...input,
       courseId,
@@ -291,6 +298,10 @@ export class LocalAdapter implements DataProvider {
       date: requireIsoDate(input.date, 'Session date'),
       durationSeconds: clampSessionSeconds(input.durationSeconds),
       note: cleanSessionNote(input.note),
+      breakSeconds: segments.length
+        ? totalBreakSeconds(segments)
+        : clampSessionSeconds(input.breakSeconds ?? 0),
+      segments,
       id: uid(),
       createdAt: nowIso(),
       semesterId: course?.semesterId ?? activeSemesterId(),

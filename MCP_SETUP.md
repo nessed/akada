@@ -41,7 +41,8 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `update_tasks`: Change tasks that already exist, including their notes and subtasks.
 - `complete_tasks`: Tick tasks off, or put them back on the list.
 - `log_study_session`: Record study time against a course, with an optional task and note.
-- `get_weekly_stats`: Read one week's hours against goal, tasks closed, and the weekly run.
+- `get_weekly_stats`: Read one week's hours against goal, break time, tasks closed, and the weekly run.
+- `get_focus_pattern`: Read how the sittings themselves were shaped: block lengths, breaks against the lengths they were set to, and when in the day the work happens.
 - `get_grading_scheme`: Read how a course is marked, accepted and proposed.
 - `set_grading_scheme`: Propose how a course is marked, read off its outline.
 - `delete_course`: Permanently delete a course and its associated tasks and sessions.
@@ -117,7 +118,8 @@ than the denormalized `tasks.semester_id`.
   - `date` (`string`, optional, format `YYYY-MM-DD`): Defaults to today. The server clock is UTC, so a student writing up a late-night sitting should pass their own date.
   - `task_id` (`string`, optional, UUID): Must belong to the same course. `sessions.task_id` is only `on delete set null`, so a mismatched pair would otherwise read back as time spent on the wrong course.
   - `note` (`string`, optional, up to 800 chars): `SESSION_NOTE_MAX` in `lib/planner-safety.ts`.
-- **Output**: The session's `id`, `date`, `duration_minutes`, `duration_seconds`, `note`, `task_id`, and `course`.
+  - `break_minutes` (`integer`, optional): Rest taken during the sitting. Reported separately and never added into `duration_minutes`, because the weekly goal and the run both read that column and would inflate together. Omitted from the insert when it is zero, so the write still runs against a project that has not re-run `supabase/schema.sql`.
+- **Output**: The session's `id`, `date`, `duration_minutes`, `duration_seconds`, `break_minutes`, `note`, `task_id`, and `course`.
 
 `semester_id` is filled by the `sessions_set_semester_id` trigger in
 `supabase/schema.sql`, exactly as the app's own `addSession` relies on.
@@ -129,7 +131,10 @@ than the denormalized `tasks.semester_id`.
 - **Parameters**:
   - `week_offset` (`integer`, -12 to 0, default: `0`): 0 for this week, -1 for last week.
   - `course_id` (`string`, optional, UUID): Narrow every figure to one course.
-- **Output**: `week` (`from`, `to`, `offset`), per-course `hours_logged` / `weekly_study_goal_hours` / `goal_met`, `totals`, the titles closed that week, and `weekly_run` / `weekly_run_best`.
+- **Output**: `week` (`from`, `to`, `offset`), per-course `hours_logged` / `break_hours` / `weekly_study_goal_hours` / `goal_met`, `totals`, the titles closed that week, and `weekly_run` / `weekly_run_best`.
+
+`hours_logged` is focus only. `break_hours` sits beside it and never moves
+`goal_met`: a goal is met on time worked.
 
 Monday-first, matching `weekBounds` in `lib/derive.ts`, so a number read here
 and a number on the Stats screen agree. The run is read through
@@ -137,6 +142,27 @@ and a number on the Stats screen agree. The run is read through
 than reimplemented in the route: a week counts on four study days or on three
 spread across three courses, and the week being lived extends the run without
 ever breaking it.
+
+### 6a. `get_focus_pattern`
+- **Title**: Read the shape of Akada study sittings
+- **Description**: How the student studies rather than how much. Block lengths, how often a block runs to the end of what it was set to, how long breaks run against how long they were meant to, how much focus comes before the first break, and when in the day the work happens.
+- **Annotations**: `readOnlyHint: true`
+- **Parameters**:
+  - `days` (`integer`, 1-180, default: `28`): How far back to read.
+  - `course_id` (`string`, optional, UUID): Narrow to one course.
+  - `utc_offset_minutes` (`integer`, -840 to 840, default: `0`): The student's offset from UTC, `300` for UTC+5. Without it the hourly breakdown is in UTC, and `by_hour_offset_minutes` in the output says which was used.
+- **Output**: `window`, `totals` (sittings, focus hours, break hours, break share), `blocks` (count, average, median, longest, how many had a set length, how many ran to the end, completion rate), `breaks` (the same plus `ran_over`, `overrun_rate` and `avg_overrun_minutes`), `rhythm` (focus before the first break, blocks per sitting, focus-to-break ratio), `by_hour`, and `by_course`.
+
+Reads `session_segments`, which the timer writes for a sitting it ran through
+continuous mode. Time logged after the fact contributes its totals but has no
+chain, so `sittings_with_a_recorded_shape` is normally lower than
+`totals.sittings`. On a project that has not re-run `supabase/schema.sql` the
+table is absent; the tool returns the totals it can and says so rather than
+failing the call.
+
+`avg_overrun_minutes` is the figure a break total on its own can never give:
+negative means breaks are habitually cut short, positive means a five-minute
+break is really a nineteen-minute one.
 
 ### 7. `get_grading_scheme`
 - **Title**: Read how an Akada course is graded
