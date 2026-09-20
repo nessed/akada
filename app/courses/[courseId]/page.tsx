@@ -288,7 +288,7 @@ export default function CoursePage() {
     <PageShell wide>
       <BackButton onClick={goBack} label="Courses" />
 
-      <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <header className="mb-[var(--density-block)] flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
           <p className="m-0 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
             <span className="eyebrow" style={{ color: course.color }}>
@@ -595,7 +595,7 @@ function ArchivedCourseView({
     <PageShell>
       <BackButton onClick={onBack} label="Courses" />
 
-      <header className="mb-[22px]">
+      <header className="mb-[var(--density-block)]">
         <div className="flex items-start justify-between gap-3">
           <p className="eyebrow m-0" style={{ color: course.color }}>
             {course.code}

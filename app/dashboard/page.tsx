@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import NextMarkLine from '@/components/progression/NextMarkLine';
 import { useProgression } from '@/lib/progression/use-progression';
+import StudySummary from '@/components/StudySummary';
 import CourseCard from '@/components/CourseCard';
 import TaskRow from '@/components/TaskRow';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
@@ -784,6 +785,15 @@ function DashboardPageContent() {
       {/* Next Mark. One quiet line naming the nearest true thing, and
           nothing at all when nothing is close. See components/progression. */}
       <NextMarkLine surface="today" />
+
+      {/* The day, with the week under it. Main computed today's total and
+          never drew it; this is that number, with the week against its goal
+          underneath. */}
+      <StudySummary
+        todaysSessions={todaysSessions}
+        sessions={sessions}
+        courses={courses}
+      />
 
       {courses.length === 0 ? (
         <EmptyPanel action="Add a course" onAction={openAddCourse} />
