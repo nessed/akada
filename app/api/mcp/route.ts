@@ -104,8 +104,11 @@ function toolCrashed(tool: string, cause: unknown) {
   return toolError(`Akada is not configured or your session has expired. Reconnect the connector and try again.${suffix}`);
 }
 
-async function activeSemesterId(token: AuthenticatedToken) {
-  const supabase = mcpSupabase(token.supabaseAccessToken);
+type McpSupabaseClient = ReturnType<typeof mcpSupabase>;
+
+// `supabase` is injectable (defaulting to a real client) so a test can drive
+// this against an in-memory double instead of a live project.
+async function activeSemesterId(token: AuthenticatedToken, supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken)) {
   const { data, error } = await supabase
     .from('user_settings')
     .select('active_semester_id')
@@ -315,6 +318,163 @@ function byDueDate(a: TaskRead, b: TaskRead) {
   }
   if (a.created_at === b.created_at) return 0;
   return a.created_at < b.created_at ? 1 : -1;
+}
+
+// Split out of `get_weekly_stats`'s registration so a test can call it
+// directly with an injected `supabase` double instead of driving the whole
+// MCP wire protocol.
+export async function getWeeklyStats(
+  token: AuthenticatedToken,
+  { week_offset, course_id }: { week_offset: number; course_id?: string },
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const semesterId = await activeSemesterId(token, supabase);
+    if (!semesterId) return result({ courses: [], message: 'No active semester is set in Akada.' });
+    // Monday-first, the same week the app's own weekBounds draws, so a
+    // number read here and a number read on the Stats screen agree.
+    const anchor = new Date();
+    anchor.setDate(anchor.getDate() + week_offset * 7);
+    const from = isoDate(startOfWeek(anchor));
+    const to = isoDate(endOfWeek(anchor));
+
+    const { data: courses, error: coursesError } = await supabase
+      .from('courses')
+      .select('id, code, name, weekly_goal_hours')
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId)
+      .order('code');
+    if (coursesError) return queryFailed('get_weekly_stats', 'courses read', coursesError, 'Akada could not load courses.');
+    if (course_id && !(courses ?? []).some((course) => course.id === course_id)) {
+      return toolError('That course is not available in your active Akada semester.');
+    }
+
+    // The run needs weeks before this one, so sessions are read over a
+    // wider window than the week being reported and filtered twice.
+    const runFloor = new Date();
+    runFloor.setDate(runFloor.getDate() - 120);
+    const [{ data: sessions, error: sessionsError }, { data: tasks, error: tasksError }] = await Promise.all([
+      supabase
+        .from('sessions')
+        // `*` rather than a column list so a project that has not re-run
+        // supabase/schema.sql, and therefore has no break_seconds, still
+        // answers instead of failing the whole week.
+        .select('*')
+        .eq('user_id', token.userId)
+        .eq('semester_id', semesterId)
+        .gte('date', isoDate(runFloor)),
+      // Same reasoning as sessions above: `pages` (like `description` and
+      // `subtasks` in get_tasks) is an additive migration column, and a
+      // named list breaks the whole query with 42703 outright on a project
+      // that predates it. `*` just returns what exists.
+      supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', token.userId)
+        .eq('semester_id', semesterId)
+        .eq('completed', true),
+    ]);
+    const readError = sessionsError ?? tasksError;
+    if (readError) {
+      return queryFailed('get_weekly_stats', sessionsError ? 'sessions read' : 'tasks read', readError, 'Akada could not load that week.');
+    }
+
+    const inWeek = (sessions ?? []).filter((session) => session.date >= from && session.date <= to);
+    const scoped = course_id ? inWeek.filter((session) => session.course_id === course_id) : inWeek;
+    const secondsByCourse = new Map<string, number>();
+    const breakSecondsByCourse = new Map<string, number>();
+    scoped.forEach((session) => {
+      secondsByCourse.set(session.course_id, (secondsByCourse.get(session.course_id) ?? 0) + Number(session.duration_seconds ?? 0));
+      breakSecondsByCourse.set(
+        session.course_id,
+        (breakSecondsByCourse.get(session.course_id) ?? 0) + Number(session.break_seconds ?? 0),
+      );
+    });
+
+    // Continuity is weeks, not days, and it is read through the very
+    // same engine the app draws from rather than reimplemented here. Two
+    // implementations of a rule this fiddly is two chances to tell the
+    // student a different number than their own screen shows.
+    const runCourses = (courses ?? []).map((course) => ({
+      id: course.id,
+      code: course.code,
+      name: course.name,
+      color: '',
+      weeklyGoalHours: Number(course.weekly_goal_hours ?? 0),
+      createdAt: '',
+    }));
+    const runs = readRuns(
+      runCourses,
+      readCredit(
+        runCourses,
+        (sessions ?? []).map((session) => ({
+          id: String(session.id),
+          courseId: session.course_id,
+          taskId: session.task_id ?? null,
+          date: session.date,
+          durationSeconds: Number(session.duration_seconds ?? 0),
+          note: '',
+          createdAt: '',
+        })),
+        (tasks ?? []).map((task) => ({
+          id: String(task.id),
+          courseId: task.course_id,
+          title: task.title,
+          dueDate: null,
+          priority: 'normal' as const,
+          completed: true,
+          completedAt: task.completed_at ?? null,
+          createdAt: '',
+          pages: task.pages ?? null,
+        })),
+      ),
+      isoDate(),
+    );
+
+    const closed = (tasks ?? []).filter((task) => {
+      const day = typeof task.completed_at === 'string' ? task.completed_at.slice(0, 10) : '';
+      if (day < from || day > to) return false;
+      return !course_id || task.course_id === course_id;
+    });
+
+    const perCourse = (courses ?? [])
+      .filter((course) => !course_id || course.id === course_id)
+      .map((course) => {
+        const seconds = secondsByCourse.get(course.id) ?? 0;
+        const restSeconds = breakSecondsByCourse.get(course.id) ?? 0;
+        const goalHours = Number(course.weekly_goal_hours);
+        return {
+          id: course.id,
+          code: course.code,
+          name: course.name,
+          hours_logged: Math.round((seconds / 3600) * 100) / 100,
+          // Rest, beside the hours and never inside them. A goal is met
+          // on time worked, so this never moves `goal_met`.
+          break_hours: Math.round((restSeconds / 3600) * 100) / 100,
+          weekly_study_goal_hours: goalHours,
+          goal_met: goalHours > 0 ? seconds >= goalHours * 3600 : null,
+        };
+      });
+
+    return result({
+      week: { from, to, offset: week_offset },
+      courses: perCourse,
+      totals: {
+        hours_logged: Math.round((scoped.reduce((sum, session) => sum + Number(session.duration_seconds ?? 0), 0) / 3600) * 100) / 100,
+        break_hours: Math.round((scoped.reduce((sum, session) => sum + Number(session.break_seconds ?? 0), 0) / 3600) * 100) / 100,
+        session_count: scoped.length,
+        tasks_completed: closed.length,
+      },
+      tasks_completed: closed.map((task) => ({ title: task.title, course_id: task.course_id })),
+      // Weeks, not days. A week counts on four study days, or on three
+      // spread across three courses; margin days are the grace layer and
+      // are reported separately rather than folded into the study count.
+      weekly_run: runs.current,
+      weekly_run_best: runs.best,
+    });
+  } catch (cause) {
+    return toolCrashed('get_weekly_stats', cause);
+  }
 }
 
 function createServer(token: AuthenticatedToken) {
@@ -791,152 +951,7 @@ function createServer(token: AuthenticatedToken) {
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ week_offset, course_id }) => {
-      try {
-        const semesterId = await activeSemesterId(token);
-        if (!semesterId) return result({ courses: [], message: 'No active semester is set in Akada.' });
-        const supabase = mcpSupabase(token.supabaseAccessToken);
-        // Monday-first, the same week the app's own weekBounds draws, so a
-        // number read here and a number read on the Stats screen agree.
-        const anchor = new Date();
-        anchor.setDate(anchor.getDate() + week_offset * 7);
-        const from = isoDate(startOfWeek(anchor));
-        const to = isoDate(endOfWeek(anchor));
-
-        const { data: courses, error: coursesError } = await supabase
-          .from('courses')
-          .select('id, code, name, weekly_goal_hours')
-          .eq('user_id', token.userId)
-          .eq('semester_id', semesterId)
-          .order('code');
-        if (coursesError) return queryFailed('get_weekly_stats', 'courses read', coursesError, 'Akada could not load courses.');
-        if (course_id && !(courses ?? []).some((course) => course.id === course_id)) {
-          return toolError('That course is not available in your active Akada semester.');
-        }
-
-        // The run needs weeks before this one, so sessions are read over a
-        // wider window than the week being reported and filtered twice.
-        const runFloor = new Date();
-        runFloor.setDate(runFloor.getDate() - 120);
-        const [{ data: sessions, error: sessionsError }, { data: tasks, error: tasksError }] = await Promise.all([
-          supabase
-            .from('sessions')
-            // `*` rather than a column list so a project that has not re-run
-            // supabase/schema.sql, and therefore has no break_seconds, still
-            // answers instead of failing the whole week.
-            .select('*')
-            .eq('user_id', token.userId)
-            .eq('semester_id', semesterId)
-            .gte('date', isoDate(runFloor)),
-          supabase
-            .from('tasks')
-            .select('id, course_id, title, completed, completed_at, pages')
-            .eq('user_id', token.userId)
-            .eq('semester_id', semesterId)
-            .eq('completed', true),
-        ]);
-        const readError = sessionsError ?? tasksError;
-        if (readError) {
-          return queryFailed('get_weekly_stats', sessionsError ? 'sessions read' : 'tasks read', readError, 'Akada could not load that week.');
-        }
-
-        const inWeek = (sessions ?? []).filter((session) => session.date >= from && session.date <= to);
-        const scoped = course_id ? inWeek.filter((session) => session.course_id === course_id) : inWeek;
-        const secondsByCourse = new Map<string, number>();
-        const breakSecondsByCourse = new Map<string, number>();
-        scoped.forEach((session) => {
-          secondsByCourse.set(session.course_id, (secondsByCourse.get(session.course_id) ?? 0) + Number(session.duration_seconds ?? 0));
-          breakSecondsByCourse.set(
-            session.course_id,
-            (breakSecondsByCourse.get(session.course_id) ?? 0) + Number(session.break_seconds ?? 0),
-          );
-        });
-
-        // Continuity is weeks, not days, and it is read through the very
-        // same engine the app draws from rather than reimplemented here. Two
-        // implementations of a rule this fiddly is two chances to tell the
-        // student a different number than their own screen shows.
-        const runCourses = (courses ?? []).map((course) => ({
-          id: course.id,
-          code: course.code,
-          name: course.name,
-          color: '',
-          weeklyGoalHours: Number(course.weekly_goal_hours ?? 0),
-          createdAt: '',
-        }));
-        const runs = readRuns(
-          runCourses,
-          readCredit(
-            runCourses,
-            (sessions ?? []).map((session) => ({
-              id: String(session.id),
-              courseId: session.course_id,
-              taskId: session.task_id ?? null,
-              date: session.date,
-              durationSeconds: Number(session.duration_seconds ?? 0),
-              note: '',
-              createdAt: '',
-            })),
-            (tasks ?? []).map((task) => ({
-              id: String(task.id),
-              courseId: task.course_id,
-              title: task.title,
-              dueDate: null,
-              priority: 'normal' as const,
-              completed: true,
-              completedAt: task.completed_at ?? null,
-              createdAt: '',
-              pages: task.pages ?? null,
-            })),
-          ),
-          isoDate(),
-        );
-
-        const closed = (tasks ?? []).filter((task) => {
-          const day = typeof task.completed_at === 'string' ? task.completed_at.slice(0, 10) : '';
-          if (day < from || day > to) return false;
-          return !course_id || task.course_id === course_id;
-        });
-
-        const perCourse = (courses ?? [])
-          .filter((course) => !course_id || course.id === course_id)
-          .map((course) => {
-            const seconds = secondsByCourse.get(course.id) ?? 0;
-            const restSeconds = breakSecondsByCourse.get(course.id) ?? 0;
-            const goalHours = Number(course.weekly_goal_hours);
-            return {
-              id: course.id,
-              code: course.code,
-              name: course.name,
-              hours_logged: Math.round((seconds / 3600) * 100) / 100,
-              // Rest, beside the hours and never inside them. A goal is met
-              // on time worked, so this never moves `goal_met`.
-              break_hours: Math.round((restSeconds / 3600) * 100) / 100,
-              weekly_study_goal_hours: goalHours,
-              goal_met: goalHours > 0 ? seconds >= goalHours * 3600 : null,
-            };
-          });
-
-        return result({
-          week: { from, to, offset: week_offset },
-          courses: perCourse,
-          totals: {
-            hours_logged: Math.round((scoped.reduce((sum, session) => sum + Number(session.duration_seconds ?? 0), 0) / 3600) * 100) / 100,
-            break_hours: Math.round((scoped.reduce((sum, session) => sum + Number(session.break_seconds ?? 0), 0) / 3600) * 100) / 100,
-            session_count: scoped.length,
-            tasks_completed: closed.length,
-          },
-          tasks_completed: closed.map((task) => ({ title: task.title, course_id: task.course_id })),
-          // Weeks, not days. A week counts on four study days, or on three
-          // spread across three courses; margin days are the grace layer and
-          // are reported separately rather than folded into the study count.
-          weekly_run: runs.current,
-          weekly_run_best: runs.best,
-        });
-      } catch (cause) {
-        return toolCrashed('get_weekly_stats', cause);
-      }
-    },
+    async ({ week_offset, course_id }) => getWeeklyStats(token, { week_offset, course_id }),
   );
 
   server.registerTool(
