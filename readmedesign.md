@@ -155,7 +155,7 @@ four-pixel floor so a short break does not vanish between its neighbours.
 
 It appears twice: under the controls while a break runs, and in the log sheet
 at the end, where the rest total sits beneath the focus total in a quieter
-mono. **Rest is reported and never added in.** The hours a course is credited
+mono and the block notes follow it in order. **Rest is reported and never added in.** The hours a course is credited
 with are the hours that were worked, and every goal, count and run in the app
 reads that one figure.
 
@@ -198,6 +198,18 @@ nothing else does.
   marks become the break's `5m / 10m / 15m`, and `NextMarkLine` under the
   controls becomes the sitting's chain. Neither is added to; both are
   exchanged, so the break screen is exactly as dense as the block screen.
+
+The break also asks the one question worth asking there. A sitting's own note
+is written at the end, by which point the first block is two hours and two
+breaks ago and gets remembered as "algorithms, I think"; a break is five
+minutes with nothing in them, and the block that just ended is still there. So
+`what did that cover?` sits under the controls as **a line to write on rather
+than a field to fill in**: no box, no label, no save, the question itself set
+faintly in the serif on the `.hand-underline` rule. Every keystroke is already
+on the block it belongs to. It is drawn only once there is a block to attach
+it to, because a line that silently swallowed what was typed into it would be
+worse than no line. The log sheet reads them back at the end, each block's
+length in mono beside what it covered in the serif.
 
 A break that runs past its length turns the digits `warn`, the muted
 terracotta, and never `priority` or anything redder. See "No Alarmist

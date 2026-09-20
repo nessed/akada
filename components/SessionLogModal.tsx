@@ -86,6 +86,12 @@ export default function SessionLogModal({
     Math.floor(rest / 3600) > 0 ? Math.floor((rest % 3600) / 60) : Math.floor(rest / 60),
   ).padStart(2, '0')}:${String(rest % 60).padStart(2, '0')}`;
   const breakCount = segments.filter((segment) => segment.kind === 'break').length;
+  // What was written on each break about the block before it. The last block
+  // of a sitting has no break after it, so it has none; the note field below
+  // is the freshest thing in mind at that point and covers it.
+  const blockNotes = segments.filter(
+    (segment) => segment.kind === 'focus' && (segment.note ?? '').trim() !== '',
+  );
 
   function toggleTag(tag: string) {
     const token = `#${tag}`;
@@ -163,6 +169,25 @@ export default function SessionLogModal({
             className="mt-3.5"
             height={10}
           />
+        )}
+
+        {/* The sitting read back to its reader, in the order it happened.
+            Each block's length in mono beside what it covered in the serif,
+            which is the same division of labour every other row in the app
+            uses: the digits are tabular, the writing is not. */}
+        {blockNotes.length > 0 && (
+          <ul className="mt-3.5 m-0 list-none space-y-1.5 p-0">
+            {blockNotes.map((segment) => (
+              <li key={segment.ordinal} className="flex items-baseline gap-2.5">
+                <span className="w-9 shrink-0 text-right font-mono tabular-nums text-[11px] text-muted-soft">
+                  {Math.max(1, Math.round(segment.seconds / 60))}m
+                </span>
+                <span className="font-serif italic text-[13px] leading-[1.45] text-ink-soft">
+                  {segment.note}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
 
         {contextMessage && (

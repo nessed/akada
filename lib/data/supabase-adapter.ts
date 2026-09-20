@@ -583,6 +583,10 @@ export class SupabaseAdapter implements DataProvider {
           started_at: segment.startedAt,
           seconds: segment.seconds,
           target_seconds: segment.targetSeconds,
+          // Mentioned only when there is one, so the insert still runs
+          // against a project that ran the first version of the schema
+          // script, before the column existed.
+          ...(segment.note ? { note: segment.note } : {}),
         })),
       );
       if (segmentError) {

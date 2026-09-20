@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
 import { useAmbientNoise } from '@/lib/use-ambient-noise';
-import { BREAK_LENGTHS, clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
+import {
+  BLOCK_NOTE_MAX,
+  BREAK_LENGTHS,
+  clampSessionSeconds,
+  isLoggableDuration,
+} from '@/lib/session-safety';
 import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import StudyFan from '@/components/StudyFan';
@@ -34,6 +39,14 @@ import { useCourses, useTasks } from '@/lib/data-hooks';
  */
 
 const BLOCK_LENGTHS = [25, 45, 60] as const;
+
+/* The hand-drawn rule, in the open screen's ink. That screen inverts with
+   literal values rather than the paper tokens, and `--underline-svg` carries
+   its colour inside a data URI where a token cannot reach it, so the whole
+   url is restated rather than a variable swapped. Mirrors the night tone's
+   own override in lib/preferences.ts. */
+const LIGHT_UNDERLINE =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%23EFE9DC' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.55'/></svg>\")";
 
 function clockFace(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
@@ -76,11 +89,13 @@ export default function TimerPage() {
     focusSeconds,
     onBreak,
     breakTarget,
+    lastBlockNote,
     start,
     extend,
     startBreak,
     endBreak,
     setBreakLength,
+    noteLastBlock,
     pause,
     resume,
     cancel,
@@ -415,6 +430,42 @@ export default function TimerPage() {
 
   const controls = resting ? restControls : focusControls;
 
+  /* The question asked where the answer still is.
+     A sitting's own note is written at the end, by which point the first
+     block is two hours and two breaks ago and gets remembered as "algorithms,
+     I think". A break is five minutes with nothing to do in them, so the
+     block that just ended is asked about here instead.
+
+     A line to write on rather than a field to fill in: no box, no label, the
+     question itself set faintly in the serif on the hand-drawn rule. There is
+     nothing to save and nothing to submit, because every keystroke is already
+     on the block it belongs to.
+
+     Only drawn when there is a block to attach it to. Tapping Break the
+     instant a session starts leaves a focus stretch too short to record, and
+     a line that silently swallowed what was typed into it would be worse than
+     no line. */
+  const blockNoteLine =
+    resting && blocksDone > 0 ? (
+      <input
+        type="text"
+        value={lastBlockNote}
+        onChange={(event) => noteLastBlock(event.target.value)}
+        maxLength={BLOCK_NOTE_MAX}
+        placeholder="what did that cover?"
+        aria-label="What the block you just finished covered"
+        className="hand-underline w-full max-w-[340px] bg-transparent text-center font-serif italic text-[14px] leading-[1.5] outline-none placeholder:text-muted-soft"
+        style={
+          night
+            ? ({
+                color: '#EFE9DC',
+                '--underline-svg': LIGHT_UNDERLINE,
+              } as React.CSSProperties)
+            : undefined
+        }
+      />
+    ) : null;
+
   const header = (
     <div className="flex items-center justify-between px-5 pt-[max(env(safe-area-inset-top),16px)] md:pt-5">
       <button
@@ -521,6 +572,8 @@ export default function TimerPage() {
                 {task ? <> · <span style={{ color: '#EFE9DC' }}>{task.title}</span></> : null}
                 {isPaused && !resting ? ' · paused' : ''}
               </p>
+              {blockNoteLine ? <div className="mt-5 max-w-[280px]">{blockNoteLine}</div> : null}
+
               {resting && liveChain.length > 1 ? (
                 <SessionChain
                   segments={liveChain}
@@ -611,8 +664,14 @@ export default function TimerPage() {
             A break takes the same slot rather than adding one: what the
             sitting has come to so far is the thing to look at while resting,
             and what it is approaching is not. */}
+        {blockNoteLine}
+
         {resting && liveChain.length > 1 ? (
-          <SessionChain segments={liveChain} color={color} className="-mt-4 w-full max-w-[340px]" />
+          <SessionChain
+            segments={liveChain}
+            color={color}
+            className={`w-full max-w-[340px] ${blockNoteLine ? '' : '-mt-4'}`}
+          />
         ) : (
           <NextMarkLine surface="timer" className="-mt-4" />
         )}

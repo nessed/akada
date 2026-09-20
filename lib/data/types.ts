@@ -53,6 +53,15 @@ export interface SessionSegment {
   seconds: number;
   /** Null for an open block, or a break the reader ended by hand. */
   targetSeconds: number | null;
+  /**
+   * What this block covered, written while the break after it runs.
+   *
+   * A sitting's own note is written at the end, by which point the first
+   * block is two hours and two breaks ago and gets remembered as "algorithms,
+   * I think". This is the same question asked where the answer is still
+   * there. Breaks do not carry one.
+   */
+  note?: string;
 }
 
 export interface Session {

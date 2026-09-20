@@ -154,6 +154,11 @@ create table if not exists session_segments (
   created_at     timestamptz not null default now()
 );
 
+-- What the block covered, written on the break straight after it while the
+-- answer is still there. Added after the table, so a project that ran the
+-- first version of this script picks it up on the next run. Breaks store ''.
+alter table session_segments add column if not exists note text not null default '';
+
 alter table session_segments enable row level security;
 
 -- ============================================================
@@ -531,6 +536,13 @@ begin
   ) then
     alter table session_segments add constraint session_segments_ordinal_positive
       check (ordinal > 0);
+  end if;
+  -- BLOCK_NOTE_MAX in lib/session-safety.ts.
+  if not exists (
+    select 1 from pg_constraint where conname = 'session_segments_note_length'
+  ) then
+    alter table session_segments add constraint session_segments_note_length
+      check (length(note) <= 200);
   end if;
 end $$;
 
