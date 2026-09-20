@@ -217,6 +217,57 @@ alter table user_settings add column if not exists avatar_url       text    not 
 alter table user_settings add column if not exists active_semester_id uuid;
 
 -- ============================================================
+-- 5b. PROGRESSION INSTRUMENTATION
+--
+-- Two small tables that record how the progression layer behaved, so that it
+-- can be judged rather than assumed. Neither is read by the app: nothing on
+-- any screen depends on a row here, and the progression layer itself is
+-- derived from sessions and tasks on read. Dropping both tables costs the
+-- product nothing except the ability to check its own work.
+--
+-- mark_candidates: every Next Mark candidate considered on an impression,
+-- including the ones that lost, and whether a session followed within the
+-- hour. Ranking is hand written today. This is the training data that makes
+-- it learnable later, and it is written now because it cannot be collected
+-- retroactively.
+--
+-- trust_pulse: one question, asked occasionally. Does this term still feel
+-- like an honest record of your work? It is a primary metric, not a nicety:
+-- if retention climbs while this answer falls, the system is manufacturing
+-- false records and the feature gets rolled back.
+-- ============================================================
+create table if not exists mark_candidates (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null default auth.uid(),
+  shown_at    timestamptz not null default now(),
+  surface     text not null,
+  -- The candidate list as ranked, with the shown one flagged. One row per
+  -- impression rather than per candidate, because the losers are only
+  -- meaningful next to the winner they lost to.
+  candidates  jsonb not null default '[]'::jsonb,
+  shown_id    text,
+  -- Filled in later by the client if a session starts within the hour. Null
+  -- means no session followed, or the question has not been answered yet.
+  followed_at timestamptz
+);
+
+alter table mark_candidates enable row level security;
+
+create table if not exists trust_pulse (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null default auth.uid(),
+  asked_on   date not null default current_date,
+  -- The answer to "does this term still feel like an honest record of your
+  -- work?". Null is a dismissal, which is itself worth keeping: a question
+  -- everybody closes is a question nobody wants asked.
+  answer     text check (answer is null or answer in ('yes', 'mostly', 'no')),
+  created_at timestamptz not null default now(),
+  unique (user_id, asked_on)
+);
+
+alter table trust_pulse enable row level security;
+
+-- ============================================================
 -- 6. BACKFILL + KEEP-IN-SYNC FOR SEMESTER SCOPING
 -- ============================================================
 
@@ -309,6 +360,8 @@ drop policy if exists "Users manage own tasks"    on tasks;
 drop policy if exists "Users manage own sessions" on sessions;
 drop policy if exists "Users manage own semester" on semesters;
 drop policy if exists "Users manage own settings" on user_settings;
+drop policy if exists "Users manage own mark candidates" on mark_candidates;
+drop policy if exists "Users manage own trust pulse" on trust_pulse;
 
 create policy "Users manage own courses"
   on courses for all
@@ -336,6 +389,18 @@ create policy "Users manage own semester"
 
 create policy "Users manage own settings"
   on user_settings for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "Users manage own mark candidates"
+  on mark_candidates for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "Users manage own trust pulse"
+  on trust_pulse for all
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
@@ -440,7 +505,8 @@ do $$
 declare
   t text;
 begin
-  foreach t in array array['courses', 'tasks', 'sessions', 'semesters', 'user_settings']
+  foreach t in array array['courses', 'tasks', 'sessions', 'semesters', 'user_settings',
+                           'mark_candidates', 'trust_pulse']
   loop
     if not exists (
       select 1 from pg_constraint where conname = t || '_user_id_fkey'
@@ -464,8 +530,8 @@ end $$;
 -- this app deliberately does not have. A SECURITY DEFINER function is the way
 -- to grant exactly that one capability and nothing else: it can only ever
 -- delete the caller's own row, because the id it deletes is auth.uid(). The
--- cascades in section 10 take the courses, tasks, sessions, semesters and
--- settings with it.
+-- cascades in section 10 take the courses, tasks, sessions, semesters,
+-- settings and the two progression instrumentation tables with it.
 -- ============================================================
 create or replace function public.delete_own_account()
 returns void

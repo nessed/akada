@@ -4,6 +4,8 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
+import NextMarkLine from '@/components/progression/NextMarkLine';
+import { useProgression } from '@/lib/progression/use-progression';
 import CourseCard from '@/components/CourseCard';
 import TaskRow from '@/components/TaskRow';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
@@ -34,7 +36,6 @@ import {
   daysBetween,
   isoDate,
   sessionsForDate,
-  studyStreakDays,
   PASTEL_PALETTE,
   totalSeconds,
 } from '@/lib/utils';
@@ -642,6 +643,11 @@ function DashboardPageContent() {
     }
   }
 
+  // Reads through the same SWR caches as everything above, so it costs no
+  // request. See lib/progression for why none of it is stored.
+  const { progression } = useProgression();
+  const run = progression?.runs.current ?? 0;
+
   if (leaving) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center px-8">
@@ -683,7 +689,6 @@ function DashboardPageContent() {
   );
   const overdueCount = overdueTasks.length;
   const urgentTasks = [...overdueTasks, ...todayTasks].slice(0, 5);
-  const streak = studyStreakDays(sessions);
   const now = new Date();
   /* "Sat, Sep 19, 2026" is how a receipt writes a date. The app writes it
      the way a diary does, so the parts are assembled rather than handed to
@@ -775,6 +780,10 @@ function DashboardPageContent() {
           </button>
         </div>
       </header>
+
+      {/* Next Mark. One quiet line naming the nearest true thing, and
+          nothing at all when nothing is close. See components/progression. */}
+      <NextMarkLine surface="today" />
 
       {courses.length === 0 ? (
         <EmptyPanel action="Add a course" onAction={openAddCourse} />
@@ -912,8 +921,14 @@ function DashboardPageContent() {
               onStart={(course, el) => openStartFor(null, el, false, course)}
             />
             <div className="flex items-center justify-between px-1 font-mono text-[11px] text-muted">
+              {/* Continuity is measured in weeks now, not days. A daily
+                  streak asks a student to study on the Saturday of a wedding
+                  and then punishes them for the wedding. */}
               <span>
-                Streak <span className="text-ink">{streak} days</span>
+                Run{' '}
+                <span className="text-ink">
+                  {run} {run === 1 ? 'week' : 'weeks'}
+                </span>
               </span>
               {semesterInfo && (
                 <span>

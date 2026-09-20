@@ -541,17 +541,17 @@ export default function StatsPage() {
 
       <GradeWeighting courses={courses} tasks={tasks} today={isoDate()} />
 
-      {/* Achievements live on Stamps now. A second, differently worded copy
-          here was two readings of the same sessions with two chances to
-          disagree about what had been earned. */}
+      {/* Progression lives on the Record tab. A second, differently worded
+          copy here was two readings of the same sessions with two chances to
+          disagree about what had happened. */}
       {sessions.length > 0 && (
         <Link
           href="/stamps"
           className="mt-[var(--density-gap)] block rounded-[14px] border border-dashed border-line-strong px-5 py-4 no-underline transition-colors hover:bg-paper-2"
         >
-          <p className="eyebrow m-0">Stamps</p>
+          <p className="eyebrow m-0">The record</p>
           <p className="m-0 mt-1.5 font-serif text-[15px] italic text-ink-soft">
-            The streak, this week&rsquo;s challenge and what has been earned &rarr;
+            The run in weeks, your course pages and the impressions &rarr;
           </p>
         </Link>
       )}

@@ -75,7 +75,7 @@ const NAV: NavItem[] = [
   },
   {
     href: '/stamps',
-    label: 'Stamps',
+    label: 'Record',
     icon: (
       <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="8" />
