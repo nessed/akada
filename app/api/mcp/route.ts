@@ -47,7 +47,16 @@ const TaskReadSchema = z.object({
 const TasksReadResponseSchema = z.object({
   schema_version: z.literal('akada.tasks.v1'),
   tasks: z.array(TaskReadSchema),
-  meta: z.object({ include_completed: z.boolean(), course_id: z.string().nullable(), count: z.number().int() }),
+  // `count` is how many tasks came back. `total` is how many matched, and
+  // `has_more` says the two differ. Reporting only the first meant a student
+  // with 140 tasks got 100 of them and heard the list described as complete.
+  meta: z.object({
+    include_completed: z.boolean(),
+    course_id: z.string().nullable(),
+    count: z.number().int(),
+    total: z.number().int(),
+    has_more: z.boolean(),
+  }),
   message: z.string().optional(),
 });
 
@@ -68,6 +77,11 @@ function result(value: unknown) {
 
 function normalize(value: string) {
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** A course code with the spaces and dashes taken out: "CS 200" -> "cs200". */
+function normalizeCode(value: string) {
+  return value.toLowerCase().replace(/[\s-]/g, '');
 }
 
 function toolError(message: string) {
@@ -339,15 +353,27 @@ function createServer(token: AuthenticatedToken) {
           .eq('semester_id', semesterId)
           .order('code');
         if (error) return queryFailed('find_course', 'courses read', error, 'Akada could not load courses.');
+        // Two needles, because a course code is written both ways. `normalize`
+        // collapses runs of whitespace but keeps one, so a course stored as
+        // "CS 200" never matched a student who typed "CS200" -- the exact
+        // spelling most likely to be pasted out of a syllabus. Codes are
+        // compared with the spaces and dashes taken out, the way
+        // lib/catalog/search.ts already compares them.
         const needle = normalize(query);
+        const codeNeedle = normalizeCode(query);
         const courses = (data ?? [])
-          .filter((course) => normalize(`${course.code} ${course.name}`).includes(needle))
+          .filter((course) =>
+            normalize(`${course.code} ${course.name}`).includes(needle)
+            || normalizeCode(course.code).includes(codeNeedle))
           .slice(0, 8)
           .map((course) => ({
             id: course.id,
             code: course.code,
             name: course.name,
-            credits: course.credits ?? 4,
+            // A course typed in by hand carries no credit count, and `null`
+            // is the honest answer. Defaulting to 4 invented a number that
+            // Claude then repeated back to the student as fact.
+            credits: course.credits ?? null,
             weekly_study_goal_hours: Number(course.weekly_goal_hours),
           }));
         return result({ courses });
@@ -372,7 +398,7 @@ function createServer(token: AuthenticatedToken) {
       try {
         const semesterId = await activeSemesterId(token);
         if (!semesterId) return result(TasksReadResponseSchema.parse({
-          schema_version: 'akada.tasks.v1', tasks: [], meta: { include_completed, course_id: course_id ?? null, count: 0 }, message: 'No active semester is set in Akada.',
+          schema_version: 'akada.tasks.v1', tasks: [], meta: { include_completed, course_id: course_id ?? null, count: 0, total: 0, has_more: false }, message: 'No active semester is set in Akada.',
         }));
         const supabase = mcpSupabase(token.supabaseAccessToken);
         const { data: courses, error: courseError } = await supabase
@@ -400,7 +426,7 @@ function createServer(token: AuthenticatedToken) {
         const { data, error } = await query;
         if (error) return queryFailed('get_tasks', 'tasks read', error, 'Akada could not load tasks.');
         const rows = (data ?? []) as Record<string, unknown>[];
-        const tasks: TaskRead[] = rows
+        const matched: TaskRead[] = rows
           .flatMap((task) => {
             const course = allowed.get(task.course_id as string);
             if (!course) return [];
@@ -420,12 +446,21 @@ function createServer(token: AuthenticatedToken) {
               course: { id: course.id, code: course.code, name: course.name },
             }];
           })
-          .sort(byDueDate)
-          .slice(0, MAX_TASKS_PER_READ);
+          .sort(byDueDate);
+        const page = matched.slice(0, MAX_TASKS_PER_READ);
         return result(TasksReadResponseSchema.parse({
           schema_version: 'akada.tasks.v1',
-          tasks,
-          meta: { include_completed, course_id: course_id ?? null, count: tasks.length },
+          tasks: page,
+          meta: {
+            include_completed,
+            course_id: course_id ?? null,
+            count: page.length,
+            total: matched.length,
+            has_more: matched.length > page.length,
+          },
+          ...(matched.length > page.length
+            ? { message: `Showing the ${page.length} tasks due soonest, out of ${matched.length}. Ask for one course at a time to see the rest.` }
+            : {}),
         }));
       } catch (cause) {
         return toolCrashed('get_tasks', cause);

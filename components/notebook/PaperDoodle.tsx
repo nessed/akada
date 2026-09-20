@@ -5,12 +5,16 @@ import { useEffect, useRef } from 'react';
 /**
  * Wet ink in the margin.
  *
- * Drag a finger, a pen or a mouse across the empty parts of a page and a line
- * of ink follows it, then dries and lifts off the paper after a few seconds.
- * There is no control for it and nothing announces it; it is marginalia, the
- * kind of thing a hand does while the mind is elsewhere.
+ * Drag a finger or a pen across the empty parts of a page and a line of ink
+ * follows it, then dries and lifts off the paper after a few seconds. There is
+ * no control for it and nothing announces it; it is marginalia, the kind of
+ * thing a hand does while the mind is elsewhere.
  *
- * The whole layer is pointer-events: none, so it can never take a tap from a
+ * A mouse is deliberately not a hand. Ink on a trackpad drag was noise on a
+ * surface nobody is doodling on, and the desktop pointer has better things to
+ * do, so the whole layer sits out for `pointerType === 'mouse'`.
+ *
+ * The canvas is pointer-events: none, so it can never take a tap from a
  * button, a field or a sheet. Gestures are read from a capture-phase listener
  * on the window instead, and a stroke only begins when the gesture starts on
  * genuinely empty background (see isEmptyBackground below).
@@ -21,20 +25,28 @@ const MAX_POINTS = 420;
 /** Older strokes are retired when this many are alive at once. */
 const MAX_STROKES = 6;
 /** Movement needed before a drag counts as a doodle rather than a tap. */
-const START_SLOP = 7;
+const START_SLOP = 6;
 /**
- * A finger has to hold still this long before the gesture becomes ink.
+ * A finger that holds still this long has said it is not scrolling.
  *
- * A mouse drag cannot scroll the page, so a mouse draws straight away. A
- * finger is ambiguous: the same movement is both "scroll the page" and "draw
- * on it", and nothing here calls preventDefault, so the page wins and the
- * scroll cancels the stroke. That left one short mark per touch and then
- * nothing for the rest of it. Holding still is how a finger says which it
- * meant, the same bargain the course cards strike for carrying a card.
+ * This is the second of two ways a finger can claim a gesture, and the slower
+ * one. It exists for the doodle that genuinely starts by moving up or down
+ * the page, which the angle test below has to hand back.
  */
-const HOLD_MS = 260;
+const HOLD_MS = 200;
 /** Wander further than this before the hold is up and it was a scroll. */
-const HOLD_SLOP = 10;
+const HOLD_SLOP = 12;
+/**
+ * How much more sideways than vertical a finger's first movement has to be
+ * before it counts as drawing rather than scrolling.
+ *
+ * Every scrolling surface in the app scrolls vertically and nothing scrolls
+ * sideways, so a finger travelling mostly across the page is not reaching for
+ * the page: the browser has nothing to give it. Claiming the gesture on that
+ * evidence is free, which is why it is the fast path and the hold is the
+ * fallback. 1.3 leaves a wide diagonal band that still belongs to the scroll.
+ */
+const SIDEWAYS_RATIO = 1.3;
 /** How long a finished stroke sits before it starts to lift, in ms. */
 const DWELL = 900;
 /** How long the lift takes, in ms. */
@@ -60,6 +72,11 @@ const INTERACTIVE = [
   '[role="switch"]',
   '[role="tab"]',
   '[contenteditable]',
+  // Anything that runs a drag of its own: swipe rows and the course carry.
+  // Their gestures are sideways too, which is exactly the evidence the finger
+  // path reads, so they have to be named rather than inferred.
+  '[data-swipe-row]',
+  '[draggable="true"]',
   '[data-no-doodle]',
 ].join(',');
 
@@ -134,10 +151,9 @@ export default function PaperDoodle() {
     let origin = { x: 0, y: 0 };
     let stroke: Stroke | null = null;
     let scrolled = false;
-    // Whether this gesture has earned the right to draw, and what kind of
-    // pointer is making it. Until it is armed, the page owns the gesture.
+    // Whether this gesture has earned the right to draw. Until it is armed,
+    // the page owns the gesture and the browser is free to scroll with it.
     let armed = false;
-    let pointerKind = 'mouse';
     let holdTimer = 0;
 
     const resize = () => {
@@ -238,20 +254,54 @@ export default function PaperDoodle() {
       return from.w + (target - from.w) * 0.35;
     };
 
+    const clearHold = () => {
+      if (holdTimer) {
+        window.clearTimeout(holdTimer);
+        holdTimer = 0;
+      }
+    };
+
+    /** Give the gesture back to the page without leaving a mark. */
+    const releaseGesture = () => {
+      clearHold();
+      armed = false;
+      pointerId = null;
+      stroke = null;
+    };
+
+    const endStroke = () => {
+      if (stroke && stroke.endedAt === null) stroke.endedAt = performance.now();
+      clearHold();
+      armed = false;
+      pointerId = null;
+      stroke = null;
+    };
+
     const onPointerDown = (e: PointerEvent) => {
-      if (pointerId !== null) return;
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      // A second finger is a pinch or a two-handed scroll, never a doodle,
+      // and whatever the first one was doing it is not doing it any more.
+      if (pointerId !== null) {
+        if (e.pointerId !== pointerId) endStroke();
+        return;
+      }
+      if (e.pointerType === 'mouse') return;
       if (!isEmptyBackground(e.target)) return;
+
       pointerId = e.pointerId;
-      pointerKind = e.pointerType;
       origin = { x: e.clientX, y: e.clientY };
       stroke = null;
       scrolled = false;
 
-      if (e.pointerType === 'mouse') {
+      // A pen is held the way a pen is held. There is no other thing it could
+      // have meant, so it draws from the first millimetre with no gate at all.
+      if (e.pointerType === 'pen') {
         armed = true;
         return;
       }
+
+      // A finger is ambiguous, so it gets the slow route as well as the fast
+      // one: hold still through HOLD_MS and the gesture is ink whichever way
+      // it goes next.
       armed = false;
       holdTimer = window.setTimeout(() => {
         holdTimer = 0;
@@ -262,13 +312,20 @@ export default function PaperDoodle() {
     const onPointerMove = (e: PointerEvent) => {
       if (e.pointerId !== pointerId) return;
 
-      // Still deciding. Moving before the hold is up means the reader was
-      // reaching for the page, so hand the gesture back and draw nothing.
+      // Still deciding. The first real movement settles it: mostly sideways is
+      // a doodle, because nothing here scrolls sideways; anything else is the
+      // reader moving the page, and the gesture goes back to them untouched.
       if (!armed) {
-        if (Math.hypot(e.clientX - origin.x, e.clientY - origin.y) > HOLD_SLOP) {
+        const dx = Math.abs(e.clientX - origin.x);
+        const dy = Math.abs(e.clientY - origin.y);
+        if (Math.hypot(dx, dy) <= HOLD_SLOP) return;
+        if (dx > dy * SIDEWAYS_RATIO) {
+          clearHold();
+          armed = true;
+        } else {
           releaseGesture();
+          return;
         }
-        return;
       }
 
       // A scroll means the reader was moving the page, not drawing on it.
@@ -310,38 +367,15 @@ export default function PaperDoodle() {
       });
     };
 
-    const clearHold = () => {
-      if (holdTimer) {
-        window.clearTimeout(holdTimer);
-        holdTimer = 0;
-      }
-    };
-
-    /** Give the gesture back to the page without leaving a mark. */
-    const releaseGesture = () => {
-      clearHold();
-      armed = false;
-      pointerId = null;
-      stroke = null;
-    };
-
-    const endStroke = () => {
-      if (stroke && stroke.endedAt === null) stroke.endedAt = performance.now();
-      clearHold();
-      armed = false;
-      pointerId = null;
-      stroke = null;
-    };
-
     const onPointerUp = (e: PointerEvent) => {
       if (e.pointerId !== pointerId) return;
       endStroke();
     };
 
     const onScroll = () => {
-      // An armed finger holds the page still, so a scroll here is not this
-      // gesture. A mouse never claims the page, so a wheel still cancels it.
-      if (armed && pointerKind !== 'mouse') return;
+      // An armed hand holds the page still, so a scroll arriving now belongs
+      // to something else and says nothing about this gesture.
+      if (armed) return;
       scrolled = true;
       if (stroke && stroke.endedAt === null) {
         stroke.endedAt = performance.now();
@@ -356,9 +390,13 @@ export default function PaperDoodle() {
      * arms, because the browser decides at touchstart whether preventDefault
      * is even allowed. A listener added mid-gesture arrives after that
      * decision and the page scrolls anyway. It only ever acts while armed.
+     *
+     * By the time it does act the browser has not begun a scroll: the angle
+     * test arms on movement the page had no use for, and the hold arms on a
+     * finger that never moved. So the page is still there to be stopped.
      */
     const holdPageStill = (e: TouchEvent) => {
-      if (armed && pointerKind !== 'mouse' && e.cancelable) e.preventDefault();
+      if (armed && e.cancelable) e.preventDefault();
     };
 
     const onHide = () => {
@@ -374,8 +412,8 @@ export default function PaperDoodle() {
       listening = true;
       resize();
       window.addEventListener('resize', resize);
-      // Capture phase, but nothing here calls preventDefault or
-      // stopPropagation: scrolling, tapping, swiping and text selection all
+      // Capture phase. The only default this ever suppresses is the page
+      // scroll under an armed hand; tapping, swiping and text selection all
       // continue exactly as they did.
       window.addEventListener('pointerdown', onPointerDown, true);
       window.addEventListener('pointermove', onPointerMove, true);

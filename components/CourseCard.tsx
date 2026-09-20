@@ -57,14 +57,15 @@ export default function CourseCard({
   const sinceLabel =
     since === 0 ? 'today' : since === 1 ? 'yesterday' : `${since}d ago`;
 
-  const catalogLine = [
-    `${typeof course.credits === 'number' && course.credits > 0 ? course.credits : 4} cr`,
-    course.section ? `Sec ${course.section}` : null,
-    course.instructor,
-    course.meetingTime,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  // When it next meets, and nothing else.
+  //
+  // This line used to carry credits, section, instructor and meeting time
+  // joined with dots, which on a phone truncated mid-value -- "3 cr · S.
+  // Rahman · Mon & Wed, 12:30 PM - 1:45 ..." -- so the one fact a student
+  // checks daily was the one that got cut. The other three are reference
+  // data and the course page, one tap away through this very card, lists
+  // them properly in its details table.
+  const catalogLine = course.meetingTime ?? null;
 
   return (
     <article className="relative bg-paper rounded-[14px] border border-line overflow-hidden transition-colors focus-within:border-line-strong hover:border-line-strong">

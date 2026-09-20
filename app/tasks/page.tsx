@@ -143,12 +143,32 @@ function TasksPageContent() {
 
   /* What the page was opened for, straight off the URL. `?course=` filters
      to that course, `&newTask=1` also opens the form, `?filter=` picks a
-     band, and `?task=` opens one task's reading view. The ref stops SWR
-     revalidations from replaying any of it over what the reader has since
-     chosen. */
+     band, and `?task=` opens one task's reading view, which is how the
+     calendar hands a day's work over. The ref stops SWR revalidations from
+     replaying any of it over what the reader has since chosen. */
   useEffect(() => {
     if (handledTaskIntent.current || coursesLoading || courses.length === 0) return;
+
+    const taskId = searchParams.get('task');
+    if (taskId) {
+      /* The task list loads separately from the courses, so there is a beat
+         where the id is real and the task is not here yet. Waiting is right;
+         treating it as missing would drop the intent on the floor. */
+      if (tasksLoading) return;
+      handledTaskIntent.current = true;
+      const wanted = tasks.find((task) => task.id === taskId);
+      if (wanted) {
+        // A band left on from last time would hide the very task asked for.
+        setFilter('all');
+        setViewingTask(wanted);
+      }
+      return;
+    }
+
     handledTaskIntent.current = true;
+
+    const wanted = searchParams.get('filter');
+    if (wanted && FILTERS.some((f) => f.v === wanted)) setFilter(wanted as Filter);
 
     const courseId = searchParams.get('course');
     if (courseId && courses.some((course) => course.id === courseId)) {
@@ -160,16 +180,7 @@ function TasksPageContent() {
         setDraftHigh(false);
       }
     }
-
-    const wanted = searchParams.get('filter');
-    if (wanted && FILTERS.some((f) => f.v === wanted)) setFilter(wanted as Filter);
-
-    const taskId = searchParams.get('task');
-    if (taskId) {
-      const task = tasks.find((t) => t.id === taskId);
-      if (task) setViewingTask(task);
-    }
-  }, [courses, coursesLoading, searchParams, tasks]);
+  }, [courses, coursesLoading, tasks, tasksLoading, searchParams]);
 
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || tasksLoading;
@@ -545,7 +556,7 @@ function TasksPageContent() {
 
   return (
     <PageShell wide>
-      <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <header className="mb-[var(--density-header)] flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="m-0 mb-1.5 font-serif italic text-[13.5px] text-muted">
             {openCount} open · {overdueCount} overdue
