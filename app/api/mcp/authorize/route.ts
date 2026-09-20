@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 
 type AuthorizationParams = {
   clientId: string;
+  clientName: string;
   redirectUri: string;
   codeChallenge: string;
   scope: string;
@@ -34,15 +35,17 @@ function parseAuthorizationParams(searchParams: URLSearchParams): AuthorizationP
   if (searchParams.get('code_challenge_method') !== 'S256') {
     return oauthError('invalid_request', 'PKCE with S256 is required.');
   }
+  let clientName: string;
   try {
     const client = readMcpClient(clientId);
     if (!client.redirectUris.includes(redirectUri)) {
       return oauthError('invalid_request', 'The redirect URI does not match the registered client.');
     }
+    clientName = client.clientName;
   } catch {
     return oauthError('invalid_client', 'The connector registration has expired or is invalid.');
   }
-  return { clientId, redirectUri, codeChallenge, scope, state: searchParams.get('state') };
+  return { clientId, clientName, redirectUri, codeChallenge, scope, state: searchParams.get('state') };
 }
 
 function createSessionClient(request: NextRequest) {
@@ -86,9 +89,9 @@ function consentPage(params: AuthorizationParams) {
   const hidden = (name: string, value: string) => `<input type="hidden" name="${name}" value="${htmlEscape(value)}" />`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Connect Claude to Akada</title>
+<title>Connect ${htmlEscape(params.clientName)} to Akada</title>
 <style>body{margin:0;background:#f8f5ed;color:#1e1b17;font:16px Georgia,serif}.wrap{width:min(92vw,460px);margin:12vh auto;padding:32px;border:1px solid #ddd4c1;border-radius:18px;background:#fffdf8}.eyebrow{font:600 11px system-ui,sans-serif;letter-spacing:.12em;color:#8b806d}.note{color:#756b5c;line-height:1.55}label{display:block;margin-top:24px;font:600 13px system-ui,sans-serif;color:#332e27}input{width:100%;box-sizing:border-box;margin-top:8px;padding:12px 14px;border:1px solid #d8cfbd;border-radius:11px;background:#fff;font:16px Georgia,serif;color:#1e1b17}.hint{margin:10px 0 0;font:13px/1.5 system-ui,sans-serif;color:#8b806d}.error{margin:16px 0 0;font:600 13px system-ui,sans-serif;color:#9b3d2e}.actions{display:flex;gap:12px;margin-top:26px}button,a{border-radius:11px;padding:12px 16px;font:600 14px system-ui,sans-serif;text-decoration:none;cursor:pointer}button{border:0;background:#1e1b17;color:#fff}a{border:1px solid #d8cfbd;color:#332e27}</style></head>
-<body><main class="wrap"><p class="eyebrow">AKADA CONNECTOR</p><h1>Connect Claude to Akada?</h1><p class="note">Claude will be able to find your current courses and add study tasks to them. It cannot delete courses, tasks, or study history.</p><form id="mcp-consent" method="post" action="/api/mcp/authorize">${hidden('response_type', 'code')}${hidden('client_id', params.clientId)}${hidden('redirect_uri', params.redirectUri)}${hidden('code_challenge', params.codeChallenge)}${hidden('code_challenge_method', 'S256')}${hidden('scope', params.scope)}${params.state ? hidden('state', params.state) : ''}<label for="password">Confirm your Akada password</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus /><p class="hint">This gives Claude a connection of its own, separate from this browser, so you will not have to reconnect it again.</p><p class="error" id="error" hidden></p><div class="actions"><button type="submit">Allow connection</button><a href="${htmlEscape(siteUrl())}">Cancel</a></div></form></main><script>document.getElementById('mcp-consent').addEventListener('submit',async(event)=>{event.preventDefault();const form=event.currentTarget;const box=document.getElementById('error');box.hidden=true;const response=await fetch(form.action,{method:'POST',body:new FormData(form),headers:{Accept:'application/json'}});if(!response.ok){const failure=await response.json().catch(()=>null);box.textContent=(failure&&failure.error_description)||'Akada could not connect Claude. Please try again.';box.hidden=false;return}const payload=await response.json();window.location.assign(payload.redirect_uri)})</script></body></html>`;
+<body><main class="wrap"><p class="eyebrow">AKADA CONNECTOR</p><h1>Connect ${htmlEscape(params.clientName)} to Akada?</h1><p class="note">${htmlEscape(params.clientName)} will be able to find your current courses and add study tasks to them. It cannot delete courses, tasks, or study history.</p><form id="mcp-consent" method="post" action="/api/mcp/authorize">${hidden('response_type', 'code')}${hidden('client_id', params.clientId)}${hidden('redirect_uri', params.redirectUri)}${hidden('code_challenge', params.codeChallenge)}${hidden('code_challenge_method', 'S256')}${hidden('scope', params.scope)}${params.state ? hidden('state', params.state) : ''}<label for="password">Confirm your Akada password</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus /><p class="hint">This gives ${htmlEscape(params.clientName)} a connection of its own, separate from this browser, so you will not have to reconnect it again.</p><p class="error" id="error" hidden></p><div class="actions"><button type="submit">Allow connection</button><a href="${htmlEscape(siteUrl())}">Cancel</a></div></form></main><script>document.getElementById('mcp-consent').addEventListener('submit',async(event)=>{event.preventDefault();const form=event.currentTarget;const box=document.getElementById('error');box.hidden=true;const response=await fetch(form.action,{method:'POST',body:new FormData(form),headers:{Accept:'application/json'}});if(!response.ok){const failure=await response.json().catch(()=>null);box.textContent=(failure&&failure.error_description)||'Akada could not connect. Please try again.';box.hidden=false;return}const payload=await response.json();window.location.assign(payload.redirect_uri)})</script></body></html>`;
 }
 
 export async function GET(request: NextRequest) {

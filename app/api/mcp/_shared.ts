@@ -1,7 +1,37 @@
 import { createClient } from '@supabase/supabase-js';
 
 export const MCP_SCOPES = ['akada.tasks.read', 'akada.tasks.write'] as const;
-export const CLAUDE_CALLBACK_URL = 'https://claude.ai/api/mcp/auth_callback';
+
+type KnownCallback = { name: string; test: (uri: string) => boolean };
+
+function isLoopbackCallback(uri: string) {
+  try {
+    const url = new URL(uri);
+    return (
+      url.protocol === 'http:' &&
+      (url.hostname === 'localhost' || url.hostname === '127.0.0.1') &&
+      (url.pathname === '/oauth/callback' || url.pathname === '/callback')
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Each assistant's connector flow uses its own fixed callback URL (Gemini CLI's
+// loopback redirect is the exception: it's a local server on a port that changes
+// every run, so it's matched by shape instead of an exact string).
+const KNOWN_CALLBACKS: KnownCallback[] = [
+  { name: 'Claude', test: (uri) => uri === 'https://claude.ai/api/mcp/auth_callback' },
+  { name: 'ChatGPT', test: (uri) => uri === 'https://chatgpt.com/connector_platform_oauth_redirect' },
+  {
+    name: 'Gemini',
+    test: (uri) => uri === 'https://vertexaisearch.cloud.google.com/oauth-redirect' || isLoopbackCallback(uri),
+  },
+];
+
+export function matchKnownCallback(uri: string): string | null {
+  return KNOWN_CALLBACKS.find((candidate) => candidate.test(uri))?.name ?? null;
+}
 
 export function siteUrl() {
   const value = process.env.NEXT_PUBLIC_SITE_URL;

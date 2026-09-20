@@ -12,6 +12,7 @@ type TokenEnvelope = {
 
 export type McpClient = {
   redirectUris: string[];
+  clientName: string;
 };
 
 export type McpAuthorizationCode = {
@@ -82,8 +83,8 @@ function open<T extends object>(token: string, expectedKind: TokenKind): T & Tok
   }
 }
 
-export function registerMcpClient(redirectUris: string[]) {
-  return seal('client', { redirectUris }, 365 * 24 * 60 * 60);
+export function registerMcpClient(redirectUris: string[], clientName: string) {
+  return seal('client', { redirectUris, clientName }, 365 * 24 * 60 * 60);
 }
 
 export function readMcpClient(token: string) {

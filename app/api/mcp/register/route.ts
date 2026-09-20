@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { CLAUDE_CALLBACK_URL, oauthError } from '../_shared';
+import { matchKnownCallback, oauthError } from '../_shared';
 import { registerMcpClient } from '@/lib/mcp-auth';
 
 export const runtime = 'nodejs';
@@ -16,18 +16,19 @@ export async function POST(request: NextRequest) {
   const redirectUris = Array.isArray(body.redirect_uris)
     ? body.redirect_uris.filter((uri): uri is string => typeof uri === 'string')
     : [];
-  if (redirectUris.length !== 1 || redirectUris[0] !== CLAUDE_CALLBACK_URL) {
+  const clientName = redirectUris.length === 1 ? matchKnownCallback(redirectUris[0]) : null;
+  if (!clientName) {
     return oauthError(
       'invalid_redirect_uri',
-      'This connector only accepts Claude’s registered callback URL.',
+      'This connector only accepts a registered callback URL from Claude, ChatGPT, or Gemini.',
     );
   }
 
-  const clientId = registerMcpClient(redirectUris);
+  const clientId = registerMcpClient(redirectUris, clientName);
   return Response.json(
     {
       client_id: clientId,
-      client_name: typeof body.client_name === 'string' ? body.client_name.slice(0, 100) : 'Claude',
+      client_name: clientName,
       redirect_uris: redirectUris,
       token_endpoint_auth_method: 'none',
       grant_types: ['authorization_code', 'refresh_token'],
