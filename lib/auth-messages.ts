@@ -14,8 +14,6 @@ export function authRedirectErrorMessage(code: string): string {
       return 'That link has expired or has already been used. Request a new one and try again.';
     case 'supabase_not_configured':
       return 'Sign-in is not configured for this build. Please contact support.';
-    case 'oauth_cancelled':
-      return 'That Google sign-in was cancelled. Try again, or use your email and password.';
     case 'callback_failed':
       return 'We could not finish signing you in. Please try again.';
     default:

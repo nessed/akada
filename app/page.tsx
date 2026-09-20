@@ -104,13 +104,13 @@ export default function LandingPage() {
             <div className="flex items-center gap-2">
               <Link
                 href="/auth"
-                className="whitespace-nowrap rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-line-strong"
+                className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-line-strong"
               >
                 Sign in
               </Link>
               <Link
                 href="/auth?mode=signup"
-                className="whitespace-nowrap rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-contrast"
+                className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-contrast"
               >
                 Create account
               </Link>

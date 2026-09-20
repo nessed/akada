@@ -162,22 +162,16 @@ input[type='number'] {
   --density-gutter: 22px;
   --density-gap: 12px;
   --density-section: 32px;
-  --density-header: 18px;
-  --density-block: 22px;
 }
 :root[data-density='cozy'] {
   --density-gutter: 26px;
   --density-gap: 16px;
   --density-section: 40px;
-  --density-header: 22px;
-  --density-block: 28px;
 }
 :root[data-density='compact'] {
   --density-gutter: 18px;
   --density-gap: 9px;
   --density-section: 24px;
-  --density-header: 14px;
-  --density-block: 18px;
 }
 
 /* Scrollbars are hidden everywhere, not only on WebKit. Firefox needs its

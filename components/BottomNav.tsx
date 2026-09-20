@@ -45,26 +45,6 @@ const tabs = [
     ),
   },
   {
-    href: '/calendar',
-    label: 'Month',
-    icon: (
-      <svg aria-hidden
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M4 6.5h16v13H4z" />
-        <path d="M4 10.5h16" />
-        <path d="M8.5 4.5v3" />
-        <path d="M15.5 4.5v3" />
-      </svg>
-    ),
-  },
-  {
     href: '/stats',
     label: 'Stats',
     icon: (
