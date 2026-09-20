@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import BackButton from '@/components/BackButton';
+import CoursePagePanel from '@/components/progression/CoursePagePanel';
+import { useProgression } from '@/lib/progression/use-progression';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import DatePicker from '@/components/DatePicker';
 import DueDateBadge from '@/components/DueDateBadge';
@@ -99,6 +101,11 @@ export default function CoursePage() {
     courseId,
     !loading && !course && courseId !== '',
   );
+
+  // The progression layer reads through the same SWR caches as everything
+  // above, so this costs no request and cannot disagree with the hours.
+  const { progression } = useProgression();
+  const pageRecord = course ? (progression?.pages.get(course.id) ?? null) : null;
 
   const courseSessions = useMemo(() => {
     if (!course) return [];
@@ -390,6 +397,16 @@ export default function CoursePage() {
           )}
         </div>
       </div>
+
+      {/* This course's page, with its marks in the margin. Faded when the
+          course has been left alone, and never a word about the fading. */}
+      {pageRecord && (
+        <CoursePagePanel
+          course={course}
+          record={pageRecord}
+          ink={progression?.ink.get(course.id) ?? null}
+        />
+      )}
 
       <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">

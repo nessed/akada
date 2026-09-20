@@ -67,7 +67,7 @@ const tabs = [
   },
   {
     href: '/stamps',
-    label: 'Stamps',
+    label: 'Record',
     icon: (
       <svg aria-hidden
         width="20"

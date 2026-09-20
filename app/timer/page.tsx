@@ -8,6 +8,7 @@ import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import StudyFan from '@/components/StudyFan';
+import NextMarkLine from '@/components/progression/NextMarkLine';
 import { useCourses, useTasks } from '@/lib/data-hooks';
 
 /**
@@ -440,6 +441,12 @@ export default function TimerPage() {
         </div>
 
         {controls}
+
+        {/* Next Mark, quietly, under the controls. It says what this sitting
+            is approaching and stays silent when nothing is near. It is kept
+            off the open-mode night screen on purpose: that screen exists to
+            hold one thing, and this would be a second one. */}
+        <NextMarkLine surface="timer" className="-mt-4" />
 
         <p className="m-0 -mt-3 font-mono text-[11px] text-muted-soft">
           Space pause · F finish · Esc back

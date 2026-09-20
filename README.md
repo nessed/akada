@@ -70,11 +70,19 @@ Before that, nothing you already hold is thrown away.
 happened in order, and a term-wide view of how much of your grade is still
 undecided.
 
-**Stamps** is the gamified reading of the same sessions: a streak, a weekly
-challenge, and twelve stamps drawn as postmarks. All of it is derived from
-your sessions on read. There is no stored record of achievement, which means
-nothing to backfill for an account that has been logging for a term already and
-no way for the page to disagree with Stats about what happened.
+**Record** is the progression reading of the same sessions. A run measured in
+weeks rather than days, because university work moves a week at a time and a
+daily streak punishes a wedding. A page per course, inked a mark at a time and
+bound when it fills. Impressions, which are ladders rather than badges, so
+there is always a next rung and never a wall of grey.
+
+All of it is derived from your sessions on read. There is no stored record of
+achievement, which means nothing to backfill for an account that has been
+logging for a term already and no way for the page to disagree with Stats
+about what happened. Every input Akada has is unverifiable self-report, so the
+game layer deliberately saturates well before a real study day does: a long
+day earns less per hour, never nothing per hour, and Stats, the heatmap and
+every export always show the true unmodified figure.
 
 **Settings** covers the daily goal, when your day ends (anywhere up to 6am, so
 a 2am session counts toward the right day), whether weekends count, CSV export,

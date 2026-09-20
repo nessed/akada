@@ -41,7 +41,7 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `update_tasks`: Change tasks that already exist, including their notes and subtasks.
 - `complete_tasks`: Tick tasks off, or put them back on the list.
 - `log_study_session`: Record study time against a course, with an optional task and note.
-- `get_weekly_stats`: Read one week's hours against goal, tasks closed, and studied-day streak.
+- `get_weekly_stats`: Read one week's hours against goal, tasks closed, and the weekly run.
 - `get_grading_scheme`: Read how a course is marked, accepted and proposed.
 - `set_grading_scheme`: Propose how a course is marked, read off its outline.
 - `delete_course`: Permanently delete a course and its associated tasks and sessions.
@@ -124,17 +124,19 @@ than the denormalized `tasks.semester_id`.
 
 ### 6. `get_weekly_stats`
 - **Title**: Read an Akada study week
-- **Description**: How one week went: hours per course against each course's weekly goal, tasks closed inside the week, and the current run of consecutive studied days.
+- **Description**: How one week went: hours per course against each course's weekly goal, tasks closed inside the week, and the current run of consecutive counting weeks.
 - **Annotations**: `readOnlyHint: true`
 - **Parameters**:
   - `week_offset` (`integer`, -12 to 0, default: `0`): 0 for this week, -1 for last week.
   - `course_id` (`string`, optional, UUID): Narrow every figure to one course.
-- **Output**: `week` (`from`, `to`, `offset`), per-course `hours_logged` / `weekly_study_goal_hours` / `goal_met`, `totals`, the titles closed that week, and `studied_day_streak`.
+- **Output**: `week` (`from`, `to`, `offset`), per-course `hours_logged` / `weekly_study_goal_hours` / `goal_met`, `totals`, the titles closed that week, and `weekly_run` / `weekly_run_best`.
 
 Monday-first, matching `weekBounds` in `lib/derive.ts`, so a number read here
-and a number on the Stats screen agree. A day counts once however many
-sittings it held, and today not being studied yet does not break an otherwise
-intact streak.
+and a number on the Stats screen agree. The run is read through
+`lib/progression/runs.ts`, the same engine the Record screen draws, rather
+than reimplemented in the route: a week counts on four study days or on three
+spread across three courses, and the week being lived extends the run without
+ever breaking it.
 
 ### 7. `get_grading_scheme`
 - **Title**: Read how an Akada course is graded
@@ -330,7 +332,7 @@ The following specifications define the next set of MCP tools planned for Akada:
   ```
 
 ### 4. `get_weekly_stats` (shipped)
-- **Description**: Retrieve weekly study performance, goal attainment, and current streak for the active semester. Shipped. Kept here for the original specification.
+- **Description**: Retrieve weekly study performance, goal attainment, and the current weekly run for the active semester. Shipped. Kept here for the original specification.
 - **Annotations**: `readOnlyHint: true`
 - **Input Schema**:
   ```typescript
@@ -353,7 +355,7 @@ The following specifications define the next set of MCP tools planned for Akada:
     "totals": {
       "total_study_hours": 12.5,
       "active_days_count": 4,
-      "current_streak_days": 5
+      "weekly_run": 5
     },
     "courses": [
       {
