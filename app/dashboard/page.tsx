@@ -702,10 +702,16 @@ function DashboardPageContent() {
     now.toLocaleDateString(undefined, { month: 'short' }),
     now.getFullYear(),
   ].join(' ');
+  const openTasks = tasks.filter((t) => !t.completed);
   /* The one task the screen asks for. Which one depends on the reader's rule,
-     see pickUpNext: by default the course that has gone longest without a
-     session, or the oldest overdue thing if they have said they want that. */
-  const upNext = pickUpNext(prefs.upNextSort, overdueTasks, todayTasks, sessions);
+     see pickUpNext: by default whatever a timer last ran on and is still
+     open, else the course that has gone longest without a session, or the
+     oldest overdue thing if they have said they want that.
+
+     openTasks is passed because the resumed task is the one pick that can sit
+     outside the overdue/due-today pool: work you were in the middle of an
+     hour ago is live whether or not it happens to be due. */
+  const upNext = pickUpNext(prefs.upNextSort, overdueTasks, todayTasks, sessions, openTasks);
   /* The week's goal is the sum of the course goals, which is what the course
      panel is already measured against; a separate number would let the two
      disagree. */
@@ -714,7 +720,6 @@ function DashboardPageContent() {
   const monthLabel = now.toLocaleDateString(undefined, { month: 'long' });
   const dayNum = now.getDate();
   const yearLabel = String(now.getFullYear()).slice(-2);
-  const openTasks = tasks.filter((t) => !t.completed);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowIso = isoDate(tomorrow);

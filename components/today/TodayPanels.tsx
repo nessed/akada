@@ -42,9 +42,20 @@ interface UpNextProps {
 // What the marginal note says for each rule, in its own voice rather than the
 // name of the setting.
 const SORT_NOTE: Record<UpNextSort, string> = {
+  'in-progress': 'carry on where you left off',
   'last-done': 'least studied first',
   overdue: 'oldest overdue first',
 };
+
+// The note is the control, so clicking it walks the rules in a ring rather
+// than flipping between two. Three is still few enough that a click gets you
+// back to where you started without thinking about it.
+const SORT_ORDER: UpNextSort[] = ['in-progress', 'last-done', 'overdue'];
+
+function nextSort(sort: UpNextSort): UpNextSort {
+  const i = SORT_ORDER.indexOf(sort);
+  return SORT_ORDER[(i + 1) % SORT_ORDER.length];
+}
 
 /**
  * The one task the screen actually asks for.
@@ -61,7 +72,7 @@ export function UpNext({
   onDone,
   onSnooze,
   onOpen,
-  sort = 'last-done',
+  sort = 'in-progress',
   onSortChange,
 }: UpNextProps) {
   const due = dueLabel(task.dueDate);
@@ -81,12 +92,10 @@ export function UpNext({
         {onSortChange ? (
           <button
             type="button"
-            onClick={() => onSortChange(sort === 'last-done' ? 'overdue' : 'last-done')}
+            onClick={() => onSortChange(nextSort(sort))}
             // The note is already the label, so it says what it is rather
             // than "sort by", and the title carries what a click will do.
-            title={`Showing ${SORT_NOTE[sort]}. Switch to ${
-              SORT_NOTE[sort === 'last-done' ? 'overdue' : 'last-done']
-            }.`}
+            title={`Showing ${SORT_NOTE[sort]}. Switch to ${SORT_NOTE[nextSort(sort)]}.`}
             className="shrink-0 bg-transparent p-0 text-right transition-opacity hover:opacity-70"
           >
             <HandNote color="var(--ink-soft)" size={17}>
