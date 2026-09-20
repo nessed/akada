@@ -11,6 +11,7 @@ To maintain the soul of the app, we actively reject standard SaaS UI/UX "best pr
 - **No Over-Explaining:** We avoid explicit, wordy labels (e.g., "0.0h logged out of 9h goal"). We rely on minimal text, visual hierarchy, and the user's intuition. The interface should not "talk" to the user more than absolutely necessary.
 - **No Clutter & Cramping:** Generous whitespace is a strict requirement. We do not compress or compact elements just to fit more on a screen. 
 - **No Alarmist Indicators:** We avoid bright red badges, aggressive error alerts, or high-contrast strikethroughs. For example, completed tasks gently fade, and overdue items use muted tones rather than screaming for attention.
+- **No Mono Kicker Over a Serif Heading:** A tiny monospaced line stacked above a large serif title is the shape every generated app arrives in. Metadata above a screen title is a standfirst and is set in the serif. Mono is for digits.
 - **No Generic Dashboard Components:** We avoid typical software widgets like text-heavy progress bars, thick tab underlines, or loud "empty state" placeholder blocks.
 
 ## 🖌️ Color Palette
@@ -79,15 +80,16 @@ They are warm clays, and that is the point, see "No Alarmist Indicators".
 Typography in Akada blends modern readability with classic literary elegance.
 - **Sans-Serif (`Inter`)**: Used for the majority of the UI, providing clean, highly legible structure.
 - **Serif (`Fraunces`)**: Applied to headings, quotes, or focal points to give the application an elegant, editorial, and sophisticated character. It is the default; **Cormorant Garamond**, **Lora** and **Merriweather** are selectable in Appearance and swap in through `--font-serif`, so no component names a family.
-- **Monospace (`JetBrains Mono`)**: Used purposefully for data, durations, and the study timer, grounding the numbers in a precise, tool-like feel.
+- **Monospace (`IBM Plex Mono`)**: Digits only, the timer face, hour counts, grades and anything tabular. It replaced JetBrains Mono, which is a code editor typeface and read like one on paper; Plex carries the same `0.600em` character advance, so the swap moved nothing. Its x-height is lower (`0.516em` against `0.550em`), which is why the handful of labels under 11px are set half a pixel larger than the face they replaced. Mono never sets prose.
 - **Handwriting (`Caveat`)**: Reserved for marginalia, the `HandNote` primitive and the `.font-hand` utility. Never for UI text.
 
 ### The Eyebrow
 One caption spec, `.eyebrow` in `globals.css`: 10px, 600 weight, uppercase,
 `0.16em` tracking, `muted`. Section headers, field labels, course codes and
-"Wk 14" all use it. It sits in `@layer components`, so a colour, a mono family
-or a tighter tracking set alongside it still wins, that is how the badges and
-the timer's display caption keep their own letterspacing.
+"Wk 17" all use it. It sits in `@layer components`, so a colour or a tighter
+tracking set alongside it still wins, that is how the badges and the timer's
+display caption keep their own letterspacing. Nothing sets it in mono: the one
+element that did was put back on the sans.
 
 ### Type scale
 Two title tiers, so a screen title is recognisable as one:
@@ -96,12 +98,20 @@ Two title tiers, so a screen title is recognisable as one:
 - **Section heading**, `text-[17px]`/`text-[20px]`, serif medium.
 
 One deliberate exception: the stats masthead is `52px`, which is the one
-editorial flourish in the app. Every screen title now sits under a line of
-mono at `12px` carrying the date, the week and the counts, rather than
-turning that information into the title.
+editorial flourish in the app. Every screen title sits under a **standfirst**
+carrying the date, the week and the counts, rather than turning that
+information into the title. It is set in the same serif as the title above it,
+italic, `13.5px`, muted, the way a magazine sets the line under a headline.
 
-Scales the desktop screens are built on: type 10 / 11 / 12 / 13 / 14 / 17 /
-20 / 28 / 36; space 4 / 8 / 12 / 16 / 24 / 32 / 48; radii 4 for marks, 10 for
+It used to be a `12px` line of mono, and that was the single thing that made
+these screens look machine-made. `13.5` is not arbitrary: Fraunces has a
+`0.470em` x-height against the mono's `0.516em`, so 12px of mono and 13.2px of
+serif read at the same size, and 13.5 rounds that up to give the line some
+presence.
+
+Scales the desktop screens are built on: type 10 / 11 / 12 / 13 / 13.5 / 14 /
+17 / 20 / 28 / 36, plus half-steps at 9.5 / 10.5 / 11.5 where mono labels needed
+them back; space 4 / 8 / 12 / 16 / 24 / 32 / 48; radii 4 for marks, 10 for
 fields and buttons, 14 for panels. Hit targets are 40px and a task row is
 48px.
 
