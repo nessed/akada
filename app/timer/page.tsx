@@ -410,7 +410,7 @@ export default function TimerPage() {
           <span className="eyebrow absolute left-5 top-3.5 z-10" style={{ color }}>
             {code}
           </span>
-          <span className="absolute right-5 top-3.5 z-10 font-mono text-[10px] tracking-[0.06em] text-muted">
+          <span className="absolute right-5 top-3.5 z-10 font-mono text-[10.5px] tracking-[0.06em] text-muted">
             {hhmm(startedAtMs)} to {hhmm(startedAtMs + target * 1000)}
           </span>
           <StudyFan

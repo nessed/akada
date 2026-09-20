@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import {
   Inter,
-  JetBrains_Mono,
+  IBM_Plex_Mono,
   Fraunces,
   Lora,
   Merriweather,
@@ -24,7 +24,7 @@ const inter = Inter({
   display: 'swap',
 });
 
-const mono = JetBrains_Mono({
+const mono = IBM_Plex_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-mono',

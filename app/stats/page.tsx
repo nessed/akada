@@ -576,7 +576,7 @@ export default function StatsPage() {
                 <h3 className="eyebrow m-0 shrink-0">{formatRelativeDate(day.date)}</h3>
                 <span aria-hidden className="h-px flex-1 bg-line" />
                 {day.seconds > 0 && (
-                  <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-soft">
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-soft">
                     {formatHM(day.seconds)}
                   </span>
                 )}

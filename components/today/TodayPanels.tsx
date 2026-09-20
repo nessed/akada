@@ -353,7 +353,7 @@ export function WeekPanel({
         ))}
       </div>
 
-      <div className="mt-2 flex gap-1.5 font-mono text-[9.5px] text-muted-soft">
+      <div className="mt-2 flex gap-1.5 font-mono text-[10px] text-muted-soft">
         {days.map((day) => (
           <span key={day.iso} className="flex-1 text-center">
             <span className={day.isToday ? 'text-ink' : ''}>{day.label}</span>

@@ -49,7 +49,7 @@ export default function CoursePage({
 
         <div className="mt-1.5 flex items-center gap-3">
           <TallyMarks inked={record.onPage} total={MARKS_PER_PAGE} color={course.color} />
-          <span className="font-mono text-[10px] text-muted-soft">
+          <span className="font-mono text-[10.5px] text-muted-soft">
             {record.onPage} / {MARKS_PER_PAGE}
           </span>
         </div>
