@@ -79,7 +79,7 @@ export function UpNext({ task, course, onStart, onDone, onSnooze, onOpen }: UpNe
         )}
       </h2>
 
-      <p className="m-0 mt-2.5 font-mono text-[12px] tracking-[0.02em] text-muted">
+      <p className="m-0 mt-2.5 font-serif italic text-[13.5px] text-muted">
         {due && (
           <span className={due.category === 'overdue' ? 'text-warn' : 'text-ink'}>
             Due {due.formattedDate}

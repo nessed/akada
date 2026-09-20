@@ -377,7 +377,7 @@ export default function TimerPage() {
               >
                 {clockFace(elapsed)}
               </p>
-              <p className="m-0 mt-3 font-mono text-[12px] tracking-[0.02em]" style={{ color: '#958D7E' }}>
+              <p className="m-0 mt-3 font-serif italic text-[13.5px]" style={{ color: '#958D7E' }}>
                 since {hhmm(startedAtMs)}
                 {task ? <> · <span style={{ color: '#EFE9DC' }}>{task.title}</span></> : null}
                 {isPaused ? ' · paused' : ''}
@@ -433,7 +433,7 @@ export default function TimerPage() {
           >
             {clockFace(remaining)}
           </p>
-          <p className="m-0 mt-3 font-mono text-[12px] tracking-[0.02em] text-muted">
+          <p className="m-0 mt-3 font-serif italic text-[13.5px] text-muted">
             {overrun ? 'over' : 'of'} {clockFace(target)}
             {task ? <> · <span className="text-ink">{task.title}</span></> : null}
             {isPaused ? ' · paused' : ''}

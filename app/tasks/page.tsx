@@ -547,7 +547,7 @@ function TasksPageContent() {
     <PageShell wide>
       <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="m-0 mb-1.5 font-mono text-[12px] tracking-[0.02em] text-muted">
+          <p className="m-0 mb-1.5 font-serif italic text-[13.5px] text-muted">
             {openCount} open · {overdueCount} overdue
           </p>
           <h1 className="m-0 font-serif text-[32px] font-medium leading-[1.05] tracking-[-0.025em] md:text-[36px]">

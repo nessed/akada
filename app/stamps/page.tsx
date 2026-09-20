@@ -44,7 +44,7 @@ export default function RecordPage() {
   return (
     <PageShell wide>
       <header className="mb-8">
-        <p className="m-0 mb-1.5 font-mono text-[12px] tracking-[0.02em] text-muted">
+        <p className="m-0 mb-1.5 font-serif italic text-[13.5px] text-muted">
           {bound === 0 ? 'no pages bound yet' : `${bound} ${bound === 1 ? 'page' : 'pages'} bound`}
           {progression.runs.current > 0 &&
             ` · ${progression.runs.current} ${progression.runs.current === 1 ? 'week' : 'weeks'} running`}

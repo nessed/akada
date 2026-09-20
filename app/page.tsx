@@ -255,7 +255,7 @@ function ProductPreview() {
       <div className="overflow-hidden rounded-[22px] border border-line bg-bg">
         <div className="flex items-start justify-between gap-3 px-5 pt-5">
           <div>
-            <p className="eyebrow m-0 font-mono text-muted">
+            <p className="eyebrow m-0 text-muted">
               Wk 17
             </p>
             <h2 className="mt-1 mb-0 font-serif text-[30px] font-normal leading-none tracking-[-0.02em]">
