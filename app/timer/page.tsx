@@ -30,12 +30,14 @@ import { useCourses, useTasks } from '@/lib/data-hooks';
  * is the one thing a reader in the middle of a chapter does not want to be
  * told; the fan only ever grows.
  *
- * A block that runs out does not simply stop: it chimes and turns into a
- * **break**, and the sitting carries on as a chain of blocks and the rests
- * between them. The break borrows this whole screen rather than bringing its
- * own. The frame stays, the clock counts the rest, and the fan holds exactly
- * where the block left it, which is the honest drawing of what is happening:
- * nothing is growing, and nothing has been lost either.
+ * A block that runs out keeps running, shown as overrun rather than stopped
+ * outright — nothing is asked and nothing is decided for the reader. A
+ * **break** is a stretch the reader chooses to take, by hand, and the
+ * sitting carries on as a chain of blocks and the rests between them. The
+ * break borrows this whole screen rather than bringing its own. The frame
+ * stays, the clock counts the rest, and the fan holds exactly where the
+ * block left it, which is the honest drawing of what is happening: nothing
+ * is growing, and nothing has been lost either.
  */
 
 const BLOCK_LENGTHS = [25, 45, 60] as const;

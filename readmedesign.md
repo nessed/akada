@@ -180,8 +180,9 @@ literal values rather than the paper tokens, because on the night ground
 `text-ink` is still the daylight ink.
 
 ### The break
-A block that runs out does not stop. It chimes, turns into a **break**, and
-the sitting carries on as a chain of blocks and the rests between them.
+A block that runs out keeps running, shown as overrun rather than stopped for
+the reader. A **break** is a stretch taken by hand, from the timer, and the
+sitting carries on as a chain of blocks and the rests between them.
 
 The break does not bring a screen of its own. It borrows the timer's: the same
 frame, the same deckle, the same two-line clock. Three things change and

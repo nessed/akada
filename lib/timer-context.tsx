@@ -861,22 +861,6 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
           );
           return;
         }
-        // The block is done and the sitting takes breaks, so it takes one.
-        // Nothing is asked: a dialog at the end of a block is a second thing
-        // to decide at the exact moment the reader has stopped deciding.
-        // "Back to it" is one tap away on the break screen.
-        if (
-          !current.isPaused &&
-          current.targetSeconds != null &&
-          current.breakSeconds != null &&
-          stretch >= current.targetSeconds
-        ) {
-          const at = current.startedAt + (current.targetSeconds * 1000 - current.accumulatedMs);
-          announceBreak(current.breakSeconds);
-          breakNoticeRef.current = null;
-          commit(toBreakState(current, Math.min(at, now), current.breakSeconds));
-          return;
-        }
       }
       // setElapsed on every fire re-rendered every consumer four times a
       // second to show the same digits. Only whole seconds are ever
@@ -1015,10 +999,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   /**
    * End the block here and rest.
    *
-   * Reached by hand from the timer, and by the tick when a block runs out on
-   * a sitting that takes breaks. Turning breaks off in Appearance and then
-   * asking for one explicitly is not a contradiction, so it falls back to a
-   * sensible five rather than refusing.
+   * Only reached by hand from the timer. Turning breaks off in Appearance and
+   * then asking for one explicitly is not a contradiction, so it falls back
+   * to a sensible five rather than refusing.
    */
   const startBreak = useCallback(
     (seconds?: number) => {
