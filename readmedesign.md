@@ -412,6 +412,28 @@ hint under the list names exactly these and nothing else. It used to offer
 than saying nothing, and the help sheet behind `?` listed a third, different
 set.
 
+### Keys for the running clock
+Two more, and they work from every screen rather than from the timer.
+
+A sitting is started from a row on Today or Tasks and the reader then goes
+back to their book. The timer's own keys (Space, B, F) only exist on the
+timer screen, which is the one screen a reader mid-chapter is least likely to
+be looking at, so stopping meant finding the dock with a mouse. `P` and `K`
+reach the clock from wherever they are: `P` holds it or lets it go, and means
+**back to it** while a break runs; `K` finishes the sitting and the log sheet
+opens on the spot, because `PageShell` already carries one on every tab. On
+the few screens that carry neither sheet nor shell, `K` opens the timer
+instead, so the key never ends a sitting with nothing to show for it.
+
+`TimerHotkeys` is mounted in the root layout and **binds nothing at all
+unless a sitting is running**, which is the same rule the task list follows.
+It stands down for a held key, for anything typed into a field, and for any
+chord: `⌘P` is print and `⌘K` is the browser's, and a chord belongs to
+whoever the reader thinks they are talking to. The dock's two buttons name
+the keys in their tooltips, and the help sheet behind `?` lists them only
+while a sitting is running, for the same reason it lists nothing else that
+is not bound.
+
 ### Rearranging by hand
 Four lists let the reader set their own order, and all four are the same
 component, `ReorderList`: the **dashboard's stack of course cards**, the
