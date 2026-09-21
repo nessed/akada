@@ -12,6 +12,7 @@ import DueDateBadge from '@/components/DueDateBadge';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskRow from '@/components/TaskRow';
+import ReorderList from '@/components/ReorderList';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import type { Task, TaskKind } from '@/lib/data';
 import { formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
@@ -474,6 +475,41 @@ function TasksPageContent() {
       setViewingTask((current) => current?.id === task.id ? { ...current, subtasks } : current);
     } catch {
       notify('That subtask change did not save.');
+    }
+  }
+
+  /**
+   * The order the steps were dragged into.
+   *
+   * Subtasks are stored as the list they read as, so the order is the write:
+   * there is no separate column to keep in step. This rethrows where
+   * saveSubtasks only notifies, because the list that asked for the move puts
+   * the step back where it came from when the write is refused.
+   */
+  async function reorderSubtasks(task: Task, orderedIds: string[]) {
+    const current = task.subtasks ?? [];
+    const byId = new Map(current.map((item) => [item.id, item]));
+    const next = orderedIds
+      .map((id) => byId.get(id))
+      .filter((item): item is NonNullable<Task['subtasks']>[number] => Boolean(item));
+    // A step ticked off or added elsewhere mid-carry would make this a
+    // shorter list than the one being saved; leave it alone rather than
+    // writing a truncated checklist.
+    if (next.length !== current.length) return;
+    // The open sheet is moved first rather than after the write, so ticking a
+    // step off while the order is still in flight cannot write the old order
+    // back over it.
+    const show = (subtasks: NonNullable<Task['subtasks']>) =>
+      setViewingTask((viewing) =>
+        viewing?.id === task.id ? { ...viewing, subtasks } : viewing,
+      );
+    show(next);
+    try {
+      await updateTaskOptimistic(task.id, { subtasks: next });
+    } catch (error) {
+      show(current);
+      notify('That order did not save.');
+      throw error;
     }
   }
 
@@ -973,6 +1009,33 @@ function TasksPageContent() {
         const subtasks = viewingTask.subtasks ?? [];
         const done = subtasks.filter((item) => item.completed).length;
 
+        /** One step, whether it is sitting in a plain list or being carried. */
+        const renderSubtask = (subtask: NonNullable<Task['subtasks']>[number]) => (
+          <button
+            key={subtask.id}
+            type="button"
+            aria-pressed={subtask.completed}
+            onClick={() =>
+              saveSubtasks(
+                viewingTask,
+                subtasks.map((item) =>
+                  item.id === subtask.id ? { ...item, completed: !item.completed } : item,
+                ),
+              )
+            }
+            className={`flex w-full items-start gap-3 border-b border-dashed border-line bg-transparent px-0.5 py-2.5 text-left transition-opacity ${
+              subtask.completed ? 'opacity-45' : ''
+            }`}
+          >
+            <span className="scribble-box mt-[3px] flex h-[17px] w-[17px] shrink-0 items-center justify-center">
+              {subtask.completed && <HandCheck size={11} color="var(--ink)" strokeWidth={1.6} />}
+            </span>
+            <span className="min-w-0 flex-1 text-[14px] leading-[1.45] text-ink">
+              {subtask.title}
+            </span>
+          </button>
+        );
+
         return (
           <div className="fixed inset-0 z-[75] flex items-end animate-fade-in">
             <button
@@ -1064,33 +1127,26 @@ function TasksPageContent() {
                   )}
                 </div>
 
-                {subtasks.map((subtask) => (
-                  <button
-                    key={subtask.id}
-                    type="button"
-                    aria-pressed={subtask.completed}
-                    onClick={() =>
-                      saveSubtasks(
-                        viewingTask,
-                        subtasks.map((item) =>
-                          item.id === subtask.id ? { ...item, completed: !item.completed } : item,
-                        ),
-                      )
-                    }
-                    className={`flex w-full items-start gap-3 border-b border-dashed border-line bg-transparent px-0.5 py-2.5 text-left transition-opacity ${
-                      subtask.completed ? 'opacity-45' : ''
-                    }`}
-                  >
-                    <span className="scribble-box mt-[3px] flex h-[17px] w-[17px] shrink-0 items-center justify-center">
-                      {subtask.completed && (
-                        <HandCheck size={11} color="var(--ink)" strokeWidth={1.6} />
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1 text-[14px] leading-[1.45] text-ink">
-                      {subtask.title}
-                    </span>
-                  </button>
-                ))}
+                {/* The steps read in the order they are meant to be done, so
+                    the order is worth being able to change. The grip is out
+                    in the margin rather than on the row, because the row
+                    itself already ticks the step off; with one step there is
+                    no order to change and it does not draw at all. */}
+                {subtasks.length > 1 ? (
+                  <ReorderList
+                    items={subtasks}
+                    getId={(subtask) => subtask.id}
+                    getLabel={(subtask) => subtask.title}
+                    label="Subtasks, in the order you arranged them"
+                    shape="row"
+                    carry="grip"
+                    className=""
+                    onReorder={(orderedIds) => reorderSubtasks(viewingTask, orderedIds)}
+                    renderItem={(subtask) => renderSubtask(subtask)}
+                  />
+                ) : (
+                  subtasks.map((subtask) => renderSubtask(subtask))
+                )}
 
                 <form
                   onSubmit={(event) => {

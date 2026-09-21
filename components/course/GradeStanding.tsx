@@ -7,6 +7,7 @@ import { updateCourseOptimistic } from '@/lib/data-hooks';
 import { gradingPrompt } from '@/lib/grading-prompt';
 import { useNotice } from '@/components/Notice';
 import { ButtonSpinner } from '@/components/LoadingIndicator';
+import ReorderList from '@/components/ReorderList';
 import { daysBetween } from '@/lib/utils';
 
 /**
@@ -55,6 +56,26 @@ export default function GradeStanding({
 
   function patch(id: string, next: Partial<Assessment>) {
     setRows((current) => current.map((r) => (r.id === id ? { ...r, ...next } : r)));
+  }
+
+  /**
+   * The order the pieces were dragged into.
+   *
+   * An outline lists them the way the course runs — quiz, quiz, midterm,
+   * final — and a scheme typed in over a term arrives in whatever order the
+   * marks did. The list is stored as a list, so the order is simply what is
+   * saved with it, and it is what every panel that reads the scheme shows.
+   */
+  function moveRow(orderedIds: string[]) {
+    setRows((current) => {
+      const byId = new Map(current.map((r) => [r.id, r]));
+      const placed = orderedIds
+        .map((id) => byId.get(id))
+        .filter((r): r is Assessment => Boolean(r));
+      const seen = new Set(orderedIds);
+      return [...placed, ...current.filter((r) => !seen.has(r.id))];
+    });
+    return Promise.resolve();
   }
 
   async function save() {
@@ -127,6 +148,66 @@ export default function GradeStanding({
     }
   }
 
+  /** One piece of the scheme, whether it is sitting still or being carried. */
+  const pieceRow = (row: Assessment, index: number) => (
+    <div
+      className={`flex items-center gap-1.5 py-2 ${
+        index === rows.length - 1 ? '' : 'border-b border-line-soft'
+      }`}
+    >
+      <input
+        value={row.label}
+        onChange={(e) => patch(row.id, { label: e.target.value })}
+        placeholder="Midterm"
+        aria-label="What this piece is"
+        className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-ink outline-none placeholder:text-muted-soft"
+      />
+      <input
+        value={row.weight || ''}
+        onChange={(e) => patch(row.id, { weight: percent(e.target.value) })}
+        inputMode="decimal"
+        placeholder="0"
+        aria-label={`${row.label || 'This piece'} is worth, as a percentage of the course`}
+        className="w-[34px] min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[13px] text-muted outline-none"
+      />
+      <span aria-hidden className="font-mono text-[10.5px] text-muted-soft">%</span>
+      {/* Score and out-of sit together so an empty score reads as
+          "not back yet" rather than as a zero. */}
+      <input
+        value={row.score ?? ''}
+        onChange={(e) =>
+          patch(row.id, {
+            score: e.target.value === '' ? null : number(e.target.value),
+            outOf: row.outOf ?? 100,
+          })
+        }
+        inputMode="decimal"
+        placeholder="—"
+        aria-label={`${row.label || 'This piece'}, what you scored`}
+        className="ml-1.5 w-[36px] min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[13px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-muted-soft"
+      />
+      <span aria-hidden className="font-mono text-[10.5px] text-muted-soft">/</span>
+      <input
+        value={row.outOf ?? ''}
+        onChange={(e) =>
+          patch(row.id, { outOf: e.target.value === '' ? null : number(e.target.value) || null })
+        }
+        inputMode="decimal"
+        placeholder="100"
+        aria-label={`${row.label || 'This piece'}, out of`}
+        className="w-[30px] min-w-0 border-0 bg-transparent p-0 font-mono text-[13px] text-muted outline-none placeholder:text-muted-soft"
+      />
+      <button
+        type="button"
+        onClick={() => setRows((current) => current.filter((r) => r.id !== row.id))}
+        aria-label={`Remove ${row.label || 'this piece'}`}
+        className="ml-0.5 grid h-7 w-6 shrink-0 place-items-center bg-transparent font-mono text-[14px] text-muted-soft transition-colors hover:text-warn"
+      >
+        ×
+      </button>
+    </div>
+  );
+
   if (editing) {
     return (
       <section className="rounded-[14px] border border-line bg-paper p-5">
@@ -141,60 +222,25 @@ export default function GradeStanding({
         </div>
 
         <div className="pt-1">
-          {rows.map((row) => (
-            <div key={row.id} className="flex items-center gap-1.5 border-b border-line-soft py-2 last:border-b-0">
-              <input
-                value={row.label}
-                onChange={(e) => patch(row.id, { label: e.target.value })}
-                placeholder="Midterm"
-                aria-label="What this piece is"
-                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-ink outline-none placeholder:text-muted-soft"
-              />
-              <input
-                value={row.weight || ''}
-                onChange={(e) => patch(row.id, { weight: percent(e.target.value) })}
-                inputMode="decimal"
-                placeholder="0"
-                aria-label={`${row.label || 'This piece'} is worth, as a percentage of the course`}
-                className="w-[34px] min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[13px] text-muted outline-none"
-              />
-              <span aria-hidden className="font-mono text-[10.5px] text-muted-soft">%</span>
-              {/* Score and out-of sit together so an empty score reads as
-                  "not back yet" rather than as a zero. */}
-              <input
-                value={row.score ?? ''}
-                onChange={(e) =>
-                  patch(row.id, {
-                    score: e.target.value === '' ? null : number(e.target.value),
-                    outOf: row.outOf ?? 100,
-                  })
-                }
-                inputMode="decimal"
-                placeholder="—"
-                aria-label={`${row.label || 'This piece'}, what you scored`}
-                className="ml-1.5 w-[36px] min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[13px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-muted-soft"
-              />
-              <span aria-hidden className="font-mono text-[10.5px] text-muted-soft">/</span>
-              <input
-                value={row.outOf ?? ''}
-                onChange={(e) =>
-                  patch(row.id, { outOf: e.target.value === '' ? null : number(e.target.value) || null })
-                }
-                inputMode="decimal"
-                placeholder="100"
-                aria-label={`${row.label || 'This piece'}, out of`}
-                className="w-[30px] min-w-0 border-0 bg-transparent p-0 font-mono text-[13px] text-muted outline-none placeholder:text-muted-soft"
-              />
-              <button
-                type="button"
-                onClick={() => setRows((current) => current.filter((r) => r.id !== row.id))}
-                aria-label={`Remove ${row.label || 'this piece'}`}
-                className="ml-0.5 grid h-7 w-6 shrink-0 place-items-center bg-transparent font-mono text-[14px] text-muted-soft transition-colors hover:text-warn"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+          {/* An outline reads in the order the course runs; a scheme typed
+              in over a term arrives in the order the marks did. The grip sits
+              in the margin, because every field on the row is already typed
+              into. */}
+          {rows.length > 1 ? (
+            <ReorderList
+              items={rows}
+              getId={(row) => row.id}
+              getLabel={(row) => row.label || 'This piece'}
+              label="How the course is marked, in the order you arranged it"
+              shape="row"
+              carry="grip"
+              className=""
+              onReorder={moveRow}
+              renderItem={pieceRow}
+            />
+          ) : (
+            rows.map((row, index) => <div key={row.id}>{pieceRow(row, index)}</div>)
+          )}
         </div>
 
         <button

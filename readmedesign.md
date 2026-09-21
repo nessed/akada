@@ -124,7 +124,7 @@ at the top while a session runs.
 
 At `md` and above a **232px rail** takes over and both of those hide
 themselves. The rail carries the five screens, the term's courses under them
-in the order the dashboard was dragged into, the timer, and Settings. It
+in the order they were dragged into, the timer, and Settings. It
 collapses to a 64px strip of icons, the choice is remembered, and `PageShell`
 mirrors its width so the content recentres rather than staying pinned to a
 phone column in the middle of a 1440px screen. Pages that lay themselves out
@@ -253,6 +253,37 @@ courses, reflection tags, timer goals and priority marks all read this way.
 
 The exceptions are deliberate: a **dashed outline** for "there is more you
 could add here", and the timer's single filled action.
+
+### Rearranging by hand
+Four lists let the reader set their own order, and all four are the same
+component, `ReorderList`: the **dashboard's stack of course cards**, the
+**course panels in Settings**, the **subtasks inside a task**, and the
+**pieces of a marking scheme** on a course page. It is written against
+pointer events rather than a drag-and-drop library, because a carried thing
+here has to keep looking like a sheet of paper.
+
+What it looks like is fixed by two choices.
+
+`shape` is what is being carried. A **sheet** is a card the size of a hand:
+the grip is two pencil strokes across its top edge, and the space it will
+settle into is outlined with a deckle rule. A **row** is a line in a list:
+the grip is two strokes out in the margin beside it, clear of the fields, and
+the landing space is a plain dashed box. Either way the carried thing lifts
+with a warm `drop-shadow` that follows its own cut corners — the tone the
+sticky note casts — tilts under half a degree, and everything else steps
+aside rather than rearranging under it.
+
+`carry` is what lifts it, and it follows from what the item already does. A
+card that is a link lifts on a **press**: a mouse must travel 6px, a finger
+must rest 320ms without wandering 9px, so a tap still opens the course and a
+swipe still scrolls the page. Its grip only appears under a cursor, which is
+honest, because on a touch screen nothing hovers and the press is the gesture.
+An item made of text fields lifts from the **grip** alone, and that grip stays
+faintly drawn at 45% so a finger can find it.
+
+Both paths have a keyboard twin: the grip is a real button, and up and down
+arrows move the item one place, with every move said out loud through a
+polite live region.
 
 ### Buttons
 Two shapes, not four:
