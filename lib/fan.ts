@@ -23,6 +23,16 @@ export interface FanSegment {
   w: number;
   /** How many splits deep this segment is. Progress unlocks depths in order. */
   d: number;
+  /** The segment this one grows out of; -1 for the stem. Always a lower
+      index than this segment's own, because the tree is built depth first,
+      which is what lets one forward pass bend the whole thing. */
+  p: number;
+  /** Rest angle, absolute. Bending a branch rotates this and every angle
+      hanging off it, which is the difference between a tree leaning and a
+      tree shearing. */
+  a: number;
+  /** Length in the fan's own units. */
+  len: number;
 }
 
 export interface FanTree {
@@ -72,11 +82,20 @@ export function buildFan(seed: number, depthMax = 7, tripleP = 0.2): FanTree {
   const r = rng(seed);
   const segs: FanSegment[] = [];
 
-  const rec = (x: number, y: number, ang: number, len: number, w: number, d: number) => {
+  const rec = (
+    x: number,
+    y: number,
+    ang: number,
+    len: number,
+    w: number,
+    d: number,
+    p: number,
+  ) => {
     if (d > depthMax) return;
     const x1 = x + Math.cos(ang) * len;
     const y1 = y + Math.sin(ang) * len;
-    segs.push({ x, y, x1, y1, w, d });
+    const self = segs.length;
+    segs.push({ x, y, x1, y1, w, d, p, a: ang, len });
 
     const n = d < 1 ? 2 : r() < tripleP ? 3 : 2;
     const spread = 0.5 + r() * 0.35;
@@ -85,11 +104,11 @@ export function buildFan(seed: number, depthMax = 7, tripleP = 0.2): FanTree {
       // Pull each branch a tenth of the way back toward straight up, so the
       // fan keeps reaching for the top of its frame instead of splaying flat.
       const a = (ang + off) * 0.9 + (-Math.PI / 2) * 0.1;
-      rec(x1, y1, a, len * (0.7 + r() * 0.12), w * 0.72, d + 1);
+      rec(x1, y1, a, len * (0.7 + r() * 0.12), w * 0.72, d + 1, self);
     }
   };
 
-  rec(0, 0, -Math.PI / 2, 1, 1, 0);
+  rec(0, 0, -Math.PI / 2, 1, 1, 0, -1);
 
   let minX = 0;
   let maxX = 0;
@@ -115,6 +134,45 @@ export interface FanDrawOptions {
   widthFill?: number;
   /** Where the stem's foot sits, measured up from the bottom edge. */
   baseOffset?: number;
+  /** Radians added at each depth, indexed by depth. A branch takes its own
+      entry plus every entry above it, so the stem leans a little and the
+      tips travel a long way, which is how a tree bends. Leave it out and
+      the fan is drawn at rest. */
+  bends?: number[];
+  /** Length multiplier at each depth, indexed the same way. Small numbers:
+      a tenth either side is the whole range the pull uses. */
+  slack?: number[];
+}
+
+/* Scratch for the bent pose: the end point and absolute angle of every
+   segment. Kept between frames because the draw loop runs sixty times a
+   second over a few hundred segments, and three fresh arrays a frame is the
+   kind of litter that shows up as a stutter on a phone. */
+let poseX = new Float64Array(0);
+let poseY = new Float64Array(0);
+let poseA = new Float64Array(0);
+
+/**
+ * Walk the tree once and write the bent pose into the scratch arrays. Parents
+ * always come first in `segs`, so a single forward pass is enough: each
+ * branch starts where its parent ended and carries its parent's rotation.
+ */
+function poseFan(tree: FanTree, bends: number[], slack?: number[]): void {
+  const n = tree.segs.length;
+  if (poseX.length < n) {
+    poseX = new Float64Array(n);
+    poseY = new Float64Array(n);
+    poseA = new Float64Array(n);
+  }
+  for (let i = 0; i < n; i++) {
+    const s = tree.segs[i];
+    const parent = s.p >= 0 ? tree.segs[s.p] : null;
+    const a = (parent ? poseA[s.p] + (s.a - parent.a) : s.a) + (bends[s.d] ?? 0);
+    const len = s.len * (1 + (slack?.[s.d] ?? 0));
+    poseA[i] = a;
+    poseX[i] = (parent ? poseX[s.p] : 0) + Math.cos(a) * len;
+    poseY[i] = (parent ? poseY[s.p] : 0) + Math.sin(a) * len;
+  }
 }
 
 /**
@@ -136,6 +194,8 @@ export function drawFan(
     padTop = 90,
     widthFill = 0.86,
     baseOffset = -2,
+    bends,
+    slack,
   } = opts;
 
   ctx.clearRect(0, 0, width, height);
@@ -152,14 +212,26 @@ export function drawFan(
   const depths = tree.depthMax + 1;
   const p = Math.min(1, Math.max(0, progress));
 
-  for (const s of tree.segs) {
+  /* The frame is measured off the resting shape, on purpose. A fan that
+     rescaled as it was pulled would shrink the moment a hand touched it, and
+     "the tips reached the top" has to keep meaning the block is done. A
+     pulled tree leans past its own margins instead, and the frame clips it. */
+  const bent = bends != null;
+  if (bent) poseFan(tree, bends, slack);
+
+  for (let i = 0; i < tree.segs.length; i++) {
+    const s = tree.segs[i];
     // Each depth gets an equal slice of the run. A segment is still growing
     // while its slice is open and finished once the next depth starts.
     const grown = Math.min(1, Math.max(0, p * depths - s.d));
     if (grown <= 0) continue;
 
-    const x1 = s.x + (s.x1 - s.x) * grown;
-    const y1 = s.y + (s.y1 - s.y) * grown;
+    const x0 = bent ? (s.p >= 0 ? poseX[s.p] : 0) : s.x;
+    const y0 = bent ? (s.p >= 0 ? poseY[s.p] : 0) : s.y;
+    const ex = bent ? poseX[i] : s.x1;
+    const ey = bent ? poseY[i] : s.y1;
+    const x1 = x0 + (ex - x0) * grown;
+    const y1 = y0 + (ey - y0) * grown;
 
     ctx.lineWidth = Math.max(1.4, s.w * trunkWidth);
     ctx.strokeStyle = s.d < 2 ? colors[0] : s.d < 5 ? colors[1] : colors[2];
@@ -168,7 +240,7 @@ export function drawFan(
     ctx.globalAlpha = s.d >= 8 ? 0.85 : 1;
 
     ctx.beginPath();
-    ctx.moveTo(ox + s.x * sc, oy + s.y * sc);
+    ctx.moveTo(ox + x0 * sc, oy + y0 * sc);
     ctx.lineTo(ox + x1 * sc, oy + y1 * sc);
     ctx.stroke();
   }

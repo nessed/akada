@@ -175,9 +175,28 @@ exactly at the target, which is what makes touching the top edge the
 completion; open mode sizes it to the screen and keeps going. `trunkWidth`
 and `padTop` are CSS pixels and are scaled by the device ratio internally.
 
+The fan can be taken hold of and pulled. A drag bends it and letting go
+springs it back, overshooting once and settling inside a couple of seconds,
+and the bend reaches the outer branches a few frames after the stem so the
+pull travels out through the tree rather than turning all of it at once.
+Sideways is the lean, up and down is the give in the branches. It is a hand
+on a branch and nothing else: **the pull never touches progress**, so the fan
+comes to rest in exactly the shape it was in before it was touched, and the
+clock, the block and the record are untouched by it. The weights live in
+`StudyFan` (`SWAY_MAX`, `STIFFNESS`, `DAMPING`), the bending itself in
+`drawFan`'s `bends` and `slack`, and a reader who has asked for reduced
+motion gets a fan that does not answer a hand at all.
+
+Early in a block there is barely any tree to pull, so the lean is shared out
+over the depths that have actually grown. A stem and one split give more than
+a full crown does, which is also true of saplings.
+
 Open mode is the **one screen in the app that inverts**, and it does so with
 literal values rather than the paper tokens, because on the night ground
-`text-ink` is still the daylight ink.
+`text-ink` is still the daylight ink. Its chrome floats over the fan and only
+the chrome takes the pointer: the empty middle of that screen is left to the
+tree, so a hand that reaches into it lands on a branch rather than on a sheet
+of glass laid over one.
 
 ### The break
 A block that runs out keeps running, shown as overrun rather than stopped for
