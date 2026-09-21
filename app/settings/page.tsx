@@ -299,9 +299,18 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
+              </SettingGroup>
+
+              {/* Its own group, because it is not a goal. It sat under Goals
+                  reading "Skip weekends in goals · Streak and weekly pace
+                  ignore Sat and Sun", which is not true of it and never was:
+                  `hideWeekends` is read in exactly one place, the Stats
+                  heatmap, and neither the run nor the weekly pace has ever
+                  looked at it. */}
+              <SettingGroup label="Stats">
                 <SettingToggleRow
-                  label="Skip weekends in goals"
-                  sub="Streak and weekly pace ignore Sat and Sun"
+                  label="Hide weekends from the heatmap"
+                  sub="The grid on Stats drops Sat and Sun"
                   value={prefs.hideWeekends}
                   onChange={(v) => setPrefs({ hideWeekends: v })}
                 />

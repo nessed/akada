@@ -43,7 +43,6 @@ export interface Preferences {
   upNextSort: UpNextSort;
   density: Density;
   primaryAccent: PrimaryAccent;
-  dailyReminder: boolean;
   /**
    * Whether the timer chimes when a block ends and when a break is up. The
    * toggle predates continuous mode and did nothing until there was something
@@ -73,7 +72,6 @@ const DEFAULTS: Preferences = {
   upNextSort: 'in-progress',
   density: 'comfy',
   primaryAccent: 'classic',
-  dailyReminder: true,
   // On, now that it has a job. A break whose end is not announced is a break
   // the reader has to sit and watch, which is not a break.
   sessionSound: true,
@@ -112,10 +110,6 @@ function sanitizePreferences(value: unknown): Preferences {
     primaryAccent: PRIMARY_ACCENT_VALUES.includes(parsed.primaryAccent as PrimaryAccent)
       ? (parsed.primaryAccent as PrimaryAccent)
       : DEFAULTS.primaryAccent,
-    dailyReminder:
-      typeof parsed.dailyReminder === 'boolean'
-        ? parsed.dailyReminder
-        : DEFAULTS.dailyReminder,
     sessionSound:
       typeof parsed.sessionSound === 'boolean' ? parsed.sessionSound : DEFAULTS.sessionSound,
     hideWeekends:

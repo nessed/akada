@@ -270,6 +270,23 @@ The steps count draws only when a task has steps, and it is the only thing on
 the row that says so — without it a task with four steps reads exactly like
 one with none, and nobody opens it to find out.
 
+At the right edge the row carries the timer: a play mark that starts one, or,
+on the row a session is already running, the elapsed time and a control that
+holds it and lets it go again. That control draws **only when it is given a
+handler**, which is the rule that matters — it used to draw whenever a timer
+ran and call nothing, so it was a live-looking button that did nothing when
+pressed.
+
+### Keys on the task list
+The list is walkable without a pointer: `↑ ↓` move a cursor, which the row
+draws as an ink ring rather than a fill; `X` selects the row under it and
+opens the bulk bar; `Enter` opens it; `N` starts a task, `S` changes the
+order, `⌘Z` undoes the last bulk move, `Esc` closes whatever is in front. The
+hint under the list names exactly these and nothing else. It used to offer
+`X select` and `⌘Z undo` with neither bound to anything, which is a worse lie
+than saying nothing, and the help sheet behind `?` listed a third, different
+set.
+
 ### Rearranging by hand
 Four lists let the reader set their own order, and all four are the same
 component, `ReorderList`: the **dashboard's stack of course cards**, the
