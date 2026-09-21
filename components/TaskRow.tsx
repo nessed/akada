@@ -120,6 +120,7 @@ export default function TaskRow({
   const due = dueLabel(task.dueDate);
   const color = course?.color ?? 'var(--muted)';
   const mark = kindMark(task);
+  const steps = stepCount(task);
 
   const row = (
     <div
@@ -172,11 +173,24 @@ export default function TaskRow({
         <button
           type="button"
           onClick={() => onOpen?.(task)}
-          className="min-w-0 flex-1 truncate bg-transparent text-left text-[14px] leading-[1.3]"
-          title={task.title}
+          className={`min-w-0 flex-1 truncate bg-transparent text-left text-[14px] leading-[1.3] ${
+            onOpen ? 'task-open cursor-pointer' : ''
+          }`}
+          title={onOpen ? `${task.title} — open it` : task.title}
         >
           {task.title}
         </button>
+        {/* How far through its steps a task is, and the only thing on the row
+            that says it has any. Without it a task with four steps reads
+            exactly like one with none, and nobody opens it to find out. */}
+        {steps && (
+          <span
+            className="tnum shrink-0 font-mono text-[10.5px] text-muted"
+            title={`${steps.done} of ${steps.total} steps done`}
+          >
+            {steps.done}/{steps.total}
+          </span>
+        )}
         {mark && !running && (
           <span
             className="hidden shrink-0 pr-3.5 font-mono text-[10.5px] tracking-[0.04em] text-muted md:inline"
@@ -366,6 +380,13 @@ export default function TaskRow({
  * it, not a column. Hidden on a phone, where the title already crowds the
  * date.
  */
+/** A task's steps, or null when it has none to show. */
+function stepCount(task: Task): { done: number; total: number } | null {
+  const list = task.subtasks ?? [];
+  if (list.length === 0) return null;
+  return { done: list.filter((item) => item.completed).length, total: list.length };
+}
+
 function kindMark(task: Task): { label: string; title: string } | null {
   const weight = task.weight ?? 0;
   if (task.kind === 'exam') {
