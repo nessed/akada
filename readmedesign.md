@@ -262,11 +262,16 @@ else:
   landed part stays for the rest of the sitting, because it is the sitting's
   own record. The open-mode night screen carries only the landed part and
   never a prompt, since that screen exists to hold one thing.
-- **In the margin of the block frame**, the course's open page as a tally,
-  `4 / 15` in mono beside it. A mark that lands twelve minutes into a block
-  draws itself in twelve minutes into the block: `TallyMarks` takes `fresh`,
-  and those strokes animate on with `.tally-fresh`, staggered, the way a pen
-  would put them down.
+- **In the margin of the timer**, the course's open page as a tally, `4 / 15`
+  in mono beside it. A mark that lands twelve minutes into a block draws
+  itself in twelve minutes into the block: `TallyMarks` takes `fresh`, and
+  those strokes animate on with `.tally-fresh`, staggered, the way a pen would
+  put them down. Both modes carry it — the block frame in its own corner, open
+  mode beside the clock — because the page filling is the record of the
+  sitting and an untimed sitting fills it exactly as a timed one does. Open
+  mode passes `trackColor` for the marks still to come, since that screen
+  inverts with literal values and the paper's own rule there is the daylight
+  one.
 - **On the log sheet**, above the note. The same tally, the same lines, and
   what is nearest after this sitting, so the loop the line opened is closed
   here and opened again in the same breath. This is the one moment a reader

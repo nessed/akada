@@ -603,6 +603,27 @@ export default function TimerPage() {
                 {task ? <> · <span style={{ color: '#EFE9DC' }}>{task.title}</span></> : null}
                 {isPaused && !resting ? ' · paused' : ''}
               </p>
+              {/* The course's page, the same one the block frame carries in
+                  its margin. It fills as the reader sits and a mark that
+                  lands inks itself in where they can see it. The empty marks
+                  take an explicit dark rule: this screen inverts with literal
+                  values, so the paper's own line would be the daylight one. */}
+              {tally && (
+                <span className="mt-4 flex items-center gap-2.5">
+                  <TallyMarks
+                    inked={tally.inked}
+                    total={MARKS_PER_PAGE}
+                    fresh={tally.fresh}
+                    color={color}
+                    trackColor="#4A4438"
+                    size={14}
+                  />
+                  <span className="font-mono text-[10.5px] tracking-[0.06em]" style={{ color: '#958D7E' }}>
+                    {tally.inked} / {MARKS_PER_PAGE}
+                  </span>
+                </span>
+              )}
+
               {/* What the sitting has done, and only that. This screen holds
                   one thing and is not given a prompt; a mark that landed
                   while the reader sat is not a prompt, it is the record. */}

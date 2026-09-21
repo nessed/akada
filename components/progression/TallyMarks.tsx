@@ -7,6 +7,12 @@
  * length and the reader can see what binding it would take without being
  * told a number.
  *
+ * `trackColor` is what the marks still to come are drawn in. It defaults to
+ * the paper's own rule, which is right on every screen but one: open mode
+ * inverts with literal values rather than the paper tokens, so there
+ * `var(--line)` is still the daylight rule and the empty marks would come
+ * out brighter than the inked ones.
+ *
  * `fresh` is how many of the inked marks arrived just now, from the sitting
  * on the clock or the one on the log sheet. Those draw themselves in, stroke
  * by stroke, the way a pen would. A mark that lands while the reader watches
@@ -19,6 +25,7 @@ export default function TallyMarks({
   fresh = 0,
   size = 18,
   color = 'var(--ink)',
+  trackColor = 'var(--line)',
   className,
 }: {
   inked: number;
@@ -26,6 +33,7 @@ export default function TallyMarks({
   fresh?: number;
   size?: number;
   color?: string;
+  trackColor?: string;
   className?: string;
 }) {
   const gates = Math.ceil(total / 5);
@@ -89,7 +97,7 @@ export default function TallyMarks({
           pathLength={1}
           className={s.fresh ? 'tally-fresh' : undefined}
           style={s.fresh ? { animationDelay: `${(i - firstFresh) * 110}ms` } : undefined}
-          stroke={s.on ? color : 'var(--line)'}
+          stroke={s.on ? color : trackColor}
           strokeWidth={s.on ? 1.6 : 1}
           strokeLinecap="round"
         />
