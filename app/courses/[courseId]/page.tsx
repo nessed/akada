@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import BackButton from '@/components/BackButton';
 import CoursePagePanel from '@/components/progression/CoursePagePanel';
+import Marginalia from '@/components/progression/Marginalia';
 import { useProgression } from '@/lib/progression/use-progression';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import DatePicker from '@/components/DatePicker';
@@ -336,6 +337,7 @@ export default function CoursePage() {
               {course.name}
             </span>
           </h1>
+          <Marginalia courseId={course.id} className="mt-2.5" />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">

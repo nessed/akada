@@ -8,6 +8,7 @@ import { useLiveSession } from '../use-live-session';
 import { isoDate } from '../utils';
 import { readSittingEffect, type SittingEffect } from './effect';
 import { readProgression, type Progression } from './index';
+import { readRankingBias } from './log';
 
 /**
  * The progression layer over the three lists every other screen already has,
@@ -40,15 +41,26 @@ export function useProgression(): {
   const today = isoDate();
   const courses = useMemo(() => sortCourses(raw), [raw]);
 
+  // What the device has learned about which lines get followed. Read when
+  // the record changes, which is also when a followed line is written, so
+  // the ranking picks the lesson up on the next sitting.
+  const bias = useMemo(
+    () => readRankingBias(),
+    // sessions is the clock this is read against: a followed line is written
+    // when a sitting starts, and the record changes when it is logged.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessions],
+  );
+
   const logged = useMemo(() => {
     if (isLoading) return null;
-    return readProgression(courses, sessions, tasks, today);
-  }, [isLoading, courses, sessions, tasks, today]);
+    return readProgression(courses, sessions, tasks, today, { bias });
+  }, [isLoading, courses, sessions, tasks, today, bias]);
 
   const progression = useMemo(() => {
     if (!logged || !live) return logged;
-    return readProgression(courses, withLiveSession(sessions, live), tasks, today);
-  }, [logged, live, courses, sessions, tasks, today]);
+    return readProgression(courses, withLiveSession(sessions, live), tasks, today, { bias });
+  }, [logged, live, courses, sessions, tasks, today, bias]);
 
   const sitting = useMemo(() => {
     if (!logged || !progression || !live || progression === logged) return null;

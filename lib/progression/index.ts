@@ -1,9 +1,10 @@
 import type { Course, Session, Task } from '../data';
 import { isoDate, startOfWeek } from '../utils';
 import { readCredit, type DayCredit } from './credit';
+import { readHabits, type Habits } from './habits';
 import { impressionOf, readLadders, type Impression, type Ladder } from './impressions';
 import { readInk } from './ink';
-import { readNextMark, type NextMarkReading } from './next-mark';
+import { readNextMark, type MarkKind, type NextMarkReading } from './next-mark';
 import { marksToday, readPages, type CoursePages } from './pages';
 import { readRuns, type RunReading } from './runs';
 import { readWeekShape, type WeekShape } from './week-shape';
@@ -38,6 +39,17 @@ export type { Impression, Ladder } from './impressions';
 export type { WeekShape } from './week-shape';
 export type { MarkCandidate, MarkKind, NextMarkReading } from './next-mark';
 export type { SittingEffect } from './effect';
+export type { CourseHabit, Habits, HourWindow, Stat } from './habits';
+export type { Observation } from './observations';
+export {
+  hourLabel,
+  readHabits,
+  roughMinutes,
+  settled,
+  WEEKDAY_NAMES,
+  windowLabel,
+} from './habits';
+export { pickMarginNote, readObservations } from './observations';
 export { describeWeek } from './runs';
 export { impressionOf, readLadders } from './impressions';
 export { readSittingEffect } from './effect';
@@ -52,6 +64,8 @@ export interface Progression {
   /** This week beside a typical one. Null until there is a usually to claim. */
   weekShape: WeekShape | null;
   nextMark: NextMarkReading;
+  /** How this reader studies, from their own rows. See habits.ts. */
+  habits: Habits;
   ladders: Ladder[];
   impressions: Impression[];
   /** Whether today's claimed effort hit a taper, so the copy can say so. */
@@ -63,16 +77,27 @@ export interface Progression {
   today: string;
 }
 
+export interface ProgressionOptions {
+  /**
+   * What the device has learned about which lines this reader follows.
+   * Client-only, so it is handed in rather than read here; the server reads
+   * nothing of the kind and gets the hand written ranking.
+   */
+  bias?: Partial<Record<MarkKind, number>>;
+}
+
 export function readProgression(
   courses: Course[],
   sessions: Session[],
   tasks: Task[],
   today = isoDate(),
+  options: ProgressionOptions = {},
 ): Progression {
   const ledger = readCredit(courses, sessions, tasks);
   const pages = readPages(courses, ledger, today);
   const runs = readRuns(courses, ledger, today);
   const ladders = readLadders(courses, sessions, tasks, ledger, pages, runs);
+  const habits = readHabits(courses, sessions, tasks);
 
   const lastActive = [...ledger].reverse().find((d) => d.rawTotal > 0)?.iso ?? null;
   const quietDays = lastActive ? daysApart(lastActive, today) : 0;
@@ -88,6 +113,8 @@ export function readProgression(
     returning: quietDays >= 4,
     thisWeek: runs.thisWeek,
     runCurrent: runs.current,
+    reach: habits.reach,
+    bias: options.bias ?? {},
   });
 
   return {
@@ -97,6 +124,7 @@ export function readProgression(
     runs,
     weekShape: readWeekShape(runs.weeks, ledger),
     nextMark,
+    habits,
     ladders,
     impressions: ladders.map(impressionOf),
     taperedToday: ledger.find((d) => d.iso === today)?.tapered ?? false,
