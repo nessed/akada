@@ -213,9 +213,17 @@ export async function deleteCourseOptimistic(id: string) {
 
 /* ───────── Task mutations ───────── */
 
+/**
+ * Returns the row as it was actually written, not the optimistic stand-in.
+ *
+ * The two differ in the one way that matters to a caller with more to say:
+ * the id. Undoing the delete of a finished task has to write the task and
+ * then put its tick back, and the optimistic id is not a row anything can be
+ * written to.
+ */
 export async function addTaskOptimistic(
   task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>,
-) {
+): Promise<Task> {
   const optimistic: Task = {
     ...task,
     id: optimisticId(),
@@ -223,10 +231,12 @@ export async function addTaskOptimistic(
     completedAt: null,
     createdAt: nowIso(),
   };
+  let written = optimistic;
   await mutate(
     KEY.tasks,
     async (current: Task[] | undefined) => {
       const saved = await db.addTask(task);
+      written = saved;
       const list = current ?? [];
       return [...list.filter((t) => t.id !== optimistic.id), saved];
     },
@@ -240,6 +250,7 @@ export async function addTaskOptimistic(
       revalidate: false,
     },
   );
+  return written;
 }
 
 export async function updateTaskOptimistic(id: string, patch: Partial<Task>) {
