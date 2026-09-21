@@ -12,6 +12,7 @@ import {
 } from '@/lib/session-safety';
 import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
+import { useNotice } from '@/components/Notice';
 import StudyFan from '@/components/StudyFan';
 import SessionChain from '@/components/SessionChain';
 import NextMarkLine from '@/components/progression/NextMarkLine';
@@ -107,7 +108,16 @@ export default function TimerPage() {
 
   const { courses } = useCourses();
   const { tasks } = useTasks();
+  const { notify } = useNotice();
   const noise = useAmbientNoise();
+
+  /* The hook already refuses to fail silently — but a `title` is a tooltip,
+     and a phone has no cursor to hover with, so on the device most likely to
+     have the audio blocked the reason reached nobody. It is said out loud
+     once, each time the reason changes. */
+  useEffect(() => {
+    if (noise.error) notify(noise.error);
+  }, [noise.error, notify]);
   const [immersive, setImmersive] = useState(false);
 
   const timerCourseId = active?.courseId ?? pendingLog?.courseId ?? null;

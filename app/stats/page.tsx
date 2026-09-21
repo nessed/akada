@@ -177,12 +177,20 @@ export default function StatsPage() {
     }
     setDeletedSession(null);
     try {
+      // The whole sitting, not most of it. This used to send five fields and
+      // drop the two that describe how the sitting actually went, so an
+      // undone delete quietly returned a session with no rest and no shape —
+      // and those are exactly the two the connector reads for its focus
+      // pattern. The row is written the same way PendingSessionLogSheet
+      // writes a new one.
       await addSessionOptimistic({
         courseId: session.courseId,
         taskId: session.taskId,
         date: session.date,
         durationSeconds: session.durationSeconds,
         note: session.note,
+        breakSeconds: session.breakSeconds,
+        segments: session.segments,
       });
     } catch (error) {
       console.error('Failed to restore session:', error);

@@ -463,17 +463,35 @@ function TasksPageContent() {
         restore: async () => {
           // A deleted row cannot come back with its old id, so undo writes
           // the same task again rather than pretending nothing happened.
+          //
+          // Everything else about it does come back. This used to send six
+          // fields and drop the three that say what the task is: an exam
+          // worth 30% returned as a plain task worth nothing, and a reading
+          // lost its page count. An undo that quietly keeps some of a row is
+          // worse than one that refuses, because nothing says what went.
           await Promise.all(
-            batch.map((t) =>
-              addTaskOptimistic({
+            batch.map(async (t) => {
+              const written = await addTaskOptimistic({
                 courseId: t.courseId,
                 title: t.title,
                 description: t.description,
                 subtasks: t.subtasks,
                 dueDate: t.dueDate,
                 priority: t.priority,
-              }),
-            ),
+                kind: t.kind,
+                weight: t.weight,
+                pages: t.pages,
+              });
+              // A finished task comes back finished. Adding a task always
+              // writes it open, so the tick is put back on the row that was
+              // actually written.
+              if (t.completed) {
+                await updateTaskOptimistic(written.id, {
+                  completed: true,
+                  completedAt: t.completedAt,
+                });
+              }
+            }),
           );
         },
       });
