@@ -562,13 +562,17 @@ export default function TimerPage() {
           trunkWidth={15}
           padTop={20}
           widthFill={0.94}
-          className="pointer-events-none absolute inset-0 h-full w-full"
+          className="absolute inset-0 h-full w-full"
         />
 
-        <div className="relative flex min-h-[100dvh] flex-col">
-          {header}
+        {/* The chrome floats over the fan, and only the chrome takes the
+            pointer. The empty middle of the screen is left to the tree, so a
+            hand that reaches into it lands on a branch rather than on a sheet
+            of glass laid over one. */}
+        <div className="pointer-events-none relative flex min-h-[100dvh] flex-col">
+          <div className="pointer-events-auto">{header}</div>
           <div className="flex-1" />
-          <div className="flex flex-col gap-6 px-6 pb-[max(env(safe-area-inset-bottom),32px)] md:flex-row md:items-end md:justify-between md:px-12 md:pb-10">
+          <div className="pointer-events-auto flex flex-col gap-6 px-6 pb-[max(env(safe-area-inset-bottom),32px)] md:flex-row md:items-end md:justify-between md:px-12 md:pb-10">
             <div>
               <p className="eyebrow m-0 mb-2" style={{ color }}>
                 {code} · {resting ? 'Break' : 'Open'}
