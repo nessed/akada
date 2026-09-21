@@ -149,9 +149,15 @@ export function readObservations({ habits, courses, now, loggedToday }: Observat
     const name = code(habit.courseId);
 
     if (settled(habit.blocks, HABIT_MIN_BLOCKS)) {
+      // A reading drawn from whole sittings rather than from timed blocks is
+      // a fact about sittings, and says so. Calling it a block would be the
+      // app dressing up what it read as something it measured.
       out.push({
         id: `blocks:${habit.courseId}`,
-        text: `${name} blocks run about ${roughMinutes(habit.blocks.median)} minutes`,
+        text:
+          habit.blocksFrom === 'timed'
+            ? `${name} blocks run about ${roughMinutes(habit.blocks.median)} minutes`
+            : `${name} sittings run about ${roughMinutes(habit.blocks.median)} minutes`,
         courseId: habit.courseId,
         weight: habit.blocks.n,
         now: false,

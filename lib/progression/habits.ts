@@ -33,6 +33,22 @@ import {
  * The start popover defaults to the block length the reader actually runs
  * on that course. And the observations (./observations.ts) are the margin
  * notes on Today and the course pages, which change as the term does.
+ *
+ * It reads the whole term, including the part recorded before any of this
+ * existed. That matters more than it sounds. A sitting only carries a chain
+ * of blocks and breaks if it was timed in continuous mode; a sitting from
+ * before that, and one reported through the connector, carries a duration
+ * and nothing else. Reading only the chains would have meant a student with
+ * a term behind them opening this and seeing a column of dashes, which is
+ * the app claiming to know nothing about somebody it has watched all
+ * semester.
+ *
+ * So a sitting with no chain is read as what the record actually says it
+ * was: one unbroken stretch, and only when no rest was reported against it,
+ * because rest without a chain means the stretch was broken in a way nobody
+ * wrote down. Those stand in for blocks only where there are too few real
+ * ones to speak, and `blocksFrom` says which happened, so a coarse reading
+ * is never passed off as a measured one.
  */
 
 export interface Stat {
@@ -50,10 +66,19 @@ export interface HourWindow {
   share: number;
 }
 
+/**
+ * Where a block reading came from. `timed` is the chain of a continuous
+ * sitting, which is a measurement. `sittings` is whole sittings that carry
+ * no chain, read as the single stretch the record says they were, which is
+ * a coarser thing and is labelled as one wherever it is shown.
+ */
+export type BlockSource = 'timed' | 'sittings' | null;
+
 export interface CourseHabit {
   courseId: string;
-  /** Focus block lengths, in seconds, from timed sittings. */
+  /** Focus block lengths, in seconds. See `blocksFrom` for where they came from. */
   blocks: Stat;
+  blocksFrom: BlockSource;
   /** Whole sittings, in seconds. */
   sittings: Stat;
   /** Blocks that were set a length, and how many ran past it by a minute or more. */
@@ -71,8 +96,9 @@ export interface CourseHabit {
 export interface Habits {
   /** Whole sittings, every course. */
   sittings: Stat;
-  /** Focus blocks, every course. */
+  /** Focus blocks, every course. See `blocksFrom` for where they came from. */
   blocks: Stat;
+  blocksFrom: BlockSource;
   /** Focus blocks per timed sitting. */
   blocksPerSitting: Stat;
   /** Breaks as taken, and the length they were set to. */
@@ -92,8 +118,10 @@ export interface Habits {
   days: number;
   /** Distinct weeks with something logged. */
   weeks: number;
-  /** Sittings timed in the app, so they have a shape to read. */
+  /** Sittings timed in the app, so they have a chain to read. */
   timedSittings: number;
+  /** Sittings with no chain that could still be read as one unbroken stretch. */
+  flatSittings: number;
   byCourse: Map<string, CourseHabit>;
 }
 
@@ -187,13 +215,17 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
 
   const allSittings: number[] = [];
   const allBlocks: number[] = [];
+  /** Chainless sittings read as one stretch, kept apart from measured blocks. */
+  const flatBlocks: number[] = [];
   const perSitting: number[] = [];
   const breaksTaken: number[] = [];
   const breaksMeant: number[] = [];
   let timedSittings = 0;
+  let flatSittings = 0;
 
   const courseSittings = new Map<string, number[]>();
   const courseBlocks = new Map<string, number[]>();
+  const courseFlatBlocks = new Map<string, number[]>();
   const courseOverrun = new Map<string, { n: number; over: number }>();
   const courseHours = new Map<string, number[]>();
   const courseTagged = new Map<string, { n: number; count: number }>();
@@ -222,6 +254,17 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
     }
 
     const blocks = focusBlocks(session.segments);
+    if (blocks.length === 0) {
+      // No chain. The record still says what this sitting was, as long as it
+      // does not also report rest: one unbroken stretch of the length logged.
+      // Rest with no chain means it was broken somewhere nobody wrote down,
+      // and a broken stretch is not a block.
+      if (!session.breakSeconds) {
+        flatSittings += 1;
+        flatBlocks.push(session.durationSeconds);
+        bucket(courseFlatBlocks, session.courseId).push(session.durationSeconds);
+      }
+    }
     if (blocks.length > 0) {
       timedSittings += 1;
       perSitting.push(blocks.length);
@@ -296,6 +339,22 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
   const sittings = stat(allSittings);
   const minPeakFocus = HABIT_MIN_SITTINGS * 20 * 60;
 
+  /**
+   * Measured blocks where there are enough of them, and chainless sittings
+   * folded in only where there are not. A reader with a term of continuous
+   * sittings gets the real reading untouched; one whose history predates
+   * continuous mode gets a coarse reading rather than nothing, and is told
+   * which it is.
+   */
+  const chooseBlocks = (timed: number[], flat: number[]): { blocks: Stat; from: BlockSource } => {
+    if (timed.length >= HABIT_MIN_BLOCKS) return { blocks: stat(timed), from: 'timed' };
+    const both = [...timed, ...flat];
+    if (both.length === 0) return { blocks: EMPTY_STAT, from: null };
+    return { blocks: stat(both), from: 'sittings' };
+  };
+
+  const overall = chooseBlocks(allBlocks, flatBlocks);
+
   // The fullest weekday, claimed only once there are enough weeks for a
   // weekday to mean anything and the leader is clearly ahead of the rest.
   let fullestDay: number | null = null;
@@ -309,9 +368,14 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
   const byCourse = new Map<string, CourseHabit>();
   for (const course of courses) {
     const pace = pagesByCourse.get(course.id);
+    const mine = chooseBlocks(
+      courseBlocks.get(course.id) ?? [],
+      courseFlatBlocks.get(course.id) ?? [],
+    );
     byCourse.set(course.id, {
       courseId: course.id,
-      blocks: stat(courseBlocks.get(course.id) ?? []),
+      blocks: mine.blocks,
+      blocksFrom: mine.from,
       sittings: stat(courseSittings.get(course.id) ?? []),
       overrun: courseOverrun.get(course.id) ?? { n: 0, over: 0 },
       peak: peakOf(courseHours.get(course.id) ?? [], minPeakFocus),
@@ -331,7 +395,8 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
 
   return {
     sittings,
-    blocks: stat(allBlocks),
+    blocks: overall.blocks,
+    blocksFrom: overall.from,
     blocksPerSitting: stat(perSitting),
     breaks: { taken: stat(breaksTaken), meant: stat(breaksMeant) },
     reach,
@@ -343,6 +408,7 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
     days: days.size,
     weeks: weeks.size,
     timedSittings,
+    flatSittings,
     byCourse,
   };
 }
