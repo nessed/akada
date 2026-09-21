@@ -18,6 +18,20 @@ interface Props {
   onResolved?: () => void;
 }
 
+/**
+ * How many log sheets are on the page.
+ *
+ * PageShell carries one, so every tab has one, and the timer screen brings
+ * its own. A handful of screens have neither. Ending a sitting from a key
+ * has to know which it is standing on, or it would leave the reader on the
+ * privacy policy wondering where their sitting went.
+ */
+let mountedSheets = 0;
+
+export function isLogSheetMounted(): boolean {
+  return mountedSheets > 0;
+}
+
 export default function PendingSessionLogSheet({ onResolved }: Props) {
   const { pendingLog, clearPendingLog } = useTimer();
   const { courses, isLoading: coursesLoading } = useCourses();
@@ -46,6 +60,13 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       pendingLog?.taskId ? tasks.find((item) => item.id === pendingLog.taskId) ?? null : null,
     [pendingLog, tasks],
   );
+
+  useEffect(() => {
+    mountedSheets += 1;
+    return () => {
+      mountedSheets -= 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (pendingLog) {

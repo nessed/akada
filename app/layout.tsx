@@ -13,6 +13,7 @@ import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import NoticeProvider from '@/components/Notice';
 import SWRRoot from '@/components/SWRRoot';
 import TimerDocumentTitle from '@/components/TimerDocumentTitle';
+import TimerHotkeys from '@/components/TimerHotkeys';
 import PaperDoodle from '@/components/notebook/PaperDoodle';
 import { SITE_URL } from '@/lib/site-url';
 import './globals.css';
@@ -140,6 +141,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SWRRoot>
           <TimerProvider>
             <TimerDocumentTitle />
+            {/* P and K reach the running clock from every screen. See the
+                component: they bind nothing unless a sitting is running. */}
+            <TimerHotkeys />
             <NoticeProvider>{children}</NoticeProvider>
           </TimerProvider>
         </SWRRoot>

@@ -1391,9 +1391,19 @@ function TasksPageContent() {
                   { k: 'Enter', l: 'Open it, or save what you are typing' },
                   { k: 'N', l: 'New task' },
                   { k: 'S', l: 'Change order' },
+                  // The clock's two keys, listed only while a sitting is
+                  // actually running, because that is the only time they do
+                  // anything. A help sheet naming a dead key is the lie this
+                  // sheet was rewritten to stop telling.
+                  ...(active
+                    ? [
+                        { k: 'P', l: 'Hold the running clock, or let it go' },
+                        { k: 'K', l: 'Finish the sitting and log it' },
+                      ]
+                    : []),
                   { k: '⌘Z', l: 'Undo the last bulk change' },
                   { k: 'Esc', l: 'Close the sheet' },
-                ] as const
+                ] as { k: string; l: string }[]
               ).map((row) => (
                 <li
                   key={row.k}
