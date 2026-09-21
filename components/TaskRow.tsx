@@ -168,8 +168,13 @@ export default function TaskRow({
 
       {/* The title is the way into the task. A full-bleed button behind the
           row would swallow the controls beside it, so the title itself is the
-          target and everything else on the row keeps its own. */}
-      <span className="flex min-w-0 items-center gap-2">
+          target and everything else on the row keeps its own.
+
+          `md:pr-3.5` reserves a gap before the due-date column: the grid's
+          own gap-x is zeroed at that width (below it, gap-x-2 already does
+          the job), and whichever badge — steps, mark or the running clock —
+          happens to be last in this row otherwise lands flush against it. */}
+      <span className="flex min-w-0 items-center gap-2 md:pr-3.5">
         {task.priority === 'high' && !task.completed && (
           <span
             aria-hidden
@@ -203,7 +208,7 @@ export default function TaskRow({
         )}
         {mark && !running && (
           <span
-            className="hidden shrink-0 pr-3.5 font-mono text-[10.5px] tracking-[0.04em] text-muted md:inline"
+            className="hidden shrink-0 font-mono text-[10.5px] tracking-[0.04em] text-muted md:inline"
             title={mark.title}
           >
             {mark.label}
