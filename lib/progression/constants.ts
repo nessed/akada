@@ -116,8 +116,43 @@ export const INK_FLOOR = 0.12;
 
 /* ── Next Mark ─────────────────────────────────────────────────────────── */
 
-/** Nothing is named unless it is this close. Roughly one sitting. */
+/**
+ * Nothing is named unless it is this close. Roughly one sitting, and once
+ * the term has taught the app what one of *this reader's* sittings is, that
+ * is the figure used instead (see ./habits.ts, `reach`), bounded below so a
+ * student of short sittings still gets the first mark and the day named, and
+ * above so a marathon reader is not offered a two hour distance as "close".
+ */
 export const REACHABLE_SECONDS = 50 * MINUTE;
+export const REACH_MIN_SECONDS = 30 * MINUTE;
+export const REACH_MAX_SECONDS = 2 * HOUR;
+
+/* ── What the term teaches ─────────────────────────────────────────────── */
+
+/**
+ * How much evidence a habit needs before it is stated. Every figure in
+ * ./habits.ts is a median over the reader's own sittings, and a median of
+ * three is a coincidence with a number on it. Below these, the panel says
+ * the habit has not taken shape yet, which is itself information: the app
+ * gets to know you as you use it, and says so.
+ */
+export const HABIT_MIN_SITTINGS = 5;
+export const HABIT_MIN_BLOCKS = 4;
+export const HABIT_MIN_WEEKS = 3;
+export const HABIT_MIN_TAGGED = 4;
+
+/** A peak has to actually be one: this share of all focus inside three hours. */
+export const PEAK_MIN_SHARE = 0.4;
+
+/**
+ * The ranking learns. Each Next Mark line shown is logged with whether a
+ * sitting followed within the hour (./log.ts). Once a kind of line has been
+ * shown this many times, its follow rate against the others moves it up or
+ * down the ranking by at most half a tier: enough to prefer the lines this
+ * reader acts on, never enough to jump a course with an exam over one without.
+ */
+export const LEARN_MIN_IMPRESSIONS = 6;
+export const LEARN_MAX_SHIFT = 0.5;
 
 /**
  * Raw duration alone must not keep generating marks all day. Once this many

@@ -5,6 +5,7 @@ import PageShell from '@/components/PageShell';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import CoursePageRow from '@/components/progression/CoursePage';
 import ImpressionSheet from '@/components/progression/ImpressionSheet';
+import HabitsPanel from '@/components/progression/HabitsPanel';
 import RunPanel from '@/components/progression/RunPanel';
 import TrustPulse from '@/components/progression/TrustPulse';
 import { useCourses } from '@/lib/data-hooks';
@@ -28,7 +29,7 @@ import { useProgression } from '@/lib/progression/use-progression';
  */
 export default function RecordPage() {
   const { courses: rawCourses } = useCourses();
-  const { progression, sitting, isLoading } = useProgression();
+  const { progression, logged, sitting, isLoading } = useProgression();
   const courses = useMemo(() => sortCourses(rawCourses), [rawCourses]);
 
   if (isLoading || !progression) {
@@ -97,6 +98,13 @@ export default function RecordPage() {
             </p>
           )}
         </section>
+      </div>
+
+      {/* What the term has taught the app about the reader. Reads the record
+          without the sitting on the clock, so a figure here is a habit and
+          not the last ten minutes. */}
+      <div className="mt-6">
+        <HabitsPanel habits={(logged ?? progression).habits} courses={courses} />
       </div>
 
       <section className="mt-10">

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Course, SessionSegment, Task } from '@/lib/data';
 import { MARKS_PER_PAGE, type SittingEffect } from '@/lib/progression';
-import { resolveTint } from '@/lib/utils';
+import { formatHM, resolveTint } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import HandCheck from '@/components/notebook/HandCheck';
 import SessionChain from '@/components/SessionChain';
@@ -32,6 +32,13 @@ interface Props {
    * duration and a question and not a word about why the duration mattered.
    */
   effect?: SittingEffect | null;
+  /**
+   * How long this reader's sittings on this course usually run, in seconds,
+   * once there are enough to say. Set beside this one with no verb between
+   * them, the way the week is set beside a typical week: two facts, nothing
+   * to beat.
+   */
+  usualSeconds?: number | null;
   saving?: boolean;
   errorMessage?: string;
   contextMessage?: string;
@@ -47,6 +54,7 @@ export default function SessionLogModal({
   breakSeconds = 0,
   segments = [],
   effect = null,
+  usualSeconds = null,
   saving = false,
   errorMessage = '',
   contextMessage = '',
@@ -230,6 +238,14 @@ export default function SessionLogModal({
               )}
             </p>
           </div>
+        )}
+
+        {usualSeconds != null && (
+          <p className="m-0 mt-2 font-mono text-[11px] text-muted">
+            your {course.code} sittings usually{' '}
+            <span className="text-ink">{formatHM(usualSeconds)}</span>
+            {' · '}this one <span className="text-ink">{formatHM(safeSeconds)}</span>
+          </p>
         )}
 
         {contextMessage && (

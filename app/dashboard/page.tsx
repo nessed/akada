@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import NextMarkLine from '@/components/progression/NextMarkLine';
+import Marginalia from '@/components/progression/Marginalia';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useLiveSession } from '@/lib/use-live-session';
 import { withLiveSession } from '@/lib/live-session';
@@ -765,6 +766,10 @@ function DashboardPageContent() {
           <h1 className="m-0 font-serif text-[32px] font-medium leading-[1.05] tracking-[-0.025em] md:text-[36px]">
             Today
           </h1>
+          {/* A note in the margin about how this reader studies, in their
+              own hand. Nothing until the term has taught the app something;
+              see lib/progression/observations.ts. */}
+          <Marginalia className="mt-2.5" />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">

@@ -7,6 +7,7 @@ import {
   useCourses,
   useTasks,
 } from '@/lib/data-hooks';
+import { settled } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useTimer } from '@/lib/timer-context';
 import { isoDate } from '@/lib/utils';
@@ -23,7 +24,10 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
   const { tasks } = useTasks();
   // The pending sitting is folded into this reading, so `sitting` is what
   // saving it will do to the record, read before the reader decides.
-  const { sitting } = useProgression();
+  const { sitting, logged } = useProgression();
+  // The reader's usual sitting on this course, from the record without this
+  // one in it, so the figure is what "usually" meant before today.
+  const usual = pendingLog ? logged?.habits.byCourse.get(pendingLog.courseId)?.sittings ?? null : null;
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -133,6 +137,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       breakSeconds={pendingLog?.breakSeconds ?? 0}
       segments={pendingLog?.segments ?? []}
       effect={pendingLog && sitting?.courseId === pendingLog.courseId ? sitting : null}
+      usualSeconds={usual && settled(usual) ? usual.median : null}
       saving={saving}
       contextMessage={
         pendingLog?.recoveryReason === 'away'

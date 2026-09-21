@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Course, Task } from '@/lib/data';
+import { HABIT_MIN_BLOCKS, roughMinutes, settled } from '@/lib/progression';
+import { useProgression } from '@/lib/progression/use-progression';
 import { useTimer } from '@/lib/timer-context';
 
 /**
@@ -14,6 +16,11 @@ import { useTimer } from '@/lib/timer-context';
  *
  * "Open" is the fourth length rather than a mode switch, because from the
  * reader's side an open session is just a block with no end on it.
+ *
+ * The length it opens on is learned. Once a course has enough timed blocks
+ * behind it, the popover opens on the fixed length nearest to how long this
+ * reader's blocks on that course actually run, and says so under the
+ * choices; until then it opens on whatever was used last.
  */
 
 const LENGTH_KEY = 'akada.timer.lastBlockMinutes';
@@ -46,6 +53,11 @@ function writeLastLength(minutes: number | null): void {
   }
 }
 
+/** The fixed length closest to how long the reader's blocks actually run. */
+function nearestLength(minutes: number): number {
+  return LENGTHS.reduce((best, n) => (Math.abs(n - minutes) < Math.abs(best - minutes) ? n : best), LENGTHS[0]);
+}
+
 function endsAt(minutes: number | null): string {
   if (minutes == null) return 'no end';
   const d = new Date(Date.now() + minutes * 60_000);
@@ -64,13 +76,25 @@ interface Props {
 export default function StartTimerPopover({ target, onClose, onStarted, stayPut }: Props) {
   const router = useRouter();
   const { start } = useTimer();
+  const { logged } = useProgression();
   const [minutes, setMinutes] = useState<number | null>(45);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
+  /* How long this reader's blocks on this course actually run, once there
+     are enough of them to say. Read from the record without the sitting on
+     the clock, so starting a second block does not move the figure. */
+  const usualBlock = target ? logged?.habits.byCourse.get(target.course.id)?.blocks ?? null : null;
+  const usualMinutes = usualBlock && settled(usualBlock, HABIT_MIN_BLOCKS) ? roughMinutes(usualBlock.median) : null;
+
   useEffect(() => {
-    if (target) setMinutes(readLastLength());
-  }, [target]);
+    if (!target) return;
+    if (usualMinutes != null) {
+      setMinutes(nearestLength(usualMinutes));
+      return;
+    }
+    setMinutes(readLastLength());
+  }, [target, usualMinutes]);
 
   /* Placed against the anchor's box and then pulled back inside the viewport,
      because a play mark near the right edge would otherwise open off screen. */
@@ -187,7 +211,15 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut 
         </button>
       </div>
 
-      <p className="m-0 mt-2 font-mono text-[11px] text-muted-soft">{endsAt(minutes)}</p>
+      <p className="m-0 mt-2 font-mono text-[11px] text-muted-soft">
+        {endsAt(minutes)}
+        {usualMinutes != null && (
+          <>
+            {' · '}
+            <span className="font-serif italic">your {course.code} blocks run about {usualMinutes} min</span>
+          </>
+        )}
+      </p>
 
       <button
         type="button"
@@ -201,7 +233,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut 
       </button>
 
       <p className="m-0 mt-2.5 text-center font-mono text-[11px] text-muted-soft">
-        Enter starts with the last used length
+        {usualMinutes != null ? 'Enter starts with your usual length' : 'Enter starts with the last used length'}
       </p>
     </div>
   );

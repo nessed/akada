@@ -2,7 +2,6 @@ import type { Course, Task } from '../data';
 import {
   DAY_QUALIFY_SECONDS,
   PLAIN_MARKS_PER_DAY,
-  REACHABLE_SECONDS,
   WEEK_BREADTH_COURSES,
   WEEK_BREADTH_DAYS,
   WEEK_CONSISTENT_DAYS,
@@ -49,7 +48,11 @@ export interface MarkCandidate {
   line: string;
   /** Credited seconds still to go. */
   remaining: number;
-  /** Lower sorts first. See the ranking note below. */
+  /**
+   * Lower sorts first. See the ranking note below. A whole number from the
+   * hand written table, moved by a fraction of a tier by what this reader
+   * has done with lines of this kind before (`bias`).
+   */
   tier: number;
   /** Days to the graded work that steered this candidate, if any. */
   deadlineDays: number | null;
@@ -88,6 +91,18 @@ export interface NextMarkInput {
   /** Counting weeks up to now, this week included only if it already counts. */
   runCurrent: number;
   /**
+   * How far away a thing can be and still be named, in credited seconds.
+   * Roughly one sitting: the shipped figure until the term has shown what
+   * one of this reader's sittings is, then that. See habits.ts.
+   */
+  reach: number;
+  /**
+   * Fractions of a tier, by kind, learned from the device's own log of
+   * which lines were followed by a sitting. Negative moves a kind up. Empty
+   * until enough lines have been shown to say anything. See log.ts.
+   */
+  bias: Partial<Record<MarkKind, number>>;
+  /**
    * True when nothing has been logged for several days. Returning after a gap
    * gets the smallest sensible next action rather than the best ranked one,
    * and no line anywhere counts what was lost.
@@ -107,6 +122,8 @@ export function readNextMark(input: NextMarkInput): NextMarkReading {
     returning,
     thisWeek,
     runCurrent,
+    reach,
+    bias,
   } = input;
   if (courses.length === 0) return { shown: null, candidates: [], silence: 'no-courses' };
 
@@ -166,10 +183,11 @@ export function readNextMark(input: NextMarkInput): NextMarkReading {
 
   const candidates: MarkCandidate[] = [];
   const push = (c: Omit<MarkCandidate, 'tier' | 'deadlineDays'>) => {
+    const base =
+      c.kind === 'day-threshold' ? 4 : c.kind === 'week-counts' ? tierFor(WEEK) : tierFor(c.courseId);
     candidates.push({
       ...c,
-      tier:
-        c.kind === 'day-threshold' ? 4 : c.kind === 'week-counts' ? tierFor(WEEK) : tierFor(c.courseId),
+      tier: base + (bias[c.kind] ?? 0),
       deadlineDays: c.courseId ? (deadlineByCourse.get(c.courseId) ?? null) : null,
     });
   };
@@ -261,7 +279,7 @@ export function readNextMark(input: NextMarkInput): NextMarkReading {
 
   const plainSpent = markedToday >= PLAIN_MARKS_PER_DAY;
   const eligible = candidates
-    .filter((c) => c.remaining > 0 && c.remaining <= REACHABLE_SECONDS)
+    .filter((c) => c.remaining > 0 && c.remaining <= reach)
     .filter((c) => !plainSpent || (c.kind !== 'day-threshold' && c.kind !== 'course-mark'))
     .sort((a, b) =>
       // Coming back from a gap, the nearest thing wins outright. The ranking

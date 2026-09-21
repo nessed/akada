@@ -271,6 +271,52 @@ ranking beside the course just worked, and the shorter distance decides.
 The voice is unchanged: lowercase, factual, no praise. A sitting that inked a
 mark is told a mark was inked. It is not told well done.
 
+### What the term teaches
+Everything above reads how *much* was studied. `lib/progression/habits.ts`
+reads how: how long a sitting and a block actually run, per course and in
+all, whether blocks run past what they were set to, when in the day the work
+lands, which weekday carries the most, what a break really costs against what
+it was meant to, how fast the reading goes on each course, which course opens
+the day. Every figure is a median over the reader's own rows and is withheld
+until there is enough behind it to be a habit rather than a coincidence
+(`HABIT_MIN_*` in `constants.ts`). Nothing here is a target and nothing is
+compared to anybody else.
+
+The app uses it in four places, and says it back in three.
+
+- **Next Mark reaches as far as your sitting.** The line names only what is
+  within roughly one sitting. That was a fixed fifty minutes; once five
+  sittings are in it is the upper quartile of your own, bounded between
+  thirty minutes and two hours.
+- **The ranking learns.** Every line shown is logged on the device with
+  whether a sitting followed within the hour (`log.ts`, which used to write
+  this only to a table nobody read). Once a kind of line has been shown six
+  times, its follow rate against the others moves it up or down the ranking
+  by at most half a tier: enough to prefer the lines you act on, never enough
+  to jump a course with an exam over one without.
+- **The start popover opens on your length.** Given enough timed blocks on a
+  course, it opens on the fixed length nearest to how long your blocks on that
+  course run, and says "your MATH blocks run about 35 min" under the choices.
+- **The log sheet sets this sitting beside your usual one**, two facts and no
+  verb, the same shape as the week beside a typical week.
+
+Said back: **marginalia**. `observations.ts` turns the habits into single
+sentences in the Next Mark voice ("your sittings mostly land in the evening",
+"MATH runs past the block more often than not · 5 of 7", "a 5 minute break of
+yours usually runs to 10") and `Marginalia` sets one of them under the Today
+title and under a course's title, in Caveat, rotated, the way the sort note
+already sits on Up next. A note about the present moment ("this is usually
+your hour", on a day nothing has been logged yet) wins outright; otherwise
+the choice rotates by date among the best few, so the margin reads
+differently tomorrow. None of it says "you should" and none of it counts what
+was missed. A note that stops being true simply goes.
+
+And the **How you study** panel on the Record lays the habits out so they
+can be seen filling in: a figure in mono beside a sentence once a habit has
+taken shape, a dashed line saying "after 3 more sittings" until it has. That
+dashed line is the one place the app says, in so many words, that it gets to
+know you as you use it.
+
 ### The chime
 The one sound the app makes, beyond the ambient noise a reader turns on
 themselves. It is a **struck glass**: three sine partials over a 1.5s
