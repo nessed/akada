@@ -31,11 +31,19 @@ interface Props {
   selected?: boolean;
   focused?: boolean;
   running?: boolean;
+  /** Whether that running timer is currently held. */
+  paused?: boolean;
   /** Live clock, only passed for the row the timer is on. */
   runningLabel?: string;
   onToggle: (task: Task) => void;
   onStartTimer: (task: Task, el: HTMLElement) => void;
-  onPause?: () => void;
+  /**
+   * Hold the running timer, or let it go again. The control only draws when
+   * this is given: it used to draw whenever a timer was running, and since
+   * nothing ever passed a handler, every one of those was a pause button that
+   * did nothing when pressed.
+   */
+  onTogglePause?: () => void;
   onOpen?: (task: Task) => void;
   onSelect?: (task: Task, additive: boolean) => void;
   onReschedule?: (task: Task) => void;
@@ -52,10 +60,11 @@ export default function TaskRow({
   selected = false,
   focused = false,
   running = false,
+  paused = false,
   runningLabel,
   onToggle,
   onStartTimer,
-  onPause,
+  onTogglePause,
   onOpen,
   onSelect,
   onReschedule,
@@ -124,6 +133,7 @@ export default function TaskRow({
 
   const row = (
     <div
+      data-task-row={task.id}
       className={`group relative grid h-12 items-center gap-x-2 border-b border-line-soft pl-1 pr-2 text-ink transition-colors last:border-b-0 md:gap-x-0 ${
         selected ? 'bg-bg-tint' : 'bg-paper hover:bg-paper-2'
       } ${task.completed ? 'opacity-50' : ''} ${
@@ -203,9 +213,9 @@ export default function TaskRow({
           <span
             className="shrink-0 font-mono text-[11px] tabular-nums"
             style={{ color }}
-            aria-label="Timer running on this task"
+            aria-label={paused ? 'Timer held on this task' : 'Timer running on this task'}
           >
-            {runningLabel ?? 'running'}
+            {runningLabel ?? (paused ? 'held' : 'running')}
           </span>
         )}
       </span>
@@ -246,17 +256,25 @@ export default function TaskRow({
       <span className="flex justify-end gap-0.5">
         {!task.completed &&
           (running ? (
-            <button
-              type="button"
-              onClick={() => onPause?.()}
-              aria-label="Pause timer"
-              className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent transition-colors hover:bg-bg-tint"
-              style={{ color }}
-            >
-              <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M9 5v14M15 5v14" />
-              </svg>
-            </button>
+            onTogglePause && (
+              <button
+                type="button"
+                onClick={onTogglePause}
+                aria-label={paused ? 'Let the timer run again' : 'Hold the timer'}
+                className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent transition-colors hover:bg-bg-tint"
+                style={{ color }}
+              >
+                {paused ? (
+                  <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M7 5l12 7-12 7V5z" />
+                  </svg>
+                ) : (
+                  <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M9 5v14M15 5v14" />
+                  </svg>
+                )}
+              </button>
+            )
           ) : (
             <button
               ref={playRef}

@@ -64,7 +64,7 @@ export default function CoursePage() {
   const courseId = typeof params?.courseId === 'string' ? params.courseId : '';
   const router = useRouter();
   const { notify } = useNotice();
-  const { active, start } = useTimer();
+  const { active, start, pause, resume, focusSeconds } = useTimer();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
@@ -175,6 +175,25 @@ export default function CoursePage() {
       console.error('Failed to update task:', error);
       notify('That task did not update.');
     }
+  }
+
+  /**
+   * What a row needs to show, and hold, the timer running on it.
+   *
+   * Passed as one unit because these four belong together: the pause control
+   * on a row used to draw whenever a timer was running and call a handler no
+   * page ever passed, so it was a live-looking button that did nothing. It
+   * now draws only when it is given something to do, and this keeps every
+   * list giving it the same thing.
+   */
+  function timerRowProps(task: Task) {
+    const mine = active?.taskId === task.id;
+    return {
+      running: mine,
+      paused: mine && Boolean(active?.isPaused),
+      runningLabel: mine ? formatHM(focusSeconds) : undefined,
+      onTogglePause: active?.isPaused ? resume : pause,
+    };
   }
 
   /**
@@ -451,7 +470,7 @@ export default function CoursePage() {
                   task={task}
                   course={course}
                   hideCourse
-                  running={active?.taskId === task.id}
+                  {...timerRowProps(task)}
                   onToggle={toggleTask}
                   onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
                   onOpen={openTask}

@@ -120,7 +120,7 @@ function DashboardFallback() {
 function DashboardPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { active, start, clearTimerState } = useTimer();
+  const { active, start, pause, resume, focusSeconds, clearTimerState } = useTimer();
   const { notify } = useNotice();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
@@ -536,6 +536,25 @@ function DashboardPageContent() {
   }
 
   /**
+   * What a row needs to show, and hold, the timer running on it.
+   *
+   * Passed as one unit because these four belong together: the pause control
+   * on a row used to draw whenever a timer was running and call a handler no
+   * page ever passed, so it was a live-looking button that did nothing. It
+   * now draws only when it is given something to do, and this keeps every
+   * list giving it the same thing.
+   */
+  function timerRowProps(task: Task) {
+    const mine = active?.taskId === task.id;
+    return {
+      running: mine,
+      paused: mine && Boolean(active?.isPaused),
+      runningLabel: mine ? formatHM(focusSeconds) : undefined,
+      onTogglePause: active?.isPaused ? resume : pause,
+    };
+  }
+
+  /**
    * The order the cards were dragged into. The write is optimistic, so
    * letting go feels instant; if it fails, the old order comes back and the
    * card returns to where it was.
@@ -760,6 +779,25 @@ function DashboardPageContent() {
           >
             New task
           </button>
+          {/* The way into Settings on a phone, and for a long time the only
+              thing missing between a phone and Settings at all: the rail that
+              carries it hides itself below md, BottomNav has four tabs and
+              none of them is this, and the sheet below — which exists for
+              exactly this screen — was never opened by anything. A phone
+              could not reach its own name, paper tone, goals or sign-out.
+              Desktop keeps the rail's row and does not draw this. */}
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            aria-label="Settings"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] border border-line bg-paper text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink md:hidden"
+          >
+            <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M4 7h9M19 7h1M4 17h3M13 17h7" />
+              <circle cx="16" cy="7" r="2.2" />
+              <circle cx="10" cy="17" r="2.2" />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -815,7 +853,7 @@ function DashboardPageContent() {
                     key={task.id}
                     task={task}
                     course={courses.find((c) => c.id === task.courseId)}
-                    running={active?.taskId === task.id}
+                    {...timerRowProps(task)}
                     onToggle={handleToggleTask}
                     onStartTimer={(t, el) => openStartFor(t, el, false)}
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
@@ -841,7 +879,7 @@ function DashboardPageContent() {
                     key={task.id}
                     task={task}
                     course={courses.find((c) => c.id === task.courseId)}
-                    running={active?.taskId === task.id}
+                    {...timerRowProps(task)}
                     onToggle={handleToggleTask}
                     onStartTimer={(t, el) => openStartFor(t, el, false)}
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}

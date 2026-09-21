@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
@@ -15,7 +15,7 @@ import TaskRow from '@/components/TaskRow';
 import ReorderList from '@/components/ReorderList';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import type { Task, TaskKind } from '@/lib/data';
-import { formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
+import { formatHM, formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
 import {
@@ -66,7 +66,7 @@ export default function TasksPage() {
 function TasksPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { active, start } = useTimer();
+  const { active, start, pause, resume, focusSeconds } = useTimer();
   const { notify } = useNotice();
   // Guards the two writes that were previously fire-and-forget from the UI's
   // point of view: nothing changed on the button while they were in flight.
@@ -104,6 +104,34 @@ function TasksPageContent() {
   const [editPages, setEditPages] = useState('');
   const handledTaskIntent = useRef(false);
 
+  /* The keydown listener is bound once, so it reads what it needs through
+     refs rather than closing over the render that bound it. */
+  const undoRef = useRef<UndoEntry | null>(null);
+  const runUndoRef = useRef<() => void>(() => {});
+  const sheetOpenRef = useRef(false);
+  const moveCursorRef = useRef<(delta: number) => void>(() => {});
+  const cursorTaskRef = useRef<Task | null>(null);
+  const toggleSelectedRef = useRef<(task: Task) => void>(() => {});
+
+  /**
+   * What a row needs to show, and hold, the timer running on it.
+   *
+   * Passed as one unit because these four belong together: the pause control
+   * on a row used to draw whenever a timer was running and call a handler no
+   * page ever passed, so it was a live-looking button that did nothing. It
+   * now draws only when it is given something to do, and this keeps every
+   * list giving it the same thing.
+   */
+  function timerRowProps(task: Task) {
+    const mine = active?.taskId === task.id;
+    return {
+      running: mine,
+      paused: mine && Boolean(active?.isPaused),
+      runningLabel: mine ? formatHM(focusSeconds) : undefined,
+      onTogglePause: active?.isPaused ? resume : pause,
+    };
+  }
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
@@ -121,11 +149,38 @@ function TasksPageContent() {
         event.preventDefault();
         setShortcutHelpOpen(true);
       }
+      // Undo is the only way back from a bulk move, and the hint under the
+      // list has always said so. It reaches the same run the toast does.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+        if (!undoRef.current) return;
+        event.preventDefault();
+        runUndoRef.current();
+        return;
+      }
       if (event.key === 'Escape') {
         setAddingFor(null);
         setEditingTask(null);
         setViewingTask(null);
         setShortcutHelpOpen(false);
+      }
+      // Everything below walks the list, so it belongs to the list: with a
+      // sheet in front of it, the arrows are the sheet's to answer.
+      if (sheetOpenRef.current) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        moveCursorRef.current(event.key === 'ArrowDown' ? 1 : -1);
+      }
+      if (event.key.toLowerCase() === 'x') {
+        const task = cursorTaskRef.current;
+        if (!task) return;
+        event.preventDefault();
+        toggleSelectedRef.current(task);
+      }
+      if (event.key === 'Enter') {
+        const task = cursorTaskRef.current;
+        if (!task) return;
+        event.preventDefault();
+        setViewingTask(task);
       }
     }
     window.addEventListener('keydown', onKeyDown);
@@ -266,6 +321,63 @@ function TasksPageContent() {
       }))
       .filter((g) => g.tasks.length > 0);
   }, [bounds, courses, grouping, visibleTasks]);
+
+  /**
+   * The rows in the order they read down the page, and where the keyboard is
+   * on them.
+   *
+   * The hint under the list has always offered "X select" and "undo", and
+   * `TaskRow` has always known how to draw a focus ring, but nothing ever
+   * moved a cursor or bound either key, so both were promises the screen
+   * could not keep. This is the missing half.
+   */
+  const flatTasks = useMemo(() => groups.flatMap((group) => group.tasks), [groups]);
+  const [cursor, setCursor] = useState<string | null>(null);
+
+  /* A cursor on a row that has been filtered away, finished or deleted points
+     at nothing, and the next arrow key should start from the top rather than
+     from a row nobody can see. */
+  useEffect(() => {
+    setCursor((current) =>
+      current && flatTasks.some((task) => task.id === current) ? current : null,
+    );
+  }, [flatTasks]);
+
+  /** Walks the cursor, and brings the row it lands on into view. */
+  const moveCursor = useCallback(
+    (delta: number) => {
+      if (flatTasks.length === 0) return;
+      setCursor((current) => {
+        const at = current ? flatTasks.findIndex((task) => task.id === current) : -1;
+        const next =
+          at === -1
+            ? flatTasks[delta > 0 ? 0 : flatTasks.length - 1]
+            : flatTasks[Math.min(flatTasks.length - 1, Math.max(0, at + delta))];
+        if (next) {
+          window.requestAnimationFrame(() => {
+            document
+              .querySelector(`[data-task-row="${next.id}"]`)
+              ?.scrollIntoView({ block: 'nearest' });
+          });
+        }
+        return next?.id ?? current;
+      });
+    },
+    [flatTasks],
+  );
+
+  /* Runs after every render, which is the point: the one bound listener
+     always reaches this render's handlers. */
+  useEffect(() => {
+    undoRef.current = undo;
+    runUndoRef.current = runUndo;
+    sheetOpenRef.current = Boolean(
+      viewingTask || editingTask || addingFor || shortcutHelpOpen,
+    );
+    moveCursorRef.current = moveCursor;
+    cursorTaskRef.current = flatTasks.find((task) => task.id === cursor) ?? null;
+    toggleSelectedRef.current = toggleSelected;
+  });
 
   /* A selection only means anything while the rows it points at are on
      screen. Changing filter or course used to leave six invisible tasks
@@ -707,7 +819,8 @@ function TasksPageContent() {
                   task={task}
                   course={courses.find((c) => c.id === task.courseId)}
                   selected={selected.has(task.id)}
-                  running={active?.taskId === task.id}
+                  focused={cursor === task.id}
+                  {...timerRowProps(task)}
                   hideCourse={Boolean(courseFilter)}
                   onToggle={toggleTask}
                   onStartTimer={(t, el) => {
@@ -791,8 +904,10 @@ function TasksPageContent() {
         </div>
       )}
 
+      {/* Every one of these is bound. The line used to offer X and undo with
+          nothing behind either, which is a worse lie than saying nothing. */}
       <p className="mt-4 px-1 font-mono text-[11px] text-muted-soft">
-        N new · S sort · X select · ⌘Z undo
+        ↑↓ move · X select · Enter open · N new · S sort · ⌘Z undo
       </p>
 
       {/* The bulk bar. It only exists while something is selected, and it
@@ -1253,9 +1368,12 @@ function TasksPageContent() {
             <ul className="mb-0 mt-5 list-none p-0">
               {(
                 [
+                  { k: '↑ ↓', l: 'Move down the list' },
+                  { k: 'X', l: 'Select the row you are on' },
+                  { k: 'Enter', l: 'Open it, or save what you are typing' },
                   { k: 'N', l: 'New task' },
                   { k: 'S', l: 'Change order' },
-                  { k: 'Enter', l: 'Save what you are typing' },
+                  { k: '⌘Z', l: 'Undo the last bulk change' },
                   { k: 'Esc', l: 'Close the sheet' },
                 ] as const
               ).map((row) => (

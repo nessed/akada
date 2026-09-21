@@ -306,13 +306,13 @@ export default function SettingsSheet({
               />
             </SettingGroup>
 
-            <SettingGroup label="Quiet hours">
-              <SettingToggleRow
-                label="Daily reminder"
-                sub="7:00 PM"
-                value={prefs.dailyReminder}
-                onChange={(v) => setPrefs({ dailyReminder: v })}
-              />
+            {/* Not "Quiet hours": nothing in here is one. This group held a
+                "Daily reminder · 7:00 PM" switch that wrote a preference no
+                code read, with nothing anywhere to fire it — the app has web
+                notifications for the timer, but no service worker and so no
+                way to reach a reader at 7pm. It promised an alarm that could
+                never go off, so it is gone. */}
+            <SettingGroup label="Timer and days">
               <SettingToggleRow
                 label="Chime on a block and a break"
                 value={prefs.sessionSound}
