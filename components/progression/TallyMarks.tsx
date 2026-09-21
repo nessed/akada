@@ -6,16 +6,24 @@
  * are drawn faintly rather than left out, so a page always shows its own
  * length and the reader can see what binding it would take without being
  * told a number.
+ *
+ * `fresh` is how many of the inked marks arrived just now, from the sitting
+ * on the clock or the one on the log sheet. Those draw themselves in, stroke
+ * by stroke, the way a pen would. A mark that lands while the reader watches
+ * is the one moment the whole layer exists for, and a stroke that was simply
+ * there on the next render would have let it pass without a sound.
  */
 export default function TallyMarks({
   inked,
   total,
+  fresh = 0,
   size = 18,
   color = 'var(--ink)',
   className,
 }: {
   inked: number;
   total: number;
+  fresh?: number;
   size?: number;
   color?: string;
   className?: string;
@@ -24,8 +32,10 @@ export default function TallyMarks({
   const gateWidth = size * 0.85;
   const width = gates * gateWidth + (gates - 1) * (size * 0.3);
   const height = size;
+  const firstFresh = Math.max(0, inked - Math.max(0, fresh));
 
-  const strokes: { x1: number; y1: number; x2: number; y2: number; on: boolean }[] = [];
+  const strokes: { x1: number; y1: number; x2: number; y2: number; on: boolean; fresh: boolean }[] =
+    [];
 
   for (let g = 0; g < gates; g++) {
     const left = g * (gateWidth + size * 0.3);
@@ -33,9 +43,17 @@ export default function TallyMarks({
     for (let i = 0; i < inGate; i++) {
       const index = g * 5 + i;
       const on = index < inked;
+      const isFresh = on && index >= firstFresh;
       if (i < 4) {
         const x = left + size * 0.12 + i * (size * 0.18);
-        strokes.push({ x1: x, y1: height * 0.12, x2: x + size * 0.04, y2: height * 0.88, on });
+        strokes.push({
+          x1: x,
+          y1: height * 0.12,
+          x2: x + size * 0.04,
+          y2: height * 0.88,
+          on,
+          fresh: isFresh,
+        });
       } else {
         // The fifth is the one struck across the other four.
         strokes.push({
@@ -44,6 +62,7 @@ export default function TallyMarks({
           x2: left + size * 0.72,
           y2: height * 0.18,
           on,
+          fresh: isFresh,
         });
       }
     }
@@ -65,6 +84,11 @@ export default function TallyMarks({
           y1={s.y1}
           x2={s.x2}
           y2={s.y2}
+          // pathLength normalises every stroke to one unit, so the same
+          // dash rule draws the short uprights and the long strike alike.
+          pathLength={1}
+          className={s.fresh ? 'tally-fresh' : undefined}
+          style={s.fresh ? { animationDelay: `${(i - firstFresh) * 110}ms` } : undefined}
           stroke={s.on ? color : 'var(--line)'}
           strokeWidth={s.on ? 1.6 : 1}
           strokeLinecap="round"

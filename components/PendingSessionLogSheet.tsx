@@ -7,6 +7,7 @@ import {
   useCourses,
   useTasks,
 } from '@/lib/data-hooks';
+import { useProgression } from '@/lib/progression/use-progression';
 import { useTimer } from '@/lib/timer-context';
 import { isoDate } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
@@ -20,6 +21,9 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
   const { pendingLog, clearPendingLog } = useTimer();
   const { courses, isLoading: coursesLoading } = useCourses();
   const { tasks } = useTasks();
+  // The pending sitting is folded into this reading, so `sitting` is what
+  // saving it will do to the record, read before the reader decides.
+  const { sitting } = useProgression();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -128,6 +132,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       durationSeconds={pendingLog?.durationSeconds ?? 0}
       breakSeconds={pendingLog?.breakSeconds ?? 0}
       segments={pendingLog?.segments ?? []}
+      effect={pendingLog && sitting?.courseId === pendingLog.courseId ? sitting : null}
       saving={saving}
       contextMessage={
         pendingLog?.recoveryReason === 'away'

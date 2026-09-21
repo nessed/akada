@@ -282,6 +282,21 @@ input[type='date']::-webkit-calendar-picker-indicator {
   }
 }
 
+/* A tally mark that has just landed draws itself in, stroke by stroke, the
+   way a pen would. Every stroke is normalised to one unit with pathLength so
+   the short uprights and the long strike across them take the same rule. The
+   stagger is set inline, per stroke. */
+@keyframes ink-in {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.tally-fresh {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: ink-in 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
 /* Anyone who has asked their system for less movement gets the app without
    it, including the tick, which otherwise pulses for a whole session. */
 @media (prefers-reduced-motion: reduce) {

@@ -221,6 +221,56 @@ No dialog is raised at the end of a block. A question at the exact moment a
 reader has stopped deciding things is the wrong thing to hand them; "Back to
 it" is one tap, or the space bar.
 
+### Next Mark, and the sitting on the clock
+The progression layer (`lib/progression`) is derived from logged sessions and
+tasks on every read and stores nothing. For a long time it read *only* logged
+sessions, so the one line it puts on Today and under the timer, "20 minutes to
+the next mark on MATH", sat there saying twenty for the whole forty minutes
+the timer ran underneath it. A prompt that does not move while you act on it
+is a caption.
+
+The sitting on the clock is now folded in as one more session
+(`lib/live-session.ts`, `useLiveSession`), marked with a `live:` id so nothing
+can mistake it for a record, and the layer is read twice: once from the log,
+once with the sitting on top. Every distance moves while the reader sits. The
+difference between the two readings is **what the sitting has done**
+(`lib/progression/effect.ts`), and it is said in three places and nowhere
+else:
+
+- **Under the timer**, on the same line as Next Mark. What has landed is set
+  in the ink, what is next a step softer, joined by a middle dot: "a mark
+  inked on MATH · today counts · 38 minutes to the next mark on MATH". The
+  landed part stays for the rest of the sitting, because it is the sitting's
+  own record. The open-mode night screen carries only the landed part and
+  never a prompt, since that screen exists to hold one thing.
+- **In the margin of the block frame**, the course's open page as a tally,
+  `4 / 15` in mono beside it. A mark that lands twelve minutes into a block
+  draws itself in twelve minutes into the block: `TallyMarks` takes `fresh`,
+  and those strokes animate on with `.tally-fresh`, staggered, the way a pen
+  would put them down.
+- **On the log sheet**, above the note. The same tally, the same lines, and
+  what is nearest after this sitting, so the loop the line opened is closed
+  here and opened again in the same breath. This is the one moment a reader
+  is guaranteed to look at the sitting, and it used to show a duration and a
+  question and not a word about why the duration mattered.
+
+The Today panels (hours, the week's bars, courses against their goals, the
+course cards) read the same augmented list, so the hour strokes fill and "2h
+to go" counts down while the clock runs. Anything that *decides* something,
+which task is up next, which course has gone quiet, still reads the record.
+
+Two candidates were added to the ranking. The **first mark** on a course is
+now named ("15 minutes to the first mark on MATH"); it is the short one
+precisely so it can be, and a course with no marks used to get no line at
+all. And the **week**: on the day that would make this week count, by either
+route, the line says so ("20 minutes makes this week count", "20 minutes
+makes it 4 weeks running") in place of "until today counts", because the week
+is the only thing on the board that moves the run. It sits at the top of the
+ranking beside the course just worked, and the shorter distance decides.
+
+The voice is unchanged: lowercase, factual, no praise. A sitting that inked a
+mark is told a mark was inked. It is not told well done.
+
 ### The chime
 The one sound the app makes, beyond the ambient noise a reader turns on
 themselves. It is a **struck glass**: three sine partials over a 1.5s
