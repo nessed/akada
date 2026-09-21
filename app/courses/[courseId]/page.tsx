@@ -177,6 +177,18 @@ export default function CoursePage() {
     }
   }
 
+  /**
+   * Reading a task, which is where its description and its steps live.
+   *
+   * The Tasks screen owns that view, so this hands the task over to it rather
+   * than keeping a second copy here. Until this existed the title on a course
+   * page was a button that did nothing, and a task's steps could only be
+   * reached by going to Tasks and finding it again.
+   */
+  function openTask(task: Task) {
+    router.push(`/tasks?task=${encodeURIComponent(task.id)}`);
+  }
+
   /** "Open ended": the task stays on the course, the date comes off. */
   async function openEndTask(task: Task) {
     if (!task.dueDate) return;
@@ -442,6 +454,7 @@ export default function CoursePage() {
                   running={active?.taskId === task.id}
                   onToggle={toggleTask}
                   onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
+                  onOpen={openTask}
                   onOpenEnded={openEndTask}
                   onDelete={(t) => removeTask(t.id)}
                 />
@@ -456,6 +469,7 @@ export default function CoursePage() {
                     hideCourse
                     onToggle={toggleTask}
                     onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
+                    onOpen={openTask}
                     onDelete={(t) => removeTask(t.id)}
                   />
                 ))}

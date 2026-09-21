@@ -395,6 +395,21 @@ input[type='date']::-webkit-calendar-picker-indicator {
   padding-bottom: 6px;
 }
 
+/* A task title that opens something. Plain ink until a cursor or a focus
+   ring is on it, then the same pencil underline the rest of the app draws —
+   as a background rather than .hand-underline's padding, so the row does not
+   shift 6px the moment you point at it. */
+.task-open:hover,
+.task-open:focus-visible {
+  background-image: var(
+    --underline-svg,
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%231A1714' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.6'/></svg>")
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 6px;
+  background-position: 0 calc(100% - 1px);
+}
+
 /* Hand-drawn rounded-rect (replaces a checkbox border) */
 .scribble-box {
   border: 1.4px solid var(--ink);

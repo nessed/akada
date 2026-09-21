@@ -149,6 +149,10 @@ function TasksPageContent() {
      chosen. */
   useEffect(() => {
     if (handledTaskIntent.current || coursesLoading || courses.length === 0) return;
+    // Courses and tasks are separate reads that can land in either order, and
+    // the ref below fires once. Opening a task named in the URL therefore has
+    // to wait for the tasks themselves, or the link quietly does nothing.
+    if (searchParams.get('task') && tasksLoading) return;
     handledTaskIntent.current = true;
 
     const courseId = searchParams.get('course');
@@ -170,7 +174,7 @@ function TasksPageContent() {
       const task = tasks.find((t) => t.id === taskId);
       if (task) setViewingTask(task);
     }
-  }, [courses, coursesLoading, searchParams, tasks]);
+  }, [courses, coursesLoading, searchParams, tasks, tasksLoading]);
 
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || tasksLoading;

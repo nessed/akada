@@ -254,6 +254,22 @@ courses, reflection tags, timer goals and priority marks all read this way.
 The exceptions are deliberate: a **dashed outline** for "there is more you
 could add here", and the timer's single filled action.
 
+### The task row, and the way into a task
+A task row is 48px and carries the ticked box, the title, the marks and the
+due date. The **title is the way in** — a full-bleed button behind the row
+would swallow the timer and the menu beside it — so it is the one thing on
+the row that opens the task's reading view, where the description and the
+steps live. It says so by drawing the same pencil underline as
+`.hand-underline` on hover and on focus, as a background rather than that
+class's padding, so pointing at a row never shifts it 6px.
+
+Two marks ride in the margin between the title and the course, both mono
+because both are digits: what the piece is **worth** or what it is
+(`EXAM 20%`, `14pp`, `5%`), and how far through its **steps** it is (`1/4`).
+The steps count draws only when a task has steps, and it is the only thing on
+the row that says so — without it a task with four steps reads exactly like
+one with none, and nobody opens it to find out.
+
 ### Rearranging by hand
 Four lists let the reader set their own order, and all four are the same
 component, `ReorderList`: the **dashboard's stack of course cards**, the
