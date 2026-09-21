@@ -84,8 +84,12 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut 
   /* How long this reader's blocks on this course actually run, once there
      are enough of them to say. Read from the record without the sitting on
      the clock, so starting a second block does not move the figure. */
-  const usualBlock = target ? logged?.habits.byCourse.get(target.course.id)?.blocks ?? null : null;
+  const usualHabit = target ? logged?.habits.byCourse.get(target.course.id) ?? null : null;
+  const usualBlock = usualHabit?.blocks ?? null;
   const usualMinutes = usualBlock && settled(usualBlock, HABIT_MIN_BLOCKS) ? roughMinutes(usualBlock.median) : null;
+  /* Whole sittings stand in where there are not enough timed blocks to read,
+     so the line says which it is rather than calling a sitting a block. */
+  const usualNoun = usualHabit?.blocksFrom === 'timed' ? 'blocks' : 'sittings';
 
   useEffect(() => {
     if (!target) return;
@@ -216,7 +220,9 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut 
         {usualMinutes != null && (
           <>
             {' · '}
-            <span className="font-serif italic">your {course.code} blocks run about {usualMinutes} min</span>
+            <span className="font-serif italic">
+              your {course.code} {usualNoun} run about {usualMinutes} min
+            </span>
           </>
         )}
       </p>

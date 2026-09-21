@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCourses, useSessions, useTasks } from '../data-hooks';
 import { sortCourses } from '../data/course-order';
 import { withLiveSession } from '../live-session';
@@ -8,7 +8,7 @@ import { useLiveSession } from '../use-live-session';
 import { isoDate } from '../utils';
 import { readSittingEffect, type SittingEffect } from './effect';
 import { readProgression, type Progression } from './index';
-import { readRankingBias } from './log';
+import { readRankingBias, seedLedgerFromServer } from './log';
 
 /**
  * The progression layer over the three lists every other screen already has,
@@ -41,7 +41,22 @@ export function useProgression(): {
   const today = isoDate();
   const courses = useMemo(() => sortCourses(raw), [raw]);
 
-  // What the device has learned about which lines get followed. Read when
+  /* The impressions the server already holds, pulled into the device's
+     ledger once. Without this the ranking would start its education on the
+     day the learning shipped while a term of evidence sat in the database
+     unread. Bumps `seeded`, which re-reads the bias below. */
+  const [seeded, setSeeded] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void seedLedgerFromServer().then((changed) => {
+      if (changed && live) setSeeded((n) => n + 1);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // What the reader has done with each kind of line before. Read again when
   // the record changes, which is also when a followed line is written, so
   // the ranking picks the lesson up on the next sitting.
   const bias = useMemo(
@@ -49,7 +64,7 @@ export function useProgression(): {
     // sessions is the clock this is read against: a followed line is written
     // when a sitting starts, and the record changes when it is logged.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessions],
+    [sessions, seeded],
   );
 
   const logged = useMemo(() => {

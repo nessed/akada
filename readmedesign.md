@@ -317,6 +317,35 @@ taken shape, a dashed line saying "after 3 more sittings" until it has. That
 dashed line is the one place the app says, in so many words, that it gets to
 know you as you use it.
 
+#### It reads the whole term, not just the part recorded since
+
+A habits layer that only understood data recorded after it shipped would
+greet a student with a term behind them as a stranger, which is the one thing
+it must not do. Two sources of history were being left on the floor.
+
+**Sittings with no chain.** A sitting only carries blocks and breaks if it
+was timed in continuous mode; one from before that, or reported through the
+connector, carries a duration and nothing else. Those used to contribute
+nothing to any block reading, so a six week account opened the panel to a
+column of dashes. A chainless sitting is now read as what the record says it
+was — one unbroken stretch — but only when no rest was reported against it,
+because rest with no chain means the stretch was broken somewhere nobody
+wrote down. They stand in only where there are too few measured blocks to
+speak, `blocksFrom` records which happened, and every surface that shows the
+figure says "stretches" or "sittings" rather than "blocks" when it is the
+coarse reading. Once four real blocks exist the chainless ones stop standing
+in, so nobody's reading gets worse as they use the app.
+
+**The impressions the server already held.** `mark_candidates` has collected
+every Next Mark impression since the table was created, and the ranking's
+device ledger starts the day the learning shipped. The ledger is now seeded
+from that table once (`seedLedgerFromServer`), keyed so an impression held by
+both sides is one fact, with the device's copy winning because only it knows
+about a follow the server has not been told about. Bounded to three attempts
+ever, so an account with no Supabase behind it does not run a doomed query on
+every load. That table was written before anyone asked for it precisely so
+this would be possible.
+
 ### The chime
 The one sound the app makes, beyond the ambient noise a reader turns on
 themselves. It is a **struck glass**: three sine partials over a 1.5s

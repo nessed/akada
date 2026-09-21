@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Course, Session, SessionSegment } from '../data/types';
 import { readHabits } from './habits';
-import { rankingBias } from './log';
+import { ledgerEntriesFromRows, mergeLedgers, rankingBias } from './log';
 import { readObservations, pickMarginNote } from './observations';
 
 /**
@@ -135,4 +135,135 @@ test('the ranking leans toward the kinds that were followed, by at most half a t
   assert.equal(bias['day-threshold'], undefined, 'too few impressions to take part');
   assert.ok(Math.abs(bias['week-counts'] ?? 0) <= 0.5);
   assert.deepEqual(rankingBias(new Map([['course-mark', { shown: 10, followed: 1 }]])), {});
+});
+
+
+/* ── The part of the term that predates all of this ────────────────────── */
+
+/** A sitting with no chain: logged before continuous mode, or through MCP. */
+function flat(courseId: string, date: string, minutes: number, restMinutes = 0): Session {
+  n += 1;
+  return {
+    id: `f${n}`,
+    courseId,
+    taskId: null,
+    date,
+    durationSeconds: minutes * 60,
+    note: '',
+    createdAt: `${date}T21:00:00.000Z`,
+    ...(restMinutes ? { breakSeconds: restMinutes * 60 } : {}),
+  };
+}
+
+test('a term recorded before continuous mode still reads as blocks, and says so', () => {
+  const sessions = DATES.map((d) => flat('math', d, 50));
+  const habits = readHabits([MATH], sessions, []);
+  assert.equal(habits.blocksFrom, 'sittings');
+  assert.equal(habits.blocks.n, 7);
+  assert.equal(habits.blocks.median, 50 * 60);
+  assert.equal(habits.flatSittings, 7);
+  assert.equal(habits.timedSittings, 0);
+  assert.equal(habits.byCourse.get('math')?.blocksFrom, 'sittings');
+
+  // The margin says stretches rather than blocks, because that is what was read.
+  const notes = readObservations({ habits, courses: [MATH], now: new Date('2026-09-21T12:00:00'), loggedToday: true });
+  assert.equal(notes.find((o) => o.id === 'blocks:math')?.text, 'MATH sittings run about 50 minutes');
+});
+
+test('once there are enough timed blocks, the chainless history stops standing in', () => {
+  const history = DATES.map((d) => flat('math', d, 120));
+  const timedSittings = ['2026-09-22', '2026-09-23'].map((d) =>
+    timed('math', d, 20, [{ minutes: 25 }, { minutes: 25 }]),
+  );
+  const habits = readHabits([MATH], [...history, ...timedSittings], []);
+  assert.equal(habits.blocksFrom, 'timed');
+  assert.equal(habits.blocks.n, 4);
+  // The two hour claims are nowhere in the figure.
+  assert.equal(habits.blocks.median, 25 * 60);
+  // They are still sittings, and still shape the reach.
+  assert.equal(habits.sittings.n, 9);
+});
+
+test('a chainless sitting that reports rest is not read as one unbroken stretch', () => {
+  const habits = readHabits([MATH], DATES.map((d) => flat('math', d, 90, 15)), []);
+  assert.equal(habits.blocks.n, 0);
+  assert.equal(habits.blocksFrom, null);
+  assert.equal(habits.flatSittings, 0);
+  assert.equal(habits.sittings.n, 7, 'it is still a sitting');
+});
+
+/* ── The impressions the server already held ───────────────────────────── */
+
+test('stored impressions are read back by the kind that was shown, and the junk is dropped', () => {
+  const entries = ledgerEntriesFromRows([
+    {
+      shown_at: '2026-09-01T10:00:00.000Z',
+      shown_id: 'week',
+      candidates: [{ id: 'mark:math', kind: 'course-mark' }, { id: 'week', kind: 'week-counts' }],
+      followed_at: '2026-09-01T10:20:00.000Z',
+    },
+    {
+      shown_at: '2026-09-02T10:00:00.000Z',
+      shown_id: 'mark:math',
+      candidates: [{ id: 'mark:math', kind: 'course-mark' }],
+      followed_at: null,
+    },
+    // A kind this version does not know, a shown id absent from its own
+    // candidates, and an unreadable stamp. None of them are guessed at.
+    { shown_at: '2026-09-03T10:00:00.000Z', shown_id: 'x', candidates: [{ id: 'x', kind: 'invented' }] },
+    { shown_at: '2026-09-04T10:00:00.000Z', shown_id: 'y', candidates: [{ id: 'z', kind: 'week-goal' }] },
+    { shown_at: 'not a date', shown_id: 'week', candidates: [{ id: 'week', kind: 'week-counts' }] },
+  ]);
+  assert.equal(entries.length, 2);
+  assert.deepEqual(
+    entries.map((e) => [e.kind, e.followed]),
+    [
+      ['week-counts', true],
+      ['course-mark', false],
+    ],
+  );
+});
+
+test('merging keeps the device\'s answer for an impression the server also holds', () => {
+  const at = Date.parse('2026-09-01T10:00:00.000Z');
+  const server = [
+    { id: 'week', kind: 'week-counts' as const, at, followed: false },
+    { id: 'mark:math', kind: 'course-mark' as const, at: at + 86_400_000, followed: false },
+  ];
+  // The device watched the same first impression and saw a sitting follow it.
+  const mine = [{ id: 'week', kind: 'week-counts' as const, at, followed: true }];
+  const merged = mergeLedgers(mine, server);
+  assert.equal(merged.length, 2, 'the shared impression is one fact, not two');
+  assert.equal(merged.find((e) => e.id === 'week')?.followed, true);
+  assert.deepEqual(merged.map((e) => e.at), [at, at + 86_400_000], 'oldest first');
+});
+
+test('a term of stored impressions can bias the ranking on its own', () => {
+  // What a returning reader's history looks like once it is read back: the
+  // week's line acted on, the mark's line walked past.
+  const rows = [
+    ...Array.from({ length: 8 }, (_, i) => ({
+      shown_at: new Date(Date.UTC(2026, 8, i + 1, 10)).toISOString(),
+      shown_id: 'week',
+      candidates: [{ id: 'week', kind: 'week-counts' }],
+      followed_at: i < 6 ? new Date(Date.UTC(2026, 8, i + 1, 10, 20)).toISOString() : null,
+    })),
+    ...Array.from({ length: 8 }, (_, i) => ({
+      shown_at: new Date(Date.UTC(2026, 8, i + 10, 10)).toISOString(),
+      shown_id: 'mark:math',
+      candidates: [{ id: 'mark:math', kind: 'course-mark' }],
+      followed_at: null,
+    })),
+  ];
+  const entries = mergeLedgers([], ledgerEntriesFromRows(rows));
+  const rates = new Map<string, { shown: number; followed: number }>();
+  for (const entry of entries) {
+    const row = rates.get(entry.kind) ?? { shown: 0, followed: 0 };
+    row.shown += 1;
+    if (entry.followed) row.followed += 1;
+    rates.set(entry.kind, row);
+  }
+  const bias = rankingBias(rates as Parameters<typeof rankingBias>[0]);
+  assert.ok((bias['week-counts'] ?? 0) < 0);
+  assert.ok((bias['course-mark'] ?? 0) > 0);
 });

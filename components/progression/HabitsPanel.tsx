@@ -14,7 +14,7 @@ import {
   type Habits,
   type MarkKind,
 } from '@/lib/progression';
-import { readFollowRates } from '@/lib/progression/log';
+import { readFollowRates, seedLedgerFromServer } from '@/lib/progression/log';
 import type { Course } from '@/lib/data';
 import { formatHM } from '@/lib/utils';
 
@@ -46,7 +46,17 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
   // it during the server pass would render a panel the client disagrees with.
   const [rates, setRates] = useState<Map<MarkKind, { shown: number; followed: number }>>(new Map());
   useEffect(() => {
+    let live = true;
+    // Read straight away, then again once the server's own history has been
+    // pulled in, so a returning reader sees the whole record rather than
+    // whatever this device happens to have watched.
     setRates(readFollowRates());
+    void seedLedgerFromServer().then(() => {
+      if (live) setRates(readFollowRates());
+    });
+    return () => {
+      live = false;
+    };
   }, []);
 
   const sittingsLeft = Math.max(0, HABIT_MIN_SITTINGS - habits.sittings.n);
@@ -69,8 +79,11 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
     {
       key: 'block',
       figure: settled(habits.blocks, HABIT_MIN_BLOCKS) ? formatHM(habits.blocks.median) : null,
-      text: 'a usual block',
-      needs: after(blocksLeft, 'timed block'),
+      // A figure read from whole sittings, because there were not enough
+      // timed blocks to read, is labelled as that rather than passed off as
+      // a block the app watched.
+      text: habits.blocksFrom === 'timed' ? 'a usual block' : 'a usual stretch, read from whole sittings',
+      needs: after(blocksLeft, 'sitting'),
     },
     {
       key: 'peak',
@@ -113,6 +126,12 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
         <span className="font-mono text-[11px] text-muted">
           from <span className="text-ink">{habits.sittings.n}</span>{' '}
           {habits.sittings.n === 1 ? 'sitting' : 'sittings'}
+          {habits.timedSittings > 0 && habits.timedSittings < habits.sittings.n && (
+            <>
+              {' · '}
+              <span className="text-ink">{habits.timedSittings}</span> timed in detail
+            </>
+          )}
         </span>
       </div>
 
@@ -147,7 +166,7 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
                 {course.code}
               </span>
               <span className="text-ink-soft">
-                blocks of{' '}
+                {habit!.blocksFrom === 'timed' ? 'blocks of ' : 'stretches of '}
                 <span className="font-mono text-ink">{roughMinutes(habit!.blocks.median)}m</span>
                 {habit!.overrun.n >= HABIT_MIN_BLOCKS && (
                   <>
