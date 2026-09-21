@@ -16,7 +16,7 @@ import {
   UpNext,
   WeekPanel,
 } from '@/components/today/TodayPanels';
-import CourseReorderList from '@/components/dashboard/CourseReorderList';
+import ReorderList from '@/components/ReorderList';
 import DatePicker from '@/components/DatePicker';
 import SettingsSheet from '@/components/SettingsSheet';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
@@ -27,7 +27,6 @@ import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
 import { pickUpNext } from '@/lib/derive';
 import { usePreferences } from '@/lib/preferences';
-import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
 import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
@@ -67,6 +66,7 @@ import {
   addCourseOptimistic,
   addTaskOptimistic,
   deleteCourseOptimistic,
+  reorderCoursesOptimistic,
   toggleTaskOptimistic,
   updateTaskOptimistic,
   updateCourseOptimistic,
@@ -536,36 +536,13 @@ function DashboardPageContent() {
   }
 
   /**
-   * The order the cards were dragged into. The cache is rewritten before the
-   * write leaves, so letting go feels instant; if the write fails, SWR puts
-   * the old order back and the card returns to where it was.
+   * The order the cards were dragged into. The write is optimistic, so
+   * letting go feels instant; if it fails, the old order comes back and the
+   * card returns to where it was.
    */
   async function handleReorderCourses(orderedIds: string[]) {
-    const rank = new Map(orderedIds.map((id, index) => [id, index]));
-    const place = (current: Course[] | undefined) =>
-      [...(current ?? [])]
-        .map((course) => {
-          const position = rank.get(course.id);
-          return position === undefined ? course : { ...course, position };
-        })
-        .sort(
-          (a, b) =>
-            (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
-            (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-        );
     try {
-      await revalidateCourses(
-        async (current: Course[] | undefined) => {
-          await db.reorderCourses(orderedIds);
-          return place(current);
-        },
-        {
-          optimisticData: place,
-          rollbackOnError: true,
-          populateCache: true,
-          revalidate: false,
-        },
-      );
+      await reorderCoursesOptimistic(orderedIds);
     } catch (error) {
       console.error('Failed to reorder courses:', error);
       // The most useful reason by far is a database that has not run the
@@ -888,10 +865,13 @@ function DashboardPageContent() {
                 {courses.length} this term
               </button>
             </div>
-            <CourseReorderList
-              courses={courses}
+            <ReorderList
+              items={courses}
+              getId={(course) => course.id}
+              getLabel={(course) => course.code}
+              label="Courses, in the order you arranged them"
               onReorder={handleReorderCourses}
-              renderCourse={(course) => (
+              renderItem={(course) => (
                 <CourseCard
                   course={course}
                   sessions={sessions.filter((s) => s.courseId === course.id)}

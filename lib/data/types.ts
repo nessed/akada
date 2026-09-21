@@ -28,8 +28,9 @@ export interface Course {
    */
   grading?: CourseGrading;
   /**
-   * Where this course sits in the order the student dragged their dashboard
-   * into, smallest first. Optional: a row written before the column existed,
+   * Where this course sits in the order the student dragged their courses
+   * into, smallest first. It is set from the dashboard's stack of cards and
+   * from the list in Settings, and read by every screen that lists courses. Optional: a row written before the column existed,
    * or a project that has not re-run supabase/schema.sql, has none and falls
    * back to the implicit oldest-first order. See lib/data/course-order.ts.
    */

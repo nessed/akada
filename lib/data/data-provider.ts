@@ -23,7 +23,8 @@ export interface DataProvider {
    * position it had. Ordering is a preference rather than a fact, so this is
    * the one course write that is allowed to be unavailable: against a
    * database that has not run the latest supabase/schema.sql it throws, and
-   * the dashboard rolls the cards back and says the order did not save.
+   * the list that asked for the move puts the cards back and says the order
+   * did not save.
    */
   reorderCourses(orderedIds: string[]): Promise<void>;
 

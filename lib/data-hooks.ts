@@ -150,6 +150,47 @@ export async function updateCourseOptimistic(
   );
 }
 
+/**
+ * Writes the order courses were dragged into, from wherever they were
+ * dragged: the dashboard's stack of cards, or the list in Settings.
+ *
+ * `orderedIds` is the whole visible list, first one first. The cache is
+ * rewritten before the write leaves so letting go feels instant, and a
+ * failure puts the old order back and rethrows, which is what lets the list
+ * that asked for the move say the order did not save. Ordering is the one
+ * course write allowed to be unavailable: against a database that has not run
+ * the latest supabase/schema.sql it throws, and everything else still works.
+ */
+export async function reorderCoursesOptimistic(orderedIds: string[]) {
+  const rank = new Map(orderedIds.map((id, index) => [id, index]));
+  // Courses the caller did not name — one added in another tab, say — keep
+  // the position they had and settle after the ones that were placed.
+  const place = (current: Course[] | undefined) =>
+    [...(current ?? [])]
+      .map((course) => {
+        const position = rank.get(course.id);
+        return position === undefined ? course : { ...course, position };
+      })
+      .sort(
+        (a, b) =>
+          (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+          (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+      );
+  await mutate(
+    KEY.courses,
+    async (current: Course[] | undefined) => {
+      await db.reorderCourses(orderedIds);
+      return place(current);
+    },
+    {
+      optimisticData: place,
+      rollbackOnError: true,
+      populateCache: true,
+      revalidate: false,
+    },
+  );
+}
+
 export async function deleteCourseOptimistic(id: string) {
   await mutate(
     KEY.courses,
