@@ -1,7 +1,15 @@
 import type { Course, Task } from '../data';
-import { DAY_QUALIFY_SECONDS, PLAIN_MARKS_PER_DAY, REACHABLE_SECONDS } from './constants';
+import {
+  DAY_QUALIFY_SECONDS,
+  PLAIN_MARKS_PER_DAY,
+  REACHABLE_SECONDS,
+  WEEK_BREADTH_COURSES,
+  WEEK_BREADTH_DAYS,
+  WEEK_CONSISTENT_DAYS,
+} from './constants';
 import type { DayCredit } from './credit';
 import type { CoursePages } from './pages';
+import type { RunWeek } from './runs';
 
 /**
  * Next Mark.
@@ -29,6 +37,7 @@ export type MarkKind =
   | 'course-mark'
   | 'course-page'
   | 'week-goal'
+  | 'week-counts'
   | 'untouched-course'
   | 'day-threshold';
 
@@ -74,6 +83,10 @@ export interface NextMarkInput {
   weekStart: string;
   /** Marks inked today across all courses. */
   markedToday: number;
+  /** The week being lived, from the run reading. Null before anything is logged. */
+  thisWeek: RunWeek | null;
+  /** Counting weeks up to now, this week included only if it already counts. */
+  runCurrent: number;
   /**
    * True when nothing has been logged for several days. Returning after a gap
    * gets the smallest sensible next action rather than the best ranked one,
@@ -83,7 +96,18 @@ export interface NextMarkInput {
 }
 
 export function readNextMark(input: NextMarkInput): NextMarkReading {
-  const { courses, tasks, ledger, pages, today, weekStart, markedToday, returning } = input;
+  const {
+    courses,
+    tasks,
+    ledger,
+    pages,
+    today,
+    weekStart,
+    markedToday,
+    returning,
+    thisWeek,
+    runCurrent,
+  } = input;
   if (courses.length === 0) return { shown: null, candidates: [], silence: 'no-courses' };
 
   const week = ledger.filter((d) => d.iso >= weekStart && d.iso <= today);
@@ -126,6 +150,11 @@ export function readNextMark(input: NextMarkInput): NextMarkReading {
 
   const tierFor = (courseId: string | null): number => {
     if (!courseId) return 4;
+    // The one thing that speaks for the whole week outranks any single
+    // course: it is the largest true thing on the board and the only one
+    // that moves the run. The course just worked ties with it at the top
+    // and the shorter distance decides.
+    if (courseId === WEEK) return 0;
     if (courseId === justWorked) return 0;
     if (deadlineByCourse.has(courseId)) return 1;
     if (untouched.has(courseId)) return 2;
@@ -139,7 +168,8 @@ export function readNextMark(input: NextMarkInput): NextMarkReading {
   const push = (c: Omit<MarkCandidate, 'tier' | 'deadlineDays'>) => {
     candidates.push({
       ...c,
-      tier: c.kind === 'day-threshold' ? 4 : tierFor(c.courseId),
+      tier:
+        c.kind === 'day-threshold' ? 4 : c.kind === 'week-counts' ? tierFor(WEEK) : tierFor(c.courseId),
       deadlineDays: c.courseId ? (deadlineByCourse.get(c.courseId) ?? null) : null,
     });
   };
@@ -159,12 +189,19 @@ export function readNextMark(input: NextMarkInput): NextMarkReading {
         line: `${minutesLabel(record.toNextMark)} binds this page of ${course.code}`,
         remaining: record.toNextMark,
       });
-    } else if (record.marks > 0) {
+    } else {
+      // The first mark is the short one, and it is short precisely so that
+      // it can be named on the day the course is added. A course with no
+      // marks used to get no line at all, which left the one course most in
+      // need of a first foothold as the one course never offered one.
       push({
         id: `mark:${course.id}`,
         kind: 'course-mark',
         courseId: course.id,
-        line: `${minutesLabel(record.toNextMark)} to the next mark on ${course.code}`,
+        line:
+          record.marks === 0
+            ? `${minutesLabel(record.toNextMark)} to the first mark on ${course.code}`
+            : `${minutesLabel(record.toNextMark)} to the next mark on ${course.code}`,
         remaining: record.toNextMark,
       });
     }
@@ -192,7 +229,25 @@ export function readNextMark(input: NextMarkInput): NextMarkReading {
   }
 
   const todayShort = DAY_QUALIFY_SECONDS - (todayEntry?.rawTotal ?? 0);
-  if (todayShort > 0) {
+
+  // The week. When today is the day that would make this week count, that is
+  // the thing to name, because it is the only candidate here that moves the
+  // run, and the run is the one thing in the app that is built out of weeks
+  // rather than minutes. Today counting is then part of the same sentence
+  // rather than a second line saying a smaller version of the same thing.
+  const weekCounts = weekWouldCount(thisWeek, today, courses.length);
+  if (weekCounts && todayShort > 0) {
+    push({
+      id: 'week',
+      kind: 'week-counts',
+      courseId: null,
+      line:
+        runCurrent > 0
+          ? `${minutesLabel(todayShort)} makes it ${runCurrent + 1} weeks running`
+          : `${minutesLabel(todayShort)} makes this week count`,
+      remaining: todayShort,
+    });
+  } else if (todayShort > 0) {
     push({
       id: 'day',
       kind: 'day-threshold',
@@ -227,6 +282,24 @@ export function readNextMark(input: NextMarkInput): NextMarkReading {
     candidates: ranked,
     silence: eligible.length > 0 ? null : plainSpent ? 'plain-marks-spent' : 'none-close',
   };
+}
+
+/** A stand-in course id for the week itself, so the tier table can rank it. */
+const WEEK = '\u0000week';
+
+/**
+ * Whether today qualifying would be the day that makes this week count, by
+ * either route. Breadth reads the courses already touched this week; the
+ * twenty minutes might land on a new course or an old one and the line does
+ * not know which, so it only speaks when the spread is already there.
+ */
+function weekWouldCount(week: RunWeek | null, today: string, courseCount: number): boolean {
+  if (!week || week.counts) return false;
+  if (week.days.find((d) => d.iso === today)?.state === 'qualified') return false;
+  const withToday = week.studyDays + 1;
+  if (withToday >= WEEK_CONSISTENT_DAYS) return true;
+  const breadthTarget = Math.min(WEEK_BREADTH_COURSES, Math.max(1, courseCount));
+  return withToday >= WEEK_BREADTH_DAYS && week.courses >= breadthTarget;
 }
 
 function daysBetween(a: string, b: string): number {

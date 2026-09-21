@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import NextMarkLine from '@/components/progression/NextMarkLine';
 import { useProgression } from '@/lib/progression/use-progression';
+import { useLiveSession } from '@/lib/use-live-session';
+import { withLiveSession } from '@/lib/live-session';
 import CourseCard from '@/components/CourseCard';
 import TaskRow from '@/components/TaskRow';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
@@ -646,6 +648,14 @@ function DashboardPageContent() {
   // request. See lib/progression for why none of it is stored.
   const { progression } = useProgression();
   const run = progression?.runs.current ?? 0;
+  /* The sitting on the clock, folded into what the panels draw. The hour
+     strokes fill, the week's bar grows and "2h to go" counts down while the
+     reader sits, rather than all of it jumping at once when the sitting is
+     logged. Only the drawings read this list; anything that decides
+     something (what is up next, which course has gone quiet) still reads
+     the record. */
+  const live = useLiveSession();
+  const shownSessions = useMemo(() => withLiveSession(sessions, live), [sessions, live]);
 
   if (leaving) {
     return (
@@ -912,7 +922,7 @@ function DashboardPageContent() {
               renderItem={(course) => (
                 <CourseCard
                   course={course}
-                  sessions={sessions.filter((s) => s.courseId === course.id)}
+                  sessions={shownSessions.filter((s) => s.courseId === course.id)}
                   tasks={tasks.filter((t) => t.courseId === course.id)}
                   onStartTimer={handleStartTimer}
                   onEdit={openEditCourse}
@@ -929,7 +939,7 @@ function DashboardPageContent() {
               goals, and the two numbers that only matter in passing. */}
           <aside className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">
             <TodayHours
-              sessions={sessions}
+              sessions={shownSessions}
               courses={courses}
               goalHours={settings?.dailyGoalHours ?? 4}
             />
@@ -939,10 +949,10 @@ function DashboardPageContent() {
               sessions={sessions}
               onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
             />
-            <WeekPanel sessions={sessions} courses={courses} goalHours={weeklyGoalHours} />
+            <WeekPanel sessions={shownSessions} courses={courses} goalHours={weeklyGoalHours} />
             <CoursesWeekPanel
               courses={courses}
-              sessions={sessions}
+              sessions={shownSessions}
               onStart={(course, el) => openStartFor(null, el, false, course)}
             />
             <div className="flex items-center justify-between px-1 font-mono text-[11px] text-muted">

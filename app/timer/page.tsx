@@ -16,6 +16,9 @@ import { useNotice } from '@/components/Notice';
 import StudyFan from '@/components/StudyFan';
 import SessionChain from '@/components/SessionChain';
 import NextMarkLine from '@/components/progression/NextMarkLine';
+import TallyMarks from '@/components/progression/TallyMarks';
+import { MARKS_PER_PAGE } from '@/lib/progression';
+import { useProgression } from '@/lib/progression/use-progression';
 import { useCourses, useTasks } from '@/lib/data-hooks';
 
 /**
@@ -110,6 +113,11 @@ export default function TimerPage() {
   const { tasks } = useTasks();
   const { notify } = useNotice();
   const noise = useAmbientNoise();
+  /* The record with this sitting folded in. The course's open page is drawn
+     in the corner of the frame and fills as the reader sits; a mark that
+     lands mid-block draws itself in there and then, which is the whole
+     point of reading the clock rather than the log. */
+  const { progression, sitting } = useProgression();
 
   /* The hook already refuses to fail silently — but a `title` is a tooltip,
      and a phone has no cursor to hover with, so on the device most likely to
@@ -247,6 +255,13 @@ export default function TimerPage() {
 
   const color = course?.color ?? '#A8B89B';
   const code = course?.code ?? 'Session';
+  const pageRecord = course ? (progression?.pages.get(course.id) ?? null) : null;
+  const tally =
+    sitting && course && sitting.courseId === course.id
+      ? sitting.tally
+      : pageRecord
+        ? { inked: pageRecord.onPage, fresh: 0 }
+        : null;
   /* Two different starts. The frame's window is the stretch on the clock; the
      open screen's "since" is the whole sitting, breaks and all. */
   const stretchStartedAt = active?.stretchStartedAt ?? Date.now();
@@ -584,6 +599,10 @@ export default function TimerPage() {
                 {task ? <> · <span style={{ color: '#EFE9DC' }}>{task.title}</span></> : null}
                 {isPaused && !resting ? ' · paused' : ''}
               </p>
+              {/* What the sitting has done, and only that. This screen holds
+                  one thing and is not given a prompt; a mark that landed
+                  while the reader sat is not a prompt, it is the record. */}
+              <NextMarkLine surface="timer" night onlyLanded align="start" className="mt-3" />
               {blockNoteLine ? <div className="mt-5 max-w-[280px]">{blockNoteLine}</div> : null}
 
               {resting && liveChain.length > 1 ? (
@@ -627,6 +646,23 @@ export default function TimerPage() {
             {hhmm(stretchStartedAt)} to{' '}
             {hhmm(stretchStartedAt + (resting ? breakTarget ?? 0 : target) * 1000)}
           </span>
+          {/* The course's open page, in the margin of the frame. It reads the
+              sitting on the clock, so a mark inked twelve minutes into this
+              block draws itself in twelve minutes into this block. */}
+          {tally && (
+            <span className="absolute bottom-3.5 left-5 z-10 flex items-center gap-2">
+              <TallyMarks
+                inked={tally.inked}
+                total={MARKS_PER_PAGE}
+                fresh={tally.fresh}
+                color={color}
+                size={13}
+              />
+              <span className="font-mono text-[10.5px] tracking-[0.06em] text-muted">
+                {tally.inked} / {MARKS_PER_PAGE}
+              </span>
+            </span>
+          )}
           <StudyFan
             progress={progress}
             seed={fanSeed}

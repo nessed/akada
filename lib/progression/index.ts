@@ -17,6 +17,12 @@ import { readWeekShape, type WeekShape } from './week-shape';
  * disagree with Stats about what happened. That property is the reason the
  * old stamps file was safe to replace wholesale, and it is worth keeping.
  *
+ * It is also what lets the sitting on the clock be read the same way. The
+ * client folds the running timer in as one more session (lib/live-session.ts)
+ * and calls this again, so every distance moves while the reader sits, and
+ * the difference between the two readings is what the sitting has done so far
+ * (./effect.ts). Nothing on the server ever sees the synthetic row.
+ *
  * The one thing that accumulates is an accurate picture of the semester.
  * There is nothing to spend and nothing to collect, so faking any of it
  * produces a false picture of your own term, which is worth nothing to the
@@ -31,8 +37,10 @@ export type { RunDay, RunReading, RunWeek } from './runs';
 export type { Impression, Ladder } from './impressions';
 export type { WeekShape } from './week-shape';
 export type { MarkCandidate, MarkKind, NextMarkReading } from './next-mark';
+export type { SittingEffect } from './effect';
 export { describeWeek } from './runs';
 export { impressionOf, readLadders } from './impressions';
+export { readSittingEffect } from './effect';
 
 export interface Progression {
   ledger: DayCredit[];
@@ -78,6 +86,8 @@ export function readProgression(
     weekStart: isoDate(startOfWeek(new Date(today + 'T12:00:00'))),
     markedToday: marksToday(pages),
     returning: quietDays >= 4,
+    thisWeek: runs.thisWeek,
+    runCurrent: runs.current,
   });
 
   return {

@@ -28,7 +28,7 @@ import { useProgression } from '@/lib/progression/use-progression';
  */
 export default function RecordPage() {
   const { courses: rawCourses } = useCourses();
-  const { progression, isLoading } = useProgression();
+  const { progression, sitting, isLoading } = useProgression();
   const courses = useMemo(() => sortCourses(rawCourses), [rawCourses]);
 
   if (isLoading || !progression) {
@@ -40,6 +40,12 @@ export default function RecordPage() {
   }
 
   const bound = [...progression.pages.values()].reduce((acc, p) => acc + p.bound, 0);
+  // What the sitting on the clock has done, then what is nearest. The same
+  // line the timer carries, so the record and the clock never disagree.
+  const headline = [
+    ...(sitting?.lines ?? []),
+    ...(progression.nextMark.shown ? [progression.nextMark.shown.line] : []),
+  ];
 
   return (
     <PageShell wide>
@@ -52,8 +58,8 @@ export default function RecordPage() {
         <h1 className="m-0 font-serif text-[32px] font-medium leading-[1.05] tracking-[-0.025em] md:text-[36px]">
           The record
         </h1>
-        {progression.nextMark.shown && (
-          <p className="m-0 mt-3 text-[13px] text-ink-soft">{progression.nextMark.shown.line}</p>
+        {headline.length > 0 && (
+          <p className="m-0 mt-3 text-[13px] text-ink-soft">{headline.join(' · ')}</p>
         )}
       </header>
 

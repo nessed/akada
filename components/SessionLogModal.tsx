@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Course, SessionSegment, Task } from '@/lib/data';
+import { MARKS_PER_PAGE, type SittingEffect } from '@/lib/progression';
 import { resolveTint } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import HandCheck from '@/components/notebook/HandCheck';
 import SessionChain from '@/components/SessionChain';
+import TallyMarks from '@/components/progression/TallyMarks';
 import { ButtonSpinner } from './LoadingIndicator';
 
 // Quick-reflection tag chips. Tapping appends `#tag` into the note so the
@@ -23,6 +25,13 @@ interface Props {
   breakSeconds?: number;
   /** The shape of the sitting, when it had one. */
   segments?: SessionSegment[];
+  /**
+   * What this sitting did to the record, and what is nearest after it. The
+   * one moment a reader is guaranteed to look at the sitting is the moment
+   * they are asked to keep it, and for a long time this sheet showed a
+   * duration and a question and not a word about why the duration mattered.
+   */
+  effect?: SittingEffect | null;
   saving?: boolean;
   errorMessage?: string;
   contextMessage?: string;
@@ -37,6 +46,7 @@ export default function SessionLogModal({
   durationSeconds,
   breakSeconds = 0,
   segments = [],
+  effect = null,
   saving = false,
   errorMessage = '',
   contextMessage = '',
@@ -188,6 +198,38 @@ export default function SessionLogModal({
               </li>
             ))}
           </ul>
+        )}
+
+        {/* The sitting's marks, drawn in as it is read back. The tally is the
+            course's open page as it stands with this sitting on it, and the
+            strokes this sitting added draw themselves in. Under it, what the
+            sitting did in the Next Mark voice, and what is nearest now, a
+            step softer, so the loop the line opened is closed here and
+            opened again in the same breath. */}
+        {effect && (effect.lines.length > 0 || effect.next) && (
+          <div className="mt-4 border-t border-line-soft pt-3.5">
+            <div className="flex items-center gap-2.5">
+              <TallyMarks
+                inked={effect.tally.inked}
+                total={MARKS_PER_PAGE}
+                fresh={effect.tally.fresh}
+                color={course.color}
+                size={16}
+              />
+              <span className="font-mono text-[10.5px] text-muted-soft">
+                {effect.tally.inked} / {MARKS_PER_PAGE}
+              </span>
+            </div>
+            <p className="m-0 mt-2 font-serif italic text-[13.5px] leading-[1.5] text-ink">
+              {effect.lines.join(' · ')}
+              {effect.next && (
+                <span className="text-muted">
+                  {effect.lines.length > 0 ? ' · ' : ''}
+                  {effect.next.line}
+                </span>
+              )}
+            </p>
+          </div>
         )}
 
         {contextMessage && (
