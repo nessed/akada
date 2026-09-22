@@ -3,6 +3,9 @@ import type { DataProvider } from './data-provider';
 import { sortCourses } from './course-order';
 import type {
   Course,
+  RecallRecord,
+  RecallRecordInput,
+  RecallRecords,
   Session,
   Task,
   TaskSubtask,
@@ -35,12 +38,16 @@ import {
   cleanKind,
   cleanOptionalDate,
   cleanPages,
+  cleanRecallKey,
+  cleanRecallPrompt,
+  cleanRecallSource,
   cleanSessionNote,
   cleanTaskTitle,
   cleanText,
   cleanWeight,
   sanitizeAssessments,
   sanitizeGrading,
+  sanitizeRecallHistory,
   requireIsoDate,
 } from '@/lib/planner-safety';
 
@@ -99,6 +106,18 @@ interface TaskRow {
   kind?: string | null;
   weight?: number | string | null;
   pages?: number | string | null;
+}
+
+interface RecallRow {
+  id: string;
+  course_id: string;
+  item_key: string;
+  prompt: string;
+  source: string;
+  ref: string | null;
+  history: unknown;
+  let_go: boolean;
+  created_at: string;
 }
 
 interface SemesterRow {
@@ -171,6 +190,20 @@ function sanitizeSubtasks(value: unknown): TaskSubtask[] {
   });
 }
 
+function rowToRecall(r: RecallRow): RecallRecord {
+  return {
+    id: r.id,
+    key: cleanRecallKey(r.item_key),
+    courseId: cleanText(r.course_id, 80),
+    prompt: cleanRecallPrompt(r.prompt),
+    source: cleanRecallSource(r.source),
+    ref: r.ref ? cleanText(r.ref, 200) : null,
+    history: sanitizeRecallHistory(r.history),
+    letGo: Boolean(r.let_go),
+    createdAt: r.created_at,
+  };
+}
+
 function rowToSemester(r: SemesterRow, activeId: string | null): Semester {
   return {
     id: r.id,
@@ -224,6 +257,23 @@ function taskExtras(input: Partial<Task>): Record<string, unknown> {
 
 const COURSE_ORDER_UNAVAILABLE =
   'Course order could not be saved. Run the latest supabase/schema.sql once and try again.';
+
+const RECALL_UNAVAILABLE =
+  'Recall could not be saved. Run the latest supabase/schema.sql once and try again.';
+
+/**
+ * The recall table, or a column it needs, is not there: a project that has
+ * not re-run supabase/schema.sql since recall arrived. PostgREST reports a
+ * missing table as PGRST205 (42P01 from older versions) and a missing column
+ * as PGRST204 or 42703.
+ */
+function isMissingRecall(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return (
+    ['PGRST205', '42P01', 'PGRST204', '42703'].includes(error.code ?? '') ||
+    Boolean(error.message?.includes('recall_items'))
+  );
+}
 
 export class SupabaseAdapter implements DataProvider {
   private supabase = createClient();
@@ -739,6 +789,63 @@ export class SupabaseAdapter implements DataProvider {
     if (error) throw error;
   }
 
+  // ---- Recall ----
+  // Scoped to the active semester like everything else. recall_items gets its
+  // semester_id from the course through the same trigger tasks and sessions
+  // use, so a write never has to know which term it is in.
+
+  async getRecall(): Promise<RecallRecords> {
+    const uid = await this.userId();
+    const semesterId = await this.activeSemesterId(uid);
+    const { data, error } = await this.supabase
+      .from('recall_items')
+      .select('*')
+      .eq('user_id', uid)
+      .eq('semester_id', semesterId);
+    if (error) {
+      // Finished readings can still be read off the tasks without the table;
+      // it is only an answer that has nowhere to go.
+      if (isMissingRecall(error)) return { records: [], available: false };
+      throw error;
+    }
+    return { records: (data as RecallRow[]).map(rowToRecall), available: true };
+  }
+
+  async saveRecall(input: RecallRecordInput): Promise<RecallRecord> {
+    const uid = await this.userId();
+    const key = cleanRecallKey(input.key);
+    const courseId = cleanText(input.courseId, 80);
+    const prompt = cleanRecallPrompt(input.prompt);
+    if (!key || !courseId || !prompt) {
+      throw new Error('A kept thing needs a course and something to recall.');
+    }
+    // One row per key per person, written whole. The history is sent as the
+    // whole document rather than appended to in the database, which is the
+    // same trade subtasks makes: it is only ever read and written with its
+    // item, and two devices answering the same thing in the same minute is
+    // not a case worth a stored procedure.
+    const { data, error } = await this.supabase
+      .from('recall_items')
+      .upsert(
+        {
+          user_id: uid,
+          course_id: courseId,
+          item_key: key,
+          prompt,
+          source: cleanRecallSource(input.source),
+          ref: input.ref ? cleanText(input.ref, 200) : null,
+          history: sanitizeRecallHistory(input.history),
+          let_go: Boolean(input.letGo),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,item_key' },
+      )
+      .select()
+      .single();
+    if (error) throw isMissingRecall(error) ? new Error(RECALL_UNAVAILABLE) : error;
+    return rowToRecall(data as RecallRow);
+  }
+
   // ---- Semesters ----
 
   async getActiveSemester(): Promise<Semester | null> {
@@ -932,7 +1039,9 @@ export class SupabaseAdapter implements DataProvider {
 
   async resetAll(): Promise<void> {
     const uid = await this.userId();
-    // Delete in FK-safe order
+    // Delete in FK-safe order. recall_items would go with its courses anyway;
+    // it is named so a project without the table simply skips it.
+    await this.supabase.from('recall_items').delete().eq('user_id', uid);
     await this.supabase.from('sessions').delete().eq('user_id', uid);
     await this.supabase.from('tasks').delete().eq('user_id', uid);
     await this.supabase.from('courses').delete().eq('user_id', uid);

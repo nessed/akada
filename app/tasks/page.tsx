@@ -14,7 +14,13 @@ import DatePicker from '@/components/DatePicker';
 import TaskRow from '@/components/TaskRow';
 import ReorderList from '@/components/ReorderList';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
+import { RecallGlyph, VerdictMark } from '@/components/recall/RecallMarks';
 import type { Task, TaskKind } from '@/lib/data';
+import { useRecall } from '@/lib/recall/use-recall';
+import { keepTask, keepTickedSteps } from '@/lib/recall/actions';
+import { looksLikeReading, readingPrompt } from '@/lib/recall';
+import { beforeReadingPrompt } from '@/lib/recall/prompt';
+import { daysAgoWords, whenWords } from '@/lib/recall/words';
 import { formatHM, formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
@@ -76,6 +82,10 @@ function TasksPageContent() {
     useOnboardingComplete();
   const { courses, isLoading: coursesLoading } = useCourses();
   const { tasks, isLoading: tasksLoading } = useTasks();
+  // Where a finished task, or a ticked step, stands in recall. Read in the
+  // task sheet only; the list itself stays a list of things to do.
+  const { reading: recall } = useRecall();
+  const [keeping, setKeeping] = useState(false);
 
   const [filter, setFilter] = useState<Filter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('smart');
@@ -1145,6 +1155,67 @@ function TasksPageContent() {
         const course = courses.find((item) => item.id === viewingTask.courseId);
         const subtasks = viewingTask.subtasks ?? [];
         const done = subtasks.filter((item) => item.completed).length;
+        const today = isoDate();
+        const recallOfTask = recall?.states.find((state) => state.key === `task:${viewingTask.id}`) ?? null;
+        const keptSteps = new Map(
+          (recall?.states ?? [])
+            .filter((state) => state.source === 'step' && state.task?.id === viewingTask.id)
+            .map((state) => [state.subtaskId, state]),
+        );
+        const unkeptTicked = subtasks.filter((item) => item.completed && !keptSteps.has(item.id));
+
+        /** A list of concepts ticked "can do it fresh" is exactly what recall checks. */
+        async function keepSteps(task: Task) {
+          if (keeping) return;
+          setKeeping(true);
+          try {
+            const kept = await keepTickedSteps(
+              task,
+              new Set([...keptSteps.keys()].map((id) => `step:${task.id}:${id}`)),
+            );
+            notify(
+              `${kept} ${kept === 1 ? 'step' : 'steps'} kept. Each comes up to be done fresh from tomorrow, and one that has gone gets unticked.`,
+            );
+          } catch (error) {
+            console.error('Failed to keep the steps:', error);
+            notify(error instanceof Error ? error.message : 'Those steps were not kept.');
+          } finally {
+            setKeeping(false);
+          }
+        }
+
+        /* The clipboard write has to happen in the click's own task or Safari
+           treats it as untrusted, so nothing is awaited before it. */
+        async function copyBeforeReading(task: Task) {
+          try {
+            await navigator.clipboard.writeText(
+              beforeReadingPrompt({
+                courseId: task.courseId,
+                courseCode: course?.code ?? 'this course',
+                courseName: course?.name ?? '',
+                title: readingPrompt(task.title),
+                detail: task.description || undefined,
+              }),
+            );
+            notify('Copied. Paste it into a chat with the Akada connector on before you start reading.');
+          } catch (error) {
+            console.error('Failed to copy the reading prompt:', error);
+            notify('Akada could not reach the clipboard.');
+          }
+        }
+
+        async function keepWhole(task: Task) {
+          if (keeping) return;
+          setKeeping(true);
+          try {
+            await keepTask(task);
+          } catch (error) {
+            console.error('Failed to keep the task:', error);
+            notify(error instanceof Error ? error.message : 'That was not kept.');
+          } finally {
+            setKeeping(false);
+          }
+        }
 
         /** One step, whether it is sitting in a plain list or being carried. */
         const renderSubtask = (subtask: NonNullable<Task['subtasks']>[number]) => (
@@ -1170,6 +1241,21 @@ function TasksPageContent() {
             <span className="min-w-0 flex-1 text-[14px] leading-[1.45] text-ink">
               {subtask.title}
             </span>
+            {/* In recall: the last answer's mark, or the loop until it has
+                been asked. In the margin where the grip is not. */}
+            {keptSteps.has(subtask.id) && (
+              <span className="mt-[3px] shrink-0 opacity-70" title="Kept for recall">
+                {keptSteps.get(subtask.id)?.last ? (
+                  <VerdictMark
+                    verdict={keptSteps.get(subtask.id)!.last!.verdict}
+                    size={14}
+                    color={course?.color ?? 'var(--ink-soft)'}
+                  />
+                ) : (
+                  <RecallGlyph size={14} color={course?.color ?? 'var(--ink-soft)'} />
+                )}
+              </span>
+            )}
           </button>
         );
 
@@ -1248,6 +1334,46 @@ function TasksPageContent() {
                 )}
               </div>
 
+              {/* A reading not read yet can be gone into with questions, the
+                  ones it answers, which then come back in recall. */}
+              {!viewingTask.completed && looksLikeReading(viewingTask) && (
+                <button
+                  type="button"
+                  onClick={() => copyBeforeReading(viewingTask)}
+                  title="Copy a prompt that has Claude ask you three questions this reading answers, and keep them for recall"
+                  className="hand-underline mt-3 bg-transparent px-0.5 font-serif text-[13px] text-ink"
+                >
+                  Questions before you read
+                </button>
+              )}
+
+              {/* Where a finished task stands in recall, in one line; or, for
+                  one that is not in it, the word that keeps it. An open task
+                  is still being done and is not asked about yet. */}
+              {viewingTask.completed &&
+                (recallOfTask ? (
+                  <p className="m-0 mt-3 flex flex-wrap items-center gap-x-2 font-serif text-[13px] italic text-muted">
+                    <RecallGlyph size={13} color={course?.color ?? 'var(--muted)'} />
+                    <span>
+                      in recall ·{' '}
+                      {recallOfTask.last
+                        ? `${recallOfTask.last.verdict} ${daysAgoWords(recallOfTask.last.on, today)}`
+                        : 'not asked yet'}
+                      {' · '}
+                      {recallOfTask.due ? 'due now' : `next ${whenWords(recallOfTask.dueOn, today)}`}
+                    </span>
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={keeping}
+                    onClick={() => keepWhole(viewingTask)}
+                    className="hand-underline mt-3 bg-transparent px-0.5 font-serif text-[13px] text-ink disabled:opacity-40"
+                  >
+                    Keep this for recall
+                  </button>
+                ))}
+
               {viewingTask.description && (
                 <p className="mb-0 mt-5 whitespace-pre-wrap font-serif text-[15px] leading-[1.7] text-ink-soft">
                   {viewingTask.description}
@@ -1257,6 +1383,20 @@ function TasksPageContent() {
               <div className="mt-8">
                 <div className="flex items-baseline gap-2 border-b border-line pb-2">
                   <p className="eyebrow m-0">Subtasks</p>
+                  {/* Ticked steps on a list of concepts are claims to be able
+                      to do each one fresh; keeping them is how the claim gets
+                      checked. Offered only while there are ticked steps not
+                      yet kept. */}
+                  {unkeptTicked.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={keeping}
+                      onClick={() => keepSteps(viewingTask)}
+                      className="hand-underline ml-2 bg-transparent px-0.5 font-serif text-[12.5px] italic text-ink-soft disabled:opacity-40"
+                    >
+                      keep {unkeptTicked.length} ticked for recall
+                    </button>
+                  )}
                   {subtasks.length > 0 && (
                     <span className="tnum ml-auto font-mono text-[11px] text-muted">
                       {done}/{subtasks.length}

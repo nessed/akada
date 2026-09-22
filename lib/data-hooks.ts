@@ -17,6 +17,9 @@
 import useSWR, { mutate } from 'swr';
 import type {
   Course,
+  RecallRecord,
+  RecallRecordInput,
+  RecallRecords,
   Session,
   Semester,
   NewSemesterInput,
@@ -34,6 +37,7 @@ const KEY = {
   activeSemester: 'active-semester',
   semesters: 'semesters',
   userSettings: 'user-settings',
+  recall: 'recall',
 } as const;
 
 /* ───────── Reads ───────── */
@@ -78,6 +82,26 @@ export function useSemesters() {
     db.getSemesters(),
   );
   return { semesters: data ?? [], error, isLoading, revalidate };
+}
+
+/**
+ * What has been kept for recall and answered, as stored. The reading of it,
+ * with finished readings folded in and a schedule worked out, is useRecall
+ * in lib/recall/use-recall.ts; this is only the rows.
+ */
+export function useRecallRecords() {
+  const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.recall, () =>
+    db.getRecall(),
+  );
+  return {
+    records: data?.records ?? [],
+    // Assumed there until a read says otherwise, so the page does not flash
+    // a note about the database while the first read is in flight.
+    available: data?.available ?? true,
+    error,
+    isLoading,
+    revalidate,
+  };
 }
 
 export function useUserSettings() {
@@ -206,9 +230,11 @@ export async function deleteCourseOptimistic(id: string) {
       revalidate: false,
     },
   );
-  // Sessions/tasks may reference this course, invalidate them.
+  // Sessions/tasks may reference this course, invalidate them. Its recall
+  // went with it through the cascade.
   mutate(KEY.sessions);
   mutate(KEY.tasks);
+  mutate(KEY.recall);
 }
 
 /* ───────── Task mutations ───────── */
@@ -342,6 +368,49 @@ export async function deleteSessionOptimistic(id: string) {
   );
 }
 
+/* ───────── Recall mutations ───────── */
+
+/** The stored list with one thing written into it, by key. */
+function placeRecall(current: RecallRecords | undefined, record: RecallRecord): RecallRecords {
+  const list = current?.records ?? [];
+  const at = list.findIndex((item) => item.key === record.key);
+  const records = at === -1 ? [...list, record] : list.map((item, i) => (i === at ? record : item));
+  return { records, available: current?.available ?? true };
+}
+
+/**
+ * Writes one kept thing whole: a first answer, a later one, a let go, or an
+ * answer taken back. The cache is written first so the next card is already
+ * there when the tap lands, and a failure puts the old list back and
+ * rethrows, which is what lets the deck say the answer did not save.
+ */
+export async function saveRecallOptimistic(input: RecallRecordInput): Promise<RecallRecord> {
+  let written: RecallRecord | null = null;
+  await mutate(
+    KEY.recall,
+    async (current: RecallRecords | undefined) => {
+      const saved = await db.saveRecall(input);
+      written = saved;
+      return placeRecall(current, saved);
+    },
+    {
+      optimisticData: (current: RecallRecords | undefined) => {
+        const held = current?.records.find((item) => item.key === input.key);
+        return placeRecall(current, {
+          ...input,
+          id: held?.id ?? optimisticId(),
+          createdAt: held?.createdAt ?? nowIso(),
+        });
+      },
+      rollbackOnError: true,
+      populateCache: true,
+      revalidate: false,
+    },
+  );
+  if (!written) throw new Error('That did not save.');
+  return written;
+}
+
 /* ───────── Settings & semester ───────── */
 
 export async function updateUserSettingsOptimistic(patch: Partial<UserSettings>) {
@@ -389,6 +458,7 @@ export async function createSemesterOptimistic(input: NewSemesterInput): Promise
     mutate(KEY.courses, [], { revalidate: false }),
     mutate(KEY.tasks, [], { revalidate: false }),
     mutate(KEY.sessions, [], { revalidate: false }),
+    mutate(KEY.recall, { records: [], available: true }, { revalidate: false }),
   ]);
   return created;
 }
@@ -421,6 +491,7 @@ export async function deleteSemesterOptimistic(id: string) {
     mutate(KEY.courses),
     mutate(KEY.tasks),
     mutate(KEY.sessions),
+    mutate(KEY.recall),
   ]);
 }
 
@@ -443,6 +514,7 @@ export async function resetAllData() {
     mutate(KEY.activeSemester, null, { revalidate: false }),
     mutate(KEY.semesters, [], { revalidate: false }),
     mutate(KEY.userSettings, null, { revalidate: false }),
+    mutate(KEY.recall, { records: [], available: true }, { revalidate: false }),
   ]);
 }
 
@@ -462,6 +534,7 @@ export async function deleteAccountAndData() {
     mutate(KEY.activeSemester, null, { revalidate: false }),
     mutate(KEY.semesters, [], { revalidate: false }),
     mutate(KEY.userSettings, null, { revalidate: false }),
+    mutate(KEY.recall, { records: [], available: true }, { revalidate: false }),
   ]);
 }
 

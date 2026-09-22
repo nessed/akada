@@ -1,5 +1,8 @@
 import type {
   Course,
+  RecallRecord,
+  RecallRecordInput,
+  RecallRecords,
   Session,
   Task,
   Semester,
@@ -39,6 +42,22 @@ export interface DataProvider {
   addTask(task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>): Promise<Task>;
   updateTask(id: string, updates: Partial<Task>): Promise<Task>;
   deleteTask(id: string): Promise<void>;
+
+  // Recall, scoped to the active semester, same rule as courses.
+  /**
+   * Everything kept for recall that has a row. A finished reading has none
+   * until it is first answered or let go (see lib/recall). Against a
+   * database that has not run the latest supabase/schema.sql this resolves
+   * with `available: false` rather than throwing, because the readings can
+   * still be read off the tasks; it is only writing that needs the table.
+   */
+  getRecall(): Promise<RecallRecords>;
+  /**
+   * Writes one kept thing whole, by its key: a first answer, a later one, a
+   * let go. Rejects with a sentence the reader can act on when the table is
+   * not there yet.
+   */
+  saveRecall(input: RecallRecordInput): Promise<RecallRecord>;
 
   // Semesters
   /** The semester Dashboard/Tasks/Timer currently write into, or null before onboarding finishes it. */

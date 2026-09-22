@@ -205,6 +205,77 @@ export interface Task {
   pages?: number | null;
 }
 
+/**
+ * How a recall went, in the reader's own honest word.
+ *
+ * `clear` is had it, without looking. `hazy` is part of it, or only with a
+ * nudge. `gone` is could not. Three rather than a scale because the question
+ * is asked with a book shut, and a reader can tell those three apart without
+ * deliberating; a five point scale asks them to grade their own grading.
+ */
+export type RecallVerdict = 'clear' | 'hazy' | 'gone';
+
+/**
+ * Where a thing kept for recall came from.
+ *
+ * `reading` is a finished reading, which is kept without being asked: the
+ * app reads the course's finished readings into recall on its own, which is
+ * what lets a term that started before recall existed arrive with its
+ * material already in it. `task` is any other finished task kept by hand,
+ * `step` one ticked step of a task, `note` a line written on the log sheet at
+ * the end of a sitting, `own` a line written on the course page or handed in
+ * through the connector.
+ */
+export type RecallSource = 'reading' | 'task' | 'step' | 'note' | 'own';
+
+/** One recall, on the reader's own day. */
+export interface RecallAnswer {
+  on: string;
+  verdict: RecallVerdict;
+}
+
+/**
+ * A thing being kept, as stored.
+ *
+ * `key` is what identifies it across devices and across the connector:
+ * `task:<taskId>` for a whole task, reading or otherwise, `step:<taskId>:
+ * <subtaskId>` for one step, and `note:` or `own:` with a random tail for a
+ * line somebody wrote. A finished reading has no row at all until it is
+ * first answered or let go; until then it is read straight off the task.
+ *
+ * There is no stored due date. When a thing next comes up is worked out from
+ * its answers on every read, like everything in lib/progression, so there is
+ * no schedule to drift out of step with the history that produced it.
+ */
+export interface RecallRecord {
+  id: string;
+  key: string;
+  courseId: string;
+  prompt: string;
+  source: RecallSource;
+  /** The task, or `taskId:subtaskId` for a step. Null for a written line. */
+  ref: string | null;
+  history: RecallAnswer[];
+  /** Taken out of recall on purpose. Kept rather than deleted, so a finished reading stays out. */
+  letGo: boolean;
+  createdAt: string;
+}
+
+export type RecallRecordInput = Omit<RecallRecord, 'id' | 'createdAt'>;
+
+/**
+ * What a read of the recall table found.
+ *
+ * `available` is false against a database that has not run the latest
+ * supabase/schema.sql, where the table is simply not there. Recall still
+ * reads finished readings off the tasks in that case; it just has nowhere to
+ * write an answer, and says so when asked to.
+ */
+export interface RecallRecords {
+  records: RecallRecord[];
+  available: boolean;
+}
+
 export interface Semester {
   id: string;
   label: string;

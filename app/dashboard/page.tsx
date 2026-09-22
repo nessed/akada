@@ -7,6 +7,9 @@ import PageShell from '@/components/PageShell';
 import NextMarkLine from '@/components/progression/NextMarkLine';
 import Marginalia from '@/components/progression/Marginalia';
 import { useProgression } from '@/lib/progression/use-progression';
+import RecallDeck from '@/components/recall/RecallDeck';
+import { useRecall } from '@/lib/recall/use-recall';
+import type { RecallState } from '@/lib/recall';
 import { useLiveSession } from '@/lib/use-live-session';
 import { withLiveSession } from '@/lib/live-session';
 import CourseCard from '@/components/CourseCard';
@@ -657,6 +660,16 @@ function DashboardPageContent() {
      the record. */
   const live = useLiveSession();
   const shownSessions = useMemo(() => withLiveSession(sessions, live), [sessions, live]);
+  /* What is due to be recalled, within the day's few. Reads the same caches
+     as everything above, plus the recall rows. */
+  const { reading: recall, available: recallAvailable } = useRecall();
+
+  /** After a slip, back to the material: the task it came from, or the course. */
+  function studyRecall(state: RecallState, anchor: HTMLElement) {
+    const course = courses.find((c) => c.id === state.courseId);
+    if (!course) return;
+    openStartFor(state.task, anchor, false, course);
+  }
 
   if (leaving) {
     return (
@@ -848,6 +861,19 @@ function DashboardPageContent() {
               </section>
             )}
 
+            {/* Recall. A few things from the term to bring back with the book
+                shut, and nothing at all on a day with none due. Under Up next
+                rather than over it: it is a few minutes, and the day's work
+                is still the day's work. See lib/recall. */}
+            <RecallDeck
+              states={recall?.queue ?? []}
+              courses={courses}
+              closing="That's today's recall."
+              onStudy={studyRecall}
+              available={recallAvailable}
+              className="mt-8"
+            />
+
             {overdueTasks.length > 0 && (
               <TaskSection
                 title="Overdue"
@@ -952,6 +978,7 @@ function DashboardPageContent() {
               tasks={tasks}
               courses={courses}
               sessions={sessions}
+              recall={recall}
               onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
             />
             <WeekPanel sessions={shownSessions} courses={courses} goalHours={weeklyGoalHours} />

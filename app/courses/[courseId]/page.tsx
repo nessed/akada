@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import BackButton from '@/components/BackButton';
 import CoursePagePanel from '@/components/progression/CoursePagePanel';
+import CourseRecallPanel from '@/components/recall/CourseRecallPanel';
+import { useRecall } from '@/lib/recall/use-recall';
 import Marginalia from '@/components/progression/Marginalia';
 import { useProgression } from '@/lib/progression/use-progression';
 import ConfirmSheet from '@/components/ConfirmSheet';
@@ -107,6 +109,7 @@ export default function CoursePage() {
   // above, so this costs no request and cannot disagree with the hours.
   const { progression } = useProgression();
   const pageRecord = course ? (progression?.pages.get(course.id) ?? null) : null;
+  const { reading: recall, available: recallAvailable } = useRecall();
 
   const courseSessions = useMemo(() => {
     if (!course) return [];
@@ -558,6 +561,16 @@ export default function CoursePage() {
               See this course beside the others →
             </Link>
           </section>
+
+          {/* What this course is keeping, and how much of it came back clear.
+              See lib/recall. */}
+          <CourseRecallPanel
+            course={course}
+            reading={recall}
+            available={recallAvailable}
+            onStudy={(state, el) => setStartTarget({ task: state.task, course, anchor: el })}
+            className="mt-10"
+          />
         </div>
 
         <aside className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">

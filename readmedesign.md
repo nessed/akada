@@ -370,6 +370,122 @@ ever, so an account with no Supabase behind it does not run a doomed query on
 every load. That table was written before anyone asked for it precisely so
 this would be possible.
 
+### Recall: what came out of the hours
+Everything above measures the hours going in. Marks, pages, the run, Next
+Mark and the habits are all readings of logged time, and a student who has
+logged forty hours can still sit an exam having kept very little of them.
+Recall (`lib/recall`) is the one part of the app that asks what came out: a
+few things a day, brought back to be given with the book shut, at gaps that
+widen each time they come back clear. Asking is the studying. Pulling a thing
+out of memory does more for keeping it than reading it again, and it tells the
+reader the one thing an hour count cannot, which is what they no longer have.
+
+**What gets asked about.** Finished readings, on their own: a task whose kind
+is `reading`, or whose title reads as one (it starts with "Read", cites an
+author and a year, or names a chapter), comes into recall the day after it was
+ticked. Nothing is stored for it until it is first answered, so a term that
+started before recall existed arrives with its readings already in it. The
+same reading written down twice, once off the syllabus and once when it was
+done, is one thing to remember. Anything else is kept by hand: a finished task
+from its sheet ("Keep this for recall"), the ticked steps of a concept list
+("keep 5 ticked for recall", in the Subtasks header), a line on a course page,
+a line on the log sheet, or through the connector.
+
+**The card.** One thing at a time, in the paper card Up next uses, with the
+course's rule down its left edge: the course code, when it was learned or how
+it last went ("hazy 3 days ago"), the thing itself in the serif, and one line
+on how to recall it in italic ("the argument, without looking", "do one fresh,
+nothing in front of you"). Three words answer it: **clear**, **hazy**,
+**gone**, each with a hand mark rather than a colour: a tick, a wave, an open
+ring that does not quite meet itself. There is no cross and no red, see "No
+Alarmist Indicators": a thing that slipped is why recall exists. The card
+never shows an answer, since a recall with the answer in view is a re-read,
+and never scores one; the reader knows whether they had it.
+
+After an answer the next card is already there, and one line under it says
+what the answer did in the Next Mark voice: "Angell (1912)… · hazy · back
+tomorrow". That line carries **undo**, because an answer is one tap on a phone
+and a mistaken one moves a thing weeks out of sight, and after a slip it
+carries the way back to the material ("reread it", "work on it"), which opens
+the start popover on the task the thing came from. A step answered **gone** is
+unticked on its task, and the line says so: the tick on a concept list claimed
+"I can do this fresh", and the recall just found out it is not true.
+
+**The schedule** is worked out from the answers on every read, never stored.
+The first asking is the day after a thing was learned; after that the gap
+grows with each clear, 3, 7, 16 and 35 days, steps one gap back in on hazy, and
+goes back to tomorrow on gone. An exam within three weeks in the same course
+pulls everything kept for it in to the day before, so it is all asked once
+more with the exam in view. Like Next Mark's deadlines, the exam steers the
+order and the timing and never appears in the copy. A second answer the same
+day replaces the first.
+
+**The day's few.** Today asks for five at most, no more than three from one
+course unless nothing else is due, slipped things first, then things never
+asked, then the clear ones coming round again. A reader with a term of
+readings behind them would otherwise open the app to thirty cards at once,
+which is a backlog, and the app does not draw backlogs. When the five are
+answered the card becomes one dashed line, "That's today's recall.", for the
+rest of the visit, and on the next visit the section is simply not there. A
+course page asks for the rest of its own on request ("Recall 4 now"), with no
+limit, because the reader asked.
+
+**Settled.** One clear recall the morning after is a good sign and not yet a
+thing kept; what holds up on an exam is recalling it clear across several
+spaced sittings. A thing clear three times running, each on a later day, is
+**settled**, and the course's standing counts it apart from the ones clear
+once: "1 settled · 1 clear · 1 hazy · 1 gone · 1 not asked yet".
+
+**Where it is drawn.**
+- **Today**, under Up next and over the day's task lists: the card, the
+  day's few. Under Up next rather than over it, because it is a few minutes
+  and the day's work is still the day's work.
+- **The course page**, under the tasks: the course's standing as uprights
+  and a sentence, then every kept thing in the order it comes up, its last
+  three answers as marks in the margin ("new" before it has been asked), and
+  when it next comes up in the serif. A line to write the next thing on sits
+  at the foot, drawn the way the subtask sheet's "one more step…" is.
+- **The Coming panel**, under an exam's row, once per course: the same
+  uprights, and "2 of 5 clear" in mono. A countdown on its own says how close
+  an exam is; this says how close the reader is to it.
+- **The task sheet**: for a finished task, where it stands ("in recall ·
+  hazy 3 days ago · next thursday") or the words that keep it; for a concept
+  list, the recall loop in the margin of each kept step, where a grip or a
+  tick would be, and the last answer's mark once it has one. A reading not
+  read yet offers "Questions before you read", which copies a prompt for
+  three questions the reading answers, a one-line guess at each first, and
+  the questions kept for recall: being asked before reading makes those
+  points stick even when the guesses were wrong.
+- **The log sheet**: "Worth keeping?", a line to write on under the tags,
+  like the break's own question. One thing from the sitting to be asked about
+  later. Most sittings leave it empty and that is the expected case.
+
+**The uprights.** A course's standing is one upright per thing kept, in the
+same stroke as the tally in its margin. Pressed hard for settled, inked for
+clear, broken for hazy, and the paper's own rule for gone and for not asked
+yet, which is the part still between the reader and ready. "Nine of fourteen"
+is a count of things; a percentage of them would be a number nobody can act
+on, see "Hours, not percentages".
+
+**Ask Claude.** A card can only ask; it cannot check, and for a concept
+"could you do one fresh?" is best answered by doing one. "ask Claude", on
+every card and in a course's Recall header, copies a prompt for a chat that
+has the connector on. The prompt is built on three rules: nothing is shown
+before the attempt (no answer, no worked example, a hint only when asked for,
+and the smallest one); everything is shown after it, so the reader grades
+against the right answer rather than against their own sense of it; and the
+verdict goes back through `record_recall`, so a quiz in a chat lands in the
+same schedule as a card on Today. A course's prompt asks for its due things
+mixed rather than in order, since practice that makes the reader decide which
+method a problem needs is what holds up on an exam, most of all in
+mathematics.
+
+**Before the table exists.** Recall reads finished readings off the task list
+with no table at all, so on a database that has not run the latest
+`supabase/schema.sql` the cards still draw. An answer has nowhere to go there,
+and the card says so once, in a quiet line under it, rather than failing on
+every tap.
+
 ### The chime
 The one sound the app makes, beyond the ambient noise a reader turns on
 themselves. It is a **struck glass**: three sine partials over a 1.5s

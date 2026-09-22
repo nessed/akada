@@ -16,6 +16,8 @@ import { isLoggableDuration } from '@/lib/session-safety';
 import { backlogPages, countdowns, readingBacklog, readingRate } from '@/lib/derive';
 import HourStrokes from '@/components/HourStrokes';
 import HandNote from '@/components/notebook/HandNote';
+import { RecallStrokes } from '@/components/recall/RecallMarks';
+import type { RecallReading } from '@/lib/recall';
 
 /**
  * The panels Today is made of.
@@ -198,11 +200,19 @@ export function ComingPanel({
   tasks,
   courses,
   sessions,
+  recall = null,
   onOpen,
 }: {
   tasks: Task[];
   courses: Course[];
   sessions: Session[];
+  /**
+   * What the reader is keeping for each course and how much of it came back
+   * clear, drawn under the course's first row. A countdown on its own says
+   * how close an exam is; this says how close the reader is to it, which is
+   * the half of the question the days cannot answer.
+   */
+  recall?: RecallReading | null;
   onOpen?: (task: Task) => void;
 }) {
   const today = isoDate();
@@ -224,7 +234,14 @@ export function ComingPanel({
         )}
       </div>
 
-      {coming.map(({ task, course, days }) => (
+      {coming.map(({ task, course, days }, index) => {
+        // Once per course, on its nearest row: two midterms in one course
+        // draw on the same material, and saying so twice is saying it twice.
+        const standing =
+          course && coming.findIndex((c) => c.course?.id === course.id) === index
+            ? (recall?.byCourse.get(course.id) ?? null)
+            : null;
+        return (
         <button
           key={task.id}
           type="button"
@@ -243,6 +260,17 @@ export function ComingPanel({
               )}
             </span>
             <span className="mt-0.5 block truncate text-[13px] text-ink">{task.title}</span>
+            {standing && course && (
+              <span
+                className="mt-1.5 flex items-center gap-2"
+                title={`${standing.settled + standing.clear} of the ${standing.kept} things kept for ${course.code} came back clear last time, ${standing.settled} of them on several days running`}
+              >
+                <RecallStrokes recall={standing} color={course.color} height={10} />
+                <span className="tnum font-mono text-[10.5px] text-muted">
+                  {standing.settled + standing.clear} of {standing.kept} clear
+                </span>
+              </span>
+            )}
           </span>
           <span
             className={`tnum shrink-0 font-mono text-[13px] font-semibold ${
@@ -252,7 +280,8 @@ export function ComingPanel({
             {days === 0 ? 'today' : days === 1 ? '1 day' : `${days} days`}
           </span>
         </button>
-      ))}
+        );
+      })}
 
       {pages > 0 && (
         <p

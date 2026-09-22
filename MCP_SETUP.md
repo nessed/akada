@@ -46,8 +46,11 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `get_grading_scheme`: Read how a course is marked, accepted and proposed.
 - `set_grading_scheme`: Propose how a course is marked, read off its outline.
 - `delete_course`: Permanently delete a course and its associated tasks and sessions.
+- `get_recall`: Read what the student is keeping for recall, what is due, and how each thing has gone.
+- `record_recall`: Record how a recall went (clear, hazy or gone) after quizzing the student.
+- `keep_for_recall`: Keep concepts, lines or a task's ticked steps to be recalled at widening gaps.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `set_grading_scheme` and `delete_course` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `set_grading_scheme`, `delete_course`, `record_recall` and `keep_for_recall` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -122,6 +125,43 @@ which leaves the original sitting there as overdue.
 Both tools refuse the whole request unless every id names a task the signed-in
 student owns in their active semester, checked through the owning course rather
 than the denormalized `tasks.semester_id`.
+
+### Recall: `get_recall`, `record_recall`, `keep_for_recall`
+
+What the student is keeping to be asked about from memory. The reading is
+`lib/recall`, the same code Today runs, so a quiz in a chat and a card in the
+app cannot disagree about what is due. Finished readings come in on their own
+and have no row until first answered; everything else is a row in
+`recall_items`, keyed `task:<id>`, `step:<taskId>:<subtaskId>`, or `own:` /
+`note:` plus a random tail.
+
+- **`get_recall`** (`readOnlyHint: true`)
+  - `course_id` (UUID, optional), `include_not_due` (boolean, default `false`),
+    `limit` (1-50, default 20), `date` (`YYYY-MM-DD`, optional, the student's own day).
+  - **Output**: `items`, due first in asking order (what slipped, then what was
+    never asked, then clear things coming round), each with its `key`, `course`,
+    `prompt`, `kind`, `how_to_recall`, `standing`, `recent` answers, `due_on`
+    and the task behind it; `due_count`; and `by_course` counts of settled,
+    clear, hazy, gone and not asked yet. On a project without the table it still
+    returns the finished readings, with a `message` saying answers cannot be
+    stored until `supabase/schema.sql` has been re-run.
+- **`record_recall`** (`destructiveHint: false`, `idempotentHint: true`)
+  - `results` (1-30 `{ key, verdict }`, verdict `clear` / `hazy` / `gone`),
+    `date` (optional).
+  - Refuses any key it is not keeping rather than inventing one. A step recorded
+    `gone` is unticked on its task. **Output**: each key's verdict and
+    `next_due_on`, and the tasks a step was unticked on.
+- **`keep_for_recall`** (`destructiveHint: false`, `idempotentHint: true`)
+  - `course_id` (UUID), `items` (up to 40 lines, each phrased as what the student
+    should be able to produce), `task_id` (UUID, optional), `ticked_steps`
+    (boolean). With `task_id` and `ticked_steps: true` it keeps that task's
+    ticked steps; with `task_id` alone, the whole finished task.
+  - Skips anything already kept on the course, by key and by wording, and never
+    overwrites the answers of a thing already kept.
+
+The descriptions carry the protocol the prompts in `lib/recall/prompt.ts` do:
+ask one thing at a time, show nothing before the attempt, show the right answer
+after it, and record the verdict the attempt earned without rounding up.
 
 ### 5. `log_study_session`
 - **Title**: Log study time in Akada

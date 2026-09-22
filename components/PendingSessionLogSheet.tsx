@@ -10,7 +10,9 @@ import {
 import { settled } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useTimer } from '@/lib/timer-context';
+import { keepLine } from '@/lib/recall/actions';
 import { isoDate } from '@/lib/utils';
+import { useNotice } from './Notice';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from './SessionLogModal';
 
@@ -34,6 +36,7 @@ export function isLogSheetMounted(): boolean {
 
 export default function PendingSessionLogSheet({ onResolved }: Props) {
   const { pendingLog, clearPendingLog } = useTimer();
+  const { notify } = useNotice();
   const { courses, isLoading: coursesLoading } = useCourses();
   const { tasks } = useTasks();
   // The pending sitting is folded into this reading, so `sitting` is what
@@ -96,7 +99,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     }
   }, [clearPendingLog, course, courses.length, coursesLoading, onResolved, pendingLog]);
 
-  async function handleSave(note: string, markTaskDone: boolean) {
+  async function handleSave(note: string, markTaskDone: boolean, keep: string) {
     if (!pendingLog) return;
     setSaveError('');
     if (!online) {
@@ -129,6 +132,17 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
           });
         } catch (error) {
           console.error('Failed to complete the task:', error);
+        }
+      }
+      // The line kept for recall, last and on its own, for the same reason:
+      // the sitting is the record, and a kept line that failed to save is
+      // said out loud rather than taking the sitting down with it.
+      if (keep.trim()) {
+        try {
+          await keepLine(pendingLog.courseId, keep, 'note');
+        } catch (error) {
+          console.error('Failed to keep the line:', error);
+          notify(error instanceof Error ? error.message : 'The line to keep did not save.');
         }
       }
       setOpen(false);
