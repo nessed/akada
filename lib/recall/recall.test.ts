@@ -491,3 +491,74 @@ test('three clears, a hazy and a clear is as far out as three clears but is not 
   assert.equal(reading.states[0].box, 3);
   assert.equal(reading.states[0].settled, false);
 });
+
+/* ── The real list ─────────────────────────────────────────────────────── */
+
+test('syllabus copies fold into the copy already finished, bibliography and all', () => {
+  const pairs: [string, string][] = [
+    ['Slaughter (2009), Power in the Networked Century — done with Claude', "Slaughter (2009), 'Power in the Networked Century', Foreign Affairs 88(1): 94-113"],
+    ['Mearsheimer (2011), Imperial by Design — done with Claude', "Mearsheimer (2011), 'Imperial by Design', The National Interest, Jan-Feb: 16-34"],
+    ['Shilliam (2011), Perilous but Unavoidable Terrain of the Non-West — done with Claude', 'Read Shilliam (2011), The Perilous but Unavoidable Terrain of the Non-West, pp 12-26 — Session 3'],
+    ['Buzan and Lawson (2013), The Global Transformation — done with Claude', 'Read: Buzan and Lawson (2013) - The Global Transformation: 19th Century and Modern IR'],
+    ['Hobson (2012), Eurocentric Conception of World Politics Ch 2 — done with Claude', 'Read Hobson (2012), The Eurocentric Conception of World Politics, Ch 2 — Session 3'],
+  ];
+  for (const [done, syllabus] of pairs) {
+    const reading = readRecall({
+      courses: [course('pol')],
+      tasks: [
+        task('done', done, { completedAt: `${day(-8)}T10:00:00` }),
+        task('syllabus', syllabus, { completedAt: `${day(-1)}T10:00:00` }),
+      ],
+      records: [],
+      today: TODAY,
+    });
+    assert.equal(reading.states.length, 1, `${done} / ${syllabus}`);
+    assert.equal(reading.states[0].key, 'task:done');
+    assert.deepEqual(reading.states[0].twins, ['syllabus']);
+  }
+});
+
+test('a chain of shorter copies settles into one, whatever order they came in', () => {
+  const titles = [
+    'Mearsheimer (2011) — done',
+    'Mearsheimer (2011), Imperial by Design',
+    "Mearsheimer (2011), 'Imperial by Design', The National Interest, Jan-Feb: 16-34",
+  ];
+  for (const order of [titles, [...titles].reverse()]) {
+    const reading = readRecall({
+      courses: [course('pol')],
+      tasks: order.map((title, i) => task(`m${i}`, title)),
+      records: [],
+      today: TODAY,
+    });
+    assert.equal(reading.states.length, 1);
+    assert.equal(reading.states[0].twins.length, 2);
+  }
+});
+
+test('a chapter is not the start of a range that begins with it', () => {
+  const reading = readRecall({
+    courses: [course('pol')],
+    tasks: [task('a', 'Read Waltz (1979), Ch 1'), task('b', 'Read Waltz (1979), Ch 1-3')],
+    records: [],
+    today: TODAY,
+  });
+  assert.equal(reading.states.length, 2);
+});
+
+test('work that names a chapter is not the reading of it, unless someone says so', () => {
+  assert.ok(!looksLikeReading({ title: 'Practice response paper: Thucydides (Mytilene + Melos) + Machiavelli Ch 15 & 18', kind: 'task' }));
+  assert.ok(!looksLikeReading({ title: 'Watch the Ch 3 lecture', kind: 'task' }));
+  assert.ok(looksLikeReading({ title: 'Practice reading: Ch 3', kind: 'reading' }));
+});
+
+test('a reading is asked about without the class session it was set for', () => {
+  assert.equal(
+    readingPrompt('Read Angell (1912), The Influence of Credit Upon International Relations — Session 4'),
+    'Angell (1912), The Influence of Credit Upon International Relations',
+  );
+  assert.equal(
+    readingPrompt('Read Mackinder (1904), The Geographical Pivot of History, Geographical Journal 23(4): 421-437 — Session 4'),
+    'Mackinder (1904), The Geographical Pivot of History, Geographical Journal 23(4): 421-437',
+  );
+});
