@@ -349,7 +349,10 @@ it must not do. Two sources of history were being left on the floor.
 
 **Sittings with no chain.** A sitting only carries blocks and breaks if it
 was timed in continuous mode; one from before that, or reported through the
-connector, carries a duration and nothing else. Those used to contribute
+connector, carries a duration and nothing else. The chains are read back from
+`session_segments` on every load. For a while they were written and never read
+again, so after a reload every continuous sitting looked like one of these,
+and the habits layer quietly fell back to its coarse reading for everyone. Those used to contribute
 nothing to any block reading, so a six week account opened the panel to a
 column of dashes. A chainless sitting is now read as what the record says it
 was — one unbroken stretch — but only when no rest was reported against it,
