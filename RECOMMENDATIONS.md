@@ -146,7 +146,13 @@ would have come up. A normal-priority task with no date still never does.
   said how close the exam is, and now the row under it says how close you are.
 - **The task sheet**: a finished task says where it stands in recall, or
   offers to keep it. A concept list offers "keep N ticked for recall", and kept
-  steps carry a small loop in the margin.
+  steps carry a small loop in the margin. A reading you haven't done yet
+  offers "Questions before you read", which copies a prompt for Claude to ask
+  you three questions the reading answers. You write a one-line guess at each,
+  then read, and the questions go into recall. Being asked first makes those
+  points stick even when the guesses are wrong (g=0.54 over 97 effects, St.
+  Hilaire et al. 2023; Pan & Carpenter 2023), as long as the reading actually
+  gets done after.
 - **The log sheet**: "Worth keeping?", a line to write one thing from the
   sitting on. Most sittings leave it empty, which is fine.
 
@@ -185,14 +191,7 @@ making progress on work that matters was the most common thing on people's
 best days (Amabile & Kramer, correlational). It's a small build, one optional
 field on the log sheet and one drawing on the course page.
 
-**2. Questions before the reading.** Asking yourself three questions about a
-reading before you read it improves recall of those points (g=0.54 over 97
-effects) even when your guesses are wrong, as long as you read the answer
-afterwards (St. Hilaire et al. 2023; Pan & Carpenter 2023). A "before you
-read" copy-prompt on reading tasks, same pattern as "ask Claude", and the
-three questions go straight into recall. An hour of work.
-
-**3. The run-up.** For an exam two weeks out, work backwards and put a sitting
+**2. The run-up.** For an exam two weeks out, work backwards and put a sitting
 on the course on the first day, then around days 2–3, 6–7 and 11–12 (spacing
 works best at about 20–40% of the time left, per Cepeda et al. 2008), each one
 starting with that course's recall. Recall already pulls things forward, and
@@ -200,18 +199,18 @@ this would put the sittings themselves on the page. Keep it weekly rather than
 hourly, since in one small study daily plans didn't raise study time and
 monthly ones did (Kirschenbaum et al. 1981).
 
-**4. Credit the return.** Your run already forgives a missed day. The step
+**3. Credit the return.** Your run already forgives a missed day. The step
 further, from the gym megastudy, is to make the first sitting back after a
 quiet week visibly count. That would be one line on Today, never a broken chain.
 
-**5. Studying alongside someone.** The only solid evidence for "body doubling"
+**4. Studying alongside someone.** The only solid evidence for "body doubling"
 is that feeling like you're working with someone made people stick at a hard
 task 48–64% longer (Carr & Walton 2014). Focusmate's own numbers are self-report.
 If friends at LUMS start using Akada, a quiet "2 others at their desks" on the
 timer is possible with Supabase presence and no new tables. Not worth it for
 one user.
 
-**6. Smaller, noticed while reading the code.** The Supabase adapter never
+**5. Smaller, noticed while reading the code.** The Supabase adapter never
 loads `session_segments`, so after a reload the habits layer sees every
 sitting as one unbroken stretch and your block readings stay coarse. It needs
 a separate read that tolerates the table missing. And the six duplicate POL
