@@ -2,6 +2,9 @@ import type { DataProvider } from './data-provider';
 import { nextCoursePosition, sortCourses } from './course-order';
 import type {
   Course,
+  RecallRecord,
+  RecallRecordInput,
+  RecallRecords,
   Session,
   Task,
   Semester,
@@ -32,12 +35,16 @@ import {
   cleanKind,
   cleanOptionalDate,
   cleanPages,
+  cleanRecallKey,
+  cleanRecallPrompt,
+  cleanRecallSource,
   cleanSessionNote,
   cleanTaskTitle,
   cleanText,
   cleanWeight,
   sanitizeAssessments,
   sanitizeGrading,
+  sanitizeRecallHistory,
   requireIsoDate,
 } from '@/lib/planner-safety';
 
@@ -49,6 +56,7 @@ const KEYS = {
   activeSemesterId: 'lums.activeSemesterId',
   onboarding: 'lums.onboardingComplete',
   userSettings: 'lums.userSettings',
+  recall: 'lums.recall',
 } as const;
 
 /**
@@ -60,6 +68,7 @@ const KEYS = {
 type StoredCourse = Course & { semesterId: string };
 type StoredTask = Task & { semesterId: string };
 type StoredSession = Session & { semesterId: string };
+type StoredRecall = RecallRecord & { semesterId: string };
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -180,6 +189,20 @@ function sanitizeTask(task: Task): Task {
   };
 }
 
+function sanitizeRecall(record: RecallRecord): RecallRecord {
+  return {
+    id: record.id,
+    key: cleanRecallKey(record.key),
+    courseId: cleanText(record.courseId, 80),
+    prompt: cleanRecallPrompt(record.prompt),
+    source: cleanRecallSource(record.source),
+    ref: record.ref ? cleanText(record.ref, 200) : null,
+    history: sanitizeRecallHistory(record.history),
+    letGo: Boolean(record.letGo),
+    createdAt: record.createdAt,
+  };
+}
+
 export class LocalAdapter implements DataProvider {
   // ---- Courses
   // Always scoped to the active semester, see getCoursesForSemester for
@@ -258,6 +281,9 @@ export class LocalAdapter implements DataProvider {
     write(KEYS.sessions, sessions);
     const tasks = read<Task[]>(KEYS.tasks, []).filter((t) => t.courseId !== id);
     write(KEYS.tasks, tasks);
+    // What recall_items' foreign key cascades in Postgres.
+    const recall = read<StoredRecall[]>(KEYS.recall, []).filter((r) => r.courseId !== id);
+    write(KEYS.recall, recall);
   }
 
   // ---- Sessions
@@ -413,6 +439,76 @@ export class LocalAdapter implements DataProvider {
     write(KEYS.tasks, tasks);
   }
 
+  // ---- Recall
+  // Scoped to the active semester, inheriting it from the course the way the
+  // recall_items_set_semester_id trigger does in Postgres.
+
+  async getRecall(): Promise<RecallRecords> {
+    const activeId = activeSemesterId();
+    const records = read<StoredRecall[]>(KEYS.recall, [])
+      .filter((record) => record.semesterId === activeId)
+      .map(({ semesterId: _semesterId, ...record }) => sanitizeRecall(record))
+      .filter((record) => record.key && record.courseId && record.prompt);
+    return { records, available: true };
+  }
+
+  async saveRecall(input: RecallRecordInput): Promise<RecallRecord> {
+    const clean = sanitizeRecall({ ...input, id: '', createdAt: '' });
+    if (!clean.key || !clean.courseId || !clean.prompt) {
+      throw new Error('A kept thing needs a course and something to recall.');
+    }
+    const records = read<StoredRecall[]>(KEYS.recall, []);
+    const idx = records.findIndex((record) => record.key === clean.key);
+    const course = read<StoredCourse[]>(KEYS.courses, []).find((c) => c.id === clean.courseId);
+    const saved: StoredRecall =
+      idx === -1
+        ? { ...clean, id: uid(), createdAt: nowIso(), semesterId: course?.semesterId ?? activeSemesterId() }
+        : { ...records[idx], ...clean, id: records[idx].id, createdAt: records[idx].createdAt };
+    if (idx === -1) records.push(saved);
+    else records[idx] = saved;
+    write(KEYS.recall, records);
+    const { semesterId: _semesterId, ...record } = saved;
+    return record;
+  }
+
+  async keepRecall(inputs: RecallRecordInput[]): Promise<RecallRecord[]> {
+    const records = read<StoredRecall[]>(KEYS.recall, []);
+    const courses = read<StoredCourse[]>(KEYS.courses, []);
+    const kept: RecallRecord[] = [];
+    for (const input of inputs) {
+      const clean = sanitizeRecall({ ...input, id: '', createdAt: '' });
+      if (!clean.key || !clean.courseId || !clean.prompt) {
+        throw new Error('A kept thing needs a course and something to recall.');
+      }
+      const idx = records.findIndex((record) => record.key === clean.key);
+      // Already there: its answers stay, and it comes back if it was let go.
+      const saved: StoredRecall =
+        idx === -1
+          ? {
+              ...clean,
+              letGo: false,
+              id: uid(),
+              createdAt: nowIso(),
+              semesterId:
+                courses.find((c) => c.id === clean.courseId)?.semesterId ?? activeSemesterId(),
+            }
+          : { ...records[idx], letGo: false };
+      if (idx === -1) records.push(saved);
+      else records[idx] = saved;
+      const { semesterId: _semesterId, ...record } = saved;
+      kept.push(record);
+    }
+    write(KEYS.recall, records);
+    return kept;
+  }
+
+  async deleteRecall(key: string): Promise<void> {
+    write(
+      KEYS.recall,
+      read<StoredRecall[]>(KEYS.recall, []).filter((record) => record.key !== key),
+    );
+  }
+
   // ---- Semesters
   async getActiveSemester(): Promise<Semester | null> {
     const activeId = read<string | null>(KEYS.activeSemesterId, null);
@@ -471,6 +567,7 @@ export class LocalAdapter implements DataProvider {
     write(KEYS.courses, read<StoredCourse[]>(KEYS.courses, []).filter((course) => course.semesterId !== id));
     write(KEYS.tasks, read<StoredTask[]>(KEYS.tasks, []).filter((task) => task.semesterId !== id));
     write(KEYS.sessions, read<StoredSession[]>(KEYS.sessions, []).filter((session) => session.semesterId !== id));
+    write(KEYS.recall, read<StoredRecall[]>(KEYS.recall, []).filter((record) => record.semesterId !== id));
   }
 
   // ---- Onboarding

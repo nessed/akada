@@ -162,6 +162,51 @@ alter table session_segments add column if not exists note text not null default
 alter table session_segments enable row level security;
 
 -- ============================================================
+-- 3b. RECALL  (FK -> courses)
+--
+-- What the student is keeping, and how each recall of it went. Everything
+-- else in the schema records the hours going in; this is the one table that
+-- records what came out of them.
+--
+-- One row per thing kept, keyed by `item_key` (unique per person): 'task:'
+-- plus a task id for a whole task, 'step:' plus 'taskId:subtaskId' for one
+-- ticked step, 'note:' or 'own:' plus a random tail for a line somebody
+-- wrote. A finished reading has no row until it is first answered or let go;
+-- the app reads finished readings straight off tasks, which is what lets a
+-- term already under way arrive with its readings in recall.
+--
+-- `history` is the answers, [{ on: 'YYYY-MM-DD', verdict: 'clear' | 'hazy' |
+-- 'gone' }, ...], oldest first. There is deliberately no due date column:
+-- when a thing next comes up is worked out from its answers on every read
+-- (lib/recall), so there is no schedule to drift out of step with the history
+-- that produced it. One jsonb document for the same reason subtasks is one:
+-- it is only ever read and written whole, with its item.
+--
+-- `ref` is the task, or 'taskId:subtaskId', as text rather than a foreign
+-- key. The prompt is stored so a kept thing survives its task being deleted,
+-- which is the point of having kept it.
+-- ============================================================
+create table if not exists recall_items (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null default auth.uid(),
+  course_id   uuid not null references courses(id) on delete cascade,
+  semester_id uuid,
+  item_key    text not null,
+  prompt      text not null,
+  source      text not null default 'own'
+    check (source in ('reading', 'task', 'step', 'note', 'own')),
+  ref         text,
+  history     jsonb not null default '[]'::jsonb,
+  -- Taken out of recall on purpose. Kept as a row rather than deleted, so a
+  -- finished reading that was let go does not walk straight back in.
+  let_go      boolean not null default false,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+alter table recall_items enable row level security;
+
+-- ============================================================
 -- 4. SEMESTERS
 --
 -- A user now has many semesters, not one. The table used to be keyed
@@ -386,6 +431,12 @@ create trigger sessions_set_semester_id
   before insert on sessions
   for each row execute function akada_set_semester_from_course();
 
+-- A kept thing belongs to its course's term, the same way.
+drop trigger if exists recall_items_set_semester_id on recall_items;
+create trigger recall_items_set_semester_id
+  before insert on recall_items
+  for each row execute function akada_set_semester_from_course();
+
 -- ============================================================
 -- 7. ROW LEVEL SECURITY POLICIES
 --
@@ -405,6 +456,7 @@ drop policy if exists "Users manage own semester" on semesters;
 drop policy if exists "Users manage own settings" on user_settings;
 drop policy if exists "Users manage own mark candidates" on mark_candidates;
 drop policy if exists "Users manage own trust pulse" on trust_pulse;
+drop policy if exists "Users manage own recall" on recall_items;
 
 create policy "Users manage own courses"
   on courses for all
@@ -454,6 +506,12 @@ create policy "Users manage own trust pulse"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
+create policy "Users manage own recall"
+  on recall_items for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
 -- ============================================================
 -- 8. INDEXES
 --
@@ -477,6 +535,11 @@ create index if not exists sessions_semester_id_idx       on sessions (semester_
 create index if not exists session_segments_session_idx    on session_segments (session_id, ordinal);
 create index if not exists session_segments_user_kind_idx  on session_segments (user_id, kind, started_at);
 create index if not exists user_settings_active_semester_id_idx on user_settings (active_semester_id);
+-- One kept thing per key per person; also what the app's upsert conflicts on.
+create unique index if not exists recall_items_user_key_unique on recall_items (user_id, item_key);
+-- Read a term at a time, like everything else.
+create index if not exists recall_items_semester_idx      on recall_items (user_id, semester_id);
+create index if not exists recall_items_course_idx        on recall_items (course_id);
 
 -- ============================================================
 -- 9. DATA INTEGRITY CONSTRAINTS
@@ -558,6 +621,31 @@ begin
   end if;
 end $$;
 
+-- A recall prompt is a line, not a document (RECALL_PROMPT_MAX in
+-- lib/recall/constants.ts), a key is an id with a prefix, and the history is
+-- always the array lib/recall reads.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'recall_items_prompt_length'
+  ) then
+    alter table recall_items add constraint recall_items_prompt_length
+      check (length(prompt) between 1 and 300);
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'recall_items_key_length'
+  ) then
+    alter table recall_items add constraint recall_items_key_length
+      check (length(item_key) between 1 and 200);
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'recall_items_history_array'
+  ) then
+    alter table recall_items add constraint recall_items_history_array
+      check (jsonb_typeof(history) = 'array');
+  end if;
+end $$;
+
 -- semester_id foreign keys. Left nullable (see section 1-3 comments) so a
 -- straggler row from an unexpected migration state degrades to "invisible
 -- until reassigned" instead of failing this whole script.
@@ -573,6 +661,10 @@ begin
   end if;
   if not exists (select 1 from pg_constraint where conname = 'sessions_semester_id_fkey') then
     alter table sessions add constraint sessions_semester_id_fkey
+      foreign key (semester_id) references semesters(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'recall_items_semester_id_fkey') then
+    alter table recall_items add constraint recall_items_semester_id_fkey
       foreign key (semester_id) references semesters(id) on delete cascade;
   end if;
   if not exists (select 1 from pg_constraint where conname = 'user_settings_active_semester_id_fkey') then
@@ -597,7 +689,7 @@ declare
 begin
   foreach t in array array['courses', 'tasks', 'sessions', 'session_segments',
                            'semesters', 'user_settings',
-                           'mark_candidates', 'trust_pulse']
+                           'mark_candidates', 'trust_pulse', 'recall_items']
   loop
     if not exists (
       select 1 from pg_constraint where conname = t || '_user_id_fkey'

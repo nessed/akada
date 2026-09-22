@@ -84,6 +84,20 @@ game layer deliberately saturates well before a real study day does: a long
 day earns less per hour, never nothing per hour, and Stats, the heatmap and
 every export always show the true unmodified figure.
 
+**Recall** is the part that asks what came out of the hours rather than how
+many there were. Finished readings come into it on their own, the day after
+they are ticked, and anything else can be kept by hand: the ticked steps of a
+concept list, a finished task, a line written at the end of a sitting or on a
+course page. Today asks for a few a day, one at a time, to be given back with
+the book shut and answered clear, hazy or gone. The gaps widen with every
+clear (a day, 3, 7, 16, 35) and close again on a slip, an exam in the course
+pulls in to the day before anything that would otherwise go past it unasked,
+and a concept step that has gone is unticked on its list, since its tick
+claimed it could be done fresh.
+A course page shows what it is keeping and how much of it is settled, and the
+Coming panel draws that under an exam's countdown. Like the record, the
+schedule is worked out from the answers on every read and never stored.
+
 **Settings** covers the daily goal, when your day ends (anywhere up to 6am, so
 a 2am session counts toward the right day), whether weekends count, CSV export,
 and appearance. Appearance is five paper tones including a night one, four
@@ -111,10 +125,14 @@ Course Memo.xlsx"`, with `--refresh-planner` to re-pull the meeting times.
 
 Akada exposes a remote MCP endpoint at `/api/mcp` with its own OAuth flow, so
 you can connect it to Claude as a custom connector and hand it a syllabus.
-Twelve tools: `find_course`, `get_tasks`, `get_overview`, `create_tasks`,
+Fifteen tools: `find_course`, `get_tasks`, `get_overview`, `create_tasks`,
 `update_tasks`, `complete_tasks`, `log_study_session`, `get_weekly_stats`,
-`get_focus_pattern`, `get_grading_scheme`, `set_grading_scheme` and
-`delete_course`. The connector
+`get_focus_pattern`, `get_grading_scheme`, `set_grading_scheme`,
+`delete_course`, and the recall three, `get_recall`, `record_recall` and
+`keep_for_recall`, which let a model quiz the student on what is due, record
+how each attempt went, and keep a concept list straight off a problem set.
+Every recall card has an "ask Claude" that copies a prompt for exactly that.
+The connector
 authenticates as you and gets a session of its own, so signing out of the app
 in a browser doesn't disconnect it.
 

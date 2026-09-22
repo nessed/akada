@@ -1,5 +1,8 @@
 import type {
   Course,
+  RecallRecord,
+  RecallRecordInput,
+  RecallRecords,
   Session,
   Task,
   Semester,
@@ -39,6 +42,34 @@ export interface DataProvider {
   addTask(task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>): Promise<Task>;
   updateTask(id: string, updates: Partial<Task>): Promise<Task>;
   deleteTask(id: string): Promise<void>;
+
+  // Recall, scoped to the active semester, same rule as courses.
+  /**
+   * Everything kept for recall that has a row. A finished reading has none
+   * until it is first answered or let go (see lib/recall). Against a
+   * database that has not run the latest supabase/schema.sql this resolves
+   * with `available: false` rather than throwing, because the readings can
+   * still be read off the tasks; it is only writing that needs the table.
+   */
+  getRecall(): Promise<RecallRecords>;
+  /**
+   * Writes one kept thing whole, by its key: a first answer, a later one, a
+   * let go. Rejects with a sentence the reader can act on when the table is
+   * not there yet.
+   */
+  saveRecall(input: RecallRecordInput): Promise<RecallRecord>;
+  /**
+   * Keeps things without touching anything they already have. A key with no
+   * row gets one as given; a key that has a row keeps its answers, and is
+   * brought back if it was let go. Keeping is never a reason to lose a
+   * history, whatever the screen that asked believed was stored.
+   */
+  keepRecall(inputs: RecallRecordInput[]): Promise<RecallRecord[]>;
+  /**
+   * Removes a row outright. Only undo uses it, to put a finished reading that
+   * had never been answered back to having no row at all.
+   */
+  deleteRecall(key: string): Promise<void>;
 
   // Semesters
   /** The semester Dashboard/Tasks/Timer currently write into, or null before onboarding finishes it. */

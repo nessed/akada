@@ -43,7 +43,11 @@ interface Props {
   errorMessage?: string;
   contextMessage?: string;
   onCancel: () => void;
-  onSave: (note: string, markTaskDone: boolean) => void;
+  /**
+   * `keep` is one thing from the sitting the reader wants to be asked about
+   * later, or an empty string. It becomes a recall item for the course.
+   */
+  onSave: (note: string, markTaskDone: boolean, keep: string) => void;
 }
 
 export default function SessionLogModal({
@@ -62,12 +66,14 @@ export default function SessionLogModal({
   onSave,
 }: Props) {
   const [note, setNote] = useState('');
+  const [keep, setKeep] = useState('');
   const [markDone, setMarkDone] = useState(false);
   const sheetRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (open) {
       setNote('');
+      setKeep('');
       // Never pre-ticked. Finishing a block is not the same as finishing the
       // chapter, and a box that arrives ticked gets confirmed without being
       // read.
@@ -314,6 +320,26 @@ export default function SessionLogModal({
           })}
         </div>
 
+        {/* One thing from the sitting to be asked about later. The end of a
+            sitting is the one moment the reader knows exactly what was in it,
+            and writing it as something to be asked is itself a small recall.
+            A line to write on, like the break's own question, rather than a
+            second box: most sittings leave it empty and that is fine. */}
+        <div className="mt-4">
+          <label htmlFor="session-log-keep" className="eyebrow m-0 mb-1.5 block">
+            Worth keeping?
+          </label>
+          <input
+            id="session-log-keep"
+            type="text"
+            value={keep}
+            onChange={(e) => setKeep(e.target.value)}
+            maxLength={300}
+            placeholder="one thing from this, to be asked about from memory later"
+            className="hand-underline w-full bg-transparent font-serif text-[14px] italic leading-[1.5] text-ink outline-none placeholder:text-muted-soft"
+          />
+        </div>
+
         {errorMessage && (
           <p role="alert" className="mt-3 mb-0 text-[12px] leading-[1.45] text-priority font-serif italic">
             {errorMessage}
@@ -333,7 +359,7 @@ export default function SessionLogModal({
           <button
             type="button"
             disabled={!canSave}
-            onClick={() => onSave(note, markDone)}
+            onClick={() => onSave(note, markDone, keep)}
             className="flex-1 min-h-[50px] py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-35"
           >
             <HandCheck size={14} color="currentColor" />

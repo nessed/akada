@@ -4,8 +4,12 @@ import type {
   DropRule,
   GradingBasis,
   PendingScheme,
+  RecallAnswer,
+  RecallSource,
+  RecallVerdict,
   TaskKind,
 } from './data/types';
+import { RECALL_HISTORY_MAX, RECALL_PROMPT_MAX } from './recall/constants';
 
 const COURSE_CODE_MAX = 18;
 const COURSE_NAME_MAX = 90;
@@ -299,4 +303,46 @@ export function hasDuplicateCourseCodes(courses: { code: string }[]): boolean {
     seen.add(code);
   }
   return false;
+}
+
+// ---- Recall
+
+const RECALL_VERDICTS: readonly RecallVerdict[] = ['clear', 'hazy', 'gone'];
+const RECALL_SOURCES: readonly RecallSource[] = ['reading', 'task', 'step', 'note', 'own'];
+const RECALL_KEY_MAX = 200;
+
+export function cleanRecallVerdict(value: unknown): RecallVerdict | null {
+  return RECALL_VERDICTS.includes(value as RecallVerdict) ? (value as RecallVerdict) : null;
+}
+
+export function cleanRecallSource(value: unknown): RecallSource {
+  return RECALL_SOURCES.includes(value as RecallSource) ? (value as RecallSource) : 'own';
+}
+
+export function cleanRecallPrompt(value: unknown): string {
+  return cleanText(value, RECALL_PROMPT_MAX);
+}
+
+export function cleanRecallKey(value: unknown): string {
+  return cleanText(value, RECALL_KEY_MAX);
+}
+
+/**
+ * A recall history as the schedule can trust it: real dates, real verdicts,
+ * oldest first, and no more than the most recent RECALL_HISTORY_MAX. Anything
+ * else in the document is dropped rather than guessed at, because a schedule
+ * built on one invented answer is wrong for every recall after it.
+ */
+export function sanitizeRecallHistory(value: unknown): RecallAnswer[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const row = item as Record<string, unknown>;
+      const verdict = cleanRecallVerdict(row.verdict);
+      const on = isIsoDate(row.on) ? row.on : null;
+      return verdict && on ? [{ on, verdict }] : [];
+    })
+    .sort((a, b) => a.on.localeCompare(b.on))
+    .slice(-RECALL_HISTORY_MAX);
 }
