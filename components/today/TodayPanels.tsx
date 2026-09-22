@@ -129,11 +129,16 @@ export function UpNext({
       </h2>
 
       <p className="m-0 mt-2.5 font-serif italic text-[13.5px] text-muted">
-        {due && (
+        {/* No date is a state the task is in, and since Up next now reaches
+            open-ended work on a day with nothing due, it is said rather than
+            left as a gap with " · high" hanging off the front of it. */}
+        {due ? (
           <span className={due.category === 'overdue' ? 'text-warn' : 'text-ink'}>
             Due {due.formattedDate}
             {due.category === 'overdue' ? ` · ${-due.days} days overdue` : ''}
           </span>
+        ) : (
+          <span>open ended</span>
         )}
         {task.priority === 'high' && <span className="text-priority"> · high</span>}
       </p>
