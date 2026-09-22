@@ -17,6 +17,7 @@ import type {
 } from './types';
 import {
   clampSessionSeconds,
+  cleanScore,
   isLoggableDuration,
   sanitizeSegments,
   sanitizeSession,
@@ -90,6 +91,10 @@ interface SessionRow {
   /** Added with continuous mode, so absent on a database still on an older
       schema. Read as zero there rather than as missing. */
   break_seconds?: number | string | null;
+  /** A practice paper's score, added later still. Postgres numeric can
+      arrive as a string. */
+  score?: number | string | null;
+  score_out_of?: number | string | null;
 }
 
 interface TaskRow {
@@ -150,6 +155,7 @@ function rowToCourse(r: CourseRow): Course {
 
 function rowToSession(r: SessionRow): Session {
   const rest = Number(r.break_seconds);
+  const practice = cleanScore(r.score, r.score_out_of);
   return sanitizeSession({
     id: r.id,
     courseId: r.course_id,
@@ -159,6 +165,7 @@ function rowToSession(r: SessionRow): Session {
     note: r.note,
     createdAt: r.created_at,
     breakSeconds: Number.isFinite(rest) ? clampSessionSeconds(rest) : 0,
+    ...(practice ? { score: practice.score, scoreOutOf: practice.outOf } : {}),
   });
 }
 
@@ -247,6 +254,14 @@ const SEGMENT_PAGES = 10;
  */
 function isMissingOrderColumn(error: { code?: string; message?: string }): boolean {
   return error?.code === '42703' || Boolean(error?.message?.includes('sort_order'));
+}
+
+/**
+ * A column the write named is not there: PostgREST's PGRST204 from its
+ * schema cache, or Postgres's own 42703.
+ */
+function isMissingColumn(error: { code?: string }): boolean {
+  return error.code === 'PGRST204' || error.code === '42703';
 }
 
 /**
@@ -655,24 +670,36 @@ export class SupabaseAdapter implements DataProvider {
     const breakSeconds = segments.length
       ? totalBreakSeconds(segments)
       : clampSessionSeconds(input.breakSeconds ?? 0);
-    const { data, error } = await this.supabase
-      .from('sessions')
-      .insert({
-        user_id: uid,
-        course_id: courseId,
-        task_id: input.taskId ? cleanText(input.taskId, 80) : null,
-        date: requireIsoDate(input.date, 'Session date'),
-        duration_seconds: clampSessionSeconds(input.durationSeconds),
-        note: cleanSessionNote(input.note),
-        // Omitted entirely when the sitting took no breaks, for the same
-        // reason courses.sort_order is: an unmentioned column cannot be
-        // rejected as unknown, so a plain session still writes exactly the
-        // insert it always did against a database that has not re-run
-        // supabase/schema.sql.
-        ...(breakSeconds > 0 ? { break_seconds: breakSeconds } : {}),
-      })
-      .select()
-      .single();
+    const practice = cleanScore(input.score, input.scoreOutOf);
+    const row = {
+      user_id: uid,
+      course_id: courseId,
+      task_id: input.taskId ? cleanText(input.taskId, 80) : null,
+      date: requireIsoDate(input.date, 'Session date'),
+      duration_seconds: clampSessionSeconds(input.durationSeconds),
+      note: cleanSessionNote(input.note),
+      // Omitted entirely when the sitting took no breaks, for the same
+      // reason courses.sort_order is: an unmentioned column cannot be
+      // rejected as unknown, so a plain session still writes exactly the
+      // insert it always did against a database that has not re-run
+      // supabase/schema.sql.
+      ...(breakSeconds > 0 ? { break_seconds: breakSeconds } : {}),
+    };
+    const insert = (values: Record<string, unknown>) =>
+      this.supabase.from('sessions').insert(values).select().single();
+    // Same again for a practice score, named only when there is one.
+    let { data, error } = await insert(
+      practice ? { ...row, score: practice.score, score_out_of: practice.outOf } : row,
+    );
+    // And when there is one but the database has nowhere to put it yet, or
+    // its check refuses the pair, the sitting is written without it rather
+    // than not at all: the hours are the record, the score is commentary on
+    // them. Each of those aborts the insert whole, so this cannot write the
+    // sitting twice. The caller sees the score missing from what comes back.
+    if (error && practice && (isMissingColumn(error) || error.code === '23514')) {
+      console.warn('The practice score was not kept. Run the latest supabase/schema.sql once.');
+      ({ data, error } = await insert(row));
+    }
     if (error) throw error;
     const session = rowToSession(data as SessionRow);
 

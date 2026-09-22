@@ -93,6 +93,14 @@ export interface Session {
    * rows.
    */
   segments?: SessionSegment[];
+  /**
+   * What a practice paper done in this sitting scored, and out of what. Both
+   * or neither, and most sittings have neither. The one figure in the record
+   * that is an outcome rather than time put in, so it is only ever what the
+   * reader wrote down, never inferred. See cleanScore.
+   */
+  score?: number;
+  scoreOutOf?: number;
 }
 
 export type TaskPriority = 'high' | 'normal';

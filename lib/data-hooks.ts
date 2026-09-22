@@ -331,18 +331,21 @@ export async function deleteTaskOptimistic(id: string) {
 
 /* ───────── Session mutations ───────── */
 
+/** Writes a sitting, and hands back the row as the database kept it. */
 export async function addSessionOptimistic(
   session: Omit<Session, 'id' | 'createdAt'>,
-) {
+): Promise<Session | null> {
   const optimistic: Session = {
     ...session,
     id: optimisticId(),
     createdAt: nowIso(),
   };
+  let written: Session | null = null;
   await mutate(
     KEY.sessions,
     async (current: Session[] | undefined) => {
       const saved = await db.addSession(session);
+      written = saved;
       const list = current ?? [];
       return [saved, ...list.filter((s) => s.id !== optimistic.id)];
     },
@@ -356,6 +359,7 @@ export async function addSessionOptimistic(
       revalidate: false,
     },
   );
+  return written;
 }
 
 export async function deleteSessionOptimistic(id: string) {

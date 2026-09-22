@@ -20,7 +20,8 @@ import {
   totalSeconds,
 } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
-import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
+import { clampSessionSeconds, isLoggableDuration, scoreFace } from '@/lib/session-safety';
+import { downloadSessionsCsv } from '@/lib/sessions-csv';
 import HandNote from '@/components/notebook/HandNote';
 import HandCheck from '@/components/notebook/HandCheck';
 import Stamp from '@/components/notebook/Stamp';
@@ -191,6 +192,8 @@ export default function StatsPage() {
         note: session.note,
         breakSeconds: session.breakSeconds,
         segments: session.segments,
+        score: session.score,
+        scoreOutOf: session.scoreOutOf,
       });
     } catch (error) {
       console.error('Failed to restore session:', error);
@@ -268,26 +271,7 @@ export default function StatsPage() {
    * anyone who wants it is already standing.
    */
   function exportCsv() {
-    const rows = [
-      ['date', 'course', 'duration_minutes', 'note'].join(','),
-      ...sessions.map((session) => {
-        const course = courses.find((c) => c.id === session.courseId);
-        const note = (session.note ?? '').replace(/"/g, '""');
-        return [
-          session.date,
-          course ? `"${course.code}"` : '',
-          Math.round(clampSessionSeconds(session.durationSeconds) / 60).toString(),
-          `"${note}"`,
-        ].join(',');
-      }),
-    ];
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `akada-sessions-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadSessionsCsv(sessions, courses);
   }
 
   const totalWhole = Math.floor(totalHrs);
@@ -745,6 +729,16 @@ function SessionEntry({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {/* A practice paper's score, when the sitting had one: quieter
+              than the hours, since the hours are what this list is. */}
+          {session.score != null && session.scoreOutOf != null && (
+            <span
+              className="mr-1 font-mono text-[12px] text-muted tabular-nums"
+              aria-label={`scored ${session.score} out of ${session.scoreOutOf}`}
+            >
+              {scoreFace(session.score, session.scoreOutOf)}
+            </span>
+          )}
           <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
             {formatHM(clampSessionSeconds(session.durationSeconds))}
           </span>

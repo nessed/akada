@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Course, SessionSegment, Task } from '@/lib/data';
 import { MARKS_PER_PAGE, type SittingEffect } from '@/lib/progression';
 import { formatHM, resolveTint } from '@/lib/utils';
-import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
+import { clampSessionSeconds, cleanScore, isLoggableDuration } from '@/lib/session-safety';
 import HandCheck from '@/components/notebook/HandCheck';
 import SessionChain from '@/components/SessionChain';
 import TallyMarks from '@/components/progression/TallyMarks';
@@ -46,8 +46,15 @@ interface Props {
   /**
    * `keep` is one thing from the sitting the reader wants to be asked about
    * later, or an empty string. It becomes a recall item for the course.
+   * `practice` is what a practice paper done in the sitting scored, when the
+   * reader wrote one down.
    */
-  onSave: (note: string, markTaskDone: boolean, keep: string) => void;
+  onSave: (
+    note: string,
+    markTaskDone: boolean,
+    keep: string,
+    practice: { score: number; outOf: number } | null,
+  ) => void;
 }
 
 export default function SessionLogModal({
@@ -67,6 +74,11 @@ export default function SessionLogModal({
 }: Props) {
   const [note, setNote] = useState('');
   const [keep, setKeep] = useState('');
+  const [scored, setScored] = useState('');
+  const [outOf, setOutOf] = useState('');
+  // Whether the score line has been left, so its warning waits for the
+  // reader to finish rather than appearing on the first keystroke.
+  const [scoreLeft, setScoreLeft] = useState(false);
   const [markDone, setMarkDone] = useState(false);
   const sheetRef = useRef<HTMLDivElement | null>(null);
 
@@ -74,6 +86,9 @@ export default function SessionLogModal({
     if (open) {
       setNote('');
       setKeep('');
+      setScored('');
+      setOutOf('');
+      setScoreLeft(false);
       // Never pre-ticked. Finishing a block is not the same as finishing the
       // chapter, and a box that arrives ticked gets confirmed without being
       // read.
@@ -116,6 +131,14 @@ export default function SessionLogModal({
   const blockNotes = segments.filter(
     (segment) => segment.kind === 'focus' && (segment.note ?? '').trim() !== '',
   );
+  const practice = cleanScore(scored, outOf);
+  // Something written in the score line that is not a score: said under it
+  // once both halves are in or the line has been left, and left out of the
+  // save rather than blocking it, since the sitting is the record and the
+  // score is only commentary on it.
+  const bothIn = scored.trim() !== '' && outOf.trim() !== '';
+  const anyIn = scored.trim() !== '' || outOf.trim() !== '';
+  const scoreProblem = !practice && (bothIn || (scoreLeft && anyIn));
 
   function toggleTag(tag: string) {
     const token = `#${tag}`;
@@ -142,7 +165,7 @@ export default function SessionLogModal({
         aria-modal="true"
         aria-labelledby="session-log-heading"
         tabIndex={-1}
-        className="relative w-full md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up outline-none"
+        className="relative max-h-[100dvh] w-full overflow-y-auto overscroll-contain md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up outline-none"
       >
         <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
 
@@ -340,6 +363,54 @@ export default function SessionLogModal({
           />
         </div>
 
+        {/* A practice paper, marked. The one number in the app that is an
+            outcome rather than time put in, so it is asked for on a line
+            like the one above and never required: most sittings pass it by.
+            Digits in mono, the words around them in the serif. */}
+        <div className="mt-4">
+          <p className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <label htmlFor="session-log-score" className="eyebrow m-0">
+              Scored
+            </label>
+            <input
+              id="session-log-score"
+              type="text"
+              inputMode="decimal"
+              value={scored}
+              onChange={(e) => setScored(e.target.value.slice(0, 9))}
+              onBlur={() => setScoreLeft(true)}
+              aria-describedby="session-log-score-problem"
+              placeholder="–"
+              aria-label="What a practice paper in this sitting scored"
+              className="hand-underline w-12 bg-transparent text-center font-mono text-[14px] tabular-nums text-ink outline-none placeholder:text-muted-soft"
+            />
+            <span aria-hidden className="font-mono text-[13px] text-muted">/</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={outOf}
+              onChange={(e) => setOutOf(e.target.value.slice(0, 9))}
+              onBlur={() => setScoreLeft(true)}
+              aria-describedby="session-log-score-problem"
+              placeholder="–"
+              aria-label="Out of"
+              className="hand-underline w-12 bg-transparent text-center font-mono text-[14px] tabular-nums text-ink outline-none placeholder:text-muted-soft"
+            />
+            <span className="font-serif text-[13px] italic text-muted-soft">
+              on a practice paper, if this was one
+            </span>
+          </p>
+          {/* Always there and usually empty, so a screen reader hears the
+              line the moment it has something to say. */}
+          <p
+            id="session-log-score-problem"
+            aria-live="polite"
+            className={`m-0 font-serif text-[12.5px] italic text-muted ${scoreProblem ? 'mt-1.5' : ''}`}
+          >
+            {scoreProblem ? 'That does not read as a score out of something, so it will not be kept.' : ''}
+          </p>
+        </div>
+
         {errorMessage && (
           <p role="alert" className="mt-3 mb-0 text-[12px] leading-[1.45] text-priority font-serif italic">
             {errorMessage}
@@ -359,7 +430,7 @@ export default function SessionLogModal({
           <button
             type="button"
             disabled={!canSave}
-            onClick={() => onSave(note, markDone, keep)}
+            onClick={() => onSave(note, markDone, keep, practice)}
             className="flex-1 min-h-[50px] py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-35"
           >
             <HandCheck size={14} color="currentColor" />

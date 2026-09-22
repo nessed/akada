@@ -22,6 +22,7 @@ import { useNotice } from '@/components/Notice';
 import CourseSessionLog from '@/components/course/CourseSessionLog';
 import CourseWeekCard from '@/components/course/CourseWeekCard';
 import GradeStanding from '@/components/course/GradeStanding';
+import PracticeScores from '@/components/course/PracticeScores';
 import { useArchivedCourse } from '@/components/course/useArchivedCourse';
 import type { Course, Session, Task } from '@/lib/data';
 import { cleanTaskTitle } from '@/lib/planner-safety';
@@ -577,6 +578,10 @@ export default function CoursePage() {
           <CourseWeekCard course={course} sessions={courseSessions} onGoalChange={saveGoal} />
 
           <GradeStanding course={course} tasks={courseTasks} today={today} />
+
+          {/* What the practice papers scored, once there are any: the one
+              panel here that reads what came out rather than what went in. */}
+          <PracticeScores sessions={courseSessions} tasks={courseTasks} color={course.color} />
 
           {/* The hours. The full log, and deleting from it, stay on Stats. */}
           <section className="rounded-[14px] border border-line bg-paper p-5">

@@ -520,6 +520,37 @@ with no table at all, so on a database that has not run the latest
 and the card says so once, in a quiet line under it, rather than failing on
 every tap.
 
+### Practice papers, plotted by hand
+A sitting spent on a practice paper can say what the paper scored. It is the
+one number in the record that is an outcome rather than time put in, so it is
+only ever what the reader wrote down, never inferred from anything, and most
+sittings have none.
+
+**On the log sheet** it is a line under "Worth keeping?", written the same
+way: "Scored" as an eyebrow, two short hand-underlined blanks for the score
+and what it was out of in mono, and "on a practice paper, if this was one" in
+the serif. Nothing is required. Something written there that is not a score
+out of something (half of one, more than it was out of) gets one quiet line
+saying it will not be kept, once both halves are in or the line has been left
+rather than on the first keystroke, and the sitting saves anyway, because the
+sitting is the record and the score is commentary on it. A database that has
+nowhere to put a score yet saves the sitting without it and says so once. The
+sheet scrolls when it is taller than the screen, which with a task and the
+marks above it it can be on a small phone.
+
+**On the course page** a **Practice** panel sits under the grade, once there
+is a paper to show. Each paper is one short pen mark, a little uphill the way
+a hand plots one, at the height of what it scored against what it was out of,
+oldest on the left, between a dashed line for full marks and a ruled baseline.
+It is deliberately not a bar that fills, which is the percentage bar this app
+does not draw, and nothing joins the marks or points an arrow over them: four
+papers on four readings are four facts, not a trend. Under the plot, the last
+four written out, what the sitting's note said it was, the day in the serif,
+and "6.5/8" in mono.
+
+**On a session row**, on the course page and in the Stats journal, the score
+sits in quiet mono before the hours, since the hours are what those lists are.
+
 ### The chime
 The one sound the app makes, beyond the ambient noise a reader turns on
 themselves. It is a **struck glass**: three sine partials over a 1.5s

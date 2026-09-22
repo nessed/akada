@@ -126,6 +126,15 @@ alter table sessions add column if not exists semester_id uuid;
 -- in one query; the shape of the chain lives in session_segments.
 alter table sessions add column if not exists break_seconds integer not null default 0;
 
+-- A sitting spent on a practice paper can say how the paper went: what was
+-- scored, out of what. The one number in the record that is an outcome rather
+-- than time put in, so it is optional, rare and never inferred. Both or
+-- neither, checked by sessions_score_range below. Additive and nullable, so a
+-- deploy against a database that has not re-run this file simply never names
+-- the columns, and a sitting without a score writes the insert it always did.
+alter table sessions add column if not exists score numeric;
+alter table sessions add column if not exists score_out_of numeric;
+
 -- ============================================================
 -- 3a. SESSION SEGMENTS  (FK -> sessions)
 --
@@ -585,6 +594,21 @@ begin
   ) then
     alter table sessions add constraint sessions_break_seconds_range
       check (break_seconds >= 0 and break_seconds <= 64800);
+  end if;
+  -- A score is both halves or neither, never more than it was out of, and
+  -- out of something (MAX_SCORE_OUT_OF in lib/session-safety.ts).
+  if not exists (
+    select 1 from pg_constraint where conname = 'sessions_score_range'
+  ) then
+    alter table sessions add constraint sessions_score_range
+      check (
+        (score is null and score_out_of is null)
+        or (
+          score is not null and score_out_of is not null
+          and score >= 0 and score_out_of > 0
+          and score <= score_out_of and score_out_of <= 10000
+        )
+      );
   end if;
   if not exists (
     select 1 from pg_constraint where conname = 'session_segments_seconds_range'
