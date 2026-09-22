@@ -37,8 +37,8 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `find_course`: Look up courses by code or title.
 - `get_tasks`: Read the active semester's tasks, optionally narrowed to one course.
 - `get_overview`: Read a snapshot of courses, open-task counts, and recent study sessions.
-- `create_tasks`: Bulk-insert tasks into an active course, with notes and subtasks.
-- `update_tasks`: Change tasks that already exist, including their notes and subtasks.
+- `create_tasks`: Bulk-insert tasks into an active course, with notes, subtasks, and what each one is (task, reading or exam) and is worth.
+- `update_tasks`: Change tasks that already exist, including their notes, subtasks, kind, weight and pages.
 - `complete_tasks`: Tick tasks off, or put them back on the list.
 - `log_study_session`: Record study time against a course, with an optional task and note.
 - `get_weekly_stats`: Read one week's hours against goal, break time, tasks closed, and the weekly run.
@@ -73,12 +73,24 @@ In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `
     - `priority` (`"high" | "normal"`, default: `"normal"`).
     - `description` (`string`, optional, up to 5000 chars): Notes that belong with the task, shown in the task reading view.
     - `subtasks` (`array` of up to 50 strings, optional): The pieces of the task, each one a title the student ticks off inside the task. Ids are generated here, and every piece starts unticked.
-- **Output**: Structured list of created tasks (`id`, `title`, `due_date`, `priority`, `description`, `subtasks`) and count of skipped duplicates.
+    - `kind` (`"task" | "reading" | "exam"`, default: `"task"`): What the task is. An exam is what the Coming panel counts down to and what recall paces itself against; a reading feeds the reading backlog and, once finished, recall.
+    - `weight` (`number`, optional, 0-100): What the piece is worth as a percentage of the course, only when the source states it.
+    - `pages` (`integer`, optional, 1-10000): How long a reading runs, only when the source gives it.
+- **Output**: Structured list of created tasks (`id`, `title`, `due_date`, `priority`, `description`, `subtasks`, `kind`, `weight`, `pages`) and count of skipped duplicates.
 
-`description` and `subtasks` are columns added by a later `supabase/schema.sql`,
-so they are only named in the insert when a request actually uses them. A
+`description`, `subtasks`, `kind`, `weight` and `pages` are columns added by a
+later `supabase/schema.sql`, so they are only named in the insert when a
+request actually uses them, and then on every row of the batch at once (a key
+some rows omit is written as NULL, and three of them are `not null`). A
 project that has not re-run the schema keeps creating plain tasks; a request
-that asks for notes or pieces against such a project fails with the reason.
+that asks for notes, pieces or a kind against such a project fails with the
+reason rather than quietly saving an exam as a plain task.
+
+The description tells the model two things it kept getting wrong. A midterm
+has to be created as an `exam`, or every part of Akada that counts down to one
+cannot see it. And finished work is ticked with `complete_tasks` on the task
+already on the list, never recorded by creating a second copy marked done,
+which leaves the original sitting there as overdue.
 
 ### 3. `update_tasks`
 - **Title**: Change study tasks in Akada
@@ -93,7 +105,10 @@ that asks for notes or pieces against such a project fails with the reason.
     - `description` (`string`, optional, up to 5000 chars): Replaces the task's notes.
     - `subtasks` (`array` of up to 50 `{ title, completed }` objects, optional): Replaces the whole list of pieces.
     - `completed` (`boolean`, optional): Also stamps or clears `completed_at`.
-- **Output**: Each changed task with its `id`, `title`, `due_date`, `priority`, `description`, `subtasks`, `completed`, and `course`.
+    - `kind` (`"task" | "reading" | "exam"`, optional).
+    - `weight` (`number | null`, optional, 0-100): `null` clears it.
+    - `pages` (`integer | null`, optional, 1-10000): `null` clears it.
+- **Output**: Each changed task with its `id`, `title`, `due_date`, `priority`, `description`, `subtasks`, `completed`, `kind`, `weight`, `pages`, and `course`.
 
 ### 4. `complete_tasks`
 - **Title**: Tick Akada tasks off
