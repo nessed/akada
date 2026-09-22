@@ -14,6 +14,12 @@ import { readRecall, type RecallReading } from './index';
  * Coming panel all read one answer and cannot disagree about what is due.
  */
 export function useRecall(): {
+  /**
+   * Null until the rows have been read, and for as long as a read has failed
+   * without one ever arriving. Every surface draws nothing and offers nothing
+   * while it is null: rows are written whole, and an answer or a keep made
+   * against rows that never loaded would write over whatever was stored.
+   */
   reading: RecallReading | null;
   /** False on a database without the recall table; see RecallRecords. */
   available: boolean;
@@ -21,15 +27,16 @@ export function useRecall(): {
 } {
   const { courses: raw, isLoading: coursesLoading } = useCourses();
   const { tasks, isLoading: tasksLoading } = useTasks();
-  const { records, available, isLoading: recallLoading } = useRecallRecords();
+  const { records, loaded, available, isLoading: recallLoading } = useRecallRecords();
 
   const isLoading = coursesLoading || tasksLoading || recallLoading;
+  const ready = !coursesLoading && !tasksLoading && loaded;
   const today = isoDate();
   const courses = useMemo(() => sortCourses(raw), [raw]);
 
   const reading = useMemo(
-    () => (isLoading ? null : readRecall({ courses, tasks, records, today })),
-    [isLoading, courses, tasks, records, today],
+    () => (ready ? readRecall({ courses, tasks, records, today }) : null),
+    [ready, courses, tasks, records, today],
   );
 
   return { reading, available, isLoading };

@@ -265,14 +265,21 @@ const RECALL_UNAVAILABLE =
  * The recall table, or a column it needs, is not there: a project that has
  * not re-run supabase/schema.sql since recall arrived. PostgREST reports a
  * missing table as PGRST205 (42P01 from older versions) and a missing column
- * as PGRST204 or 42703.
+ * as PGRST204 or 42703. By code only: every other failure on the table names
+ * it in its message too, a foreign key or a check among them, and telling the
+ * reader to run schema.sql for those would send them the wrong way.
  */
-function isMissingRecall(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false;
-  return (
-    ['PGRST205', '42P01', 'PGRST204', '42703'].includes(error.code ?? '') ||
-    Boolean(error.message?.includes('recall_items'))
-  );
+function isMissingRecall(error: { code?: string } | null): boolean {
+  return Boolean(error && ['PGRST205', '42P01', 'PGRST204', '42703'].includes(error.code ?? ''));
+}
+
+/** A recall write that failed, as something the reader can act on. */
+function recallWriteError(error: { code?: string; message?: string }): Error {
+  if (isMissingRecall(error)) return new Error(RECALL_UNAVAILABLE);
+  // The course went, on another device or in another tab, after this screen
+  // read it.
+  if (error.code === '23503') return new Error('That course is not in this semester any more.');
+  return error as unknown as Error;
 }
 
 export class SupabaseAdapter implements DataProvider {
@@ -842,8 +849,66 @@ export class SupabaseAdapter implements DataProvider {
       )
       .select()
       .single();
-    if (error) throw isMissingRecall(error) ? new Error(RECALL_UNAVAILABLE) : error;
+    if (error) throw recallWriteError(error);
     return rowToRecall(data as RecallRow);
+  }
+
+  async keepRecall(inputs: RecallRecordInput[]): Promise<RecallRecord[]> {
+    const uid = await this.userId();
+    const rows = inputs.map((input) => {
+      const key = cleanRecallKey(input.key);
+      const courseId = cleanText(input.courseId, 80);
+      const prompt = cleanRecallPrompt(input.prompt);
+      if (!key || !courseId || !prompt) {
+        throw new Error('A kept thing needs a course and something to recall.');
+      }
+      return {
+        user_id: uid,
+        course_id: courseId,
+        item_key: key,
+        prompt,
+        source: cleanRecallSource(input.source),
+        ref: input.ref ? cleanText(input.ref, 200) : null,
+        history: sanitizeRecallHistory(input.history),
+        let_go: false,
+      };
+    });
+    if (rows.length === 0) return [];
+
+    // New keys become rows; a key already there is left exactly as it is,
+    // answers and all, and comes back only with the rows actually inserted.
+    const { data: inserted, error } = await this.supabase
+      .from('recall_items')
+      .upsert(rows, { onConflict: 'user_id,item_key', ignoreDuplicates: true })
+      .select();
+    if (error) throw recallWriteError(error);
+    const saved = (inserted as RecallRow[]).map(rowToRecall);
+
+    // The ones that were already there are brought back if they had been let
+    // go. Nothing else about them changes.
+    const fresh = new Set(saved.map((record) => record.key));
+    const existing = rows.map((row) => row.item_key).filter((key) => !fresh.has(key));
+    if (existing.length > 0) {
+      const { data: revived, error: reviveError } = await this.supabase
+        .from('recall_items')
+        .update({ let_go: false, updated_at: new Date().toISOString() })
+        .eq('user_id', uid)
+        .in('item_key', existing)
+        .select();
+      if (reviveError) throw recallWriteError(reviveError);
+      saved.push(...(revived as RecallRow[]).map(rowToRecall));
+    }
+    return saved;
+  }
+
+  async deleteRecall(key: string): Promise<void> {
+    const uid = await this.userId();
+    const { error } = await this.supabase
+      .from('recall_items')
+      .delete()
+      .eq('user_id', uid)
+      .eq('item_key', cleanRecallKey(key));
+    if (error) throw recallWriteError(error);
   }
 
   // ---- Semesters ----

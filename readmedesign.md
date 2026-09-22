@@ -414,11 +414,16 @@ unticked on its task, and the line says so: the tick on a concept list claimed
 **The schedule** is worked out from the answers on every read, never stored.
 The first asking is the day after a thing was learned; after that the gap
 grows with each clear, 3, 7, 16 and 35 days, steps one gap back in on hazy, and
-goes back to tomorrow on gone. An exam within three weeks in the same course
-pulls everything kept for it in to the day before, so it is all asked once
-more with the exam in view. Like Next Mark's deadlines, the exam steers the
-order and the timing and never appears in the copy. A second answer the same
-day replaces the first.
+goes back to tomorrow on gone. An exam within three weeks in the same course,
+or a piece worth a fifth of it, pulls in anything whose ordinary gap would
+carry it past the exam unasked, to the day before, so it is all asked once
+more with the exam in view. Only that: a thing already asked in the few days
+before the eve keeps its gap, and weekly work worth a tenth pulls nothing,
+since a course with a problem set due every week would otherwise have every
+reading asked every week and no gap would ever widen. Like Next Mark's
+deadlines, the exam steers the order and the timing and never appears in the
+copy. A second answer the same day replaces the first, and answers are kept
+in date order whichever way they arrive.
 
 **The day's few.** Today asks for five at most, no more than three from one
 course unless nothing else is due, slipped things first, then things never
@@ -432,9 +437,21 @@ limit, because the reader asked.
 
 **Settled.** One clear recall the morning after is a good sign and not yet a
 thing kept; what holds up on an exam is recalling it clear across several
-spaced sittings. A thing clear three times running, each on a later day, is
-**settled**, and the course's standing counts it apart from the ones clear
-once: "1 settled · 1 clear · 1 hazy · 1 gone · 1 not asked yet".
+spaced sittings. A thing whose last three answers were clear, each on a later
+day, is **settled**, and the course's standing counts it apart from the ones
+clear once: "1 settled · 1 clear · 1 hazy · 1 gone · 1 not asked yet". It is
+read off the answers, not off how far out the schedule has got, because hazy
+steps the schedule back one gap rather than to the start, and clear, clear,
+clear, hazy, clear is as far out as three clears without being three clears.
+
+**Keeping never forgets.** Keeping a thing that is already kept does nothing,
+and keeping one that was let go brings it back with the answers it had, in the
+app and through the connector alike. A reading written down twice is asked
+about once, and the second copy's sheet says where it stands rather than
+offering to keep it again; two chapters of one book, or two papers an author
+published the same year, are two readings. Nothing about recall is offered
+until its rows have loaded, since every row is written whole and an answer
+given against a list that never arrived would write over a real history.
 
 **Where it is drawn.**
 - **Today**, under Up next and over the day's task lists: the card, the
@@ -443,13 +460,18 @@ once: "1 settled · 1 clear · 1 hazy · 1 gone · 1 not asked yet".
 - **The course page**, under the tasks: the course's standing as uprights
   and a sentence, then every kept thing in the order it comes up, its last
   three answers as marks in the margin ("new" before it has been asked), and
-  when it next comes up in the serif. A line to write the next thing on sits
-  at the foot, drawn the way the subtask sheet's "one more step…" is.
+  when it next comes up in the serif. Each row has a "let go" at its end,
+  shown on hover on a wide screen and always on a phone, where there is no
+  hover to find it with; letting go leaves a line with undo, since a line
+  written by hand has nowhere else it could be brought back from. A line to
+  write the next thing on sits at the foot, drawn the way the subtask sheet's
+  "one more step…" is.
 - **The Coming panel**, under an exam's row, once per course: the same
   uprights, and "2 of 5 clear" in mono. A countdown on its own says how close
   an exam is; this says how close the reader is to it.
 - **The task sheet**: for a finished task, where it stands ("in recall ·
-  hazy 3 days ago · next thursday") or the words that keep it; for a concept
+  hazy 3 days ago · next thursday") or the words that keep it ("Bring this
+  back into recall" when it was let go); for a concept
   list, the recall loop in the margin of each kept step, where a grip or a
   tick would be, and the last answer's mark once it has one. A reading not
   read yet offers "Questions before you read", which copies a prompt for

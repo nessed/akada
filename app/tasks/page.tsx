@@ -18,7 +18,7 @@ import { RecallGlyph, VerdictMark } from '@/components/recall/RecallMarks';
 import type { Task, TaskKind } from '@/lib/data';
 import { useRecall } from '@/lib/recall/use-recall';
 import { keepTask, keepTickedSteps } from '@/lib/recall/actions';
-import { looksLikeReading, readingPrompt } from '@/lib/recall';
+import { looksLikeReading, readingPrompt, recallOfTask, type RecallItem } from '@/lib/recall';
 import { beforeReadingPrompt } from '@/lib/recall/prompt';
 import { daysAgoWords, whenWords } from '@/lib/recall/words';
 import { formatHM, formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
@@ -1156,13 +1156,19 @@ function TasksPageContent() {
         const subtasks = viewingTask.subtasks ?? [];
         const done = subtasks.filter((item) => item.completed).length;
         const today = isoDate();
-        const recallOfTask = recall?.states.find((state) => state.key === `task:${viewingTask.id}`) ?? null;
+        // Null until the recall rows have been read, and then nothing about
+        // recall is offered: keeping against a list that never arrived would
+        // be keeping blind. See useRecall.
+        const standing = recall ? recallOfTask(recall, viewingTask.id) : null;
+        const inRecall = standing?.kept ?? null;
         const keptSteps = new Map(
           (recall?.states ?? [])
             .filter((state) => state.source === 'step' && state.task?.id === viewingTask.id)
             .map((state) => [state.subtaskId, state]),
         );
-        const unkeptTicked = subtasks.filter((item) => item.completed && !keptSteps.has(item.id));
+        const unkeptTicked = recall
+          ? subtasks.filter((item) => item.completed && !keptSteps.has(item.id))
+          : [];
 
         /** A list of concepts ticked "can do it fresh" is exactly what recall checks. */
         async function keepSteps(task: Task) {
@@ -1204,11 +1210,11 @@ function TasksPageContent() {
           }
         }
 
-        async function keepWhole(task: Task) {
+        async function keepWhole(task: Task, letGo: RecallItem | null) {
           if (keeping) return;
           setKeeping(true);
           try {
-            await keepTask(task);
+            await keepTask(task, letGo);
           } catch (error) {
             console.error('Failed to keep the task:', error);
             notify(error instanceof Error ? error.message : 'That was not kept.');
@@ -1351,26 +1357,27 @@ function TasksPageContent() {
                   one that is not in it, the word that keeps it. An open task
                   is still being done and is not asked about yet. */}
               {viewingTask.completed &&
-                (recallOfTask ? (
+                recall &&
+                (inRecall ? (
                   <p className="m-0 mt-3 flex flex-wrap items-center gap-x-2 font-serif text-[13px] italic text-muted">
                     <RecallGlyph size={13} color={course?.color ?? 'var(--muted)'} />
                     <span>
                       in recall ·{' '}
-                      {recallOfTask.last
-                        ? `${recallOfTask.last.verdict} ${daysAgoWords(recallOfTask.last.on, today)}`
+                      {inRecall.last
+                        ? `${inRecall.last.verdict} ${daysAgoWords(inRecall.last.on, today)}`
                         : 'not asked yet'}
                       {' · '}
-                      {recallOfTask.due ? 'due now' : `next ${whenWords(recallOfTask.dueOn, today)}`}
+                      {inRecall.due ? 'due now' : `next ${whenWords(inRecall.dueOn, today)}`}
                     </span>
                   </p>
                 ) : (
                   <button
                     type="button"
                     disabled={keeping}
-                    onClick={() => keepWhole(viewingTask)}
+                    onClick={() => keepWhole(viewingTask, standing?.letGo ?? null)}
                     className="hand-underline mt-3 bg-transparent px-0.5 font-serif text-[13px] text-ink disabled:opacity-40"
                   >
-                    Keep this for recall
+                    {standing?.letGo ? 'Bring this back into recall' : 'Keep this for recall'}
                   </button>
                 ))}
 

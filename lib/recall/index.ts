@@ -6,16 +6,17 @@ import type {
   RecallVerdict,
   Task,
 } from '../data';
-import { daysBetween, isoDate } from '../utils';
+import { daysBetween, isoDate, logicalDateOf } from '../utils';
 import {
   RECALL_EXAM_MIN_WEIGHT,
+  RECALL_EXAM_RUNUP_DAYS,
   RECALL_EXAM_WINDOW_DAYS,
   RECALL_HISTORY_MAX,
   RECALL_INTERVALS,
   RECALL_PER_COURSE_PER_DAY,
   RECALL_PER_DAY,
   RECALL_PROMPT_MAX,
-  RECALL_SETTLED_BOX,
+  RECALL_SETTLED_RUN,
 } from './constants';
 
 export * from './constants';
@@ -62,15 +63,24 @@ export interface RecallItem {
   letGo: boolean;
   /** The stored row. A finished reading never answered or let go has none. */
   record: RecallRecord | null;
+  /**
+   * Other finished tasks for the same reading, written down twice and asked
+   * about once, as this item. Their task sheets point here rather than
+   * offering to keep them again.
+   */
+  twins: string[];
 }
 
 /** Never asked yet, or how the last asking went. */
 export type RecallStanding = 'new' | RecallVerdict;
 
 export interface RecallState extends RecallItem {
-  /** How many times in a row it has come back clear, capped at the last interval. */
+  /**
+   * How far out the schedule has got: one gap further for each clear, one
+   * back for a hazy, back to the start for gone. Capped at the last interval.
+   */
   box: number;
-  /** Clear on enough separate days running to count as kept. See RECALL_SETTLED_BOX. */
+  /** The last answers clear, on enough separate days running. See RECALL_SETTLED_RUN. */
   settled: boolean;
   dueOn: string;
   due: boolean;
@@ -111,6 +121,8 @@ export interface RecallReading {
   /** Items answered today, which the day's few are counted against. */
   answeredToday: number;
   byCourse: Map<string, CourseRecall>;
+  /** Everything let go, so keeping one again can bring it back with its answers. */
+  letGo: RecallItem[];
 }
 
 export interface RecallInput {
@@ -118,6 +130,13 @@ export interface RecallInput {
   tasks: Task[];
   records: RecallRecord[];
   today?: string;
+  /**
+   * The reader's day for a stored instant: when a reading was finished, when
+   * a line was kept. This device's day by default, honouring the late-night
+   * cutoff the way `today` does. The connector runs in UTC and passes the
+   * student's own offset instead.
+   */
+  dayOf?: (instant: Date) => string;
 }
 
 /* ── What counts as a reading ─────────────────────────────────────────── */
@@ -153,16 +172,46 @@ export function readingPrompt(title: string): string {
   return (cleaned || title).slice(0, RECALL_PROMPT_MAX);
 }
 
+// Where in a work a reading is: a chapter, a book or part, a volume, pages.
+const LOCATOR =
+  /\b(chapters?|ch|books?|bk|parts?|pt|volumes?|vols?|pages?|pp|p)\.?\s*((?:\d+|[IVXL]+\b)(?:\s*(?:[-–—&,]|and|to)\s*(?:\d+|[IVXL]+\b))*)/gi;
+
+const LOCATOR_KIND: Record<string, string> = {
+  chapter: 'ch', chapters: 'ch', ch: 'ch',
+  book: 'bk', books: 'bk', bk: 'bk',
+  part: 'pt', parts: 'pt', pt: 'pt',
+  volume: 'vol', volumes: 'vol', vol: 'vol', vols: 'vol',
+  page: 'p', pages: 'p', pp: 'p', p: 'p',
+};
+
+/** "ch 15,18 p 45,80": every place in a work a title points at, in one order. */
+function locators(text: string): string {
+  const found: string[] = [];
+  for (const match of text.matchAll(LOCATOR)) {
+    const kind = LOCATOR_KIND[match[1].toLowerCase()] ?? match[1].toLowerCase();
+    const numbers = match[2].toUpperCase().match(/\d+|[IVXL]+/g) ?? [];
+    found.push(`${kind} ${numbers.join(',')}`);
+  }
+  return found.sort().join(' ');
+}
+
 /**
- * What two tasks for the same reading share. The author and the year when
- * there is a citation, since the same paper is often written down twice, once
- * off the syllabus and once when it was done; otherwise the whole title.
+ * What two tasks for the same reading share, so a reading written down twice,
+ * once off the syllabus and once when it was done, is asked about once.
+ *
+ * With a citation, the author, the year with its letter, and every chapter,
+ * book, part, volume or page the title names; otherwise the whole title. The
+ * places in the work are part of it because a syllabus that sets Waltz (1979)
+ * twice is setting two chapters, and merging those would hide one of them
+ * from recall for good. Two copies where only one names a chapter stay apart
+ * for the same reason: an extra question costs a tap, a missing one costs a
+ * reading nobody is ever asked about.
  */
 function readingStem(title: string): string {
-  const prompt = readingPrompt(title).toLowerCase();
-  const cited = prompt.match(/^(.*?)\(\s*((?:1[5-9]|20)\d{2})[a-z]?\s*\)/);
-  const base = cited ? `${cited[1]} ${cited[2]}` : prompt;
-  return base.replace(/[^a-z0-9]+/g, ' ').trim();
+  const prompt = readingPrompt(title);
+  const cited = prompt.match(/^(.*?)\(\s*((?:1[5-9]|20)\d{2}[a-z]?)\s*\)/i);
+  const base = cited ? `${cited[1]} ${cited[2]} ${locators(prompt)}` : prompt;
+  return base.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 /* ── Dates ────────────────────────────────────────────────────────────── */
@@ -173,11 +222,15 @@ function addDays(iso: string, days: number): string {
   return isoDate(d);
 }
 
-/** A stored timestamp as the calendar day it fell on, where the reader is. */
-function dayOf(timestamp: string | null | undefined, fallback: string): string {
+/** A stored timestamp as the reader's day it fell on. */
+function dayFrom(
+  timestamp: string | null | undefined,
+  dayOf: (instant: Date) => string,
+  fallback: string,
+): string {
   if (!timestamp) return fallback;
   const d = new Date(timestamp);
-  return Number.isNaN(d.getTime()) ? fallback : isoDate(d);
+  return Number.isNaN(d.getTime()) ? fallback : dayOf(d);
 }
 
 /* ── The schedule ─────────────────────────────────────────────────────── */
@@ -191,9 +244,10 @@ function dayOf(timestamp: string | null | undefined, fallback: string): string {
  *
  * `examOn` is the nearest exam in the thing's course, when one is close. If
  * the ordinary gap would carry the next asking past the day before that exam,
- * it is pulled in to that day, so everything kept for an exam is asked once
- * more with the exam in view. Never onto a day already answered, though: a
- * thing answered this morning is not asked again this afternoon.
+ * and the thing has not been asked in the few days before that already, it is
+ * pulled in to the eve, so everything kept for an exam is asked once more
+ * with the exam in view. Something asked in the run-up keeps its ordinary
+ * gap, which also means the pull can never land on a day already answered.
  */
 export function scheduleRecall(
   history: RecallAnswer[],
@@ -211,18 +265,24 @@ export function scheduleRecall(
   let dueOn = addDays(from, last ? RECALL_INTERVALS[box] : 1);
   if (examOn) {
     const eve = addDays(examOn, -1);
-    if (dueOn > eve) {
-      const earliest = addDays(from, 1);
-      dueOn = earliest > eve ? earliest : eve;
-    }
+    if (dueOn > eve && from < addDays(eve, -RECALL_EXAM_RUNUP_DAYS)) dueOn = eve;
   }
   return { box, dueOn };
+}
+
+/** How many of the latest answers came back clear, counting back from the last. */
+export function clearRun(history: RecallAnswer[]): number {
+  let run = 0;
+  for (let i = history.length - 1; i >= 0 && history[i].verdict === 'clear'; i -= 1) run += 1;
+  return run;
 }
 
 /**
  * The history after answering. A second answer on the same day replaces the
  * first rather than joining it, so a changed mind is one answer, and putting
- * back an answer is putting back the history it replaced.
+ * back an answer is putting back the history it replaced. Kept in date order
+ * whatever order the answers arrive in, since the last one is read as the
+ * latest: a quiz in a chat can land an answer dated before one given on Today.
  */
 export function applyVerdict(
   history: RecallAnswer[],
@@ -230,7 +290,9 @@ export function applyVerdict(
   on: string = isoDate(),
 ): RecallAnswer[] {
   const kept = history.filter((answer) => answer.on !== on);
-  return [...kept, { on, verdict }].slice(-RECALL_HISTORY_MAX);
+  return [...kept, { on, verdict }]
+    .sort((a, b) => a.on.localeCompare(b.on))
+    .slice(-RECALL_HISTORY_MAX);
 }
 
 /* ── Exams ────────────────────────────────────────────────────────────── */
@@ -254,7 +316,13 @@ function nearestExams(tasks: Task[], today: string): Map<string, string> {
 /* ── Reading it all ───────────────────────────────────────────────────── */
 
 /** Everything kept, answered or not, before any of it is scheduled. */
-function readItems(courses: Course[], tasks: Task[], records: RecallRecord[], today: string): RecallItem[] {
+function readItems(
+  courses: Course[],
+  tasks: Task[],
+  records: RecallRecord[],
+  today: string,
+  dayOf: (instant: Date) => string,
+): RecallItem[] {
   const courseIds = new Set(courses.map((c) => c.id));
   const byKey = new Map(records.map((record) => [record.key, record]));
   const taskById = new Map(tasks.map((task) => [task.id, task]));
@@ -264,8 +332,8 @@ function readItems(courses: Course[], tasks: Task[], records: RecallRecord[], to
   // Finished readings, read straight off the tasks. The same reading written
   // down twice, once off the syllabus and once when it was done, is one thing
   // to remember; the copy that has been answered wins, then the one finished
-  // first.
-  const readings = new Map<string, RecallItem>();
+  // first, and the others are its twins.
+  const readings = new Map<string, RecallItem[]>();
   for (const task of tasks) {
     if (!task.completed || !courseIds.has(task.courseId) || !looksLikeReading(task)) continue;
     const key = `task:${task.id}`;
@@ -278,17 +346,20 @@ function readItems(courses: Course[], tasks: Task[], records: RecallRecord[], to
       ref: task.id,
       task,
       subtaskId: null,
-      origin: dayOf(task.completedAt ?? task.createdAt, today),
+      origin: dayFrom(task.completedAt ?? task.createdAt, dayOf, today),
       history: record?.history ?? [],
       letGo: record?.letGo ?? false,
       record,
+      twins: [],
     };
     used.add(key);
     const stem = `${task.courseId}|${readingStem(task.title)}`;
-    const held = readings.get(stem);
-    if (!held || preferReading(item, held)) readings.set(stem, item);
+    readings.set(stem, [...(readings.get(stem) ?? []), item]);
   }
-  items.push(...readings.values());
+  for (const copies of readings.values()) {
+    const [first, ...others] = [...copies].sort(readingOrder);
+    items.push({ ...first, twins: others.map((copy) => copy.ref as string) });
+  }
 
   // Everything else was kept on purpose and has a row.
   for (const record of records) {
@@ -319,20 +390,21 @@ function readItems(courses: Course[], tasks: Task[], records: RecallRecord[], to
       ref: record.ref,
       task,
       subtaskId: step ? step.id : subtaskId,
-      origin: dayOf(record.createdAt, today),
+      origin: dayFrom(record.createdAt, dayOf, today),
       history: record.history,
       letGo: record.letGo,
       record,
+      twins: [],
     });
   }
 
   return items;
 }
 
-function preferReading(candidate: RecallItem, held: RecallItem): boolean {
+/** Which copy of a reading written down twice is the one asked about: the most answered, then the first finished. */
+function readingOrder(a: RecallItem, b: RecallItem): number {
   const answered = (item: RecallItem) => item.history.length + (item.letGo ? 1 : 0);
-  if (answered(candidate) !== answered(held)) return answered(candidate) > answered(held);
-  return candidate.origin < held.origin;
+  return answered(b) - answered(a) || a.origin.localeCompare(b.origin) || a.key.localeCompare(b.key);
 }
 
 function splitRef(record: RecallRecord): [string | null, string | null] {
@@ -361,10 +433,17 @@ function askingOrder(a: RecallState, b: RecallState): number {
   );
 }
 
-export function readRecall({ courses, tasks, records, today = isoDate() }: RecallInput): RecallReading {
+export function readRecall({
+  courses,
+  tasks,
+  records,
+  today = isoDate(),
+  dayOf = logicalDateOf,
+}: RecallInput): RecallReading {
   const exams = nearestExams(tasks, today);
+  const items = readItems(courses, tasks, records, today, dayOf);
 
-  const states: RecallState[] = readItems(courses, tasks, records, today)
+  const states: RecallState[] = items
     .filter((item) => !item.letGo)
     .map((item) => {
       const examOn = exams.get(item.courseId) ?? null;
@@ -373,7 +452,7 @@ export function readRecall({ courses, tasks, records, today = isoDate() }: Recal
       return {
         ...item,
         box,
-        settled: box >= RECALL_SETTLED_BOX && last?.verdict === 'clear',
+        settled: clearRun(item.history) >= RECALL_SETTLED_RUN,
         dueOn,
         due: dueOn <= today,
         standing: last ? last.verdict : 'new',
@@ -428,7 +507,32 @@ export function readRecall({ courses, tasks, records, today = isoDate() }: Recal
     });
   }
 
-  return { today, states, due, queue, answeredToday, byCourse };
+  return {
+    today,
+    states,
+    due,
+    queue,
+    answeredToday,
+    byCourse,
+    letGo: items.filter((item) => item.letGo),
+  };
+}
+
+/**
+ * Where a whole task stands in recall: the thing asked about for it, which may
+ * be filed under a copy of the same reading written down twice, or the thing
+ * let go. Null when recall has nothing on it.
+ */
+export function recallOfTask(
+  reading: RecallReading,
+  taskId: string,
+): { kept: RecallState; letGo: null } | { kept: null; letGo: RecallItem } | null {
+  const mine = (item: RecallItem) =>
+    item.source !== 'step' && (item.ref === taskId || item.twins.includes(taskId));
+  const kept = reading.states.find(mine);
+  if (kept) return { kept, letGo: null };
+  const letGo = reading.letGo.find(mine);
+  return letGo ? { kept: null, letGo } : null;
 }
 
 /**

@@ -25,8 +25,13 @@ export const RECALL_INTERVALS = [1, 3, 7, 16, 35] as const;
  * correctly across several spaced sittings, about three, not once. Readiness
  * counts settled things apart from things clear once, so the picture a week
  * before an exam is not flattered by a single good morning.
+ *
+ * Counted from the answers themselves, not from how far out the schedule has
+ * got: a hazy steps the schedule back one gap rather than to the start, so
+ * clear, clear, clear, hazy, clear is as far out as three clears and is not
+ * three clears running.
  */
-export const RECALL_SETTLED_BOX = 3;
+export const RECALL_SETTLED_RUN = 3;
 
 /**
  * How many recalls Today asks for in one day, at most.
@@ -50,8 +55,23 @@ export const RECALL_PER_COURSE_PER_DAY = 3;
  */
 export const RECALL_EXAM_WINDOW_DAYS = 21;
 
-/** A piece worth at least this much of a course counts as one to prepare for. */
-export const RECALL_EXAM_MIN_WEIGHT = 10;
+/**
+ * A piece worth at least this much of a course counts as one to prepare for,
+ * alongside anything marked as an exam. Twenty rather than ten because a
+ * course with a weekly problem set worth ten per cent always has one within
+ * the window, and pulling everything in before each of those undoes the
+ * widening gaps entirely: a reading answered clear every time would be asked
+ * every week of the term.
+ */
+export const RECALL_EXAM_MIN_WEIGHT = 20;
+
+/**
+ * Asked this many days before the eve of an exam or closer, a thing has
+ * already been asked with the exam in view and is not pulled in again. The
+ * pull is for what the ordinary schedule would carry past the exam unasked,
+ * not for asking everything twice in one week.
+ */
+export const RECALL_EXAM_RUNUP_DAYS = 3;
 
 /** Answers kept per item. A term of daily recall is well under this. */
 export const RECALL_HISTORY_MAX = 60;

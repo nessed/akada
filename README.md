@@ -91,8 +91,9 @@ concept list, a finished task, a line written at the end of a sitting or on a
 course page. Today asks for a few a day, one at a time, to be given back with
 the book shut and answered clear, hazy or gone. The gaps widen with every
 clear (a day, 3, 7, 16, 35) and close again on a slip, an exam in the course
-pulls everything kept for it in to the day before, and a concept step that has
-gone is unticked on its list, since its tick claimed it could be done fresh.
+pulls in to the day before anything that would otherwise go past it unasked,
+and a concept step that has gone is unticked on its list, since its tick
+claimed it could be done fresh.
 A course page shows what it is keeping and how much of it is settled, and the
 Coming panel draws that under an exam's countdown. Like the record, the
 schedule is worked out from the answers on every read and never stored.

@@ -137,7 +137,11 @@ and have no row until first answered; everything else is a row in
 
 - **`get_recall`** (`readOnlyHint: true`)
   - `course_id` (UUID, optional), `include_not_due` (boolean, default `false`),
-    `limit` (1-50, default 20), `date` (`YYYY-MM-DD`, optional, the student's own day).
+    `limit` (1-50, default 20), `date` (`YYYY-MM-DD`, optional, the student's own
+    day), `utc_offset_minutes` (-840 to 840, optional, e.g. `300` for UTC+5).
+    The server keeps UTC, so without either the day is UTC's, which is a day out
+    for part of every day away from Greenwich; a `date` more than a day from the
+    server's is refused.
   - **Output**: `items`, due first in asking order (what slipped, then what was
     never asked, then clear things coming round), each with its `key`, `course`,
     `prompt`, `kind`, `how_to_recall`, `standing`, `recent` answers, `due_on`
@@ -147,7 +151,7 @@ and have no row until first answered; everything else is a row in
     stored until `supabase/schema.sql` has been re-run.
 - **`record_recall`** (`destructiveHint: false`, `idempotentHint: true`)
   - `results` (1-30 `{ key, verdict }`, verdict `clear` / `hazy` / `gone`),
-    `date` (optional).
+    `date` and `utc_offset_minutes` (optional, as for `get_recall`).
   - Refuses any key it is not keeping rather than inventing one. A step recorded
     `gone` is unticked on its task. **Output**: each key's verdict and
     `next_due_on`, and the tasks a step was unticked on.
@@ -156,8 +160,11 @@ and have no row until first answered; everything else is a row in
     should be able to produce), `task_id` (UUID, optional), `ticked_steps`
     (boolean). With `task_id` and `ticked_steps: true` it keeps that task's
     ticked steps; with `task_id` alone, the whole finished task.
-  - Skips anything already kept on the course, by key and by wording, and never
-    overwrites the answers of a thing already kept.
+  - Skips anything already kept on the course, by key and by wording (a
+    reading written down twice counts as kept through either copy), and never
+    overwrites the answers of a thing already kept. A thing the student had let
+    go is brought back instead, with its answers. **Output**: `kept` (new rows)
+    and `brought_back`.
 
 The descriptions carry the protocol the prompts in `lib/recall/prompt.ts` do:
 ask one thing at a time, show nothing before the attempt, show the right answer

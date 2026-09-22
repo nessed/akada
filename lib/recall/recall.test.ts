@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Course, RecallRecord, Task } from '../data';
+import type { Course, RecallAnswer, RecallRecord, Task } from '../data';
 import {
   applyVerdict,
   looksLikeReading,
   readingPrompt,
   readRecall,
+  recallOfTask,
   RECALL_PER_COURSE_PER_DAY,
   RECALL_PER_DAY,
   scheduleRecall,
@@ -105,18 +106,78 @@ test('the gaps widen with each clear and close again when it slips', () => {
   assert.equal(scheduleRecall(many, origin).dueOn, day(34), 'the widest gap is five weeks');
 });
 
-test('a near exam pulls the next asking in to the day before it, never onto a day answered', () => {
+test('a near exam pulls the next asking in to its eve, unless it was asked in the run-up', () => {
   const settled = Array.from({ length: 4 }, (_, i) => ({ on: day(i - 4), verdict: 'clear' as const }));
-  // Ordinarily sixteen days out; an exam in six days pulls it to five.
-  assert.equal(scheduleRecall(settled, day(-30), day(6)).dueOn, day(5));
+  // Ordinarily five weeks out; an exam in ten days pulls it in to the ninth.
+  assert.equal(scheduleRecall(settled, day(-30), day(10)).dueOn, day(9));
+  // Asked yesterday with the exam three days off: that was the run-up, so
+  // it keeps its ordinary gap rather than being asked again on the eve.
+  assert.equal(scheduleRecall(settled, day(-30), day(3)).dueOn, day(34));
+  // Answered on the eve itself: not asked again on the morning of the exam.
   const answeredToday = [{ on: TODAY, verdict: 'clear' as const }];
-  assert.equal(scheduleRecall(answeredToday, day(-30), day(1)).dueOn, day(1));
+  assert.equal(scheduleRecall(answeredToday, day(-30), day(1)).dueOn, day(3));
+});
+
+test('weekly graded work does not undo the widening gaps, and a midterm adds one asking', () => {
+  // A reading answered clear every time it comes up, over ten weeks, in a
+  // course with a problem set worth ten per cent due every week.
+  const walk = (withMidterm: boolean) => {
+    const reading = task('r', 'Read Waltz (1979), Ch. 1', { completedAt: `${TODAY}T15:00:00` });
+    const sets = Array.from({ length: 10 }, (_, i) =>
+      task(`ps${i}`, `Problem Set ${i + 1}`, {
+        completed: false,
+        completedAt: null,
+        dueDate: day(7 * (i + 1)),
+        weight: 10,
+      }),
+    );
+    const midterm = task('mid', 'Midterm', { kind: 'exam', completed: false, completedAt: null, dueDate: day(40) });
+    let history: RecallAnswer[] = [];
+    const asked: number[] = [];
+    for (let d = 1; d <= 70; d += 1) {
+      const today = day(d);
+      const state = readRecall({
+        courses: [course('pol')],
+        tasks: [reading, ...sets, ...(withMidterm ? [midterm] : [])],
+        records: history.length ? [record('task:r', { source: 'reading', ref: 'r', history })] : [],
+        today,
+      }).states.find((s) => s.key === 'task:r')!;
+      if (state.due) {
+        history = applyVerdict(history, 'clear', today);
+        asked.push(d);
+      }
+    }
+    return asked;
+  };
+  assert.deepEqual(walk(false), [1, 4, 11, 27, 62], 'the problem sets pull nothing in');
+  assert.deepEqual(walk(true), [1, 4, 11, 27, 39], 'the midterm pulls in its eve, once');
+});
+
+test('a piece marked as an exam, or worth a fifth of the course, is prepared for; a tenth is not', () => {
+  const reading = task('r', 'Read Angell (1912)');
+  const examDays = (piece: Partial<Task>) =>
+    readRecall({
+      courses: [course('pol')],
+      tasks: [reading, task('p', 'Response paper', { completed: false, completedAt: null, dueDate: day(9), ...piece })],
+      records: [],
+      today: TODAY,
+    }).states[0].examDays;
+  assert.equal(examDays({ weight: 10 }), null);
+  assert.equal(examDays({ weight: 20 }), 9);
+  assert.equal(examDays({ kind: 'exam' }), 9);
 });
 
 test('a second answer on the same day replaces the first', () => {
   const first = applyVerdict([], 'gone', TODAY);
   const changed = applyVerdict(first, 'hazy', TODAY);
   assert.deepEqual(changed, [{ on: TODAY, verdict: 'hazy' }]);
+});
+
+test('an answer that arrives out of order lands in date order', () => {
+  // Answered on Today, then a chat records one dated the day before.
+  const history = applyVerdict([{ on: TODAY, verdict: 'clear' }], 'gone', day(-1));
+  assert.deepEqual(history.map((a) => a.on), [day(-1), TODAY]);
+  assert.equal(history.at(-1)?.verdict, 'clear', 'the latest answer is still the last');
 });
 
 /* ── Reading the whole thing ──────────────────────────────────────────── */
@@ -153,6 +214,54 @@ test('the same reading written down twice is one thing to remember', () => {
     today: TODAY,
   });
   assert.deepEqual(reading.states.map((s) => s.key), ['task:done'], 'the one finished first');
+  assert.deepEqual(reading.states[0].twins, ['syllabus']);
+  assert.equal(recallOfTask(reading, 'syllabus')?.kept?.key, 'task:done', 'its copy points at it');
+});
+
+test('two chapters of one book are two readings, and a letter after the year is another paper', () => {
+  const reading = readRecall({
+    courses: [course('pol')],
+    tasks: [
+      task('w1', 'Read: Waltz (1979), Theory of International Politics, Ch. 1'),
+      task('w6', 'Read: Waltz (1979), Theory of International Politics, Ch. 6'),
+      task('ka', 'Keohane (1984a) After Hegemony'),
+      task('kb', 'Keohane (1984b) — done with Claude'),
+      task('t1', 'Read Thucydides, Book III Ch 36-50'),
+      task('t5', 'Read Thucydides, Book V Ch 84-116'),
+    ],
+    records: [],
+    today: TODAY,
+  });
+  assert.deepEqual(
+    reading.states.map((s) => s.key).sort(),
+    ['task:ka', 'task:kb', 'task:t1', 'task:t5', 'task:w1', 'task:w6'],
+  );
+});
+
+test('a reading let go under one copy is brought back through either', () => {
+  const reading = readRecall({
+    courses: [course('pol')],
+    tasks: [
+      task('syllabus', 'Read: Buzan and Lawson (2013) - The Global Transformation', { completedAt: `${day(-2)}T10:00:00` }),
+      task('done', 'Buzan and Lawson (2013) — done with Claude', { completedAt: `${day(-8)}T10:00:00` }),
+    ],
+    records: [record('task:done', { source: 'reading', ref: 'done', letGo: true, history: [{ on: day(-7), verdict: 'hazy' }] })],
+    today: TODAY,
+  });
+  assert.equal(reading.states.length, 0);
+  assert.equal(recallOfTask(reading, 'syllabus')?.letGo?.key, 'task:done');
+  assert.equal(recallOfTask(reading, 'syllabus')?.letGo?.history.length, 1, 'with its answers');
+});
+
+test('a reading finished after midnight counts from the day the reader was still in', () => {
+  const late = task('a', 'Read Angell (1912)', { completedAt: '2026-09-21T01:30:00' });
+  const lateNight = (instant: Date) => {
+    const d = new Date(instant);
+    d.setHours(d.getHours() - 4);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const reading = readRecall({ courses: [course('pol')], tasks: [late], records: [], today: TODAY, dayOf: lateNight });
+  assert.equal(reading.states[0].origin, '2026-09-20');
 });
 
 test('answers are read from the stored row, and a let go reading stays out', () => {
@@ -282,4 +391,22 @@ test('a thing is settled only after clear recalls on separate days running', () 
     reading.states.filter((s) => s.settled).map((s) => s.key),
     ['task:a'],
   );
+});
+
+test('three clears, a hazy and a clear is as far out as three clears but is not settled', () => {
+  const history: RecallAnswer[] = [
+    { on: day(-40), verdict: 'clear' },
+    { on: day(-37), verdict: 'clear' },
+    { on: day(-30), verdict: 'clear' },
+    { on: day(-14), verdict: 'hazy' },
+    { on: day(-7), verdict: 'clear' },
+  ];
+  const reading = readRecall({
+    courses: [course('pol')],
+    tasks: [task('a', 'Read A (2001)')],
+    records: [record('task:a', { source: 'reading', ref: 'a', history })],
+    today: TODAY,
+  });
+  assert.equal(reading.states[0].box, 3);
+  assert.equal(reading.states[0].settled, false);
 });

@@ -8,6 +8,7 @@ import {
   cleanRecallKey,
   cleanRecallPrompt,
   cleanRecallSource,
+  isIsoDate,
   sanitizeRecallHistory,
 } from '@/lib/planner-safety';
 import type { Course, RecallRecord, RecallSource, RecallVerdict, Task } from '@/lib/data/types';
@@ -17,10 +18,11 @@ import {
   readingPrompt,
   readRecall,
   recallCue,
+  recallOfTask,
   scheduleRecall,
   type RecallState,
 } from '@/lib/recall';
-import { isoDate, startOfWeek, endOfWeek } from '@/lib/utils';
+import { daysBetween, isoDate, startOfWeek, endOfWeek } from '@/lib/utils';
 import { readCredit } from '@/lib/progression/credit';
 import { readRuns } from '@/lib/progression/runs';
 import { mcpSupabase, mcpUrl, siteUrl } from './_shared';
@@ -646,14 +648,52 @@ export async function createTasks(
 /**
  * The recall table, or a column it needs, is not there: a project that has
  * not re-run supabase/schema.sql since recall arrived. Same codes the app's
- * adapter reads, for the same reason.
+ * adapter reads, for the same reason, and by code only: a foreign key or a
+ * check failing on the table names it in its message too, and is not fixed
+ * by running schema.sql.
  */
 function isMissingRecallTable(error: QueryFailure): boolean {
-  if (!error) return false;
-  return (
-    ['PGRST205', '42P01', 'PGRST204', '42703'].includes(error.code ?? '') ||
-    Boolean(error.message?.includes('recall_items'))
-  );
+  return Boolean(error && ['PGRST205', '42P01', 'PGRST204', '42703'].includes(error.code ?? ''));
+}
+
+/** The student's day, as the recall tools take it. */
+const RecallDay = {
+  date: z
+    .string()
+    .regex(DATE, 'Use YYYY-MM-DD.')
+    .refine(isIsoDate, 'That is not a date on the calendar.')
+    .optional(),
+  utc_offset_minutes: z.number().int().min(-840).max(840).optional(),
+};
+
+const RECALL_DAY_WORDS =
+  '`date` is the student\'s own date, YYYY-MM-DD, and `utc_offset_minutes` their offset from UTC (300 for UTC+5). Pass what you know, both if you can: Akada\'s server keeps UTC, which is a day out for part of every day away from Greenwich, and an answer dated a day early comes straight back as due.';
+
+/**
+ * The student's day, and the day any stored instant fell on for them.
+ *
+ * The server runs in UTC. An answer stamped with the server's date lands on
+ * the day before for someone in Lahore answering at half past one in the
+ * morning, where a slip is then due again the moment Today opens; and on the
+ * day after for someone in the Americas answering in the evening. So the
+ * student's own date wins, then their offset, then UTC. A date more than a
+ * day from the server's cannot be anybody's today, so it is refused rather
+ * than written into a history where it would sit ahead of every real answer.
+ */
+function recallDays(
+  date: string | undefined,
+  offsetMinutes: number | undefined,
+): { ok: true; today: string; dayOf: (instant: Date) => string } | { ok: false; error: ReturnType<typeof toolError> } {
+  const offset = offsetMinutes ?? 0;
+  const dayOf = (instant: Date) => new Date(instant.getTime() + offset * 60_000).toISOString().slice(0, 10);
+  const today = date ?? dayOf(new Date());
+  if (Math.abs(daysBetween(new Date().toISOString().slice(0, 10), today)) > 1) {
+    return {
+      ok: false,
+      error: toolError(`${today} is not today anywhere. Pass the student's own date, or leave it out and pass utc_offset_minutes.`),
+    };
+  }
+  return { ok: true, today, dayOf };
 }
 
 const RECALL_NOT_STORED =
@@ -674,6 +714,7 @@ async function loadRecall(
   token: AuthenticatedToken,
   supabase: McpSupabaseClient,
   today: string,
+  dayOf?: (instant: Date) => string,
 ) {
   const semesterId = await activeSemesterId(token, supabase);
   if (!semesterId) return { ok: false, error: toolError('No active semester is set in Akada.') } as const;
@@ -737,7 +778,7 @@ async function loadRecall(
     courses: byId,
     tasks,
     records,
-    reading: readRecall({ courses, tasks, records, today }),
+    reading: readRecall({ courses, tasks, records, today, dayOf }),
   } as const;
 }
 
@@ -768,20 +809,24 @@ const GetRecallInput = z.object({
   course_id: z.string().uuid().optional(),
   include_not_due: z.boolean().default(false),
   limit: z.number().int().min(1).max(50).default(20),
-  date: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional(),
+  ...RecallDay,
 });
 
 const GET_RECALL_DESCRIPTION =
-  'Read what the student is keeping in Akada to be asked about from memory: finished readings (which come in on their own), concepts and steps they chose to keep, and lines they wrote down after a sitting. Each comes with how the last few recalls went and when it is next due. Use this to quiz the student on what is actually due, most urgent first, rather than on whatever comes to mind: one thing at a time, wait for their attempt before saying anything about it, never show the answer or a worked example first, and afterwards record how each attempt went with record_recall. `include_not_due` adds everything else being kept, for questions like "what am I shaky on in MATH". `date` is the student\'s own date, YYYY-MM-DD, when you know it. This tool never changes Akada data.';
+  'Read what the student is keeping in Akada to be asked about from memory: finished readings (which come in on their own), concepts and steps they chose to keep, and lines they wrote down after a sitting. Each comes with how the last few recalls went and when it is next due. Use this to quiz the student on what is actually due, most urgent first, rather than on whatever comes to mind: one thing at a time, wait for their attempt before saying anything about it, never show the answer or a worked example first, and afterwards record how each attempt went with record_recall. `include_not_due` adds everything else being kept, for questions like "what am I shaky on in MATH". ' +
+  RECALL_DAY_WORDS +
+  ' This tool never changes Akada data.';
 
 // Split out like getWeeklyStats, so a test can drive it with a double.
 export async function getRecallTool(
   token: AuthenticatedToken,
-  { course_id, include_not_due, limit, date }: z.infer<typeof GetRecallInput>,
+  { course_id, include_not_due, limit, date, utc_offset_minutes }: z.infer<typeof GetRecallInput>,
   supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
 ) {
   try {
-    const loaded = await loadRecall('get_recall', token, supabase, date ?? isoDate(new Date()));
+    const days = recallDays(date, utc_offset_minutes);
+    if (!days.ok) return days.error;
+    const loaded = await loadRecall('get_recall', token, supabase, days.today, days.dayOf);
     if (!loaded.ok) return loaded.error;
     if (course_id && !loaded.courses.has(course_id)) {
       return toolError('That course is not in your active Akada semester. Find the course again with find_course and use the id it returns.');
@@ -830,20 +875,23 @@ const RecordRecallInput = z.object({
     )
     .min(1)
     .max(30),
-  date: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional(),
+  ...RecallDay,
 });
 
 const RECORD_RECALL_DESCRIPTION =
-  'Record how the student did when recalling things they keep in Akada, after you have quizzed them. Pass each item\'s `key` exactly as get_recall returned it, with the verdict the attempt earned: `clear` if they produced it correctly without help, `hazy` if they got part of it or needed a nudge, `gone` if they could not. Judge the attempt rather than the effort and do not round up: a hazy recorded as clear pushes the thing weeks out of sight, which is the one way this goes wrong. Akada works out when each thing comes up next from these answers, sooner for what slipped and further out for what stuck. A step recorded as gone is also unticked on its task, because its tick claimed the student could do it fresh. `date` is the student\'s own date, YYYY-MM-DD, when you know it.';
+  'Record how the student did when recalling things they keep in Akada, after you have quizzed them. Pass each item\'s `key` exactly as get_recall returned it, with the verdict the attempt earned: `clear` if they produced it correctly without help, `hazy` if they got part of it or needed a nudge, `gone` if they could not. Judge the attempt rather than the effort and do not round up: a hazy recorded as clear pushes the thing weeks out of sight, which is the one way this goes wrong. Akada works out when each thing comes up next from these answers, sooner for what slipped and further out for what stuck. A step recorded as gone is also unticked on its task, because its tick claimed the student could do it fresh. ' +
+  RECALL_DAY_WORDS;
 
 export async function recordRecallTool(
   token: AuthenticatedToken,
-  { results, date }: z.infer<typeof RecordRecallInput>,
+  { results, date, utc_offset_minutes }: z.infer<typeof RecordRecallInput>,
   supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
 ) {
   try {
-    const today = date ?? isoDate(new Date());
-    const loaded = await loadRecall('record_recall', token, supabase, today);
+    const days = recallDays(date, utc_offset_minutes);
+    if (!days.ok) return days.error;
+    const today = days.today;
+    const loaded = await loadRecall('record_recall', token, supabase, today, days.dayOf);
     if (!loaded.ok) return loaded.error;
     if (!loaded.available) return toolError(RECALL_NOT_STORED);
 
@@ -947,7 +995,7 @@ const KeepForRecallInput = z.object({
 });
 
 const KEEP_FOR_RECALL_DESCRIPTION =
-  'Keep things in Akada for the student to be asked about from memory, at widening gaps and pulled forward before an exam in that course. Each item is one short line phrased as what the student should be able to produce with the book shut, e.g. "the three conditions for continuity at a point" or "Thucydides: what the Athenians argue at Melos", not a bare topic like "continuity". Use find_course first. Finished readings come into recall on their own and need nothing here. Pass `task_id` with `ticked_steps: true` to keep the ticked steps of a task that lists concepts the student has marked as ones they can do fresh; pass `task_id` alone to keep a whole finished task. Keep only what the student asked for or agreed to: recall asks about everything kept, and a list padded with trivia is a list they stop answering. Things already kept on the course are skipped.';
+  'Keep things in Akada for the student to be asked about from memory, at widening gaps and pulled forward before an exam in that course. Each item is one short line phrased as what the student should be able to produce with the book shut, e.g. "the three conditions for continuity at a point" or "Thucydides: what the Athenians argue at Melos", not a bare topic like "continuity". Use find_course first. Finished readings come into recall on their own and need nothing here. Pass `task_id` with `ticked_steps: true` to keep the ticked steps of a task that lists concepts the student has marked as ones they can do fresh; pass `task_id` alone to keep a whole finished task. Keep only what the student asked for or agreed to: recall asks about everything kept, and a list padded with trivia is a list they stop answering. Things already kept on the course are skipped, and a thing the student had let go comes back with the answers it already had.';
 
 export async function keepForRecallTool(
   token: AuthenticatedToken,
@@ -966,17 +1014,27 @@ export async function keepForRecallTool(
       return toolError('That course is not in your active Akada semester. Find the course again with find_course and use the id it returns.');
     }
 
-    const keptKeys = new Set(loaded.records.map((record) => record.key));
-    const keptPrompts = new Set(
-      loaded.reading.states.filter((s) => s.courseId === course_id).map((s) => normalize(s.prompt)),
-    );
+    // The same rule the app keeps: keeping a thing that is already kept does
+    // nothing, and keeping one that was let go brings it back as it was, with
+    // its answers. Nothing kept is ever written over.
+    const { reading } = loaded;
+    const kept = reading.states.filter((s) => s.courseId === course_id);
+    const letGo = reading.letGo.filter((s) => s.courseId === course_id);
+    const keptKeys = new Set(kept.map((s) => s.key));
+    const letGoKeys = new Set(letGo.map((s) => s.key));
+    const keptPrompts = new Set(kept.map((s) => normalize(s.prompt)));
     const rows: { item_key: string; prompt: string; source: RecallSource; ref: string | null }[] = [];
+    const revive = new Set<string>();
 
     for (const line of items ?? []) {
       const prompt = cleanRecallPrompt(line);
       if (!prompt || keptPrompts.has(normalize(prompt))) continue;
       keptPrompts.add(normalize(prompt));
-      rows.push({ item_key: `own:${crypto.randomUUID()}`, prompt, source: 'own', ref: null });
+      const was = letGo.find(
+        (s) => (s.source === 'own' || s.source === 'note') && normalize(s.prompt) === normalize(prompt),
+      );
+      if (was) revive.add(was.key);
+      else rows.push({ item_key: `own:${crypto.randomUUID()}`, prompt, source: 'own', ref: null });
     }
 
     if (task_id) {
@@ -988,44 +1046,71 @@ export async function keepForRecallTool(
         for (const step of task.subtasks ?? []) {
           const key = `step:${task.id}:${step.id}`;
           if (!step.completed || keptKeys.has(key)) continue;
-          rows.push({ item_key: key, prompt: cleanRecallPrompt(step.title), source: 'step', ref: `${task.id}:${step.id}` });
+          if (letGoKeys.has(key)) revive.add(key);
+          else rows.push({ item_key: key, prompt: cleanRecallPrompt(step.title), source: 'step', ref: `${task.id}:${step.id}` });
         }
       } else if (!task.completed) {
         return toolError('That task is not finished yet, so there is nothing to recall from it. Keep its ticked steps with ticked_steps: true, or keep it once it is done.');
-      } else if (!keptKeys.has(`task:${task.id}`)) {
-        const reading = looksLikeReading(task);
-        rows.push({
-          item_key: `task:${task.id}`,
-          prompt: cleanRecallPrompt(reading ? readingPrompt(task.title) : task.title),
-          source: reading ? 'reading' : 'task',
-          ref: task.id,
-        });
+      } else {
+        // A reading written down twice is kept under one of its copies, which
+        // may not be this one.
+        const standing = recallOfTask(reading, task.id);
+        if (standing?.letGo) revive.add(standing.letGo.key);
+        else if (!standing) {
+          const isReading = looksLikeReading(task);
+          rows.push({
+            item_key: `task:${task.id}`,
+            prompt: cleanRecallPrompt(isReading ? readingPrompt(task.title) : task.title),
+            source: isReading ? 'reading' : 'task',
+            ref: task.id,
+          });
+        }
       }
     }
 
-    if (rows.length === 0) {
+    if (rows.length === 0 && revive.size === 0) {
       return result({ course, kept: [], skipped: (items?.length ?? 0) + (task_id ? 1 : 0), message: 'Everything there is already being kept.' });
     }
-    const { data, error } = await supabase
-      .from('recall_items')
-      // A key that is already a row stays exactly as it is, answers and all.
-      .upsert(
-        rows.map((row) => ({ ...row, user_id: token.userId, course_id, history: [], let_go: false })),
-        { onConflict: 'user_id,item_key', ignoreDuplicates: true },
-      )
-      .select('*');
-    if (error) {
-      return isMissingRecallTable(error)
-        ? toolError(RECALL_NOT_STORED)
-        : queryFailed('keep_for_recall', 'recall write', error, 'Akada could not keep those.');
+
+    const written: Record<string, unknown>[] = [];
+    if (rows.length > 0) {
+      const { data, error } = await supabase
+        .from('recall_items')
+        // A key that is already a row stays exactly as it is, answers and all.
+        .upsert(
+          rows.map((row) => ({ ...row, user_id: token.userId, course_id, history: [], let_go: false })),
+          { onConflict: 'user_id,item_key', ignoreDuplicates: true },
+        )
+        .select('*');
+      if (error) {
+        return isMissingRecallTable(error)
+          ? toolError(RECALL_NOT_STORED)
+          : queryFailed('keep_for_recall', 'recall write', error, 'Akada could not keep those.');
+      }
+      written.push(...((data ?? []) as Record<string, unknown>[]));
     }
+    const broughtBack: Record<string, unknown>[] = [];
+    if (revive.size > 0) {
+      const { data, error } = await supabase
+        .from('recall_items')
+        .update({ let_go: false, updated_at: new Date().toISOString() })
+        .eq('user_id', token.userId)
+        .in('item_key', [...revive])
+        .select('*');
+      if (error) {
+        return queryFailed('keep_for_recall', 'recall revive', error, 'Akada could not bring those back.');
+      }
+      broughtBack.push(...((data ?? []) as Record<string, unknown>[]));
+    }
+    const out = (row: Record<string, unknown>) => ({
+      key: String(row.item_key ?? ''),
+      prompt: String(row.prompt ?? ''),
+    });
     return result({
       course,
-      kept: ((data ?? []) as Record<string, unknown>[]).map((row) => ({
-        key: String(row.item_key ?? ''),
-        prompt: String(row.prompt ?? ''),
-      })),
-      message: `Kept for ${course.code}. Each comes up to be recalled from tomorrow, on Today in Akada or through get_recall.`,
+      kept: written.map(out),
+      brought_back: broughtBack.map(out),
+      message: `Kept for ${course.code}. New things come up to be recalled from tomorrow, on Today in Akada or through get_recall; anything brought back keeps the answers it had.`,
     });
   } catch (cause) {
     return toolCrashed('keep_for_recall', cause);

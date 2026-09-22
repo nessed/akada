@@ -6,7 +6,12 @@
  * it is still Sunday's date, and still the week Sunday closes.
  */
 function logicalNow(): Date {
-  const date = new Date();
+  return pulledBack(new Date());
+}
+
+/** An instant moved back by the reader's late-night cutoff, if they set one. */
+function pulledBack(instant: Date): Date {
+  const date = new Date(instant);
   if (typeof window === 'undefined') return date;
   try {
     const stored = JSON.parse(window.localStorage.getItem('akada.preferences.v1') || '{}');
@@ -14,6 +19,16 @@ function logicalNow(): Date {
     if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= 6) date.setHours(date.getHours() - cutoff);
   } catch { /* a normal calendar day is a safe fallback */ }
   return date;
+}
+
+/**
+ * The day a stored instant belongs to, by the same rule as `isoDate()`: a
+ * reading finished at 1am by someone whose day ends at 4am was finished on the
+ * day before, as far as anything that counts days is concerned. On the server
+ * it is the plain calendar day.
+ */
+export function logicalDateOf(instant: Date): string {
+  return isoDate(pulledBack(instant));
 }
 
 export function isoDate(d?: Date): string {

@@ -118,6 +118,10 @@ function fakeSupabase(tables: Record<string, Row[]>, schema: Record<string, stri
           if (!failure) rows = rows.filter((row) => (row[col] as string) >= (value as string));
           return builder;
         },
+        in(col: string, values: unknown[]) {
+          if (!failure) rows = rows.filter((row) => values.includes(row[col]));
+          return builder;
+        },
         order() {
           return builder;
         },
@@ -329,10 +333,19 @@ type RecallOutput = {
   structuredContent?: Record<string, unknown>;
 };
 
+// The recall tools refuse a date more than a day from the server's own, so
+// these tests answer on the real day, in UTC, rather than a fixed one.
+const RECALL_TODAY = new Date().toISOString().slice(0, 10);
+function recallDay(offset: number): string {
+  const d = new Date(`${RECALL_TODAY}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
 test('get_recall reads finished readings even on a project without the recall table', async () => {
   const output = (await getRecallTool(
     TOKEN,
-    { include_not_due: false, limit: 20, date: '2026-09-22' },
+    { include_not_due: false, limit: 20, date: RECALL_TODAY },
     fakeSupabase(recallFixtures(), MIGRATED),
   )) as RecallOutput;
   assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
@@ -376,7 +389,7 @@ test('record_recall writes the answers, and a step that is gone comes off its li
   const output = (await recordRecallTool(
     TOKEN,
     {
-      date: '2026-09-22',
+      date: RECALL_TODAY,
       results: [
         { key: 'task:reading-1', verdict: 'hazy' },
         { key: 'step:concepts:s-2', verdict: 'gone' },
@@ -387,7 +400,7 @@ test('record_recall writes the answers, and a step that is gone comes off its li
   assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
 
   const reading = tables.recall_items.find((row) => row.item_key === 'task:reading-1')!;
-  assert.deepEqual(reading.history, [{ on: '2026-09-22', verdict: 'hazy' }]);
+  assert.deepEqual(reading.history, [{ on: RECALL_TODAY, verdict: 'hazy' }]);
   assert.equal(reading.source, 'reading');
 
   const concepts = tables.tasks.find((row) => row.id === 'concepts')!;
@@ -396,7 +409,7 @@ test('record_recall writes the answers, and a step that is gone comes off its li
     [['s-1', true], ['s-2', false], ['s-3', false]],
   );
   const recorded = (output.structuredContent as { recorded: { key: string; next_due_on: string }[] }).recorded;
-  assert.equal(recorded.find((r) => r.key === 'step:concepts:s-2')?.next_due_on, '2026-09-23');
+  assert.equal(recorded.find((r) => r.key === 'step:concepts:s-2')?.next_due_on, recallDay(1));
 });
 
 test('record_recall refuses a key it is not keeping rather than inventing one', async () => {
@@ -407,4 +420,78 @@ test('record_recall refuses a key it is not keeping rather than inventing one', 
   )) as RecallOutput;
   assert.ok(output.isError);
   assert.match(output.content![0].text, /get_recall/);
+});
+
+test('record_recall refuses a date that is not today anywhere', async () => {
+  const output = (await recordRecallTool(
+    TOKEN,
+    { date: recallDay(3), results: [{ key: 'task:reading-1', verdict: 'clear' }] },
+    fakeSupabase(recallFixtures(), WITH_RECALL),
+  )) as RecallOutput;
+  assert.ok(output.isError);
+  assert.match(output.content![0].text, /not today anywhere/);
+});
+
+test('recall reads a finished reading on the student\'s own day, given their offset', async () => {
+  const tables = recallFixtures();
+  // Finished at 20:30 UTC: half past one the next morning in Lahore.
+  tables.tasks[0].completed_at = `${recallDay(-5)}T20:30:00.000Z`;
+  const read = async (utc_offset_minutes?: number) => {
+    const output = (await getRecallTool(
+      TOKEN,
+      { include_not_due: true, limit: 20, utc_offset_minutes },
+      fakeSupabase(tables, WITH_RECALL),
+    )) as RecallOutput;
+    const body = output.structuredContent as { today: string; items: { key: string; due_on: string }[] };
+    return body.items.find((item) => item.key === 'task:reading-1')!.due_on;
+  };
+  assert.equal(await read(), recallDay(-4), 'the day after, in UTC');
+  assert.equal(await read(300), recallDay(-3), 'the day after, in Lahore');
+});
+
+test('keep_for_recall brings back a step that was let go, with the answers it had', async () => {
+  const tables = recallFixtures();
+  tables.recall_items.push({
+    id: 'row-1',
+    user_id: 'user-1',
+    semester_id: 'sem-1',
+    course_id: 'course-1',
+    item_key: 'step:concepts:s-1',
+    prompt: '0/0 factor and cancel',
+    source: 'step',
+    ref: 'concepts:s-1',
+    history: [{ on: recallDay(-9), verdict: 'clear' }, { on: recallDay(-6), verdict: 'hazy' }],
+    let_go: true,
+    created_at: `${recallDay(-10)}T10:00:00.000Z`,
+  });
+  const output = (await keepForRecallTool(
+    TOKEN,
+    { course_id: 'course-1', task_id: 'concepts', ticked_steps: true },
+    fakeSupabase(tables, WITH_RECALL),
+  )) as RecallOutput;
+  assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
+  const body = output.structuredContent as { kept: { key: string }[]; brought_back: { key: string }[] };
+  assert.deepEqual(body.kept.map((row) => row.key), ['step:concepts:s-2']);
+  assert.deepEqual(body.brought_back.map((row) => row.key), ['step:concepts:s-1']);
+  const revived = tables.recall_items.find((row) => row.item_key === 'step:concepts:s-1')!;
+  assert.equal(revived.let_go, false);
+  assert.equal((revived.history as unknown[]).length, 2, 'its answers are still there');
+});
+
+test('keep_for_recall treats the second copy of a reading as the reading already kept', async () => {
+  const tables = recallFixtures();
+  tables.tasks.push({
+    ...tables.tasks[0],
+    id: 'reading-2',
+    title: 'Angell (1912) — done with Claude',
+    completed_at: '2026-09-12T10:00:00.000Z',
+  });
+  const output = (await keepForRecallTool(
+    TOKEN,
+    { course_id: 'course-1', task_id: 'reading-2', ticked_steps: false },
+    fakeSupabase(tables, WITH_RECALL),
+  )) as RecallOutput;
+  assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
+  assert.match((output.structuredContent as { message: string }).message, /already being kept/);
+  assert.equal(tables.recall_items.length, 0, 'no second row for the same reading');
 });

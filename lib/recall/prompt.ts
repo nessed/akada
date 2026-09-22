@@ -29,6 +29,17 @@ const PROTOCOL = `Wait for my answer before you say anything about whether it is
 
 Once I have answered, show me the correct answer or the key points I should have hit, so I can compare mine against it. Then tell me plainly how it went: clear if I got it right without help, hazy if I only got part of it or needed a hint, gone if I could not. Do not round up; a hazy recorded as clear pushes it weeks out of sight.`;
 
+/**
+ * This device's offset from UTC, in minutes east, for the connector's recall
+ * tools. Its server keeps UTC, and an answer given in a chat at half past one
+ * in the morning in Lahore would otherwise be dated the day before. The
+ * offset rather than today's date, because a copied prompt can be pasted
+ * after midnight and an offset does not go stale.
+ */
+function utcOffset(): number {
+  return -new Date().getTimezoneOffset();
+}
+
 function askFor(source: RecallSource): string {
   if (source === 'reading') {
     return 'Ask me to give the main argument of this reading in my own words, then ask one or two follow-up questions about it, one at a time.';
@@ -65,7 +76,7 @@ ${askFor(source)}
 
 ${PROTOCOL}
 
-Then record that verdict with the record_recall tool, using the key "${key}" exactly as written, so Akada schedules the next time it asks me.`;
+Then record that verdict with the record_recall tool, using the key "${key}" exactly as written and utc_offset_minutes ${utcOffset()}, so Akada schedules the next time it asks me.`;
 }
 
 /**
@@ -87,11 +98,11 @@ export function coursePrompt({
 }): string {
   return `Quiz me on what is due for recall in ${courseCode} (${courseName}) in Akada.
 
-Call get_recall with course_id ${courseId} and use the items it returns, most urgent first. Mix them up rather than taking them in order, so I have to work out what each one needs before I start. One at a time: for a reading, ask me for its main argument in my own words; for a concept or a step, give me one fresh problem of that type that I have not seen.
+Call get_recall with course_id ${courseId} and utc_offset_minutes ${utcOffset()}, and use the items it returns, most urgent first. Mix them up rather than taking them in order, so I have to work out what each one needs before I start. One at a time: for a reading, ask me for its main argument in my own words; for a concept or a step, give me one fresh problem of that type that I have not seen.
 
 ${PROTOCOL}
 
-Record each verdict with record_recall as we go, using each item's key exactly as get_recall gave it. When we are done, tell me which ones went, so I know what to go back over.`;
+Record each verdict with record_recall as we go, using each item's key exactly as get_recall gave it and utc_offset_minutes ${utcOffset()}. When we are done, tell me which ones went, so I know what to go back over.`;
 }
 
 /**

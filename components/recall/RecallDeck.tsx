@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Course, RecallVerdict } from '@/lib/data';
 import { useNotice } from '@/components/Notice';
-import { recallCue, scheduleRecall, type RecallState } from '@/lib/recall';
+import { applyVerdict, recallCue, scheduleRecall, type RecallState } from '@/lib/recall';
 import { answerRecall, letGoRecall, undoRecall, type RecallChange } from '@/lib/recall/actions';
 import { recallPrompt } from '@/lib/recall/prompt';
 import { daysAgoWords, originVerb, studyWords, whenWords } from '@/lib/recall/words';
@@ -106,7 +106,7 @@ export default function RecallDeck({
     try {
       const change = await answerRecall(card, verdict, today);
       const examOn = card.examDays != null ? shift(today, card.examDays) : null;
-      const history = [...card.history.filter((a) => a.on !== today), { on: today, verdict }];
+      const history = applyVerdict(card.history, verdict, today);
       setOutcome({ change, verdict, nextOn: scheduleRecall(history, card.origin, examOn).dueOn });
       setWalked((n) => n + 1);
     } catch (error) {

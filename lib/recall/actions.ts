@@ -1,10 +1,21 @@
 'use client';
 
 import type { RecallRecord, RecallRecordInput, RecallSource, RecallVerdict, Task } from '../data';
-import { saveRecallOptimistic, updateTaskOptimistic } from '../data-hooks';
+import {
+  deleteRecallOptimistic,
+  keepRecallOptimistic,
+  saveRecallOptimistic,
+  updateTaskOptimistic,
+} from '../data-hooks';
 import { cleanRecallPrompt } from '../planner-safety';
 import { isoDate } from '../utils';
-import { applyVerdict, looksLikeReading, readingPrompt, type RecallState } from './index';
+import {
+  applyVerdict,
+  looksLikeReading,
+  readingPrompt,
+  type RecallItem,
+  type RecallState,
+} from './index';
 
 /**
  * What the recall surfaces do, in one place, so a card on Today and a card on
@@ -24,15 +35,15 @@ export interface RecallChange {
   unticked: Task | null;
 }
 
-function inputOf(state: RecallState, patch: Partial<RecallRecordInput>): RecallRecordInput {
+function inputOf(item: RecallItem, patch: Partial<RecallRecordInput> = {}): RecallRecordInput {
   return {
-    key: state.key,
-    courseId: state.courseId,
-    prompt: state.prompt,
-    source: state.source,
-    ref: state.ref,
-    history: state.history,
-    letGo: state.letGo,
+    key: item.key,
+    courseId: item.courseId,
+    prompt: item.prompt,
+    source: item.source,
+    ref: item.ref,
+    history: item.history,
+    letGo: item.letGo,
     ...patch,
   };
 }
@@ -86,22 +97,23 @@ export async function letGoRecall(state: RecallState): Promise<RecallChange> {
 /** Put a change back exactly as it was. */
 export async function undoRecall(change: RecallChange): Promise<void> {
   const { state, before, unticked } = change;
-  await saveRecallOptimistic(
-    before
-      ? {
-          key: before.key,
-          courseId: before.courseId,
-          prompt: before.prompt,
-          source: before.source,
-          ref: before.ref,
-          history: before.history,
-          letGo: before.letGo,
-        }
-      : // A reading that had never been answered had no row. An empty one
-        // schedules exactly the same, since a reading's first asking is
-        // counted from the day it was finished, not from its row.
-        inputOf(state, { history: [], letGo: false }),
-  );
+  if (before) {
+    await saveRecallOptimistic({
+      key: before.key,
+      courseId: before.courseId,
+      prompt: before.prompt,
+      source: before.source,
+      ref: before.ref,
+      history: before.history,
+      letGo: before.letGo,
+    });
+  } else {
+    // A reading that had never been answered had no row, and goes back to
+    // having none. An empty row would schedule the same today, but it would
+    // outlive its task: a reading deleted from the list later would stay in
+    // recall, kept by a row nobody meant to write.
+    await deleteRecallOptimistic(state.key);
+  }
   if (unticked && state.subtaskId) {
     await updateTaskOptimistic(unticked.id, {
       subtasks: (unticked.subtasks ?? []).map((step) =>
@@ -131,54 +143,71 @@ export async function keepLine(
 ): Promise<RecallRecord | null> {
   const prompt = cleanRecallPrompt(text);
   if (!prompt) return null;
-  return saveRecallOptimistic({
-    key: `${source}:${randomTail()}`,
-    courseId,
-    prompt,
-    source,
-    ref: null,
-    history: [],
-    letGo: false,
-  });
+  const [kept] = await keepRecallOptimistic([
+    {
+      key: `${source}:${randomTail()}`,
+      courseId,
+      prompt,
+      source,
+      ref: null,
+      history: [],
+      letGo: false,
+    },
+  ]);
+  return kept ?? null;
 }
 
 /**
  * Keep a whole finished task. A reading comes into recall on its own, so this
- * is for everything else, and for bringing back a reading that was let go,
- * which keeps its reading's wording and its reading's question.
+ * is for everything else, and for bringing back a reading that was let go.
+ *
+ * `letGo` is what recall already holds for the task and has let go, which for
+ * a reading written down twice may be filed under the other copy (see
+ * recallOfTask). It comes back as it was, answers and all: keeping something
+ * again is never a reason to forget how it went. Everything here goes through
+ * keepRecall for the same reason, so even a screen that has the wrong idea
+ * about what is stored cannot write an empty history over a real one.
  */
-export async function keepTask(task: Task): Promise<RecallRecord> {
+export async function keepTask(task: Task, letGo: RecallItem | null = null): Promise<void> {
+  if (letGo) {
+    await keepRecallOptimistic([inputOf(letGo, { letGo: false })]);
+    return;
+  }
   const reading = looksLikeReading(task);
-  return saveRecallOptimistic({
-    key: `task:${task.id}`,
-    courseId: task.courseId,
-    prompt: cleanRecallPrompt(reading ? readingPrompt(task.title) : task.title),
-    source: reading ? 'reading' : 'task',
-    ref: task.id,
-    history: [],
-    letGo: false,
-  });
+  await keepRecallOptimistic([
+    {
+      key: `task:${task.id}`,
+      courseId: task.courseId,
+      prompt: cleanRecallPrompt(reading ? readingPrompt(task.title) : task.title),
+      source: reading ? 'reading' : 'task',
+      ref: task.id,
+      history: [],
+      letGo: false,
+    },
+  ]);
 }
 
 /**
  * Keep the ticked steps of a task. The steps a list of concepts has ticked
  * are the ones its reader claims to be able to do fresh, so those are the
- * ones worth checking; the unticked ones are still being learned.
+ * ones worth checking; the unticked ones are still being learned. A step let
+ * go earlier comes back with the answers it had.
  */
 export async function keepTickedSteps(task: Task, alreadyKept: Set<string>): Promise<number> {
   const steps = (task.subtasks ?? []).filter(
     (step) => step.completed && !alreadyKept.has(`step:${task.id}:${step.id}`),
   );
-  for (const step of steps) {
-    await saveRecallOptimistic({
+  if (steps.length === 0) return 0;
+  await keepRecallOptimistic(
+    steps.map((step) => ({
       key: `step:${task.id}:${step.id}`,
       courseId: task.courseId,
       prompt: cleanRecallPrompt(step.title),
-      source: 'step',
+      source: 'step' as const,
       ref: `${task.id}:${step.id}`,
       history: [],
       letGo: false,
-    });
-  }
+    })),
+  );
   return steps.length;
 }

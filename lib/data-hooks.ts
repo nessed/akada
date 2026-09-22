@@ -95,6 +95,13 @@ export function useRecallRecords() {
   );
   return {
     records: data?.records ?? [],
+    /**
+     * Whether the rows have actually been read. Not the same as not loading:
+     * a first read that failed is not loading either, and its empty list is
+     * not "nothing kept". Every row is written whole, so answering against a
+     * list that never arrived would write one answer over a whole history.
+     */
+    loaded: data !== undefined,
     // Assumed there until a read says otherwise, so the page does not flash
     // a note about the database while the first read is in flight.
     available: data?.available ?? true,
@@ -379,36 +386,118 @@ function placeRecall(current: RecallRecords | undefined, record: RecallRecord): 
 }
 
 /**
+ * Recall writes, one at a time.
+ *
+ * SWR hands every mutation of a key the list as it was before any of them
+ * began, and keeps only the result of the last to start. Two writes in flight
+ * at once, letting go of one line on a course page and then another before
+ * the first had saved, therefore put the first line back on screen until the
+ * next refetch. Queued, each write starts from the list the one before it
+ * left. A write is a single small upsert, so the wait is not felt.
+ */
+let recallWrites: Promise<unknown> = Promise.resolve();
+function inTurn<T>(write: () => Promise<T>): Promise<T> {
+  const run = recallWrites.then(write, write);
+  recallWrites = run.catch(() => undefined);
+  return run;
+}
+
+/**
  * Writes one kept thing whole: a first answer, a later one, a let go, or an
  * answer taken back. The cache is written first so the next card is already
  * there when the tap lands, and a failure puts the old list back and
  * rethrows, which is what lets the deck say the answer did not save.
  */
-export async function saveRecallOptimistic(input: RecallRecordInput): Promise<RecallRecord> {
-  let written: RecallRecord | null = null;
-  await mutate(
-    KEY.recall,
-    async (current: RecallRecords | undefined) => {
-      const saved = await db.saveRecall(input);
-      written = saved;
-      return placeRecall(current, saved);
-    },
-    {
-      optimisticData: (current: RecallRecords | undefined) => {
-        const held = current?.records.find((item) => item.key === input.key);
-        return placeRecall(current, {
-          ...input,
-          id: held?.id ?? optimisticId(),
-          createdAt: held?.createdAt ?? nowIso(),
-        });
+export function saveRecallOptimistic(input: RecallRecordInput): Promise<RecallRecord> {
+  return inTurn(async () => {
+    let written: RecallRecord | null = null;
+    await mutate(
+      KEY.recall,
+      async (current: RecallRecords | undefined) => {
+        const saved = await db.saveRecall(input);
+        written = saved;
+        return placeRecall(current, saved);
       },
-      rollbackOnError: true,
-      populateCache: true,
-      revalidate: false,
-    },
-  );
-  if (!written) throw new Error('That did not save.');
-  return written;
+      {
+        optimisticData: (current: RecallRecords | undefined) => {
+          const held = current?.records.find((item) => item.key === input.key);
+          return placeRecall(current, {
+            ...input,
+            id: held?.id ?? optimisticId(),
+            createdAt: held?.createdAt ?? nowIso(),
+          });
+        },
+        rollbackOnError: true,
+        populateCache: true,
+        revalidate: false,
+      },
+    );
+    if (!written) throw new Error('That did not save.');
+    return written as RecallRecord;
+  });
+}
+
+/**
+ * Keeps things without overwriting anything already kept: see
+ * DataProvider.keepRecall. On screen, a thing already there keeps its
+ * answers and loses only its let go.
+ */
+export function keepRecallOptimistic(inputs: RecallRecordInput[]): Promise<RecallRecord[]> {
+  return inTurn(async () => {
+    let written: RecallRecord[] = [];
+    await mutate(
+      KEY.recall,
+      async (current: RecallRecords | undefined) => {
+        written = await db.keepRecall(inputs);
+        return written.reduce(placeRecall, current) ?? { records: [], available: true };
+      },
+      {
+        optimisticData: (current: RecallRecords | undefined) =>
+          inputs.reduce<RecallRecords>(
+            (list, input) => {
+              const held = list.records.find((item) => item.key === input.key);
+              return placeRecall(
+                list,
+                held
+                  ? { ...held, letGo: false }
+                  : { ...input, letGo: false, id: optimisticId(), createdAt: nowIso() },
+              );
+            },
+            current ?? { records: [], available: true },
+          ),
+        rollbackOnError: true,
+        populateCache: true,
+        revalidate: false,
+      },
+    );
+    return written;
+  });
+}
+
+/** Takes a row away entirely. Undo's, for a reading that had never been answered. */
+export function deleteRecallOptimistic(key: string): Promise<void> {
+  return inTurn(async () => {
+    await mutate(
+      KEY.recall,
+      async (current: RecallRecords | undefined) => {
+        await db.deleteRecall(key);
+        return withoutRecall(current, key);
+      },
+      {
+        optimisticData: (current: RecallRecords | undefined) => withoutRecall(current, key),
+        rollbackOnError: true,
+        populateCache: true,
+        revalidate: false,
+      },
+    );
+  });
+}
+
+function withoutRecall(current: RecallRecords | undefined, key: string): RecallRecords {
+  return {
+    records: (current?.records ?? []).filter((item) => item.key !== key),
+    available: current?.available ?? true,
+  };
 }
 
 /* ───────── Settings & semester ───────── */

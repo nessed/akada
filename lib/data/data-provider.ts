@@ -58,6 +58,18 @@ export interface DataProvider {
    * not there yet.
    */
   saveRecall(input: RecallRecordInput): Promise<RecallRecord>;
+  /**
+   * Keeps things without touching anything they already have. A key with no
+   * row gets one as given; a key that has a row keeps its answers, and is
+   * brought back if it was let go. Keeping is never a reason to lose a
+   * history, whatever the screen that asked believed was stored.
+   */
+  keepRecall(inputs: RecallRecordInput[]): Promise<RecallRecord[]>;
+  /**
+   * Removes a row outright. Only undo uses it, to put a finished reading that
+   * had never been answered back to having no row at all.
+   */
+  deleteRecall(key: string): Promise<void>;
 
   // Semesters
   /** The semester Dashboard/Tasks/Timer currently write into, or null before onboarding finishes it. */

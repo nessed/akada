@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { Course } from '@/lib/data';
 import { useNotice } from '@/components/Notice';
 import type { RecallReading, RecallState } from '@/lib/recall';
-import { letGoRecall } from '@/lib/recall/actions';
+import { letGoRecall, undoRecall, type RecallChange } from '@/lib/recall/actions';
 import { coursePrompt } from '@/lib/recall/prompt';
 import { whenWords } from '@/lib/recall/words';
 import KeepLine from './KeepLine';
@@ -43,6 +43,11 @@ export default function CourseRecallPanel({
   const { notify } = useNotice();
   const [walking, setWalking] = useState(false);
   const [unfolded, setUnfolded] = useState(false);
+  // The last thing let go from the list, with the way to take it back. A line
+  // written on this page or at the end of a sitting has nowhere else it could
+  // be brought back from.
+  const [letGoOf, setLetGoOf] = useState<RecallChange | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const mine = reading?.byCourse.get(course.id) ?? null;
   const states = mine?.states ?? [];
@@ -67,11 +72,29 @@ export default function CourseRecallPanel({
   }
 
   async function letGo(state: RecallState) {
+    if (busy) return;
+    setBusy(true);
     try {
-      await letGoRecall(state);
+      setLetGoOf(await letGoRecall(state));
     } catch (error) {
       console.error('Failed to let the recall go:', error);
       notify(error instanceof Error ? error.message : 'That did not save.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function undoLetGo() {
+    if (!letGoOf || busy) return;
+    setBusy(true);
+    try {
+      await undoRecall(letGoOf);
+      setLetGoOf(null);
+    } catch (error) {
+      console.error('Failed to bring the recall back:', error);
+      notify('That could not be put back.');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -160,17 +183,38 @@ export default function CourseRecallPanel({
             >
               {state.due ? 'due' : whenWords(state.dueOn, today).replace(/^on /, '')}
             </span>
+            {/* On a phone there is no hover to find it with, so it stays
+                in view there, the way TaskRow's own row actions do. */}
             <button
               type="button"
               onClick={() => letGo(state)}
+              disabled={busy}
               title="Stop asking about this one"
               aria-label={`Let go of ${state.prompt}`}
-              className="h-8 shrink-0 rounded-[8px] px-1.5 font-serif text-[12px] italic text-muted-soft opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+              className="h-8 shrink-0 rounded-[8px] px-1.5 font-serif text-[12px] italic text-muted-soft transition-opacity hover:text-ink focus-visible:opacity-100 disabled:opacity-40 md:opacity-0 md:group-hover:opacity-100"
             >
               let go
             </button>
           </div>
         ))}
+
+        {letGoOf && (
+          <p
+            aria-live="polite"
+            className="m-0 flex flex-wrap items-center gap-x-2 border-t border-line-soft px-4 py-2.5 font-serif text-[13px] italic text-muted"
+          >
+            <span className="max-w-[260px] truncate text-ink-soft">{letGoOf.state.prompt}</span>
+            <span>· let go</span>
+            <button
+              type="button"
+              onClick={undoLetGo}
+              disabled={busy}
+              className="hand-underline bg-transparent px-0.5 not-italic text-[12.5px] text-ink disabled:opacity-40"
+            >
+              undo
+            </button>
+          </p>
+        )}
 
         {states.length > FOLDED && (
           <button

@@ -155,8 +155,10 @@ cites an author and a year, or names a chapter counts, and a reading written
 down twice is one thing to remember. Nothing is stored for a reading until you
 answer it, so the whole term arrives already in recall. The schedule is worked
 out from your answers every time, never stored, the same way the rest of the
-record works. An exam within three weeks in the same course pulls everything
-kept for it in to the day before.
+record works. An exam within three weeks in the same course, or anything worth
+a fifth of it, pulls in to the day before whatever would otherwise go past it
+unasked. Weekly work worth a tenth doesn't, or every reading would come up every
+week and the gaps would never widen.
 
 **"ask Claude"** is on every card and on each course's Recall header. It
 copies a prompt for a chat with the connector that asks one question at a time

@@ -471,6 +471,44 @@ export class LocalAdapter implements DataProvider {
     return record;
   }
 
+  async keepRecall(inputs: RecallRecordInput[]): Promise<RecallRecord[]> {
+    const records = read<StoredRecall[]>(KEYS.recall, []);
+    const courses = read<StoredCourse[]>(KEYS.courses, []);
+    const kept: RecallRecord[] = [];
+    for (const input of inputs) {
+      const clean = sanitizeRecall({ ...input, id: '', createdAt: '' });
+      if (!clean.key || !clean.courseId || !clean.prompt) {
+        throw new Error('A kept thing needs a course and something to recall.');
+      }
+      const idx = records.findIndex((record) => record.key === clean.key);
+      // Already there: its answers stay, and it comes back if it was let go.
+      const saved: StoredRecall =
+        idx === -1
+          ? {
+              ...clean,
+              letGo: false,
+              id: uid(),
+              createdAt: nowIso(),
+              semesterId:
+                courses.find((c) => c.id === clean.courseId)?.semesterId ?? activeSemesterId(),
+            }
+          : { ...records[idx], letGo: false };
+      if (idx === -1) records.push(saved);
+      else records[idx] = saved;
+      const { semesterId: _semesterId, ...record } = saved;
+      kept.push(record);
+    }
+    write(KEYS.recall, records);
+    return kept;
+  }
+
+  async deleteRecall(key: string): Promise<void> {
+    write(
+      KEYS.recall,
+      read<StoredRecall[]>(KEYS.recall, []).filter((record) => record.key !== key),
+    );
+  }
+
   // ---- Semesters
   async getActiveSemester(): Promise<Semester | null> {
     const activeId = read<string | null>(KEYS.activeSemesterId, null);
@@ -529,6 +567,7 @@ export class LocalAdapter implements DataProvider {
     write(KEYS.courses, read<StoredCourse[]>(KEYS.courses, []).filter((course) => course.semesterId !== id));
     write(KEYS.tasks, read<StoredTask[]>(KEYS.tasks, []).filter((task) => task.semesterId !== id));
     write(KEYS.sessions, read<StoredSession[]>(KEYS.sessions, []).filter((session) => session.semesterId !== id));
+    write(KEYS.recall, read<StoredRecall[]>(KEYS.recall, []).filter((record) => record.semesterId !== id));
   }
 
   // ---- Onboarding
