@@ -23,6 +23,7 @@ import {
   totalBreakSeconds,
 } from '@/lib/session-safety';
 import { seasonLabel } from '@/lib/utils';
+import { attachSegments, dropCutChain, segmentWindowStart } from './segment-rows';
 import {
   clampDailyGoalHours,
   clampWeeklyGoalHours,
@@ -228,6 +229,15 @@ function courseWriteError(error: { code?: string }, code: string): Error {
   }
   return error as unknown as Error;
 }
+
+/**
+ * How session_segments is read back: a page is PostgREST's usual ceiling, and
+ * ten of them is a term of sittings several times over. Past that the oldest
+ * chains are left off, and those sittings read as the stretches they were
+ * before continuous mode.
+ */
+const SEGMENT_PAGE = 1000;
+const SEGMENT_PAGES = 10;
 
 /**
  * Postgres 42703 is "column does not exist". The only optional column the app
@@ -578,7 +588,48 @@ export class SupabaseAdapter implements DataProvider {
 
     const { data, error } = await query;
     if (error) throw error;
-    return (data as SessionRow[]).map(rowToSession);
+    return this.withSegments(uid, (data as SessionRow[]).map(rowToSession));
+  }
+
+  /**
+   * The shape of each sitting, read back onto it. See lib/data/segment-rows.
+   *
+   * A second read rather than a join, for the reason every optional table is
+   * read on its own here: a project that has not re-run supabase/schema.sql
+   * has no session_segments, and a join would take the whole sessions read
+   * down with it. Failing here costs the chains and nothing else; the hours
+   * are already in hand and are returned as they are.
+   *
+   * Paged, because PostgREST hands back at most its max-rows setting (1000 on
+   * a new Supabase project) whatever the query asks for, and a term of daily
+   * continuous sittings can pass that. The first page asks for the total so
+   * the loop knows when it has everything, and if it stops short anyway, the
+   * one chain the cut went through is dropped rather than read half-finished.
+   */
+  private async withSegments(uid: string, sessions: Session[]): Promise<Session[]> {
+    const from = segmentWindowStart(sessions);
+    if (!from) return sessions;
+    const rows: unknown[] = [];
+    let total = Infinity;
+    for (let page = 0; page < SEGMENT_PAGES && rows.length < total; page += 1) {
+      const { data, error, count } = await this.supabase
+        .from('session_segments')
+        .select('*', page === 0 ? { count: 'exact' } : undefined)
+        .eq('user_id', uid)
+        .gte('started_at', from)
+        .order('started_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(rows.length, rows.length + SEGMENT_PAGE - 1);
+      if (error) {
+        console.warn('Sessions loaded without their shape:', error.message);
+        return sessions;
+      }
+      const got = (data as unknown[] | null) ?? [];
+      if (page === 0) total = count ?? (got.length < SEGMENT_PAGE ? got.length : Infinity);
+      if (got.length === 0) break;
+      rows.push(...got);
+    }
+    return attachSegments(sessions, rows.length >= total ? rows : dropCutChain(rows));
   }
 
   async getSessionsForSemester(semesterId: string): Promise<Session[]> {
@@ -590,7 +641,7 @@ export class SupabaseAdapter implements DataProvider {
       .eq('semester_id', semesterId)
       .order('date', { ascending: false });
     if (error) throw error;
-    return (data as SessionRow[]).map(rowToSession);
+    return this.withSegments(uid, (data as SessionRow[]).map(rowToSession));
   }
 
   async addSession(input: Omit<Session, 'id' | 'createdAt'>): Promise<Session> {

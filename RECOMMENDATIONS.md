@@ -212,11 +212,13 @@ timer is possible with Supabase presence and no new tables. Not worth it for
 one user.
 
 **5. Smaller, noticed while reading the code.** The Supabase adapter never
-loads `session_segments`, so after a reload the habits layer sees every
-sitting as one unbroken stretch and your block readings stay coarse. It needs
-a separate read that tolerates the table missing. And the six duplicate POL
-readings on your real list are still there. Tick the syllabus copies, or ask
-Claude to; the new tool descriptions should stop new ones appearing.
+loaded `session_segments`, so after a reload the habits layer saw every
+sitting as one unbroken stretch and your block readings stayed coarse. That's
+fixed in its own PR: a separate, paged read that tolerates the table missing.
+The six duplicate POL readings on your real list are still there though. Tick
+the syllabus copies, or ask Claude to. Recall only merges two copies when it's
+sure they're the same reading, so if one comes up twice, let go of the extra.
+The new tool descriptions should stop new ones appearing.
 
 ## What I'd skip
 

@@ -85,9 +85,12 @@ export interface Session {
    */
   breakSeconds?: number;
   /**
-   * The shape of the sitting, oldest first. Written when a continuous session
-   * is logged and not read back by the app, which has the totals above; it is
-   * read over MCP, where the pattern questions get asked.
+   * The shape of the sitting, oldest first: written when a continuous session
+   * is logged, and read back onto the sitting with it (lib/data/segment-rows).
+   * Absent for a sitting timed before continuous mode, logged by hand, or
+   * reported through the connector, which the habits layer reads as the one
+   * stretch the record says it was. Over MCP, get_focus_pattern reads the same
+   * rows.
    */
   segments?: SessionSegment[];
 }

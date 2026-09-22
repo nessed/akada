@@ -139,8 +139,10 @@ alter table sessions add column if not exists break_seconds integer not null def
 -- what it actually ran. A break set to five minutes that took nineteen is the
 -- most useful pair of numbers in the table.
 --
--- The app writes these and does not read them back. They are read over MCP,
--- which is where the study-pattern questions get asked.
+-- The app writes these when a continuous sitting is logged and reads them back
+-- onto the sitting on every load (lib/data/segment-rows), which is what the
+-- habits layer's block and break readings are made from. MCP's
+-- get_focus_pattern reads the same rows.
 -- ============================================================
 create table if not exists session_segments (
   id             uuid primary key default gen_random_uuid(),
