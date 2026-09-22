@@ -206,6 +206,13 @@ const RESUME_WINDOW_DAYS = 1;
  * due today — so neither reaches past live work for something not yet due.
  * `in-progress` is the exception by design, and only for the one task a timer
  * has actually been run on; with nothing recent it falls back to `last-done`.
+ *
+ * When that pool is empty, every rule reaches one step further rather than
+ * calling the day a clean page: see `pickBeyondToday`. A card that said
+ * "nothing due today" while a problem set was due tomorrow, or while a
+ * course's catch-up reading sat on the list with no date on it, was telling
+ * the reader there was nothing to do on exactly the days the work that
+ * decides a term gets done.
  */
 export function pickUpNext(
   sort: 'in-progress' | 'last-done' | 'overdue',
@@ -213,6 +220,70 @@ export function pickUpNext(
   todayTasks: Task[],
   sessions: Session[] = [],
   openTasks: Task[] = [],
+): Task | null {
+  return (
+    pickFromToday(sort, overdueTasks, todayTasks, sessions, openTasks) ??
+    pickBeyondToday(openTasks, sessions)
+  );
+}
+
+/** How far ahead a dated task can be and still be the next thing. */
+const AHEAD_DAYS = 7;
+
+/**
+ * The next thing when nothing is overdue and nothing is due today.
+ *
+ * First whatever is due soonest within the week, since tomorrow's problem set
+ * is the plain answer to "what now" on a day with nothing due. Then work the
+ * reader marked high priority and gave no date to, which is where catch-up
+ * reading, a concept list and a problem set with no posted deadline all live:
+ * a date is what puts a task on the day, so a task without one never came up
+ * here at all, however much it mattered. Among those, the course that has
+ * gone longest without a session goes first, the same rotation `last-done`
+ * uses. Nothing further than that: an undated task of normal priority is a
+ * note to self, not a claim on the evening.
+ */
+function pickBeyondToday(openTasks: Task[], sessions: Session[]): Task | null {
+  const today = isoDate();
+  const open = openTasks.filter((t) => !t.completed);
+
+  const soon = open
+    .filter((t) => t.dueDate && t.dueDate > today && daysBetween(today, t.dueDate) <= AHEAD_DAYS)
+    .sort(
+      (a, b) =>
+        (a.dueDate as string).localeCompare(b.dueDate as string) ||
+        Number(b.priority === 'high') - Number(a.priority === 'high'),
+    )[0];
+  if (soon) return soon;
+
+  const lastStudied = lastStudiedByCourse(sessions);
+  return (
+    open
+      .filter((t) => !t.dueDate && t.priority === 'high')
+      .sort(
+        (a, b) =>
+          (lastStudied.get(a.courseId) ?? '').localeCompare(lastStudied.get(b.courseId) ?? '') ||
+          a.createdAt.localeCompare(b.createdAt),
+      )[0] ?? null
+  );
+}
+
+/** Latest session date per course. */
+function lastStudiedByCourse(sessions: Session[]): Map<string, string> {
+  const lastStudied = new Map<string, string>();
+  for (const session of sessions) {
+    const seen = lastStudied.get(session.courseId);
+    if (!seen || session.date > seen) lastStudied.set(session.courseId, session.date);
+  }
+  return lastStudied;
+}
+
+function pickFromToday(
+  sort: 'in-progress' | 'last-done' | 'overdue',
+  overdueTasks: Task[],
+  todayTasks: Task[],
+  sessions: Session[],
+  openTasks: Task[],
 ): Task | null {
   const oldestDueFirst = (a: Task, b: Task) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '');
 
@@ -230,11 +301,7 @@ export function pickUpNext(
   // Latest session date per course. Sessions carry a taskId, but the question
   // is which *course* has been neglected, so a session on any of its tasks
   // counts as having touched it.
-  const lastStudied = new Map<string, string>();
-  for (const session of sessions) {
-    const seen = lastStudied.get(session.courseId);
-    if (!seen || session.date > seen) lastStudied.set(session.courseId, session.date);
-  }
+  const lastStudied = lastStudiedByCourse(sessions);
 
   // Overdue still outranks due-today: falling behind is the louder signal.
   // The rotation happens within each tier, not across them.
