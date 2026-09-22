@@ -41,6 +41,12 @@ const TaskReadSchema = z.object({
   completed: z.boolean(),
   completed_at: z.string().nullable(),
   created_at: z.string(),
+  // Always present in the reply, whatever the table has: a project that
+  // predates these columns reads every row as a plain, unweighted task,
+  // which is exactly what the app shows it as.
+  kind: z.enum(['task', 'reading', 'exam']),
+  weight: z.number().nullable(),
+  pages: z.number().nullable(),
   course: z.object({ id: z.string(), code: z.string(), name: z.string() }),
 });
 
@@ -117,6 +123,27 @@ async function activeSemesterId(token: AuthenticatedToken, supabase: McpSupabase
   // Carry the cause up rather than flattening it: the outer catch logs it.
   if (error) throw new Error(`Akada could not load your active semester. ${describe(error)}`);
   return data?.active_semester_id as string | null;
+}
+
+const TASK_KINDS = ['task', 'reading', 'exam'] as const;
+type TaskKindName = (typeof TASK_KINDS)[number];
+
+/**
+ * What a row is and what it is worth, read off a row fetched with `*`.
+ *
+ * The three columns are additive migrations, so on a project that has not
+ * re-run supabase/schema.sql they are simply absent from the row, and the
+ * row reads as a plain, unweighted task: the same thing the app shows.
+ */
+function readTaskMeasure(row: Record<string, unknown>) {
+  const kind = TASK_KINDS.includes(row.kind as TaskKindName) ? (row.kind as TaskKindName) : 'task';
+  const weight = row.weight === null || row.weight === undefined ? null : Number(row.weight);
+  const pages = row.pages === null || row.pages === undefined ? null : Number(row.pages);
+  return {
+    kind,
+    weight: Number.isFinite(weight) ? weight : null,
+    pages: Number.isFinite(pages) ? pages : null,
+  };
 }
 
 function readSubtasks(value: unknown) {
@@ -477,6 +504,127 @@ export async function getWeeklyStats(
   }
 }
 
+const CreateTasksInput = z.object({
+  course_id: z.string().uuid(),
+  tasks: z.array(z.object({
+    title: z.string().trim().min(1).max(160),
+    due_date: z.string().regex(DATE, 'Use YYYY-MM-DD.').nullable().optional(),
+    priority: z.enum(['high', 'normal']).default('normal'),
+    description: z.string().trim().max(MAX_DESCRIPTION).optional(),
+    subtasks: z.array(z.string().trim().min(1).max(MAX_SUBTASK_TITLE)).max(MAX_SUBTASKS_PER_TASK).optional(),
+    kind: z.enum(TASK_KINDS).default('task'),
+    weight: z.number().min(0).max(100).optional().describe('Percent of the course this piece is worth, only when the source states it.'),
+    pages: z.number().int().min(1).max(10000).optional().describe('How many pages a reading runs to, only when the source gives a range or count.'),
+  })).min(1).max(MAX_TASKS_PER_REQUEST),
+});
+
+const CREATE_TASKS_DESCRIPTION = 'Add extracted readings, assignments, or preparation tasks to exactly one active-semester Akada course. Use find_course first. Only include a due date when the source explicitly gives one; do not invent deadlines. Say what each task is with `kind`: `exam` for a midterm, final, quiz or test, with its `weight` as a percentage of the course when the source states one; `reading` for something to read, with `pages` when the source gives a page range; `task` for everything else. This matters: exams and weighted work are what Akada counts down to and paces recall against, and readings feed the reading backlog and recall, so a midterm saved as a plain task is invisible to all of it. A task that the source breaks into steps can carry those steps as `subtasks`, which the student ticks off inside the task; use them for the real pieces of one piece of work, not as a way to add several unrelated tasks at once. `description` holds notes that belong with the task, such as the instructions or what the source said about it. Existing unfinished tasks with the same title and due date are skipped. Do not use this to record work the student has already finished: find the existing task with get_tasks and tick it with complete_tasks, because a second, finished copy leaves the original sitting on the list as overdue.';
+
+// Split out of `create_tasks`'s registration for the same reason
+// getWeeklyStats is: so a test can drive it against an in-memory double of
+// an un-migrated table, which is the case that has broken in production
+// before and the one every optional column here has to survive.
+export async function createTasks(
+  token: AuthenticatedToken,
+  { course_id, tasks }: z.infer<typeof CreateTasksInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const semesterId = await activeSemesterId(token, supabase);
+    if (!semesterId) return toolError('No active semester is set in Akada.');
+    const { data: course, error: courseError } = await supabase
+      .from('courses')
+      .select('id, code, name')
+      .eq('id', course_id)
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId)
+      .maybeSingle();
+    // A missing row and a failed query are different problems. Only the
+    // second one has a cause worth reporting.
+    if (courseError) return queryFailed('create_tasks', 'course lookup', courseError, 'Akada could not look up that course.');
+    if (!course) return toolError('That course is not available in your active Akada semester. Find the course again first.');
+
+    const { data: existing, error: existingError } = await supabase
+      .from('tasks')
+      .select('title, due_date')
+      .eq('course_id', course.id)
+      .eq('user_id', token.userId)
+      .eq('completed', false);
+    if (existingError) return queryFailed('create_tasks', 'duplicate check', existingError, 'Akada could not check your existing tasks.');
+
+    const existingKeys = new Set((existing ?? []).map((task) => `${normalize(task.title)}|${task.due_date ?? ''}`));
+    const seen = new Set<string>();
+    const toInsert = tasks.flatMap((task) => {
+      const title = task.title.trim().replace(/\s+/g, ' ');
+      const dueDate = task.due_date ?? null;
+      const taskKey = `${normalize(title)}|${dueDate ?? ''}`;
+      if (existingKeys.has(taskKey) || seen.has(taskKey)) return [];
+      seen.add(taskKey);
+      return [{
+        user_id: token.userId,
+        course_id: course.id,
+        title,
+        due_date: dueDate,
+        priority: task.priority,
+        description: (task.description ?? '').trim(),
+        subtasks: buildSubtasks(task.subtasks),
+        kind: task.kind,
+        weight: task.weight ?? null,
+        pages: task.pages ?? null,
+      }];
+    });
+    // `description`, `subtasks`, `kind`, `weight` and `pages` are all
+    // additive columns, so naming one is what would break an insert on a
+    // project whose schema.sql predates it. Drop a key from every row
+    // when nothing in the request uses it, and a deployment mid-rollout
+    // keeps creating plain tasks exactly as before; only a request that
+    // genuinely needs the column hits the error that says so. Uniformly
+    // present or uniformly absent across the batch, never mixed:
+    // PostgREST writes NULL for a key some rows omit, and `description`,
+    // `subtasks` and `kind` are all `not null`.
+    if (toInsert.length === 0) {
+      return result({ course: { id: course.id, code: course.code, name: course.name }, created: [], skipped: tasks.length, message: 'Every task already exists in Akada.' });
+    }
+    const withNotes = toInsert.some((row) => row.description.length > 0);
+    const withSubtasks = toInsert.some((row) => row.subtasks.length > 0);
+    const withKind = toInsert.some((row) => row.kind !== 'task');
+    const withWeight = toInsert.some((row) => row.weight !== null);
+    const withPages = toInsert.some((row) => row.pages !== null);
+    const rowsToInsert = toInsert.map(({ description, subtasks, kind, weight, pages, ...task }) => ({
+      ...task,
+      ...(withNotes ? { description } : {}),
+      ...(withSubtasks ? { subtasks } : {}),
+      ...(withKind ? { kind } : {}),
+      ...(withWeight ? { weight } : {}),
+      ...(withPages ? { pages } : {}),
+    }));
+    const { data: created, error: insertError } = await supabase
+      .from('tasks')
+      .insert(rowsToInsert)
+      // `*` rather than a column list for the same reason get_tasks reads
+      // that way: `subtasks` is only there once schema.sql has been re-run,
+      // and naming it in the returning clause would fail the whole insert
+      // on a project that has not.
+      .select('*');
+    if (insertError) return queryFailed('create_tasks', 'insert', insertError, 'Akada could not save those tasks.');
+    return result({
+      course: { id: course.id, code: course.code, name: course.name },
+      created: ((created ?? []) as Record<string, unknown>[]).map((task) => ({
+        id: String(task.id),
+        title: String(task.title ?? ''),
+        due_date: (task.due_date as string | null) ?? null,
+        priority: task.priority === 'high' ? ('high' as const) : ('normal' as const),
+        description: typeof task.description === 'string' ? task.description : '',
+        subtasks: readSubtasks(task.subtasks),
+        ...readTaskMeasure(task),
+      })),
+      skipped: tasks.length - toInsert.length,
+    });
+  } catch (cause) {
+    return toolCrashed('create_tasks', cause);
+  }
+}
+
 function createServer(token: AuthenticatedToken) {
   const server = new McpServer({ name: 'Akada', version: '1.0.0' });
 
@@ -577,6 +725,7 @@ function createServer(token: AuthenticatedToken) {
               completed: Boolean(task.completed),
               completed_at: (task.completed_at as string | null) ?? null,
               created_at: String(task.created_at),
+              ...readTaskMeasure(task),
               course: { id: course.id, code: course.code, name: course.name },
             }];
           })
@@ -633,112 +782,18 @@ function createServer(token: AuthenticatedToken) {
     'create_tasks',
     {
       title: 'Add study tasks to Akada',
-      description: 'Add extracted readings, assignments, or preparation tasks to exactly one active-semester Akada course. Use find_course first. Only include a due date when the source explicitly gives one; do not invent deadlines. A task that the source breaks into steps can carry those steps as `subtasks`, which the student ticks off inside the task; use them for the real pieces of one piece of work, not as a way to add several unrelated tasks at once. `description` holds notes that belong with the task, such as the instructions or what the source said about it. Existing unfinished tasks with the same title and due date are skipped.',
-      inputSchema: z.object({
-        course_id: z.string().uuid(),
-        tasks: z.array(z.object({
-          title: z.string().trim().min(1).max(160),
-          due_date: z.string().regex(DATE, 'Use YYYY-MM-DD.').nullable().optional(),
-          priority: z.enum(['high', 'normal']).default('normal'),
-          description: z.string().trim().max(MAX_DESCRIPTION).optional(),
-          subtasks: z.array(z.string().trim().min(1).max(MAX_SUBTASK_TITLE)).max(MAX_SUBTASKS_PER_TASK).optional(),
-        })).min(1).max(MAX_TASKS_PER_REQUEST),
-      }),
+      description: CREATE_TASKS_DESCRIPTION,
+      inputSchema: CreateTasksInput,
       annotations: { destructiveHint: false, idempotentHint: true },
     },
-    async ({ course_id, tasks }) => {
-      try {
-        const semesterId = await activeSemesterId(token);
-        if (!semesterId) return toolError('No active semester is set in Akada.');
-        const supabase = mcpSupabase(token.supabaseAccessToken);
-        const { data: course, error: courseError } = await supabase
-          .from('courses')
-          .select('id, code, name')
-          .eq('id', course_id)
-          .eq('user_id', token.userId)
-          .eq('semester_id', semesterId)
-          .maybeSingle();
-        // A missing row and a failed query are different problems. Only the
-        // second one has a cause worth reporting.
-        if (courseError) return queryFailed('create_tasks', 'course lookup', courseError, 'Akada could not look up that course.');
-        if (!course) return toolError('That course is not available in your active Akada semester. Find the course again first.');
-
-        const { data: existing, error: existingError } = await supabase
-          .from('tasks')
-          .select('title, due_date')
-          .eq('course_id', course.id)
-          .eq('user_id', token.userId)
-          .eq('completed', false);
-        if (existingError) return queryFailed('create_tasks', 'duplicate check', existingError, 'Akada could not check your existing tasks.');
-
-        const existingKeys = new Set((existing ?? []).map((task) => `${normalize(task.title)}|${task.due_date ?? ''}`));
-        const seen = new Set<string>();
-        const toInsert = tasks.flatMap((task) => {
-          const title = task.title.trim().replace(/\s+/g, ' ');
-          const dueDate = task.due_date ?? null;
-          const taskKey = `${normalize(title)}|${dueDate ?? ''}`;
-          if (existingKeys.has(taskKey) || seen.has(taskKey)) return [];
-          seen.add(taskKey);
-          return [{
-            user_id: token.userId,
-            course_id: course.id,
-            title,
-            due_date: dueDate,
-            priority: task.priority,
-            description: (task.description ?? '').trim(),
-            subtasks: buildSubtasks(task.subtasks),
-          }];
-        });
-        // `description` and `subtasks` are additive columns, so naming one is
-        // what would break an insert on a project whose schema.sql predates
-        // it. Drop a key from every row when nothing in the request uses it,
-        // and a deployment mid-rollout keeps creating plain tasks exactly as
-        // before; only a request that genuinely needs the column hits the
-        // error that says so. Uniformly present or uniformly absent across the
-        // batch, never mixed: PostgREST writes NULL for a key some rows omit,
-        // and both columns are `not null`.
-        if (toInsert.length === 0) {
-          return result({ course: { id: course.id, code: course.code, name: course.name }, created: [], skipped: tasks.length, message: 'Every task already exists in Akada.' });
-        }
-        const withNotes = toInsert.some((row) => row.description.length > 0);
-        const withSubtasks = toInsert.some((row) => row.subtasks.length > 0);
-        const rowsToInsert = toInsert.map(({ description, subtasks, ...task }) => ({
-          ...task,
-          ...(withNotes ? { description } : {}),
-          ...(withSubtasks ? { subtasks } : {}),
-        }));
-        const { data: created, error: insertError } = await supabase
-          .from('tasks')
-          .insert(rowsToInsert)
-          // `*` rather than a column list for the same reason get_tasks reads
-          // that way: `subtasks` is only there once schema.sql has been re-run,
-          // and naming it in the returning clause would fail the whole insert
-          // on a project that has not.
-          .select('*');
-        if (insertError) return queryFailed('create_tasks', 'insert', insertError, 'Akada could not save those tasks.');
-        return result({
-          course: { id: course.id, code: course.code, name: course.name },
-          created: ((created ?? []) as Record<string, unknown>[]).map((task) => ({
-            id: String(task.id),
-            title: String(task.title ?? ''),
-            due_date: (task.due_date as string | null) ?? null,
-            priority: task.priority === 'high' ? ('high' as const) : ('normal' as const),
-            description: typeof task.description === 'string' ? task.description : '',
-            subtasks: readSubtasks(task.subtasks),
-          })),
-          skipped: tasks.length - toInsert.length,
-        });
-      } catch (cause) {
-        return toolCrashed('create_tasks', cause);
-      }
-    },
+    async (input) => createTasks(token, input),
   );
 
   server.registerTool(
     'update_tasks',
     {
       title: 'Change study tasks in Akada',
-      description: 'Change tasks that already exist in the signed-in student’s active semester. Read the tasks with get_tasks first and pass the ids it returns. Only the fields you name are changed; everything you leave out keeps its current value. `description` is the notes that sit with the task, and passing it replaces the existing notes, so include what should be kept. `subtasks` likewise replaces the whole list of pieces, so send every piece the task should end up with, carrying over the ones already ticked. To only tick a task off, prefer complete_tasks.',
+      description: 'Change tasks that already exist in the signed-in student’s active semester. Read the tasks with get_tasks first and pass the ids it returns. Only the fields you name are changed; everything you leave out keeps its current value. `description` is the notes that sit with the task, and passing it replaces the existing notes, so include what should be kept. `subtasks` likewise replaces the whole list of pieces, so send every piece the task should end up with, carrying over the ones already ticked. `kind`, `weight` and `pages` say what the task is and what it is worth, exactly as in create_tasks; pass null for `weight` or `pages` to clear one. A midterm or reading sitting on the list as a plain task is worth fixing here, since Akada counts down to exams and paces recall against them. To only tick a task off, prefer complete_tasks.',
       inputSchema: z.object({
         tasks: z.array(z.object({
           task_id: z.string().uuid(),
@@ -751,6 +806,9 @@ function createServer(token: AuthenticatedToken) {
             completed: z.boolean().default(false),
           })).max(MAX_SUBTASKS_PER_TASK).optional(),
           completed: z.boolean().optional(),
+          kind: z.enum(TASK_KINDS).optional(),
+          weight: z.number().min(0).max(100).nullable().optional(),
+          pages: z.number().int().min(1).max(10000).nullable().optional(),
         })).min(1).max(MAX_TASKS_PER_REQUEST),
       }),
       annotations: { destructiveHint: false, idempotentHint: true },
@@ -779,6 +837,11 @@ function createServer(token: AuthenticatedToken) {
             // through the connector still lands on the right day in Stats.
             patch.completed_at = task.completed ? new Date().toISOString() : null;
           }
+          // Only ever named when asked for, so a request that changes a due
+          // date still runs against a project that has not added these.
+          if (task.kind !== undefined) patch.kind = task.kind;
+          if (task.weight !== undefined) patch.weight = task.weight;
+          if (task.pages !== undefined) patch.pages = task.pages;
           if (Object.keys(patch).length === 0) continue;
           const { data, error } = await owned.supabase
             .from('tasks')
@@ -802,6 +865,7 @@ function createServer(token: AuthenticatedToken) {
               description: typeof task.description === 'string' ? task.description : '',
               subtasks: readSubtasks(task.subtasks),
               completed: Boolean(task.completed),
+              ...readTaskMeasure(task),
               course: course ? { id: course.id, code: course.code, name: course.name } : null,
             };
           }),
@@ -816,7 +880,7 @@ function createServer(token: AuthenticatedToken) {
     'complete_tasks',
     {
       title: 'Tick Akada tasks off',
-      description: 'Mark tasks in the signed-in student’s active semester as done, or put them back on the list with completed: false. Read the tasks with get_tasks first and pass the ids it returns. Ticking a task off is what feeds the student’s week in Stats, so only do it for work the student says is actually finished.',
+      description: 'Mark tasks in the signed-in student’s active semester as done, or put them back on the list with completed: false. Read the tasks with get_tasks first and pass the ids it returns. Ticking a task off is what feeds the student’s week in Stats, so only do it for work the student says is actually finished. When the student says they have finished something, this is the tool: tick the task that is already on the list rather than creating a new one marked done, which would leave the original sitting there as overdue.',
       inputSchema: z.object({
         task_ids: z.array(z.string().uuid()).min(1).max(MAX_TASKS_PER_REQUEST),
         completed: z.boolean().default(true),

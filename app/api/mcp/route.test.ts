@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isoDate, startOfWeek } from '@/lib/utils';
-import { getWeeklyStats } from './route';
+import { createTasks, getWeeklyStats } from './route';
 
 type Row = Record<string, unknown>;
 
@@ -21,10 +21,10 @@ const SCHEMA: Record<string, string[]> = {
 // awaitable (`.then`) builder over an in-memory row set, and `.select()`
 // rejects with a 42703-shaped error for any column not in SCHEMA, the same
 // way a live, un-migrated Postgres project would.
-function fakeSupabase(tables: Record<string, Row[]>) {
+function fakeSupabase(tables: Record<string, Row[]>, schema: Record<string, string[]> = SCHEMA) {
   return {
     from(table: string) {
-      const known = new Set(SCHEMA[table] ?? []);
+      const known = new Set(schema[table] ?? []);
       let rows = (tables[table] ?? []).slice();
       let failure: { code: string; message: string } | null = null;
 
@@ -40,6 +40,23 @@ function fakeSupabase(tables: Record<string, Row[]>) {
       const builder = {
         select(cols: string) {
           checkColumns(cols);
+          return builder;
+        },
+        // An insert names its columns through the keys of the rows it sends,
+        // and a live project rejects the whole statement for one it does not
+        // have, which is the failure every optional column has to survive.
+        insert(input: Row | Row[]) {
+          const list = Array.isArray(input) ? input : [input];
+          for (const row of list) {
+            for (const col of Object.keys(row)) {
+              if (!failure && !known.has(col)) failure = { code: '42703', message: `column ${table}.${col} does not exist` };
+            }
+          }
+          if (!failure) {
+            const stamped = list.map((row, i) => ({ id: `${table}-new-${i}`, created_at: '2026-09-22T00:00:00.000Z', ...row }));
+            (tables[table] ??= []).push(...stamped);
+            rows = stamped;
+          }
           return builder;
         },
         eq(col: string, value: unknown) {
@@ -136,4 +153,77 @@ test('get_weekly_stats reads a week with no sessions in it', async () => {
   assert.equal(body.totals.hours_logged, 0);
   assert.equal(body.totals.tasks_completed, 0);
   assert.equal(body.courses[0].hours_logged, 0);
+});
+
+// A project that has run the latest supabase/schema.sql, for the writes that
+// genuinely need a newer column.
+const MIGRATED: Record<string, string[]> = {
+  ...SCHEMA,
+  tasks: [...SCHEMA.tasks, 'description', 'subtasks', 'kind', 'weight', 'pages'],
+};
+
+type CreateOutput = {
+  isError?: boolean;
+  content?: { text: string }[];
+  structuredContent?: {
+    created: { title: string; kind: string; weight: number | null; pages: number | null }[];
+  };
+};
+
+test('create_tasks still writes plain tasks against a table with none of the newer columns', async () => {
+  const tables = fixtures();
+  const output = (await createTasks(
+    TOKEN,
+    { course_id: 'course-1', tasks: [{ title: 'Problem set 3', priority: 'normal', kind: 'task' }] },
+    fakeSupabase(tables),
+  )) as CreateOutput;
+
+  assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
+  const written = tables.tasks.at(-1)!;
+  for (const col of ['description', 'subtasks', 'kind', 'weight', 'pages']) {
+    assert.ok(!(col in written), `a plain task should not name ${col}`);
+  }
+  assert.deepEqual(
+    { kind: output.structuredContent!.created[0].kind, weight: output.structuredContent!.created[0].weight },
+    { kind: 'task', weight: null },
+  );
+});
+
+test('create_tasks says what a task is when asked to, uniformly across the batch', async () => {
+  const tables = fixtures();
+  const output = (await createTasks(
+    TOKEN,
+    {
+      course_id: 'course-1',
+      tasks: [
+        { title: 'Midterm I', due_date: '2026-10-03', priority: 'high', kind: 'exam', weight: 25 },
+        { title: 'Todaro ch. 3', priority: 'normal', kind: 'reading', pages: 38 },
+        { title: 'Email the TA', priority: 'normal', kind: 'task' },
+      ],
+    },
+    fakeSupabase(tables, MIGRATED),
+  )) as CreateOutput;
+
+  assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
+  const written = tables.tasks.slice(-3);
+  // kind is `not null`, so every row names it once any row needs it; a row
+  // that left it out would be written as NULL rather than as the default.
+  assert.deepEqual(written.map((row) => row.kind), ['exam', 'reading', 'task']);
+  assert.deepEqual(written.map((row) => row.weight), [25, null, null]);
+  assert.deepEqual(written.map((row) => row.pages), [null, 38, null]);
+  assert.deepEqual(
+    output.structuredContent!.created.map((task) => [task.kind, task.weight, task.pages]),
+    [['exam', 25, null], ['reading', null, 38], ['task', null, null]],
+  );
+});
+
+test('create_tasks says why an exam could not be saved on a project without the column', async () => {
+  const output = (await createTasks(
+    TOKEN,
+    { course_id: 'course-1', tasks: [{ title: 'Final', priority: 'high', kind: 'exam', weight: 40 }] },
+    fakeSupabase(fixtures()),
+  )) as CreateOutput;
+
+  assert.ok(output.isError, 'an exam needs the kind column and should fail rather than save as a plain task');
+  assert.match(output.content![0].text, /42703/);
 });
