@@ -15,6 +15,7 @@ import type {
 } from './types';
 import {
   clampSessionSeconds,
+  cleanScore,
   isLoggableDuration,
   sanitizeSegments,
   sanitizeSession,
@@ -317,8 +318,13 @@ export class LocalAdapter implements DataProvider {
     const sessions = read<StoredSession[]>(KEYS.sessions, []);
     const course = read<StoredCourse[]>(KEYS.courses, []).find((c) => c.id === courseId);
     const segments = sanitizeSegments(input.segments);
+    // Checked here rather than trusted from the spread: a score is both halves
+    // or none, and never more than it was out of.
+    const { score: _score, scoreOutOf: _scoreOutOf, ...plain } = input;
+    const practice = cleanScore(input.score, input.scoreOutOf);
     const session: StoredSession = {
-      ...input,
+      ...plain,
+      ...(practice ? { score: practice.score, scoreOutOf: practice.outOf } : {}),
       courseId,
       taskId: input.taskId ? cleanText(input.taskId, 80) : null,
       date: requireIsoDate(input.date, 'Session date'),

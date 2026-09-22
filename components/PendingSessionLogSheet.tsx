@@ -99,7 +99,12 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     }
   }, [clearPendingLog, course, courses.length, coursesLoading, onResolved, pendingLog]);
 
-  async function handleSave(note: string, markTaskDone: boolean, keep: string) {
+  async function handleSave(
+    note: string,
+    markTaskDone: boolean,
+    keep: string,
+    practice: { score: number; outOf: number } | null,
+  ) {
     if (!pendingLog) return;
     setSaveError('');
     if (!online) {
@@ -121,6 +126,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
         note,
         breakSeconds: pendingLog.breakSeconds,
         segments: pendingLog.segments,
+        ...(practice ? { score: practice.score, scoreOutOf: practice.outOf } : {}),
       });
       // The session is what must not be lost, so it is written first and a
       // failure to tick the task off afterwards does not undo it.

@@ -1,7 +1,7 @@
 'use client';
 
 import type { Session } from '@/lib/data';
-import { clampSessionSeconds } from '@/lib/session-safety';
+import { clampSessionSeconds, scoreFace } from '@/lib/session-safety';
 import { formatHM, formatRelativeDate } from '@/lib/utils';
 
 interface Props {
@@ -55,6 +55,14 @@ export default function CourseSessionLog({
               </p>
             )}
           </div>
+          {session.score != null && session.scoreOutOf != null && (
+            <span
+              className="tnum shrink-0 pt-[3px] font-mono text-[12px] text-muted"
+              aria-label={`scored ${session.score} out of ${session.scoreOutOf}`}
+            >
+              {scoreFace(session.score, session.scoreOutOf)}
+            </span>
+          )}
           <span className="tnum shrink-0 pt-[2px] font-mono text-[13px] font-semibold text-ink">
             {formatHM(clampSessionSeconds(session.durationSeconds))}
           </span>

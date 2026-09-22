@@ -29,9 +29,11 @@ based on you.
 ## Do this first (two minutes)
 
 1. **Run `supabase/schema.sql` once** in the Supabase SQL editor. Idempotent
-   as always. It adds one table, `recall_items`. Until you run it the recall
-   cards still appear (your finished readings are read straight off the task
-   list, no table needed), but answering one says it can't save yet.
+   as always. It adds one table, `recall_items`, and two columns on sessions
+   for practice scores. Until you run it the recall cards still appear (your
+   finished readings are read straight off the task list, no table needed),
+   but answering one says it can't save yet, and a score on the log sheet
+   isn't kept (the sitting still is).
 2. **Put the midterm in as an exam.** Tell Claude "add MATH 101 Midterm I on
    3 October as an exam worth 25%". Until tonight it couldn't, because the
    connector had no way to set a task's kind, so every task Claude ever made
@@ -182,17 +184,23 @@ There are three new connector tools, `get_recall`, `record_recall` and
 it went, and turn a problem set's concepts into things to keep. All of it is
 in `MCP_SETUP.md`.
 
+**Practice papers with a score** (its own PR, after recall). You already wrote
+"Machiavelli closed book 4.5/8" in a note. Now the log sheet has a line for
+it, "Scored __ / __ on a practice paper, if this was one", and `log_study_session`
+takes `score` and `score_out_of` so Claude can log a marked paper too. The
+course page plots every paper as a pen mark at the height of its score, oldest
+on the left, with the last four written out under it, and the score shows next
+to the hours on each session row. It's the one number in the app that measures
+what came out instead of what went in, so a run of timed closed-book attempts
+becomes the most honest progress line you've got. In the diary research,
+making progress on work that matters was the most common thing on people's
+best days (Amabile & Kramer, correlational). It needs `supabase/schema.sql`
+run once more for the two new columns; until then the line is there but a
+score just isn't kept.
+
 ## What I'd build next, in order
 
-**1. Practice papers with a score.** You already wrote "Machiavelli closed
-book 4.5/8" in a note. Give a sitting an optional score out of something, draw
-the scores per course as a row of marks, and a timed closed-book attempt
-becomes the most honest progress line in the app. In the diary research,
-making progress on work that matters was the most common thing on people's
-best days (Amabile & Kramer, correlational). It's a small build, one optional
-field on the log sheet and one drawing on the course page.
-
-**2. The run-up.** For an exam two weeks out, work backwards and put a sitting
+**1. The run-up.** For an exam two weeks out, work backwards and put a sitting
 on the course on the first day, then around days 2–3, 6–7 and 11–12 (spacing
 works best at about 20–40% of the time left, per Cepeda et al. 2008), each one
 starting with that course's recall. Recall already pulls things forward, and
@@ -200,18 +208,18 @@ this would put the sittings themselves on the page. Keep it weekly rather than
 hourly, since in one small study daily plans didn't raise study time and
 monthly ones did (Kirschenbaum et al. 1981).
 
-**3. Credit the return.** Your run already forgives a missed day. The step
+**2. Credit the return.** Your run already forgives a missed day. The step
 further, from the gym megastudy, is to make the first sitting back after a
 quiet week visibly count. That would be one line on Today, never a broken chain.
 
-**4. Studying alongside someone.** The only solid evidence for "body doubling"
+**3. Studying alongside someone.** The only solid evidence for "body doubling"
 is that feeling like you're working with someone made people stick at a hard
 task 48–64% longer (Carr & Walton 2014). Focusmate's own numbers are self-report.
 If friends at LUMS start using Akada, a quiet "2 others at their desks" on the
 timer is possible with Supabase presence and no new tables. Not worth it for
 one user.
 
-**5. Smaller, noticed while reading the code.** The Supabase adapter never
+**4. Smaller, noticed while reading the code.** The Supabase adapter never
 loaded `session_segments`, so after a reload the habits layer saw every
 sitting as one unbroken stretch and your block readings stayed coarse. That's
 fixed in its own PR: a separate, paged read that tolerates the table missing.

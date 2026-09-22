@@ -66,6 +66,12 @@ six are kept come to 30% rather than 35%, and the piece that gets dropped is
 decided by score once enough of them have come back to say which is the worst.
 Before that, nothing you already hold is thrown away.
 
+A sitting spent on a practice paper can say what the paper scored, on a line
+of the log sheet or through the connector, and the course page plots every
+paper as a pen mark at the height of its score, with the last few written out
+under it. It is the one figure in the app that measures what came out rather
+than what went in, so it is only ever what you wrote down.
+
 **Stats** is the heatmap, the weekly chart, a journal of everything that
 happened in order, and a term-wide view of how much of your grade is still
 undecided.
