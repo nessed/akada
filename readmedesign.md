@@ -454,11 +454,18 @@ clear, hazy, clear is as far out as three clears without being three clears.
 and keeping one that was let go brings it back with the answers it had, in the
 app and through the connector alike. A reading written down twice is asked
 about once, and the second copy's sheet says where it stands rather than
-offering to keep it again. Copies count as one only when everything after the
+offering to keep it again. Copies count as one when everything after the
 citation matches word for word (less "the", and the class session they were
-set for), or when one of them says nothing after it at all and there is only
-one titled reading of that work it could be; so two chapters of one book, or
-two papers an author published the same year, are two readings. Nothing that
+set for), or when one stops where the other goes on, the way a copy ticked off
+a syllabus carries the journal and the pages the finished one left out, and
+it is the start of only that one; a copy that says nothing after its citation
+is the start of every titled one, so it joins only when there is just one.
+What goes on after it cannot be a bare number, since "Ch 1" is not the start
+of "Ch 1-3". So two chapters of one book, or two papers an author published
+the same year, are two readings. The card asks about a reading by its own
+words: no "Read:", no "— done with Claude", no "— Session 4". A title that
+opens with work, "Practice", "Watch", "Write", is that work and not a reading,
+whatever chapter it names. Nothing that
 shows or answers what is stored is drawn until the rows have loaded, since
 every row is written whole and an answer given against a list that never
 arrived would write over a real history. A new line can be kept from the log

@@ -148,6 +148,12 @@ const CITATION = /\(\s*(1[5-9]|20)\d{2}[a-z]?\s*\)/;
 const CHAPTER = /\b(ch\.?|chapters?)\s*\d+/i;
 // "— done with Claude", "- done": a completion written into the title.
 const DONE_SUFFIX = /\s+[–—-]+\s*done\b.*$/i;
+// The class meeting a title is filed under ("— Session 4", "- week 3"): when
+// it is due, not what it is.
+const MEETING_SUFFIX = /\s*[–—-]+\s*(session|week|class|lecture|seminar|tutorial)\s*\d+\b.*$/i;
+// Work that names a chapter without being the reading of it: "Practice
+// response paper: Machiavelli Ch 15 & 18", "Watch the Ch 3 lecture".
+const NOT_READING = /^\s*(practice|watch|write|solve|submit|attempt|draft)\b/i;
 
 /**
  * Whether a finished task is a reading, for the purpose of recalling it.
@@ -163,18 +169,23 @@ export function looksLikeReading(task: Pick<Task, 'kind' | 'title'>): boolean {
   if (task.kind === 'reading') return true;
   if (task.kind === 'exam') return false;
   const title = task.title ?? '';
+  if (NOT_READING.test(title)) return false;
   return READ_PREFIX.test(title) || CITATION.test(title) || CHAPTER.test(title);
 }
 
-/** The reading as it is asked about: no "Read:" in front, no "— done" behind. */
+/**
+ * The reading as it is asked about: no "Read:" in front, and none of the
+ * bookkeeping behind it, "— done with Claude" or the "— Session 4" it was
+ * set for.
+ */
 export function readingPrompt(title: string): string {
-  const cleaned = title.replace(READ_PREFIX, '').replace(DONE_SUFFIX, '').trim();
+  const cleaned = title
+    .replace(READ_PREFIX, '')
+    .replace(DONE_SUFFIX, '')
+    .replace(MEETING_SUFFIX, '')
+    .trim();
   return (cleaned || title).slice(0, RECALL_PROMPT_MAX);
 }
-
-// The class meeting a title is filed under ("— Session 4", "- week 3"): when
-// it is due, not what it is.
-const MEETING_SUFFIX = /\s*[–—-]+\s*(session|week|class|lecture|seminar|tutorial)\s*\d+\b.*$/i;
 // Everything before an author-date citation, the year with its letter, and
 // everything after it.
 const CITED = /^(.*?)\(\s*((?:1[5-9]|20)\d{2}[a-z]?)\s*\)(.*)$/i;
@@ -198,7 +209,7 @@ function words(text: string): string {
  * while one that should have and did not costs a single extra question.
  */
 function readingFile(title: string): { work: string; rest: string } {
-  const prompt = readingPrompt(title).replace(MEETING_SUFFIX, '');
+  const prompt = readingPrompt(title);
   const cited = prompt.match(CITED);
   if (!cited) return { work: words(prompt), rest: '' };
   return {
@@ -370,15 +381,25 @@ function readItems(
     readings.set(shelf, copies);
   }
   for (const copies of readings.values()) {
-    // A copy with nothing after its citation ("Hobson (2012) — done") is the
-    // same reading as a titled one only when there is exactly one titled
-    // reading of that work for it to be. Beside two, it could be either, so
-    // it stays a reading of its own.
-    const bare = copies.get('');
-    const titled = [...copies.keys()].filter((rest) => rest !== '');
-    if (bare && titled.length === 1) {
-      copies.get(titled[0])?.push(...bare);
-      copies.delete('');
+    // A copy that stops where another goes on is that reading written down
+    // shorter: "Imperial by Design" beside "Imperial by Design, The National
+    // Interest, Jan-Feb: 16-34", or "Hobson (2012) — done" with nothing after
+    // its citation at all. It joins the longer one only when it is the start
+    // of exactly one other, since beside two it could be either, and only
+    // when what follows is not a bare number carrying a range on: "Ch 1" is
+    // not the start of "Ch 1-3". The shortest goes first and each join
+    // starts the look again, so a chain settles the same way whatever order
+    // the tasks came in.
+    for (let joined = true; joined; ) {
+      joined = false;
+      for (const rest of [...copies.keys()].sort((a, b) => a.length - b.length)) {
+        const longer = [...copies.keys()].filter((other) => continues(other, rest));
+        if (longer.length !== 1) continue;
+        copies.get(longer[0])?.push(...(copies.get(rest) ?? []));
+        copies.delete(rest);
+        joined = true;
+        break;
+      }
     }
     for (const same of copies.values()) {
       const [first, ...others] = [...same].sort(readingOrder);
@@ -424,6 +445,13 @@ function readItems(
   }
 
   return items;
+}
+
+/** Whether `longer` is `shorter` with more words after it that are not a bare number. */
+function continues(longer: string, shorter: string): boolean {
+  if (longer === shorter) return false;
+  const next = shorter === '' ? longer : longer.startsWith(`${shorter} `) ? longer.slice(shorter.length + 1) : '';
+  return next !== '' && !/^\d+(\s|$)/.test(next);
 }
 
 /** Which copy of a reading written down twice is the one asked about: the most answered, then the first finished. */

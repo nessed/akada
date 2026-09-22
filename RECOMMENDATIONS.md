@@ -224,9 +224,10 @@ loaded `session_segments`, so after a reload the habits layer saw every
 sitting as one unbroken stretch and your block readings stayed coarse. That's
 fixed in its own PR: a separate, paged read that tolerates the table missing.
 The six duplicate POL readings on your real list are still there though. Tick
-the syllabus copies, or ask Claude to. Recall only merges two copies when it's
-sure they're the same reading, so if one comes up twice, let go of the extra.
-The new tool descriptions should stop new ones appearing.
+the syllabus copies, or ask Claude to. Recall folds each one into the copy you
+already finished (I checked it against your actual titles, journal names and
+page ranges included), so they come up once. The new tool descriptions should
+stop new ones appearing.
 
 ## What I'd skip
 
