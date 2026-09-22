@@ -9,15 +9,25 @@ function logicalNow(): Date {
   return pulledBack(new Date());
 }
 
-/** An instant moved back by the reader's late-night cutoff, if they set one. */
-function pulledBack(instant: Date): Date {
-  const date = new Date(instant);
-  if (typeof window === 'undefined') return date;
+/**
+ * The hour, 0 to 6, the reader's day ends at, if they moved it past
+ * midnight. Zero on the server, and whenever nothing sensible is stored.
+ */
+export function dayEndingHour(): number {
+  if (typeof window === 'undefined') return 0;
   try {
     const stored = JSON.parse(window.localStorage.getItem('akada.preferences.v1') || '{}');
     const cutoff = Number(stored.dayEndingHour);
-    if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= 6) date.setHours(date.getHours() - cutoff);
+    if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= 6) return cutoff;
   } catch { /* a normal calendar day is a safe fallback */ }
+  return 0;
+}
+
+/** An instant moved back by the reader's late-night cutoff, if they set one. */
+function pulledBack(instant: Date): Date {
+  const date = new Date(instant);
+  const cutoff = dayEndingHour();
+  if (cutoff > 0) date.setHours(date.getHours() - cutoff);
   return date;
 }
 

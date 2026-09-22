@@ -432,6 +432,18 @@ test('record_recall refuses a date that is not today anywhere', async () => {
   assert.match(output.content![0].text, /not today anywhere/);
 });
 
+test('the device\'s offset decides the day over a date the model carried past midnight', async () => {
+  const tables = recallFixtures();
+  const output = (await recordRecallTool(
+    TOKEN,
+    { date: recallDay(-1), utc_offset_minutes: 0, results: [{ key: 'task:reading-1', verdict: 'clear' }] },
+    fakeSupabase(tables, WITH_RECALL),
+  )) as RecallOutput;
+  assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
+  const reading = tables.recall_items.find((row) => row.item_key === 'task:reading-1')!;
+  assert.deepEqual(reading.history, [{ on: RECALL_TODAY, verdict: 'clear' }]);
+});
+
 test('recall reads a finished reading on the student\'s own day, given their offset', async () => {
   const tables = recallFixtures();
   // Finished at 20:30 UTC: half past one the next morning in Lahore.

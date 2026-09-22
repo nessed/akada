@@ -98,6 +98,11 @@ export default function CourseRecallPanel({
     }
   }
 
+  // Nothing until the rows have been read, the keep line included: an empty
+  // panel would say "nothing kept" about a course whose answers simply have
+  // not arrived, and see useRecall for why nothing is offered before then.
+  if (!reading) return null;
+
   return (
     <section className={className}>
       <div className="flex items-baseline justify-between gap-3 px-2 pb-2">

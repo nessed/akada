@@ -163,8 +163,9 @@ answer it, so the whole term arrives already in recall. The schedule is worked
 out from your answers every time, never stored, the same way the rest of the
 record works. An exam within three weeks in the same course, or anything worth
 a fifth of it, pulls in to the day before whatever would otherwise go past it
-unasked. Weekly work worth a tenth doesn't, or every reading would come up every
-week and the gaps would never widen.
+unasked. Weekly stuff doesn't, a problem set worth a tenth or a quiz worth 2%
+even if it's marked as an exam, or every reading would come up every week and
+the gaps would never widen.
 
 **"ask Claude"** is on every card and on each course's Recall header. It
 copies a prompt for a chat with the connector that asks one question at a time

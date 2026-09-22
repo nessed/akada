@@ -153,7 +153,7 @@ test('weekly graded work does not undo the widening gaps, and a midterm adds one
   assert.deepEqual(walk(true), [1, 4, 11, 27, 39], 'the midterm pulls in its eve, once');
 });
 
-test('a piece marked as an exam, or worth a fifth of the course, is prepared for; a tenth is not', () => {
+test('what is prepared for: a fifth of the course, or an unweighted midterm; not a quiz', () => {
   const reading = task('r', 'Read Angell (1912)');
   const examDays = (piece: Partial<Task>) =>
     readRecall({
@@ -164,7 +164,43 @@ test('a piece marked as an exam, or worth a fifth of the course, is prepared for
     }).states[0].examDays;
   assert.equal(examDays({ weight: 10 }), null);
   assert.equal(examDays({ weight: 20 }), 9);
-  assert.equal(examDays({ kind: 'exam' }), 9);
+  assert.equal(examDays({ kind: 'exam', title: 'Midterm I' }), 9, 'an exam nobody weighted');
+  assert.equal(examDays({ kind: 'exam', title: 'Final Exam', weight: 40 }), 9);
+  assert.equal(examDays({ kind: 'exam', title: 'Quiz 3', weight: 2 }), null, 'a weighted quiz');
+  assert.equal(examDays({ kind: 'exam', title: 'Quiz 3' }), null, 'an unweighted quiz');
+});
+
+test('weekly quizzes marked as exams do not undo the gaps either', () => {
+  const walk = (weight: number | null) => {
+    const reading = task('r', 'Read Waltz (1979), Ch. 1', { completedAt: `${TODAY}T15:00:00` });
+    const quizzes = Array.from({ length: 10 }, (_, i) =>
+      task(`q${i}`, `Quiz ${i + 1}`, {
+        kind: 'exam',
+        weight,
+        completed: false,
+        completedAt: null,
+        dueDate: day(7 * (i + 1)),
+      }),
+    );
+    let history: RecallAnswer[] = [];
+    const asked: number[] = [];
+    for (let d = 1; d <= 70; d += 1) {
+      const today = day(d);
+      const state = readRecall({
+        courses: [course('pol')],
+        tasks: [reading, ...quizzes],
+        records: history.length ? [record('task:r', { source: 'reading', ref: 'r', history })] : [],
+        today,
+      }).states.find((s) => s.key === 'task:r')!;
+      if (state.due) {
+        history = applyVerdict(history, 'clear', today);
+        asked.push(d);
+      }
+    }
+    return asked;
+  };
+  assert.deepEqual(walk(2), [1, 4, 11, 27, 62]);
+  assert.deepEqual(walk(null), [1, 4, 11, 27, 62]);
 });
 
 test('a second answer on the same day replaces the first', () => {
@@ -216,6 +252,51 @@ test('the same reading written down twice is one thing to remember', () => {
   assert.deepEqual(reading.states.map((s) => s.key), ['task:done'], 'the one finished first');
   assert.deepEqual(reading.states[0].twins, ['syllabus']);
   assert.equal(recallOfTask(reading, 'syllabus')?.kept?.key, 'task:done', 'its copy points at it');
+});
+
+test('readings that only share an author and a year stay apart', () => {
+  const pairs: [string, string][] = [
+    ['Read Waltz (1979), Chs. 1-3', 'Read Waltz (1979), Chs. 4-6'],
+    ['Read Waltz (1979), Chap. 1', 'Read Waltz (1979), Chap. 6'],
+    ['Read Hobson (2012), Ch. 2.3', 'Read Hobson (2012), Ch. 2.5'],
+    ['Read Hobson (2012), §2.3', 'Read Hobson (2012), §2.5'],
+    ['Read Hobson (2012), chapter one', 'Read Hobson (2012), chapter six'],
+    ['Read Keohane (1984) After Hegemony', 'Read Keohane (1984) International Institutions and State Power'],
+    ['Treaty of Westphalia (1648), primary source', 'Treaty of Westphalia (1648), Osiander critique'],
+    ['Read Waltz (1979), pp. 1-17', 'Read Waltz (1979), pgs. 79-101'],
+  ];
+  for (const [a, b] of pairs) {
+    const reading = readRecall({ courses: [course('pol')], tasks: [task('a', a), task('b', b)], records: [], today: TODAY });
+    assert.equal(reading.states.length, 2, `${a} / ${b}`);
+  }
+});
+
+test('the same reading filed under a class meeting, or with an article, is still one', () => {
+  const reading = readRecall({
+    courses: [course('pol')],
+    tasks: [
+      task('a', 'Read Angell (1912), The Influence of Credit Upon International Relations — Session 4'),
+      task('b', 'Angell (1912) Influence of Credit Upon International Relations'),
+    ],
+    records: [],
+    today: TODAY,
+  });
+  assert.equal(reading.states.length, 1);
+  assert.equal(reading.states[0].twins.length, 1);
+});
+
+test('a bare citation beside two titled readings could be either, so it stays apart', () => {
+  const reading = readRecall({
+    courses: [course('pol')],
+    tasks: [
+      task('c1', 'Read Waltz (1979), Ch. 1'),
+      task('c6', 'Read Waltz (1979), Ch. 6'),
+      task('bare', 'Waltz (1979) — done'),
+    ],
+    records: [],
+    today: TODAY,
+  });
+  assert.equal(reading.states.length, 3);
 });
 
 test('two chapters of one book are two readings, and a letter after the year is another paper', () => {

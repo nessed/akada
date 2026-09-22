@@ -667,7 +667,7 @@ const RecallDay = {
 };
 
 const RECALL_DAY_WORDS =
-  '`date` is the student\'s own date, YYYY-MM-DD, and `utc_offset_minutes` their offset from UTC (300 for UTC+5). Pass what you know, both if you can: Akada\'s server keeps UTC, which is a day out for part of every day away from Greenwich, and an answer dated a day early comes straight back as due.';
+  '`utc_offset_minutes` is the student\'s offset from UTC (300 for UTC+5); a prompt copied from Akada gives it, and when it is given the student\'s day is worked out from it. Otherwise pass `date`, the student\'s own date, YYYY-MM-DD. Akada\'s server keeps UTC, which is a day out for part of every day away from Greenwich, and an answer dated a day early comes straight back as due.';
 
 /**
  * The student's day, and the day any stored instant fell on for them.
@@ -676,9 +676,12 @@ const RECALL_DAY_WORDS =
  * the day before for someone in Lahore answering at half past one in the
  * morning, where a slip is then due again the moment Today opens; and on the
  * day after for someone in the Americas answering in the evening. So the
- * student's own date wins, then their offset, then UTC. A date more than a
- * day from the server's cannot be anybody's today, so it is refused rather
- * than written into a history where it would sit ahead of every real answer.
+ * offset decides when there is one: it comes from the student's own device,
+ * by way of the copied prompt, where a `date` comes from the model, which may
+ * be carrying the date a conversation started on past midnight. Then `date`,
+ * then UTC. A date more than a day from the server's cannot be anybody's
+ * today, so it is refused rather than written into a history where it would
+ * sit ahead of every real answer.
  */
 function recallDays(
   date: string | undefined,
@@ -686,7 +689,7 @@ function recallDays(
 ): { ok: true; today: string; dayOf: (instant: Date) => string } | { ok: false; error: ReturnType<typeof toolError> } {
   const offset = offsetMinutes ?? 0;
   const dayOf = (instant: Date) => new Date(instant.getTime() + offset * 60_000).toISOString().slice(0, 10);
-  const today = date ?? dayOf(new Date());
+  const today = offsetMinutes !== undefined ? dayOf(new Date()) : (date ?? dayOf(new Date()));
   if (Math.abs(daysBetween(new Date().toISOString().slice(0, 10), today)) > 1) {
     return {
       ok: false,

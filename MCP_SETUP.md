@@ -140,7 +140,10 @@ and have no row until first answered; everything else is a row in
     `limit` (1-50, default 20), `date` (`YYYY-MM-DD`, optional, the student's own
     day), `utc_offset_minutes` (-840 to 840, optional, e.g. `300` for UTC+5).
     The server keeps UTC, so without either the day is UTC's, which is a day out
-    for part of every day away from Greenwich; a `date` more than a day from the
+    for part of every day away from Greenwich. When both are given the offset
+    decides, since it comes from the student's device by way of the copied
+    prompt (less their late-night cutoff, so the day turns when the app's does)
+    while a `date` comes from the model. A `date` more than a day from the
     server's is refused.
   - **Output**: `items`, due first in asking order (what slipped, then what was
     never asked, then clear things coming round), each with its `key`, `course`,

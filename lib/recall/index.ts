@@ -172,46 +172,39 @@ export function readingPrompt(title: string): string {
   return (cleaned || title).slice(0, RECALL_PROMPT_MAX);
 }
 
-// Where in a work a reading is: a chapter, a book or part, a volume, pages.
-const LOCATOR =
-  /\b(chapters?|ch|books?|bk|parts?|pt|volumes?|vols?|pages?|pp|p)\.?\s*((?:\d+|[IVXL]+\b)(?:\s*(?:[-–—&,]|and|to)\s*(?:\d+|[IVXL]+\b))*)/gi;
+// The class meeting a title is filed under ("— Session 4", "- week 3"): when
+// it is due, not what it is.
+const MEETING_SUFFIX = /\s*[–—-]+\s*(session|week|class|lecture|seminar|tutorial)\s*\d+\b.*$/i;
+// Everything before an author-date citation, the year with its letter, and
+// everything after it.
+const CITED = /^(.*?)\(\s*((?:1[5-9]|20)\d{2}[a-z]?)\s*\)(.*)$/i;
 
-const LOCATOR_KIND: Record<string, string> = {
-  chapter: 'ch', chapters: 'ch', ch: 'ch',
-  book: 'bk', books: 'bk', bk: 'bk',
-  part: 'pt', parts: 'pt', pt: 'pt',
-  volume: 'vol', volumes: 'vol', vol: 'vol', vols: 'vol',
-  page: 'p', pages: 'p', pp: 'p', p: 'p',
-};
-
-/** "ch 15,18 p 45,80": every place in a work a title points at, in one order. */
-function locators(text: string): string {
-  const found: string[] = [];
-  for (const match of text.matchAll(LOCATOR)) {
-    const kind = LOCATOR_KIND[match[1].toLowerCase()] ?? match[1].toLowerCase();
-    const numbers = match[2].toUpperCase().match(/\d+|[IVXL]+/g) ?? [];
-    found.push(`${kind} ${numbers.join(',')}`);
-  }
-  return found.sort().join(' ');
+function words(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 /**
- * What two tasks for the same reading share, so a reading written down twice,
+ * How a finished reading is filed, so the same reading written down twice,
  * once off the syllabus and once when it was done, is asked about once.
  *
- * With a citation, the author, the year with its letter, and every chapter,
- * book, part, volume or page the title names; otherwise the whole title. The
- * places in the work are part of it because a syllabus that sets Waltz (1979)
- * twice is setting two chapters, and merging those would hide one of them
- * from recall for good. Two copies where only one names a chapter stay apart
- * for the same reason: an extra question costs a tap, a missing one costs a
- * reading nobody is ever asked about.
+ * `work` is the author and the year with its letter when the title cites one,
+ * otherwise the whole title; `rest` is everything the title says after the
+ * citation, word for word, less a leading article and the class meeting it
+ * was set for. Two copies are one reading when both match, so Waltz (1979)
+ * Ch. 1 and Ch. 6, Keohane (1984) After Hegemony and his other 1984, and a
+ * primary source and its critique filed under the same year all stay apart.
+ * Comparing every word rather than picking out chapter numbers is on purpose:
+ * a merge that should not have happened hides a reading from recall for good,
+ * while one that should have and did not costs a single extra question.
  */
-function readingStem(title: string): string {
-  const prompt = readingPrompt(title);
-  const cited = prompt.match(/^(.*?)\(\s*((?:1[5-9]|20)\d{2}[a-z]?)\s*\)/i);
-  const base = cited ? `${cited[1]} ${cited[2]} ${locators(prompt)}` : prompt;
-  return base.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function readingFile(title: string): { work: string; rest: string } {
+  const prompt = readingPrompt(title).replace(MEETING_SUFFIX, '');
+  const cited = prompt.match(CITED);
+  if (!cited) return { work: words(prompt), rest: '' };
+  return {
+    work: `${words(cited[1])} ${cited[2].toLowerCase()}`,
+    rest: words(cited[3]).replace(/^(the|a|an) /, ''),
+  };
 }
 
 /* ── Dates ────────────────────────────────────────────────────────────── */
@@ -297,6 +290,23 @@ export function applyVerdict(
 
 /* ── Exams ────────────────────────────────────────────────────────────── */
 
+// A midterm or a final, named as one.
+const MAJOR_EXAM = /\b(mid-?terms?|finals?|exams?|examinations?)\b/i;
+
+/**
+ * Whether a piece is one to prepare for, and so pulls its course's recall in.
+ * By its weight whenever the weight is known, exam or not: a weekly quiz is
+ * marked as an exam as often as not, and one worth two per cent pulling
+ * everything in every week undoes the widening gaps as surely as a weekly
+ * problem set would. With no weight, only an exam that calls itself a
+ * midterm, a final or an exam, which is what an unweighted midterm looks
+ * like on a list.
+ */
+function preparesFor(task: Task): boolean {
+  if (task.weight != null) return task.weight >= RECALL_EXAM_MIN_WEIGHT;
+  return task.kind === 'exam' && MAJOR_EXAM.test(task.title);
+}
+
 /**
  * The nearest exam, or heavily weighted piece, still ahead in each course,
  * within the window that pulls recall forward.
@@ -305,7 +315,7 @@ function nearestExams(tasks: Task[], today: string): Map<string, string> {
   const exams = new Map<string, string>();
   for (const task of tasks) {
     if (task.completed || !task.dueDate || task.dueDate < today) continue;
-    if (task.kind !== 'exam' && (task.weight ?? 0) < RECALL_EXAM_MIN_WEIGHT) continue;
+    if (!preparesFor(task)) continue;
     if (daysBetween(today, task.dueDate) > RECALL_EXAM_WINDOW_DAYS) continue;
     const held = exams.get(task.courseId);
     if (!held || task.dueDate < held) exams.set(task.courseId, task.dueDate);
@@ -333,7 +343,7 @@ function readItems(
   // down twice, once off the syllabus and once when it was done, is one thing
   // to remember; the copy that has been answered wins, then the one finished
   // first, and the others are its twins.
-  const readings = new Map<string, RecallItem[]>();
+  const readings = new Map<string, Map<string, RecallItem[]>>();
   for (const task of tasks) {
     if (!task.completed || !courseIds.has(task.courseId) || !looksLikeReading(task)) continue;
     const key = `task:${task.id}`;
@@ -353,12 +363,27 @@ function readItems(
       twins: [],
     };
     used.add(key);
-    const stem = `${task.courseId}|${readingStem(task.title)}`;
-    readings.set(stem, [...(readings.get(stem) ?? []), item]);
+    const { work, rest } = readingFile(task.title);
+    const shelf = `${task.courseId}|${work}`;
+    const copies = readings.get(shelf) ?? new Map<string, RecallItem[]>();
+    copies.set(rest, [...(copies.get(rest) ?? []), item]);
+    readings.set(shelf, copies);
   }
   for (const copies of readings.values()) {
-    const [first, ...others] = [...copies].sort(readingOrder);
-    items.push({ ...first, twins: others.map((copy) => copy.ref as string) });
+    // A copy with nothing after its citation ("Hobson (2012) — done") is the
+    // same reading as a titled one only when there is exactly one titled
+    // reading of that work for it to be. Beside two, it could be either, so
+    // it stays a reading of its own.
+    const bare = copies.get('');
+    const titled = [...copies.keys()].filter((rest) => rest !== '');
+    if (bare && titled.length === 1) {
+      copies.get(titled[0])?.push(...bare);
+      copies.delete('');
+    }
+    for (const same of copies.values()) {
+      const [first, ...others] = [...same].sort(readingOrder);
+      items.push({ ...first, twins: others.map((copy) => copy.ref as string) });
+    }
   }
 
   // Everything else was kept on purpose and has a row.

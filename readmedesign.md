@@ -418,9 +418,12 @@ goes back to tomorrow on gone. An exam within three weeks in the same course,
 or a piece worth a fifth of it, pulls in anything whose ordinary gap would
 carry it past the exam unasked, to the day before, so it is all asked once
 more with the exam in view. Only that: a thing already asked in the few days
-before the eve keeps its gap, and weekly work worth a tenth pulls nothing,
-since a course with a problem set due every week would otherwise have every
-reading asked every week and no gap would ever widen. Like Next Mark's
+before the eve keeps its gap, and weekly work pulls nothing, a problem set
+worth a tenth or a quiz worth two per cent, marked as an exam or not, since a
+course with something due every week would otherwise have every reading asked
+every week and no gap would ever widen. A piece is judged by its weight
+whenever it has one; an exam with none counts only when it calls itself a
+midterm, a final or an exam. Like Next Mark's
 deadlines, the exam steers the order and the timing and never appears in the
 copy. A second answer the same day replaces the first, and answers are kept
 in date order whichever way they arrive.
@@ -448,10 +451,16 @@ clear, hazy, clear is as far out as three clears without being three clears.
 and keeping one that was let go brings it back with the answers it had, in the
 app and through the connector alike. A reading written down twice is asked
 about once, and the second copy's sheet says where it stands rather than
-offering to keep it again; two chapters of one book, or two papers an author
-published the same year, are two readings. Nothing about recall is offered
-until its rows have loaded, since every row is written whole and an answer
-given against a list that never arrived would write over a real history.
+offering to keep it again. Copies count as one only when everything after the
+citation matches word for word (less "the", and the class session they were
+set for), or when one of them says nothing after it at all and there is only
+one titled reading of that work it could be; so two chapters of one book, or
+two papers an author published the same year, are two readings. Nothing that
+shows or answers what is stored is drawn until the rows have loaded, since
+every row is written whole and an answer given against a list that never
+arrived would write over a real history. A new line can be kept from the log
+sheet at any time, because keeping never writes over anything, and a keep
+made before the list is read leaves the list unread and reads it fresh.
 
 **Where it is drawn.**
 - **Today**, under Up next and over the day's task lists: the card, the

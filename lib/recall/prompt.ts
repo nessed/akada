@@ -1,4 +1,5 @@
 import type { RecallSource } from '../data';
+import { dayEndingHour } from '../utils';
 
 /**
  * The prompts recall hands to a model.
@@ -35,9 +36,15 @@ Once I have answered, show me the correct answer or the key points I should have
  * in the morning in Lahore would otherwise be dated the day before. The
  * offset rather than today's date, because a copied prompt can be pasted
  * after midnight and an offset does not go stale.
+ *
+ * Less the reader's late-night cutoff, so the connector's day turns over when
+ * the app's does: someone whose day ends at 4am and answers in a chat at half
+ * past one is still answering on the day the app says it is.
  */
 function utcOffset(): number {
-  return -new Date().getTimezoneOffset();
+  // Within the tool's range; only the far west of the Pacific with a 6am
+  // cutoff reaches past it, and there the day turns a few hours early.
+  return Math.max(-840, -new Date().getTimezoneOffset() - dayEndingHour() * 60);
 }
 
 function askFor(source: RecallSource): string {

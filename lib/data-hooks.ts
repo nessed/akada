@@ -396,11 +396,34 @@ function placeRecall(current: RecallRecords | undefined, record: RecallRecord): 
  * left. A write is a single small upsert, so the wait is not felt.
  */
 let recallWrites: Promise<unknown> = Promise.resolve();
+/**
+ * How long one write may hold the line. A request on a dead connection has no
+ * timeout of its own, and every answer after it would otherwise wait behind
+ * it for good; past this the next write goes ahead and the slow one still
+ * lands, or fails, on its own.
+ */
+const RECALL_WRITE_PATIENCE_MS = 10_000;
 function inTurn<T>(write: () => Promise<T>): Promise<T> {
   const run = recallWrites.then(write, write);
-  recallWrites = run.catch(() => undefined);
+  recallWrites = Promise.race([
+    run,
+    new Promise((resolve) => setTimeout(resolve, RECALL_WRITE_PATIENCE_MS)),
+  ]).catch(() => undefined);
   return run;
 }
+
+/**
+ * Every recall write leaves a list that has not been read yet unread.
+ *
+ * An optimistic row written into an empty cache would make the list look
+ * loaded with that one row in it, and SWR throws away a first read that was
+ * still in flight when a write began, so the one row would stand in for
+ * everything stored until the next refetch. A screen reading it then takes
+ * every stored answer for missing, and the next answer is written whole over
+ * a real history. So with nothing read yet, the write goes straight to the
+ * database, the cache is left alone, and the list is read fresh afterwards.
+ */
+const readIfUnread = (data: RecallRecords | undefined) => data === undefined;
 
 /**
  * Writes one kept thing whole: a first answer, a later one, a let go, or an
@@ -411,16 +434,17 @@ function inTurn<T>(write: () => Promise<T>): Promise<T> {
 export function saveRecallOptimistic(input: RecallRecordInput): Promise<RecallRecord> {
   return inTurn(async () => {
     let written: RecallRecord | null = null;
-    await mutate(
+    await mutate<RecallRecords | undefined>(
       KEY.recall,
-      async (current: RecallRecords | undefined) => {
+      async (current) => {
         const saved = await db.saveRecall(input);
         written = saved;
-        return placeRecall(current, saved);
+        return current && placeRecall(current, saved);
       },
       {
-        optimisticData: (current: RecallRecords | undefined) => {
-          const held = current?.records.find((item) => item.key === input.key);
+        optimisticData: (current) => {
+          if (!current) return current;
+          const held = current.records.find((item) => item.key === input.key);
           return placeRecall(current, {
             ...input,
             id: held?.id ?? optimisticId(),
@@ -429,7 +453,7 @@ export function saveRecallOptimistic(input: RecallRecordInput): Promise<RecallRe
         },
         rollbackOnError: true,
         populateCache: true,
-        revalidate: false,
+        revalidate: readIfUnread,
       },
     );
     if (!written) throw new Error('That did not save.');
@@ -445,29 +469,27 @@ export function saveRecallOptimistic(input: RecallRecordInput): Promise<RecallRe
 export function keepRecallOptimistic(inputs: RecallRecordInput[]): Promise<RecallRecord[]> {
   return inTurn(async () => {
     let written: RecallRecord[] = [];
-    await mutate(
+    await mutate<RecallRecords | undefined>(
       KEY.recall,
-      async (current: RecallRecords | undefined) => {
+      async (current) => {
         written = await db.keepRecall(inputs);
-        return written.reduce(placeRecall, current) ?? { records: [], available: true };
+        return current && written.reduce(placeRecall, current);
       },
       {
-        optimisticData: (current: RecallRecords | undefined) =>
-          inputs.reduce<RecallRecords>(
-            (list, input) => {
-              const held = list.records.find((item) => item.key === input.key);
-              return placeRecall(
-                list,
-                held
-                  ? { ...held, letGo: false }
-                  : { ...input, letGo: false, id: optimisticId(), createdAt: nowIso() },
-              );
-            },
-            current ?? { records: [], available: true },
-          ),
+        optimisticData: (current) =>
+          current &&
+          inputs.reduce<RecallRecords>((list, input) => {
+            const held = list.records.find((item) => item.key === input.key);
+            return placeRecall(
+              list,
+              held
+                ? { ...held, letGo: false }
+                : { ...input, letGo: false, id: optimisticId(), createdAt: nowIso() },
+            );
+          }, current),
         rollbackOnError: true,
         populateCache: true,
-        revalidate: false,
+        revalidate: readIfUnread,
       },
     );
     return written;
@@ -477,26 +499,26 @@ export function keepRecallOptimistic(inputs: RecallRecordInput[]): Promise<Recal
 /** Takes a row away entirely. Undo's, for a reading that had never been answered. */
 export function deleteRecallOptimistic(key: string): Promise<void> {
   return inTurn(async () => {
-    await mutate(
+    await mutate<RecallRecords | undefined>(
       KEY.recall,
-      async (current: RecallRecords | undefined) => {
+      async (current) => {
         await db.deleteRecall(key);
-        return withoutRecall(current, key);
+        return current && withoutRecall(current, key);
       },
       {
-        optimisticData: (current: RecallRecords | undefined) => withoutRecall(current, key),
+        optimisticData: (current) => current && withoutRecall(current, key),
         rollbackOnError: true,
         populateCache: true,
-        revalidate: false,
+        revalidate: readIfUnread,
       },
     );
   });
 }
 
-function withoutRecall(current: RecallRecords | undefined, key: string): RecallRecords {
+function withoutRecall(current: RecallRecords, key: string): RecallRecords {
   return {
-    records: (current?.records ?? []).filter((item) => item.key !== key),
-    available: current?.available ?? true,
+    records: current.records.filter((item) => item.key !== key),
+    available: current.available,
   };
 }
 
