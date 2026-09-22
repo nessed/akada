@@ -6,7 +6,7 @@ type Row = Record<string, unknown>;
 
 // A PostgREST double for one insert, which refuses a column the project
 // does not have the way PostgREST's schema cache does (PGRST204).
-function fake(columns: string[]) {
+function fake(columns: string[], refuseScores = false) {
   const inserts: Row[] = [];
   return {
     inserts,
@@ -28,6 +28,11 @@ function fake(columns: string[]) {
             if (unknown) {
               return Promise.resolve({ data: null, error: { code: 'PGRST204', message: `Could not find the '${unknown}' column of 'sessions'` } });
             }
+            // A check constraint that disagrees with the app about a score,
+            // say one written by an older schema.sql.
+            if (refuseScores && 'score' in values) {
+              return Promise.resolve({ data: null, error: { code: '23514', message: 'violates check constraint "sessions_score_range"' } });
+            }
             return Promise.resolve({ data: { id: 's1', created_at: '2026-09-22T20:00:00Z', ...values }, error: null });
           },
         };
@@ -40,8 +45,8 @@ function fake(columns: string[]) {
 async function adapterWith(client: unknown) {
   // The adapter makes its own client on construction, which only needs the
   // two settings to exist; every call it makes here goes to the double.
-  process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'http://127.0.0.1:9';
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= 'test';
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||= 'http://127.0.0.1:9';
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||= 'test';
   const { SupabaseAdapter } = await import('./supabase-adapter');
   const adapter = new SupabaseAdapter() as unknown as Record<string, unknown>;
   adapter.supabase = client;
@@ -81,4 +86,12 @@ test('a sitting without a score never names the columns', async () => {
   await (await adapterWith(f.client)).addSession(sitting({ score: 9, scoreOutOf: 8 }));
   assert.equal(f.inserts.length, 1, 'a score that does not add up is no score, so one plain insert');
   assert.equal('score' in f.inserts[0], false);
+});
+
+test('a score the database check refuses costs the score, not the sitting', async () => {
+  const f = fake([...BASE, 'score', 'score_out_of'], true);
+  const saved = await (await adapterWith(f.client)).addSession(sitting({ score: 4.5, scoreOutOf: 8 }));
+  assert.equal(f.inserts.length, 2);
+  assert.equal(saved.durationSeconds, 2700);
+  assert.equal(saved.score, undefined);
 });

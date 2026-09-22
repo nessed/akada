@@ -121,8 +121,8 @@ function fake(sessions: Row[], segments: Row[], cap: number, fail = false) {
 async function adapterWith(client: unknown) {
   // The adapter makes its own client on construction, which only needs the
   // two settings to exist; every call it makes here goes to the double.
-  process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'http://127.0.0.1:9';
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= 'test';
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||= 'http://127.0.0.1:9';
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||= 'test';
   const { SupabaseAdapter } = await import('./supabase-adapter');
   const adapter = new SupabaseAdapter() as unknown as Record<string, unknown>;
   adapter.supabase = client;

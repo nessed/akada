@@ -7,8 +7,8 @@ import type { Course, Session } from '@/lib/data';
 import { useActiveSemester } from '@/lib/data-hooks';
 import SemesterManager from './SemesterManager';
 import { totalSeconds } from '@/lib/utils';
-import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
-import { cleanSessionNote } from '@/lib/planner-safety';
+import { isLoggableDuration } from '@/lib/session-safety';
+import { downloadSessionsCsv } from '@/lib/sessions-csv';
 import {
   usePreferences,
   type PaperTone,
@@ -118,26 +118,7 @@ export default function SettingsSheet({
   }
 
   function exportSessions() {
-    const lines = [
-      ['date', 'course', 'duration_minutes', 'note'].join(','),
-      ...safeSessions.map((s) => {
-        const c = courses.find((x) => x.id === s.courseId);
-        const note = cleanSessionNote(s.note).replace(/"/g, '""');
-        return [
-          s.date,
-          c ? `"${c.code}"` : '',
-          Math.round(clampSessionSeconds(s.durationSeconds) / 60).toString(),
-          `"${note}"`,
-        ].join(',');
-      }),
-    ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `akada-sessions-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadSessionsCsv(safeSessions, courses);
   }
 
   return (

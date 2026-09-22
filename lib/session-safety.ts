@@ -20,16 +20,27 @@ export function isLoggableDuration(value: unknown): boolean {
 }
 
 /**
- * The most a practice paper can be out of. A problem set worth 170 points is
- * a real total; four digits of one is a slip of the thumb.
+ * The most a practice paper can be out of. A problem set worth 170 points and
+ * an SAT out of 1600 are real totals; five digits of one is a slip.
  */
-export const MAX_SCORE_OUT_OF = 1000;
+export const MAX_SCORE_OUT_OF = 10000;
 
+/**
+ * A number as someone writes a mark down: "6", "4.5", ".5", "4,5" for four
+ * and a half, "1,350" for thirteen hundred and fifty. Nothing else, so "1e2",
+ * "0x10" and "six" are not numbers here, and a comma followed by exactly three
+ * digits is read as a thousands mark rather than a decimal point.
+ */
 function scoreNumber(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value !== 'string' || value.trim() === '') return null;
-  // "4,5" is how half the world writes four and a half.
-  const n = Number(value.trim().replace(',', '.'));
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  let plain: string;
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(text)) plain = text.replace(/,/g, '');
+  else if (/^\d+,\d+$/.test(text)) plain = text.replace(',', '.');
+  else if (/^(\d+\.?\d*|\.\d+)$/.test(text)) plain = text;
+  else return null;
+  const n = Number(plain);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -39,14 +50,18 @@ function scoreNumber(value: unknown): number | null {
  * MAX_SCORE_OUT_OF, or anything that is not a number, is no score at all
  * rather than a clamped guess at one, since the whole worth of the figure is
  * that it is what the paper actually said. Two decimal places is a quarter
- * mark and then some. Mirrored by sessions_score_range in supabase/schema.sql.
+ * mark and then some, and the pair is checked after it is rounded to them, so
+ * what passes here is exactly what gets stored. Mirrored by
+ * sessions_score_range in supabase/schema.sql.
  */
 export function cleanScore(score: unknown, outOf: unknown): { score: number; outOf: number } | null {
   const got = scoreNumber(score);
   const total = scoreNumber(outOf);
   if (got === null || total === null) return null;
-  if (total <= 0 || total > MAX_SCORE_OUT_OF || got < 0 || got > total) return null;
-  return { score: Math.round(got * 100) / 100, outOf: Math.round(total * 100) / 100 };
+  const rounded = { score: Math.round(got * 100) / 100 + 0, outOf: Math.round(total * 100) / 100 };
+  if (rounded.outOf <= 0 || rounded.outOf > MAX_SCORE_OUT_OF) return null;
+  if (rounded.score < 0 || rounded.score > rounded.outOf) return null;
+  return rounded;
 }
 
 /** "6/8", "4.5/8": a score as it is written in the margin, in mono. */

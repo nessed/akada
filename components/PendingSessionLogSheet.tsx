@@ -118,7 +118,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     }
     setSaving(true);
     try {
-      await addSessionOptimistic({
+      const saved = await addSessionOptimistic({
         courseId: pendingLog.courseId,
         taskId: pendingLog.taskId,
         date: pendingLog.date || isoDate(),
@@ -128,6 +128,12 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
         segments: pendingLog.segments,
         ...(practice ? { score: practice.score, scoreOutOf: practice.outOf } : {}),
       });
+      // A score the database had nowhere to put: the sitting is saved and the
+      // score is not, which is said once rather than left to vanish from the
+      // list a moment after it was typed.
+      if (practice && saved && saved.score == null) {
+        notify('Saved, without the score. Run the latest supabase/schema.sql once to keep practice scores.');
+      }
       // The session is what must not be lost, so it is written first and a
       // failure to tick the task off afterwards does not undo it.
       if (markTaskDone && task && !task.completed) {

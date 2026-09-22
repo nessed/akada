@@ -1120,6 +1120,117 @@ export async function keepForRecallTool(
   }
 }
 
+const LogStudySessionInput = z.object({
+  course_id: z.string().uuid(),
+  duration_minutes: z.number().int().min(1).max(Math.floor(MAX_SESSION_SECONDS / 60)),
+  date: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional(),
+  task_id: z.string().uuid().optional(),
+  note: z.string().trim().max(SESSION_NOTE_MAX).optional(),
+  break_minutes: z.number().int().min(0).max(Math.floor(MAX_SESSION_SECONDS / 60)).optional(),
+  // Taken loosely and checked by cleanScore below, so a score that does
+  // not add up costs the score and never the sitting it came with.
+  score: z.union([z.number(), z.string().max(20)]).optional(),
+  score_out_of: z.union([z.number(), z.string().max(20)]).optional(),
+});
+
+const LOG_STUDY_SESSION_DESCRIPTION =
+  'Record time the student actually spent studying one active-semester course, optionally against a specific task, with a note about what the sitting covered. Only log time the student reports; never estimate it. `date` defaults to today and takes a past date for a sitting being written up after the fact. `duration_minutes` is focus time and must never include breaks; put rest in `break_minutes`, which is reported separately and does not count toward any goal. When the sitting was a practice paper the student marked, pass what it scored as `score` and what it was out of as `score_out_of`, both or neither (4.5 and 8 for 4.5/8). Only a score the student gives you: never estimate one, and never turn a percentage into a score out of something the paper was not marked out of. A score that does not add up is left off and said so; the sitting is logged either way.';
+
+// Split out like createTasks, so a test can drive it against a double: this
+// is the one write whose whole job is not to lose the hours, whatever comes
+// with them.
+export async function logStudySession(
+  token: AuthenticatedToken,
+  { course_id, duration_minutes, date, task_id, note, break_minutes, score, score_out_of }: z.infer<typeof LogStudySessionInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const practice = cleanScore(score, score_out_of);
+    const scoreRefused = (score !== undefined || score_out_of !== undefined) && !practice;
+    const semesterId = await activeSemesterId(token, supabase);
+    if (!semesterId) return toolError('No active semester is set in Akada.');
+    const { data: course, error: courseError } = await supabase
+      .from('courses')
+      .select('id, code, name')
+      .eq('id', course_id)
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId)
+      .maybeSingle();
+    if (courseError) return queryFailed('log_study_session', 'course lookup', courseError, 'Akada could not look up that course.');
+    if (!course) return toolError('That course is not available in your active Akada semester. Find the course again first.');
+
+    // A task from another course would be accepted by the database and
+    // then read back as time spent on the wrong thing, because
+    // sessions.task_id is only `on delete set null` and nothing ties the
+    // pair together. Checked here rather than trusted.
+    if (task_id) {
+      const owned = await loadOwnTasks('log_study_session', token, [task_id]);
+      if (!owned.ok) return owned.error;
+      const task = owned.tasks[0];
+      if (String(task.course_id) !== course.id) {
+        return toolError('That task belongs to a different course. Log the session against the task’s own course, or leave task_id out.');
+      }
+    }
+
+    const row = {
+      user_id: token.userId,
+      course_id: course.id,
+      task_id: task_id ?? null,
+      // The server clock is UTC, which is a day boundary the student
+      // does not live in. Their own date wins whenever they give one.
+      date: date ?? isoDate(new Date()),
+      duration_seconds: duration_minutes * 60,
+      note: note ?? '',
+      // Left out entirely when there were none, so the insert still
+      // runs against a project that has not re-run supabase/schema.sql.
+      // Rest is never added into duration_seconds: the weekly goal and
+      // the run both read that column and would inflate together.
+      ...(break_minutes ? { break_seconds: break_minutes * 60 } : {}),
+    };
+    // The semester_id column is filled by schema.sql's
+    // sessions_set_semester_id trigger, exactly as the app's own
+    // addSession relies on. `*` for the same reason as everywhere else
+    // here: an un-migrated project still answers.
+    const insert = (values: Record<string, unknown>) => supabase.from('sessions').insert(values).select('*');
+    // A practice paper's score, named only when there is one for the same
+    // reason; and where the project has no columns for it yet, the sitting
+    // is logged without it rather than not at all, and the reply says so.
+    let { data: session, error: insertError } = await insert(
+      practice ? { ...row, score: practice.score, score_out_of: practice.outOf } : row,
+    );
+    let scoreDropped = false;
+    // A missing column (PGRST204, 42703), or the score check refusing
+    // the pair (23514): each aborts the insert whole, so writing it again
+    // without the score cannot write the sitting twice.
+    if (insertError && practice && ['PGRST204', '42703', '23514'].includes(insertError.code ?? '')) {
+      ({ data: session, error: insertError } = await insert(row));
+      scoreDropped = !insertError;
+    }
+    if (insertError) return queryFailed('log_study_session', 'insert', insertError, 'Akada could not save that study session.');
+    const saved = ((session ?? []) as Record<string, unknown>[])[0] ?? {};
+    return result({
+      session: {
+        id: String(saved.id ?? ''),
+        date: (saved.date as string | null) ?? null,
+        duration_minutes: Math.round(Number(saved.duration_seconds ?? 0) / 60),
+        duration_seconds: Number(saved.duration_seconds ?? 0),
+        break_minutes: Math.round(Number(saved.break_seconds ?? 0) / 60),
+        ...(practice && !scoreDropped ? { score: practice.score, score_out_of: practice.outOf } : {}),
+        note: typeof saved.note === 'string' ? saved.note : '',
+        task_id: (saved.task_id as string | null) ?? null,
+        course: { id: course.id, code: course.code, name: course.name },
+      },
+      ...(scoreRefused
+        ? { message: `The sitting is logged, but its score was not kept: a score needs both halves, \`score\` and \`score_out_of\`, as numbers, out of more than 0 and at most ${MAX_SCORE_OUT_OF}, and cannot be more than it was out of.` }
+        : scoreDropped
+          ? { message: 'The sitting is logged, but its score was not kept: this Akada project needs the latest supabase/schema.sql run once before it can store practice scores.' }
+          : {}),
+    });
+  } catch (cause) {
+    return toolCrashed('log_study_session', cause);
+  }
+}
+
 function createServer(token: AuthenticatedToken) {
   const server = new McpServer({ name: 'Akada', version: '1.0.0' });
 
@@ -1429,104 +1540,11 @@ function createServer(token: AuthenticatedToken) {
     'log_study_session',
     {
       title: 'Log study time in Akada',
-      description: 'Record time the student actually spent studying one active-semester course, optionally against a specific task, with a note about what the sitting covered. Only log time the student reports; never estimate it. `date` defaults to today and takes a past date for a sitting being written up after the fact. `duration_minutes` is focus time and must never include breaks; put rest in `break_minutes`, which is reported separately and does not count toward any goal. When the sitting was a practice paper the student marked, pass what it scored as `score` and what it was out of as `score_out_of`, both or neither (4.5 and 8 for 4.5/8). Only a score the student gives you: never estimate one, and never turn a percentage into a score out of something the paper was not marked out of.',
-      inputSchema: z.object({
-        course_id: z.string().uuid(),
-        duration_minutes: z.number().int().min(1).max(Math.floor(MAX_SESSION_SECONDS / 60)),
-        date: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional(),
-        task_id: z.string().uuid().optional(),
-        note: z.string().trim().max(SESSION_NOTE_MAX).optional(),
-        break_minutes: z.number().int().min(0).max(Math.floor(MAX_SESSION_SECONDS / 60)).optional(),
-        score: z.number().min(0).max(MAX_SCORE_OUT_OF).optional(),
-        score_out_of: z.number().positive().max(MAX_SCORE_OUT_OF).optional(),
-      }),
+      description: LOG_STUDY_SESSION_DESCRIPTION,
+      inputSchema: LogStudySessionInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async ({ course_id, duration_minutes, date, task_id, note, break_minutes, score, score_out_of }) => {
-      try {
-        const practice = cleanScore(score, score_out_of);
-        if ((score !== undefined || score_out_of !== undefined) && !practice) {
-          return toolError('A score needs both halves, `score` and `score_out_of`, and cannot be more than it was out of. Leave both out if the sitting was not a marked paper.');
-        }
-        const semesterId = await activeSemesterId(token);
-        if (!semesterId) return toolError('No active semester is set in Akada.');
-        const supabase = mcpSupabase(token.supabaseAccessToken);
-        const { data: course, error: courseError } = await supabase
-          .from('courses')
-          .select('id, code, name')
-          .eq('id', course_id)
-          .eq('user_id', token.userId)
-          .eq('semester_id', semesterId)
-          .maybeSingle();
-        if (courseError) return queryFailed('log_study_session', 'course lookup', courseError, 'Akada could not look up that course.');
-        if (!course) return toolError('That course is not available in your active Akada semester. Find the course again first.');
-
-        // A task from another course would be accepted by the database and
-        // then read back as time spent on the wrong thing, because
-        // sessions.task_id is only `on delete set null` and nothing ties the
-        // pair together. Checked here rather than trusted.
-        if (task_id) {
-          const owned = await loadOwnTasks('log_study_session', token, [task_id]);
-          if (!owned.ok) return owned.error;
-          const task = owned.tasks[0];
-          if (String(task.course_id) !== course.id) {
-            return toolError('That task belongs to a different course. Log the session against the task’s own course, or leave task_id out.');
-          }
-        }
-
-        const row = {
-          user_id: token.userId,
-          course_id: course.id,
-          task_id: task_id ?? null,
-          // The server clock is UTC, which is a day boundary the student
-          // does not live in. Their own date wins whenever they give one.
-          date: date ?? isoDate(new Date()),
-          duration_seconds: duration_minutes * 60,
-          note: note ?? '',
-          // Left out entirely when there were none, so the insert still
-          // runs against a project that has not re-run supabase/schema.sql.
-          // Rest is never added into duration_seconds: the weekly goal and
-          // the run both read that column and would inflate together.
-          ...(break_minutes ? { break_seconds: break_minutes * 60 } : {}),
-        };
-        // The semester_id column is filled by schema.sql's
-        // sessions_set_semester_id trigger, exactly as the app's own
-        // addSession relies on. `*` for the same reason as everywhere else
-        // here: an un-migrated project still answers.
-        const insert = (values: Record<string, unknown>) => supabase.from('sessions').insert(values).select('*');
-        // A practice paper's score, named only when there is one for the same
-        // reason; and where the project has no columns for it yet, the sitting
-        // is logged without it rather than not at all, and the reply says so.
-        let { data: session, error: insertError } = await insert(
-          practice ? { ...row, score: practice.score, score_out_of: practice.outOf } : row,
-        );
-        let scoreDropped = false;
-        if (insertError && practice && ['PGRST204', '42703'].includes(insertError.code ?? '')) {
-          ({ data: session, error: insertError } = await insert(row));
-          scoreDropped = !insertError;
-        }
-        if (insertError) return queryFailed('log_study_session', 'insert', insertError, 'Akada could not save that study session.');
-        const saved = ((session ?? []) as Record<string, unknown>[])[0] ?? {};
-        return result({
-          session: {
-            id: String(saved.id ?? ''),
-            date: (saved.date as string | null) ?? null,
-            duration_minutes: Math.round(Number(saved.duration_seconds ?? 0) / 60),
-            duration_seconds: Number(saved.duration_seconds ?? 0),
-            break_minutes: Math.round(Number(saved.break_seconds ?? 0) / 60),
-            ...(practice && !scoreDropped ? { score: practice.score, score_out_of: practice.outOf } : {}),
-            note: typeof saved.note === 'string' ? saved.note : '',
-            task_id: (saved.task_id as string | null) ?? null,
-            course: { id: course.id, code: course.code, name: course.name },
-          },
-          ...(scoreDropped
-            ? { message: 'The sitting is logged, but its score was not kept: this Akada project needs the latest supabase/schema.sql run once before it can store practice scores.' }
-            : {}),
-        });
-      } catch (cause) {
-        return toolCrashed('log_study_session', cause);
-      }
-    },
+    async (input) => logStudySession(token, input),
   );
 
   server.registerTool(

@@ -691,10 +691,12 @@ export class SupabaseAdapter implements DataProvider {
     let { data, error } = await insert(
       practice ? { ...row, score: practice.score, score_out_of: practice.outOf } : row,
     );
-    // And when there is one but the database has nowhere to put it yet, the
-    // sitting is written without it rather than not at all: the hours are
-    // the record, the score is commentary on them.
-    if (error && practice && isMissingColumn(error)) {
+    // And when there is one but the database has nowhere to put it yet, or
+    // its check refuses the pair, the sitting is written without it rather
+    // than not at all: the hours are the record, the score is commentary on
+    // them. Each of those aborts the insert whole, so this cannot write the
+    // sitting twice. The caller sees the score missing from what comes back.
+    if (error && practice && (isMissingColumn(error) || error.code === '23514')) {
       console.warn('The practice score was not kept. Run the latest supabase/schema.sql once.');
       ({ data, error } = await insert(row));
     }

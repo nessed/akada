@@ -21,6 +21,7 @@ import {
 } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
 import { clampSessionSeconds, isLoggableDuration, scoreFace } from '@/lib/session-safety';
+import { downloadSessionsCsv } from '@/lib/sessions-csv';
 import HandNote from '@/components/notebook/HandNote';
 import HandCheck from '@/components/notebook/HandCheck';
 import Stamp from '@/components/notebook/Stamp';
@@ -270,28 +271,7 @@ export default function StatsPage() {
    * anyone who wants it is already standing.
    */
   function exportCsv() {
-    const rows = [
-      ['date', 'course', 'duration_minutes', 'note', 'score', 'out_of'].join(','),
-      ...sessions.map((session) => {
-        const course = courses.find((c) => c.id === session.courseId);
-        const note = (session.note ?? '').replace(/"/g, '""');
-        return [
-          session.date,
-          course ? `"${course.code}"` : '',
-          Math.round(clampSessionSeconds(session.durationSeconds) / 60).toString(),
-          `"${note}"`,
-          session.score ?? '',
-          session.scoreOutOf ?? '',
-        ].join(',');
-      }),
-    ];
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `akada-sessions-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadSessionsCsv(sessions, courses);
   }
 
   const totalWhole = Math.floor(totalHrs);

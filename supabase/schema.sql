@@ -606,7 +606,7 @@ begin
         or (
           score is not null and score_out_of is not null
           and score >= 0 and score_out_of > 0
-          and score <= score_out_of and score_out_of <= 1000
+          and score <= score_out_of and score_out_of <= 10000
         )
       );
   end if;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isoDate, startOfWeek } from '@/lib/utils';
-import { createTasks, getRecallTool, getWeeklyStats, keepForRecallTool, recordRecallTool } from './route';
+import { createTasks, getRecallTool, getWeeklyStats, keepForRecallTool, logStudySession, recordRecallTool } from './route';
 
 type Row = Record<string, unknown>;
 
@@ -506,4 +506,70 @@ test('keep_for_recall treats the second copy of a reading as the reading already
   assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
   assert.match((output.structuredContent as { message: string }).message, /already being kept/);
   assert.equal(tables.recall_items.length, 0, 'no second row for the same reading');
+});
+
+/* ── A sitting with a practice score ─────────────────────────────────── */
+
+const WITH_SCORES: Record<string, string[]> = {
+  ...MIGRATED,
+  sessions: [...SCHEMA.sessions, 'score', 'score_out_of'],
+};
+
+type LogOutput = {
+  isError?: boolean;
+  content?: { text: string }[];
+  structuredContent?: { session: { score?: number; score_out_of?: number; duration_minutes: number }; message?: string };
+};
+
+const sitting = {
+  course_id: 'course-1',
+  duration_minutes: 50,
+  date: '2026-09-22',
+  note: 'Machiavelli closed book',
+};
+
+test('log_study_session keeps a practice score with the sitting', async () => {
+  const tables = fixtures();
+  const output = (await logStudySession(TOKEN, { ...sitting, score: 4.5, score_out_of: 8 }, fakeSupabase(tables, WITH_SCORES))) as LogOutput;
+  assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
+  const row = tables.sessions.at(-1)!;
+  assert.deepEqual([row.score, row.score_out_of, row.duration_seconds], [4.5, 8, 3000]);
+  assert.equal(output.structuredContent?.session.score, 4.5);
+  assert.equal(output.structuredContent?.message, undefined);
+});
+
+test('log_study_session logs the hours without a score the project has no columns for', async () => {
+  const tables = fixtures();
+  const before = tables.sessions.length;
+  const output = (await logStudySession(TOKEN, { ...sitting, score: 4.5, score_out_of: 8 }, fakeSupabase(tables, MIGRATED))) as LogOutput;
+  assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
+  assert.equal(tables.sessions.length, before + 1, 'one sitting, written once');
+  assert.equal('score' in tables.sessions.at(-1)!, false);
+  assert.equal(output.structuredContent?.session.score, undefined);
+  assert.match(output.structuredContent?.message ?? '', /schema\.sql/);
+});
+
+test('log_study_session never refuses the hours over a score that does not add up', async () => {
+  const bad: { score?: number | string; score_out_of?: number | string }[] = [
+    { score: 45 },
+    { score: 105, score_out_of: 100 },
+    { score: '4,5,6', score_out_of: '8' },
+    { score: 0, score_out_of: 0.004 },
+  ];
+  for (const score of bad) {
+    const tables = fixtures();
+    const before = tables.sessions.length;
+    const output = (await logStudySession(TOKEN, { ...sitting, ...score }, fakeSupabase(tables, WITH_SCORES))) as LogOutput;
+    assert.ok(!output.isError, `${JSON.stringify(score)}: ${JSON.stringify(output)}`);
+    assert.equal(tables.sessions.length, before + 1, JSON.stringify(score));
+    assert.equal('score' in tables.sessions.at(-1)!, false, JSON.stringify(score));
+    assert.match(output.structuredContent?.message ?? '', /both halves/, JSON.stringify(score));
+  }
+});
+
+test('log_study_session takes a score written the way people write one', async () => {
+  const tables = fixtures();
+  const output = (await logStudySession(TOKEN, { ...sitting, score: '1,350', score_out_of: '1600' }, fakeSupabase(tables, WITH_SCORES))) as LogOutput;
+  assert.ok(!output.isError);
+  assert.deepEqual([tables.sessions.at(-1)!.score, tables.sessions.at(-1)!.score_out_of], [1350, 1600]);
 });

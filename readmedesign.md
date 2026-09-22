@@ -531,8 +531,12 @@ way: "Scored" as an eyebrow, two short hand-underlined blanks for the score
 and what it was out of in mono, and "on a practice paper, if this was one" in
 the serif. Nothing is required. Something written there that is not a score
 out of something (half of one, more than it was out of) gets one quiet line
-saying it will not be kept, and the sitting saves anyway, because the sitting
-is the record and the score is commentary on it.
+saying it will not be kept, once both halves are in or the line has been left
+rather than on the first keystroke, and the sitting saves anyway, because the
+sitting is the record and the score is commentary on it. A database that has
+nowhere to put a score yet saves the sitting without it and says so once. The
+sheet scrolls when it is taller than the screen, which with a task and the
+marks above it it can be on a small phone.
 
 **On the course page** a **Practice** panel sits under the grade, once there
 is a paper to show. Each paper is one short pen mark, a little uphill the way
