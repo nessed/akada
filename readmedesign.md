@@ -112,8 +112,8 @@ presence.
 Scales the desktop screens are built on: type 10 / 11 / 12 / 13 / 13.5 / 14 /
 17 / 20 / 28 / 36, plus half-steps at 9.5 / 10.5 / 11.5 where mono labels needed
 them back; space 4 / 8 / 12 / 16 / 24 / 32 / 48; radii 4 for marks, 10 for
-fields and buttons, 14 for panels. Hit targets are 40px and a task row is
-48px.
+fields and buttons, 14 for the few things that still float (popovers,
+sheets). Hit targets are 40px and a task row is 48px.
 
 ### Layout: the rail and the sheet
 The app is one design read at two widths.
@@ -136,6 +136,38 @@ interruption; the sheet is still what phone gets. And the
 `FloatingActionButton` is gone: "New task" lives in the page header, and a
 timer starts from the row it belongs to, through a popover that takes a
 length without a trip to `/timer` first.
+
+### Rules, not panels
+Today and a course page draw no boxes. Every section used to be its own
+bordered, rounded panel with a fill step behind it, twelve of them on Today
+at the same weight, and a box that everything has stops meaning anything.
+The page is separated by its own ruling instead, the way a ruled pad is:
+
+- **The head band.** On Today, Up next is the one thing that spans the page,
+  with today's hours beside it (from `xl`), since Start is what fills them. On
+  a course page the band is the strip of four figures. Nothing frames it: it
+  leads by position and size.
+- **The fold.** `.fold`, two `line-strong` rules 2px apart, the full content
+  width. It closes the head band and is the one heavier line on the screen.
+- **The column rule.** From `xl` the page below the fold is two columns, the
+  day's work and the readings, with a 1px `line` between them. It belongs to
+  the right column, so it ends where that column does. Below `xl` it is one
+  column in reading order and the rule becomes a cutoff.
+- **Cutoffs.** A section is an eyebrow and a body, ended by a 1px `line`
+  cutoff with 28px either side (`divide-y` on the column). The last section in
+  a column has none.
+- **Rows** are written on the page (`TaskRow` with `ground="page"`) with a
+  `line-soft` hairline between them. Their hover wash reaches 15px past the
+  column on either side, the way a highlighter overshoots.
+- **The course rule.** `.course-rule`, a 20×3 stroke in the course colour set
+  before the code: the stripe that ran down a card's edge, turned on its side.
+  The code beside it stays in `ink-soft`, since a pastel on the bare page
+  reads at 1.5 to 2:1 on cream.
+
+What still floats keeps its edge and warm shadow: popovers, menus, the date
+picker, toasts, sheets and the timer dock. With the page unboxed they are the
+only edged things on screen, so they read as above it again. The Tasks table,
+Stats, the Record and Settings are not ruled this way yet.
 
 ### Hours, not percentages
 Nothing in the app draws a percentage bar. A week against a goal is **one
@@ -278,8 +310,8 @@ else:
   is guaranteed to look at the sitting, and it used to show a duration and a
   question and not a word about why the duration mattered.
 
-The Today panels (hours, the week's bars, courses against their goals, the
-course cards) read the same augmented list, so the hour strokes fill and "2h
+The Today sections (hours, the week's bars, the course list under the day)
+read the same augmented list, so the hour strokes fill and "2h
 to go" counts down while the clock runs. Anything that *decides* something,
 which task is up next, which course has gone quiet, still reads the record.
 
@@ -394,8 +426,8 @@ from its sheet ("Keep this for recall"), the ticked steps of a concept list
 ("keep 5 ticked for recall", in the Subtasks header), a line on a course page,
 a line on the log sheet, or through the connector.
 
-**The card.** One thing at a time, in the paper card Up next uses, with the
-course's rule down its left edge: the course code, when it was learned or how
+**The card.** One thing at a time, written on the page under the fold with no
+box around it, the course rule before its code: the course code, when it was learned or how
 it last went ("hazy 3 days ago"), the thing itself in the serif, and one line
 on how to recall it in italic ("the argument, without looking", "do one fresh,
 nothing in front of you"). Three words answer it: **clear**, **hazy**,
@@ -436,7 +468,7 @@ course unless nothing else is due, slipped things first, then things never
 asked, then the clear ones coming round again. A reader with a term of
 readings behind them would otherwise open the app to thirty cards at once,
 which is a backlog, and the app does not draw backlogs. When the five are
-answered the card becomes one dashed line, "That's today's recall.", for the
+answered the card becomes one line, "That's today's recall.", for the
 rest of the visit, and on the next visit the section is simply not there. A
 course page asks for the rest of its own on request ("Recall 4 now"), with no
 limit, because the reader asked.
@@ -485,7 +517,7 @@ made before the list is read leaves the list unread and reads it fresh.
   written by hand has nowhere else it could be brought back from. A line to
   write the next thing on sits at the foot, drawn the way the subtask sheet's
   "one more step…" is.
-- **The Coming panel**, under an exam's row, once per course: the same
+- **The Coming section**, under an exam's row, once per course: the same
   uprights, and "2 of 5 clear" in mono. A countdown on its own says how close
   an exam is; this says how close the reader is to it.
 - **The task sheet**: for a finished task, where it stands ("in recall ·
@@ -648,7 +680,8 @@ is not bound.
 
 ### Rearranging by hand
 Four lists let the reader set their own order, and all four are the same
-component, `ReorderList`: the **dashboard's stack of course cards**, the
+component, `ReorderList`: the **course list on Today** (carried as a `row`,
+since its entries are lines on the page), the
 **course panels in Settings**, the **subtasks inside a task**, and the
 **pieces of a marking scheme** on a course page. It is written against
 pointer events rather than a drag-and-drop library, because a carried thing

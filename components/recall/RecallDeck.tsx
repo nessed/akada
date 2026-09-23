@@ -176,7 +176,7 @@ export default function RecallDeck({
 
   return (
     <section className={className} aria-label={title}>
-      <div className="flex items-baseline justify-between gap-3 px-2 pb-2">
+      <div className="flex items-baseline justify-between gap-3 pb-3">
         <p className="eyebrow m-0">
           {title}
           {states.length > 0 && (
@@ -196,15 +196,14 @@ export default function RecallDeck({
       </div>
 
       {card ? (
-        <div
-          key={card.key}
-          className="deckle relative animate-fade-in overflow-hidden border border-line bg-paper py-5 pl-7 pr-5"
-        >
-          <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: color }} />
-
+        // Written on the page like everything else under the double rule. It
+        // is still one card at a time, keyed so the next one fades in, but it
+        // has no box: the course is the short rule before its code.
+        <div key={card.key} className="relative animate-fade-in">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="m-0 flex min-w-0 items-baseline gap-2.5">
-              <span className="eyebrow shrink-0" style={{ color }}>
+            <p className="m-0 flex min-w-0 items-center gap-2.5">
+              <span aria-hidden className="course-rule" style={{ ['--c' as string]: color }} />
+              <span className="eyebrow shrink-0 text-ink-soft">
                 {course?.code ?? 'Course'}
               </span>
               <span className="truncate font-serif text-[12.5px] italic text-muted">{meta}</span>
@@ -214,7 +213,7 @@ export default function RecallDeck({
               onClick={letGo}
               disabled={busy}
               title="Stop asking about this one"
-              className="-my-2 h-10 shrink-0 rounded-[10px] px-2 font-serif text-[12.5px] italic text-muted-soft transition-colors hover:bg-bg-tint hover:text-ink disabled:opacity-40"
+              className="-my-2 -mr-2 h-10 shrink-0 rounded-[10px] px-2 font-serif text-[12.5px] italic text-muted-soft transition-colors hover:bg-bg-tint hover:text-ink disabled:opacity-40"
             >
               let go
             </button>
@@ -225,7 +224,7 @@ export default function RecallDeck({
           </h3>
           <p className="m-0 mt-1.5 font-serif text-[13.5px] italic text-muted">{recallCue(card)}</p>
 
-          <div className="mt-4 flex flex-wrap items-center gap-1.5">
+          <div className="-ml-2.5 mt-3 flex flex-wrap items-center gap-1">
             {VERDICTS.map(({ verdict, label }) => (
               <button
                 key={verdict}
@@ -234,7 +233,7 @@ export default function RecallDeck({
                 disabled={busy}
                 aria-label={label}
                 title={label}
-                className="flex h-10 items-center gap-2 rounded-[10px] border border-line px-3.5 font-serif text-[15px] italic text-ink-soft transition-colors hover:border-line-strong hover:bg-bg-tint hover:text-ink disabled:opacity-40"
+                className="flex h-10 items-center gap-2 rounded-[10px] px-2.5 font-serif text-[15px] italic text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink disabled:opacity-40"
               >
                 <VerdictMark verdict={verdict} color={verdict === 'gone' ? 'var(--muted)' : color} />
                 {verdict}
@@ -243,7 +242,7 @@ export default function RecallDeck({
             <button
               type="button"
               onClick={askClaude}
-              className="ml-auto h-10 rounded-[10px] px-2 font-serif text-[12.5px] italic text-muted-soft transition-colors hover:bg-bg-tint hover:text-ink"
+              className="-mr-2 ml-auto h-10 rounded-[10px] px-2 font-serif text-[12.5px] italic text-muted-soft transition-colors hover:bg-bg-tint hover:text-ink"
               title="Copy a prompt that has Claude quiz you on this and record how it went"
             >
               ask Claude
@@ -251,7 +250,7 @@ export default function RecallDeck({
           </div>
         </div>
       ) : (
-        <div className="deckle animate-fade-in border border-dashed border-line-strong bg-paper px-7 py-5">
+        <div className="animate-fade-in">
           <p className="m-0 font-serif text-[15px] italic text-ink-soft">{closing}</p>
           {onClose && (
             <button
@@ -266,7 +265,7 @@ export default function RecallDeck({
       )}
 
       {!available && card && (
-        <p className="m-0 mt-2.5 px-2 text-[12px] leading-[1.5] text-muted">
+        <p className="m-0 mt-2.5 text-[12px] leading-[1.5] text-muted">
           Answers are not saved until the latest supabase/schema.sql has been run once.
         </p>
       )}
@@ -274,7 +273,7 @@ export default function RecallDeck({
       {/* What the last answer did, and the way to take it back. */}
       <p
         aria-live="polite"
-        className={`m-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-2 font-serif text-[13px] italic text-muted ${
+        className={`m-0 flex flex-wrap items-center gap-x-2 gap-y-1 font-serif text-[13px] italic text-muted ${
           outcome ? 'mt-2.5' : ''
         }`}
       >

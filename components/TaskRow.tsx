@@ -52,6 +52,14 @@ interface Props {
   onDelete?: (task: Task) => void;
   /** Hide the course column on a screen that is already one course. */
   hideCourse?: boolean;
+  /**
+   * What the row is drawn on. `paper` is a row inside a panel, the Tasks
+   * table. `page` is a row written straight onto the page, on Today and a
+   * course page, where lists have no box around them: it takes the page's
+   * own ground, so a swipe still has something opaque to slide, and washes
+   * with the tint on hover.
+   */
+  ground?: 'paper' | 'page';
 }
 
 export default function TaskRow({
@@ -71,6 +79,7 @@ export default function TaskRow({
   onOpenEnded,
   onDelete,
   hideCourse = false,
+  ground = 'paper',
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -135,7 +144,7 @@ export default function TaskRow({
     <div
       data-task-row={task.id}
       className={`group relative grid h-12 items-center gap-x-2 border-b border-line-soft pl-1 pr-2 text-ink transition-colors last:border-b-0 md:gap-x-0 ${
-        selected ? 'bg-bg-tint' : 'bg-paper hover:bg-paper-2'
+        selected ? 'bg-bg-tint' : ground === 'page' ? 'bg-bg hover:bg-bg-tint' : 'bg-paper hover:bg-paper-2'
       } ${task.completed ? 'opacity-50' : ''} ${
         hideCourse
           ? 'grid-cols-[40px_minmax(0,1fr)_78px_40px] md:grid-cols-[40px_minmax(0,1fr)_128px_88px]'

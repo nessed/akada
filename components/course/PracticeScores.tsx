@@ -63,8 +63,8 @@ export default function PracticeScores({
   };
 
   return (
-    <section aria-label="Practice papers" className="rounded-[14px] border border-line bg-paper p-5">
-      <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+    <section aria-label="Practice papers">
+      <div className="flex items-baseline justify-between">
         <p className="eyebrow m-0">
           Practice
           <span className="ml-1.5 font-mono tracking-normal text-ink-soft">{papers.length}</span>

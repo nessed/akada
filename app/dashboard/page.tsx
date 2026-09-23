@@ -17,7 +17,6 @@ import TaskRow from '@/components/TaskRow';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import {
   ComingPanel,
-  CoursesWeekPanel,
   TodayHours,
   UpNext,
   WeekPanel,
@@ -836,7 +835,11 @@ function DashboardPageContent() {
       {courses.length === 0 ? (
         <EmptyPanel action="Add a course" onAction={openAddCourse} />
       ) : (
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <>
+        {/* The head band. Up next is the one thing that spans the page, and
+            today's hours sit beside it, since Start is what fills them. The
+            pad's double rule closes the band; nothing below it is boxed. */}
+        <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
           <div className="min-w-0">
             {upNext ? (
               <UpNext
@@ -850,8 +853,8 @@ function DashboardPageContent() {
                 onSortChange={(upNextSort) => updatePrefs({ upNextSort })}
               />
             ) : (
-              <section className="deckle border border-dashed border-line-strong bg-paper px-7 py-8">
-                <p className="eyebrow m-0">Up next</p>
+              <section>
+                <p className="eyebrow m-0 text-ink-soft">Up next</p>
                 <p className="m-0 mt-3 font-serif text-[20px] text-ink-soft">
                   Nothing overdue and nothing due today.
                 </p>
@@ -860,6 +863,23 @@ function DashboardPageContent() {
                 </p>
               </section>
             )}
+          </div>
+          <div className="mt-8 xl:mt-0">
+            <TodayHours
+              sessions={shownSessions}
+              courses={courses}
+              goalHours={settings?.dailyGoalHours ?? 4}
+            />
+          </div>
+        </div>
+        <div aria-hidden className="fold my-8 md:mb-9" />
+
+        {/* Below the fold, two columns and a pencil rule between them: the
+            day's work on the left, the readings on the right. Each story
+            ends on a cutoff rule rather than inside a box. Below xl it is one
+            column in reading order. */}
+        <div className="grid items-start xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
+          <div className="flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
 
             {/* Recall. A few things from the term to bring back with the book
                 shut, and nothing at all on a day with none due. Under Up next
@@ -871,7 +891,6 @@ function DashboardPageContent() {
               closing="That's today's recall."
               onStudy={studyRecall}
               available={recallAvailable}
-              className="mt-8"
             />
 
             {overdueTasks.length > 0 && (
@@ -883,7 +902,7 @@ function DashboardPageContent() {
                   <button
                     type="button"
                     onClick={handleRescheduleOverdue}
-                    className="h-10 rounded-[10px] px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
+                    className="-my-3 -mr-2.5 h-10 rounded-[10px] px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
                   >
                     Reschedule all to today
                   </button>
@@ -900,6 +919,7 @@ function DashboardPageContent() {
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
                     onReschedule={handleSnoozeTask}
                     onOpenEnded={handleOpenEndTask}
+                    ground="page"
                   />
                 ))}
                 {overdueTasks.length > 5 && (
@@ -926,14 +946,18 @@ function DashboardPageContent() {
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
                     onReschedule={handleSnoozeTask}
                     onOpenEnded={handleOpenEndTask}
+                    ground="page"
                   />
                 ))}
               </TaskSection>
             )}
 
-            {/* Courses keep their cards and their drag order on Today, below
-                the day's own work rather than above it. */}
-            <div className="mt-8 mb-3.5 flex items-baseline justify-between">
+            {/* Courses keep their drag order on Today, below the day's own
+                work rather than above it, as entries on the page with a rule
+                between them. They carry the week's hours and quiet notes, so
+                the aside no longer repeats them. */}
+            <section>
+            <div className="mb-1 flex items-baseline justify-between">
               <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">Courses</h2>
               <button
                 type="button"
@@ -949,6 +973,8 @@ function DashboardPageContent() {
               getId={(course) => course.id}
               getLabel={(course) => course.code}
               label="Courses, in the order you arranged them"
+              shape="row"
+              className="[&>li+li]:border-t [&>li+li]:border-line-soft"
               onReorder={handleReorderCourses}
               renderItem={(course) => (
                 <CourseCard
@@ -964,16 +990,14 @@ function DashboardPageContent() {
                 />
               )}
             />
+            </section>
           </div>
 
-          {/* The right column: the day, the week, the courses against their
-              goals, and the two numbers that only matter in passing. */}
-          <aside className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">
-            <TodayHours
-              sessions={shownSessions}
-              courses={courses}
-              goalHours={settings?.dailyGoalHours ?? 4}
-            />
+          {/* The readings: what is coming, the week, and the two numbers that
+              only matter in passing. The pencil column rule belongs to them,
+              so it ends where they do. */}
+          <aside className="relative mt-7 border-t border-line pt-7 xl:sticky xl:top-10 xl:mt-0 xl:border-t-0 xl:pt-0 xl:before:absolute xl:before:-left-[41px] xl:before:inset-y-0 xl:before:w-px xl:before:bg-line xl:before:content-['']">
+            <div className="flex flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
             <ComingPanel
               tasks={tasks}
               courses={courses}
@@ -982,12 +1006,8 @@ function DashboardPageContent() {
               onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
             />
             <WeekPanel sessions={shownSessions} courses={courses} goalHours={weeklyGoalHours} />
-            <CoursesWeekPanel
-              courses={courses}
-              sessions={shownSessions}
-              onStart={(course, el) => openStartFor(null, el, false, course)}
-            />
-            <div className="flex items-center justify-between px-1 font-mono text-[11px] text-muted">
+            </div>
+            <div className="mt-7 flex items-center justify-between font-mono text-[11px] text-muted">
               {/* Continuity is measured in weeks now, not days. A daily
                   streak asks a student to study on the Saturday of a wedding
                   and then punishes them for the wedding. */}
@@ -1009,6 +1029,7 @@ function DashboardPageContent() {
             </div>
           </aside>
         </div>
+        </>
       )}
 
       <StartTimerPopover target={startTarget} onClose={() => setStartTarget(null)} />
@@ -1500,8 +1521,8 @@ function TaskSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-8">
-      <div className="flex items-baseline justify-between gap-3 px-2 pb-2">
+    <section>
+      <div className="flex items-baseline justify-between gap-3 pb-2">
         <p className="eyebrow m-0">
           {title}
           <span
@@ -1514,7 +1535,9 @@ function TaskSection({
         </p>
         {action}
       </div>
-      <div className="overflow-hidden rounded-[14px] border border-line bg-paper">{children}</div>
+      {/* No box: the rows are written on the page with a hairline between
+          them, and the cutoff under the section ends it. */}
+      <div className="-mx-[15px]">{children}</div>
     </section>
   );
 }
