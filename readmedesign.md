@@ -749,6 +749,34 @@ the browser. Notes written before this, when they lived in localStorage, are
 carried up into the account the first time the shelf loads. Everything the
 reader draws lives in `app/notes/notes.css`, scoped under `.notes`.
 
+### Courses: the shelf
+
+`/courses` is the term as a bookshelf, laid out as a grid of books standing
+face out. It used to be a bordered table of rows, and that was the one screen
+that still looked like an admin panel.
+
+- **A book** is a `.book-cover`: the course's tint (through `resolveTint`) as
+  the board, a 10px spine down the left in the course colour, and a crease
+  just inside it at a third of the colour's strength. The only depth is a
+  `line` hairline on the fore edge and the foot, never a shadow. The code
+  sits at the top as an eyebrow in `ink-soft`, the name in the serif under
+  it, and the week's `HourStrokes` at the foot with the mono figure over them.
+- **Heights vary** by a few percent, picked from the course id so a book
+  keeps its height, and the row is bottom-aligned so they stand on the
+  plank rather than hang from a line. Pointing at one lifts it 6px, the way
+  you tip a book off the shelf.
+- **The plank**, `.shelf-plank`, is the fold thickened into a board: two
+  `line-strong` rules with a `bg-tint` wash between them, the full content
+  width, one under each row.
+- **The label on the plank** is what a library would write there: what is
+  open (serif italic, overdue in `warn`), then the term's hours in mono and
+  when it was last sat.
+- **The last slot** is a dashed book, "Add a course", which opens the
+  catalog sheet on Today. It is the dashed-outline exception from Marks, not
+  Chips, and it replaces the header button this screen used to carry.
+- Two books a shelf on phone, three from 560px and on the narrow desktop
+  beside the rail, four from 1024px and five from 1280px.
+
 ### Buttons
 Two shapes, not four:
 - **Page CTA**, full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
