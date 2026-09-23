@@ -70,7 +70,9 @@ export default function PageShell({ children, hideNav, wide }: Props) {
       }
     >
       {!hideNav && <DesktopRail />}
-      <div className="transition-[padding] duration-200 md:pl-[var(--rail)]">
+      {/* data-scroll-content is what SmoothScroll pulls past the ends of
+          the page. The rail, the dock and the bar are outside it on purpose. */}
+      <div data-scroll-content className="transition-[padding] duration-200 md:pl-[var(--rail)]">
         <main
           className={`mx-auto px-[var(--density-gutter)] md:px-12 ${
             wide ? 'md:max-w-[1136px]' : 'max-w-2xl md:max-w-3xl'
