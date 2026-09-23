@@ -40,7 +40,10 @@ export default function PromptSheet({ onClose, onPasteAnswer }: { onClose: () =>
           Paste the answer
         </button>
       </div>
-      <button type="button" className="link" style={{ marginTop: 16 }} onClick={() => setShowing((s) => !s)}>
+      <p className="set-note" style={{ marginTop: 16 }}>
+        Using Claude with the Akada connector? Skip all this and ask it to save the notes to Akada. It writes them straight onto this shelf.
+      </p>
+      <button type="button" className="link" style={{ marginTop: 10 }} onClick={() => setShowing((s) => !s)}>
         {showing ? 'hide the prompt' : 'read the prompt first'}
       </button>
       {showing && (

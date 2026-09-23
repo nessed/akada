@@ -4,6 +4,10 @@ import type {
   RecallRecordInput,
   RecallRecords,
   Session,
+  StudyNote,
+  StudyNoteInput,
+  StudyNotes,
+  NoteCheckResult,
   Task,
   Semester,
   NewSemesterInput,
@@ -70,6 +74,18 @@ export interface DataProvider {
    * had never been answered back to having no row at all.
    */
   deleteRecall(key: string): Promise<void>;
+
+  // Notes. Not semester-scoped: every note the student has, newest first.
+  /**
+   * Resolves with `available: false` rather than throwing against a database
+   * that has not run the latest supabase/schema.sql.
+   */
+  getNotes(): Promise<StudyNotes>;
+  /** Creates a note, or writes over one by id. Undo puts a deleted note back through this. */
+  saveNote(input: StudyNoteInput): Promise<StudyNote>;
+  /** Writes a note's check results whole. */
+  setNoteChecks(id: string, checks: Record<string, NoteCheckResult>): Promise<void>;
+  deleteNote(id: string): Promise<void>;
 
   // Semesters
   /** The semester Dashboard/Tasks/Timer currently write into, or null before onboarding finishes it. */

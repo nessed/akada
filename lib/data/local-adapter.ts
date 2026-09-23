@@ -6,6 +6,10 @@ import type {
   RecallRecordInput,
   RecallRecords,
   Session,
+  StudyNote,
+  StudyNoteInput,
+  StudyNotes,
+  NoteCheckResult,
   Task,
   Semester,
   NewSemesterInput,
@@ -22,6 +26,8 @@ import {
   totalBreakSeconds,
 } from '@/lib/session-safety';
 import { seasonLabel } from '@/lib/utils';
+import { cleanChecks } from '@/lib/notes/checks';
+import { cleanNoteMarkdown, cleanNoteTitle } from '@/lib/notes/limits';
 import {
   clampDailyGoalHours,
   clampWeeklyGoalHours,
@@ -58,6 +64,7 @@ const KEYS = {
   onboarding: 'lums.onboardingComplete',
   userSettings: 'lums.userSettings',
   recall: 'lums.recall',
+  notes: 'lums.notes',
 } as const;
 
 /**
@@ -583,6 +590,41 @@ export class LocalAdapter implements DataProvider {
 
   async setOnboardingComplete(): Promise<void> {
     write(KEYS.onboarding, true);
+  }
+
+  // ---- Notes
+  async getNotes(): Promise<StudyNotes> {
+    const notes = read<StudyNote[]>(KEYS.notes, []).slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return { notes, available: true };
+  }
+
+  async saveNote(input: StudyNoteInput): Promise<StudyNote> {
+    const notes = read<StudyNote[]>(KEYS.notes, []);
+    const markdown = cleanNoteMarkdown(input.markdown);
+    if (!markdown.trim()) throw new Error('A note needs something in it.');
+    const now = new Date().toISOString();
+    const existing = input.id ? notes.find((n) => n.id === input.id) : undefined;
+    const note: StudyNote = {
+      id: input.id || uid(),
+      courseId: input.courseId !== undefined ? input.courseId || null : existing?.courseId ?? null,
+      title: cleanNoteTitle(input.title, markdown),
+      markdown,
+      checks: input.checks ? cleanChecks(input.checks) : existing?.checks ?? {},
+      source: input.source ?? existing?.source ?? 'app',
+      createdAt: input.createdAt ?? existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    write(KEYS.notes, [note, ...notes.filter((n) => n.id !== note.id)]);
+    return note;
+  }
+
+  async setNoteChecks(id: string, checks: Record<string, NoteCheckResult>): Promise<void> {
+    const notes = read<StudyNote[]>(KEYS.notes, []);
+    write(KEYS.notes, notes.map((n) => (n.id === id ? { ...n, checks: cleanChecks(checks) } : n)));
+  }
+
+  async deleteNote(id: string): Promise<void> {
+    write(KEYS.notes, read<StudyNote[]>(KEYS.notes, []).filter((n) => n.id !== id));
   }
 
   async resetAll(): Promise<void> {

@@ -23,6 +23,10 @@ import type {
   Session,
   Semester,
   NewSemesterInput,
+  StudyNote,
+  StudyNoteInput,
+  StudyNotes,
+  NoteCheckResult,
   Task,
   UserSettings,
 } from './data';
@@ -38,6 +42,7 @@ const KEY = {
   semesters: 'semesters',
   userSettings: 'user-settings',
   recall: 'recall',
+  notes: 'notes',
 } as const;
 
 /* ───────── Reads ───────── */
@@ -104,6 +109,19 @@ export function useRecallRecords() {
     loaded: data !== undefined,
     // Assumed there until a read says otherwise, so the page does not flash
     // a note about the database while the first read is in flight.
+    available: data?.available ?? true,
+    error,
+    isLoading,
+    revalidate,
+  };
+}
+
+/** Every note the student has, newest first. Not scoped to a semester. */
+export function useNotes() {
+  const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.notes, () => db.getNotes());
+  return {
+    notes: data?.notes ?? [],
+    loaded: data !== undefined,
     available: data?.available ?? true,
     error,
     isLoading,
@@ -630,6 +648,7 @@ export async function resetAllData() {
     mutate(KEY.semesters, [], { revalidate: false }),
     mutate(KEY.userSettings, null, { revalidate: false }),
     mutate(KEY.recall, { records: [], available: true }, { revalidate: false }),
+    mutate(KEY.notes, { notes: [], available: true }, { revalidate: false }),
   ]);
 }
 
@@ -650,9 +669,65 @@ export async function deleteAccountAndData() {
     mutate(KEY.semesters, [], { revalidate: false }),
     mutate(KEY.userSettings, null, { revalidate: false }),
     mutate(KEY.recall, { records: [], available: true }, { revalidate: false }),
+    mutate(KEY.notes, { notes: [], available: true }, { revalidate: false }),
   ]);
 }
 
 // Public re-exports so consumers can build their own SWR keys / call
 // mutate(KEY.foo) without re-deriving the constant.
 export const PLANNER_KEYS = KEY;
+
+/* ───────── Note mutations ───────── */
+
+function placeNote(current: StudyNotes | undefined, note: StudyNote): StudyNotes {
+  const notes = (current?.notes ?? []).filter((n) => n.id !== note.id);
+  return { notes: [note, ...notes], available: true };
+}
+
+/**
+ * Writes a note and returns it as stored. Not optimistic: a new note's id
+ * comes from the database, and the page opens the note by it.
+ */
+export async function saveNote(input: StudyNoteInput): Promise<StudyNote> {
+  const saved = await db.saveNote(input);
+  await mutate(KEY.notes, (current: StudyNotes | undefined) => placeNote(current, saved), { revalidate: false });
+  return saved;
+}
+
+export async function setNoteChecksOptimistic(id: string, checks: Record<string, NoteCheckResult>) {
+  await mutate(
+    KEY.notes,
+    async (current: StudyNotes | undefined) => {
+      await db.setNoteChecks(id, checks);
+      return { notes: (current?.notes ?? []).map((n) => (n.id === id ? { ...n, checks } : n)), available: true };
+    },
+    {
+      optimisticData: (current: StudyNotes | undefined) => ({
+        notes: (current?.notes ?? []).map((n) => (n.id === id ? { ...n, checks } : n)),
+        available: current?.available ?? true,
+      }),
+      rollbackOnError: true,
+      populateCache: true,
+      revalidate: false,
+    },
+  );
+}
+
+export async function deleteNoteOptimistic(id: string) {
+  await mutate(
+    KEY.notes,
+    async (current: StudyNotes | undefined) => {
+      await db.deleteNote(id);
+      return { notes: (current?.notes ?? []).filter((n) => n.id !== id), available: true };
+    },
+    {
+      optimisticData: (current: StudyNotes | undefined) => ({
+        notes: (current?.notes ?? []).filter((n) => n.id !== id),
+        available: current?.available ?? true,
+      }),
+      rollbackOnError: true,
+      populateCache: true,
+      revalidate: false,
+    },
+  );
+}

@@ -50,8 +50,14 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `get_recall`: Read what the student is keeping for recall, what is due, and how each thing has gone.
 - `record_recall`: Record how a recall went (clear, hazy or gone) after quizzing the student.
 - `keep_for_recall`: Keep concepts, lines or a task's ticked steps to be recalled at widening gaps.
+- `save_note`: Write a study note straight onto the Notes shelf, in Markd format, optionally linked to a course.
+- `list_notes`: List study notes with their course, length and how the self-checks have gone.
+- `get_note`: Read one note, with its self-check questions, answers and results.
+- `update_note`: Replace a note, append a section to it, retitle it, or link it to a course.
+- `record_note_checks`: Record how the student did on a note's self-checks after a quiz in chat.
+- `delete_note`: Permanently delete a note.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `delete_course`, `record_recall` and `keep_for_recall` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `delete_course`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks` and `delete_note` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -173,6 +179,23 @@ and have no row until first answered; everything else is a row in
 The descriptions carry the protocol the prompts in `lib/recall/prompt.ts` do:
 ask one thing at a time, show nothing before the attempt, show the right answer
 after it, and record the verdict the attempt earned without rounding up.
+
+### Notes: `save_note`, `list_notes`, `get_note`, `update_note`, `record_note_checks`, `delete_note`
+
+Notes live in the `notes` table (see `supabase/schema.sql`), are not scoped to a semester, and are what the Notes screen reads. `save_note` carries Markd's format rules in its description (`lib/notes/format.ts`), so an assistant writes a note in the same shape the copy-paste AI prompt asks for, without the student pasting anything.
+
+- **`save_note`** (`destructiveHint: false`): `markdown` (the whole note, up to 200,000 chars), optional `title` (read off the `#` heading when left out) and `course_id`. Stored with `source: "mcp"`. Returns the note's id, tally of checks and a `url` to open it.
+- **`list_notes`** (`readOnlyHint: true`): optional `query` (title or text), `course_id`, `limit` (1-50, default 20). Newest first.
+- **`get_note`** (`readOnlyHint: true`): `note_id`, `include_markdown` (default true). Returns the markdown and `check_questions`: each `[!CHECK]` block's `index`, `question`, `answer` and `result` (`got`, `not_yet` or null).
+- **`update_note`** (`destructiveHint: false`): `note_id`, then `markdown` (replace) or `append` (add to the end), `title`, `course_id` (null unlinks). A rewrite drops results for checks that no longer exist.
+- **`record_note_checks`** (`idempotentHint: true`): `note_id`, `results` of `{ index, result: "got" | "not_yet" | "clear" }`. The strokes on the note page fill in from this.
+- **`delete_note`** (`destructiveHint: true`): `note_id`.
+
+Things to ask Claude once it's connected:
+- "Make me notes on chapter 3 of this PDF and put them in Akada under ECON 240."
+- "Quiz me on my Harrod-Domar note." (reads the checks, asks one at a time, records got/not yet)
+- "Add three harder check questions to that note."
+- "Which of my notes have checks I keep missing?"
 
 ### 5. `log_study_session`
 - **Title**: Log study time in Akada
