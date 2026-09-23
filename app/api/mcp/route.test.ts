@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isoDate, startOfWeek } from '@/lib/utils';
-import { createTasks, getRecallTool, getWeeklyStats, keepForRecallTool, logStudySession, recordRecallTool } from './route';
+import { createTasks, getRecallTool, getWeeklyStats, keepForRecallTool, logStudySession, recordRecallTool, updateStudySession } from './route';
 
 type Row = Record<string, unknown>;
 
@@ -572,4 +572,44 @@ test('log_study_session takes a score written the way people write one', async (
   const output = (await logStudySession(TOKEN, { ...sitting, score: '1,350', score_out_of: '1600' }, fakeSupabase(tables, WITH_SCORES))) as LogOutput;
   assert.ok(!output.isError);
   assert.deepEqual([tables.sessions.at(-1)!.score, tables.sessions.at(-1)!.score_out_of], [1350, 1600]);
+});
+
+/* ── Fixing a logged sitting's note ──────────────────────────────────── */
+
+type UpdateOutput = {
+  isError?: boolean;
+  content?: { text: string }[];
+  structuredContent?: { session: { id: string; note: string; duration_seconds: number; course: { id: string } }; message: string };
+};
+
+test('update_study_session rewrites the note and nothing else', async () => {
+  const tables = fixtures();
+  const before = { ...tables.sessions[0] };
+  const output = (await updateStudySession(TOKEN, { session_id: 'session-1', note: 'Ch. 3 problems, redid 3.4' }, fakeSupabase(tables))) as UpdateOutput;
+  assert.ok(!output.isError, `expected success, got: ${JSON.stringify(output)}`);
+  assert.deepEqual(tables.sessions[0], { ...before, note: 'Ch. 3 problems, redid 3.4' });
+  assert.equal(output.structuredContent?.session.id, 'session-1');
+  assert.equal(output.structuredContent?.session.note, 'Ch. 3 problems, redid 3.4');
+  assert.equal(output.structuredContent?.session.duration_seconds, 3600);
+  assert.equal(output.structuredContent?.session.course.id, 'course-1');
+});
+
+test('update_study_session refuses a session that is not the student\'s own', async () => {
+  const tables = fixtures();
+  tables.sessions.push({ id: 'session-2', user_id: 'user-2', semester_id: 'sem-1', course_id: 'course-1', task_id: null, date: WEEK_START, duration_seconds: 600, note: 'theirs' });
+  for (const session_id of ['session-2', 'session-missing']) {
+    const output = (await updateStudySession(TOKEN, { session_id, note: 'mine now' }, fakeSupabase(tables))) as UpdateOutput;
+    assert.equal(output.isError, true, session_id);
+    assert.match(output.content?.[0].text ?? '', /not in your active Akada semester/, session_id);
+  }
+  assert.equal(tables.sessions[1].note, 'theirs');
+});
+
+test('update_study_session refuses a session from a course outside the active semester', async () => {
+  const tables = fixtures();
+  tables.courses.push({ id: 'course-old', user_id: 'user-1', semester_id: 'sem-0', code: 'HIST100', name: 'Old', weekly_goal_hours: 3 });
+  tables.sessions.push({ id: 'session-old', user_id: 'user-1', semester_id: 'sem-0', course_id: 'course-old', task_id: null, date: '2026-01-10', duration_seconds: 600, note: 'old' });
+  const output = (await updateStudySession(TOKEN, { session_id: 'session-old', note: 'new' }, fakeSupabase(tables))) as UpdateOutput;
+  assert.equal(output.isError, true);
+  assert.equal(tables.sessions.at(-1)!.note, 'old');
 });
