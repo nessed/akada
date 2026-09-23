@@ -7,6 +7,11 @@
 --
 -- Several statements can fail on an existing database that has drifted. Each
 -- is called out inline with the query to run first.
+--
+-- supabase/migrations/ holds the changes that were applied to production
+-- directly (through the Supabase MCP) and recorded there as migrations, so
+-- the repo's migration history matches the project's. Everything in them is
+-- also in this file.
 -- ============================================================================
 
 -- ============================================================
@@ -98,7 +103,27 @@ alter table tasks add column if not exists kind text not null default 'task'
 alter table tasks add column if not exists weight numeric
   check (weight is null or (weight >= 0 and weight <= 100));
 alter table tasks add column if not exists pages integer
-  check (pages is null or (pages >= 0 and pages <= 10000));
+  check (pages is null or (pages >= 1 and pages <= 10000));
+
+-- The same three columns went onto production through the MCP as the
+-- migration add_task_kind_weight_pages (supabase/migrations/), with a page
+-- count of at least 1. An earlier version of this file allowed 0. A zero
+-- was never a real count: cleanPages in lib/planner-safety.ts already read
+-- it as "not set", so it is cleared to the null it always meant and the
+-- bound is brought into line. Nothing happens where it already says 1.
+do $$
+begin
+  if exists (
+    select 1 from pg_constraint
+    where conname = 'tasks_pages_check'
+      and pg_get_constraintdef(oid) like '%pages >= 0%'
+  ) then
+    update tasks set pages = null where pages < 1;
+    alter table tasks drop constraint tasks_pages_check;
+    alter table tasks add constraint tasks_pages_check
+      check (pages is null or (pages >= 1 and pages <= 10000));
+  end if;
+end $$;
 
 -- ============================================================
 -- 3. SESSIONS  (FK -> courses, FK -> tasks)
