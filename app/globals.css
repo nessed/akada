@@ -131,11 +131,16 @@ body {
    over the page has to chain up to the viewport to move anything. Declaring
    `none` on body blocked precisely that chaining and left every page
    unscrollable while still reporting a full scrollHeight. On html it reaches
-   the viewport directly, which is what suppressing the overscroll glow and
-   pull-to-refresh actually wanted, and body keeps the default `auto` so the
-   chain stays open. */
+   the viewport directly, and body keeps the default `auto` so the chain
+   stays open.
+
+   `contain`, not `none`. Both stop pull-to-refresh, which is all this was
+   ever for, but `none` also took away the bounce at the ends: the page hit
+   a wall under a finger on iOS and stopped dead on Android. `contain` keeps
+   the platform's own rubber band and stretch. A wheel or a trackpad gets
+   the same pull from SmoothScroll, since desktop browsers draw none. */
 html {
-  overscroll-behavior-y: none;
+  overscroll-behavior-y: contain;
   /* A jump the page makes on purpose (a contents link, a row brought into
      view from the keyboard) glides instead of cutting. Route changes still
      land at the top instantly: layout.tsx sets data-scroll-behavior, which
