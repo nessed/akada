@@ -26,6 +26,7 @@ import { daysBetween, isoDate, startOfWeek, endOfWeek } from '@/lib/utils';
 import { readCredit } from '@/lib/progression/credit';
 import { readRuns } from '@/lib/progression/runs';
 import { mcpSupabase, mcpUrl, siteUrl } from './_shared';
+import { registerNoteTools } from './notes-tools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -2205,6 +2206,8 @@ function createServer(token: AuthenticatedToken) {
     },
     async (input) => keepForRecallTool(token, input),
   );
+
+  registerNoteTools(server, token);
 
   return server;
 }

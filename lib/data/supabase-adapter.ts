@@ -7,6 +7,11 @@ import type {
   RecallRecordInput,
   RecallRecords,
   Session,
+  StudyNote,
+  StudyNoteInput,
+  StudyNotes,
+  NoteCheckResult,
+  NoteSource,
   Task,
   TaskSubtask,
   Semester,
@@ -24,6 +29,8 @@ import {
   totalBreakSeconds,
 } from '@/lib/session-safety';
 import { seasonLabel } from '@/lib/utils';
+import { cleanChecks } from '@/lib/notes/checks';
+import { cleanNoteMarkdown, cleanNoteTitle } from '@/lib/notes/limits';
 import { attachSegments, dropCutChain, segmentWindowStart } from './segment-rows';
 import {
   clampDailyGoalHours,
@@ -125,6 +132,34 @@ interface RecallRow {
   let_go: boolean;
   created_at: string;
 }
+
+interface NoteRow {
+  id: string;
+  course_id: string | null;
+  title: string;
+  markdown: string;
+  checks: unknown;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function rowToNote(r: NoteRow): StudyNote {
+  const source: NoteSource = r.source === 'import' || r.source === 'mcp' ? r.source : 'app';
+  return {
+    id: r.id,
+    courseId: r.course_id,
+    title: r.title,
+    markdown: r.markdown,
+    checks: cleanChecks(r.checks),
+    source,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+const NOTES_UNAVAILABLE =
+  'Notes could not be saved. Run the latest supabase/schema.sql once and try again.';
 
 interface SemesterRow {
   id: string;
@@ -1178,6 +1213,68 @@ export class SupabaseAdapter implements DataProvider {
     if (error) throw error;
   }
 
+  // ---- Notes ----
+  // Not semester-scoped: a note belongs to the student, and to a course only
+  // loosely. The table is read with `*` so a column added later cannot break
+  // a project that has not caught up.
+
+  async getNotes(): Promise<StudyNotes> {
+    const uid = await this.userId();
+    const { data, error } = await this.supabase
+      .from('notes')
+      .select('*')
+      .eq('user_id', uid)
+      .order('updated_at', { ascending: false });
+    if (error) {
+      if (isMissingRecall(error)) return { notes: [], available: false };
+      throw error;
+    }
+    return { notes: (data as NoteRow[]).map(rowToNote), available: true };
+  }
+
+  async saveNote(input: StudyNoteInput): Promise<StudyNote> {
+    const uid = await this.userId();
+    const markdown = cleanNoteMarkdown(input.markdown);
+    if (!markdown.trim()) throw new Error('A note needs something in it.');
+    const row: Record<string, unknown> = {
+      user_id: uid,
+      title: cleanNoteTitle(input.title, markdown),
+      markdown,
+      updated_at: new Date().toISOString(),
+    };
+    if (input.courseId !== undefined) row.course_id = input.courseId || null;
+    if (input.source) row.source = input.source;
+    if (input.checks) row.checks = cleanChecks(input.checks);
+    if (input.createdAt) row.created_at = input.createdAt;
+    if (input.id) row.id = input.id;
+    const query = input.id
+      ? this.supabase.from('notes').upsert(row, { onConflict: 'id' })
+      : this.supabase.from('notes').insert(row);
+    const { data, error } = await query.select().single();
+    if (error) {
+      if (isMissingRecall(error)) throw new Error(NOTES_UNAVAILABLE);
+      if (error.code === '23503') throw new Error('That course is not there any more.');
+      throw error;
+    }
+    return rowToNote(data as NoteRow);
+  }
+
+  async setNoteChecks(id: string, checks: Record<string, NoteCheckResult>): Promise<void> {
+    const uid = await this.userId();
+    const { error } = await this.supabase
+      .from('notes')
+      .update({ checks: cleanChecks(checks) })
+      .eq('id', id)
+      .eq('user_id', uid);
+    if (error) throw isMissingRecall(error) ? new Error(NOTES_UNAVAILABLE) : error;
+  }
+
+  async deleteNote(id: string): Promise<void> {
+    const uid = await this.userId();
+    const { error } = await this.supabase.from('notes').delete().eq('id', id).eq('user_id', uid);
+    if (error) throw error;
+  }
+
   // ---- Dev / debugging ----
 
   async resetAll(): Promise<void> {
@@ -1185,6 +1282,7 @@ export class SupabaseAdapter implements DataProvider {
     // Delete in FK-safe order. recall_items would go with its courses anyway;
     // it is named so a project without the table simply skips it.
     await this.supabase.from('recall_items').delete().eq('user_id', uid);
+    await this.supabase.from('notes').delete().eq('user_id', uid);
     await this.supabase.from('sessions').delete().eq('user_id', uid);
     await this.supabase.from('tasks').delete().eq('user_id', uid);
     await this.supabase.from('courses').delete().eq('user_id', uid);

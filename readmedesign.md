@@ -738,8 +738,16 @@ back button walks out the way you came in.
 - Paper tone and heading font come from Appearance. The reader only owns text
   size and column width, in the `Aa` popover.
 
-Notes are kept in this browser's localStorage for now. Everything the reader
-draws lives in `app/notes/notes.css`, scoped under `.notes`.
+Notes live in the `notes` table in Supabase, owned by the student and not
+scoped to a semester; a note linked to a course takes the course's colour for
+its stripe and its code in the standfirst, and one sent by an assistant over
+the connector says "From your assistant" there instead of "Edited". The self-check
+results are stored on the note, so the strokes follow the student between
+devices and fill in when Claude quizzes them through `record_note_checks`.
+Only the reading position, the draft in progress and the `Aa` choices stay in
+the browser. Notes written before this, when they lived in localStorage, are
+carried up into the account the first time the shelf loads. Everything the
+reader draws lives in `app/notes/notes.css`, scoped under `.notes`.
 
 ### Buttons
 Two shapes, not four:

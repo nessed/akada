@@ -218,6 +218,34 @@ create table if not exists recall_items (
 alter table recall_items enable row level security;
 
 -- ============================================================
+-- 3b. NOTES
+--
+-- Study notes, the markdown the Notes screen reads (it was Markd, which kept
+-- them in the browser). Not semester-scoped: a note belongs to the student
+-- and only loosely to a course, so deleting the course unlinks the note
+-- rather than taking it. `checks` holds the self-check results by position,
+-- {"0":"got","1":"miss"}, written whole. `source` says whether it was
+-- written here, opened from a file, or sent by an assistant over MCP.
+-- ============================================================
+create table if not exists notes (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  course_id   uuid references courses(id) on delete set null,
+  title       text not null,
+  markdown    text not null,
+  checks      jsonb not null default '{}'::jsonb,
+  source      text not null default 'app' check (source in ('app', 'import', 'mcp')),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  -- The same ceilings lib/notes/limits.ts holds the app and the connector to.
+  constraint notes_title_length check (char_length(title) between 1 and 300),
+  constraint notes_markdown_length check (char_length(markdown) between 1 and 200000),
+  constraint notes_checks_object check (jsonb_typeof(checks) = 'object')
+);
+
+alter table notes enable row level security;
+
+-- ============================================================
 -- 4. SEMESTERS
 --
 -- A user now has many semesters, not one. The table used to be keyed
@@ -468,6 +496,7 @@ drop policy if exists "Users manage own settings" on user_settings;
 drop policy if exists "Users manage own mark candidates" on mark_candidates;
 drop policy if exists "Users manage own trust pulse" on trust_pulse;
 drop policy if exists "Users manage own recall" on recall_items;
+drop policy if exists "Users manage own notes" on notes;
 
 create policy "Users manage own courses"
   on courses for all
@@ -523,6 +552,12 @@ create policy "Users manage own recall"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
+create policy "Users manage own notes"
+  on notes for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
 -- ============================================================
 -- 8. INDEXES
 --
@@ -551,6 +586,8 @@ create unique index if not exists recall_items_user_key_unique on recall_items (
 -- Read a term at a time, like everything else.
 create index if not exists recall_items_semester_idx      on recall_items (user_id, semester_id);
 create index if not exists recall_items_course_idx        on recall_items (course_id);
+create index if not exists notes_user_updated_idx         on notes (user_id, updated_at desc);
+create index if not exists notes_course_idx               on notes (course_id);
 
 -- ============================================================
 -- 9. DATA INTEGRITY CONSTRAINTS

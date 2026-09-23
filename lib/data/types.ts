@@ -287,6 +287,47 @@ export interface RecallRecords {
   available: boolean;
 }
 
+/** Where a note came from: written here, opened from a file, or sent by an assistant. */
+export type NoteSource = 'app' | 'import' | 'mcp';
+
+/** How a "Check yourself" went, keyed by the check's position in the note. */
+export type NoteCheckResult = 'got' | 'miss';
+
+/**
+ * A study note, the markdown Markd used to keep in the browser. Not scoped to
+ * a semester: a note on a course outlives the term it was written in, and
+ * `courseId` goes null rather than taking the note with it when the course is
+ * deleted.
+ */
+export interface StudyNote {
+  id: string;
+  courseId: string | null;
+  title: string;
+  markdown: string;
+  checks: Record<string, NoteCheckResult>;
+  source: NoteSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudyNoteInput {
+  /** Present to write over a note that exists, or to put one back after undo. */
+  id?: string;
+  courseId?: string | null;
+  title: string;
+  markdown: string;
+  source?: NoteSource;
+  /** Left out, a note keeps the results it has. */
+  checks?: Record<string, NoteCheckResult>;
+  createdAt?: string;
+}
+
+/** `available` is false against a database without the notes table yet. */
+export interface StudyNotes {
+  notes: StudyNote[];
+  available: boolean;
+}
+
 export interface Semester {
   id: string;
   label: string;

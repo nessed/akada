@@ -12,10 +12,17 @@ import PromptSheet from '@/components/notes/PromptSheet';
 import Icon from '@/components/notes/Icon';
 import { CheckStrokes, MinutesLeft, TocList } from '@/components/notes/Contents';
 import {
-  DOCS_KEY, READER_KEY, checksKey, dateLabel, downloadNote, draftKey, loadChecks, loadNotes, minutesFor, newNoteId,
+  DOCS_KEY, READER_KEY, checksKey, dateLabel, downloadNote, draftKey, loadChecks, loadNotes, minutesFor,
   noteColor, readStore, relativeLabel, removeStore, sampleNote, scrollKey, titleFromMarkdown, unwrapFence, wordCount,
   writeStore, type CheckResult, type Note,
 } from '@/lib/notes/store';
+import { useCourses, useNotes, saveNote, deleteNoteOptimistic, setNoteChecksOptimistic } from '@/lib/data-hooks';
+import type { NoteSource, StudyNote } from '@/lib/data';
+
+/** The page's view of a stored note: times as numbers, the way it compares them. */
+type ShelfNote = Note & { courseId: string | null; checks: Record<string, CheckResult>; source: NoteSource; stored: StudyNote };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Slip = { id: number; text: string; action?: { label: string; run: () => void } };
 type Reader = { size: 'small' | 'medium' | 'large'; measure: 'narrow' | 'wide' };
@@ -61,8 +68,24 @@ function NotesContent() {
   const editing = params.get('edit') === '1';
   const writingNew = params.get('new') === '1';
 
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [ready, setReady] = useState(false);
+  const { notes: stored, loaded, available } = useNotes();
+  const { courses } = useCourses();
+  const notes: ShelfNote[] = useMemo(
+    () => stored.map((n) => ({
+      id: n.id,
+      title: n.title,
+      markdown: n.markdown,
+      updatedAt: Date.parse(n.updatedAt) || Date.now(),
+      createdAt: Date.parse(n.createdAt) || Date.now(),
+      courseId: n.courseId,
+      checks: n.checks,
+      source: n.source,
+      stored: n,
+    })),
+    [stored],
+  );
+  const [prefsReady, setPrefsReady] = useState(false);
+  const ready = prefsReady && loaded;
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const [reader, setReader] = useState<Reader>({ size: 'medium', measure: 'narrow' });
@@ -70,7 +93,6 @@ function NotesContent() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeHeading, setActiveHeading] = useState('');
   const [progress, setProgress] = useState(0);
-  const [checks, setChecks] = useState<Record<string, CheckResult>>({});
   const [contentsOpen, setContentsOpen] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
   const [slip, setSlip] = useState<Slip | null>(null);
@@ -83,16 +105,48 @@ function NotesContent() {
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      setNotes(loadNotes());
       setReader(readReader());
-      setReady(true);
+      setPrefsReady(true);
     });
     return () => cancelAnimationFrame(frame);
   }, []);
-  useEffect(() => { if (ready) writeStore(DOCS_KEY, JSON.stringify(notes)); }, [notes, ready]);
+
+  // Notes written before they lived in the account were kept in this
+  // browser. Carry them up once, results and all, then forget the local copy.
+  const movedRef = useRef(false);
+  useEffect(() => {
+    if (!loaded || !available || movedRef.current) return;
+    const local = loadNotes();
+    if (!local.length) return;
+    movedRef.current = true;
+    (async () => {
+      let moved = 0;
+      for (const note of local) {
+        try {
+          await saveNote({
+            id: UUID.test(note.id) ? note.id : undefined,
+            title: note.title,
+            markdown: note.markdown,
+            checks: loadChecks(note.id),
+            createdAt: new Date(note.createdAt ?? note.updatedAt).toISOString(),
+            source: 'import',
+          });
+          removeStore(checksKey(note.id));
+          moved++;
+        } catch {
+          /* Left in the browser; the next visit tries again. */
+          return;
+        }
+      }
+      removeStore(DOCS_KEY);
+      if (moved) say(`Moved ${moved} ${moved === 1 ? 'note' : 'notes'} from this browser into your account.`);
+    })();
+  }, [loaded, available, say]);
 
   const mode: 'library' | 'read' | 'edit' = writingNew || editing ? 'edit' : openId ? 'read' : 'library';
   const active = notes.find((n) => n.id === openId);
+  const checks = useMemo(() => active?.checks ?? {}, [active]);
+  const activeCourse = active?.courseId ? courses.find((c) => c.id === active.courseId) : undefined;
 
   const go = useCallback((search: string) => {
     router.push(search ? `/notes?${search}` : '/notes');
@@ -113,10 +167,7 @@ function NotesContent() {
 
   useEffect(() => {
     if (!openId) return;
-    const frame = requestAnimationFrame(() => {
-      setChecks(loadChecks(openId));
-      setCollapsed(new Set());
-    });
+    const frame = requestAnimationFrame(() => setCollapsed(new Set()));
     return () => cancelAnimationFrame(frame);
   }, [openId]);
 
@@ -172,14 +223,12 @@ function NotesContent() {
   }, [readerOpen]);
 
   const markCheck = useCallback((id: string, result: CheckResult) => {
-    setChecks((current) => {
-      const next = { ...current };
-      if (next[id] === result) delete next[id];
-      else next[id] = result;
-      writeStore(checksKey(openId), JSON.stringify(next));
-      return next;
-    });
-  }, [openId]);
+    if (!openId) return;
+    const next = { ...checks };
+    if (next[id] === result) delete next[id];
+    else next[id] = result;
+    setNoteChecksOptimistic(openId, next).catch(() => say('That result didn’t save. Try again in a moment.'));
+  }, [openId, checks, say]);
 
   const toggleSection = (id: string) =>
     setCollapsed((current) => {
@@ -234,17 +283,27 @@ function NotesContent() {
     return () => window.clearTimeout(timer);
   }, [draft, mode, ready, writingNew, openId]);
 
-  const saveDraft = useCallback(() => {
+  const [saving, setSaving] = useState(false);
+  const saveDraft = useCallback(async () => {
     const text = unwrapFence(draft);
-    if (!text.trim()) return;
-    const id = writingNew || !active ? newNoteId() : active.id;
-    const now = Date.now();
-    const next: Note = { id, title: titleFromMarkdown(text), markdown: text, updatedAt: now, createdAt: active && !writingNew ? active.createdAt : now };
-    setNotes((previous) => [next, ...previous.filter((n) => n.id !== id)]);
-    removeStore(draftKey);
-    if (writingNew) writeStore(scrollKey(id), '0');
-    router.replace(`/notes?n=${encodeURIComponent(id)}`);
-  }, [active, draft, writingNew, router]);
+    if (!text.trim() || saving) return;
+    setSaving(true);
+    try {
+      const saved = await saveNote({
+        id: writingNew || !active ? undefined : active.id,
+        title: titleFromMarkdown(text),
+        markdown: text,
+        source: writingNew || !active ? 'app' : undefined,
+      });
+      removeStore(draftKey);
+      if (writingNew) writeStore(scrollKey(saved.id), '0');
+      router.replace(`/notes?n=${encodeURIComponent(saved.id)}`);
+    } catch (cause) {
+      say(cause instanceof Error && cause.message ? cause.message : 'The note didn’t save. Your draft is still here.');
+    } finally {
+      setSaving(false);
+    }
+  }, [active, draft, writingNew, router, saving, say]);
 
   const cancelEdit = useCallback(() => {
     const kept = draft;
@@ -264,11 +323,17 @@ function NotesContent() {
   }, [draft, writingNew, openId, router, say]);
 
   /* ── Shelf ────────────────────────────────────────────────────────── */
-  const addNotes = useCallback((incoming: Note[], message?: string) => {
+  const addNotes = useCallback(async (incoming: { title: string; markdown: string }[], message?: string, source: NoteSource = 'import') => {
     if (!incoming.length) return;
-    setNotes((previous) => [...incoming, ...previous]);
-    go(`n=${encodeURIComponent(incoming[0].id)}`);
-    say(message ?? (incoming.length === 1 ? `Opened “${incoming[0].title}”.` : `Opened ${incoming.length} notes.`));
+    const saved: StudyNote[] = [];
+    try {
+      for (const note of incoming) saved.push(await saveNote({ title: note.title, markdown: note.markdown, source }));
+    } catch (cause) {
+      say(cause instanceof Error && cause.message ? cause.message : 'That didn’t save. Try again in a moment.');
+    }
+    if (!saved.length) return;
+    go(`n=${encodeURIComponent(saved[0].id)}`);
+    say(message ?? (saved.length === 1 ? `Opened “${saved[0].title}”.` : `Opened ${saved.length} notes.`));
   }, [go, say]);
 
   const importFiles = useCallback(async (files: File[]) => {
@@ -280,14 +345,13 @@ function NotesContent() {
     const read = await Promise.all(usable.map(async (file) => {
       try {
         const text = unwrapFence(await file.text());
-        const now = Date.now();
         const title = /^#\s+/m.test(text) ? titleFromMarkdown(text) : file.name.replace(/\.[^.]+$/, '');
-        return { id: newNoteId(), title, markdown: text, updatedAt: now, createdAt: now };
+        return { title, markdown: text };
       } catch {
         return null;
       }
     }));
-    addNotes(read.filter((n): n is NonNullable<typeof n> => n !== null));
+    await addNotes(read.filter((n): n is NonNullable<typeof n> => n !== null));
   }, [addNotes, say]);
 
   const onFileInput = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -296,20 +360,32 @@ function NotesContent() {
   };
 
   const deleteNote = useCallback((id: string) => {
-    const at = notes.findIndex((n) => n.id === id);
-    const gone = notes[at];
+    const gone = notes.find((n) => n.id === id)?.stored;
     if (!gone) return;
-    setNotes((current) => current.filter((n) => n.id !== id));
     if (openId === id) router.replace('/notes');
+    deleteNoteOptimistic(id).catch(() => say('That note didn’t delete. Try again in a moment.'));
     say(`Deleted “${gone.title}”.`, {
       label: 'Undo',
-      run: () => setNotes((current) => {
-        const copy = current.filter((n) => n.id !== gone.id);
-        copy.splice(Math.min(at, copy.length), 0, gone);
-        return copy;
-      }),
+      run: () => {
+        saveNote({
+          id: gone.id,
+          title: gone.title,
+          markdown: gone.markdown,
+          courseId: gone.courseId,
+          checks: gone.checks,
+          source: gone.source,
+          createdAt: gone.createdAt,
+        }).catch(() => say('It couldn’t be put back.'));
+      },
     });
   }, [notes, openId, router, say]);
+
+  const linkCourse = (courseId: string | null) => {
+    if (!active) return;
+    saveNote({ id: active.id, title: active.title, markdown: active.markdown, courseId }).catch(() =>
+      say('The course didn’t save. Try again in a moment.'),
+    );
+  };
 
   const copyMarkdown = async () => {
     if (!active) return;
@@ -365,8 +441,7 @@ function NotesContent() {
       if (text.trim().length < 20) return;
       event.preventDefault();
       setPromptOpen(false);
-      const now = Date.now();
-      addNotes([{ id: newNoteId(), title: titleFromMarkdown(text), markdown: text, updatedAt: now, createdAt: now }], 'Pasted as a new note.');
+      void addNotes([{ title: titleFromMarkdown(text), markdown: text }], 'Pasted as a new note.', 'app');
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
@@ -452,7 +527,13 @@ function NotesContent() {
           <button type="button" className="back" onClick={() => go('')}>← Notes</button>
           <header className="page-head">
             <p className="standfirst">
-              Edited {dateLabel(active.updatedAt)} · {words.toLocaleString()} words · {minutes} min read
+              {activeCourse && (
+                <span style={{ fontStyle: 'normal', marginRight: 8 }}>
+                  <span className="course-rule" style={{ ['--c' as string]: activeCourse.color, marginRight: 6 }} />
+                  <span className="eyebrow" style={{ color: 'var(--ink-soft)' }}>{activeCourse.code}</span>
+                </span>
+              )}
+              {active.source === 'mcp' ? 'From your assistant' : 'Edited'} {dateLabel(active.updatedAt)} · {words.toLocaleString()} words · {minutes} min read
             </p>
             <div className="actions">
               <button type="button" className="btn btn-ghost" onClick={() => go(`n=${encodeURIComponent(active.id)}&edit=1`)} title="Edit (E)">
@@ -496,6 +577,17 @@ function NotesContent() {
                         ))}
                       </div>
                     </div>
+                    {courses.length > 0 && (
+                      <div className="set-group">
+                        <span className="eyebrow">Course</span>
+                        <div className="choice-row">
+                          <button type="button" className="choice" aria-pressed={!active.courseId} onClick={() => linkCourse(null)}><span>None</span></button>
+                          {courses.map((c) => (
+                            <button key={c.id} type="button" className="choice" aria-pressed={active.courseId === c.id} onClick={() => linkCourse(c.id)}><span>{c.code}</span></button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <p className="set-note">Paper and heading font follow Appearance in Settings.</p>
                   </div>
                 )}
@@ -563,7 +655,7 @@ function NotesContent() {
           <button type="button" className="btn btn-ghost" onClick={() => setPromptOpen(true)}><Icon name="copy" size={16} />AI prompt</button>
         </div>
         <div style={{ marginTop: 18 }}>
-          <button type="button" className="link" onClick={() => addNotes([sampleNote()], 'Here’s a sample to read.')}>or read a sample note first</button>
+          <button type="button" className="link" onClick={() => void addNotes([sampleNote()], 'Here’s a sample to read.', 'app')}>or read a sample note first</button>
         </div>
         <div className="keys" aria-label="Keyboard shortcuts">
           <div><span className="kbd">N</span> new note</div>
@@ -606,8 +698,9 @@ function NotesContent() {
           {shown.map((note) => {
             const noteWords = wordCount(note.markdown);
             const total = countChecks(note.markdown);
-            const results = total ? loadChecks(note.id) : {};
-            const firstLine = note.markdown.replace(/^\s*#.*$/m, '').replace(/[#>*_`=$[\]!]/g, '').trim().split('\n').find((l) => l.trim()) ?? '';
+            const results = note.checks;
+            const course = note.courseId ? courses.find((c) => c.id === note.courseId) : undefined;
+            const firstLine = note.markdown.replace(/^\s*#.*$/m, '').replace(/\[![\w-]+\]/g, '').replace(/[#>*_`=$[\]!]/g, '').trim().split('\n').find((l) => l.trim()) ?? '';
             return (
               <li key={note.id}>
                 <div
@@ -616,12 +709,12 @@ function NotesContent() {
                   tabIndex={0}
                   onClick={() => go(`n=${encodeURIComponent(note.id)}`)}
                   onKeyDown={(event) => { if (event.key === 'Enter') go(`n=${encodeURIComponent(note.id)}`); }}
-                  style={{ ['--c' as string]: noteColor(note.id) }}
+                  style={{ ['--c' as string]: course?.color ?? noteColor(note.id) }}
                 >
                   <span className="stripe" aria-hidden />
                   <span className="body">
                     <span className="title">{note.title}</span>
-                    <span className="sub">{relativeLabel(note.updatedAt)}{firstLine ? ` · ${firstLine}` : ''}</span>
+                    <span className="sub">{course ? `${course.code} · ` : ''}{relativeLabel(note.updatedAt)}{note.source === 'mcp' ? ' · from your assistant' : ''}{firstLine ? ` · ${firstLine}` : ''}</span>
                   </span>
                   {total > 0 && (
                     <span className="mini" aria-label={`${Object.values(results).filter((r) => r === 'got').length} of ${total} checks got`}>
@@ -651,6 +744,11 @@ function NotesContent() {
   return (
     <PageShell wide>
       <div className="notes">
+        {loaded && !available && (
+          <p className="standfirst" role="status" style={{ marginBottom: 16, color: 'var(--warn)' }}>
+            Notes aren’t set up in the database yet. Run the latest supabase/schema.sql once and they’ll save to your account.
+          </p>
+        )}
         <input ref={fileRef} type="file" accept=".md,.markdown,.mdown,.txt,text/markdown,text/plain" multiple hidden onChange={onFileInput} />
         {body}
 
