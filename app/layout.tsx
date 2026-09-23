@@ -1,13 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import {
-  Inter,
-  IBM_Plex_Mono,
-  Fraunces,
-  Lora,
-  Merriweather,
-  Cormorant_Garamond,
-  Caveat,
-} from 'next/font/google';
+import localFont from 'next/font/local';
 import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import NoticeProvider from '@/components/Notice';
@@ -19,64 +11,86 @@ import SmoothScroll from '@/components/SmoothScroll';
 import { SITE_URL } from '@/lib/site-url';
 import './globals.css';
 
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+/* Every face is served from app/fonts rather than next/font/google. The
+   Google loader fetches the CSS at build time, and under Turbopack on Vercel
+   that fetch intermittently came back in a shape it could not parse ("queries
+   have exactly one entry"), failing production builds of commits whose
+   previews had built fine. Local files build the same every time. They are
+   the Latin variable cuts from Fontsource (all SIL OFL), the same subset the
+   Google loader was asked for. */
+
+const inter = localFont({
+  src: './fonts/inter-latin-wght-normal.woff2',
+  weight: '100 900',
   variable: '--font-sans',
   display: 'swap',
 });
 
-const mono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const mono = localFont({
+  src: [
+    { path: './fonts/ibm-plex-mono-latin-400-normal.woff2', weight: '400' },
+    { path: './fonts/ibm-plex-mono-latin-500-normal.woff2', weight: '500' },
+    { path: './fonts/ibm-plex-mono-latin-600-normal.woff2', weight: '600' },
+    { path: './fonts/ibm-plex-mono-latin-700-normal.woff2', weight: '700' },
+  ],
   variable: '--font-mono',
   display: 'swap',
+  adjustFontFallback: false,
 });
 
-const fraunces = Fraunces({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  style: ['normal', 'italic'],
+const fraunces = localFont({
+  src: [
+    { path: './fonts/fraunces-latin-wght-normal.woff2', weight: '100 900', style: 'normal' },
+    { path: './fonts/fraunces-latin-wght-italic.woff2', weight: '100 900', style: 'italic' },
+  ],
   variable: '--font-fraunces',
   display: 'swap',
+  adjustFontFallback: 'Times New Roman',
 });
 
-const lora = Lora({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  style: ['normal', 'italic'],
+const lora = localFont({
+  src: [
+    { path: './fonts/lora-latin-wght-normal.woff2', weight: '400 700', style: 'normal' },
+    { path: './fonts/lora-latin-wght-italic.woff2', weight: '400 700', style: 'italic' },
+  ],
   variable: '--font-lora',
   display: 'swap',
+  adjustFontFallback: 'Times New Roman',
   // Only renders if chosen in Appearance, so it is not worth a preload on
   // every page load. Same for the other two alternates below.
   preload: false,
 });
 
-const merriweather = Merriweather({
-  subsets: ['latin'],
-  weight: ['400', '700'],
-  style: ['normal', 'italic'],
+const merriweather = localFont({
+  src: [
+    { path: './fonts/merriweather-latin-wght-normal.woff2', weight: '300 900', style: 'normal' },
+    { path: './fonts/merriweather-latin-wght-italic.woff2', weight: '300 900', style: 'italic' },
+  ],
   variable: '--font-merriweather',
   display: 'swap',
+  adjustFontFallback: 'Times New Roman',
   preload: false,
 });
 
 // Editorial alternative to the default Fraunces, offered in Appearance.
-const cormorant = Cormorant_Garamond({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  style: ['normal', 'italic'],
+const cormorant = localFont({
+  src: [
+    { path: './fonts/cormorant-garamond-latin-wght-normal.woff2', weight: '300 700', style: 'normal' },
+    { path: './fonts/cormorant-garamond-latin-wght-italic.woff2', weight: '300 700', style: 'italic' },
+  ],
   variable: '--font-cormorant',
   display: 'swap',
+  adjustFontFallback: 'Times New Roman',
   preload: false,
 });
 
 // Handwritten marginalia and notes (HandNote primitive, Caveat utility).
-const caveat = Caveat({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+const caveat = localFont({
+  src: './fonts/caveat-latin-wght-normal.woff2',
+  weight: '400 700',
   variable: '--font-hand',
   display: 'swap',
+  adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {
