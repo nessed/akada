@@ -425,6 +425,18 @@ function declarations(vars: Record<string, string>): string {
     .join('');
 }
 
+/**
+ * One paper's tokens as a style object, for a surface that sits on a
+ * different paper from the page around it. Notes' focus mode is the one:
+ * a reader can take a single note under the lamp without changing the app.
+ * Custom properties set on an element reach its descendants over the root's
+ * inline ones, so this scopes cleanly.
+ */
+export function paperToneStyle(key: PaperTone): Record<string, string> {
+  const vars = toneVariables(PAPER_TONES[key] ?? PAPER_TONES[DEFAULTS.paperTone]);
+  return key === 'night' ? { ...vars, ...NIGHT_TOKENS, colorScheme: 'dark' } : vars;
+}
+
 const TONE_CSS: Record<PaperTone, string> = PAPER_TONE_VALUES.reduce(
   (acc, key) => {
     const base = declarations(toneVariables(PAPER_TONES[key]));
