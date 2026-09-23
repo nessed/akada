@@ -65,6 +65,7 @@ const config: Config = {
         'slide-up': 'slideUp 0.26s cubic-bezier(0.2, 0.7, 0.2, 1)',
         'fade-in': 'fadeIn 0.22s ease-out',
         tick: 'tick 2.4s ease-in-out infinite',
+        settle: 'settle 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both',
       },
       keyframes: {
         slideUp: {
@@ -74,6 +75,10 @@ const config: Config = {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        settle: {
+          '0%': { opacity: '0', transform: 'translateY(4px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         tick: {
           '0%': { opacity: '0.55' },

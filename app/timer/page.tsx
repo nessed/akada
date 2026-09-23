@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
 import { useAmbientNoise } from '@/lib/use-ambient-noise';
@@ -89,12 +90,12 @@ export default function TimerPage() {
   const router = useRouter();
   const {
     hydrated,
-    active,
+    active: liveActive,
     pendingLog,
-    elapsedSeconds,
+    elapsedSeconds: liveElapsed,
     focusSeconds,
-    onBreak,
-    breakTarget,
+    onBreak: liveOnBreak,
+    breakTarget: liveBreakTarget,
     lastBlockNote,
     start,
     extend,
@@ -127,6 +128,25 @@ export default function TimerPage() {
     if (noise.error) notify(noise.error);
   }, [noise.error, notify]);
   const [immersive, setImmersive] = useState(false);
+
+  /* The screen as it stood the moment Finish was pressed. Stopping empties
+     the timer, and with no target left a block screen read as an open one:
+     the page flipped to the night paper at 00:00 behind the log sheet as it
+     rose. The sheet should come up over the sitting it is about, so the last
+     frame is kept and drawn, still, until the sheet is dealt with. */
+  const [held, setHeld] = useState<{
+    active: NonNullable<typeof liveActive>;
+    elapsed: number;
+    onBreak: boolean;
+    breakTarget: number | null;
+  } | null>(null);
+  const active = liveActive ?? (pendingLog ? held?.active ?? null : null);
+  const elapsedSeconds = liveActive ? liveElapsed : held?.elapsed ?? 0;
+  const onBreak = liveActive ? liveOnBreak : held?.onBreak ?? false;
+  const breakTarget = liveActive ? liveBreakTarget : held?.breakTarget ?? null;
+  /* Whether anything on screen can still be acted on. A held frame is a
+     picture of the sitting, not the sitting. */
+  const live = liveActive != null;
 
   const timerCourseId = active?.courseId ?? pendingLog?.courseId ?? null;
   const timerTaskId = active?.taskId ?? pendingLog?.taskId ?? null;
@@ -164,6 +184,14 @@ export default function TimerPage() {
   );
 
   const handleStop = useCallback(() => {
+    if (liveActive) {
+      setHeld({
+        active: liveActive,
+        elapsed: liveElapsed,
+        onBreak: liveOnBreak,
+        breakTarget: liveBreakTarget,
+      });
+    }
     const result = stop();
     if (!result) {
       router.replace('/dashboard');
@@ -174,7 +202,7 @@ export default function TimerPage() {
       clearPendingLog();
       router.replace('/dashboard');
     }
-  }, [clearPendingLog, router, stop]);
+  }, [clearPendingLog, liveActive, liveBreakTarget, liveElapsed, liveOnBreak, router, stop]);
 
   /* Dead ends. A timer pointing at a course that has since been deleted, or
      an account with no courses at all, used to leave this screen spinning on
@@ -186,7 +214,7 @@ export default function TimerPage() {
     // that point sent anyone who reloaded /timer mid-session back to the
     // dashboard with the session still running behind them.
     if (!hydrated) return;
-    if (!active && !pendingLog) {
+    if (!liveActive && !pendingLog) {
       router.replace('/dashboard');
       return;
     }
@@ -195,7 +223,7 @@ export default function TimerPage() {
       clearPendingLog();
       router.replace('/dashboard');
     }
-  }, [active, cancel, clearPendingLog, course, courses.length, hydrated, pendingLog, router, timerCourseId]);
+  }, [cancel, clearPendingLog, course, courses.length, hydrated, liveActive, pendingLog, router, timerCourseId]);
 
   const isPaused = active?.isPaused ?? false;
   /* The current stretch, which is what the face shows: time into this block,
@@ -212,7 +240,7 @@ export default function TimerPage() {
   /* Space pauses, F finishes, Escape goes back. Typed into a field they mean
      what the field means, so the handler stands down for one. */
   useEffect(() => {
-    if (!active) return;
+    if (!liveActive) return;
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
@@ -221,7 +249,7 @@ export default function TimerPage() {
         // On a break the one thing Space can mean is "back to it". Pausing a
         // break is a control nobody reaches for and it reads as stopping.
         if (onBreak) endBreak();
-        else if (active.isPaused) resume();
+        else if (liveActive.isPaused) resume();
         else pause();
       } else if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
@@ -236,7 +264,7 @@ export default function TimerPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, endBreak, handleStop, immersive, onBreak, pause, resume, router, startBreak]);
+  }, [endBreak, handleStop, immersive, liveActive, onBreak, pause, resume, router, startBreak]);
 
   if (!hydrated || (!course && !pendingLog)) {
     return (
@@ -310,8 +338,30 @@ export default function TimerPage() {
         ]
       : segments;
 
+  /* Pausing is the page going quiet, not a switch being thrown. The clock
+     lets its ink down over half a second, the fan loses some of its colour
+     and the word "paused" fades in after them; resuming runs the same way
+     back. The same curve as the sheet's slide-up, so every move on this
+     screen is the one hand. */
+  const pausedFocus = isPaused && !resting;
+  const clockEase: CSSProperties = {
+    transition: 'opacity 480ms cubic-bezier(0.2, 0.7, 0.2, 1), color 480ms cubic-bezier(0.2, 0.7, 0.2, 1)',
+  };
+  const quiet = `transition-[filter,opacity] duration-700 ease-[cubic-bezier(0.2,0.7,0.2,1)] ${
+    pausedFocus ? 'opacity-80 saturate-[0.55]' : ''
+  }`;
+  const swap =
+    'absolute inset-0 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)]';
+  const swapWord =
+    'col-start-1 row-start-1 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)]';
+  const pausedMark = pausedFocus ? (
+    <span className="inline-block animate-settle" style={{ animationDelay: '120ms' }}>
+      {'\u00a0· paused'}
+    </span>
+  ) : null;
+
   function setMode(next: 'block' | 'open') {
-    if (!active) return;
+    if (!liveActive || !active) return;
     if (next === 'open') {
       start(active.courseId, active.taskId, null);
       return;
@@ -339,7 +389,7 @@ export default function TimerPage() {
       type="button"
       onClick={go}
       aria-pressed={on}
-      className="h-10 rounded-[10px] px-3 text-[13px] font-medium transition-colors"
+      className="h-10 rounded-[10px] px-3 text-[13px] font-medium transition-[color,background-color,transform] duration-200 active:scale-[0.97]"
       style={{ color: on ? ink : inkSoft }}
       onMouseEnter={(e) => {
         e.currentTarget.style.background = hoverBg;
@@ -385,7 +435,7 @@ export default function TimerPage() {
       type="button"
       onClick={go}
       style={night ? { borderColor: '#4A4438', color: ink } : undefined}
-      className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+      className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-[background-color,transform] duration-200 ease-out hover:bg-bg-tint active:scale-[0.97]"
     >
       {label}
     </button>
@@ -401,7 +451,7 @@ export default function TimerPage() {
         router.replace('/dashboard');
       }}
       style={night ? { color: '#CC8462' } : undefined}
-      className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-warn transition-colors hover:bg-warnTint"
+      className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-warn transition-[background-color,transform] duration-200 ease-out hover:bg-warnTint active:scale-[0.97]"
     >
       Discard
     </button>
@@ -413,7 +463,7 @@ export default function TimerPage() {
         type="button"
         onClick={endBreak}
         style={night ? { background: '#EFE9DC', color: '#1A1815' } : undefined}
-        className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-opacity hover:opacity-90"
+        className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-[opacity,transform] duration-200 ease-out hover:opacity-90 active:scale-[0.97]"
       >
         <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
           <path d="M7 5l12 7-12 7V5z" />
@@ -434,18 +484,40 @@ export default function TimerPage() {
         style={
           night ? { background: '#EFE9DC', color: '#1A1815' } : undefined
         }
-        className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-opacity hover:opacity-90"
+        aria-label={isPaused ? 'Resume' : 'Pause'}
+        className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-[opacity,transform] duration-200 ease-out hover:opacity-90 active:scale-[0.97]"
       >
-        {isPaused ? (
-          <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+        {/* Both glyphs and both words are always there, stacked in one cell,
+            and the press crosses them over rather than swapping one for the
+            other. The cell is as wide as the longer word, so the button does
+            not change size under the finger either. */}
+        <span aria-hidden className="relative h-3 w-3">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className={`${swap} ${isPaused ? 'scale-100 rotate-0 opacity-100' : 'scale-50 -rotate-90 opacity-0'}`}
+          >
             <path d="M7 5l12 7-12 7V5z" />
           </svg>
-        ) : (
-          <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            className={`${swap} ${isPaused ? 'scale-50 rotate-90 opacity-0' : 'scale-100 rotate-0 opacity-100'}`}
+          >
             <path d="M9 5v14M15 5v14" />
           </svg>
-        )}
-        {isPaused ? 'Resume' : 'Pause'}
+        </span>
+        <span aria-hidden className="grid text-left">
+          <span className={`${swapWord} ${isPaused ? 'translate-y-0 opacity-100' : 'translate-y-1.5 opacity-0'}`}>Resume</span>
+          <span className={`${swapWord} ${isPaused ? '-translate-y-1.5 opacity-0' : 'translate-y-0 opacity-100'}`}>Pause</span>
+        </span>
       </button>
 
       {isBlock && secondary('+5 min', () => extend(5 * 60))}
@@ -455,7 +527,18 @@ export default function TimerPage() {
     </div>
   );
 
-  const controls = resting ? restControls : focusControls;
+  /* Resting and working are different sets of controls in the same place.
+     Keyed on which it is, so the new set settles in rather than cutting. A
+     held frame keeps its controls on screen but out of reach. */
+  const controls = (
+    <div
+      key={resting ? 'controls-rest' : 'controls-focus'}
+      className={`animate-settle ${live ? '' : 'pointer-events-none'}`}
+      aria-hidden={live ? undefined : true}
+    >
+      {resting ? restControls : focusControls}
+    </div>
+  );
 
   /* The question asked where the answer still is.
      A sitting's own note is written at the end, by which point the first
@@ -507,7 +590,11 @@ export default function TimerPage() {
         Today
       </button>
 
-      {active && (resting ? breakSwitch : modeSwitch)}
+      {active && (
+        <div key={resting ? 'switch-rest' : 'switch-focus'} className={`animate-settle ${live ? '' : 'pointer-events-none'}`}>
+          {resting ? breakSwitch : modeSwitch}
+        </div>
+      )}
 
       <div className="flex items-center gap-1">
         <button
@@ -562,7 +649,7 @@ export default function TimerPage() {
           trunkWidth={15}
           padTop={20}
           widthFill={0.94}
-          className="absolute inset-0 h-full w-full"
+          className={`absolute inset-0 h-full w-full ${quiet}`}
         />
 
         {/* The chrome floats over the fan, and only the chrome takes the
@@ -573,7 +660,7 @@ export default function TimerPage() {
           <div className="pointer-events-auto">{header}</div>
           <div className="flex-1" />
           <div className="pointer-events-auto flex flex-col gap-6 px-6 pb-[max(env(safe-area-inset-bottom),32px)] md:flex-row md:items-end md:justify-between md:px-12 md:pb-10">
-            <div>
+            <div key={resting ? 'face-rest' : 'face-focus'} className="animate-settle">
               <p className="eyebrow m-0 mb-2" style={{ color }}>
                 {code} · {resting ? 'Break' : 'Open'}
               </p>
@@ -583,7 +670,11 @@ export default function TimerPage() {
                    actually run past its length. See "No Alarmist
                    Indicators": the number going quietly warm is the whole
                    announcement. */
-                style={breakOver ? { color: '#CC8462' } : undefined}
+                style={{
+                  ...clockEase,
+                  opacity: pausedFocus ? 0.5 : 1,
+                  color: breakOver ? '#CC8462' : undefined,
+                }}
                 aria-label={
                   resting
                     ? `${breakOver ? 'Break over by' : 'Break, remaining'} ${spoken(remaining)}`
@@ -601,7 +692,7 @@ export default function TimerPage() {
                   <>since {hhmm(sittingStartedAt)}</>
                 )}
                 {task ? <> · <span style={{ color: '#EFE9DC' }}>{task.title}</span></> : null}
-                {isPaused && !resting ? ' · paused' : ''}
+                {pausedMark}
               </p>
               {/* The course's page, the same one the block frame carries in
                   its margin. It fills as the reader sits and a mark that
@@ -695,15 +786,16 @@ export default function TimerPage() {
             depth={7}
             trunkWidth={11}
             padTop={45}
-            className="absolute inset-0 h-full w-full"
+            className={`absolute inset-0 h-full w-full ${quiet}`}
           />
         </div>
 
-        <div className="text-center">
+        <div key={resting ? 'face-rest' : 'face-focus'} className="animate-settle text-center">
           <p
             className={`m-0 font-mono text-[56px] font-medium leading-none tracking-[-0.03em] tabular-nums md:text-[72px] ${
-              isPaused && !resting ? 'opacity-60' : ''
-            } ${breakOver ? 'text-warn' : ''}`}
+              breakOver ? 'text-warn' : ''
+            }`}
+            style={{ ...clockEase, opacity: pausedFocus ? 0.5 : 1 }}
             aria-label={
               resting
                 ? `${breakOver ? 'Break over by' : 'Break, remaining'} ${spoken(remaining)}`
@@ -723,7 +815,7 @@ export default function TimerPage() {
               </>
             )}
             {task ? <> · <span className="text-ink">{task.title}</span></> : null}
-            {isPaused && !resting ? ' · paused' : ''}
+            {pausedMark}
           </p>
         </div>
 

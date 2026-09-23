@@ -740,3 +740,7 @@ Movement in the app is soft and deliberate:
 - **`slide-up`**: A smooth `0.26s` entrance using a custom cubic-bezier curve (`0.2, 0.7, 0.2, 1`), ensuring panels and modals float in weightlessly.
 - **`fade-in`**: Subtle opacity transitions for dynamic content.
 - **`tick`**: A slow, `2.4s` pulsing animation used during active study timers to indicate progression without frantic or stressful ticking.
+- **`settle`**: `0.34s` on the same curve, a 4px rise and fade. Whatever swaps in place on the timer screen (focus controls for break controls, the clock face going from block to rest, the "· paused" note) settles in with it rather than cutting.
+- **Pause** is the timer screen going quiet, not a switch: the clock lets its ink down to half over `480ms`, the fan loses colour over `700ms`, and the pause button crosses its glyph and word over (both are always rendered, stacked, so the button never changes width). Resume runs the same way back.
+- **Presses** on the timer's buttons give a `0.97` scale on `:active`. Small enough to feel, never enough to read as a bounce.
+- **Finish and log** holds the last frame of the sitting still behind the log sheet as it rises. Stopping empties the timer, and a block screen with no target left used to flip to open mode's night paper at 00:00 under the sheet.
