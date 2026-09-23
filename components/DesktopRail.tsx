@@ -65,6 +65,16 @@ const NAV: NavItem[] = [
     ),
   },
   {
+    href: '/notes',
+    label: 'Notes',
+    icon: (
+      <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 3h9l4 4v14H6z" />
+        <path d="M14 3v5h5M9 12h7M9 16h5" />
+      </svg>
+    ),
+  },
+  {
     href: '/stats',
     label: 'Stats',
     icon: (

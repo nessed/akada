@@ -45,6 +45,26 @@ const tabs = [
     ),
   },
   {
+    href: '/notes',
+    label: 'Notes',
+    icon: (
+      <svg aria-hidden
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M6 3h9l4 4v14H6z" />
+        <path d="M14 3v5h5" />
+        <path d="M9 12h7" />
+        <path d="M9 16h5" />
+      </svg>
+    ),
+  },
+  {
     href: '/stats',
     label: 'Stats',
     icon: (

@@ -710,6 +710,37 @@ Both paths have a keyboard twin: the grip is a real button, and up and down
 arrows move the item one place, with every move said out loud through a
 polite live region.
 
+### Notes: the reader
+
+`/notes` is Markd folded into the app, a reader for long study notes written
+in markdown. It sits in the rail and the bottom bar between Courses and Stats.
+It has three states on one route, driven by the query string: the shelf
+(`/notes`), a note (`?n=id`) and the editor (`?n=id&edit=1`, `?new=1`), so the
+back button walks out the way you came in.
+
+- **The shelf** is ruled like Today: the standfirst and title, the fold, then
+  rows written on the page with a `line-soft` hairline between them. Each
+  note gets a pastel from the course palette, picked from its id, drawn as
+  the same 3px stripe a course carries in the rail.
+- **A note** is set in the serif at 17px, with its own `#` title as the
+  screen title and the fold under it. Callouts (`> [!DEF]`, `[!EXAM]`,
+  `[!TRAP]`, `[!CHECK]` and the rest) are a `.course-rule` tab and an
+  eyebrow on a faint wash of their pastel, not a bordered box. Tables are
+  ruled top and bottom with `line-strong` and hairlines between rows.
+- **The contents column** (from 1280px, a sheet below it) follows the section
+  being read with a highlighter swipe and dims the ones behind it. How long
+  is left is a line of Caveat marginalia, never a bar.
+- **Checks** hide their answer until asked, then take "Got it" or "Not yet".
+  They are drawn as strokes, one per question, the way hours are.
+- **The AI prompt** is a sheet holding the exact format rules. A reader copies
+  it into their own chat with a summary, and pastes the answer back onto the
+  page, which makes a note of it (one outer code fence is peeled off).
+- Paper tone and heading font come from Appearance. The reader only owns text
+  size and column width, in the `Aa` popover.
+
+Notes are kept in this browser's localStorage for now. Everything the reader
+draws lives in `app/notes/notes.css`, scoped under `.notes`.
+
 ### Buttons
 Two shapes, not four:
 - **Page CTA**, full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
