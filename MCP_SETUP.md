@@ -36,11 +36,12 @@ normally does not disconnect Claude, but revoking all sessions does.
 The connector provides tools for interacting with courses and tasks in your active semester:
 - `find_course`: Look up courses by code or title.
 - `get_tasks`: Read the active semester's tasks, optionally narrowed to one course.
-- `get_overview`: Read a snapshot of courses, open-task counts, and recent study sessions.
+- `get_overview`: Read a snapshot of courses, open-task counts, and recent study sessions (with their ids).
 - `create_tasks`: Bulk-insert tasks into an active course, with notes, subtasks, and what each one is (task, reading or exam) and is worth.
 - `update_tasks`: Change tasks that already exist, including their notes, subtasks, kind, weight and pages.
 - `complete_tasks`: Tick tasks off, or put them back on the list.
 - `log_study_session`: Record study time against a course, with an optional task, note, and practice-paper score.
+- `update_study_session`: Fix or rewrite the note on a session that is already logged. Only the note changes.
 - `get_weekly_stats`: Read one week's hours against goal, break time, tasks closed, and the weekly run.
 - `get_focus_pattern`: Read how the sittings themselves were shaped: block lengths, breaks against the lengths they were set to, and when in the day the work happens.
 - `get_grading_scheme`: Read how a course is marked, accepted and proposed.
@@ -50,7 +51,7 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `record_recall`: Record how a recall went (clear, hazy or gone) after quizzing the student.
 - `keep_for_recall`: Keep concepts, lines or a task's ticked steps to be recalled at widening gaps.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `set_grading_scheme`, `delete_course`, `record_recall` and `keep_for_recall` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `delete_course`, `record_recall` and `keep_for_recall` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -189,6 +190,17 @@ after it, and record the verdict the attempt earned without rounding up.
 
 `semester_id` is filled by the `sessions_set_semester_id` trigger in
 `supabase/schema.sql`, exactly as the app's own `addSession` relies on.
+
+### 5a. `update_study_session`
+- **Title**: Fix a study session's note in Akada
+- **Description**: Fix or rewrite the note on a session that is already logged. For logging a new sitting, use `log_study_session`.
+- **Annotations**: `destructiveHint: false`, `idempotentHint: true`
+- **Parameters**:
+  - `session_id` (`string`, UUID): The sitting to change. It comes back as `id` from `log_study_session`, and on each of `get_overview`'s `recent_sessions`.
+  - `note` (`string`, up to 800 chars): Replaces the whole note, same ceiling as `log_study_session` (`SESSION_NOTE_MAX` in `lib/planner-safety.ts`). An empty string clears it.
+- Only the note is ever written. Date, minutes, break, task and score stay as they were logged.
+- Ownership is checked the way the task tools check it through `loadOwnTasks`: the row has to carry the student's `user_id`, and its course has to be in their active semester. A session that does not exist, belongs to someone else, or sits in another semester gets the same error rather than a silent no-op, and the update itself repeats the `user_id` filter.
+- **Output**: The updated session in the same shape `log_study_session` returns (`id`, `date`, `duration_minutes`, `duration_seconds`, `break_minutes`, `note`, `task_id`, `course`, plus `score` and `score_out_of` when it has one), and a `message`.
 
 ### 6. `get_weekly_stats`
 - **Title**: Read an Akada study week

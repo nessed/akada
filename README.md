@@ -131,10 +131,10 @@ Course Memo.xlsx"`, with `--refresh-planner` to re-pull the meeting times.
 
 Akada exposes a remote MCP endpoint at `/api/mcp` with its own OAuth flow, so
 you can connect it to Claude as a custom connector and hand it a syllabus.
-Fifteen tools: `find_course`, `get_tasks`, `get_overview`, `create_tasks`,
-`update_tasks`, `complete_tasks`, `log_study_session`, `get_weekly_stats`,
-`get_focus_pattern`, `get_grading_scheme`, `set_grading_scheme`,
-`delete_course`, and the recall three, `get_recall`, `record_recall` and
+Sixteen tools: `find_course`, `get_tasks`, `get_overview`, `create_tasks`,
+`update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`,
+`get_weekly_stats`, `get_focus_pattern`, `get_grading_scheme`,
+`set_grading_scheme`, `delete_course`, and the recall three, `get_recall`, `record_recall` and
 `keep_for_recall`, which let a model quiz the student on what is due, record
 how each attempt went, and keep a concept list straight off a problem set.
 Every recall card has an "ask Claude" that copies a prompt for exactly that.

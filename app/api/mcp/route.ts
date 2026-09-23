@@ -1231,6 +1231,83 @@ export async function logStudySession(
   }
 }
 
+const UpdateStudySessionInput = z.object({
+  session_id: z.string().uuid(),
+  // The same ceiling log_study_session takes, so a note fixed here and a
+  // note written with the sitting cannot differ in shape. Empty clears it.
+  note: z.string().trim().max(SESSION_NOTE_MAX),
+});
+
+const UPDATE_STUDY_SESSION_DESCRIPTION =
+  'Fix or rewrite the note on a study session that is already logged in the signed-in student’s active semester, by `session_id`. Use this when a sitting was written up wrong, or the student wants to say more about what it covered; to record a new sitting, use log_study_session instead. The session id comes back from log_study_session, and from `recent_sessions` in get_overview. `note` replaces the whole existing note, so include what should be kept; an empty note clears it. Only the note ever changes: the date, the minutes, the break, the task and any practice score stay exactly as they were logged.';
+
+// Split out like logStudySession, so a test can drive it against a double.
+// Ownership is the same two-step check loadOwnTasks makes for tasks: the row
+// has to be the student's own, and its course has to be in their active
+// semester. The update then repeats the user_id filter rather than trusting
+// the read.
+export async function updateStudySession(
+  token: AuthenticatedToken,
+  { session_id, note }: z.infer<typeof UpdateStudySessionInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const semesterId = await activeSemesterId(token, supabase);
+    if (!semesterId) return toolError('No active semester is set in Akada.');
+    const notFound = toolError('That study session is not in your active Akada semester. Check the id against get_overview’s recent_sessions, or the id log_study_session returned.');
+    // `*` for the same reason as everywhere else here: an un-migrated
+    // project still answers.
+    const { data: existing, error: sessionError } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', session_id)
+      .eq('user_id', token.userId)
+      .maybeSingle();
+    if (sessionError) return queryFailed('update_study_session', 'session lookup', sessionError, 'Akada could not look up that study session.');
+    if (!existing) return notFound;
+    const { data: course, error: courseError } = await supabase
+      .from('courses')
+      .select('id, code, name')
+      .eq('id', String(existing.course_id ?? ''))
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId)
+      .maybeSingle();
+    if (courseError) return queryFailed('update_study_session', 'course lookup', courseError, 'Akada could not look up that session’s course.');
+    if (!course) return notFound;
+
+    const { data: saved, error: updateError } = await supabase
+      .from('sessions')
+      .update({ note })
+      .eq('id', session_id)
+      .eq('user_id', token.userId)
+      .select('*')
+      .maybeSingle();
+    if (updateError) return queryFailed('update_study_session', 'session update', updateError, 'Akada could not change that study session.');
+    // Row-level security hides a row it will not let this student write, so
+    // an update that touched nothing is the same refusal, never a quiet
+    // success.
+    if (!saved) return notFound;
+    const row = saved as Record<string, unknown>;
+    const practice = cleanScore(row.score, row.score_out_of);
+    return result({
+      session: {
+        id: String(row.id ?? ''),
+        date: (row.date as string | null) ?? null,
+        duration_minutes: Math.round(Number(row.duration_seconds ?? 0) / 60),
+        duration_seconds: Number(row.duration_seconds ?? 0),
+        break_minutes: Math.round(Number(row.break_seconds ?? 0) / 60),
+        ...(practice ? { score: practice.score, score_out_of: practice.outOf } : {}),
+        note: typeof row.note === 'string' ? row.note : '',
+        task_id: (row.task_id as string | null) ?? null,
+        course: { id: course.id, code: course.code, name: course.name },
+      },
+      message: note ? 'The session’s note is changed.' : 'The session’s note is cleared.',
+    });
+  } catch (cause) {
+    return toolCrashed('update_study_session', cause);
+  }
+}
+
 function createServer(token: AuthenticatedToken) {
   const server = new McpServer({ name: 'Akada', version: '1.0.0' });
 
@@ -1352,7 +1429,7 @@ function createServer(token: AuthenticatedToken) {
     'get_overview',
     {
       title: 'Read Akada study overview',
-      description: 'Read a compact, read-only snapshot of active-semester courses, open-task counts, and recent study sessions for the signed-in student.',
+      description: 'Read a compact, read-only snapshot of active-semester courses, open-task counts, and recent study sessions for the signed-in student. Each recent session carries its `id`, which is what update_study_session takes to fix its note.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
@@ -1381,6 +1458,8 @@ function createServer(token: AuthenticatedToken) {
           recent_sessions: (sessions ?? []).map((session) => {
             const practice = cleanScore(session.score, session.score_out_of);
             return {
+              // So a sitting read here can be named to update_study_session.
+              id: session.id,
               date: session.date,
               duration_seconds: session.duration_seconds,
               note: session.note,
@@ -1545,6 +1624,17 @@ function createServer(token: AuthenticatedToken) {
       annotations: { destructiveHint: false, idempotentHint: false },
     },
     async (input) => logStudySession(token, input),
+  );
+
+  server.registerTool(
+    'update_study_session',
+    {
+      title: 'Fix a study session’s note in Akada',
+      description: UPDATE_STUDY_SESSION_DESCRIPTION,
+      inputSchema: UpdateStudySessionInput,
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async (input) => updateStudySession(token, input),
   );
 
   server.registerTool(
