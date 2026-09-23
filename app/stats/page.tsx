@@ -386,7 +386,7 @@ export default function StatsPage() {
       )}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="min-w-0">
+        <div className="settle-in min-w-0">
       {/* Heatmap */}
       <section className="deckle mb-[var(--density-gap)] border border-line bg-paper py-5 px-[var(--density-gutter)]">
         <div className="mb-[18px] flex flex-wrap items-baseline justify-between gap-2">
@@ -429,7 +429,7 @@ export default function StatsPage() {
 
         {/* The aside: what the week came to, per course, and the marks it
             earned. On a phone it simply follows the charts. */}
-        <aside className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">
+        <aside className="settle-in grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">
       {/* Totals, deckle card with hand-drawn trend arrows */}
       <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
         <h2 className="m-0 mb-1.5 font-serif font-medium text-[20px]">Hours by course</h2>

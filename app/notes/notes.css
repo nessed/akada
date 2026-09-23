@@ -71,7 +71,7 @@
 }
 .notes .toc-col { display: none; }
 @media (min-width: 1280px) { .notes .toc-col { display: block; } .notes .toc-toggle { display: none !important; } }
-.notes .toc-sticky { position: sticky; top: 40px; max-height: calc(100dvh - 80px); overflow-y: auto; scrollbar-width: none; padding-top: 6px; }
+.notes .toc-sticky { position: sticky; top: 40px; max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding-top: 6px; }
 .notes .toc-list { display: grid; margin: 12px 0 0; padding: 0; list-style: none; }
 .notes .toc-link { display: block; width: 100%; padding: 6px 0; border: 0; background: none; color: var(--ink-soft); font-size: 13px; line-height: 1.45; text-align: left; cursor: pointer; transition: color .15s; }
 .notes .toc-link:hover { color: var(--ink); }

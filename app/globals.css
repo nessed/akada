@@ -124,8 +124,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* overscroll-behavior belongs on html, not body. body is its own scroll
-   container here (see the overflow-x rule below) and is exactly as tall as
+/* overscroll-behavior belongs on html, not body. body can be its own scroll
+   container here (see the overflow-x rule below, on a browser without
+   `clip`) and is exactly as tall as
    its content, so it has nothing of its own to scroll: a wheel or a swipe
    over the page has to chain up to the viewport to move anything. Declaring
    `none` on body blocked precisely that chaining and left every page
@@ -135,6 +136,21 @@ body {
    chain stays open. */
 html {
   overscroll-behavior-y: none;
+  /* A jump the page makes on purpose (a contents link, a row brought into
+     view from the keyboard) glides instead of cutting. Route changes still
+     land at the top instantly: layout.tsx sets data-scroll-behavior, which
+     tells Next to switch this off for the length of a navigation. */
+  scroll-behavior: smooth;
+  /* Anything scrolled into view, by a link, by Tab or by scrollIntoView,
+     stops short of the notch and of the bottom bar rather than under them.
+     The bar is phone only, so desktop keeps a plain margin. */
+  scroll-padding-top: max(env(safe-area-inset-top), 24px);
+  scroll-padding-bottom: calc(112px + env(safe-area-inset-bottom));
+}
+@media (min-width: 768px) {
+  html {
+    scroll-padding-bottom: 32px;
+  }
 }
 
 body {
@@ -185,6 +201,15 @@ body {
      overscroll-behavior-y is declared on html above rather than on body. */
   overflow-x: hidden;
 }
+/* clip, where the browser has it, does the same clipping without making
+   body a scroll container. That matters for the sections that settle in as
+   they arrive (below): a view timeline binds to the nearest scroll
+   container, and a body that never scrolls would pin them in place. */
+@supports (overflow-x: clip) {
+  body {
+    overflow-x: clip;
+  }
+}
 
 ::-webkit-scrollbar {
   width: 0;
@@ -196,6 +221,43 @@ body {
 }
 .app-scroll {
   scrollbar-width: none;
+  /* A strip that scrolls on its own (the filter chips, the heatmap, the
+     rail) stops at its own end. It does not hand the rest of the flick to
+     the page, and on a trackpad it does not turn into a swipe back. */
+  overscroll-behavior: contain;
+}
+
+/* Sections settle onto the page as they come up from below the fold, the
+   same 0.2/0.7/0.2/1 rise the timer uses, but driven by the scroll itself
+   rather than a clock: halfway in, a section is halfway settled, and it
+   goes back the way it came if you scroll it off again. What is already in
+   view on arrival is past its range and just sits there. Put .settle-in on
+   a column and each child rides separately.
+
+   The fill is backwards only, so a section that has fully arrived carries
+   no animation at all. A held transform or opacity would make every
+   section its own stacking context and a containing block, and the
+   popovers inside one would slide under the section below. Browsers
+   without view timelines get the page as it was. */
+@keyframes settle-in {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .settle-in > * {
+      animation: settle-in linear backwards;
+      animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+  }
 }
 
 button,
@@ -318,6 +380,48 @@ input[type='date']::-webkit-calendar-picker-indicator {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
   animation: ink-in 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Up next arriving. Whenever the task changes, by Done, by Tomorrow or by
+   switching the rule, the course rule is drawn left to right the way a pen
+   draws it, and a highlighter swipe is pulled under the title a beat after.
+   Both play once per task: UpNext keys its body on the task id. */
+@keyframes rule-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.rule-draw {
+  transform-origin: left center;
+  animation: rule-draw 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0.08s both;
+}
+@keyframes hl-draw {
+  from {
+    background-size: 0% var(--hl-nib);
+  }
+  to {
+    background-size: 100% var(--hl-nib);
+  }
+}
+.hl-draw {
+  animation: hl-draw 0.7s cubic-bezier(0.3, 0.6, 0.25, 1) 0.22s both;
+}
+
+/* Up next leaving. Done and Tomorrow let the task go before the next one
+   comes up, a fade and a short lift, rather than swapping in the same
+   frame. Held so nothing flickers back while the list catches up. */
+@keyframes lift-away {
+  to {
+    opacity: 0;
+    translate: 0 -6px;
+  }
+}
+.lift-away {
+  animation: lift-away 0.22s ease-in forwards;
+  pointer-events: none;
 }
 
 /* Anyone who has asked their system for less movement gets the app without

@@ -439,7 +439,7 @@ export default function CoursePage() {
       <div aria-hidden className="fold mt-8" />
 
       <div className="mt-9 grid items-start xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
-        <div className="flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
+        <div className="settle-in flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
           {/* This course's page, with its marks in the margin. Faded when the
               course has been left alone, and never a word about the fading. */}
           {pageRecord && (
@@ -581,7 +581,7 @@ export default function CoursePage() {
         </div>
 
         {/* The right column, as stories under a pencil column rule. */}
-        <aside className="relative mt-7 flex flex-col divide-y divide-line border-t border-line pt-7 [&>*]:py-7 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0 xl:sticky xl:top-10 xl:mt-0 xl:border-t-0 xl:pt-0 xl:before:absolute xl:before:-left-[41px] xl:before:inset-y-0 xl:before:w-px xl:before:bg-line xl:before:content-['']">
+        <aside className="settle-in relative mt-7 flex flex-col divide-y divide-line border-t border-line pt-7 [&>*]:py-7 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0 xl:sticky xl:top-10 xl:mt-0 xl:border-t-0 xl:pt-0 xl:before:absolute xl:before:-left-[41px] xl:before:inset-y-0 xl:before:w-px xl:before:bg-line xl:before:content-['']">
           <CourseWeekCard course={course} sessions={courseSessions} onGoalChange={saveGoal} />
 
           <GradeStanding course={course} tasks={courseTasks} today={today} />

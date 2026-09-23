@@ -153,7 +153,7 @@ export default function SectionPicker({
           id={listId}
           role="listbox"
           aria-label="Section"
-          className={`absolute left-0 right-0 z-[90] m-0 max-h-[min(17rem,42vh)] list-none overflow-y-auto overflow-x-hidden rounded-[12px] border border-line bg-paper p-0 shadow-[0_18px_48px_rgba(26,25,21,0.16)] animate-fade-in ${
+          className={`absolute left-0 right-0 z-[90] m-0 max-h-[min(17rem,42vh)] list-none overflow-y-auto overflow-x-hidden overscroll-contain rounded-[12px] border border-line bg-paper p-0 shadow-[0_18px_48px_rgba(26,25,21,0.16)] animate-fade-in ${
             placeAbove ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]'
           }`}
         >

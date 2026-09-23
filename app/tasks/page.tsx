@@ -1273,7 +1273,7 @@ function TasksPageContent() {
               onClick={() => setViewingTask(null)}
               className="absolute inset-0 scrim backdrop-blur-sm"
             />
-            <section className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-bg px-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] animate-slide-up md:mx-auto md:max-w-xl">
+            <section className="relative max-h-[92vh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-bg px-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] animate-slide-up md:mx-auto md:max-w-xl">
               <div className="mx-auto mb-6 h-1 w-9 rounded-full bg-line-strong" />
 
               <div className="flex items-baseline gap-2.5">

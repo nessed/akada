@@ -766,6 +766,14 @@ value. `Comfy` is the shipped middle at a 22px gutter.
 - **Notebook Range Sliders**: The native `<input type="range">` elements are deeply customized to resemble tactile physical knobs sitting on top of notebook lines.
 - **Clean App Chrome**: Scrollbars are entirely hidden across the application, achieving a seamless, native-app feel that doesn't distract the user.
 
+## 📜 Scrolling
+Scrolling is the page moving under a hand, so it is kept quiet and physical:
+- **Sections settle in from below.** `.settle-in` on a column (Today's two, the course page's two, Stats' two) lets each child rise 14px and fade in as it comes up past the fold, on the app's `0.2, 0.7, 0.2, 1` curve. It is a scroll-driven animation (`animation-timeline: view()`), so it follows the scroll exactly rather than playing on a clock, and runs backwards if the section is scrolled back off. What is already in view on arrival does not move. It fills backwards only, so a section that has fully arrived carries no transform and no stacking context, and the popovers inside it still sit over the section below. Browsers without view timelines, and anyone who asked for reduced motion, get the page still.
+- **body clips, it does not scroll.** `overflow-x: clip` where supported, not `hidden`, so body is not a scroll container and a view timeline binds to the viewport that actually scrolls.
+- **Jumps glide.** `scroll-behavior: smooth` on `html`, with `data-scroll-behavior="smooth"` on the root so Next drops it during route changes and a new page still opens at its top. Code that scrolls per frame (the drag autoscroll in `ReorderList`) asks for `instant`.
+- **Nothing lands under the chrome.** `scroll-padding` keeps a jump or a Tab stop clear of the notch and, on phone, of the bottom bar.
+- **Every inner scroller stops at its own end.** Sheets, dropdown lists, the contents column and every `.app-scroll` strip use `overscroll-behavior: contain`, so a flick inside one never drags the page behind it and a sideways strip never turns into a trackpad swipe back.
+
 ## 🎬 Micro-Animations
 Movement in the app is soft and deliberate:
 - **`slide-up`**: A smooth `0.26s` entrance using a custom cubic-bezier curve (`0.2, 0.7, 0.2, 1`), ensuring panels and modals float in weightlessly.
@@ -774,4 +782,6 @@ Movement in the app is soft and deliberate:
 - **`settle`**: `0.34s` on the same curve, a 4px rise and fade. Whatever swaps in place on the timer screen (focus controls for break controls, the clock face going from block to rest, the "· paused" note) settles in with it rather than cutting.
 - **Pause** is the timer screen going quiet, not a switch: the clock lets its ink down to half over `480ms`, the fan loses colour over `700ms`, and the pause button crosses its glyph and word over (both are always rendered, stacked, so the button never changes width). Resume runs the same way back.
 - **Presses** on the timer's buttons give a `0.97` scale on `:active`. Small enough to feel, never enough to read as a bounce.
+- **Up next arriving.** The task body is keyed on the task, so when it changes (Done, Tomorrow, or the rule switched) the new one settles in, its course rule draws left to right (`.rule-draw`, `0.5s`) and a highlighter swipe in the course's pastel is pulled under the title a beat after (`.hl-draw`, `0.7s`). Done and Tomorrow first let the old task go with `.lift-away`, a `0.22s` fade and 6px lift, so the next one comes up into a space instead of replacing it in the same frame. The handwritten rule note settles when it is switched.
+- **Up next is live.** Its meta line carries the time already put into the task (mono digits) and when it was last sat. With a timer running on it the line says "on the clock" beside a dot in the course colour pulsing on `tick`, and the figure counts up with the sitting.
 - **Finish and log** holds the last frame of the sitting still behind the log sheet as it rises. Stopping empties the timer, and a block screen with no target left used to flip to open mode's night paper at 00:00 under the sheet.
