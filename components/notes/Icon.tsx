@@ -1,6 +1,7 @@
 export type IconName =
   | 'read' | 'write' | 'upload' | 'download' | 'plus' | 'trash' | 'search' | 'rail' | 'railOpen'
-  | 'settings' | 'contents' | 'notes' | 'copy' | 'close' | 'fold' | 'unfold' | 'split' | 'check';
+  | 'settings' | 'contents' | 'notes' | 'copy' | 'close' | 'fold' | 'unfold' | 'split' | 'check'
+  | 'focus' | 'lamp' | 'sun' | 'spot' | 'expand' | 'shrink' | 'play' | 'minus' | 'back';
 
 const paths: Record<IconName, React.ReactNode> = {
   read: <path d="M4 5.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H4zM20 5.5h-6a2 2 0 0 0-2 2V20a2 2 0 0 1 2-2h6z" />,
@@ -21,6 +22,15 @@ const paths: Record<IconName, React.ReactNode> = {
   unfold: <path d="M7 4l5 5 5-5M7 20l5-5 5 5" />,
   split: <><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M12 4.5v15" /></>,
   check: <path d="M4.5 12.5 9 17l10.5-10.5" />,
+  focus: <path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4M9 12h6" />,
+  lamp: <path d="M19.5 14.5A7.5 7.5 0 1 1 9.5 4.5a6 6 0 0 0 10 10z" />,
+  sun: <><circle cx="12" cy="12" r="3.8" /><path d="M12 3.5v1.5M12 19v1.5M3.5 12H5M19 12h1.5M6 6l1 1M17 17l1 1M6 18l1-1M17 7l1-1" /></>,
+  spot: <><path d="M4 12h16" /><path d="M6 6.5h9M6 17.5h7" opacity=".4" /></>,
+  expand: <path d="M14 4h6v6M10 20H4v-6M20 4l-6 6M4 20l6-6" />,
+  shrink: <path d="M20 10h-6V4M4 14h6v6M14 10l6-6M10 14l-6 6" />,
+  play: <path d="M8 5.5v13l10-6.5z" />,
+  minus: <path d="M6 12h12" />,
+  back: <path d="M19 12H5m6-6-6 6 6 6" />,
 };
 
 export default function Icon({ name, size = 18 }: { name: IconName; size?: number }) {

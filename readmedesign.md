@@ -718,10 +718,24 @@ It has three states on one route, driven by the query string: the shelf
 (`/notes`), a note (`?n=id`) and the editor (`?n=id&edit=1`, `?new=1`), so the
 back button walks out the way you came in.
 
-- **The shelf** is ruled like Today: the standfirst and title, the fold, then
-  rows written on the page with a `line-soft` hairline between them. Each
-  note gets a pastel from the course palette, picked from its id, drawn as
-  the same 3px stripe a course carries in the rail.
+- **The shelf** is ruled like Today. The standfirst carries the count, the
+  reading time and how many checks are waiting to be revisited. Under the
+  title, the note last read leads the page the way Up next leads Today:
+  "Where you left off", its title large in the serif, the section it was left
+  in, the opening lines of that section, and **Keep reading** / **Focus**.
+  Beside it, the note's sections as strokes, the ones behind the reader inked
+  in the course colour, and "~ 6 min left" in Caveat. Then the fold, then the
+  tools: course filters and Recent / A–Z as highlighter marks (never tabs),
+  and a search that looks through every note and shows the words around the
+  hit. Rows are written on the page with a `line-soft` hairline between them,
+  split into "This week" and "Earlier" when sorted by recent. Each note
+  gets a pastel from the course palette, picked from its id, drawn as the
+  same 3px stripe a course carries in the rail. On the right of a row, what
+  is left to read in mono ("4m left"), a hand tick once it has been read
+  through, and on hover the way into focus and delete. The list walks with
+  `↑ ↓`, `Enter` reads, `F` focuses, `/` searches, and the hint at the foot
+  names exactly those. How far a note has been read and which note was last
+  read stay in the browser, with the scroll position.
 - **A note** is set in the serif at 17px, with its own `#` title as the
   screen title and the fold under it. Callouts (`> [!DEF]`, `[!EXAM]`,
   `[!TRAP]`, `[!CHECK]` and the rest) are a `.course-rule` tab and an
@@ -737,6 +751,41 @@ back button walks out the way you came in.
   page, which makes a note of it (one outer code fence is peeled off).
 - Paper tone and heading font come from Appearance. The reader only owns text
   size and column width, in the `Aa` popover.
+
+#### Focus
+
+`?n=id&focus=1`, from **Focus** on a note, from the shelf, or `F`. The note
+and nothing else: one sheet on the desk, portalled over the rail, the bar and
+the timer dock, and under the log sheet and the toasts so a sitting can still
+end on top of it. `Esc` or `F` leaves, and the page behind opens on the
+section focus was on rather than on a pixel offset, since the two are laid
+out differently.
+
+- **The sheet.** `paper` a step off the desk, a deckle corner, the warm
+  shadow a floating thing keeps, the edge of a second sheet under it, and a
+  faint rose margin rule down the left the way a ruled pad has. The prose is
+  a size up from the reader. On a phone it drops the sheet and is the page.
+- **The spotlight** (`D`, on by default). The section under the reading line,
+  about a third of the way down, keeps its ink; every other section lets it
+  down to a fifth, and comes back up under a pointer. It is written onto the
+  DOM as `data-lit`, never state, so a scroll does not re-render the note.
+- **The bar** goes away as the reader scrolls down and comes back for a
+  scroll up, a moving pointer or a Tab into it. It carries the course code
+  and the section being read in the serif, the clock, and four quiet tools:
+  spotlight, lamp, `A A` for text size (`−` / `+`), and full screen. With a
+  sitting running the clock is that sitting in mono, beside a dot in the
+  course colour pulsing on `tick`; without one, a note on a course offers
+  "Time this", which starts one.
+- **The lamp** (`L`) puts this note under the night paper without changing
+  the app, through `paperToneStyle` in `lib/preferences.ts` set on the focus
+  root. A reader already on night paper gets daylight instead.
+- **The margin.** From 1100px, one stroke per section down the left of the
+  desk: long and inked for the one being read, muted behind, the paper's rule
+  ahead. Their names come up under a pointer and a click goes there. `← →`
+  walk the sections; up, down and space are the scroller's own.
+- **The foot.** "3/7" in mono on the left, "~ 6 min left" in Caveat on the
+  right. At the end, the hand tick, "that's the lot", how long the reader sat
+  with it, and the next note on the pile, which `]` also opens in focus.
 
 Notes live in the `notes` table in Supabase, owned by the student and not
 scoped to a semester; a note linked to a course takes the course's colour for

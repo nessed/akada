@@ -11,6 +11,31 @@ export const scrollKey = (id: string) => `akada.notes.scroll.${id}`;
 export const checksKey = (id: string) => `akada.notes.checks.${id}`;
 export const draftKey = 'akada.notes.draft.v1';
 export const READER_KEY = 'akada.notes.reader.v1';
+/** How far through a note the reader got, 0 to 1, for the shelf's "4m left". */
+export const progressKey = (id: string) => `akada.notes.progress.${id}`;
+/** The note last read, and the section it was left in, for "Where you left off". */
+export const LAST_READ_KEY = 'akada.notes.last.v1';
+/** Focus mode's own choices: the spotlight and the lamp. */
+export const FOCUS_KEY = 'akada.notes.focus.v1';
+
+export type LastRead = { id: string; at: number; section: string };
+export function readLastRead(): LastRead | null {
+  try {
+    const raw = JSON.parse(readStore(LAST_READ_KEY) || 'null');
+    return raw && typeof raw.id === 'string' ? { id: raw.id, at: Number(raw.at) || 0, section: String(raw.section ?? '') } : null;
+  } catch {
+    return null;
+  }
+}
+export function readProgress(id: string) {
+  const value = Number(readStore(progressKey(id)));
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+}
+/** Kept together, since both are written from the same scroll. */
+export function rememberReading(id: string, progress: number, section: string) {
+  writeStore(progressKey(id), progress.toFixed(3));
+  writeStore(LAST_READ_KEY, JSON.stringify({ id, at: Date.now(), section }));
+}
 
 export function readStore(key: string) {
   try {

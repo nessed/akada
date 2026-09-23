@@ -11,9 +11,11 @@ import Sheet from '@/components/notes/Sheet';
 import PromptSheet from '@/components/notes/PromptSheet';
 import Icon from '@/components/notes/Icon';
 import { CheckStrokes, MinutesLeft, TocList } from '@/components/notes/Contents';
+import FocusMode from '@/components/notes/FocusMode';
+import Shelf from '@/components/notes/Shelf';
 import {
   DOCS_KEY, READER_KEY, checksKey, dateLabel, downloadNote, draftKey, loadChecks, loadNotes, minutesFor,
-  noteColor, readStore, relativeLabel, removeStore, sampleNote, scrollKey, titleFromMarkdown, unwrapFence, wordCount,
+  readStore, rememberReading, removeStore, sampleNote, scrollKey, titleFromMarkdown, unwrapFence, wordCount,
   writeStore, type CheckResult, type Note,
 } from '@/lib/notes/store';
 import { useCourses, useNotes, saveNote, deleteNoteOptimistic, setNoteChecksOptimistic } from '@/lib/data-hooks';
@@ -67,6 +69,7 @@ function NotesContent() {
   const openId = params.get('n') ?? '';
   const editing = params.get('edit') === '1';
   const writingNew = params.get('new') === '1';
+  const focusParam = params.get('focus') === '1';
 
   const { notes: stored, loaded, available } = useNotes();
   const { courses } = useCourses();
@@ -87,7 +90,6 @@ function NotesContent() {
   const [prefsReady, setPrefsReady] = useState(false);
   const ready = prefsReady && loaded;
   const [draft, setDraft] = useState('');
-  const [query, setQuery] = useState('');
   const [reader, setReader] = useState<Reader>({ size: 'medium', measure: 'narrow' });
   const [readerOpen, setReaderOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -145,6 +147,7 @@ function NotesContent() {
 
   const mode: 'library' | 'read' | 'edit' = writingNew || editing ? 'edit' : openId ? 'read' : 'library';
   const active = notes.find((n) => n.id === openId);
+  const focusing = mode === 'read' && focusParam && !!active;
   const checks = useMemo(() => active?.checks ?? {}, [active]);
   const activeCourse = active?.courseId ? courses.find((c) => c.id === active.courseId) : undefined;
 
@@ -171,16 +174,26 @@ function NotesContent() {
     return () => cancelAnimationFrame(frame);
   }, [openId]);
 
-  // Back where the reader left the note.
+  // Back where the reader left the note. Coming out of focus, that is the
+  // section focus was on, since the two pages are laid out differently and
+  // a pixel offset from one lands somewhere else on the other.
+  const returnHeading = useRef('');
+  const [focusStart, setFocusStart] = useState('');
   useEffect(() => {
-    if (!ready || mode !== 'read' || !openId) return;
+    if (!ready || mode !== 'read' || !openId || focusing) return;
+    const heading = returnHeading.current;
+    returnHeading.current = '';
     const y = Number(readStore(scrollKey(openId)) || 0);
-    const timer = window.setTimeout(() => window.scrollTo({ top: Number.isFinite(y) ? y : 0, behavior: 'instant' }), 60);
+    const timer = window.setTimeout(() => {
+      const el = heading ? document.getElementById(heading) : null;
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 32, behavior: 'instant' });
+      else window.scrollTo({ top: Number.isFinite(y) ? y : 0, behavior: 'instant' });
+    }, 60);
     return () => window.clearTimeout(timer);
-  }, [openId, mode, ready]);
+  }, [openId, mode, ready, focusing]);
 
   useEffect(() => {
-    if (mode !== 'read') return;
+    if (mode !== 'read' || focusing) return;
     let frame = 0;
     let timer: number | undefined;
     const measure = () => {
@@ -199,7 +212,15 @@ function NotesContent() {
       if (!frame) frame = requestAnimationFrame(measure);
       if (openId) {
         window.clearTimeout(timer);
-        timer = window.setTimeout(() => writeStore(scrollKey(openId), String(window.scrollY)), 200);
+        timer = window.setTimeout(() => {
+          writeStore(scrollKey(openId), String(window.scrollY));
+          const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+          const section = headings
+            .filter((h) => h.level === 2)
+            .filter((h) => (document.getElementById(h.id)?.getBoundingClientRect().top ?? Infinity) <= 120)
+            .pop();
+          rememberReading(openId, scrollable > 0 ? window.scrollY / scrollable : 1, window.scrollY > 40 ? section?.text ?? '' : '');
+        }, 200);
       }
     };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -211,7 +232,7 @@ function NotesContent() {
       window.clearTimeout(timer);
       cancelAnimationFrame(frame);
     };
-  }, [headings, openId, mode, collapsed]);
+  }, [headings, openId, mode, collapsed, focusing]);
 
   useEffect(() => {
     if (!readerOpen) return;
@@ -397,11 +418,22 @@ function NotesContent() {
     }
   };
 
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? notes.filter((n) => n.title.toLowerCase().includes(q) || n.markdown.toLowerCase().includes(q)) : notes;
-  }, [notes, query]);
-  const shelfMinutes = useMemo(() => notes.reduce((sum, n) => sum + minutesFor(wordCount(n.markdown)), 0), [notes]);
+  /* ── Focus ────────────────────────────────────────────────────────── */
+  const enterFocus = useCallback((id: string) => {
+    // From the page behind, focus opens on the section being read.
+    setFocusStart(id === openId && mode === 'read' && window.scrollY > 120 ? activeHeading : '');
+    go(`n=${encodeURIComponent(id)}&focus=1`);
+  }, [go, openId, mode, activeHeading]);
+  const leaveFocus = useCallback((heading: string) => {
+    if (!active) return;
+    returnHeading.current = heading;
+    router.replace(`/notes?n=${encodeURIComponent(active.id)}`);
+  }, [active, router]);
+  const focusNext = useCallback(() => {
+    if (!nextNote) return;
+    setFocusStart('');
+    router.replace(`/notes?n=${encodeURIComponent(nextNote.id)}&focus=1`);
+  }, [nextNote, router]);
 
   /* ── Keys, paste, drop ────────────────────────────────────────────── */
   useEffect(() => {
@@ -417,8 +449,9 @@ function NotesContent() {
         }
         return;
       }
-      if (mod || event.altKey || isTyping(event.target) || contentsOpen || promptOpen) return;
+      if (mod || event.altKey || isTyping(event.target) || contentsOpen || promptOpen || focusing) return;
       if (event.key === 'e' && mode === 'read' && active) { event.preventDefault(); go(`n=${encodeURIComponent(active.id)}&edit=1`); }
+      else if (event.key === 'f' && mode === 'read' && active) { event.preventDefault(); enterFocus(active.id); }
       else if (event.key === 'n') { event.preventDefault(); go('new=1'); }
       else if (event.key === 'o') { event.preventDefault(); fileRef.current?.click(); }
       else if (event.key === 'Escape' && mode === 'read') { event.preventDefault(); go(''); }
@@ -430,13 +463,13 @@ function NotesContent() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [mode, active, notes, index, contentsOpen, promptOpen, saveDraft, cancelEdit, go, router]);
+  }, [mode, active, notes, index, contentsOpen, promptOpen, focusing, saveDraft, cancelEdit, go, router, enterFocus]);
 
   // Pasting markdown onto the page makes a note of it. This is the other half
   // of the AI prompt: copy the answer, come back, paste.
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
-      if (mode === 'edit' || isTyping(event.target)) return;
+      if (mode === 'edit' || focusing || isTyping(event.target)) return;
       const text = unwrapFence(event.clipboardData?.getData('text/plain') ?? '');
       if (text.trim().length < 20) return;
       event.preventDefault();
@@ -445,7 +478,7 @@ function NotesContent() {
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  }, [mode, addNotes]);
+  }, [mode, focusing, addNotes]);
 
   useEffect(() => {
     let depth = 0;
@@ -488,8 +521,8 @@ function NotesContent() {
   }, [slip]);
 
   useEffect(() => {
-    document.title = mode === 'edit' ? 'Writing - Akada' : active ? `${active.title} - Akada` : 'Notes - Akada';
-  }, [mode, active]);
+    document.title = mode === 'edit' ? 'Writing - Akada' : active ? `${focusing ? 'Focus · ' : ''}${active.title} - Akada` : 'Notes - Akada';
+  }, [mode, active, focusing]);
 
   /* ── Render ───────────────────────────────────────────────────────── */
   const showToc = mode === 'read' && !!active && (headings.length > 0 || totalChecks > 0);
@@ -520,6 +553,23 @@ function NotesContent() {
         <button type="button" className="btn" onClick={() => go('')}>Back to notes</button>
       </div>
     );
+  } else if (focusing && active) {
+    body = (
+      <FocusMode
+        key={active.id}
+        note={active}
+        course={activeCourse}
+        checks={checks}
+        onMarkCheck={markCheck}
+        size={reader.size}
+        onSize={(size) => updateReader({ size })}
+        measure={reader.measure}
+        startAt={focusStart}
+        nextNote={nextNote}
+        onNext={focusNext}
+        onLeave={leaveFocus}
+      />
+    );
   } else if (mode === 'read' && active) {
     body = (
       <div className={`reader ${showToc ? 'has-toc' : ''}`} data-measure={reader.measure}>
@@ -538,6 +588,9 @@ function NotesContent() {
             <div className="actions">
               <button type="button" className="btn btn-ghost" onClick={() => go(`n=${encodeURIComponent(active.id)}&edit=1`)} title="Edit (E)">
                 <Icon name="write" size={16} />Edit
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => enterFocus(active.id)} title="Read in focus (F)">
+                <Icon name="focus" size={16} />Focus
               </button>
               {showToc && (
                 <button type="button" className="btn btn-ghost btn-icon toc-toggle" onClick={() => setContentsOpen(true)} aria-label="Contents" title="Contents">
@@ -666,78 +719,16 @@ function NotesContent() {
     );
   } else {
     body = (
-      <>
-        <header className="page-head">
-          <div>
-            <p className="standfirst">
-              {notes.length} {notes.length === 1 ? 'note' : 'notes'} · {shelfMinutes} min of reading
-            </p>
-            <h1 className="screen-title">Notes</h1>
-          </div>
-          <div className="actions">
-            {notes.length > 3 && (
-              <label className="search">
-                <Icon name="search" size={14} />
-                <span className="sr-only">Search notes</span>
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" />
-              </label>
-            )}
-            <button type="button" className="btn btn-ghost" onClick={() => setPromptOpen(true)} title="A prompt for your AI">
-              <Icon name="copy" size={16} />AI prompt
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => fileRef.current?.click()} title="Open .md (O)">
-              <Icon name="upload" size={16} />Open
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => go('new=1')} title="New note (N)">
-              <Icon name="plus" size={16} />New note
-            </button>
-          </div>
-        </header>
-        <div className="fold" />
-        <ul className="shelf">
-          {shown.map((note) => {
-            const noteWords = wordCount(note.markdown);
-            const total = countChecks(note.markdown);
-            const results = note.checks;
-            const course = note.courseId ? courses.find((c) => c.id === note.courseId) : undefined;
-            const firstLine = note.markdown.replace(/^\s*#.*$/m, '').replace(/\[![\w-]+\]/g, '').replace(/[#>*_`=$[\]!]/g, '').trim().split('\n').find((l) => l.trim()) ?? '';
-            return (
-              <li key={note.id}>
-                <div
-                  className="shelf-row"
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => go(`n=${encodeURIComponent(note.id)}`)}
-                  onKeyDown={(event) => { if (event.key === 'Enter') go(`n=${encodeURIComponent(note.id)}`); }}
-                  style={{ ['--c' as string]: course?.color ?? noteColor(note.id) }}
-                >
-                  <span className="stripe" aria-hidden />
-                  <span className="body">
-                    <span className="title">{note.title}</span>
-                    <span className="sub">{course ? `${course.code} · ` : ''}{relativeLabel(note.updatedAt)}{note.source === 'mcp' ? ' · from your assistant' : ''}{firstLine ? ` · ${firstLine}` : ''}</span>
-                  </span>
-                  {total > 0 && (
-                    <span className="mini" aria-label={`${Object.values(results).filter((r) => r === 'got').length} of ${total} checks got`}>
-                      {Array.from({ length: total }, (_, i) => <span key={i} data-r={results[String(i)] ?? ''} />)}
-                    </span>
-                  )}
-                  <span className="mins">{minutesFor(noteWords)}m</span>
-                  <button
-                    type="button"
-                    className="del"
-                    aria-label={`Delete ${note.title}`}
-                    title="Delete"
-                    onClick={(event) => { event.stopPropagation(); deleteNote(note.id); }}
-                  >
-                    <Icon name="trash" size={15} />
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-        {shown.length === 0 && <p className="standfirst" style={{ marginTop: 20 }}>No note mentions that.</p>}
-      </>
+      <Shelf
+        notes={notes}
+        courses={courses}
+        onOpen={(id) => go(`n=${encodeURIComponent(id)}`)}
+        onFocus={enterFocus}
+        onDelete={deleteNote}
+        onNew={() => go('new=1')}
+        onOpenFile={() => fileRef.current?.click()}
+        onPrompt={() => setPromptOpen(true)}
+      />
     );
   }
 
