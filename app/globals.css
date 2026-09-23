@@ -370,6 +370,44 @@ input[type='date']::-webkit-calendar-picker-indicator {
     background: var(--c, var(--muted));
     vertical-align: middle;
   }
+
+  /* A course on the Courses shelf, standing face out. The cover is the
+     course's tint, the spine down its left edge is the course colour with a
+     crease just inside it where the board bends, and the only depth is a
+     hairline on the fore edge, never a drop shadow. Set --c on the element. */
+  .book-cover {
+    position: relative;
+    border-radius: 3px 8px 8px 3px;
+    box-shadow: inset -1px 0 0 var(--line), inset 0 -1px 0 var(--line);
+  }
+  .book-cover::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 10px;
+    border-radius: 3px 0 0 3px;
+    background: var(--c, var(--muted));
+  }
+  .book-cover::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 13px;
+    width: 1px;
+    background: var(--c, var(--muted));
+    opacity: 0.35;
+  }
+
+  /* The plank a row of books stands on: the pad's double rule, thickened
+     into a board with a wash between its edges. */
+  .shelf-plank {
+    height: 7px;
+    border-top: 1px solid var(--line-strong);
+    border-bottom: 1px solid var(--line-strong);
+    background: var(--bg-tint);
+    border-radius: 1px;
+  }
 }
 
 /* A tally mark that has just landed draws itself in, stroke by stroke, the
