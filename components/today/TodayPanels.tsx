@@ -1,17 +1,19 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Course, Session, Task } from '@/lib/data';
 import type { UpNextSort } from '@/lib/preferences';
 import {
   dueLabel,
   formatHM,
+  formatRelativeDate,
   isoDate,
   sessionsForDate,
   startOfWeek,
   totalSeconds,
 } from '@/lib/utils';
 import { isLoggableDuration } from '@/lib/session-safety';
+import { LIVE_SESSION_PREFIX } from '@/lib/live-session';
 import { backlogPages, countdowns, readingBacklog, readingRate } from '@/lib/derive';
 import HourStrokes from '@/components/HourStrokes';
 import HandNote from '@/components/notebook/HandNote';
@@ -38,7 +40,16 @@ interface UpNextProps {
   onOpen?: (task: Task) => void;
   sort?: UpNextSort;
   onSortChange?: (sort: UpNextSort) => void;
+  /**
+   * The record with the running sitting folded in, so the time already put
+   * into this task counts up while a timer runs on it.
+   */
+  sessions?: Session[];
 }
+
+// How long Done and Tomorrow wait for the task to lift off before handing
+// it over. Matches .lift-away in globals.css.
+const LIFT_MS = 200;
 
 // What the marginal note says for each rule, in its own voice rather than the
 // name of the setting.
@@ -75,9 +86,47 @@ export function UpNext({
   onOpen,
   sort = 'in-progress',
   onSortChange,
+  sessions = [],
 }: UpNextProps) {
   const due = dueLabel(task.dueDate);
   const color = course?.color ?? 'var(--ink)';
+
+  // What this task has had so far, and whether it is on the clock right now.
+  // The live sitting is in the list, so the figure moves while it runs.
+  const { spent, lastSat, onClock } = useMemo(() => {
+    let spent = 0;
+    let lastSat: string | null = null;
+    let onClock = false;
+    for (const s of sessions) {
+      if (s.taskId !== task.id) continue;
+      if (s.id.startsWith(LIVE_SESSION_PREFIX)) onClock = true;
+      else if (!lastSat || s.date > lastSat) lastSat = s.date;
+      spent += totalSeconds([s]);
+    }
+    return { spent, lastSat, onClock };
+  }, [sessions, task.id]);
+
+  // Done and Tomorrow lift the task off the page first, then hand it over,
+  // so the next one arrives into a space rather than replacing it mid-frame.
+  // Keyed on the id so the next task never inherits it; the timeout puts the
+  // task back if the change never lands.
+  const [leaving, setLeaving] = useState<string | null>(null);
+  useEffect(() => {
+    if (!leaving) return;
+    const t = window.setTimeout(() => setLeaving(null), 1600);
+    return () => window.clearTimeout(t);
+  }, [leaving]);
+  const letGo = (then: (task: Task) => void) => {
+    if (leaving === task.id) return;
+    setLeaving(task.id);
+    window.setTimeout(() => then(task), LIFT_MS);
+  };
+
+  // The swipe under the title is the course's own pastel, lifted off the
+  // line the way the highlighter tokens are.
+  const swipe = course?.color
+    ? `color-mix(in srgb, ${course.color} 42%, transparent)`
+    : 'var(--highlight-yellow)';
 
   // No card. Up next leads by where it sits, across the top of the page
   // over the double rule, and the course colour is the short rule before
@@ -95,9 +144,13 @@ export function UpNext({
             title={`Showing ${SORT_NOTE[sort]}. Switch to ${SORT_NOTE[nextSort(sort)]}.`}
             className="-my-3 flex min-h-10 shrink-0 items-center bg-transparent p-0 text-right transition-opacity hover:opacity-70"
           >
-            <HandNote color="var(--ink-soft)" size={17}>
-              {SORT_NOTE[sort]}
-            </HandNote>
+            {/* Wrapped, because HandNote's tilt is a transform and settle
+                would hold its own over it. */}
+            <span key={sort} className="inline-block animate-settle">
+              <HandNote color="var(--ink-soft)" size={17}>
+                {SORT_NOTE[sort]}
+              </HandNote>
+            </span>
           </button>
         ) : (
           <HandNote color="var(--ink-soft)" size={17}>
@@ -106,9 +159,12 @@ export function UpNext({
         )}
       </div>
 
+      {/* Everything about the task itself, keyed on it, so a new one settles
+          in and draws its rule and its swipe fresh. */}
+      <div key={task.id} className={leaving === task.id ? 'lift-away' : 'animate-settle'}>
       {course && (
         <div className="mt-2.5 flex items-center gap-2.5">
-          <span aria-hidden className="course-rule" style={{ ['--c' as string]: color }} />
+          <span aria-hidden className="course-rule rule-draw" style={{ ['--c' as string]: color }} />
           <span className="eyebrow text-ink-soft">{course.code}</span>
           <span className="text-[12px] text-muted">{course.name}</span>
         </div>
@@ -117,10 +173,14 @@ export function UpNext({
       <h2 className="m-0 mt-1.5 font-serif text-[24px] font-medium leading-[1.15] tracking-[-0.02em] md:text-[28px]">
         {onOpen ? (
           <button type="button" onClick={() => onOpen(task)} className="bg-transparent text-left">
-            {task.title}
+            <span className="hl-swipe hl-draw -mx-[3px]" style={{ ['--hl' as string]: swipe }}>
+              {task.title}
+            </span>
           </button>
         ) : (
-          task.title
+          <span className="hl-swipe hl-draw -mx-[3px]" style={{ ['--hl' as string]: swipe }}>
+            {task.title}
+          </span>
         )}
       </h2>
 
@@ -137,15 +197,29 @@ export function UpNext({
           <span>open ended</span>
         )}
         {task.priority === 'high' && <span className="text-priority"> · high</span>}
+        {onClock ? (
+          <span className="text-ink">
+            {' · '}
+            <span aria-hidden className="inline-block h-[6px] w-[6px] -translate-y-[2px] animate-tick rounded-full" style={{ background: color }} />{' '}
+            on the clock, <span className="font-mono not-italic tnum text-[13.5px]">{formatHM(spent)}</span> in
+          </span>
+        ) : spent >= 60 ? (
+          <span>
+            {' · '}
+            <span className="font-mono not-italic tnum text-[13.5px]">{formatHM(spent)}</span> in
+            {lastSat && `, last sat ${formatRelativeDate(lastSat).toLowerCase()}`}
+          </span>
+        ) : null}
       </p>
+      </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={(e) => onStart(task, e.currentTarget, false)}
-          className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-opacity hover:opacity-90"
+          className="group flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.97]"
         >
-          <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+          <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor" className="transition-transform duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)] group-hover:translate-x-[2px]">
             <path d="M7 5l12 7-12 7V5z" />
           </svg>
           Start
@@ -159,14 +233,14 @@ export function UpNext({
         </button>
         <button
           type="button"
-          onClick={() => onDone(task)}
+          onClick={() => letGo(onDone)}
           className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
         >
           Done
         </button>
         <button
           type="button"
-          onClick={() => onSnooze(task)}
+          onClick={() => letGo(onSnooze)}
           className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
         >
           Tomorrow

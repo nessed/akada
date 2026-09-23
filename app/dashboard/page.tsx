@@ -851,6 +851,7 @@ function DashboardPageContent() {
                 onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
                 sort={prefs.upNextSort}
                 onSortChange={(upNextSort) => updatePrefs({ upNextSort })}
+                sessions={shownSessions}
               />
             ) : (
               <section>
@@ -879,7 +880,7 @@ function DashboardPageContent() {
             ends on a cutoff rule rather than inside a box. Below xl it is one
             column in reading order. */}
         <div className="grid items-start xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
-          <div className="flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
+          <div className="settle-in flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
 
             {/* Recall. A few things from the term to bring back with the book
                 shut, and nothing at all on a day with none due. Under Up next
@@ -997,7 +998,7 @@ function DashboardPageContent() {
               only matter in passing. The pencil column rule belongs to them,
               so it ends where they do. */}
           <aside className="relative mt-7 border-t border-line pt-7 xl:sticky xl:top-10 xl:mt-0 xl:border-t-0 xl:pt-0 xl:before:absolute xl:before:-left-[41px] xl:before:inset-y-0 xl:before:w-px xl:before:bg-line xl:before:content-['']">
-            <div className="flex flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
+            <div className="settle-in flex flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
             <ComingPanel
               tasks={tasks}
               courses={courses}
@@ -1278,7 +1279,7 @@ function DashboardPageContent() {
             onClick={() => !savingCourseEdit && setEditingCourse(null)}
             className="absolute inset-0 scrim backdrop-blur-sm"
           />
-          <div className="relative max-h-[92dvh] w-full overflow-y-auto md:mx-auto md:max-w-xl rounded-t-3xl bg-bg px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
+          <div className="relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain md:mx-auto md:max-w-xl rounded-t-3xl bg-bg px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
             <div className="mx-auto mb-[18px] h-1 w-9 rounded-full bg-line-strong" />
             <h3 className="mt-0 mb-1.5 font-serif font-medium text-[22px] tracking-[-0.01em]">
               Edit course

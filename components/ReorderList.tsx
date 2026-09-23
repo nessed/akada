@@ -110,9 +110,10 @@ function usePrefersReducedMotion(): boolean {
 /**
  * The nearest ancestor that actually scrolls, or null for the page itself.
  *
- * The walk stops at `body` on purpose. `body` computes an `overflow-y` of
- * `auto` here — `globals.css` clips horizontal overflow on it, and CSS turns
- * the other axis into `auto` when one axis is not `visible` — but the thing
+ * The walk stops at `body` on purpose. On a browser without `overflow: clip`
+ * `body` computes an `overflow-y` of `auto` — `globals.css` clips horizontal
+ * overflow on it with `hidden` there, and CSS turns the other axis into
+ * `auto` when one axis is not `visible` — but the thing
  * that actually scrolls on the page is the viewport, whose offset is
  * `window.scrollY`, so reading `body.scrollTop` would report a permanent 0.
  */
@@ -276,7 +277,9 @@ export default function ReorderList<T>({
     else if (y > bottom - EDGE) delta = Math.ceil((y - (bottom - EDGE)) / 5);
     if (delta !== 0) {
       if (current.scroller) current.scroller.scrollTop += delta;
-      else window.scrollBy(0, delta);
+      // Instant, per frame: the page scrolls smoothly by default, and a
+      // glide started on every frame of a drag never catches the pointer.
+      else window.scrollBy({ top: delta, behavior: 'instant' });
       trackPointer(y);
     }
     scrollFrameRef.current = requestAnimationFrame(scrollTick);

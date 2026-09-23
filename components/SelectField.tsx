@@ -102,7 +102,7 @@ export default function SelectField({
         <ul
           id={listId}
           role="listbox"
-          className="absolute left-0 right-0 bottom-[calc(100%+6px)] z-[90] m-0 max-h-[min(15rem,38vh)] list-none overflow-y-auto rounded-[12px] border border-line bg-paper p-0 shadow-[0_18px_48px_rgba(26,25,21,0.16)] animate-fade-in"
+          className="absolute left-0 right-0 bottom-[calc(100%+6px)] z-[90] m-0 max-h-[min(15rem,38vh)] list-none overflow-y-auto overscroll-contain rounded-[12px] border border-line bg-paper p-0 shadow-[0_18px_48px_rgba(26,25,21,0.16)] animate-fade-in"
         >
           {options.map((option) => {
             const isSelected = option.value === value;
