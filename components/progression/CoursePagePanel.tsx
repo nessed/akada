@@ -28,7 +28,7 @@ export default function CoursePagePanel({
   const opacity = ink === null ? 1 : 0.5 + ink * 0.5;
 
   return (
-    <section className="deckle mt-6 border border-line bg-paper px-7 py-6" style={{ opacity }}>
+    <section style={{ opacity }}>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <p className="eyebrow m-0">Page {record.bound + 1}</p>
         <span className="font-mono text-[11px] text-muted">

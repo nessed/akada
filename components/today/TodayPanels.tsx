@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useMemo } from 'react';
 import type { Course, Session, Task } from '@/lib/data';
 import type { UpNextSort } from '@/lib/preferences';
@@ -80,17 +79,13 @@ export function UpNext({
   const due = dueLabel(task.dueDate);
   const color = course?.color ?? 'var(--ink)';
 
+  // No card. Up next leads by where it sits, across the top of the page
+  // over the double rule, and the course colour is the short rule before
+  // the code rather than a stripe down a box's edge.
   return (
-    <section className="deckle relative overflow-hidden border border-line bg-paper py-6 pl-8 pr-7">
-      <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: color }} />
-      <span
-        aria-hidden
-        className="absolute right-0 top-0 h-[22px] w-[22px]"
-        style={{ background: 'linear-gradient(225deg, var(--bg-tint) 50%, transparent 50%)' }}
-      />
-
+    <section className="relative">
       <div className="flex items-baseline justify-between gap-4">
-        <p className="eyebrow m-0">Up next</p>
+        <p className="eyebrow m-0 text-ink-soft">Up next</p>
         {onSortChange ? (
           <button
             type="button"
@@ -98,7 +93,7 @@ export function UpNext({
             // The note is already the label, so it says what it is rather
             // than "sort by", and the title carries what a click will do.
             title={`Showing ${SORT_NOTE[sort]}. Switch to ${SORT_NOTE[nextSort(sort)]}.`}
-            className="shrink-0 bg-transparent p-0 text-right transition-opacity hover:opacity-70"
+            className="-my-3 flex min-h-10 shrink-0 items-center bg-transparent p-0 text-right transition-opacity hover:opacity-70"
           >
             <HandNote color="var(--ink-soft)" size={17}>
               {SORT_NOTE[sort]}
@@ -112,10 +107,9 @@ export function UpNext({
       </div>
 
       {course && (
-        <div className="mt-4 flex items-center gap-2.5">
-          <span className="eyebrow" style={{ color }}>
-            {course.code}
-          </span>
+        <div className="mt-2.5 flex items-center gap-2.5">
+          <span aria-hidden className="course-rule" style={{ ['--c' as string]: color }} />
+          <span className="eyebrow text-ink-soft">{course.code}</span>
           <span className="text-[12px] text-muted">{course.name}</span>
         </div>
       )}
@@ -130,7 +124,7 @@ export function UpNext({
         )}
       </h2>
 
-      <p className="m-0 mt-2.5 font-serif italic text-[13.5px] text-muted">
+      <p className="m-0 mt-2 font-serif italic text-[15px] text-muted">
         {/* No date is a state the task is in, and since Up next now reaches
             open-ended work on a day with nothing due, it is said rather than
             left as a gap with " · high" hanging off the front of it. */}
@@ -224,8 +218,8 @@ export function ComingPanel({
   if (coming.length === 0 && pages === 0) return null;
 
   return (
-    <section className="rounded-[14px] border border-line bg-paper p-5">
-      <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+    <section>
+      <div className="flex items-baseline justify-between pb-1.5">
         <p className="eyebrow m-0">Coming</p>
         {coming.length > 0 && (
           <span className="font-mono text-[11px] text-muted">
@@ -252,7 +246,14 @@ export function ComingPanel({
             {/* Course, what it is and what it is worth all ride the eyebrow,
                 so the countdown is the only thing on the right and the title
                 keeps the width it needs. */}
-            <span className="eyebrow block truncate" style={{ color: course?.color }}>
+            <span className="eyebrow block truncate text-ink-soft">
+              {course && (
+                <span
+                  aria-hidden
+                  className="course-rule relative -top-px mr-2"
+                  style={{ ['--c' as string]: course.color }}
+                />
+              )}
               {course?.code ?? '—'}
               {task.kind === 'exam' && <span className="ml-1.5 text-warn">exam</span>}
               {(task.weight ?? 0) > 0 && (
@@ -325,13 +326,13 @@ export function TodayHours({
   }, [courses, todays]);
 
   return (
-    <section className="rounded-[14px] border border-line bg-paper p-5">
-      <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+    <section>
+      <div className="flex items-baseline justify-between">
         <p className="eyebrow m-0">Today</p>
         <span className="font-mono text-[11px] text-muted">of {goalHours}h</span>
       </div>
 
-      <p className="m-0 mt-4 font-mono text-[32px] font-semibold leading-none tracking-[-0.02em] tabular-nums">
+      <p className="m-0 mt-4 font-mono text-[32px] font-semibold leading-none tracking-[-0.02em] tabular-nums xl:mt-6">
         {total > 0 ? formatHM(total) : '0m'}
       </p>
 
@@ -399,8 +400,8 @@ export function WeekPanel({
   const peak = Math.max(1, ...days.map((d) => d.secs));
 
   return (
-    <section className="rounded-[14px] border border-line bg-paper p-5">
-      <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+    <section>
+      <div className="flex items-baseline justify-between">
         <p className="eyebrow m-0">This week</p>
         <span className="font-mono text-[11px] text-ink">
           {formatHM(weekTotal)} <span className="text-muted">/ {goalHours}h</span>
@@ -441,101 +442,6 @@ export function WeekPanel({
           <span key={day.iso} className="flex-1 text-center">
             <span className={day.isToday ? 'text-ink' : ''}>{day.label}</span>
           </span>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ── Courses this week ─────────────────────────────────────────────────── */
-
-export function CoursesWeekPanel({
-  courses,
-  sessions,
-  onStart,
-}: {
-  courses: Course[];
-  sessions: Session[];
-  onStart: (course: Course, el: HTMLElement) => void;
-}) {
-  const weekStart = isoDate(startOfWeek());
-
-  const rows = useMemo(
-    () =>
-      courses.map((course) => {
-        const mine = sessions.filter(
-          (s) => s.courseId === course.id && isLoggableDuration(s.durationSeconds),
-        );
-        const week = mine.filter((s) => s.date >= weekStart);
-        const last = mine.reduce<string | null>(
-          (acc, s) => (acc == null || s.date > acc ? s.date : acc),
-          null,
-        );
-        const quietDays = last
-          ? Math.round((Date.now() - new Date(last + 'T12:00:00').getTime()) / 86_400_000)
-          : null;
-        return { course, secs: totalSeconds(week), quietDays };
-      }),
-    [courses, sessions, weekStart],
-  );
-
-  if (rows.length === 0) return null;
-
-  return (
-    <section className="rounded-[14px] border border-line bg-paper p-5">
-      <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
-        <p className="eyebrow m-0">Courses · week</p>
-        <Link href="/courses" className="text-[11px] text-muted no-underline hover:text-ink">
-          All
-        </Link>
-      </div>
-
-      <div className="mt-1">
-        {rows.map(({ course, secs, quietDays }) => (
-          <div
-            key={course.id}
-            className="group flex items-center gap-3 rounded-[10px] px-1 py-2.5 transition-colors hover:bg-paper-2"
-          >
-            <span
-              aria-hidden
-              className="block h-7 w-[3px] shrink-0 rounded-[1px]"
-              style={{ background: course.color }}
-            />
-            <Link href={`/courses/${course.id}`} className="min-w-0 flex-1 no-underline">
-              <span className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-[13px] text-ink">{course.code}</span>
-                <span className="shrink-0 font-mono text-[11px] text-muted">
-                  {/* A course nobody has opened in a while says so rather than
-                      showing a row of empty strokes and leaving it at that. */}
-                  {secs > 0
-                    ? `${formatHM(secs)} / ${course.weeklyGoalHours}h`
-                    : quietDays && quietDays > 1
-                      ? `${quietDays}d quiet`
-                      : `0m / ${course.weeklyGoalHours}h`}
-                </span>
-              </span>
-              <HourStrokes
-                seconds={secs}
-                goalHours={course.weeklyGoalHours}
-                color={course.color}
-                height={10}
-                width={7}
-                max={10}
-                className="mt-1.5"
-                label={`${course.code}, ${formatHM(secs)} of ${course.weeklyGoalHours} hours this week`}
-              />
-            </Link>
-            <button
-              type="button"
-              onClick={(e) => onStart(course, e.currentTarget)}
-              aria-label={`Start timer on ${course.code}`}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-bg-tint text-ink-soft opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
-            >
-              <svg aria-hidden width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7 5l12 7-12 7V5z" />
-              </svg>
-            </button>
-          </div>
         ))}
       </div>
     </section>

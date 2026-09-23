@@ -369,10 +369,11 @@ export default function CoursePage() {
         </div>
       </header>
 
-      {/* The four numbers the course is actually judged on, across the top
-          rather than stacked down the side of a phone column. */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <div className="rounded-[14px] border border-line bg-paper p-4">
+      {/* The four numbers the course is actually judged on, as one strip
+          across the top, closed by the pad's double rule. No tiles: a pencil
+          rule between the figures on a wide screen, space on a phone. */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-6 md:grid-cols-4 md:gap-x-0 md:divide-x md:divide-line md:[&>*]:px-6 md:[&>*:first-child]:pl-0 md:[&>*:last-child]:pr-0">
+        <div>
           <p className="eyebrow m-0">This week</p>
           <p className="m-0 mt-2 font-mono text-[20px] font-semibold tabular-nums">
             {formatHM(weekSeconds)}
@@ -392,7 +393,7 @@ export default function CoursePage() {
           />
         </div>
 
-        <div className="rounded-[14px] border border-line bg-paper p-4">
+        <div>
           <p className="eyebrow m-0">Term</p>
           <p className="m-0 mt-2 font-mono text-[20px] font-semibold tabular-nums">
             {formatHM(totalSeconds(log))}
@@ -403,7 +404,7 @@ export default function CoursePage() {
           </p>
         </div>
 
-        <div className="rounded-[14px] border border-line bg-paper p-4">
+        <div>
           <p className="eyebrow m-0">Open tasks</p>
           <p className="m-0 mt-2 font-mono text-[20px] font-semibold tabular-nums">
             {open.length}
@@ -418,7 +419,7 @@ export default function CoursePage() {
           </p>
         </div>
 
-        <div className="rounded-[14px] border border-line bg-paper p-4">
+        <div>
           <p className="eyebrow m-0">Next due</p>
           {nextDue ? (
             <>
@@ -435,22 +436,24 @@ export default function CoursePage() {
         </div>
       </div>
 
-      {/* This course's page, with its marks in the margin. Faded when the
-          course has been left alone, and never a word about the fading. */}
-      {pageRecord && (
-        <CoursePagePanel
-          course={course}
-          record={pageRecord}
-          ink={progression?.ink.get(course.id) ?? null}
-        />
-      )}
+      <div aria-hidden className="fold mt-8" />
 
-      <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0">
+      <div className="mt-9 grid items-start xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
+        <div className="flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
+          {/* This course's page, with its marks in the margin. Faded when the
+              course has been left alone, and never a word about the fading. */}
+          {pageRecord && (
+            <CoursePagePanel
+              course={course}
+              record={pageRecord}
+              ink={progression?.ink.get(course.id) ?? null}
+            />
+          )}
+
           {/* Tasks. This course's list, and only this course's, so the rows
               drop the course column they would otherwise all repeat. */}
           <section>
-            <div className="flex items-baseline justify-between gap-3 px-2 pb-2">
+            <div className="flex items-baseline justify-between gap-3 pb-2">
               <p className="eyebrow m-0">
                 Tasks
                 <span className="ml-1.5 font-mono tracking-normal text-ink-soft">
@@ -462,14 +465,16 @@ export default function CoursePage() {
                   type="button"
                   aria-expanded={showDone}
                   onClick={() => setShowDone((current) => !current)}
-                  className="h-10 rounded-[10px] px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
+                  className="-my-3 -mr-2.5 h-10 rounded-[10px] px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
                 >
                   {showDone ? 'Hide' : 'Done'} {done.length}
                 </button>
               )}
             </div>
 
-            <div className="overflow-hidden rounded-[14px] border border-line bg-paper">
+            {/* The rows are written on the page; their wash reaches a little
+                past the column on either side, the way a highlighter does. */}
+            <div className="-mx-[15px]">
               {open.map((task) => (
                 <TaskRow
                   key={task.id}
@@ -482,6 +487,7 @@ export default function CoursePage() {
                   onOpen={openTask}
                   onOpenEnded={openEndTask}
                   onDelete={(t) => removeTask(t.id)}
+                  ground="page"
                 />
               ))}
 
@@ -496,6 +502,7 @@ export default function CoursePage() {
                     onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
                     onOpen={openTask}
                     onDelete={(t) => removeTask(t.id)}
+                    ground="page"
                   />
                 ))}
 
@@ -508,7 +515,7 @@ export default function CoursePage() {
               {/* The inline add sits inside the panel, on the line where the
                   next task will appear. */}
               {adding ? (
-                <div className="border-t border-line-soft px-3 py-2.5">
+                <div className="border-t border-line-soft px-[15px] py-2.5">
                   <input
                     autoFocus
                     type="text"
@@ -548,7 +555,7 @@ export default function CoursePage() {
                     setDraftTitle('');
                     setDraftDue('');
                   }}
-                  className="w-full border-t border-line-soft px-4 py-3 text-left font-serif text-[13px] italic text-muted-soft transition-colors hover:text-ink"
+                  className="w-full border-t border-line-soft px-[15px] py-3 text-left font-serif text-[13px] italic text-muted-soft transition-colors hover:text-ink"
                 >
                   + jot a task…
                 </button>
@@ -570,11 +577,11 @@ export default function CoursePage() {
             reading={recall}
             available={recallAvailable}
             onStudy={(state, el) => setStartTarget({ task: state.task, course, anchor: el })}
-            className="mt-10"
           />
         </div>
 
-        <aside className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">
+        {/* The right column, as stories under a pencil column rule. */}
+        <aside className="relative mt-7 flex flex-col divide-y divide-line border-t border-line pt-7 [&>*]:py-7 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0 xl:sticky xl:top-10 xl:mt-0 xl:border-t-0 xl:pt-0 xl:before:absolute xl:before:-left-[41px] xl:before:inset-y-0 xl:before:w-px xl:before:bg-line xl:before:content-['']">
           <CourseWeekCard course={course} sessions={courseSessions} onGoalChange={saveGoal} />
 
           <GradeStanding course={course} tasks={courseTasks} today={today} />
@@ -584,8 +591,8 @@ export default function CoursePage() {
           <PracticeScores sessions={courseSessions} tasks={courseTasks} color={course.color} />
 
           {/* The hours. The full log, and deleting from it, stay on Stats. */}
-          <section className="rounded-[14px] border border-line bg-paper p-5">
-            <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+          <section>
+            <div className="flex items-baseline justify-between">
               <p className="eyebrow m-0">Sessions</p>
               {log.length > 0 && (
                 <span className="tnum font-mono text-[11px] text-muted">

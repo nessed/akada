@@ -280,6 +280,29 @@ input[type='date']::-webkit-calendar-picker-indicator {
   .scrim {
     background-color: var(--scrim);
   }
+
+  /* The pad's double rule. It closes the head band on Today and the figures
+     across the top of a course page: the one heavier line on the screen,
+     since it ends the thing the screen is for. */
+  .fold {
+    height: 4px;
+    border-top: 1px solid var(--line-strong);
+    border-bottom: 1px solid var(--line-strong);
+  }
+
+  /* A course's colour, set as a short rule before its code: the stripe that
+     used to run down a card's edge, turned on its side like a section tab.
+     The code beside it stays in ink, because a pastel on the bare page reads
+     at 1.5 to 2:1 on cream. Set --c on the element. */
+  .course-rule {
+    display: inline-block;
+    flex: none;
+    width: 20px;
+    height: 3px;
+    border-radius: 1px;
+    background: var(--c, var(--muted));
+    vertical-align: middle;
+  }
 }
 
 /* A tally mark that has just landed draws itself in, stroke by stroke, the

@@ -105,7 +105,7 @@ export default function CourseRecallPanel({
 
   return (
     <section className={className}>
-      <div className="flex items-baseline justify-between gap-3 px-2 pb-2">
+      <div className="flex items-baseline justify-between gap-3 pb-2">
         <p className="eyebrow m-0">
           Recall
           {mine && (
@@ -147,7 +147,7 @@ export default function CourseRecallPanel({
         />
       )}
 
-      <div className="overflow-hidden rounded-[14px] border border-line bg-paper">
+      <div className="-mx-4">
         {mine && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3">
             <RecallStrokes recall={mine} color={course.color} height={13} />

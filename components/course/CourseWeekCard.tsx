@@ -67,7 +67,7 @@ export default function CourseWeekCard({ course, sessions, onGoalChange }: Props
           : `last studied ${since}d ago`;
 
   return (
-    <section className="deckle relative border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-[18px]">
+    <section className="relative">
       {since !== null && since >= 4 && (
         <HandNote
           color="var(--warn-soft)"

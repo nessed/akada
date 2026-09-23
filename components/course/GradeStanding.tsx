@@ -210,8 +210,8 @@ export default function GradeStanding({
 
   if (editing) {
     return (
-      <section className="rounded-[14px] border border-line bg-paper p-5">
-        <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+      <section>
+        <div className="flex items-baseline justify-between">
           <p className="eyebrow m-0">How it is marked</p>
           <span
             className="tnum font-mono text-[11px]"
@@ -290,8 +290,8 @@ export default function GradeStanding({
   // would invite reading the two as one scheme.
   if (pending) {
     return (
-      <section className="rounded-[14px] border border-line bg-paper p-5">
-        <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+      <section>
+        <div className="flex items-baseline justify-between">
           <p className="eyebrow m-0">What was read off the outline</p>
           <span className="tnum font-mono text-[11px] text-muted">
             {round(pending.assessments.reduce((acc, r) => acc + r.weight, 0))}% of 100
@@ -381,7 +381,7 @@ export default function GradeStanding({
 
   if (standing.rows.length === 0) {
     return (
-      <section className="rounded-[14px] border border-line bg-paper p-5">
+      <section>
         <p className="eyebrow m-0">Where the grade stands</p>
         <p className="m-0 mt-2.5 font-serif text-[15px] leading-[1.45] text-ink-soft">
           Akada does not know how {course.code} is marked yet.
@@ -411,8 +411,8 @@ export default function GradeStanding({
   }
 
   return (
-    <section className="rounded-[14px] border border-line bg-paper p-5">
-      <div className="flex items-baseline justify-between border-b border-line-soft pb-2.5">
+    <section>
+      <div className="flex items-baseline justify-between">
         <p className="eyebrow m-0">Where the grade stands</p>
         <button
           type="button"

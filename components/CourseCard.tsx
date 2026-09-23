@@ -67,11 +67,11 @@ export default function CourseCard({
     .join(' · ');
 
   return (
-    <article className="relative bg-paper rounded-[14px] border border-line overflow-hidden transition-colors focus-within:border-line-strong hover:border-line-strong">
-      <div
-        className="pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-1"
-        style={{ background: course.color }}
-      />
+    // An entry written on the page, not a card: no edge, no fill of its own,
+    // and the course colour is the short rule before the code. It is drawn
+    // on the page's own ground so that, lifted and carried in the list, it
+    // still covers the entries it passes over.
+    <article className="group/course relative bg-bg">
       {/* The whole card is the way into the course. It sits under the content
           rather than wrapping it, so the menu and the timer button stay real
           buttons instead of controls nested inside a link. It opens the
@@ -81,18 +81,18 @@ export default function CourseCard({
       <Link
         href={`/courses/${encodeURIComponent(course.id)}`}
         aria-label={`Open ${course.name}`}
-        className="absolute inset-0 rounded-[14px]"
+        className="absolute inset-0 rounded-[6px]"
       />
-      <div className="pointer-events-none relative py-[18px] pl-[22px] pr-[18px]">
+      <div className="pointer-events-none relative py-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p
-              className="eyebrow m-0"
-              style={{ color: course.color }}
-            >
+            <p className="eyebrow m-0 flex items-center gap-2.5 text-ink-soft">
+              <span aria-hidden className="course-rule" style={{ ['--c' as string]: course.color }} />
               {course.code}
             </p>
-            <h3 className="mt-1 mb-0 font-serif font-medium text-[19px] tracking-[-0.01em] truncate">
+            {/* Pointing at the entry underlines its name, the same pencil
+                line a task title draws: the way in, without a box. */}
+            <h3 className="mt-1 mb-0 truncate font-serif text-[19px] font-medium tracking-[-0.01em] decoration-line-strong underline-offset-[5px] group-focus-within/course:underline group-hover/course:underline">
               {course.name}
             </h3>
             {/* Only what the catalog actually supplied, a manually typed
