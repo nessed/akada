@@ -5,9 +5,17 @@ import { readAccessToken } from '@/lib/mcp-auth';
 import { MAX_SCORE_OUT_OF, MAX_SESSION_SECONDS, cleanScore } from '@/lib/session-safety';
 import {
   SESSION_NOTE_MAX,
+  TASK_KINDS,
+  TASK_PAGES_MAX,
+  TASK_PAGES_MIN,
+  TASK_WEIGHT_MAX,
+  TASK_WEIGHT_MIN,
+  cleanKind,
+  cleanPages,
   cleanRecallKey,
   cleanRecallPrompt,
   cleanRecallSource,
+  cleanWeight,
   isIsoDate,
   sanitizeRecallHistory,
 } from '@/lib/planner-safety';
@@ -63,9 +71,9 @@ const TaskReadSchema = z.object({
   // Always present in the reply, whatever the table has: a project that
   // predates these columns reads every row as a plain, unweighted task,
   // which is exactly what the app shows it as.
-  kind: z.enum(['task', 'reading', 'exam']),
-  weight: z.number().nullable(),
-  pages: z.number().nullable(),
+  kind: z.enum(TASK_KINDS),
+  weight: z.number().min(TASK_WEIGHT_MIN).max(TASK_WEIGHT_MAX).nullable(),
+  pages: z.number().int().min(TASK_PAGES_MIN).max(TASK_PAGES_MAX).nullable(),
   course: z.object({ id: z.string(), code: z.string(), name: z.string() }),
 });
 
@@ -144,24 +152,20 @@ async function activeSemesterId(token: AuthenticatedToken, supabase: McpSupabase
   return data?.active_semester_id as string | null;
 }
 
-const TASK_KINDS = ['task', 'reading', 'exam'] as const;
-type TaskKindName = (typeof TASK_KINDS)[number];
-
 /**
  * What a row is and what it is worth, read off a row fetched with `*`.
  *
  * The three columns are additive migrations, so on a project that has not
  * re-run supabase/schema.sql they are simply absent from the row, and the
- * row reads as a plain, unweighted task: the same thing the app shows.
+ * row reads as a plain, unweighted task: the same thing the app shows. Read
+ * through the app's own cleaners, so the connector and the screen agree on
+ * every value, including a stray 0 pages an older schema allowed.
  */
 function readTaskMeasure(row: Record<string, unknown>) {
-  const kind = TASK_KINDS.includes(row.kind as TaskKindName) ? (row.kind as TaskKindName) : 'task';
-  const weight = row.weight === null || row.weight === undefined ? null : Number(row.weight);
-  const pages = row.pages === null || row.pages === undefined ? null : Number(row.pages);
   return {
-    kind,
-    weight: Number.isFinite(weight) ? weight : null,
-    pages: Number.isFinite(pages) ? pages : null,
+    kind: cleanKind(row.kind),
+    weight: cleanWeight(row.weight),
+    pages: cleanPages(row.pages),
   };
 }
 
@@ -532,8 +536,8 @@ const CreateTasksInput = z.object({
     description: z.string().trim().max(MAX_DESCRIPTION).optional(),
     subtasks: z.array(z.string().trim().min(1).max(MAX_SUBTASK_TITLE)).max(MAX_SUBTASKS_PER_TASK).optional(),
     kind: z.enum(TASK_KINDS).default('task'),
-    weight: z.number().min(0).max(100).optional().describe('Percent of the course this piece is worth, only when the source states it.'),
-    pages: z.number().int().min(1).max(10000).optional().describe('How many pages a reading runs to, only when the source gives a range or count.'),
+    weight: z.number().min(TASK_WEIGHT_MIN).max(TASK_WEIGHT_MAX).optional().describe('Percent of the course this piece is worth, only when the source states it.'),
+    pages: z.number().int().min(TASK_PAGES_MIN).max(TASK_PAGES_MAX).optional().describe('How many pages a reading runs to, only when the source gives a range or count.'),
   })).min(1).max(MAX_TASKS_PER_REQUEST),
 });
 
@@ -1504,8 +1508,8 @@ function createServer(token: AuthenticatedToken) {
           })).max(MAX_SUBTASKS_PER_TASK).optional(),
           completed: z.boolean().optional(),
           kind: z.enum(TASK_KINDS).optional(),
-          weight: z.number().min(0).max(100).nullable().optional(),
-          pages: z.number().int().min(1).max(10000).nullable().optional(),
+          weight: z.number().min(TASK_WEIGHT_MIN).max(TASK_WEIGHT_MAX).nullable().optional(),
+          pages: z.number().int().min(TASK_PAGES_MIN).max(TASK_PAGES_MAX).nullable().optional(),
         })).min(1).max(MAX_TASKS_PER_REQUEST),
       }),
       annotations: { destructiveHint: false, idempotentHint: true },

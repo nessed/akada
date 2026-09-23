@@ -208,11 +208,18 @@ export interface Task {
   completed: boolean;
   completedAt: string | null;
   createdAt: string;
-  /** Plain task unless said otherwise. See TaskKind. */
+  /** Plain task unless said otherwise, and `'task'` when absent. See TaskKind. */
   kind?: TaskKind;
-  /** What this piece is worth, as a percentage of the course. */
+  /**
+   * What this piece is worth, as a percentage of the course: 0 to 100, or
+   * null when nobody has said. Bounds in lib/planner-safety.ts, matching the
+   * check constraint on `tasks.weight`.
+   */
   weight?: number | null;
-  /** Pages, for a reading. What turns the backlog into hours. */
+  /**
+   * Pages, for a reading: a whole number from 1 to 10000, or null. What turns
+   * the backlog into hours. Bounds match the check on `tasks.pages`.
+   */
   pages?: number | null;
 }
 

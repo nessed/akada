@@ -76,11 +76,20 @@ export function cleanCredits(value: unknown): number | null {
   return Math.min(12, Math.round(parsed * 2) / 2);
 }
 
-const TASK_KINDS: TaskKind[] = ['task', 'reading', 'exam'];
+/**
+ * The bounds on a task's kind, weight and pages. They are the check
+ * constraints on `tasks` in supabase/schema.sql, restated here so the app and
+ * the MCP connector refuse the same values the database would.
+ */
+export const TASK_KINDS = ['task', 'reading', 'exam'] as const satisfies readonly TaskKind[];
+export const TASK_WEIGHT_MIN = 0;
+export const TASK_WEIGHT_MAX = 100;
+export const TASK_PAGES_MIN = 1;
+export const TASK_PAGES_MAX = 10000;
 
 /** A row's kind. Anything unrecognised is a plain task, which is the default. */
 export function cleanKind(value: unknown): TaskKind {
-  return TASK_KINDS.includes(value as TaskKind) ? (value as TaskKind) : 'task';
+  return (TASK_KINDS as readonly unknown[]).includes(value) ? (value as TaskKind) : 'task';
 }
 
 /**
@@ -90,13 +99,17 @@ export function cleanKind(value: unknown): TaskKind {
 export function cleanWeight(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
   const n = Number(value);
-  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
+  return Number.isFinite(n) ? Math.min(TASK_WEIGHT_MAX, Math.max(TASK_WEIGHT_MIN, n)) : null;
 }
 
+/**
+ * A whole page count, or null. Rounded before it is checked, so a stray 0.4
+ * reads as "not set" rather than as the 0 pages the database refuses.
+ */
 export function cleanPages(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.min(10000, Math.round(n)) : null;
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) && n >= TASK_PAGES_MIN ? Math.min(TASK_PAGES_MAX, n) : null;
 }
 
 /**
