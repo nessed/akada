@@ -167,8 +167,9 @@ The page is separated by its own ruling instead, the way a ruled pad is:
 What still floats keeps its edge and warm shadow: popovers, menus, the date
 picker, toasts, sheets and the timer dock. With the page unboxed they are the
 only edged things on screen, so they read as above it again. Tasks is ruled
-this way too (see Tasks: the planner). Stats, the Record and Settings are
-not yet.
+this way too (see Tasks: the planner). Stats and the Record are deckle
+cards by design (see Stats: the chase, and The Record); Settings is not yet
+ruled.
 
 ### Hours, not percentages
 Nothing in the app draws a percentage bar. A week against a goal is **one
@@ -958,6 +959,55 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
 
 All of it fills backwards only and holds no transform once landed, and
 reduced motion drops the delays with the durations.
+
+### The Record: the term as a ledger
+
+`/stamps` (the Record tab) is laid out the way Stats is, since the two are
+read side by side. It used to be three plain rounded boxes with eyebrow-only
+headers, the one screen that still looked like a settings panel.
+
+- **Masthead.** Standfirst (pages bound, impressions struck) in the serif
+  italic with the term-week `Stamp` beside it, the title at the screen-title
+  tier ("The *record*"), and the Next Mark line under it with its tally glyph.
+  This copy does not log an impression: Record is where the line is looked
+  up, not where it is offered. On the right, the one figure the page is
+  about: weeks running, in mono, with a Caveat note that says "best is N" or
+  "your longest yet", so a broken run never hides the best.
+- **The ledger line**, the same newspaper rule as Stats: marks inked, pages
+  bound, best run, margin days banked.
+- **Course pages** (deckle card, serif heading). Each row is a link to the
+  course: course rule and code, the name in the serif, the page's
+  `TallyMarks` drawing themselves in on open, the distance to the next mark
+  and to binding, and the bound pages drawn as the edge of a stack of ruled
+  sheets. Ink fading is unchanged.
+- **The run** (aside). Weekday initials over the grid, the week in progress
+  outlined, a `HandCheck` in the margin for a week that counted, and a legend
+  for studied / margin / blank. The rules for what counts sit behind a
+  "what makes a week count" disclosure, since they are looked up once and the
+  grid is read daily.
+- **Within reach** (aside). The first four Next Mark candidates. Today and the
+  timer say one line and go quiet; this is where the rest of the board is.
+- **How you study**, full width, figures on the left, by-course and what the
+  ranking has learned on the right from `lg`.
+- **Since you last looked.** Record remembers, on the device, what it
+  showed on the last visit (`lib/progression/visits.ts`, a convenience like
+  the Next Mark ledger, never part of the record). On arrival it diffs the
+  logged record against that and, when something landed, tapes a note to the
+  top of the page: marks inked by course, pages bound, rungs struck, weeks
+  added to the run, with the figure in mono and the header in Caveat. Facts
+  only, and nothing about what was missed; a visit with nothing new shows
+  nothing. Only the marks inked since draw themselves in, and an impression
+  struck since gets the `warn` "New" stamp brought down (`.stamp-down`), the
+  same one loud moment Stats allows a new record. The baseline is rewritten
+  on every visit, so the news belongs to that visit.
+- **The dot.** While there is news, the Record item in the rail and the
+  bottom bar carries a 6px `ink` dot, never a count and never red. It reads
+  the logged record, not the sitting on the clock, and clears the moment the
+  page opens. This is the reason to come back to the Record.
+- **Impressions** are dealt in (`.deal-in`). Each is a stamp ring: a finished
+  ladder pressed as a double ring off the square, one under way a single
+  ring, one not started a dashed pencil outline, with one dot per rung under
+  the name.
 
 ### Buttons
 Two shapes, not four:
