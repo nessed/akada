@@ -52,6 +52,8 @@ interface Props {
   onDelete?: (task: Task) => void;
   /** Hide the course column on a screen that is already one course. */
   hideCourse?: boolean;
+  /** Leave the date off, on a list already cut into days where it repeats. */
+  hideDue?: boolean;
   /**
    * What the row is drawn on. `paper` is a row inside a panel, the Tasks
    * table. `page` is a row written straight onto the page, on Today and a
@@ -79,6 +81,7 @@ export default function TaskRow({
   onOpenEnded,
   onDelete,
   hideCourse = false,
+  hideDue = false,
   ground = 'paper',
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -146,9 +149,13 @@ export default function TaskRow({
       className={`group relative grid h-12 items-center gap-x-2 border-b border-line-soft pl-1 pr-2 text-ink transition-colors last:border-b-0 md:gap-x-0 ${
         selected ? 'bg-bg-tint' : ground === 'page' ? 'bg-bg hover:bg-bg-tint' : 'bg-paper hover:bg-paper-2'
       } ${task.completed ? 'opacity-50' : ''} ${
-        hideCourse
-          ? 'grid-cols-[40px_minmax(0,1fr)_78px_40px] md:grid-cols-[40px_minmax(0,1fr)_128px_88px]'
-          : 'grid-cols-[40px_minmax(0,1fr)_78px_40px] md:grid-cols-[40px_minmax(0,1fr)_132px_128px_88px]'
+        hideDue
+          ? hideCourse
+            ? 'grid-cols-[40px_minmax(0,1fr)_40px] md:grid-cols-[40px_minmax(0,1fr)_128px_88px]'
+            : 'grid-cols-[40px_minmax(0,1fr)_40px] md:grid-cols-[40px_minmax(0,1fr)_132px_128px_88px]'
+          : hideCourse
+            ? 'grid-cols-[40px_minmax(0,1fr)_78px_40px] md:grid-cols-[40px_minmax(0,1fr)_128px_88px]'
+            : 'grid-cols-[40px_minmax(0,1fr)_78px_40px] md:grid-cols-[40px_minmax(0,1fr)_132px_128px_88px]'
       }`}
       style={{
         boxShadow: focused ? 'inset 0 0 0 1.5px var(--ink)' : undefined,
@@ -245,8 +252,14 @@ export default function TaskRow({
         </span>
       )}
 
-      <span
-        className={`tnum font-mono text-[10.5px] tracking-[0.02em] md:text-[11.5px] ${
+      {/* Under a heading that already names the day, the date only repeats
+          it. The column stays on desktop, empty, so the courses still line
+          up down the page; on a phone it gives its width to the title. */}
+      {hideDue ? (
+        <span aria-hidden className="hidden md:block" />
+      ) : (
+        <span
+          className={`tnum font-mono text-[10.5px] tracking-[0.02em] md:text-[11.5px] ${
           due?.category === 'overdue'
             ? 'text-warn'
             : due?.category === 'today'
@@ -265,7 +278,8 @@ export default function TaskRow({
                 ? 'today'
                 : due.formattedDate
             : 'open ended'}
-      </span>
+        </span>
+      )}
 
       <span className="flex justify-end gap-0.5">
         {!task.completed &&
