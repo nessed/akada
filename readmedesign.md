@@ -1004,10 +1004,22 @@ headers, the one screen that still looked like a settings panel.
   bottom bar carries a 6px `ink` dot, never a count and never red. It reads
   the logged record, not the sitting on the clock, and clears the moment the
   page opens. This is the reason to come back to the Record.
-- **Impressions** are dealt in (`.deal-in`). Each is a stamp ring: a finished
-  ladder pressed as a double ring off the square, one under way a single
-  ring, one not started a dashed pencil outline, with one dot per rung under
-  the name.
+- **Impressions** are rubber stamps on one deckle sheet, drawn in SVG as
+  the mark each leaves: the ladder's name set round the rim like a postmark
+  (uppercase sans on a `textPath`), its own emblem and pastel (hours peach,
+  run rose, pages lavender, breadth sky, sitting clay, early mint, days
+  sage), the count it keeps in mono in the middle, an inner ring filling
+  toward the next rung, and one pip a rung along the foot, struck ones inked.
+  A stamp under way is inked in its colour over the colour's tint, roughened
+  by a faint displacement filter so it reads as pressed rubber; a finished
+  one is double ringed and struck off the square; one not started is a
+  dashed pencil outline. Each sits at a steady tilt picked from its id. The
+  one furthest toward its next rung is drawn large at the head of the sheet
+  as **Closest to striking**, with a ruled line between where the count
+  stands and the next rung. Under every stamp, one line in words says what
+  the next rung takes ("17 more hours for the 50h stamp"). Only the next rung
+  is ever named. A stamp struck since the last visit comes down with
+  `.stamp-down` and wears the `warn` "New" stamp.
 
 ### Buttons
 Two shapes, not four:
