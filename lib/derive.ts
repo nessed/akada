@@ -92,6 +92,64 @@ function countedAssessments(rows: Assessment[], dropRules: DropRule[]): Assessme
   return dropped.size === 0 ? rows : rows.filter((row) => !dropped.has(row.id));
 }
 
+/**
+ * Where a course can still end up, and what the rest has to go like to land
+ * on a given mark.
+ *
+ * Everything is out of what the scheme counts once drop rules are applied,
+ * the same `total` gradeStanding uses, so a course whose weights come to 100
+ * reads in plain percent. `floor` is the mark if nothing else scored a point,
+ * `ceiling` if everything left came back full. A target is solved two ways:
+ * as the average every unmarked piece would need, and, when `solveFor` names
+ * one piece, as what that piece needs with the others going at `assume` (a
+ * fraction, 0.72 for 72%). The second is the "what do I need on the final"
+ * question, which only has an answer once the rest is assumed to go somehow.
+ *
+ * Needed values are fractions and are not clamped: 1.2 means the target
+ * would take 120% of what is left, which is the honest way to say it cannot
+ * be reached. Nothing here knows a letter. Cutoffs are the outline's.
+ */
+export function gradeProjection(
+  course: Pick<Course, 'assessments' | 'grading'>,
+  options: { target?: number; solveFor?: string; assume?: number } = {},
+) {
+  const standing = gradeStanding(course);
+  const { total, earned, unmarked } = standing;
+  const outstanding = standing.counted.filter((a) => a.score === null || !a.outOf);
+  const floor = total > 0 ? (earned / total) * 100 : null;
+  const ceiling = total > 0 ? ((earned + unmarked) / total) * 100 : null;
+
+  const verdict = (needed: number | null) =>
+    needed === null ? ('decided' as const) : needed <= 0 ? ('secured' as const) : needed > 1 ? ('out_of_reach' as const) : ('reachable' as const);
+
+  let target: { percent: number; neededAverage: number | null; status: ReturnType<typeof verdict> } | null = null;
+  let solved: {
+    piece: Assessment;
+    assume: number;
+    needed: number | null;
+    status: ReturnType<typeof verdict>;
+  } | null = null;
+
+  if (options.target !== undefined && total > 0) {
+    const short = (options.target / 100) * total - earned;
+    const neededAverage = unmarked > 0 ? short / unmarked : null;
+    // With nothing left the target is simply met or missed.
+    const status = neededAverage === null ? (short <= 0 ? ('secured' as const) : ('out_of_reach' as const)) : verdict(neededAverage);
+    target = { percent: options.target, neededAverage, status };
+
+    const piece = options.solveFor ? outstanding.find((a) => a.id === options.solveFor) : undefined;
+    if (piece && piece.weight > 0) {
+      // The exact average, not `percent`, which is rounded for the card and
+      // would move the answer by the rounding.
+      const assume = options.assume ?? (standing.marked > 0 ? earned / standing.marked : options.target / 100);
+      const needed = (short - (unmarked - piece.weight) * assume) / piece.weight;
+      solved = { piece, assume, needed, status: verdict(needed) };
+    }
+  }
+
+  return { standing, outstanding, floor, ceiling, target, solved };
+}
+
 /** The share of every course's grade still to be decided. */
 export function unmarkedShare(courses: Course[]): number | null {
   const withWeighting = courses.filter((c) => (c.assessments?.length ?? 0) > 0);
@@ -168,14 +226,35 @@ export function readingRate(
   tasks: Task[],
   sessions: { taskId: string | null; durationSeconds: number }[],
 ): number {
+  return readingRateDetail(tasks, sessions).pagesPerHour;
+}
+
+/** The plain rate a reader is given until their own history says otherwise. */
+export const DEFAULT_PAGES_PER_HOUR = 20;
+
+/**
+ * The same rate with what it stands on, for a caller that has to say whether
+ * the number is the reader's own or the default. The connector does: "at
+ * your pace" off a default of 20 would be a claim about someone it has never
+ * watched read.
+ */
+export function readingRateDetail(
+  tasks: Pick<Task, 'id' | 'kind' | 'completed' | 'pages'>[],
+  sessions: { taskId: string | null; durationSeconds: number }[],
+) {
   const readingIds = new Set(tasks.filter((t) => t.kind === 'reading').map((t) => t.id));
   const done = tasks.filter((t) => t.completed && t.kind === 'reading');
   const pages = done.reduce((acc, t) => acc + (t.pages || 0), 0);
   const seconds = sessions
     .filter((s) => s.taskId && readingIds.has(s.taskId))
     .reduce((acc, s) => acc + s.durationSeconds, 0);
-  if (pages < 20 || seconds < 3600) return 20;
-  return Math.round(pages / (seconds / 3600));
+  const measured = pages >= 20 && seconds >= 3600;
+  return {
+    pagesPerHour: measured ? Math.round(pages / (seconds / 3600)) : DEFAULT_PAGES_PER_HOUR,
+    measured,
+    pagesRead: pages,
+    hoursRead: seconds / 3600,
+  };
 }
 
 /** How recently a session has to have happened to count as "just now". */

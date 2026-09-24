@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isoDate, startOfWeek } from '@/lib/utils';
-import { createTasks, getRecallTool, getWeeklyStats, keepForRecallTool, logStudySession, recordRecallTool, updateStudySession } from './route';
+import {
+  createTasks,
+  deleteStudySession,
+  deleteTasks,
+  getGradeProjection,
+  getReadingBacklog,
+  getRecallTool,
+  getWeeklyStats,
+  keepForRecallTool,
+  logStudySession,
+  recordGrade,
+  recordRecallTool,
+  updateStudySession,
+} from './route';
 
 type Row = Record<string, unknown>;
 
@@ -32,6 +45,7 @@ function fakeSupabase(tables: Record<string, Row[]>, schema: Record<string, stri
         ? null
         : { code: 'PGRST205', message: `Could not find the table 'public.${table}' in the schema cache` };
       let pendingUpdate: Row | null = null;
+      let pendingDelete = false;
 
       const checkColumns = (cols: string) => {
         if (failure || cols.trim() === '*') return;
@@ -45,6 +59,10 @@ function fakeSupabase(tables: Record<string, Row[]>, schema: Record<string, stri
         if (pendingUpdate) {
           for (const row of rows) Object.assign(row, pendingUpdate);
           pendingUpdate = null;
+        }
+        if (pendingDelete) {
+          tables[table] = (tables[table] ?? []).filter((row) => !rows.includes(row));
+          pendingDelete = false;
         }
         return { data: rows, error: null };
       };
@@ -108,6 +126,10 @@ function fakeSupabase(tables: Record<string, Row[]>, schema: Record<string, stri
         update(patch: Row) {
           checkKeys([patch]);
           pendingUpdate = patch;
+          return builder;
+        },
+        delete() {
+          pendingDelete = true;
           return builder;
         },
         eq(col: string, value: unknown) {
@@ -612,4 +634,213 @@ test('update_study_session refuses a session from a course outside the active se
   const output = (await updateStudySession(TOKEN, { session_id: 'session-old', note: 'new' }, fakeSupabase(tables))) as UpdateOutput;
   assert.equal(output.isError, true);
   assert.equal(tables.sessions.at(-1)!.note, 'old');
+});
+
+// ---- Grades ----
+
+const GRADED_SCHEMA: Record<string, string[]> = {
+  ...SCHEMA,
+  courses: [...SCHEMA.courses, 'assessments', 'grading'],
+  tasks: [...SCHEMA.tasks, 'kind', 'pages', 'weight'],
+};
+
+const COURSE_ID = '11111111-1111-4111-8111-111111111111';
+
+function gradedFixtures(): Record<string, Row[]> {
+  return {
+    user_settings: [{ user_id: 'user-1', active_semester_id: 'sem-1' }],
+    courses: [
+      {
+        id: COURSE_ID,
+        user_id: 'user-1',
+        semester_id: 'sem-1',
+        code: 'ECON 240',
+        name: 'Development',
+        weekly_goal_hours: 5,
+        assessments: [
+          { id: 'q1', label: 'Quiz 1', weight: 10, score: 8, outOf: 10, group: 'quizzes' },
+          { id: 'q2', label: 'Quiz 2', weight: 10, score: null, outOf: 10, group: 'quizzes' },
+          { id: 'q3', label: 'Quiz 3', weight: 10, score: null, outOf: 10, group: 'quizzes' },
+          { id: 'mid', label: 'Midterm', weight: 30, score: null, outOf: 50 },
+          { id: 'fin', label: 'Final exam', weight: 50, score: null, outOf: 100 },
+        ],
+        // Best 2 of 3 quizzes: the course counts to 100.
+        grading: { basis: 'absolute', dropRules: [{ group: 'quizzes', keep: 2 }] },
+      },
+    ],
+    sessions: [],
+    tasks: [],
+  };
+}
+
+type Reply = { isError?: boolean; content: { text: string }[]; structuredContent?: Record<string, unknown> };
+
+test('record_grade writes a mark by label and says where the course stands', async () => {
+  const db = gradedFixtures();
+  const output = (await recordGrade(
+    TOKEN,
+    { course_id: COURSE_ID, grades: [{ component: 'midterm', score: 40, out_of: 50 }] },
+    fakeSupabase(db, GRADED_SCHEMA),
+  )) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  const mid = (db.courses[0].assessments as Row[]).find((row) => row.id === 'mid')!;
+  assert.deepEqual([mid.score, mid.outOf], [40, 50]);
+  const standing = output.structuredContent!.standing as Record<string, unknown>;
+  // 8/10 on a 10% quiz and 40/50 on a 30% midterm: 32 of 40 marked.
+  assert.equal(standing.percent_so_far, 80);
+  assert.equal(standing.marked_weight, 40);
+});
+
+test('record_grade writes nothing when one mark in the request does not add up', async () => {
+  const db = gradedFixtures();
+  const output = (await recordGrade(
+    TOKEN,
+    {
+      course_id: COURSE_ID,
+      grades: [
+        { component: 'Quiz 2', score: 9, out_of: 10 },
+        { component: 'Quiz 3', score: 14, out_of: 10 },
+      ],
+    },
+    fakeSupabase(db, GRADED_SCHEMA),
+  )) as Reply;
+  assert.equal(output.isError, true);
+  assert.equal((db.courses[0].assessments as Row[]).find((row) => row.id === 'q2')!.score, null);
+});
+
+test('record_grade refuses a label that matches more than one component', async () => {
+  const output = (await recordGrade(
+    TOKEN,
+    { course_id: COURSE_ID, grades: [{ component: 'quiz', score: 9 }] },
+    fakeSupabase(gradedFixtures(), GRADED_SCHEMA),
+  )) as Reply;
+  assert.equal(output.isError, true);
+  assert.match(output.content[0].text, /more than one/);
+});
+
+test('get_grade_projection solves for the final with the rest at the average so far', async () => {
+  const db = gradedFixtures();
+  (db.courses[0].assessments as Row[]).find((row) => row.id === 'mid')!.score = 35; // 70%
+  const output = (await getGradeProjection(
+    TOKEN,
+    { course_id: COURSE_ID, target_percent: 80, solve_for: 'final' },
+    fakeSupabase(db, GRADED_SCHEMA),
+  )) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  const body = output.structuredContent!;
+  // Counted: Quiz 1 (8/10), one open quiz slot, midterm 35/50, final.
+  // Earned 8 + 21 = 29 of 40 marked, 72.5%. The open quiz at 72.5% is 7.25.
+  // 80 - 29 - 7.25 = 43.75 needed from a 50% final: 87.5%.
+  const solved = body.solve_for as Record<string, unknown>;
+  assert.equal(solved.needed_percent, 87.5);
+  assert.equal(solved.needed_score, 87.5);
+  assert.equal(solved.status, 'reachable');
+  assert.equal(body.floor_percent, 29);
+  assert.equal(body.ceiling_percent, 89);
+});
+
+test('get_grade_projection says when a target is out of reach', async () => {
+  const db = gradedFixtures();
+  (db.courses[0].assessments as Row[]).find((row) => row.id === 'mid')!.score = 10;
+  const output = (await getGradeProjection(TOKEN, { course_id: COURSE_ID, target_percent: 95 }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
+  const target = output.structuredContent!.target as Record<string, unknown>;
+  assert.equal(target.status, 'out_of_reach');
+});
+
+test('get_grade_projection will not solve for a component already marked', async () => {
+  const output = (await getGradeProjection(
+    TOKEN,
+    { course_id: COURSE_ID, target_percent: 80, solve_for: 'Quiz 1' },
+    fakeSupabase(gradedFixtures(), GRADED_SCHEMA),
+  )) as Reply;
+  assert.equal(output.isError, true);
+});
+
+// ---- Deleting ----
+
+const TASK_A = '22222222-2222-4222-8222-222222222222';
+const TASK_B = '33333333-3333-4333-8333-333333333333';
+const SESSION_A = '44444444-4444-4444-8444-444444444444';
+
+function deletable(): Record<string, Row[]> {
+  const db = gradedFixtures();
+  db.courses.push({ id: 'course-old', user_id: 'user-1', semester_id: 'sem-0', code: 'HIST100', name: 'Old', weekly_goal_hours: 3 });
+  db.tasks = [
+    { id: TASK_A, user_id: 'user-1', semester_id: 'sem-1', course_id: COURSE_ID, title: 'Read Sen ch. 1', due_date: null, priority: 'normal', completed: false, completed_at: null, created_at: '2026-09-01T00:00:00.000Z' },
+    { id: TASK_B, user_id: 'user-1', semester_id: 'sem-0', course_id: 'course-old', title: 'Old essay', due_date: null, priority: 'normal', completed: false, completed_at: null, created_at: '2026-01-01T00:00:00.000Z' },
+  ];
+  db.sessions = [
+    { id: SESSION_A, user_id: 'user-1', semester_id: 'sem-1', course_id: COURSE_ID, task_id: null, date: '2026-09-20', duration_seconds: 2700, note: 'twice' },
+  ];
+  return db;
+}
+
+test('delete_tasks deletes a task in the active semester', async () => {
+  const db = deletable();
+  const output = (await deleteTasks(TOKEN, { task_ids: [TASK_A] }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  assert.deepEqual(db.tasks.map((row) => row.id), [TASK_B]);
+});
+
+test('delete_tasks deletes nothing when any id is outside the active semester', async () => {
+  const db = deletable();
+  const output = (await deleteTasks(TOKEN, { task_ids: [TASK_A, TASK_B] }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
+  assert.equal(output.isError, true);
+  assert.equal(db.tasks.length, 2);
+});
+
+test('delete_study_session removes the sitting and says which one it was', async () => {
+  const db = deletable();
+  const output = (await deleteStudySession(TOKEN, { session_id: SESSION_A }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  assert.equal(db.sessions.length, 0);
+  assert.equal((output.structuredContent!.deleted as Row).duration_minutes, 45);
+});
+
+test('delete_study_session refuses a session it cannot find', async () => {
+  const db = deletable();
+  const output = (await deleteStudySession(TOKEN, { session_id: TASK_A }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
+  assert.equal(output.isError, true);
+  assert.equal(db.sessions.length, 1);
+});
+
+// ---- Reading backlog ----
+
+function inDays(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+}
+
+function reading(id: string, patch: Row): Row {
+  return { id, user_id: 'user-1', semester_id: 'sem-1', course_id: COURSE_ID, title: id, due_date: null, priority: 'normal', completed: false, completed_at: null, created_at: '2026-09-01T00:00:00.000Z', kind: 'reading', pages: null, weight: null, ...patch };
+}
+
+test('get_reading_backlog times the backlog at the pace the student has shown', async () => {
+  const db = gradedFixtures();
+  db.tasks = [
+    // 60 pages finished over two logged hours: 30 an hour.
+    reading('done', { completed: true, pages: 60 }),
+    reading('soon', { pages: 45, due_date: inDays(2) }),
+    reading('later', { pages: 90, due_date: inDays(30) }),
+    reading('loose', { pages: 30 }),
+    reading('nopages', { due_date: inDays(1) }),
+  ];
+  db.sessions = [{ id: 's', user_id: 'user-1', semester_id: 'sem-1', course_id: COURSE_ID, task_id: 'done', date: inDays(-3), duration_seconds: 7200, note: '' }];
+  const output = (await getReadingBacklog(TOKEN, { by_date: inDays(4) }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  const body = output.structuredContent!;
+  assert.deepEqual(body.pace, { pages_per_hour: 30, measured: true, based_on: { pages_read: 60, hours_logged: 2 } });
+  assert.deepEqual(body.totals, { readings: 2, pages: 45, hours: 1.5, without_pages: 1 });
+  assert.equal(body.days_left, 5);
+  assert.deepEqual(body.undated, { readings: 1, pages: 30, hours: 1, without_pages: 0 });
+});
+
+test('get_reading_backlog does not call the default rate the student’s pace', async () => {
+  const db = gradedFixtures();
+  db.tasks = [reading('one', { pages: 40 })];
+  const output = (await getReadingBacklog(TOKEN, {}, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
+  const body = output.structuredContent!;
+  assert.equal((body.pace as Row).measured, false);
+  assert.match(String(body.message), /default 20 pages an hour/);
 });

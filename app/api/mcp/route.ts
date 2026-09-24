@@ -17,9 +17,12 @@ import {
   cleanRecallSource,
   cleanWeight,
   isIsoDate,
+  sanitizeAssessments,
+  sanitizeGrading,
   sanitizeRecallHistory,
 } from '@/lib/planner-safety';
-import type { Course, RecallRecord, RecallSource, RecallVerdict, Task } from '@/lib/data/types';
+import type { Assessment, Course, RecallRecord, RecallSource, RecallVerdict, Task } from '@/lib/data/types';
+import { gradeProjection, gradeStanding, readingBacklog, readingRateDetail } from '@/lib/derive';
 import {
   applyVerdict,
   looksLikeReading,
@@ -80,7 +83,23 @@ const TaskReadSchema = z.object({
 const TasksReadResponseSchema = z.object({
   schema_version: z.literal('akada.tasks.v1'),
   tasks: z.array(TaskReadSchema),
-  meta: z.object({ include_completed: z.boolean(), course_id: z.string().nullable(), count: z.number().int() }),
+  meta: z.object({
+    include_completed: z.boolean(),
+    course_id: z.string().nullable(),
+    count: z.number().int(),
+    // Present only when a filter narrowed the read, so an older reader of
+    // akada.tasks.v1 sees exactly what it always did.
+    filters: z
+      .object({
+        due_after: z.string().nullable(),
+        due_before: z.string().nullable(),
+        priority: z.enum(['high', 'normal']).nullable(),
+        kind: z.enum(TASK_KINDS).nullable(),
+      })
+      .optional(),
+    // Matches before `limit` cut the list, so "showing 10 of 23" can be said.
+    matching: z.number().int().optional(),
+  }),
   message: z.string().optional(),
 });
 
@@ -206,10 +225,14 @@ function buildSubtasks(pieces: (string | { title: string; completed?: boolean })
 // from a past semester is not something a connector should be reaching into.
 // Checked by the owning course rather than tasks.semester_id, which is a
 // denormalized column an un-migrated project may not have filled yet.
-async function loadOwnTasks(tool: string, token: AuthenticatedToken, ids: string[]) {
-  const semesterId = await activeSemesterId(token);
+async function loadOwnTasks(
+  tool: string,
+  token: AuthenticatedToken,
+  ids: string[],
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  const semesterId = await activeSemesterId(token, supabase);
   if (!semesterId) return { ok: false, error: toolError('No active semester is set in Akada.') } as const;
-  const supabase = mcpSupabase(token.supabaseAccessToken);
   const { data: courses, error: coursesError } = await supabase
     .from('courses')
     .select('id, code, name')
@@ -242,10 +265,14 @@ async function loadOwnTasks(tool: string, token: AuthenticatedToken, ids: string
  * that has not applied the newer schema.sql, instead of simply reading no
  * scheme.
  */
-async function loadOwnCourse(tool: string, token: AuthenticatedToken, courseId: string) {
-  const semesterId = await activeSemesterId(token);
+async function loadOwnCourse(
+  tool: string,
+  token: AuthenticatedToken,
+  courseId: string,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  const semesterId = await activeSemesterId(token, supabase);
   if (!semesterId) return { ok: false, error: toolError('No active semester is set in Akada.') } as const;
-  const supabase = mcpSupabase(token.supabaseAccessToken);
   const { data, error } = await supabase
     .from('courses')
     .select('*')
@@ -1313,6 +1340,513 @@ export async function updateStudySession(
   }
 }
 
+// ---- Grades ----
+// Both tools read the accepted scheme only, through the app's own sanitizers
+// and gradeStanding, so a number said in chat is the number the course card
+// draws. A pending proposal is never read here, same as everywhere else.
+
+const ONE_DECIMAL = (value: number) => Math.round(value * 10) / 10;
+
+/**
+ * One component by what the student called it. Exact label first, then a
+ * label that contains what was said ("final" for "Final exam"), and anything
+ * that still matches more than one is sent back rather than guessed, because
+ * a mark written against the wrong quiz is worse than no mark.
+ */
+function matchComponent(rows: Assessment[], said: string) {
+  const needle = normalize(said);
+  const exact = rows.filter((row) => normalize(row.label) === needle);
+  const hits = exact.length > 0 ? exact : rows.filter((row) => normalize(row.label).includes(needle));
+  if (hits.length === 1) return { ok: true, row: hits[0] } as const;
+  const labels = (hits.length > 1 ? hits : rows).map((row) => `"${row.label}"`).join(', ');
+  return {
+    ok: false,
+    message:
+      hits.length > 1
+        ? `"${said}" matches more than one component (${labels}). Use the exact label.`
+        : `No component is called "${said}". The components are ${labels}.`,
+  } as const;
+}
+
+function standingSummary(standing: ReturnType<typeof gradeStanding>) {
+  const { total, marked, earned, unmarked } = standing;
+  return {
+    basis: standing.basis,
+    total_weight: ONE_DECIMAL(total),
+    marked_weight: ONE_DECIMAL(marked),
+    unmarked_weight: ONE_DECIMAL(unmarked),
+    // Out of what has been marked, the way the course card reads it: a
+    // student 30% of the way in with 24 points has 80%, not 24%.
+    percent_so_far: marked > 0 ? ONE_DECIMAL((earned / marked) * 100) : null,
+    // Out of the whole course: what is already banked whatever happens next.
+    secured_percent: total > 0 ? ONE_DECIMAL((earned / total) * 100) : null,
+    dropped: standing.rows.filter((row) => standing.dropped.includes(row.id)).map((row) => row.label),
+  };
+}
+
+function noSchemeYet(code: string, pending: boolean) {
+  return toolError(
+    pending
+      ? `${code} has a proposed grading scheme the student has not accepted yet. They need to accept it on the course page in Akada first.`
+      : `${code} has no grading scheme in Akada yet. Set one with set_grading_scheme from the course outline, or the student can add the components on the course page.`,
+  );
+}
+
+const RecordGradeInput = z.object({
+  course_id: z.string().uuid(),
+  grades: z
+    .array(
+      z.object({
+        component: z
+          .string()
+          .trim()
+          .min(1)
+          .max(120)
+          .describe('The component’s label as get_grading_scheme returns it, e.g. "Quiz 3" or "Midterm".'),
+        score: z.number().nullable().describe('What the student got. null clears a mark entered by mistake.'),
+        out_of: z
+          .number()
+          .optional()
+          .describe('What it was marked out of, 20 for 17/20. Leave it out to keep what the component already holds.'),
+      }),
+    )
+    .min(1)
+    .max(MAX_COMPONENTS),
+});
+
+const RECORD_GRADE_DESCRIPTION =
+  'Write the marks the student got back into one course’s accepted grading scheme in Akada, e.g. 17 out of 20 on Quiz 3. Name each component by its label from get_grading_scheme; a label that matches more than one is refused rather than guessed. Only record a mark the student gives you: never estimate one, and never turn a percentage into a score out of something the piece was not marked out of (for "85%" send 85 out of 100). `score: null` clears a mark entered by mistake. Every mark in the request is checked before anything is written, so one that does not add up writes none of them. Returns where the course now stands; for what the rest needs to go like, use get_grade_projection.';
+
+// Split out like logStudySession, so a test can drive it against a double.
+export async function recordGrade(
+  token: AuthenticatedToken,
+  { course_id, grades }: z.infer<typeof RecordGradeInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const owned = await loadOwnCourse('record_grade', token, course_id, supabase);
+    if (!owned.ok) return owned.error;
+    const { course } = owned;
+    const rows = sanitizeAssessments(course.assessments);
+    if (rows.length === 0) return noSchemeYet(course.code, Boolean(readGrading(course.grading).pending));
+
+    // Resolve and check everything first, so a bad mark halfway down the
+    // list never leaves the first half written.
+    const marks = new Map<string, { score: number | null; outOf: number | null }>();
+    for (const grade of grades) {
+      const match = matchComponent(rows, grade.component);
+      if (!match.ok) return toolError(match.message);
+      if (marks.has(match.row.id)) return toolError(`"${match.row.label}" is named twice in that request. Send each component once.`);
+      if (grade.score === null) {
+        marks.set(match.row.id, { score: null, outOf: match.row.outOf });
+        continue;
+      }
+      const clean = cleanScore(grade.score, grade.out_of ?? match.row.outOf ?? 100);
+      if (!clean) {
+        return toolError(
+          `${grade.score} out of ${grade.out_of ?? match.row.outOf ?? 100} on "${match.row.label}" does not add up. A score is from 0 up to what it was marked out of. Nothing was written.`,
+        );
+      }
+      marks.set(match.row.id, { score: clean.score, outOf: clean.outOf });
+    }
+
+    // Written back onto the stored rows rather than the sanitized copies, so
+    // nothing the app keeps on a row that this route does not know about is
+    // lost on the way through.
+    const stored = Array.isArray(course.assessments) ? (course.assessments as Record<string, unknown>[]) : [];
+    const assessments = stored.map((row) => {
+      const mark = row && typeof row === 'object' ? marks.get(String(row.id ?? '')) : undefined;
+      return mark ? { ...row, score: mark.score, outOf: mark.outOf } : row;
+    });
+    const { error } = await supabase
+      .from('courses')
+      .update({ assessments })
+      .eq('id', course.id)
+      .eq('user_id', token.userId);
+    if (error) return queryFailed('record_grade', 'assessments write', error, 'Akada could not save those marks.');
+
+    const standing = gradeStanding({ assessments: sanitizeAssessments(assessments), grading: sanitizeGrading(course.grading) });
+    const summary = standingSummary(standing);
+    return result({
+      course: { id: course.id, code: course.code, name: course.name },
+      recorded: rows
+        .filter((row) => marks.has(row.id))
+        .map((row) => ({ component: row.label, score: marks.get(row.id)!.score, out_of: marks.get(row.id)!.outOf })),
+      components: readComponents(assessments),
+      standing: summary,
+      message:
+        summary.percent_so_far === null
+          ? `Saved. Nothing in ${course.code} is marked yet.`
+          : `Saved. ${course.code} stands at ${summary.percent_so_far}% on the ${summary.marked_weight}% marked so far.` +
+            (standing.basis === 'relative' ? ` ${course.code} is marked against the class, so that is a position rather than a grade.` : ''),
+    });
+  } catch (cause) {
+    return toolCrashed('record_grade', cause);
+  }
+}
+
+const GetGradeProjectionInput = z.object({
+  course_id: z.string().uuid(),
+  target_percent: z
+    .number()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe('The course mark the student is aiming for, as a percentage. For a letter, use the cutoff the course outline gives; never assume one.'),
+  solve_for: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .optional()
+    .describe('One unmarked component to solve for, e.g. "Final". Needs target_percent.'),
+  assume_percent: z
+    .number()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe('With solve_for: how the other unmarked components are assumed to go. Defaults to the student’s average so far.'),
+});
+
+const GET_GRADE_PROJECTION_DESCRIPTION =
+  'Work out where one course can still end up from the marks recorded in Akada: the mark banked already (the floor if nothing else scored), the ceiling if everything left came back full, and, given `target_percent`, the average every unmarked component needs to reach it. For "what do I need on the final", pass the component as `solve_for`: the other unmarked pieces are assumed to go at the student’s average so far unless `assume_percent` says otherwise, so say that assumption back. Drop rules ("best 6 of 7") are applied exactly as on the course page. Akada never assigns letters: when the student asks for an A-, use the cutoff from their course outline and say where it came from, or ask them for it. On a course graded relatively the percentage is a position against the class, not a grade, so say that too. This tool never changes Akada data.';
+
+export async function getGradeProjection(
+  token: AuthenticatedToken,
+  { course_id, target_percent, solve_for, assume_percent }: z.infer<typeof GetGradeProjectionInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    if (solve_for && target_percent === undefined) {
+      return toolError('solve_for needs a target_percent to solve toward. Ask the student what mark they are aiming for.');
+    }
+    const owned = await loadOwnCourse('get_grade_projection', token, course_id, supabase);
+    if (!owned.ok) return owned.error;
+    const { course } = owned;
+    const assessments = sanitizeAssessments(course.assessments);
+    if (assessments.length === 0) return noSchemeYet(course.code, Boolean(readGrading(course.grading).pending));
+    const grading = sanitizeGrading(course.grading);
+
+    let solveFor: Assessment | undefined;
+    if (solve_for) {
+      const match = matchComponent(assessments, solve_for);
+      if (!match.ok) return toolError(match.message);
+      solveFor = match.row;
+      if (solveFor.score !== null && solveFor.outOf) {
+        return toolError(`"${solveFor.label}" is already marked (${solveFor.score}/${solveFor.outOf}), so there is nothing to solve for. Pick a component that has not come back.`);
+      }
+    }
+
+    const projection = gradeProjection(
+      { assessments, grading },
+      { target: target_percent, solveFor: solveFor?.id, assume: assume_percent === undefined ? undefined : assume_percent / 100 },
+    );
+    if (solveFor && !projection.outstanding.some((row) => row.id === solveFor.id)) {
+      return toolError(`"${solveFor.label}" is not being counted right now because of a drop rule, so no mark on it moves the course. Solve for another component.`);
+    }
+
+    const percent = (fraction: number | null) => (fraction === null ? null : ONE_DECIMAL(fraction * 100));
+    const summary = standingSummary(projection.standing);
+    const lines: string[] = [];
+    if (projection.target) {
+      const { status, neededAverage } = projection.target;
+      lines.push(
+        status === 'secured'
+          ? `${target_percent}% is already banked in ${course.code}, whatever the rest brings.`
+          : status === 'out_of_reach'
+            ? `${target_percent}% is out of reach in ${course.code}: even full marks on everything left comes to ${ONE_DECIMAL(projection.ceiling ?? 0)}%.`
+            : `${course.code} needs an average of ${percent(neededAverage)}% across the ${summary.unmarked_weight}% still unmarked to reach ${target_percent}%.`,
+      );
+    }
+    if (projection.solved) {
+      const { piece, needed, status, assume } = projection.solved;
+      const neededPercent = percent(needed) ?? 0;
+      lines.push(
+        status === 'secured'
+          ? `With the rest at ${percent(assume)}%, ${target_percent}% is reached whatever "${piece.label}" goes like.`
+          : status === 'out_of_reach'
+            ? `With the rest at ${percent(assume)}%, "${piece.label}" would need ${neededPercent}%, which cannot happen.`
+            : `With the rest at ${percent(assume)}%, "${piece.label}" needs ${neededPercent}%` +
+              (piece.outOf ? `, ${ONE_DECIMAL((neededPercent / 100) * piece.outOf)} out of ${piece.outOf}.` : '.'),
+      );
+    }
+    if (projection.standing.basis === 'relative') {
+      lines.push(`${course.code} is marked against the class, so these are positions rather than grades.`);
+    }
+
+    return result({
+      schema_version: 'akada.grade_projection.v1',
+      course: { id: course.id, code: course.code, name: course.name },
+      standing: summary,
+      floor_percent: projection.floor === null ? null : ONE_DECIMAL(projection.floor),
+      ceiling_percent: projection.ceiling === null ? null : ONE_DECIMAL(projection.ceiling),
+      outstanding: projection.outstanding.map((row) => ({
+        component: row.label,
+        weight: row.weight,
+        out_of: row.outOf,
+        group: row.group ?? null,
+      })),
+      target: projection.target
+        ? {
+            percent: projection.target.percent,
+            needed_average_percent: percent(projection.target.neededAverage),
+            status: projection.target.status,
+          }
+        : null,
+      solve_for: projection.solved
+        ? {
+            component: projection.solved.piece.label,
+            weight: projection.solved.piece.weight,
+            out_of: projection.solved.piece.outOf,
+            assumed_percent_on_the_rest: percent(projection.solved.assume),
+            needed_percent: percent(projection.solved.needed),
+            needed_score:
+              projection.solved.needed === null || !projection.solved.piece.outOf
+                ? null
+                : ONE_DECIMAL(projection.solved.needed * projection.solved.piece.outOf),
+            status: projection.solved.status,
+          }
+        : null,
+      message: lines.join(' ') || undefined,
+    });
+  } catch (cause) {
+    return toolCrashed('get_grade_projection', cause);
+  }
+}
+
+// ---- Deleting ----
+
+const DeleteTasksInput = z.object({
+  task_ids: z.array(z.string().uuid()).min(1).max(MAX_TASKS_PER_REQUEST),
+});
+
+const DELETE_TASKS_DESCRIPTION =
+  'Permanently delete tasks from the signed-in student’s active semester. Read the tasks with get_tasks first and pass the ids it returns. Only for tasks the student wants gone: a duplicate, something added by mistake, a reading the course dropped. Work the student finished is ticked with complete_tasks instead, because a finished task is what feeds their week in Stats and deleting it takes that away. When cleaning up duplicates, say which copies will go and which stays before calling this. Study time logged against a deleted task stays logged, under its course.';
+
+export async function deleteTasks(
+  token: AuthenticatedToken,
+  { task_ids }: z.infer<typeof DeleteTasksInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const ids = [...new Set(task_ids)];
+    // Every id has to be the student's and in their active semester before
+    // any of them goes, the same all-or-nothing check the other task writes
+    // make.
+    const owned = await loadOwnTasks('delete_tasks', token, ids, supabase);
+    if (!owned.ok) return owned.error;
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .in('id', ids)
+      .eq('user_id', token.userId);
+    if (error) return queryFailed('delete_tasks', 'tasks delete', error, 'Akada could not delete those tasks.');
+    const deleted = owned.tasks.map((task) => {
+      const course = owned.courses.get(task.course_id as string);
+      return {
+        id: String(task.id),
+        title: String(task.title ?? ''),
+        due_date: (task.due_date as string | null) ?? null,
+        completed: Boolean(task.completed),
+        course: course ? { id: course.id, code: course.code, name: course.name } : null,
+      };
+    });
+    return result({
+      deleted,
+      message: `Deleted ${deleted.length} task${deleted.length === 1 ? '' : 's'}.`,
+    });
+  } catch (cause) {
+    return toolCrashed('delete_tasks', cause);
+  }
+}
+
+const DeleteStudySessionInput = z.object({
+  session_id: z.string().uuid(),
+});
+
+const DELETE_STUDY_SESSION_DESCRIPTION =
+  'Permanently delete one study session from the signed-in student’s active semester, by `session_id`. Only when the student says a sitting should not be there: logged twice, logged against the wrong course, or never happened. Its hours come off the week in Stats and off the course’s goal. If only the note is wrong, use update_study_session instead. The id comes from `recent_sessions` in get_overview, or from what log_study_session returned; say which sitting it is (date, course, minutes) before deleting it.';
+
+export async function deleteStudySession(
+  token: AuthenticatedToken,
+  { session_id }: z.infer<typeof DeleteStudySessionInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const semesterId = await activeSemesterId(token, supabase);
+    if (!semesterId) return toolError('No active semester is set in Akada.');
+    const notFound = toolError('That study session is not in your active Akada semester. Check the id against get_overview’s recent_sessions, or the id log_study_session returned.');
+    // Ownership the same two steps updateStudySession takes: the row is the
+    // student's, and its course is in the term they are studying.
+    const { data: existing, error: sessionError } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', session_id)
+      .eq('user_id', token.userId)
+      .maybeSingle();
+    if (sessionError) return queryFailed('delete_study_session', 'session lookup', sessionError, 'Akada could not look up that study session.');
+    if (!existing) return notFound;
+    const { data: course, error: courseError } = await supabase
+      .from('courses')
+      .select('id, code, name')
+      .eq('id', String(existing.course_id ?? ''))
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId)
+      .maybeSingle();
+    if (courseError) return queryFailed('delete_study_session', 'course lookup', courseError, 'Akada could not look up that session’s course.');
+    if (!course) return notFound;
+
+    // Its focus and break segments go with it: session_segments cascades.
+    const { error: deleteError } = await supabase
+      .from('sessions')
+      .delete()
+      .eq('id', session_id)
+      .eq('user_id', token.userId);
+    if (deleteError) return queryFailed('delete_study_session', 'session delete', deleteError, 'Akada could not delete that study session.');
+
+    const row = existing as Record<string, unknown>;
+    const minutes = Math.round(Number(row.duration_seconds ?? 0) / 60);
+    return result({
+      deleted: {
+        id: String(row.id ?? ''),
+        date: (row.date as string | null) ?? null,
+        duration_minutes: minutes,
+        note: typeof row.note === 'string' ? row.note : '',
+        course: { id: course.id, code: course.code, name: course.name },
+      },
+      message: `Deleted the ${minutes}-minute ${course.code} session from ${String(row.date ?? '')}.`,
+    });
+  } catch (cause) {
+    return toolCrashed('delete_study_session', cause);
+  }
+}
+
+// ---- Reading backlog ----
+
+const MAX_BACKLOG_ROWS = 50;
+
+const GetReadingBacklogInput = z.object({
+  course_id: z.string().uuid().optional(),
+  by_date: z
+    .string()
+    .regex(DATE, 'Use YYYY-MM-DD.')
+    .optional()
+    .describe('Only count readings due on or before this date, e.g. the day before a midterm. Overdue readings are always counted; undated ones are reported on their own.'),
+});
+
+const GET_READING_BACKLOG_DESCRIPTION =
+  'Read how much unfinished reading the student has and how long it will take them: readings on the list, their pages, and hours at the student’s own pace. The pace is pages an hour measured from the readings they have finished against the time they logged on them, the same number the Today screen uses; until there is enough of that it is a plain 20 pages an hour and `pace.measured` is false, so do not call it their pace then. Readings with no page count are counted but cannot be timed, so say how many there are. With `by_date` (for "before the midterm", take the exam’s date from get_tasks) it also says how many hours a day that comes to. This tool never changes Akada data.';
+
+export async function getReadingBacklog(
+  token: AuthenticatedToken,
+  { course_id, by_date }: z.infer<typeof GetReadingBacklogInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const semesterId = await activeSemesterId(token, supabase);
+    if (!semesterId) return result({ readings: [], message: 'No active semester is set in Akada.' });
+    const today = isoDate();
+    if (by_date && by_date < today) return toolError(`${by_date} has already passed. Give a date from today on.`);
+
+    const [{ data: courses, error: coursesError }, { data: taskRows, error: tasksError }, { data: sessionRows, error: sessionsError }] = await Promise.all([
+      supabase.from('courses').select('id, code, name').eq('user_id', token.userId).eq('semester_id', semesterId),
+      // `*` so a project without the kind/pages columns reads every row as a
+      // plain task, which simply means no backlog, instead of failing.
+      supabase.from('tasks').select('*').eq('user_id', token.userId).eq('semester_id', semesterId),
+      supabase.from('sessions').select('task_id, duration_seconds').eq('user_id', token.userId).eq('semester_id', semesterId),
+    ]);
+    const readError = coursesError ?? tasksError ?? sessionsError;
+    if (readError) {
+      const step = coursesError ? 'courses read' : tasksError ? 'tasks read' : 'sessions read';
+      return queryFailed('get_reading_backlog', step, readError, 'Akada could not load the reading list.');
+    }
+    const byId = new Map((courses ?? []).map((course) => [course.id as string, course]));
+    if (course_id && !byId.has(course_id)) return toolError('That course is not available in your active Akada semester.');
+
+    const tasks: Task[] = ((taskRows ?? []) as Record<string, unknown>[])
+      .filter((row) => byId.has(row.course_id as string))
+      .map((row) => ({
+        id: String(row.id),
+        courseId: String(row.course_id),
+        title: String(row.title ?? ''),
+        dueDate: (row.due_date as string | null) ?? null,
+        priority: row.priority === 'high' ? 'high' : 'normal',
+        completed: Boolean(row.completed),
+        completedAt: (row.completed_at as string | null) ?? null,
+        createdAt: String(row.created_at ?? ''),
+        ...readTaskMeasure(row),
+      }));
+    // Pace is the student's across every course, the way the app reads it:
+    // one course rarely has enough finished reading to say anything alone.
+    const pace = readingRateDetail(
+      tasks,
+      ((sessionRows ?? []) as Record<string, unknown>[]).map((row) => ({
+        taskId: (row.task_id as string | null) ?? null,
+        durationSeconds: Number(row.duration_seconds ?? 0),
+      })),
+    );
+
+    const backlog = readingBacklog(tasks).filter((task) => !course_id || task.courseId === course_id);
+    const inScope = by_date ? backlog.filter((task) => task.dueDate && task.dueDate <= by_date) : backlog;
+    const undated = by_date ? backlog.filter((task) => !task.dueDate) : [];
+    const hours = (pages: number) => ONE_DECIMAL(pages / pace.pagesPerHour);
+    const tally = (list: Task[]) => {
+      const pages = list.reduce((acc, task) => acc + (task.pages || 0), 0);
+      return { readings: list.length, pages, hours: hours(pages), without_pages: list.filter((task) => !task.pages).length };
+    };
+
+    const totals = tally(inScope);
+    const perCourse = [...new Set(inScope.map((task) => task.courseId))].map((id) => {
+      const course = byId.get(id)!;
+      return { course: { id: course.id, code: course.code, name: course.name }, ...tally(inScope.filter((task) => task.courseId === id)) };
+    });
+    // Today counts as a day to read in, so a date tomorrow leaves two.
+    const daysLeft = by_date ? daysBetween(today, by_date) + 1 : null;
+
+    const paceLine = pace.measured
+      ? `At the student's pace of ${pace.pagesPerHour} pages an hour`
+      : `At a default ${pace.pagesPerHour} pages an hour (not enough finished reading has been timed to know their own pace yet)`;
+    const message =
+      totals.readings === 0
+        ? by_date
+          ? `No unfinished readings are due by ${by_date}.`
+          : 'No unfinished readings on the list.'
+        : `${paceLine}, ${totals.pages} pages comes to about ${totals.hours} hours` +
+          (daysLeft ? `, ${ONE_DECIMAL(totals.hours / daysLeft)} a day over the ${daysLeft} day${daysLeft === 1 ? '' : 's'} to ${by_date}.` : '.') +
+          (totals.without_pages > 0 ? ` ${totals.without_pages} reading${totals.without_pages === 1 ? ' has' : 's have'} no page count and ${totals.without_pages === 1 ? 'is' : 'are'} not in that.` : '');
+
+    return result({
+      schema_version: 'akada.reading_backlog.v1',
+      pace: {
+        pages_per_hour: pace.pagesPerHour,
+        measured: pace.measured,
+        based_on: { pages_read: pace.pagesRead, hours_logged: ONE_DECIMAL(pace.hoursRead) },
+      },
+      by_date: by_date ?? null,
+      days_left: daysLeft,
+      hours_per_day: daysLeft ? ONE_DECIMAL(totals.hours / daysLeft) : null,
+      totals,
+      courses: perCourse,
+      undated: by_date ? tally(undated) : null,
+      readings: inScope.slice(0, MAX_BACKLOG_ROWS).map((task) => {
+        const course = byId.get(task.courseId)!;
+        return {
+          id: task.id,
+          title: task.title,
+          due_date: task.dueDate,
+          overdue: Boolean(task.dueDate && task.dueDate < today),
+          pages: task.pages ?? null,
+          hours: task.pages ? hours(task.pages) : null,
+          course: { id: course.id, code: course.code, name: course.name },
+        };
+      }),
+      message,
+    });
+  } catch (cause) {
+    return toolCrashed('get_reading_backlog', cause);
+  }
+}
+
 function createServer(token: AuthenticatedToken) {
   const server = new McpServer({ name: 'Akada', version: '1.0.0' });
 
@@ -1357,15 +1891,24 @@ function createServer(token: AuthenticatedToken) {
     'get_tasks',
     {
       title: 'Read Akada tasks',
-      description: 'Read the signed-in student’s active-semester tasks. Optionally narrow to a course or include completed tasks. This tool never changes Akada data.',
+      description: 'Read the signed-in student’s active-semester tasks, soonest due first. Optionally narrow to a course, include completed tasks, or filter: `due_after` and `due_before` (both inclusive, YYYY-MM-DD) for "what is due this week", `priority`, and `kind` (exam, reading or task) for "when are my midterms". A date filter leaves out tasks with no due date. `limit` caps how many come back; `meta.matching` says how many matched before it. This tool never changes Akada data.',
       inputSchema: z.object({
         course_id: z.string().uuid().optional(),
         include_completed: z.boolean().default(false),
+        due_after: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional().describe('Only tasks due on or after this date.'),
+        due_before: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional().describe('Only tasks due on or before this date.'),
+        priority: z.enum(['high', 'normal']).optional(),
+        kind: z.enum(TASK_KINDS).optional().describe('exam for midterms, finals and quizzes; reading; task for everything else.'),
+        limit: z.number().int().min(1).max(MAX_TASKS_PER_READ).default(MAX_TASKS_PER_READ),
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ course_id, include_completed }) => {
+    async ({ course_id, include_completed, due_after, due_before, priority, kind, limit }) => {
       try {
+        if (due_after && due_before && due_after > due_before) {
+          return toolError(`due_after (${due_after}) is later than due_before (${due_before}), so nothing could match. Swap them.`);
+        }
+        const filtered = Boolean(due_after || due_before || priority || kind);
         const semesterId = await activeSemesterId(token);
         if (!semesterId) return result(TasksReadResponseSchema.parse({
           schema_version: 'akada.tasks.v1', tasks: [], meta: { include_completed, course_id: course_id ?? null, count: 0 }, message: 'No active semester is set in Akada.',
@@ -1417,12 +1960,27 @@ function createServer(token: AuthenticatedToken) {
               course: { id: course.id, code: course.code, name: course.name },
             }];
           })
-          .sort(byDueDate)
-          .slice(0, MAX_TASKS_PER_READ);
+          // Filtered here rather than in the query, for the reason above:
+          // `kind` is an additive column, and the request stays the app's.
+          .filter((task) =>
+            (!due_after || (task.due_date !== null && task.due_date >= due_after)) &&
+            (!due_before || (task.due_date !== null && task.due_date <= due_before)) &&
+            (!priority || task.priority === priority) &&
+            (!kind || task.kind === kind))
+          .sort(byDueDate);
+        const shown = tasks.slice(0, limit);
         return result(TasksReadResponseSchema.parse({
           schema_version: 'akada.tasks.v1',
-          tasks,
-          meta: { include_completed, course_id: course_id ?? null, count: tasks.length },
+          tasks: shown,
+          meta: {
+            include_completed,
+            course_id: course_id ?? null,
+            count: shown.length,
+            ...(filtered
+              ? { filters: { due_after: due_after ?? null, due_before: due_before ?? null, priority: priority ?? null, kind: kind ?? null } }
+              : {}),
+            ...(tasks.length > shown.length ? { matching: tasks.length } : {}),
+          },
         }));
       } catch (cause) {
         return toolCrashed('get_tasks', cause);
@@ -2209,6 +2767,61 @@ function createServer(token: AuthenticatedToken) {
       annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (input) => keepForRecallTool(token, input),
+  );
+
+  server.registerTool(
+    'record_grade',
+    {
+      title: 'Record marks in Akada',
+      description: RECORD_GRADE_DESCRIPTION,
+      inputSchema: RecordGradeInput,
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async (input) => recordGrade(token, input),
+  );
+
+  server.registerTool(
+    'get_grade_projection',
+    {
+      title: 'Work out what an Akada course still needs',
+      description: GET_GRADE_PROJECTION_DESCRIPTION,
+      inputSchema: GetGradeProjectionInput,
+      annotations: { readOnlyHint: true },
+    },
+    async (input) => getGradeProjection(token, input),
+  );
+
+  server.registerTool(
+    'delete_tasks',
+    {
+      title: 'Delete Akada tasks',
+      description: DELETE_TASKS_DESCRIPTION,
+      inputSchema: DeleteTasksInput,
+      annotations: { destructiveHint: true },
+    },
+    async (input) => deleteTasks(token, input),
+  );
+
+  server.registerTool(
+    'delete_study_session',
+    {
+      title: 'Delete an Akada study session',
+      description: DELETE_STUDY_SESSION_DESCRIPTION,
+      inputSchema: DeleteStudySessionInput,
+      annotations: { destructiveHint: true },
+    },
+    async (input) => deleteStudySession(token, input),
+  );
+
+  server.registerTool(
+    'get_reading_backlog',
+    {
+      title: 'Read the Akada reading backlog',
+      description: GET_READING_BACKLOG_DESCRIPTION,
+      inputSchema: GetReadingBacklogInput,
+      annotations: { readOnlyHint: true },
+    },
+    async (input) => getReadingBacklog(token, input),
   );
 
   registerNoteTools(server, token);
