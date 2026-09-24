@@ -104,7 +104,7 @@ A course page shows what it is keeping and how much of it is settled, and the
 Coming panel draws that under an exam's countdown. Like the record, the
 schedule is worked out from the answers on every read and never stored.
 
-**Settings** covers the daily goal, when your day ends (anywhere up to 6am, so
+**Settings** covers the daily goal, when your day ends (anywhere up to 8am, so
 a 2am session counts toward the right day), whether weekends count, CSV export,
 and appearance. Appearance is five paper tones including a night one, four
 heading serifs, three densities and two accents.

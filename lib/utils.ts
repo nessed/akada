@@ -10,7 +10,7 @@ function logicalNow(): Date {
 }
 
 /**
- * The hour, 0 to 6, the reader's day ends at, if they moved it past
+ * The hour, 0 to 8, the reader's day ends at, if they moved it past
  * midnight. Zero on the server, and whenever nothing sensible is stored.
  */
 export function dayEndingHour(): number {
@@ -18,7 +18,7 @@ export function dayEndingHour(): number {
   try {
     const stored = JSON.parse(window.localStorage.getItem('akada.preferences.v1') || '{}');
     const cutoff = Number(stored.dayEndingHour);
-    if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= 6) return cutoff;
+    if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= 8) return cutoff;
   } catch { /* a normal calendar day is a safe fallback */ }
   return 0;
 }

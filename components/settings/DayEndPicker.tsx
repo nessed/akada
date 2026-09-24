@@ -4,7 +4,7 @@ import { useState } from 'react';
 import HandNote from '@/components/notebook/HandNote';
 
 /** The hours a day is allowed to run over into. Midnight is a plain day. */
-const HOURS = [0, 1, 2, 3, 4, 5, 6];
+const HOURS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 /** How the chosen hour reads in a sentence. */
 export function dayEndLabel(hour: number): string {

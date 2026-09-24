@@ -119,7 +119,7 @@ function sanitizePreferences(value: unknown): Preferences {
       : DEFAULTS.breakMinutes,
     darkMode: paperTone === 'night',
     dayEndingHour:
-      typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 6
+      typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 8
         ? Math.round(parsed.dayEndingHour)
         : DEFAULTS.dayEndingHour,
   };
