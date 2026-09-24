@@ -82,6 +82,9 @@ export const FIRST_MARK_SECONDS = 15 * MINUTE;
 /** Three gates of five. Enough marks bind the page and a fresh one opens. */
 export const MARKS_PER_PAGE = 15;
 
+/** The rungs of the Pages bound impression, counted across every course. */
+export const PAGES_BOUND_RUNGS = [1, 3, 6, 12, 24];
+
 /* ── Days and weeks ────────────────────────────────────────────────────── */
 
 /** A day counts on this much logged, or on a ticked task, or on pages read. */

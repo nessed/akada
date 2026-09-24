@@ -27,6 +27,8 @@ export interface CoursePages {
   toNextMark: number;
   /** Marks still to go before this page binds. */
   toBind: number;
+  /** Credited seconds still to go before this page binds. */
+  toBindSeconds: number;
   /** Marks inked today, which is what caps the plain Next Mark candidates. */
   markedToday: number;
 }
@@ -74,6 +76,7 @@ export function readPages(
       onPage,
       toNextMark: Math.max(0, secondsForMark(marks + 1) - seconds),
       toBind: MARKS_PER_PAGE - onPage,
+      toBindSeconds: Math.max(0, secondsForMark((bound + 1) * MARKS_PER_PAGE) - seconds),
       markedToday: marks - marksFor(beforeToday.get(course.id) ?? 0),
     });
   }

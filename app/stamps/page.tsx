@@ -9,11 +9,12 @@ import Stamp from '@/components/notebook/Stamp';
 import CoursePageRow from '@/components/progression/CoursePage';
 import ImpressionSheet from '@/components/progression/ImpressionSheet';
 import HabitsPanel from '@/components/progression/HabitsPanel';
+import PagesExplainer from '@/components/progression/PagesExplainer';
 import RunPanel from '@/components/progression/RunPanel';
 import TrustPulse from '@/components/progression/TrustPulse';
 import { useActiveSemester, useCourses } from '@/lib/data-hooks';
 import { sortCourses } from '@/lib/data/course-order';
-import { MARKS_PER_PAGE } from '@/lib/progression';
+import { MARKS_PER_PAGE, MARK_SECONDS } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import {
   diffRecord,
@@ -197,7 +198,8 @@ export default function RecordPage() {
             <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="m-0 font-serif text-[20px] font-medium">Course pages</h2>
               <span className="font-serif text-[12.5px] italic text-muted">
-                every {MARKS_PER_PAGE} marks binds a page
+                {MARKS_PER_PAGE} marks, about{' '}
+                {Math.round((MARKS_PER_PAGE * MARK_SECONDS) / 3600)} hours, binds a page
               </span>
             </div>
 
@@ -232,6 +234,8 @@ export default function RecordPage() {
                 the heatmap and every export still show every hour you logged.
               </p>
             )}
+
+            <PagesExplainer className="mb-3 mt-1" />
           </section>
         </div>
 

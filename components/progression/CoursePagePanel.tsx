@@ -2,6 +2,8 @@
 
 import type { Course } from '@/lib/data';
 import { MARKS_PER_PAGE, type CoursePages } from '@/lib/progression';
+import { formatHM } from '@/lib/utils';
+import PagesExplainer from './PagesExplainer';
 import TallyMarks from './TallyMarks';
 
 /**
@@ -50,13 +52,18 @@ export default function CoursePagePanel({
         </span>
       </div>
 
-      <p className="m-0 mt-4 text-[12px] leading-[1.6] text-muted">
-        {record.marks === 0
-          ? 'The first mark on a new course is a short one.'
-          : record.toBind === 1
-            ? 'One more mark binds this page into the course record.'
-            : `${record.toBind} marks bind this page into the course record.`}
+      <p className="m-0 mt-4 font-serif text-[13px] italic leading-[1.6] text-muted">
+        <Figure>{formatHM(record.toNextMark)}</Figure> of study to the{' '}
+        {record.marks === 0 ? 'first' : 'next'} mark
+        {' · '}
+        <Figure>{formatHM(record.toBindSeconds)}</Figure> to bind this page
       </p>
+
+      <PagesExplainer className="mt-4" />
     </section>
   );
+}
+
+function Figure({ children }: { children: React.ReactNode }) {
+  return <span className="font-mono not-italic text-ink-soft">{children}</span>;
 }
