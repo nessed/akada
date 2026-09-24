@@ -296,7 +296,7 @@ export function ComingPanel({
       <div className="flex items-baseline justify-between pb-1.5">
         <p className="eyebrow m-0">Coming</p>
         {coming.length > 0 && (
-          <span className="font-mono text-[11px] text-muted">
+          <span className="font-serif text-[12.5px] italic text-muted">
             next {coming.length === 1 ? 'one' : coming.length}
           </span>
         )}
@@ -403,7 +403,9 @@ export function TodayHours({
     <section>
       <div className="flex items-baseline justify-between">
         <p className="eyebrow m-0">Today</p>
-        <span className="font-mono text-[11px] text-muted">of {goalHours}h</span>
+        <span className="font-serif text-[12.5px] italic text-muted">
+          of <span className="font-mono text-[11px] not-italic tabular-nums">{goalHours}h</span>
+        </span>
       </div>
 
       <p className="m-0 mt-4 font-mono text-[32px] font-semibold leading-none tracking-[-0.02em] tabular-nums xl:mt-6">
@@ -511,7 +513,7 @@ export function WeekPanel({
         ))}
       </div>
 
-      <div className="mt-2 flex gap-1.5 font-mono text-[10px] text-muted-soft">
+      <div className="mt-2 flex gap-1.5 text-[10.5px] text-muted-soft">
         {days.map((day) => (
           <span key={day.iso} className="flex-1 text-center">
             <span className={day.isToday ? 'text-ink' : ''}>{day.label}</span>

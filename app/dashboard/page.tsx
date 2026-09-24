@@ -43,6 +43,7 @@ import {
   isoDate,
   sessionsForDate,
   PASTEL_PALETTE,
+  resolveTint,
   totalSeconds,
 } from '@/lib/utils';
 import { isLoggableDuration } from '@/lib/session-safety';
@@ -879,7 +880,7 @@ function DashboardPageContent() {
             day's work on the left, the readings on the right. Each story
             ends on a cutoff rule rather than inside a box. Below xl it is one
             column in reading order. */}
-        <div className="grid items-start xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
           <div className="settle-in flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
 
             {/* Recall. A few things from the term to bring back with the book
@@ -1008,23 +1009,21 @@ function DashboardPageContent() {
             />
             <WeekPanel sessions={shownSessions} courses={courses} goalHours={weeklyGoalHours} />
             </div>
-            <div className="mt-7 flex items-center justify-between font-mono text-[11px] text-muted">
+            <div className="mt-7 flex items-baseline justify-between font-serif text-[12.5px] italic text-muted">
               {/* Continuity is measured in weeks now, not days. A daily
                   streak asks a student to study on the Saturday of a wedding
                   and then punishes them for the wedding. */}
               <span>
-                Run{' '}
-                <span className="text-ink">
-                  {run} {run === 1 ? 'week' : 'weeks'}
-                </span>
+                <span className="font-mono text-[11px] not-italic tabular-nums text-ink">{run}</span>{' '}
+                {run === 1 ? 'week' : 'weeks'} running
               </span>
               {semesterInfo && (
                 <span>
-                  Term{' '}
-                  <span className="text-ink">
-                    day {semesterInfo.totalWeeks * 7 - semesterInfo.daysRemaining} /{' '}
-                    {semesterInfo.totalWeeks * 7}
-                  </span>
+                  day{' '}
+                  <span className="font-mono text-[11px] not-italic tabular-nums text-ink">
+                    {semesterInfo.totalWeeks * 7 - semesterInfo.daysRemaining} / {semesterInfo.totalWeeks * 7}
+                  </span>{' '}
+                  of the term
                 </span>
               )}
             </div>
@@ -1046,17 +1045,50 @@ function DashboardPageContent() {
           />
           <div className="relative w-full md:mx-auto md:max-w-xl bg-bg rounded-t-3xl px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
             <div className="w-9 h-1 rounded-full bg-line-strong mx-auto mb-[18px]" />
-            {(() => {
-              const course = courses.find((c) => c.id === addingTaskFor);
-              return course ? (
-                <p
-                  className="eyebrow m-0"
-                  style={{ color: course.color }}
-                >
-                  {course.code}
-                </p>
-              ) : null;
-            })()}
+            {/* Which course it goes under. The sheet opens on the first
+                course, and with no way to change it every task added from
+                Today landed there, so with more than one course it offers
+                the rest. */}
+            {courses.length > 1 ? (
+              <div
+                className="app-scroll -mx-6 flex gap-1 overflow-x-auto px-6 md:flex-wrap"
+                role="radiogroup"
+                aria-label="Course"
+              >
+                {courses.map((c) => {
+                  const on = c.id === addingTaskFor;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => setAddingTaskFor(c.id)}
+                      className={`flex h-9 shrink-0 items-center gap-2 rounded-[8px] px-2.5 text-[12.5px] transition-colors first:-ml-2.5 ${
+                        on ? 'text-ink' : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
+                      }`}
+                    >
+                      <span aria-hidden className="course-rule !w-3.5" style={{ ['--c' as string]: c.color }} />
+                      <span
+                        className={on ? 'hl-swipe' : ''}
+                        style={on ? ({ '--hl': resolveTint(c.color, c.tint) } as React.CSSProperties) : undefined}
+                      >
+                        {c.code}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              (() => {
+                const course = courses.find((c) => c.id === addingTaskFor);
+                return course ? (
+                  <p className="eyebrow m-0" style={{ color: course.color }}>
+                    {course.code}
+                  </p>
+                ) : null;
+              })()
+            )}
             <h3 className="mt-1 mb-1.5 font-serif font-medium text-[22px] tracking-[-0.01em]">
               New task
             </h3>

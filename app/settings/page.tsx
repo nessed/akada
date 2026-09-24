@@ -326,7 +326,7 @@ export default function SettingsPage() {
               </SettingGroup>
 
               <SettingGroup label="So far">
-                <div className="flex gap-8 px-[18px] py-4">
+                <div className="grid grid-cols-3 gap-2 px-[18px] py-4 sm:flex sm:gap-8">
                   <StatMark label="Hours" value={totalHours.toFixed(1)} />
                   <StatMark label="Days" value={String(dayCount)} />
                   <StatMark label="Sessions" value={String(safeSessions.length)} />

@@ -137,6 +137,27 @@ interruption; the sheet is still what phone gets. And the
 timer starts from the row it belongs to, through a popover that takes a
 length without a trip to `/timer` first.
 
+### On a phone
+Things a phone reader meets that a desktop one does not:
+- **320 is the floor.** A small SE, or a newer one with Display Zoom on, is
+  320px wide, and every screen has to hold there without clipping. A grid
+  that stacks to one column below a breakpoint says `grid-cols-[minmax(0,1fr)]`
+  at the base: a bare `grid` makes an `auto` track as wide as its widest
+  child, which is how Today once ran 22px off the right edge. Popovers take
+  `min(their width, 100vw - 24px)`.
+- **No keyboard lines on touch.** A line naming shortcuts ("Space pause · Esc
+  back", "Enter starts…") carries `.key-hint`, which hides under
+  `(hover: none) and (pointer: coarse)`. Notes does the same with its own
+  `.keys` rules.
+- **Fields are 16px on touch.** iOS zooms into any field under 16px on focus
+  and stays zoomed. Pinch-zoom is allowed, so the viewport is not the fix:
+  `globals.css` lifts inputs and textareas set at `text-xs`, `text-sm` or
+  13 to 15px up to 16px under `(pointer: coarse)`. A field set larger keeps
+  its size.
+- **New task names its course.** The sheet on Today opens on the first course
+  and, with more than one, shows the term's courses as a row of chips to move
+  it, the same chips as the Tasks filter.
+
 ### Rules, not panels
 Today and a course page draw no boxes. Every section used to be its own
 bordered, rounded panel with a fill step behind it, twelve of them on Today

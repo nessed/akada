@@ -173,8 +173,11 @@ export default function CourseCard({
               </span>
             </span>
             {remainingHours > 0 && (
-              <span className="font-mono text-xs tabular-nums text-muted">
-                {remainingHours.toFixed(remainingHours < 1 ? 1 : 0)}h to go
+              <span className="font-serif text-[12.5px] italic text-muted">
+                <span className="font-mono text-xs not-italic tabular-nums">
+                  {remainingHours.toFixed(remainingHours < 1 ? 1 : 0)}h
+                </span>{' '}
+                to go
               </span>
             )}
           </div>

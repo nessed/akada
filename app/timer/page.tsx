@@ -841,7 +841,7 @@ export default function TimerPage() {
           <NextMarkLine surface="timer" className="-mt-4" />
         )}
 
-        <p className="m-0 -mt-3 font-mono text-[11px] text-muted-soft">
+        <p className="key-hint m-0 -mt-3 font-mono text-[11px] text-muted-soft">
           {resting ? 'Space back · F finish · Esc back' : 'Space pause · B break · F finish · Esc back'}
         </p>
       </div>
