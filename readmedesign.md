@@ -826,6 +826,54 @@ that still looked like an admin panel.
 - Two books a shelf on phone, three from 560px and on the narrow desktop
   beside the rail, four from 1024px and five from 1280px.
 
+### Stats: the chase
+
+Stats used to be a page of totals: what happened, printed, and an Export CSV
+button in the masthead. Totals say what the term was; nothing on the page said
+what the next sitting would change, so there was nothing to come back for. The
+export is in Settings, where a spreadsheet is looked for, and the masthead
+carries the hours alone. Everything below is read off the logged sessions on
+every render (`lib/stats-reading.ts`) and nothing is stored.
+
+- **The masthead figure rolls up** to the term's hours when the page opens
+  (`useCountUp`), and under it a line of Caveat sets the hours beside
+  something anybody can picture: "that's 5 runs of the extended lord of the
+  rings". Only comparisons that land between one and a few dozen are
+  offered, and the pick turns over with the date.
+- **The chase row**, three cards dealt onto the page one after the other
+  (`.deal-in`), under the ledger line:
+  - **You vs last week** (`PaceRace`). Both weeks as running totals on one
+    ruled plot, last week pencilled in whole, this week inked over it up to
+    today. Where the two stand today is joined by a short dashed stroke, so
+    ahead or behind is a distance before it is a figure. The headline is the
+    gap ("29m behind", "1h 10m ahead", "neck and neck") and the line under
+    it is what closes it.
+  - **The next line** (`NextMilestone`). The next round number in the
+    term's hours, named in the serif ("half a century", "the century"),
+    counted out as `TallyMarks` from the last line crossed. Never more than
+    twenty five marks, so a long stretch has each mark stand for more than
+    an hour and the margin says how much. Not a bar.
+  - **Your day, as a clock** (`StudyClock`). Midnight at the top, one stroke
+    per hour as long as the time that has landed in it, the usual three hours
+    inked and the rest pencil, a `warn` hand pointing at now. Under it the
+    kind of studier those strokes make ("an evening regular", in the serif
+    italic) with one more thing in Caveat ("and a weekend warrior"). It is
+    read off `habits.peak`, so it is withheld until the habits layer has
+    enough to call it, and says how many sittings are left until it does.
+- **Records to beat** (`PersonalBests`), at the head of the aside: longest
+  sitting, biggest day, best week, longest run, each with a dotted leader to
+  the figure and, under it, the one in progress that could take it ("this
+  week so far 3h 42m · 7h 13m to beat it"). A record set inside the last week
+  gets a `warn` stamp that comes down on the page (`.stamp-down`), the one
+  moment on Stats allowed to be loud.
+- **The charts arrive.** The heatmap inks in a week at a time from the
+  oldest (`.heat-in`) and rings today; the week's bars fill up from the rule
+  (`.bar-grow`); the course rules draw (`.rule-draw`) and their hour counts
+  roll up.
+
+All of it fills backwards only and holds no transform once landed, and
+reduced motion drops the delays with the durations.
+
 ### Buttons
 Two shapes, not four:
 - **Page CTA**, full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
@@ -872,4 +920,5 @@ Movement in the app is soft and deliberate:
 - **Presses** on the timer's buttons give a `0.97` scale on `:active`. Small enough to feel, never enough to read as a bounce.
 - **Up next arriving.** The task body is keyed on the task, so when it changes (Done, Tomorrow, or the rule switched) the new one settles in, its course rule draws left to right (`.rule-draw`, `0.5s`) and a highlighter swipe in the course's pastel is pulled under the title a beat after (`.hl-draw`, `0.7s`). Done and Tomorrow first let the old task go with `.lift-away`, a `0.22s` fade and 6px lift, so the next one comes up into a space instead of replacing it in the same frame. The handwritten rule note settles when it is switched.
 - **Up next is live.** Its meta line carries the time already put into the task (mono digits) and when it was last sat. With a timer running on it the line says "on the clock" beside a dot in the course colour pulsing on `tick`, and the figure counts up with the sitting.
+- **Stats arriving.** Cards dealt in (`.deal-in`, `0.55s`, a 12px rise off a `-1.2deg` tilt), the heatmap inking in (`.heat-in`), bars filling from the rule (`.bar-grow`), lines drawn with a pen (`.ink-draw`, any path with `pathLength=1`), dots popping on (`.pop-in`), and a record stamped down (`.stamp-down`). See "Stats: the chase".
 - **Finish and log** holds the last frame of the sitting still behind the log sheet as it rises. Stopping empties the timer, and a block screen with no target left used to flip to open mode's night paper at 00:00 under the sheet.

@@ -50,6 +50,11 @@ export default function WeeklyChart({ sessions, courses }: Props) {
             className="w-full relative flex flex-col-reverse rounded overflow-hidden bg-bg-tint"
             style={{ height: 86 }}
           >
+            {/* The stack fills up from the rule, a day at a time. */}
+            <div
+              className="bar-grow flex h-full w-full flex-col-reverse"
+              style={{ animationDelay: `${150 + idx * 70}ms` }}
+            >
             {t.total > 0 &&
               courses.map((c) => {
                 const sec = t.byC[c.id] || 0;
@@ -66,8 +71,13 @@ export default function WeeklyChart({ sessions, courses }: Props) {
                   />
                 );
               })}
+            </div>
           </div>
-          <span className="text-[10.5px] text-muted font-mono">{t.label}</span>
+          <span
+            className={`text-[10.5px] font-mono ${idx === totals.length - 1 ? 'font-semibold text-ink' : 'text-muted'}`}
+          >
+            {t.label}
+          </span>
         </div>
       ))}
     </div>
