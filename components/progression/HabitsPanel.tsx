@@ -82,7 +82,10 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
       // A figure read from whole sittings, because there were not enough
       // timed blocks to read, is labelled as that rather than passed off as
       // a block the app watched.
-      text: habits.blocksFrom === 'timed' ? 'a usual block' : 'a usual stretch, read from whole sittings',
+      text:
+        habits.blocksFrom === 'timed'
+          ? 'a usual block'
+          : 'a usual stretch, read from whole sittings',
       needs: after(blocksLeft, 'sitting'),
     },
     {
@@ -91,7 +94,10 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
       text: habits.peak
         ? `${windowLabel(habits.peak.start)}, where ${Math.round(habits.peak.share * 100)}% of your focus lands`
         : 'the hour your work mostly lands',
-      needs: habits.sittings.n < HABIT_MIN_SITTINGS ? after(sittingsLeft, 'sitting') : 'no hour clearly ahead yet',
+      needs:
+        habits.sittings.n < HABIT_MIN_SITTINGS
+          ? after(sittingsLeft, 'sitting')
+          : 'no hour clearly ahead yet',
     },
     {
       key: 'day',
@@ -102,7 +108,8 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
     {
       key: 'break',
       figure:
-        settled(habits.breaks.taken, HABIT_MIN_BLOCKS) && settled(habits.breaks.meant, HABIT_MIN_BLOCKS)
+        settled(habits.breaks.taken, HABIT_MIN_BLOCKS) &&
+        settled(habits.breaks.meant, HABIT_MIN_BLOCKS)
           ? `${roughMinutes(habits.breaks.meant.median)} → ${roughMinutes(habits.breaks.taken.median)}m`
           : null,
       text: 'a break as set, and as taken',
@@ -120,100 +127,117 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
   const shownTotal = [...rates.values()].reduce((acc, r) => acc + r.shown, 0);
 
   return (
-    <section className="rounded-[14px] border border-line bg-paper p-6">
-      <div className="flex items-baseline justify-between">
-        <p className="eyebrow m-0">How you study</p>
-        <span className="font-mono text-[11px] text-muted">
-          from <span className="text-ink">{habits.sittings.n}</span>{' '}
+    <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="m-0 font-serif text-[20px] font-medium">How you study</h2>
+        <span className="font-serif text-[12.5px] italic text-muted">
+          from <span className="font-mono not-italic text-ink">{habits.sittings.n}</span>{' '}
           {habits.sittings.n === 1 ? 'sitting' : 'sittings'}
           {habits.timedSittings > 0 && habits.timedSittings < habits.sittings.n && (
             <>
               {' · '}
-              <span className="text-ink">{habits.timedSittings}</span> timed in detail
+              <span className="font-mono not-italic text-ink">{habits.timedSittings}</span> timed in
+              detail
             </>
           )}
         </span>
       </div>
 
-      <div className="mt-4 flex flex-col">
-        {rows.map((row) => (
-          <div
-            key={row.key}
-            className="flex items-baseline gap-4 border-b border-line-soft py-2.5 last:border-b-0"
-          >
-            {row.figure ? (
-              <span className="w-[76px] shrink-0 font-mono text-[13px] font-semibold tabular-nums text-ink">
-                {row.figure}
-              </span>
-            ) : (
+      <div className="mt-3 grid gap-x-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="flex flex-col">
+          {rows.map((row) => (
+            <div
+              key={row.key}
+              className="flex items-baseline gap-4 border-b border-dashed border-line py-3 last:border-b-0"
+            >
+              {row.figure ? (
+                <span className="w-[76px] shrink-0 font-mono text-[13px] font-semibold tabular-nums text-ink">
+                  {row.figure}
+                </span>
+              ) : (
+                <span
+                  aria-hidden
+                  className="mt-[7px] h-[3px] w-[76px] shrink-0 rounded-[1px] border-t border-dashed border-line-strong"
+                />
+              )}
               <span
-                aria-hidden
-                className="mt-[7px] h-[3px] w-[76px] shrink-0 rounded-[1px] border-t border-dashed border-line-strong"
-              />
-            )}
-            <span className={`text-[13px] ${row.figure ? 'text-ink-soft' : 'text-muted-soft'}`}>
-              {row.figure ? row.text : `${row.text} · ${row.needs}`}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {courseRows.length > 0 && (
-        <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
-          {courseRows.map(({ course, habit }) => (
-            <div key={course.id} className="flex items-baseline gap-3 text-[12px]">
-              <span className="eyebrow w-[76px] shrink-0 truncate" style={{ color: course.color }}>
-                {course.code}
-              </span>
-              <span className="text-ink-soft">
-                {habit!.blocksFrom === 'timed' ? 'blocks of ' : 'stretches of '}
-                <span className="font-mono text-ink">{roughMinutes(habit!.blocks.median)}m</span>
-                {habit!.overrun.n >= HABIT_MIN_BLOCKS && (
-                  <>
-                    {' · '}
-                    <span className="font-mono text-ink">
-                      {habit!.overrun.over}/{habit!.overrun.n}
-                    </span>{' '}
-                    ran past the block
-                  </>
-                )}
-                {habit!.pagesPerHour && (
-                  <>
-                    {' · '}
-                    <span className="font-mono text-ink">{habit!.pagesPerHour}</span> pages an hour
-                  </>
-                )}
+                className={`font-serif text-[14px] leading-snug ${
+                  row.figure ? 'text-ink-soft' : 'italic text-muted-soft'
+                }`}
+              >
+                {row.figure ? row.text : `${row.text} · ${row.needs}`}
               </span>
             </div>
           ))}
         </div>
-      )}
 
-      <div className="mt-4 border-t border-line pt-4">
-        <p className="m-0 text-[12px] leading-[1.6] text-muted">
-          {learned.length >= 2 ? (
-            <>
-              The line under the timer has learned which of its kinds you follow with a sitting, and
-              leans toward those.{' '}
-              {learned.slice(0, 3).map(([kind, r], i) => (
-                <span key={kind}>
-                  {i > 0 && ' · '}
-                  {KIND_LABEL[kind]}{' '}
-                  <span className="font-mono text-ink">
-                    {r.followed}/{r.shown}
+        <div className="flex flex-col border-t border-line pt-4 mt-3 lg:mt-0 lg:border-t-0 lg:border-l lg:pl-10 lg:pt-3">
+          {courseRows.length > 0 && (
+            <div className="mb-4 flex flex-col gap-2.5 border-b border-line pb-4">
+              <p className="eyebrow m-0">By course</p>
+              {courseRows.map(({ course, habit }) => (
+                <div key={course.id} className="flex items-baseline gap-3 text-[12px]">
+                  <span
+                    className="eyebrow w-[76px] shrink-0 truncate"
+                    style={{ color: course.color }}
+                  >
+                    {course.code}
                   </span>
-                </span>
+                  <span className="text-ink-soft">
+                    {habit!.blocksFrom === 'timed' ? 'blocks of ' : 'stretches of '}
+                    <span className="font-mono text-ink">
+                      {roughMinutes(habit!.blocks.median)}m
+                    </span>
+                    {habit!.overrun.n >= HABIT_MIN_BLOCKS && (
+                      <>
+                        {' · '}
+                        <span className="font-mono text-ink">
+                          {habit!.overrun.over}/{habit!.overrun.n}
+                        </span>{' '}
+                        ran past the block
+                      </>
+                    )}
+                    {habit!.pagesPerHour && (
+                      <>
+                        {' · '}
+                        <span className="font-mono text-ink">{habit!.pagesPerHour}</span> pages an
+                        hour
+                      </>
+                    )}
+                  </span>
+                </div>
               ))}
-            </>
-          ) : (
-            <>
-              The line under the timer learns which of its kinds you follow with a sitting.{' '}
-              {shownTotal === 0
-                ? 'Nothing shown on this device yet.'
-                : `${shownTotal} shown so far; it starts leaning after ${LEARN_MIN_IMPRESSIONS} of a kind.`}
-            </>
+            </div>
           )}
-        </p>
+
+          <div>
+            <p className="eyebrow m-0 mb-1.5">What Next Mark has learned</p>
+            <p className="m-0 font-serif text-[13px] leading-[1.6] text-muted">
+              {learned.length >= 2 ? (
+                <>
+                  The line under the timer has learned which of its kinds you follow with a sitting,
+                  and leans toward those.{' '}
+                  {learned.slice(0, 3).map(([kind, r], i) => (
+                    <span key={kind}>
+                      {i > 0 && ' · '}
+                      {KIND_LABEL[kind]}{' '}
+                      <span className="font-mono text-ink">
+                        {r.followed}/{r.shown}
+                      </span>
+                    </span>
+                  ))}
+                </>
+              ) : (
+                <>
+                  The line under the timer learns which of its kinds you follow with a sitting.{' '}
+                  {shownTotal === 0
+                    ? 'Nothing shown on this device yet.'
+                    : `${shownTotal} shown so far; it starts leaning after ${LEARN_MIN_IMPRESSIONS} of a kind.`}
+                </>
+              )}
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   );
