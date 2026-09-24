@@ -989,6 +989,21 @@ headers, the one screen that still looked like a settings panel.
   timer say one line and go quiet; this is where the rest of the board is.
 - **How you study**, full width, figures on the left, by-course and what the
   ranking has learned on the right from `lg`.
+- **Since you last looked.** Record remembers, on the device, what it
+  showed on the last visit (`lib/progression/visits.ts`, a convenience like
+  the Next Mark ledger, never part of the record). On arrival it diffs the
+  logged record against that and, when something landed, tapes a note to the
+  top of the page: marks inked by course, pages bound, rungs struck, weeks
+  added to the run, with the figure in mono and the header in Caveat. Facts
+  only, and nothing about what was missed; a visit with nothing new shows
+  nothing. Only the marks inked since draw themselves in, and an impression
+  struck since gets the `warn` "New" stamp brought down (`.stamp-down`), the
+  same one loud moment Stats allows a new record. The baseline is rewritten
+  on every visit, so the news belongs to that visit.
+- **The dot.** While there is news, the Record item in the rail and the
+  bottom bar carries a 6px `ink` dot, never a count and never red. It reads
+  the logged record, not the sitting on the clock, and clears the moment the
+  page opens. This is the reason to come back to the Record.
 - **Impressions** are dealt in (`.deal-in`). Each is a stamp ring: a finished
   ladder pressed as a double ring off the square, one under way a single
   ring, one not started a dashed pencil outline, with one dot per rung under

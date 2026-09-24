@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import PageShell from '@/components/PageShell';
 import LoadingIndicator from '@/components/LoadingIndicator';
@@ -15,6 +15,15 @@ import { useActiveSemester, useCourses } from '@/lib/data-hooks';
 import { sortCourses } from '@/lib/data/course-order';
 import { MARKS_PER_PAGE } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
+import {
+  diffRecord,
+  readSnapshot,
+  snapshotOf,
+  writeSnapshot,
+  type RecordNews,
+} from '@/lib/progression/visits';
+import type { Course } from '@/lib/data';
+import type { Ladder } from '@/lib/progression';
 
 /**
  * The record.
@@ -41,6 +50,20 @@ export default function RecordPage() {
   const { semester } = useActiveSemester();
   const { progression, logged, sitting, isLoading } = useProgression();
   const courses = useMemo(() => sortCourses(rawCourses), [rawCourses]);
+
+  /* What changed since the reader last opened this page. Read once, from
+     the logged record rather than the sitting on the clock, then the new
+     baseline is written straight away: the news belongs to this visit, and
+     the dot on the nav clears the moment the page is open. */
+  const [news, setNews] = useState<RecordNews | null>(null);
+  const seen = useRef(false);
+  useEffect(() => {
+    if (!logged || seen.current) return;
+    seen.current = true;
+    const before = readSnapshot();
+    if (before) setNews(diffRecord(before, logged));
+    writeSnapshot(snapshotOf(logged));
+  }, [logged]);
 
   const semesterWeek = useMemo(() => {
     if (!semester?.startDate || !semester?.endDate) return null;
@@ -152,6 +175,8 @@ export default function RecordPage() {
         </p>
       </div>
 
+      {news?.any && <SinceLastLooked news={news} courses={courses} ladders={progression.ladders} />}
+
       {empty && (
         <div className="deckle mb-[var(--density-gap)] border border-dashed border-line-strong px-[var(--density-gutter)] py-6 text-center">
           <p className="m-0 font-serif text-[16px] italic text-ink-soft">
@@ -193,7 +218,8 @@ export default function RecordPage() {
                       course={course}
                       record={record}
                       ink={progression.ink.get(course.id) ?? null}
-                      delay={index * 90}
+                      delay={500 + index * 120}
+                      fresh={news?.marks.find((m) => m.courseId === course.id)?.n ?? 0}
                     />
                   );
                 })}
@@ -253,12 +279,132 @@ export default function RecordPage() {
           </span>
         </div>
 
-        <ImpressionSheet ladders={progression.ladders} impressions={progression.impressions} />
+        <ImpressionSheet
+          ladders={progression.ladders}
+          impressions={progression.impressions}
+          fresh={news?.struck ?? null}
+        />
       </section>
 
       <TrustPulse termDays={progression.termDays} />
     </PageShell>
   );
+}
+
+/**
+ * What the record gained while the reader was away, taped to the top of the
+ * page. Facts only, in the Next Mark voice: what was inked, bound, struck and
+ * added, and nothing about what was missed. A visit with nothing new shows
+ * nothing at all.
+ */
+function SinceLastLooked({
+  news,
+  courses,
+  ladders,
+}: {
+  news: RecordNews;
+  courses: Course[];
+  ladders: Ladder[];
+}) {
+  const byCourse = new Map(courses.map((c) => [c.id, c]));
+  const byLadder = new Map(ladders.map((l) => [l.id, l]));
+  const totalMarks = news.marks.reduce((acc, m) => acc + m.n, 0);
+
+  const rows: { key: string; figure: string; text: React.ReactNode }[] = [];
+  if (totalMarks > 0) {
+    rows.push({
+      key: 'marks',
+      figure: `+${totalMarks}`,
+      text: (
+        <>
+          {totalMarks === 1 ? 'mark inked' : 'marks inked'}
+          {news.marks.length > 0 && (
+            <span className="text-muted">
+              {' · '}
+              {news.marks
+                .map((m) => `${byCourse.get(m.courseId)?.code ?? 'a course'} ${m.n}`)
+                .join(', ')}
+            </span>
+          )}
+        </>
+      ),
+    });
+  }
+  for (const b of news.bound) {
+    rows.push({
+      key: `bound-${b.courseId}`,
+      figure: `+${b.n}`,
+      text: (
+        <>
+          {b.n === 1 ? 'page bound' : 'pages bound'} on{' '}
+          <span className="text-ink">{byCourse.get(b.courseId)?.code ?? 'a course'}</span>
+        </>
+      ),
+    });
+  }
+  for (const [id, n] of news.struck) {
+    const ladder = byLadder.get(id);
+    if (!ladder) continue;
+    const reached = ladder.thresholds.filter((t) => t <= ladder.value).length;
+    const rung = ladder.thresholds[reached - 1];
+    rows.push({
+      key: `struck-${id}`,
+      figure: rung !== undefined ? ladder.format(rung) : `+${n}`,
+      text: (
+        <>
+          struck on <span className="text-ink">{ladder.name}</span>
+          {n > 1 && <span className="text-muted"> · {n} rungs</span>}
+        </>
+      ),
+    });
+  }
+  if (news.run > 0) {
+    rows.push({
+      key: 'run',
+      figure: `+${news.run}`,
+      text: <>{news.run === 1 ? 'week added to the run' : 'weeks added to the run'}</>,
+    });
+  }
+
+  return (
+    <section
+      className="deal-in deckle relative mb-[var(--density-gap)] border border-line-strong bg-paper px-[var(--density-gutter)] pt-6 pb-3"
+      aria-label="Since you last looked"
+    >
+      <span aria-hidden className="tape" style={{ top: -9, left: 28 }} />
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <HandNote size={22} rotate={-1.5}>
+          since you last looked
+        </HandNote>
+        <span className="font-serif text-[12.5px] italic text-muted">{ago(news.since)}</span>
+      </div>
+      <ul className="m-0 mt-2 grid list-none gap-x-10 p-0 md:grid-cols-2">
+        {rows.map((row, i) => (
+          <li
+            key={row.key}
+            className="deal-in flex items-baseline gap-4 border-b border-dashed border-line py-2.5 last:border-0"
+            style={{ animationDelay: `${200 + i * 90}ms` }}
+          >
+            <span className="w-[56px] shrink-0 font-mono text-[15px] font-semibold tabular-nums text-ink">
+              {row.figure}
+            </span>
+            <span className="font-serif text-[14px] leading-snug text-ink-soft">{row.text}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ago(iso: string): string {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 60) return 'earlier today';
+  const hours = Math.round(minutes / 60);
+  if (hours < 20) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  const days = Math.max(1, Math.round(hours / 24));
+  if (days === 1) return 'yesterday';
+  if (days < 14) return `${days} days ago`;
+  return `${Math.round(days / 7)} weeks ago`;
 }
 
 /**

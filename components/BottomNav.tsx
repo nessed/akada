@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRecordHasNews } from '@/lib/progression/visits';
 import { usePathname } from 'next/navigation';
 
 const tabs = [
@@ -121,6 +122,7 @@ function isActive(pathname: string | null, href: string) {
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const recordNews = useRecordHasNews();
   return (
     /* The fade has to finish before the icons start, otherwise a card
        scrolling underneath stays legible behind the tab labels. The taller
@@ -137,6 +139,7 @@ export default function BottomNav() {
       <div className="pointer-events-auto mx-auto max-w-2xl md:max-w-3xl w-full flex justify-around items-center">
         {tabs.map((tab) => {
           const active = isActive(pathname, tab.href);
+          const news = tab.href === '/stamps' && recordNews && !active;
           return (
             <Link
               key={tab.href}
@@ -147,8 +150,14 @@ export default function BottomNav() {
               style={{ strokeWidth: active ? 1.8 : 1.4 }}
             >
               {tab.icon}
+              {/* Something earned since Record was last opened: an ink dot,
+                  never a count and never red. */}
+              {news && (
+                <span aria-hidden className="absolute right-3 top-1 h-[6px] w-[6px] rounded-full bg-ink" />
+              )}
               <span className="text-[10px] font-medium tracking-[0.04em]">
                 {tab.label}
+                {news && <span className="sr-only"> (something new)</span>}
               </span>
               {active && (
                 <span className="absolute -bottom-0.5 w-[18px] h-[1.5px] rounded-full bg-primary" />

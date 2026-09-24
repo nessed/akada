@@ -21,9 +21,12 @@ import type { Impression, Ladder } from '@/lib/progression';
 export default function ImpressionSheet({
   ladders,
   impressions,
+  fresh = null,
 }: {
   ladders: Ladder[];
   impressions: Impression[];
+  /** Rungs struck since the reader last opened the Record, by impression id. */
+  fresh?: Map<string, number> | null;
 }) {
   const byId = new Map(ladders.map((l) => [l.id, l]));
 
@@ -35,6 +38,7 @@ export default function ImpressionSheet({
           impression={impression}
           unit={byId.get(impression.id)?.unit ?? ''}
           delay={i * 70}
+          fresh={fresh?.has(impression.id) ?? false}
         />
       ))}
     </div>
@@ -45,10 +49,12 @@ function ImpressionCard({
   impression,
   unit,
   delay,
+  fresh,
 }: {
   impression: Impression;
   unit: string;
   delay: number;
+  fresh: boolean;
 }) {
   const started = impression.struck > 0;
   const face = impression.complete ? impression.mark : (impression.progress ?? impression.mark);
@@ -56,11 +62,29 @@ function ImpressionCard({
 
   return (
     <div
-      className={`deal-in deckle flex min-w-0 flex-col items-center px-3 pt-5 pb-4 text-center ${
-        started ? 'border border-line bg-paper' : 'border border-dashed border-line'
+      className={`deal-in deckle relative flex min-w-0 flex-col items-center px-3 pt-5 pb-4 text-center ${
+        fresh
+          ? 'border border-line-strong bg-paper'
+          : started
+            ? 'border border-line bg-paper'
+            : 'border border-dashed border-line'
       }`}
       style={{ animationDelay: `${delay}ms` }}
     >
+      {/* Struck since the last visit: the one loud moment on this page,
+          the same stamp Stats brings down on a new record. */}
+      {fresh && (
+        <span
+          className="stamp stamp-down absolute right-2 top-2"
+          style={{
+            animationDelay: `${delay + 700}ms`,
+            color: 'var(--warn)',
+            borderColor: 'var(--warn)',
+          }}
+        >
+          New
+        </span>
+      )}
       <span
         className="relative grid h-[76px] w-[76px] place-items-center rounded-full"
         style={

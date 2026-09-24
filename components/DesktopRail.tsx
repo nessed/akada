@@ -7,6 +7,7 @@ import { useCourses, useTasks } from '@/lib/data-hooks';
 import { useTimer } from '@/lib/timer-context';
 import { isoDate } from '@/lib/utils';
 import { sortCourses } from '@/lib/data/course-order';
+import { useRecordHasNews } from '@/lib/progression/visits';
 import AkadaMark from './notebook/AkadaMark';
 
 /**
@@ -148,6 +149,7 @@ function isActive(pathname: string | null, href: string): boolean {
 
 export default function DesktopRail() {
   const pathname = usePathname();
+  const recordNews = useRecordHasNews();
   const [collapsed, setCollapsed] = useRailCollapsed();
   const { courses } = useCourses();
   const { tasks } = useTasks();
@@ -203,6 +205,9 @@ export default function DesktopRail() {
       {NAV.map((item) => {
         const on = isActive(pathname, item.href);
         const count = item.href === '/tasks' ? openCounts.total : 0;
+        // Something earned since Record was last opened: an ink dot, never a
+        // count and never red.
+        const news = item.href === '/stamps' && recordNews && !on;
         return (
           <Link
             key={item.href}
@@ -214,10 +219,17 @@ export default function DesktopRail() {
               on ? 'bg-bg-tint font-medium text-ink' : 'text-ink-soft'
             }`}
           >
-            {item.icon}
+            <span className="relative flex">
+              {item.icon}
+              {news && collapsed && (
+                <span aria-hidden className="absolute -right-1 -top-0.5 h-[6px] w-[6px] rounded-full bg-ink" />
+              )}
+            </span>
+            {news && <span className="sr-only">Something new on the record</span>}
             {!collapsed && (
               <>
                 <span className="font-medium">{item.label}</span>
+                {news && <span aria-hidden className="ml-auto h-[6px] w-[6px] rounded-full bg-ink" />}
                 {count > 0 && (
                   <span className="ml-auto font-mono text-[11px] tabular-nums text-muted">{count}</span>
                 )}

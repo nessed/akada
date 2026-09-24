@@ -22,18 +22,22 @@ import TallyMarks from './TallyMarks';
  *
  * The row is written on the card the way a log row on Stats is, and opens
  * the course, since the course page is where its own panel and its tasks
- * are. `delay` staggers the marks drawing in as the page opens.
+ * are. `fresh` is how many marks were inked since the reader last opened the
+ * Record: only those draw themselves in, so what is new is what moves.
  */
 export default function CoursePage({
   course,
   record,
   ink,
   delay = 0,
+  fresh = 0,
 }: {
   course: Course;
   record: CoursePages;
   ink: number | null;
   delay?: number;
+  /** Marks inked since the reader last opened the Record. */
+  fresh?: number;
 }) {
   // A course with no weekly goal has opted out of fading entirely: there is
   // nothing to be behind on, so it is always drawn at full strength.
@@ -62,7 +66,7 @@ export default function CoursePage({
           <TallyMarks
             inked={record.onPage}
             total={MARKS_PER_PAGE}
-            fresh={record.onPage}
+            fresh={Math.min(record.onPage, fresh)}
             delay={delay}
             stagger={45}
             size={22}
