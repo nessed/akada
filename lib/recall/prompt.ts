@@ -42,7 +42,7 @@ Once I have answered, show me the correct answer or the key points I should have
  * past one is still answering on the day the app says it is.
  */
 function utcOffset(): number {
-  // Within the tool's range; only the far west of the Pacific with a 6am
+  // Within the tool's range; only the far west of the Pacific with a late
   // cutoff reaches past it, and there the day turns a few hours early.
   return Math.max(-840, -new Date().getTimezoneOffset() - dayEndingHour() * 60);
 }
