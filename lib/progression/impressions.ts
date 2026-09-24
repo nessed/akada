@@ -1,5 +1,6 @@
 import type { Course, Session, Task } from '../data';
 import { isLoggableDuration } from '../session-safety';
+import { PAGES_BOUND_RUNGS } from './constants';
 import type { DayCredit } from './credit';
 import type { CoursePages } from './pages';
 import type { RunReading } from './runs';
@@ -111,7 +112,7 @@ export function readLadders(
       id: 'pages',
       name: 'Pages bound',
       unit: 'pages across every course',
-      thresholds: [1, 3, 6, 12, 24],
+      thresholds: PAGES_BOUND_RUNGS,
       value: bound,
       format: plainLabel,
     },

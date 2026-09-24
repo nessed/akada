@@ -979,7 +979,14 @@ headers, the one screen that still looked like a settings panel.
   course: course rule and code, the name in the serif, the page's
   `TallyMarks` drawing themselves in on open, the distance to the next mark
   and to binding, and the bound pages drawn as the edge of a stack of ruled
-  sheets. Ink fading is unchanged.
+  sheets. Ink fading is unchanged. The header says what a page is in hours
+  ("15 marks, about 10 hours, binds a page"), and a "how pages work"
+  disclosure at the foot of the card (`PagesExplainer`, the same fold as
+  "what makes a week count") says in plain words what a mark is in minutes,
+  what binding does, and that bound pages feed the Pages bound impression and
+  nothing else. It shows before any course exists too, since that is when
+  the question gets asked. The course screen's panel carries the same fold,
+  with the time to the next mark and to binding in mono figures.
 - **The run** (aside). Weekday initials over the grid, the week in progress
   outlined, a `HandCheck` in the margin for a week that counted, and a legend
   for studied / margin / blank. The rules for what counts sit behind a

@@ -94,7 +94,7 @@ export default function CoursePage({
               {' · '}
               {record.toBind === 1
                 ? 'one more binds the page'
-                : `${record.toBind} to bind the page`}
+                : `${record.toBind} marks to bind the page`}
             </>
           )}
         </p>
