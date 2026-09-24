@@ -12,11 +12,12 @@ import DueDateBadge from '@/components/DueDateBadge';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
 import TaskRow from '@/components/TaskRow';
+import Fortnight from '@/components/tasks/Fortnight';
 import ReorderList from '@/components/ReorderList';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import TaskNoteLine from '@/components/notes/TaskNoteLine';
 import { RecallGlyph, VerdictMark } from '@/components/recall/RecallMarks';
-import type { Task, TaskKind } from '@/lib/data';
+import type { Course, Task, TaskKind } from '@/lib/data';
 import { useRecall } from '@/lib/recall/use-recall';
 import { keepTask, keepTickedSteps } from '@/lib/recall/actions';
 import { looksLikeReading, readingPrompt, recallOfTask, type RecallItem } from '@/lib/recall';
@@ -56,6 +57,18 @@ const KINDS: { v: TaskKind; l: string }[] = [
 const BULK_BUTTON =
   'h-10 rounded-[8px] px-3 text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink';
 
+/** One band of the list: a day, a stretch of days, or a course. */
+interface Band {
+  key: string;
+  label: string;
+  sub: string;
+  tone?: 'late' | 'today' | 'done';
+  course?: Course;
+  /** Where a task added from this band lands. Absent: no add row here. */
+  addDue?: string;
+  tasks: Task[];
+}
+
 /** What an undone bulk action needs to put itself back. */
 interface UndoEntry {
   label: string;
@@ -92,6 +105,9 @@ function TasksPageContent() {
   const [sortMode, setSortMode] = useState<SortMode>('smart');
   const [grouping, setGrouping] = useState<Grouping>('due');
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
+  // A day picked on the fortnight strip: an ISO date, or 'overdue' for the
+  // pile of late ones at its left edge.
+  const [dayFilter, setDayFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [undo, setUndo] = useState<UndoEntry | null>(null);
   const [startTarget, setStartTarget] = useState<StartTarget | null>(null);
@@ -99,6 +115,9 @@ function TasksPageContent() {
 
   // Inline add per course
   const [addingFor, setAddingFor] = useState<string | null>(null);
+  // Which band the draft is written into. Null is the top of the list,
+  // where New task and N put it.
+  const [addingAt, setAddingAt] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDue, setDraftDue] = useState('');
   const [draftHigh, setDraftHigh] = useState(false);
@@ -149,6 +168,7 @@ function TasksPageContent() {
       if (target?.closest('input, textarea, select, [contenteditable=true]')) return;
       if (event.key.toLowerCase() === 'n' && courses[0]) {
         event.preventDefault();
+        setAddingAt(null);
         setAddingFor(courses[0].id);
         setDraftTitle('');
       }
@@ -281,7 +301,13 @@ function TasksPageContent() {
 
   const visibleTasks = useMemo(() => {
     const list = tasks.filter(
-      (t) => matchesFilter(t, filter) && (!courseFilter || t.courseId === courseFilter),
+      (t) =>
+        matchesFilter(t, filter) &&
+        (!courseFilter || t.courseId === courseFilter) &&
+        (!dayFilter ||
+          (dayFilter === 'overdue'
+            ? !t.completed && Boolean(t.dueDate && t.dueDate < bounds.today)
+            : t.dueDate === dayFilter)),
     );
     return list.sort((a, b) => {
       if (sortMode === 'newest') return b.createdAt.localeCompare(a.createdAt);
@@ -290,48 +316,91 @@ function TasksPageContent() {
       if (a.priority !== b.priority) return a.priority === 'high' ? -1 : 1;
       return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
     });
-  }, [courseFilter, filter, matchesFilter, sortMode, tasks]);
+  }, [bounds, courseFilter, dayFilter, filter, matchesFilter, sortMode, tasks]);
 
   /**
    * The list in bands. By due date it is the four answers to "when", in the
    * order the reader has to deal with them; by course it is the term's own
    * order. Either way an empty band is left out rather than shown empty.
    */
-  const groups = useMemo(() => {
+  const groups = useMemo((): Band[] => {
     if (grouping === 'course') {
       return courses
         .map((course) => ({
           key: course.id,
-          label: `${course.code} · ${course.name}`,
+          label: course.code,
+          sub: course.name,
+          course,
+          addDue: '',
           tasks: visibleTasks.filter((t) => t.courseId === course.id),
         }))
         .filter((g) => g.tasks.length > 0);
     }
 
-    const band = (t: Task) => {
-      if (t.completed) return 'done';
-      if (!t.dueDate) return 'someday';
-      if (t.dueDate < bounds.today) return 'overdue';
-      if (t.dueDate === bounds.today) return 'today';
-      if (t.dueDate <= bounds.weekEnd) return 'week';
-      return 'later';
+    // The planner's own order: what slipped, today, then each of the next
+    // seven days by name, then everything past them.
+    const at = (n: number) => {
+      const d = new Date(bounds.today + 'T12:00:00');
+      d.setDate(d.getDate() + n);
+      return d;
     };
-    const labels: Record<string, string> = {
-      overdue: 'Overdue',
-      today: 'Today',
-      week: 'This week',
-      later: 'Later',
-      someday: 'Open ended',
-      done: 'Done',
-    };
-    return ['overdue', 'today', 'week', 'later', 'someday', 'done']
-      .map((key) => ({
-        key,
-        label: labels[key],
-        tasks: visibleTasks.filter((t) => band(t) === key),
-      }))
-      .filter((g) => g.tasks.length > 0);
-  }, [bounds, courses, grouping, visibleTasks]);
+    const short = (d: Date) =>
+      d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+    const open = visibleTasks.filter((t) => !t.completed);
+    const bands: Band[] = [
+      {
+        key: 'overdue',
+        label: 'Overdue',
+        sub: 'carried over',
+        tone: 'late',
+        tasks: open.filter((t) => t.dueDate && t.dueDate < bounds.today),
+      },
+      {
+        key: 'today',
+        label: 'Today',
+        sub: at(0).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }),
+        tone: 'today',
+        addDue: bounds.today,
+        tasks: open.filter((t) => t.dueDate === bounds.today),
+      },
+      ...Array.from({ length: 7 }, (_, i) => {
+        const d = at(i + 1);
+        const iso = isoDate(d);
+        return {
+          key: iso,
+          label: i === 0 ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'long' }),
+          sub: short(d),
+          addDue: iso,
+          tasks: open.filter((t) => t.dueDate === iso),
+        };
+      }),
+      {
+        key: 'later',
+        label: 'Later',
+        sub: `after ${short(at(7))}`,
+        tasks: open.filter((t) => t.dueDate && t.dueDate > bounds.weekEnd),
+      },
+      {
+        key: 'someday',
+        label: 'Open ended',
+        sub: 'no date on them',
+        addDue: '',
+        tasks: open.filter((t) => !t.dueDate),
+      },
+      {
+        key: 'done',
+        label: 'Done',
+        sub: 'ticked off',
+        tone: 'done',
+        tasks: visibleTasks.filter((t) => t.completed),
+      },
+    ];
+    // Today stays on the page even when nothing is due, because "nothing
+    // today" is an answer, and it is where a task for today gets written.
+    const keepToday = !dayFilter && (filter === 'all' || filter === 'today');
+    return bands.filter((g) => g.tasks.length > 0 || (g.key === 'today' && keepToday));
+  }, [bounds, courses, dayFilter, filter, grouping, visibleTasks]);
+
 
   /**
    * The rows in the order they read down the page, and where the keyboard is
@@ -395,7 +464,7 @@ function TasksPageContent() {
      armed behind a Delete button. */
   useEffect(() => {
     setSelected(new Set());
-  }, [filter, courseFilter]);
+  }, [filter, courseFilter, dayFilter]);
 
   /* The toast is the only way back from a bulk action, so it stays long
      enough to be read and reached, and a new one replaces it rather than
@@ -694,6 +763,88 @@ function TasksPageContent() {
     }
   }
 
+  function openDraft(courseId: string, due = '', at: string | null = null) {
+    setAddingAt(at);
+    setAddingFor(courseId);
+    setDraftTitle('');
+    setDraftDue(due);
+    setDraftHigh(false);
+  }
+
+  /** The inline draft, wherever it was asked for. */
+  function renderDraft(courseId: string) {
+    return (
+      <div
+        className="animate-fade-in rounded-[10px] bg-paper px-3 py-2.5"
+        style={{ border: `1px solid ${courses.find((c) => c.id === courseId)?.color ?? 'var(--line)'}` }}
+      >
+        <input
+          autoFocus
+          type="text"
+          value={draftTitle}
+          onChange={(e) => setDraftTitle(e.target.value)}
+          placeholder="New task"
+          className="w-full border-0 bg-transparent p-1 font-serif text-sm italic text-ink outline-none"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitDraft(courseId);
+            if (e.key === 'Escape') setAddingFor(null);
+          }}
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <SelectField
+            className="w-[180px]"
+            ariaLabel="Course"
+            value={courseId}
+            onChange={setAddingFor}
+            options={courses.map((course) => ({
+              value: course.id,
+              tag: course.code,
+              label: course.name,
+            }))}
+          />
+          <DatePicker
+            value={draftDue}
+            onChange={setDraftDue}
+            placeholder="Due"
+            compact
+            clearLabel="Open ended"
+            className="w-[132px]"
+          />
+          <button
+            type="button"
+            onClick={() => setDraftHigh((v) => !v)}
+            aria-pressed={draftHigh}
+            className="flex items-center gap-1.5 bg-transparent px-1 py-1"
+          >
+            <span className="scribble-box flex h-4 w-4 items-center justify-center">
+              {draftHigh && <HandCheck size={11} color="var(--priority)" strokeWidth={1.6} />}
+            </span>
+            <span
+              className={`font-hand text-[14px] ${draftHigh ? 'text-priority' : 'text-muted-soft'}`}
+            >
+              !! high
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddingFor(null)}
+            className="ml-auto bg-transparent px-1 font-serif text-[13px] italic text-muted hover:text-ink"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={savingTask}
+            onClick={() => commitDraft(courseId)}
+            className="hand-underline bg-transparent px-0.5 font-serif text-[13px] text-ink disabled:opacity-40"
+          >
+            {savingTask ? 'Adding' : 'Add'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <PageShell>
@@ -726,10 +877,12 @@ function TasksPageContent() {
 
   return (
     <PageShell wide>
-      <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <header className="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="m-0 mb-1.5 font-serif italic text-[13.5px] text-muted">
-            {openCount} open · {overdueCount} overdue
+            {openCount} open
+            {overdueCount > 0 && <span className="text-warn"> · {overdueCount} overdue</span>}
+            {counts.week > 0 && <> · {counts.week} more this week</>}
           </p>
           <h1 className="m-0 font-serif text-[32px] font-medium leading-[1.05] tracking-[-0.025em] md:text-[36px]">
             Tasks
@@ -749,13 +902,7 @@ function TasksPageContent() {
           </button>
           <button
             type="button"
-            onClick={() => {
-              if (!courses[0]) return;
-              setAddingFor(courseFilter ?? courses[0].id);
-              setDraftTitle('');
-              setDraftDue('');
-              setDraftHigh(false);
-            }}
+            onClick={() => courses[0] && openDraft(courseFilter ?? courses[0].id)}
             className="h-10 rounded-[10px] border border-line-strong px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
           >
             New task
@@ -763,21 +910,43 @@ function TasksPageContent() {
         </div>
       </header>
 
-      {/* What is shown, and how it is grouped. The filter is a swipe of
-          highlighter; the course and grouping are written choices beside it. */}
-      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-3">
-        <div className="flex flex-wrap gap-1">
+      {/* The fortnight: where the load falls, before the list of what it is. */}
+      {courses.length > 0 && (
+        <section className="mb-7">
+          <Fortnight
+            tasks={courseFilter ? tasks.filter((t) => t.courseId === courseFilter) : tasks}
+            courses={courses}
+            picked={dayFilter}
+            onPick={(day) => {
+              setDayFilter(day);
+              if (day) setFilter('all');
+            }}
+          />
+          <div aria-hidden className="fold mt-0" />
+        </section>
+      )}
+
+      {/* What is shown. The band filter is a swipe of highlighter, each
+          course is its own colour rule, and how the list is cut is two words
+          with the chosen one underlined. */}
+      <div className="mb-2 flex flex-wrap items-center gap-x-5 gap-y-2">
+        <div className="app-scroll -mx-[var(--density-gutter)] flex w-[calc(100%+2*var(--density-gutter))] gap-1 overflow-x-auto px-[var(--density-gutter)] sm:mx-0 sm:w-auto sm:flex-wrap sm:px-0">
           {FILTERS.map((f) => (
             <button
               key={f.v}
               type="button"
-              aria-pressed={filter === f.v}
-              onClick={() => setFilter(f.v)}
-              className={`flex h-10 items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] transition-colors ${
-                filter === f.v ? 'text-ink' : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
+              aria-pressed={filter === f.v && !dayFilter}
+              onClick={() => {
+                setFilter(f.v);
+                setDayFilter(null);
+              }}
+              className={`flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] transition-colors ${
+                filter === f.v && !dayFilter
+                  ? 'text-ink'
+                  : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
               }`}
             >
-              <span className={filter === f.v ? 'hl-swipe' : ''}>{f.l}</span>
+              <span className={filter === f.v && !dayFilter ? 'hl-swipe' : ''}>{f.l}</span>
               <span className="font-mono text-[11px] tabular-nums text-muted">
                 {counts[f.v]}
               </span>
@@ -785,151 +954,212 @@ function TasksPageContent() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 sm:ml-auto">
-          <label className="sr-only" htmlFor="task-course-filter">
-            Course
-          </label>
-          <select
-            id="task-course-filter"
-            value={courseFilter ?? ''}
-            onChange={(e) => setCourseFilter(e.target.value || null)}
-            className="h-10 rounded-[10px] border border-line bg-paper px-2.5 text-[12px] text-ink-soft outline-none"
+        <div className="flex items-center gap-1 text-[13px] sm:ml-auto">
+          <span className="eyebrow mr-1">By</span>
+          {(
+            [
+              { v: 'due', l: 'day' },
+              { v: 'course', l: 'course' },
+            ] as { v: Grouping; l: string }[]
+          ).map((g) => (
+            <button
+              key={g.v}
+              type="button"
+              aria-pressed={grouping === g.v}
+              onClick={() => setGrouping(g.v)}
+              className={`h-10 bg-transparent px-1.5 font-serif italic transition-colors ${
+                grouping === g.v ? 'text-ink' : 'text-muted hover:text-ink'
+              }`}
+            >
+              <span className={grouping === g.v ? 'hand-underline' : ''}>{g.l}</span>
+            </button>
+          ))}
+          <span aria-hidden className="mx-1.5 h-4 w-px bg-line" />
+          <button
+            type="button"
+            onClick={() =>
+              setSortMode((m) => (m === 'smart' ? 'due' : m === 'due' ? 'newest' : 'smart'))
+            }
+            title="Change the order inside each band (S)"
+            className="h-10 bg-transparent px-1.5 text-muted transition-colors hover:text-ink"
           >
-            <option value="">Course: all</option>
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code}
-              </option>
-            ))}
-          </select>
-
-          <label className="sr-only" htmlFor="task-grouping">
-            Group by
-          </label>
-          <select
-            id="task-grouping"
-            value={grouping}
-            onChange={(e) => setGrouping(e.target.value as Grouping)}
-            className="h-10 rounded-[10px] border border-line bg-paper px-2.5 text-[12px] text-ink-soft outline-none"
-          >
-            <option value="due">Group: due date</option>
-            <option value="course">Group: course</option>
-          </select>
+            <span className="eyebrow mr-1.5">Order</span>
+            <span className="font-serif italic text-ink-soft">
+              {sortMode === 'smart' ? 'what matters' : sortMode === 'due' ? 'by date' : 'newest'}
+            </span>
+          </button>
         </div>
       </div>
+
+      {courses.length > 0 && (
+        <div
+          className="app-scroll -mx-[var(--density-gutter)] mb-6 flex gap-1 overflow-x-auto px-[var(--density-gutter)] md:mx-0 md:flex-wrap md:px-0"
+          role="group"
+          aria-label="Course"
+        >
+          <button
+            type="button"
+            aria-pressed={!courseFilter}
+            onClick={() => setCourseFilter(null)}
+            className={`flex h-9 shrink-0 items-center rounded-[8px] px-2.5 text-[12.5px] transition-colors ${
+              !courseFilter ? 'text-ink' : 'text-muted hover:bg-bg-tint hover:text-ink'
+            }`}
+          >
+            <span className={!courseFilter ? 'hl-swipe' : ''}>Every course</span>
+          </button>
+          {courses.map((c) => {
+            const on = courseFilter === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setCourseFilter(on ? null : c.id)}
+                className={`flex h-9 shrink-0 items-center gap-2 rounded-[8px] px-2.5 text-[12.5px] transition-colors ${
+                  on ? 'text-ink' : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
+                }`}
+              >
+                <span aria-hidden className="course-rule !w-3.5" style={{ ['--c' as string]: c.color }} />
+                <span
+                  className={on ? 'hl-swipe' : ''}
+                  style={on ? ({ '--hl': resolveTint(c.color, c.tint) } as React.CSSProperties) : undefined}
+                >
+                  {c.code}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {dayFilter && (
+        <p className="-mt-2 mb-4 font-serif text-[14px] italic text-muted">
+          Only{' '}
+          {dayFilter === 'overdue'
+            ? 'what is past its date'
+            : dayFilter === bounds.today
+              ? 'today'
+              : new Date(dayFilter + 'T12:00:00').toLocaleDateString(undefined, {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                })}
+          {' · '}
+          <button
+            type="button"
+            onClick={() => setDayFilter(null)}
+            className="hand-underline bg-transparent px-0.5 not-italic text-ink"
+          >
+            every day
+          </button>
+        </p>
+      )}
+
+      {addingFor && addingAt === null && <div className="mb-5">{renderDraft(addingFor)}</div>}
 
       {courses.length === 0 ? (
         <EmptyState title="No courses yet" />
       ) : groups.length === 0 ? (
         <EmptyState title={filter === 'all' ? 'Nothing on the list' : `No ${filterLabel} tasks`} />
       ) : (
-        <div className="overflow-hidden rounded-[14px] border border-line bg-paper">
-          {/* The column heads. They belong to the whole table, not to each
-              group, so a long list keeps meaning as it scrolls past them. */}
-          <div className="hidden h-10 items-center border-b border-line bg-paper-2 pl-1 pr-2 md:grid md:grid-cols-[40px_minmax(0,1fr)_132px_128px_88px]">
-            <span />
-            <span className="eyebrow">Task</span>
-            <span className="eyebrow">Course</span>
-            <span className="eyebrow">Due</span>
-            <span />
-          </div>
-
+        /* The planner. Each band is a day, or a course, with its name held in
+           the left margin while its rows go past, the way the date sits at
+           the head of a page in a diary. Nothing boxes it: bands are ended
+           by the page's own cutoff rule. */
+        <div className="divide-y divide-line">
           {groups.map((group) => (
-            <section key={group.key}>
-              <div className="flex items-baseline justify-between gap-3 border-b border-line-soft bg-paper-2 px-4 py-2">
-                <p className="eyebrow m-0">{group.label}</p>
-                <span className="font-mono text-[11px] tabular-nums text-muted">
-                  {group.tasks.length}
-                </span>
-              </div>
-              {group.tasks.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  course={courses.find((c) => c.id === task.courseId)}
-                  selected={selected.has(task.id)}
-                  focused={cursor === task.id}
-                  {...timerRowProps(task)}
-                  hideCourse={Boolean(courseFilter)}
-                  onToggle={toggleTask}
-                  onStartTimer={(t, el) => {
-                    const course = courses.find((c) => c.id === t.courseId);
-                    if (course) setStartTarget({ task: t, course, anchor: el });
-                  }}
-                  onOpen={setViewingTask}
-                  onSelect={toggleSelected}
-                  onReschedule={snoozeTask}
-                  onOpenEnded={openEndTask}
-                  onDelete={(t) => deleteTask(t.id)}
-                />
-              ))}
-            </section>
-          ))}
-        </div>
-      )}
-
-      {/* Inline add, on the course the page is filtered to or the first one. */}
-      {addingFor && (
-        <div
-          className="mt-3 animate-fade-in rounded-[10px] bg-paper px-3 py-2.5"
-          style={{ border: `1px solid ${courses.find((c) => c.id === addingFor)?.color ?? 'var(--line)'}` }}
-        >
-          <input
-            autoFocus
-            type="text"
-            value={draftTitle}
-            onChange={(e) => setDraftTitle(e.target.value)}
-            placeholder="New task"
-            className="w-full border-0 bg-transparent p-1 font-serif text-sm italic text-ink outline-none"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitDraft(addingFor);
-              if (e.key === 'Escape') setAddingFor(null);
-            }}
-          />
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <SelectField
-              className="w-[180px]"
-              ariaLabel="Course"
-              value={addingFor}
-              onChange={setAddingFor}
-              options={courses.map((course) => ({
-                value: course.id,
-                tag: course.code,
-                label: course.name,
-              }))}
-            />
-            <DatePicker
-              value={draftDue}
-              onChange={setDraftDue}
-              placeholder="Due"
-              compact
-              clearLabel="Open ended"
-              className="w-[132px]"
-            />
-            <button
-              type="button"
-              onClick={() => setDraftHigh((v) => !v)}
-              aria-pressed={draftHigh}
-              className="flex items-center gap-1.5 bg-transparent px-1 py-1"
-            >
-              <span className="scribble-box flex h-4 w-4 items-center justify-center">
-                {draftHigh && <HandCheck size={11} color="var(--priority)" strokeWidth={1.6} />}
-              </span>
-              <span
-                className={`font-hand text-[14px] ${draftHigh ? 'text-priority' : 'text-muted-soft'}`}
+              <section
+                key={group.key}
+                className="group/band py-5 first:pt-1 md:grid md:grid-cols-[168px_minmax(0,1fr)] md:gap-x-8"
               >
-                !! high
-              </span>
-            </button>
-            <button
-              type="button"
-              disabled={savingTask}
-              onClick={() => commitDraft(addingFor)}
-              className="hand-underline ml-auto bg-transparent px-0.5 font-serif text-[13px] text-ink disabled:opacity-40"
-            >
-              {savingTask ? 'Adding' : 'Add'}
-            </button>
-          </div>
+                <header className="mb-2 flex items-baseline gap-2.5 md:sticky md:top-6 md:mb-0 md:block md:self-start md:pt-2.5">
+                  <h2
+                    className={`m-0 flex items-center gap-2 font-serif text-[20px] font-medium leading-tight tracking-[-0.01em] ${
+                      group.tone === 'late' ? 'text-warn' : group.tone === 'done' ? 'text-muted' : 'text-ink'
+                    }`}
+                  >
+                    {group.course && (
+                      <span aria-hidden className="course-rule" style={{ ['--c' as string]: group.course.color }} />
+                    )}
+                    <span className={group.tone === 'today' ? 'hl-swipe' : ''}>{group.label}</span>
+                  </h2>
+                  <p className="m-0 mt-0.5 min-w-0 truncate font-serif text-[13px] italic text-muted">
+                    {group.sub}
+                  </p>
+                  {group.tone === 'late' && (
+                    <p className="m-0 ml-auto shrink-0 md:ml-0 md:mt-2">
+                      <HandNote color="var(--warnSoft)" size={16} rotate={-3}>
+                        {group.tasks.length} to catch up
+                      </HandNote>
+                    </p>
+                  )}
+                </header>
+
+                <div className="min-w-0">
+                  {group.tasks.length === 0 && (
+                    <p className="m-0 flex h-12 items-center pl-[11px] font-serif text-[14.5px] italic text-muted-soft">
+                      Nothing due. A clear day.
+                    </p>
+                  )}
+                  {group.tasks.map((task) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      course={courses.find((c) => c.id === task.courseId)}
+                      selected={selected.has(task.id)}
+                      focused={cursor === task.id}
+                      {...timerRowProps(task)}
+                      hideCourse={Boolean(courseFilter) || grouping === 'course'}
+                      hideDue={grouping === 'due' && group.addDue !== undefined && group.addDue !== ''}
+                      ground="page"
+                      onToggle={toggleTask}
+                      onStartTimer={(t, el) => {
+                        const course = courses.find((c) => c.id === t.courseId);
+                        if (course) setStartTarget({ task: t, course, anchor: el });
+                      }}
+                      onOpen={setViewingTask}
+                      onSelect={toggleSelected}
+                      onReschedule={snoozeTask}
+                      onOpenEnded={openEndTask}
+                      onDelete={(t) => deleteTask(t.id)}
+                    />
+                  ))}
+                  {addingFor && addingAt === group.key ? (
+                    <div className="mt-2">{renderDraft(addingFor)}</div>
+                  ) : (
+                    group.addDue !== undefined && (
+                      /* Written straight into the band: the date, or the
+                         course, is already filled in from where it was asked. */
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openDraft(
+                            group.course?.id ?? courseFilter ?? courses[0].id,
+                            group.addDue ?? '',
+                            group.key,
+                          )
+                        }
+                        className="flex h-10 w-full items-center gap-3 bg-transparent pl-[11px] text-left font-serif text-[13.5px] italic text-muted-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover/band:opacity-100"
+                      >
+                        <span
+                          aria-hidden
+                          className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border border-dashed border-line-strong not-italic"
+                        >
+                          +
+                        </span>
+                        {group.course
+                          ? `add to ${group.course.code}`
+                          : group.key === 'today'
+                            ? 'add something for today'
+                            : group.key === 'someday'
+                              ? 'add without a date'
+                              : `add for ${group.label === 'Tomorrow' ? 'tomorrow' : group.label}`}
+                      </button>
+                    )
+                  )}
+                </div>
+              </section>
+          ))}
         </div>
       )}
 

@@ -51,6 +51,8 @@ export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: 
     return out;
   }, [sessions, weeks]);
 
+  const todayIso = isoDate();
+
   return (
     <div>
       <div className="flex gap-1">
@@ -68,6 +70,7 @@ export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: 
               : cell.sec === 0
                 ? 0.08
                 : 0.18 + cell.intensity * 0.82;
+            const isToday = cell.iso === todayIso;
             return (
               <button
                 key={d}
@@ -75,7 +78,13 @@ export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: 
                 aria-label={`${cell.iso} · ${formatHM(cell.sec)}`}
                 onClick={() => setReading({ iso: cell.iso, sec: cell.sec })}
                 disabled={cell.future}
+                // The page inks in a week at a time, oldest first, so the
+                // term reads as having been written rather than printed.
+                className={cell.future ? undefined : 'heat-in'}
                 style={{
+                  animationDelay: `${w * 45 + d * 14}ms`,
+                  outline: isToday ? '1.5px solid var(--ink)' : undefined,
+                  outlineOffset: isToday ? 1.5 : undefined,
                   width: 14,
                   height: 14,
                   borderRadius: 3,

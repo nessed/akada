@@ -21,7 +21,19 @@ import {
 } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
 import { clampSessionSeconds, isLoggableDuration, scoreFace } from '@/lib/session-safety';
-import { downloadSessionsCsv } from '@/lib/sessions-csv';
+import { readHabits } from '@/lib/progression';
+import {
+  hoursLookLike,
+  readMilestone,
+  readPace,
+  readPersona,
+  readRecords,
+} from '@/lib/stats-reading';
+import PaceRace from '@/components/stats/PaceRace';
+import PersonalBests from '@/components/stats/PersonalBests';
+import NextMilestone from '@/components/stats/NextMilestone';
+import StudyClock from '@/components/stats/StudyClock';
+import { useCountUp } from '@/components/stats/useCountUp';
 import HandNote from '@/components/notebook/HandNote';
 import HandCheck from '@/components/notebook/HandCheck';
 import Stamp from '@/components/notebook/Stamp';
@@ -264,18 +276,22 @@ export default function StatsPage() {
     return { current: currentWeek, total: totalWeeks };
   }, [semester]);
 
-  const totalHrs = totalSec / 3600;
-  /**
-   * The session log as a spreadsheet. Settings has the same export; this is
-   * the copy that belongs beside the numbers it describes, which is where
-   * anyone who wants it is already standing.
-   */
-  function exportCsv() {
-    downloadSessionsCsv(sessions, courses);
-  }
+  /* The things to chase. A page of totals says what happened; these say
+     what the next sitting would change. The CSV export that used to sit in
+     the masthead lives in Settings, where a spreadsheet is looked for. */
+  const today = isoDate();
+  const records = useMemo(() => readRecords(sessions, today), [sessions, today]);
+  const pace = useMemo(() => readPace(sessions, today), [sessions, today]);
+  const milestone = readMilestone(totalSec);
+  const habits = useMemo(() => readHabits(courses, sessions, tasks), [courses, sessions, tasks]);
+  const persona = readPersona(habits);
+  const lookLike = hoursLookLike(totalSec, today);
 
-  const totalWhole = Math.floor(totalHrs);
-  const totalDecimal = `.${Math.round((totalHrs - totalWhole) * 10)}`;
+  // The masthead figure rolls up to the term's hours rather than being
+  // printed there. Held at a tenth, the way it is written.
+  const rolling = useCountUp(loading ? 0 : totalSec / 3600, 1400, 150);
+  const totalWhole = Math.floor(rolling);
+  const totalDecimal = `.${Math.min(9, Math.floor((rolling - totalWhole) * 10))}`;
 
   // Best day of week, name + duration. Read out in the ledger line.
   const bestDay = useMemo(() => {
@@ -338,21 +354,22 @@ export default function StatsPage() {
           </h1>
         </div>
 
-        <div className="flex shrink-0 items-end gap-6">
-          <div>
-            <span className="font-mono text-[44px] font-semibold leading-[0.9] tracking-[-0.04em] tabular-nums text-ink md:text-[56px]">
-              {totalWhole}
-              <span className="text-muted-soft">{totalDecimal}</span>
-            </span>
-            <p className="m-0 mt-1 text-[12px] text-muted">hours logged</p>
-          </div>
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="h-10 rounded-[10px] border border-line-strong px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
-          >
-            Export CSV
-          </button>
+        <div className="shrink-0 md:text-right">
+          <span className="font-mono text-[44px] font-semibold leading-[0.9] tracking-[-0.04em] tabular-nums text-ink md:text-[56px]">
+            {totalWhole}
+            <span className="text-muted-soft">{totalDecimal}</span>
+          </span>
+          <p className="m-0 mt-1 text-[12px] text-muted">hours logged</p>
+          {lookLike && (
+            <HandNote
+              className="animate-settle mt-1.5"
+              style={{ animationDelay: '1.4s' }}
+              size={18}
+              rotate={-2.5}
+            >
+              {lookLike}
+            </HandNote>
+          )}
         </div>
       </header>
 
@@ -384,6 +401,20 @@ export default function StatsPage() {
       {sessions.length === 0 && (
         <EmptyState text="Your history will map itself here..." />
       )}
+
+      {/* The chase: last week, the next round number, and the hours of the
+          day it all lands in. Dealt onto the desk one after another. */}
+      <div className="mb-[var(--density-gap)] grid gap-[var(--density-gap)] md:grid-cols-2 xl:grid-cols-3">
+        <ChaseCard title="You vs last week" delay={0}>
+          <PaceRace pace={pace} />
+        </ChaseCard>
+        <ChaseCard title="The next line" delay={120}>
+          <NextMilestone milestone={milestone} totalSeconds={totalSec} />
+        </ChaseCard>
+        <ChaseCard title="Your day, as a clock" delay={240} className="md:col-span-2 xl:col-span-1">
+          <StudyClock habits={habits} persona={persona} />
+        </ChaseCard>
+      </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="settle-in min-w-0">
@@ -429,7 +460,12 @@ export default function StatsPage() {
 
         {/* The aside: what the week came to, per course, and the marks it
             earned. On a phone it simply follows the charts. */}
-        <aside className="settle-in grid grid-cols-[minmax(0,1fr)] gap-4 lg:sticky lg:top-10">
+        <aside className="settle-in grid grid-cols-[minmax(0,1fr)] gap-4">
+      <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
+        <h2 className="m-0 mb-1 font-serif font-medium text-[20px]">Records to beat</h2>
+        <PersonalBests records={records} />
+      </section>
+
       {/* Totals, deckle card with hand-drawn trend arrows */}
       <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
         <h2 className="m-0 mb-1.5 font-serif font-medium text-[20px]">Hours by course</h2>
@@ -439,7 +475,7 @@ export default function StatsPage() {
               Nothing to weigh up yet...
             </p>
           )}
-          {totals.map(({ course, totalHours, avg }) => {
+          {totals.map(({ course, totalHours, avg }, index) => {
             // Quick trend: compare last 7 days vs the 7 before that
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -491,8 +527,9 @@ export default function StatsPage() {
                     {totalHours > 0 && heaviestCourseHours > 0 && (
                       <span
                         aria-hidden
-                        className="mt-2 block h-[2px] rounded-full"
+                        className="rule-draw mt-2 block h-[2px] rounded-full"
                         style={{
+                          animationDelay: `${0.3 + index * 0.1}s`,
                           width: `${Math.max(
                             8,
                             (totalHours / heaviestCourseHours) * 140,
@@ -507,7 +544,7 @@ export default function StatsPage() {
                   {totalHours > 0 ? (
                     <>
                       <p className="m-0 font-mono font-semibold text-[18px] tabular-nums leading-none tracking-[-0.02em]">
-                        {totalHours.toFixed(1)}
+                        <RollingFigure value={totalHours} delay={300 + index * 100} />
                         <span className="text-muted font-sans font-normal text-[11px] ml-[3px]">
                           h
                         </span>
@@ -631,6 +668,35 @@ export default function StatsPage() {
       )}
     </PageShell>
   );
+}
+
+/** A card in the chase row, dealt onto the page a beat after the one before. */
+function ChaseCard({
+  title,
+  delay,
+  className = '',
+  children,
+}: {
+  title: string;
+  delay: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className={`deal-in deckle min-w-0 border border-line bg-paper px-[var(--density-gutter)] py-5 ${className}`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <h2 className="eyebrow m-0 mb-3">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+/** An hour count that rolls up to itself, to a tenth. */
+function RollingFigure({ value, delay }: { value: number; delay: number }) {
+  const shown = useCountUp(value, 900, delay);
+  return <>{shown.toFixed(1)}</>;
 }
 
 /** A number inside a sentence: mono, upright, the app's ink. */

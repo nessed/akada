@@ -166,8 +166,9 @@ The page is separated by its own ruling instead, the way a ruled pad is:
 
 What still floats keeps its edge and warm shadow: popovers, menus, the date
 picker, toasts, sheets and the timer dock. With the page unboxed they are the
-only edged things on screen, so they read as above it again. The Tasks table,
-Stats, the Record and Settings are not ruled this way yet.
+only edged things on screen, so they read as above it again. Tasks is ruled
+this way too (see Tasks: the planner). Stats, the Record and Settings are
+not yet.
 
 ### Hours, not percentages
 Nothing in the app draws a percentage bar. A week against a goal is **one
@@ -656,6 +657,50 @@ hint under the list names exactly these and nothing else. It used to offer
 than saying nothing, and the help sheet behind `?` listed a third, different
 set.
 
+### Tasks: the planner
+`/tasks` used to be a bordered table with column heads and grey band strips,
+the one screen that looked like a spreadsheet. It is now a planner spread.
+
+- **The fortnight.** Across the top, the next fourteen days as a strip of
+  columns: the weekday as an eyebrow, the date in mono (today's under a
+  highlighter swipe), and every open task due that day as a 7px bar in its
+  course colour, stacked from the foot up. An exam is a hollow ring in its
+  course colour above the bars, because an exam changes what the days before
+  it are for. More than five bars on a day becomes `+n`. Weekends sit on a
+  faint `paper-2` wash, each Monday gets a `line-strong` rule, and anything
+  past its date piles up in a **Late** column at the far left in `warn`. The
+  busiest day, if it has three or more, gets "busy" in Caveat in the margin.
+  The strip draws the load rather than the items: it answers "is Thursday
+  bad" before the list answers "what is on it". Pressing a day narrows the
+  list to that day, a line under the controls says so and lets it go, and
+  pressing the day again does the same. The fold closes the strip. On a phone
+  it scrolls sideways as an `.app-scroll` strip.
+- **The controls** are marks, not dropdowns. The band filter is the
+  highlighter swipe it always was; each course is its `.course-rule` and
+  code, the chosen one swiped in its own tint; how the list is cut is two
+  serif words, "day" and "course", with the chosen one hand-underlined; and
+  the order says what it is ("what matters", "by date", "newest") and changes
+  on a press or `S`.
+- **The bands.** By day, the list reads Overdue, Today, then each of the next
+  seven days by name (Tomorrow, then Friday, Saturday...), then Later and
+  Open ended. By course, one band per course. Each band holds its name in a
+  168px left margin, serif 20px with the date or course name under it in
+  italic, and on desktop that margin is **sticky** while the band's rows go
+  past, the way a diary keeps the date at the head of the page. Bands are
+  ended by the page's `line` cutoff; nothing is boxed. Overdue sets its name
+  in `warn` and carries "n to catch up" in Caveat. Today stays on the page
+  when nothing is due, reading "Nothing due. A clear day." Rows are
+  `TaskRow` on `ground="page"`.
+- **No date repeated.** Under a heading that already names the day, a row
+  passes `hideDue`: on a phone the date column goes and the title gets its
+  width, and on desktop the column stays empty so courses still line up down
+  the page.
+- **Adding into a band.** Every band a task can land in ends with a dashed
+  `+` line ("add for Friday", "add to CS 200", "add without a date"). It
+  shows on hover on desktop and always on a phone, and opens the draft right
+  there with the date or course already filled in. New task and `N` still
+  open it at the top of the list.
+
 ### Keys for the running clock
 Two more, and they work from every screen rather than from the timer.
 
@@ -866,6 +911,54 @@ that still looked like an admin panel.
 - Two books a shelf on phone, three from 560px and on the narrow desktop
   beside the rail, four from 1024px and five from 1280px.
 
+### Stats: the chase
+
+Stats used to be a page of totals: what happened, printed, and an Export CSV
+button in the masthead. Totals say what the term was; nothing on the page said
+what the next sitting would change, so there was nothing to come back for. The
+export is in Settings, where a spreadsheet is looked for, and the masthead
+carries the hours alone. Everything below is read off the logged sessions on
+every render (`lib/stats-reading.ts`) and nothing is stored.
+
+- **The masthead figure rolls up** to the term's hours when the page opens
+  (`useCountUp`), and under it a line of Caveat sets the hours beside
+  something anybody can picture: "that's 5 runs of the extended lord of the
+  rings". Only comparisons that land between one and a few dozen are
+  offered, and the pick turns over with the date.
+- **The chase row**, three cards dealt onto the page one after the other
+  (`.deal-in`), under the ledger line:
+  - **You vs last week** (`PaceRace`). Both weeks as running totals on one
+    ruled plot, last week pencilled in whole, this week inked over it up to
+    today. Where the two stand today is joined by a short dashed stroke, so
+    ahead or behind is a distance before it is a figure. The headline is the
+    gap ("29m behind", "1h 10m ahead", "neck and neck") and the line under
+    it is what closes it.
+  - **The next line** (`NextMilestone`). The next round number in the
+    term's hours, named in the serif ("half a century", "the century"),
+    counted out as `TallyMarks` from the last line crossed. Never more than
+    twenty five marks, so a long stretch has each mark stand for more than
+    an hour and the margin says how much. Not a bar.
+  - **Your day, as a clock** (`StudyClock`). Midnight at the top, one stroke
+    per hour as long as the time that has landed in it, the usual three hours
+    inked and the rest pencil, a `warn` hand pointing at now. Under it the
+    kind of studier those strokes make ("an evening regular", in the serif
+    italic) with one more thing in Caveat ("and a weekend warrior"). It is
+    read off `habits.peak`, so it is withheld until the habits layer has
+    enough to call it, and says how many sittings are left until it does.
+- **Records to beat** (`PersonalBests`), at the head of the aside: longest
+  sitting, biggest day, best week, longest run, each with a dotted leader to
+  the figure and, under it, the one in progress that could take it ("this
+  week so far 3h 42m · 7h 13m to beat it"). A record set inside the last week
+  gets a `warn` stamp that comes down on the page (`.stamp-down`), the one
+  moment on Stats allowed to be loud.
+- **The charts arrive.** The heatmap inks in a week at a time from the
+  oldest (`.heat-in`) and rings today; the week's bars fill up from the rule
+  (`.bar-grow`); the course rules draw (`.rule-draw`) and their hour counts
+  roll up.
+
+All of it fills backwards only and holds no transform once landed, and
+reduced motion drops the delays with the durations.
+
 ### Buttons
 Two shapes, not four:
 - **Page CTA**, full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
@@ -894,6 +987,7 @@ value. `Comfy` is the shipped middle at a 22px gutter.
 ## 📜 Scrolling
 Scrolling is the page moving under a hand, so it is kept quiet and physical:
 - **The page has weight under a wheel.** `SmoothScroll` (mounted in the root layout) takes the wheel and trackpad over for the page: each notch moves a target and the page glides after it, closing a fixed share of the distance every frame, so it eases to rest instead of jumping 100px and stopping dead. Touch is left to the platform's own momentum.
+- **Nothing repaints under a scroll.** The paper glow is a fixed `body::before` layer, not `background-attachment: fixed` on body, which forced a full-viewport repaint every frame. The doodle canvas is `display: none` until there is ink on it, so its blend mode is not composited over the page while it scrolls. `SmoothScroll` decides who owns the wheel once per gesture instead of walking computed styles on every event.
 - **The ends give.** Pushing past the top or the bottom pulls the page's content (`[data-scroll-content]` in `PageShell`, so the rail, the dock and the bar stay put) up to about 96px against rising resistance, and it springs home once the wheel stops. A flick that reaches the end mid-glide spends what is left of itself as that pull. On touch the same thing is the platform's own rubber band: `html` sets `overscroll-behavior-y: contain`, not `none`, which still stops pull-to-refresh but keeps the bounce.
 - **Only the page.** Sheets, the rail, dropdowns, sideways strips, anything inside a fixed layer, the whole page while something is modal or the body is locked, pinch zoom and sideways swipes all keep the browser's scrolling. Reduced motion gets the browser as it is. A scroll the component did not make (keys, the scrollbar, a link, a route change) is followed, never fought.
 - **Sections settle in from below.** `.settle-in` on a column (Today's two, the course page's two, Stats' two) lets each child rise 14px and fade in as it comes up past the fold, on the app's `0.2, 0.7, 0.2, 1` curve. It is a scroll-driven animation (`animation-timeline: view()`), so it follows the scroll exactly rather than playing on a clock, and runs backwards if the section is scrolled back off. What is already in view on arrival does not move. It fills backwards only, so a section that has fully arrived carries no transform and no stacking context, and the popovers inside it still sit over the section below. Browsers without view timelines, and anyone who asked for reduced motion, get the page still.
@@ -912,4 +1006,5 @@ Movement in the app is soft and deliberate:
 - **Presses** on the timer's buttons give a `0.97` scale on `:active`. Small enough to feel, never enough to read as a bounce.
 - **Up next arriving.** The task body is keyed on the task, so when it changes (Done, Tomorrow, or the rule switched) the new one settles in, its course rule draws left to right (`.rule-draw`, `0.5s`) and a highlighter swipe in the course's pastel is pulled under the title a beat after (`.hl-draw`, `0.7s`). Done and Tomorrow first let the old task go with `.lift-away`, a `0.22s` fade and 6px lift, so the next one comes up into a space instead of replacing it in the same frame. The handwritten rule note settles when it is switched.
 - **Up next is live.** Its meta line carries the time already put into the task (mono digits) and when it was last sat. With a timer running on it the line says "on the clock" beside a dot in the course colour pulsing on `tick`, and the figure counts up with the sitting.
+- **Stats arriving.** Cards dealt in (`.deal-in`, `0.55s`, a 12px rise off a `-1.2deg` tilt), the heatmap inking in (`.heat-in`), bars filling from the rule (`.bar-grow`), lines drawn with a pen (`.ink-draw`, any path with `pathLength=1`), dots popping on (`.pop-in`), and a record stamped down (`.stamp-down`). See "Stats: the chase".
 - **Finish and log** holds the last frame of the sitting still behind the log sheet as it rises. Stopping empties the timer, and a block screen with no target left used to flip to open mode's night paper at 00:00 under the sheet.

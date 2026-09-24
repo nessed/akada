@@ -26,6 +26,8 @@ export default function TallyMarks({
   size = 18,
   color = 'var(--ink)',
   trackColor = 'var(--line)',
+  stagger = 110,
+  delay = 0,
   className,
 }: {
   inked: number;
@@ -34,6 +36,10 @@ export default function TallyMarks({
   size?: number;
   color?: string;
   trackColor?: string;
+  /** Milliseconds between one fresh stroke and the next. */
+  stagger?: number;
+  /** Milliseconds before the first fresh stroke. */
+  delay?: number;
   className?: string;
 }) {
   const gates = Math.ceil(total / 5);
@@ -96,7 +102,7 @@ export default function TallyMarks({
           // dash rule draws the short uprights and the long strike alike.
           pathLength={1}
           className={s.fresh ? 'tally-fresh' : undefined}
-          style={s.fresh ? { animationDelay: `${(i - firstFresh) * 110}ms` } : undefined}
+          style={s.fresh ? { animationDelay: `${delay + (i - firstFresh) * stagger}ms` } : undefined}
           stroke={s.on ? color : trackColor}
           strokeWidth={s.on ? 1.6 : 1}
           strokeLinecap="round"
