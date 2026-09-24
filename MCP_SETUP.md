@@ -35,17 +35,22 @@ normally does not disconnect Claude, but revoking all sessions does.
 
 The connector provides tools for interacting with courses and tasks in your active semester:
 - `find_course`: Look up courses by code or title.
-- `get_tasks`: Read the active semester's tasks, optionally narrowed to one course.
+- `get_tasks`: Read the active semester's tasks, optionally narrowed to one course, a due-date range, a priority or a kind.
+- `delete_tasks`: Permanently delete tasks, for duplicates and mistakes.
 - `get_overview`: Read a snapshot of courses, open-task counts, and recent study sessions (with their ids).
 - `create_tasks`: Bulk-insert tasks into an active course, with notes, subtasks, and what each one is (task, reading or exam) and is worth.
 - `update_tasks`: Change tasks that already exist, including their notes, subtasks, kind, weight and pages.
 - `complete_tasks`: Tick tasks off, or put them back on the list.
 - `log_study_session`: Record study time against a course, with an optional task, note, and practice-paper score.
 - `update_study_session`: Fix or rewrite the note on a session that is already logged. Only the note changes.
+- `delete_study_session`: Permanently delete a sitting that should not be there.
+- `get_reading_backlog`: Read the unfinished reading and how many hours it comes to at the student's pace, optionally by a date.
 - `get_weekly_stats`: Read one week's hours against goal, break time, tasks closed, and the weekly run.
 - `get_focus_pattern`: Read how the sittings themselves were shaped: block lengths, breaks against the lengths they were set to, and when in the day the work happens.
 - `get_grading_scheme`: Read how a course is marked, accepted and proposed.
 - `set_grading_scheme`: Propose how a course is marked, read off its outline.
+- `record_grade`: Write marks that came back into a course's accepted scheme.
+- `get_grade_projection`: Work out the floor, the ceiling, and what the rest needs to reach a target.
 - `delete_course`: Permanently delete a course and its associated tasks and sessions.
 - `get_recall`: Read what the student is keeping for recall, what is due, and how each thing has gone.
 - `record_recall`: Record how a recall went (clear, hazy or gone) after quizzing the student.
@@ -57,7 +62,7 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `record_note_checks`: Record how the student did on a note's self-checks after a quiz in chat.
 - `delete_note`: Permanently delete a note.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `delete_course`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks` and `delete_note` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `record_grade`, `delete_course`, `delete_tasks`, `delete_study_session`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks` and `delete_note` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -375,14 +380,91 @@ been marked, nothing the student already holds is thrown away.
   2. If the user asks to remove a course, Claude must confirm with the user before calling `delete_course`, explicitly mentioning the course code, name, and that tasks and study sessions will also be erased.
   3. Upon confirmation, Claude calls `delete_course` with the course UUID.
 
+### 10. `get_tasks` filters
+`get_tasks` takes, beside `course_id` and `include_completed`:
+- `due_after` / `due_before` (`YYYY-MM-DD`, both inclusive). Either one leaves out tasks with no due date.
+- `priority` (`"high" | "normal"`) and `kind` (`"exam" | "reading" | "task"`).
+- `limit` (1-100, default 100).
+
+Filtering happens after the same `select('*')` read the app makes, so a
+project without the `kind` column still answers. When a filter is set,
+`meta.filters` echoes it; when `limit` cut the list, `meta.matching` says how
+many matched before it.
+
+### 11. `record_grade`
+- **Title**: Record marks in Akada
+- **Description**: Write marks the student got back into one course's **accepted** grading scheme, e.g. 17/20 on Quiz 3.
+- **Annotations**: `destructiveHint: false`, `idempotentHint: true`
+- **Parameters**:
+  - `course_id` (`string`, UUID).
+  - `grades` (array, 1-40): `component` (the label from `get_grading_scheme`), `score` (a number, or `null` to clear a mark), optional `out_of` (defaults to what the component holds).
+- **Output**: `recorded`, the course's `components`, and a `standing` block: `percent_so_far` (out of what is marked, as the course card reads it), `secured_percent` (out of the whole course), `marked_weight`, `unmarked_weight`, `total_weight`, `basis`, and the labels a drop rule is currently leaving out.
+
+A label is matched exactly first, then by containment ("final" finds "Final
+exam"), and one that matches more than one component is refused rather than
+guessed. Every mark is checked through `cleanScore` before anything is written,
+so one bad mark writes none. A course with only a pending proposal is refused
+until the student accepts it.
+
+### 12. `get_grade_projection`
+- **Title**: Work out what an Akada course still needs
+- **Annotations**: `readOnlyHint: true`
+- **Parameters**:
+  - `course_id` (`string`, UUID).
+  - `target_percent` (0-100, optional): the course mark being aimed for.
+  - `solve_for` (optional): one unmarked component, e.g. `"Final"`. Needs `target_percent`.
+  - `assume_percent` (0-100, optional): with `solve_for`, how the other unmarked pieces are assumed to go. Defaults to the exact average so far.
+- **Output**: `schema_version` (`akada.grade_projection.v1`), `standing` (as above), `floor_percent` (nothing else scores), `ceiling_percent` (everything left comes back full), `outstanding` components, `target` (`needed_average_percent`, `status`), `solve_for` (`needed_percent`, `needed_score` out of the component's `out_of`, `status`), and a `message`.
+
+`status` is `secured`, `reachable` or `out_of_reach`. Needed values are not
+clamped: 112% is how "cannot be reached" is said. The maths is
+`gradeProjection` in `lib/derive.ts`, built on the same `gradeStanding` the
+course card uses, drop rules included. Akada never assigns letters, so the tool
+description tells the model to take an A-'s cutoff from the course outline or
+ask for it.
+
+### 13. `delete_tasks`
+- **Title**: Delete Akada tasks
+- **Annotations**: `destructiveHint: true`
+- **Parameters**: `task_ids` (array of 1-20 UUIDs from `get_tasks`).
+- **Output**: `deleted` (each task's `id`, `title`, `due_date`, `completed`, `course`) and a `message`.
+
+All or nothing, through the same ownership check `complete_tasks` uses. For
+duplicates and mistakes; finished work is ticked, never deleted, because a
+ticked task is what feeds the week in Stats. Sessions logged against a deleted
+task stay logged (`sessions.task_id` is `on delete set null`).
+
+### 14. `delete_study_session`
+- **Title**: Delete an Akada study session
+- **Annotations**: `destructiveHint: true`
+- **Parameters**: `session_id` (UUID, from `get_overview`'s `recent_sessions` or from `log_study_session`).
+- **Output**: `deleted` (`id`, `date`, `duration_minutes`, `note`, `course`) and a `message`.
+
+Ownership is checked the way `update_study_session` checks it. The sitting's
+focus and break segments go with it (`session_segments` cascades).
+
+### 15. `get_reading_backlog`
+- **Title**: Read the Akada reading backlog
+- **Annotations**: `readOnlyHint: true`
+- **Parameters**:
+  - `course_id` (UUID, optional).
+  - `by_date` (`YYYY-MM-DD`, optional): only readings due on or before it. Overdue readings always count; undated ones are reported separately under `undated`.
+- **Output**: `schema_version` (`akada.reading_backlog.v1`), `pace` (`pages_per_hour`, `measured`, `based_on`), `totals` and per-`courses` tallies (`readings`, `pages`, `hours`, `without_pages`), `days_left` and `hours_per_day` with a `by_date`, up to 50 `readings`, and a `message`.
+
+The pace is `readingRateDetail` in `lib/derive.ts`, the same pages-an-hour the
+Today screen uses: finished reading pages over hours logged against readings,
+and a plain 20 until there are at least 20 pages over an hour. `measured` is
+false then, and the message says it is a default rather than the student's
+pace. `days_left` counts today.
+
 ---
 
 ## Roadmap: High-Value MCP Tools
 
 The following specifications define the next set of MCP tools planned for Akada:
 
-### 1. `list_tasks` (partly covered by `get_tasks`)
-- **Description**: Query tasks in the active semester, with flexible filters for course, completion status, and due dates. `get_tasks` covers the course and completion filters; the date, priority and limit filters are still unbuilt.
+### 1. `list_tasks` (shipped as filters on `get_tasks`)
+- **Description**: Query tasks in the active semester, with flexible filters for course, completion status, and due dates. Shipped as the `due_after`, `due_before`, `priority`, `kind` and `limit` inputs on `get_tasks` (see above). Kept here for the original specification.
 - **Annotations**: `readOnlyHint: true`
 - **Input Schema**:
   ```typescript
