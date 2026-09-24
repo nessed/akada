@@ -237,11 +237,14 @@ export default function PaperDoodle() {
       }
 
       // Nothing left to age, so nothing left to do. The loop restarts on the
-      // next stroke rather than spinning against an empty page.
+      // next stroke rather than spinning against an empty page, and the
+      // canvas leaves the compositor until then.
       frame = strokes.length ? requestAnimationFrame(tick) : 0;
+      if (!frame) canvas.style.display = '';
     };
 
     const wake = () => {
+      canvas.style.display = 'block';
       if (!frame) frame = requestAnimationFrame(tick);
     };
 
@@ -403,6 +406,7 @@ export default function PaperDoodle() {
       endStroke();
       strokes.length = 0;
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      canvas.style.display = '';
     };
 
     let listening = false;

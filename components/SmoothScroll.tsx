@@ -16,6 +16,11 @@ import { useEffect } from 'react';
  * Touch is left alone. A finger already gets the platform's own momentum,
  * and globals.css keeps the platform's own bounce for it.
  *
+ * The wheel handler has to stay cheap, since a trackpad fires it well over
+ * a hundred times a second. Whether the page owns the wheel is decided once
+ * per gesture (same element under the pointer, same direction, events
+ * still arriving) rather than by walking computed styles on every event.
+ *
  * Anything that is not the page keeps the browser's scrolling: a sheet, the
  * rail, a dropdown, a strip that scrolls sideways, anything inside a fixed
  * layer, and the whole page while something modal is open or the body is
@@ -33,6 +38,8 @@ const RESISTANCE = 0.5;
 const SPRING = 12;
 /** No wheel for this long counts as letting go. */
 const RELEASE_MS = 110;
+/** Reuse the ownership check for events this close together. */
+const CHECK_MS = 120;
 
 export default function SmoothScroll() {
   useEffect(() => {
@@ -53,6 +60,11 @@ export default function SmoothScroll() {
     let lastDir = 0;
     let frame = 0;
     let prev = 0;
+    // The last ownership check, reused while the gesture carries on.
+    let checkedAt = -Infinity;
+    let checkedTarget: EventTarget | null = null;
+    let checkedDir = 0;
+    let checkedOwned = false;
     let stretched: HTMLElement | null = null;
 
     const maxY = () => Math.max(0, root.scrollHeight - window.innerHeight);
@@ -89,10 +101,18 @@ export default function SmoothScroll() {
     // The pull is drawn by moving the page's content, not the page: the bar,
     // the rail and the dock are fixed siblings of it and stay where they are.
     const drawPull = () => {
+      // Only look the element up while there is a pull to draw or undo, not
+      // on every frame of a plain glide.
+      if (pull === 0 && !stretched) return;
       const el = document.querySelector<HTMLElement>('[data-scroll-content]');
       if (stretched && stretched !== el) stretched.style.transform = '';
       stretched = el;
       if (!el) return;
+      if (pull === 0) {
+        el.style.transform = '';
+        stretched = null;
+        return;
+      }
       // A soft cap: the further it goes, the harder it gets.
       const shown = MAX_PULL * Math.tanh(pull / MAX_PULL);
       el.style.transform = Math.abs(shown) < 0.25 ? '' : `translate3d(0, ${-shown}px, 0)`;
@@ -145,13 +165,21 @@ export default function SmoothScroll() {
     const onWheel = (e: WheelEvent) => {
       if (e.defaultPrevented || e.ctrlKey || reduced.matches) return;
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      if (locked() || ownedElsewhere(e.target, e.deltaY)) return;
+      const now = performance.now();
+      const dir = Math.sign(e.deltaY);
+      if (e.target !== checkedTarget || dir !== checkedDir || now - checkedAt > CHECK_MS) {
+        checkedOwned = !locked() && !ownedElsewhere(e.target, e.deltaY);
+        checkedTarget = e.target;
+        checkedDir = dir;
+      }
+      checkedAt = now;
+      if (!checkedOwned) return;
       e.preventDefault();
 
       const dy =
         e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1);
       if (!frame) current = target = written = window.scrollY;
-      lastWheel = performance.now();
+      lastWheel = now;
       lastDir = Math.sign(dy);
 
       if (pending !== 0 && Math.sign(dy) !== Math.sign(pending)) pending = 0;

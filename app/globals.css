@@ -114,6 +114,10 @@
   z-index: 30;
   pointer-events: none;
   mix-blend-mode: var(--doodle-blend, multiply);
+  /* Out of the way until there is ink on it. A full-screen blended layer
+     makes the compositor blend the whole page beneath it on every scroll
+     frame; PaperDoodle shows it only while a stroke is alive. */
+  display: none;
 }
 
 html,
@@ -158,12 +162,25 @@ html {
   }
 }
 
+/* The paper glow sits on its own fixed layer rather than on body with
+   `background-attachment: fixed`. A fixed background cannot be composited:
+   the browser repaints the whole viewport on every frame of a scroll, which
+   is most of what made scrolling stutter. A fixed element gets its own layer
+   and the page slides over it for free. body goes transparent so the glow
+   shows through; html still carries the paper colour underneath it. */
 body {
   min-height: 100dvh;
+  background-color: transparent;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     radial-gradient(circle at 18% 12%, var(--paper-glow-a), transparent 55%),
     radial-gradient(circle at 82% 88%, var(--paper-glow-b), transparent 60%);
-  background-attachment: fixed;
 }
 
 input[type='number']::-webkit-outer-spin-button,
