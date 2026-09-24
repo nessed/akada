@@ -49,6 +49,7 @@ export type {
   Session,
   SessionSegment,
   NoteCheckResult,
+  NoteRead,
   NoteSource,
   StudyNote,
   StudyNoteInput,

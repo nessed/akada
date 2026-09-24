@@ -8,6 +8,7 @@ import type {
   StudyNoteInput,
   StudyNotes,
   NoteCheckResult,
+  NoteRead,
   Task,
   Semester,
   NewSemesterInput,
@@ -85,6 +86,10 @@ export interface DataProvider {
   saveNote(input: StudyNoteInput): Promise<StudyNote>;
   /** Writes a note's check results whole. */
   setNoteChecks(id: string, checks: Record<string, NoteCheckResult>): Promise<void>;
+  /** Links a note to a task, and to a course with it; null unlinks. */
+  setNoteStudy(id: string, patch: { taskId?: string | null; courseId?: string | null }): Promise<void>;
+  /** Writes a note's timed read-throughs whole. */
+  setNoteReads(id: string, reads: NoteRead[]): Promise<void>;
   deleteNote(id: string): Promise<void>;
 
   // Semesters

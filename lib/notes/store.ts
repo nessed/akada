@@ -31,9 +31,13 @@ export function readProgress(id: string) {
   const value = Number(readStore(progressKey(id)));
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 }
-/** Kept together, since both are written from the same scroll. */
+/** The section a note was left in, by its heading's words. */
+export const sectionKey = (id: string) => `akada.notes.section.${id}`;
+export const readSection = (id: string) => readStore(sectionKey(id)) ?? '';
+/** Kept together, since all three are written from the same scroll. */
 export function rememberReading(id: string, progress: number, section: string) {
   writeStore(progressKey(id), progress.toFixed(3));
+  writeStore(sectionKey(id), section);
   writeStore(LAST_READ_KEY, JSON.stringify({ id, at: Date.now(), section }));
 }
 

@@ -14,6 +14,7 @@ import DatePicker from '@/components/DatePicker';
 import TaskRow from '@/components/TaskRow';
 import ReorderList from '@/components/ReorderList';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
+import TaskNoteLine from '@/components/notes/TaskNoteLine';
 import { RecallGlyph, VerdictMark } from '@/components/recall/RecallMarks';
 import type { Task, TaskKind } from '@/lib/data';
 import { useRecall } from '@/lib/recall/use-recall';
@@ -1352,6 +1353,9 @@ function TasksPageContent() {
                   Questions before you read
                 </button>
               )}
+
+              {/* The note this task is studied from, and the way back in. */}
+              <TaskNoteLine taskId={viewingTask.id} />
 
               {/* Where a finished task stands in recall, in one line; or, for
                   one that is not in it, the word that keeps it. An open task

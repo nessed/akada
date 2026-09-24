@@ -6,9 +6,12 @@ import HandNote from '@/components/notebook/HandNote';
 import HandCheck from '@/components/notebook/HandCheck';
 import { MarkdownReader, getMarkdownHeadings } from './MarkdownReader';
 import Icon from './Icon';
+import StudyThis from './StudyThis';
 import { useTimer } from '@/lib/timer-context';
 import { paperToneStyle, usePreferences } from '@/lib/preferences';
-import { FOCUS_KEY, minutesFor, readStore, rememberReading, wordCount, writeStore, type CheckResult } from '@/lib/notes/store';
+import { FOCUS_KEY, readStore, rememberReading, wordCount, writeStore, type CheckResult } from '@/lib/notes/store';
+import { useReadThrough } from '@/lib/notes/use-read-through';
+import type { Course, NoteRead } from '@/lib/data';
 
 type Size = 'small' | 'medium' | 'large';
 const SIZES: Size[] = ['small', 'medium', 'large'];
@@ -30,7 +33,7 @@ const isTyping = (target: EventTarget | null) =>
 const READING_LINE = 0.36;
 
 interface Props {
-  note: { id: string; title: string; markdown: string };
+  note: { id: string; title: string; markdown: string; courseId: string | null; taskId: string | null };
   course?: { id: string; code: string; color: string };
   checks: Record<string, CheckResult>;
   onMarkCheck: (id: string, result: CheckResult) => void;
@@ -39,6 +42,13 @@ interface Props {
   measure: 'narrow' | 'wide';
   /** Where the reader was on the page behind, so focus opens on the same lines. */
   startAt?: string;
+  /** The section it picked up in from the shelf, said once on the way in. */
+  resumedAt?: string;
+  /** A whole read, at this reader's pace. */
+  minutes: number;
+  courses: Course[];
+  onSay: (text: string) => void;
+  onRead: (read: NoteRead) => void;
   nextNote?: { id: string; title: string };
   onNext: () => void;
   /** Hands back the section being read, so the page behind can open on it. */
@@ -64,7 +74,7 @@ export default function FocusMode(props: Props) {
   return createPortal(<FocusSheet {...props} />, document.body);
 }
 
-function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, startAt, nextNote, onNext, onLeave }: Props) {
+function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, startAt, resumedAt, minutes, courses, onSay, onRead, nextNote, onNext, onLeave }: Props) {
   const [prefs] = usePreferences();
   const [focusPrefs, setFocusPrefs] = useState<FocusPrefs>(readFocusPrefs);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -80,7 +90,10 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
 
   const headings = useMemo(() => getMarkdownHeadings(note.markdown), [note.markdown]);
   const sections = useMemo(() => headings.filter((h) => h.level === 2), [headings]);
-  const minutes = minutesFor(wordCount(note.markdown));
+  const words = useMemo(() => wordCount(note.markdown), [note.markdown]);
+  const [placed, setPlaced] = useState(false);
+  const [resumeChip, setResumeChip] = useState(resumedAt ?? '');
+  const timing = useReadThrough({ note, words, progress, enabled: placed, onRead });
   const minutesLeft = Math.round(minutes * (1 - progress));
   const activeIndex = sections.findIndex((s) => s.id === activeId);
   const activeTitle = activeIndex >= 0 ? sections[activeIndex].text : '';
@@ -111,12 +124,17 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
     const scroller = scrollerRef.current;
     if (!scroller) return;
     scroller.focus({ preventScroll: true });
-    if (!startAt) return;
+    let second = 0;
     const frame = requestAnimationFrame(() => {
-      const target = document.getElementById(startAt);
+      const target = startAt ? document.getElementById(startAt) : null;
       if (target) scroller.scrollTop = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 96;
+      // A frame for the scroll to be measured before a read can begin.
+      second = requestAnimationFrame(() => setPlaced(true));
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(second);
+    };
     // Only on the way in.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id]);
@@ -221,6 +239,17 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
       cancelAnimationFrame(frame);
     };
   }, [note.id, headings]);
+
+  useEffect(() => {
+    if (!resumeChip) return;
+    const timer = window.setTimeout(() => setResumeChip(''), 9000);
+    return () => window.clearTimeout(timer);
+  }, [resumeChip]);
+  const startFromTop = () => {
+    setResumeChip('');
+    rememberReading(note.id, 0, '');
+    scrollerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // A pointer that moves brings the bar back; one that rests lets it go again.
   useEffect(() => {
@@ -333,7 +362,8 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
             <span className="nf-section" key={activeTitle || note.title}>{activeTitle || note.title}</span>
           </div>
           <div className="nf-bar-side nf-tools">
-            <FocusClock course={course} />
+            <FocusClock course={course} timing={timing} />
+            <StudyThis note={note} courses={courses} onSay={onSay} raised compact />
             <span className="nf-sep" aria-hidden />
             <button type="button" className="nf-tool" aria-pressed={focusPrefs.spot} onClick={() => updatePrefs({ spot: !focusPrefs.spot })} title="Spotlight the section you're on (D)" aria-label="Spotlight">
               <Icon name="spot" size={17} />
@@ -403,10 +433,18 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
           </nav>
         )}
 
+        {resumeChip && (
+          <div className="nf-resume" role="status">
+            <span>picked up in <em>{resumeChip}</em></span>
+            <button type="button" onClick={startFromTop}>Start from the top</button>
+          </div>
+        )}
+
         <div className="nf-foot" aria-hidden>
           {sections.length > 1 && (
             <span className="nf-count">{Math.max(1, activeIndex + 1)}<span>/</span>{sections.length}</span>
           )}
+          {timing && <span className="eyebrow nf-timing">timing this read</span>}
           <HandNote size={20} rotate={-3} className="nf-left">
             {progress >= 0.98 ? 'read through' : minutesLeft < 1 ? 'under a minute left' : `~ ${minutesLeft} min left`}
           </HandNote>
@@ -435,12 +473,11 @@ const FocusArticle = memo(function FocusArticle({ markdown, title, collapsed, on
 });
 
 /**
- * The clock in the bar. With a sitting running it is that sitting, in the
- * course colour; without one it offers to start one on the note's course,
- * which is the whole reason to be reading it.
+ * The clock in the bar: the sitting on the clock, in the course colour.
+ * Starting one is StudyThis's, beside it.
  */
-function FocusClock({ course }: { course?: { id: string; code: string; color: string } }) {
-  const { active, focusSeconds, onBreak, hydrated, start } = useTimer();
+function FocusClock({ course, timing }: { course?: { id: string; code: string; color: string }; timing: boolean }) {
+  const { active, focusSeconds, onBreak, hydrated } = useTimer();
   if (!hydrated) return null;
   if (active) {
     const m = Math.floor(focusSeconds / 60);
@@ -448,19 +485,13 @@ function FocusClock({ course }: { course?: { id: string; code: string; color: st
     const h = Math.floor(m / 60);
     const shown = h ? `${h}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
     return (
-      <span className="nf-clock" data-paused={active.isPaused || onBreak || undefined} title={onBreak ? 'On a break' : active.isPaused ? 'Held' : 'On the clock'}>
+      <span className="nf-clock" data-paused={active.isPaused || onBreak || undefined} title={onBreak ? 'On a break' : active.isPaused ? 'Held' : timing ? 'On the clock, timing this read' : 'On the clock'}>
         <span className="nf-clock-dot" style={{ background: course?.color ?? 'var(--ink-soft)' }} aria-hidden />
         <span className="nf-clock-digits">{shown}</span>
       </span>
     );
   }
-  if (!course) return null;
-  return (
-    <button type="button" className="nf-tool nf-start" onClick={() => start(course.id)} title={`Start the clock on ${course.code}`}>
-      <Icon name="play" size={12} />
-      <span>Time this</span>
-    </button>
-  );
+  return null;
 }
 
 /** How long this sitting with the note has been, counted from the way in. */

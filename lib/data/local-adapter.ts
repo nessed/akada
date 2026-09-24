@@ -10,6 +10,7 @@ import type {
   StudyNoteInput,
   StudyNotes,
   NoteCheckResult,
+  NoteRead,
   Task,
   Semester,
   NewSemesterInput,
@@ -27,6 +28,7 @@ import {
 } from '@/lib/session-safety';
 import { seasonLabel } from '@/lib/utils';
 import { cleanChecks } from '@/lib/notes/checks';
+import { cleanReads } from '@/lib/notes/reads';
 import { cleanNoteMarkdown, cleanNoteTitle } from '@/lib/notes/limits';
 import {
   clampDailyGoalHours,
@@ -450,6 +452,9 @@ export class LocalAdapter implements DataProvider {
   async deleteTask(id: string): Promise<void> {
     const tasks = read<Task[]>(KEYS.tasks, []).filter((t) => t.id !== id);
     write(KEYS.tasks, tasks);
+    // notes.task_id is `on delete set null` in Postgres.
+    const notes = read<StudyNote[]>(KEYS.notes, []);
+    if (notes.some((n) => n.taskId === id)) write(KEYS.notes, notes.map((n) => (n.taskId === id ? { ...n, taskId: null } : n)));
   }
 
   // ---- Recall
@@ -594,7 +599,10 @@ export class LocalAdapter implements DataProvider {
 
   // ---- Notes
   async getNotes(): Promise<StudyNotes> {
-    const notes = read<StudyNote[]>(KEYS.notes, []).slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    // Notes written before tasks and reads existed carry neither.
+    const notes = read<StudyNote[]>(KEYS.notes, [])
+      .map((n) => ({ ...n, taskId: n.taskId ?? null, reads: cleanReads(n.reads) }))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     return { notes, available: true };
   }
 
@@ -611,6 +619,8 @@ export class LocalAdapter implements DataProvider {
       markdown,
       checks: input.checks ? cleanChecks(input.checks) : existing?.checks ?? {},
       source: input.source ?? existing?.source ?? 'app',
+      taskId: input.taskId !== undefined ? input.taskId || null : existing?.taskId ?? null,
+      reads: input.reads ? cleanReads(input.reads) : existing?.reads ?? [],
       createdAt: input.createdAt ?? existing?.createdAt ?? now,
       updatedAt: now,
     };
@@ -621,6 +631,20 @@ export class LocalAdapter implements DataProvider {
   async setNoteChecks(id: string, checks: Record<string, NoteCheckResult>): Promise<void> {
     const notes = read<StudyNote[]>(KEYS.notes, []);
     write(KEYS.notes, notes.map((n) => (n.id === id ? { ...n, checks: cleanChecks(checks) } : n)));
+  }
+
+  async setNoteStudy(id: string, patch: { taskId?: string | null; courseId?: string | null }): Promise<void> {
+    const notes = read<StudyNote[]>(KEYS.notes, []);
+    write(KEYS.notes, notes.map((n) => (n.id === id ? {
+      ...n,
+      ...(patch.taskId !== undefined ? { taskId: patch.taskId || null } : {}),
+      ...(patch.courseId !== undefined ? { courseId: patch.courseId || null } : {}),
+    } : n)));
+  }
+
+  async setNoteReads(id: string, reads: NoteRead[]): Promise<void> {
+    const notes = read<StudyNote[]>(KEYS.notes, []);
+    write(KEYS.notes, notes.map((n) => (n.id === id ? { ...n, reads: cleanReads(reads) } : n)));
   }
 
   async deleteNote(id: string): Promise<void> {

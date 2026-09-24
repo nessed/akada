@@ -27,10 +27,12 @@ import type {
   StudyNoteInput,
   StudyNotes,
   NoteCheckResult,
+  NoteRead,
   Task,
   UserSettings,
 } from './data';
 import { db } from './data';
+import { cleanReads } from './notes/reads';
 import { clearStoredTimerState } from './timer-context';
 
 const KEY = {
@@ -345,6 +347,8 @@ export async function deleteTaskOptimistic(id: string) {
       revalidate: false,
     },
   );
+  // A note studied under the task is unlinked by the database; read it back.
+  void mutate(KEY.notes);
 }
 
 /* ───────── Session mutations ───────── */
@@ -706,6 +710,52 @@ export async function setNoteChecksOptimistic(id: string, checks: Record<string,
         notes: (current?.notes ?? []).map((n) => (n.id === id ? { ...n, checks } : n)),
         available: current?.available ?? true,
       }),
+      rollbackOnError: true,
+      populateCache: true,
+      revalidate: false,
+    },
+  );
+}
+
+/** Patches one note in the cached list. */
+function patchNote(current: StudyNotes | undefined, id: string, patch: Partial<StudyNote>): StudyNotes {
+  return {
+    notes: (current?.notes ?? []).map((n) => (n.id === id ? { ...n, ...patch } : n)),
+    available: current?.available ?? true,
+  };
+}
+
+/** Puts a note under a task (and its course), or takes it out from under one. */
+export async function setNoteStudyOptimistic(id: string, patch: { taskId?: string | null; courseId?: string | null }) {
+  const next: Partial<StudyNote> = {};
+  if (patch.taskId !== undefined) next.taskId = patch.taskId;
+  if (patch.courseId !== undefined) next.courseId = patch.courseId;
+  await mutate(
+    KEY.notes,
+    async (current: StudyNotes | undefined) => {
+      await db.setNoteStudy(id, patch);
+      return patchNote(current, id, next);
+    },
+    {
+      optimisticData: (current: StudyNotes | undefined) => patchNote(current, id, next),
+      rollbackOnError: true,
+      populateCache: true,
+      revalidate: false,
+    },
+  );
+}
+
+/** Adds one timed read-through to a note, keeping the last MAX_READS. */
+export async function addNoteReadOptimistic(note: StudyNote, read: NoteRead) {
+  const reads = cleanReads([...note.reads, read]);
+  await mutate(
+    KEY.notes,
+    async (current: StudyNotes | undefined) => {
+      await db.setNoteReads(note.id, reads);
+      return patchNote(current, note.id, { reads });
+    },
+    {
+      optimisticData: (current: StudyNotes | undefined) => patchNote(current, note.id, { reads }),
       rollbackOnError: true,
       populateCache: true,
       revalidate: false,
