@@ -166,8 +166,9 @@ The page is separated by its own ruling instead, the way a ruled pad is:
 
 What still floats keeps its edge and warm shadow: popovers, menus, the date
 picker, toasts, sheets and the timer dock. With the page unboxed they are the
-only edged things on screen, so they read as above it again. The Tasks table,
-Stats, the Record and Settings are not ruled this way yet.
+only edged things on screen, so they read as above it again. Tasks is ruled
+this way too (see Tasks: the planner). Stats, the Record and Settings are
+not yet.
 
 ### Hours, not percentages
 Nothing in the app draws a percentage bar. A week against a goal is **one
@@ -655,6 +656,50 @@ hint under the list names exactly these and nothing else. It used to offer
 `X select` and `⌘Z undo` with neither bound to anything, which is a worse lie
 than saying nothing, and the help sheet behind `?` listed a third, different
 set.
+
+### Tasks: the planner
+`/tasks` used to be a bordered table with column heads and grey band strips,
+the one screen that looked like a spreadsheet. It is now a planner spread.
+
+- **The fortnight.** Across the top, the next fourteen days as a strip of
+  columns: the weekday as an eyebrow, the date in mono (today's under a
+  highlighter swipe), and every open task due that day as a 7px bar in its
+  course colour, stacked from the foot up. An exam is a hollow ring in its
+  course colour above the bars, because an exam changes what the days before
+  it are for. More than five bars on a day becomes `+n`. Weekends sit on a
+  faint `paper-2` wash, each Monday gets a `line-strong` rule, and anything
+  past its date piles up in a **Late** column at the far left in `warn`. The
+  busiest day, if it has three or more, gets "busy" in Caveat in the margin.
+  The strip draws the load rather than the items: it answers "is Thursday
+  bad" before the list answers "what is on it". Pressing a day narrows the
+  list to that day, a line under the controls says so and lets it go, and
+  pressing the day again does the same. The fold closes the strip. On a phone
+  it scrolls sideways as an `.app-scroll` strip.
+- **The controls** are marks, not dropdowns. The band filter is the
+  highlighter swipe it always was; each course is its `.course-rule` and
+  code, the chosen one swiped in its own tint; how the list is cut is two
+  serif words, "day" and "course", with the chosen one hand-underlined; and
+  the order says what it is ("what matters", "by date", "newest") and changes
+  on a press or `S`.
+- **The bands.** By day, the list reads Overdue, Today, then each of the next
+  seven days by name (Tomorrow, then Friday, Saturday...), then Later and
+  Open ended. By course, one band per course. Each band holds its name in a
+  168px left margin, serif 20px with the date or course name under it in
+  italic, and on desktop that margin is **sticky** while the band's rows go
+  past, the way a diary keeps the date at the head of the page. Bands are
+  ended by the page's `line` cutoff; nothing is boxed. Overdue sets its name
+  in `warn` and carries "n to catch up" in Caveat. Today stays on the page
+  when nothing is due, reading "Nothing due. A clear day." Rows are
+  `TaskRow` on `ground="page"`.
+- **No date repeated.** Under a heading that already names the day, a row
+  passes `hideDue`: on a phone the date column goes and the title gets its
+  width, and on desktop the column stays empty so courses still line up down
+  the page.
+- **Adding into a band.** Every band a task can land in ends with a dashed
+  `+` line ("add for Friday", "add to CS 200", "add without a date"). It
+  shows on hover on desktop and always on a phone, and opens the draft right
+  there with the date or course already filled in. New task and `N` still
+  open it at the top of the list.
 
 ### Keys for the running clock
 Two more, and they work from every screen rather than from the timer.
