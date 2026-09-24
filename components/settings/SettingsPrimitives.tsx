@@ -175,7 +175,7 @@ export function SettingToggleRow({
 /** A number kept from the record, under its eyebrow. */
 export function StatMark({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`border border-line bg-paper px-3 py-2.5 ${FIELD_RADIUS}`}>
+    <div className={`min-w-0 border border-line bg-paper px-3 py-2.5 ${FIELD_RADIUS}`}>
       <p className="m-0 font-mono text-[15px] font-semibold tracking-[-0.01em] tabular-nums text-ink">
         {value}
       </p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Course, Task } from '@/lib/data';
 import { HABIT_MIN_BLOCKS, roughMinutes, settled } from '@/lib/progression';
@@ -58,10 +58,17 @@ function nearestLength(minutes: number): number {
   return LENGTHS.reduce((best, n) => (Math.abs(n - minutes) < Math.abs(best - minutes) ? n : best), LENGTHS[0]);
 }
 
-function endsAt(minutes: number | null): string {
+function endsAt(minutes: number | null): ReactNode {
   if (minutes == null) return 'no end';
   const d = new Date(Date.now() + minutes * 60_000);
-  return `block ends ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  return (
+    <>
+      ends at{' '}
+      <span className="font-mono text-[11px] not-italic tabular-nums">
+        {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
+      </span>
+    </>
+  );
 }
 
 interface Props {
@@ -110,7 +117,9 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
       return;
     }
     const rect = target.anchor.getBoundingClientRect();
-    const width = 360;
+    // Never wider than the screen less its two 12px margins: at 320 a fixed
+    // 360 ran the lengths and the start button off the right edge.
+    const width = Math.min(360, window.innerWidth - 24);
     const left = Math.min(
       Math.max(12, rect.right - width),
       Math.max(12, window.innerWidth - width - 12),
@@ -166,7 +175,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
       ref={panelRef}
       role="dialog"
       aria-label="Start timer"
-      className={`fixed ${raised ? 'z-[85]' : 'z-50'} w-[360px] animate-fade-in rounded-[14px] border border-line bg-paper p-5 shadow-[0_8px_20px_rgba(57,48,36,.12)]`}
+      className={`fixed ${raised ? 'z-[85]' : 'z-50'} w-[min(360px,calc(100vw-24px))] animate-fade-in rounded-[14px] border border-line bg-paper p-5 shadow-[0_8px_20px_rgba(57,48,36,.12)]`}
       style={{ top: pos.top, left: pos.left }}
     >
       <p className="eyebrow m-0">Start timer</p>
@@ -217,7 +226,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
         </button>
       </div>
 
-      <p className="m-0 mt-2 font-mono text-[11px] text-muted-soft">
+      <p className="m-0 mt-2 font-serif text-[12.5px] italic text-muted-soft">
         {endsAt(minutes)}
         {usualMinutes != null && (
           <>
@@ -240,7 +249,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
         {minutes == null ? 'Start untimed' : `Start ${minutes} min`}
       </button>
 
-      <p className="m-0 mt-2.5 text-center font-mono text-[11px] text-muted-soft">
+      <p className="key-hint m-0 mt-2.5 text-center font-mono text-[11px] text-muted-soft">
         {usualMinutes != null ? 'Enter starts with your usual length' : 'Enter starts with the last used length'}
       </p>
     </div>

@@ -1165,7 +1165,7 @@ function TasksPageContent() {
 
       {/* Every one of these is bound. The line used to offer X and undo with
           nothing behind either, which is a worse lie than saying nothing. */}
-      <p className="mt-4 px-1 font-mono text-[11px] text-muted-soft">
+      <p className="key-hint mt-4 px-1 font-mono text-[11px] text-muted-soft">
         ↑↓ move · X select · Enter open · N new · S sort · ⌘Z undo
       </p>
 

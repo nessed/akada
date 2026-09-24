@@ -775,3 +775,29 @@ input[type='date']::-webkit-calendar-picker-indicator {
     animation-delay: 0s !important;
   }
 }
+
+/* A line of keyboard shortcuts. A phone has no Space, Esc or ⌘Z to press, so
+   on a touch screen the line is only noise under the controls it describes.
+   Unlayered, so no utility set on the line can put it back. */
+@media (hover: none) and (pointer: coarse) {
+  .key-hint {
+    display: none;
+  }
+}
+
+/* iOS zooms the page into any field set under 16px the moment it takes focus,
+   and leaves it zoomed. Pinch-zoom stays allowed (see the viewport in
+   app/layout.tsx), so the fix is the type, not the viewport: on a touch
+   screen the fields set small come up to 16px. Only those, matched by their
+   size class, so a title field set large keeps its size. */
+@media (pointer: coarse) {
+  :is(input, textarea):is(
+      [class~='text-xs'],
+      [class~='text-sm'],
+      [class~='text-[13px]'],
+      [class~='text-[14px]'],
+      [class~='text-[15px]']
+    ) {
+    font-size: 16px;
+  }
+}

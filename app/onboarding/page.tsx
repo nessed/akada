@@ -188,7 +188,11 @@ function OnboardingContent() {
       // one activates right after.
       if (!newSemesterMode) {
         await createSemesterOptimistic({
-          label: seasonLabel(new Date(start + 'T00:00:00')),
+          // The term they tapped carries its own name. Working it out from
+          // the start date called a Fall term that opens on Aug 31 "Summer".
+          label:
+            upcomingSemesters().find((sem) => sem.start === start && sem.end === end)?.label ??
+            seasonLabel(new Date(start + 'T00:00:00')),
           startDate: start,
           endDate: end,
         });
