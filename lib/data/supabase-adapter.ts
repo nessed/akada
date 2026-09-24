@@ -11,6 +11,7 @@ import type {
   StudyNoteInput,
   StudyNotes,
   NoteCheckResult,
+  NoteRead,
   NoteSource,
   Task,
   TaskSubtask,
@@ -30,6 +31,7 @@ import {
 } from '@/lib/session-safety';
 import { seasonLabel } from '@/lib/utils';
 import { cleanChecks } from '@/lib/notes/checks';
+import { cleanReads } from '@/lib/notes/reads';
 import { cleanNoteMarkdown, cleanNoteTitle } from '@/lib/notes/limits';
 import { attachSegments, dropCutChain, segmentWindowStart } from './segment-rows';
 import {
@@ -140,6 +142,9 @@ interface NoteRow {
   markdown: string;
   checks: unknown;
   source: string;
+  /** Absent on a project that has not run the migration adding it. */
+  task_id?: string | null;
+  reads?: unknown;
   created_at: string;
   updated_at: string;
 }
@@ -153,6 +158,8 @@ function rowToNote(r: NoteRow): StudyNote {
     markdown: r.markdown,
     checks: cleanChecks(r.checks),
     source,
+    taskId: r.task_id ?? null,
+    reads: cleanReads(r.reads),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -160,6 +167,8 @@ function rowToNote(r: NoteRow): StudyNote {
 
 const NOTES_UNAVAILABLE =
   'Notes could not be saved. Run the latest supabase/schema.sql once and try again.';
+const NOTE_STUDY_UNAVAILABLE =
+  'Linking notes to tasks needs the latest supabase/schema.sql. Run it once and try again.';
 
 interface SemesterRow {
   id: string;
@@ -1245,6 +1254,8 @@ export class SupabaseAdapter implements DataProvider {
     if (input.courseId !== undefined) row.course_id = input.courseId || null;
     if (input.source) row.source = input.source;
     if (input.checks) row.checks = cleanChecks(input.checks);
+    if (input.taskId !== undefined) row.task_id = input.taskId || null;
+    if (input.reads) row.reads = cleanReads(input.reads);
     if (input.createdAt) row.created_at = input.createdAt;
     if (input.id) row.id = input.id;
     const query = input.id
@@ -1267,6 +1278,30 @@ export class SupabaseAdapter implements DataProvider {
       .eq('id', id)
       .eq('user_id', uid);
     if (error) throw isMissingRecall(error) ? new Error(NOTES_UNAVAILABLE) : error;
+  }
+
+  async setNoteStudy(id: string, patch: { taskId?: string | null; courseId?: string | null }): Promise<void> {
+    const uid = await this.userId();
+    const row: Record<string, unknown> = {};
+    if (patch.taskId !== undefined) row.task_id = patch.taskId || null;
+    if (patch.courseId !== undefined) row.course_id = patch.courseId || null;
+    if (!Object.keys(row).length) return;
+    const { error } = await this.supabase.from('notes').update(row).eq('id', id).eq('user_id', uid);
+    if (error) {
+      if (isMissingRecall(error)) throw new Error(NOTE_STUDY_UNAVAILABLE);
+      if (error.code === '23503') throw new Error('That task is not there any more.');
+      throw error;
+    }
+  }
+
+  async setNoteReads(id: string, reads: NoteRead[]): Promise<void> {
+    const uid = await this.userId();
+    const { error } = await this.supabase
+      .from('notes')
+      .update({ reads: cleanReads(reads) })
+      .eq('id', id)
+      .eq('user_id', uid);
+    if (error) throw isMissingRecall(error) ? new Error(NOTE_STUDY_UNAVAILABLE) : error;
   }
 
   async deleteNote(id: string): Promise<void> {

@@ -270,6 +270,17 @@ create table if not exists notes (
 
 alter table notes enable row level security;
 
+-- Added after notes shipped. `task_id` is the task a note is studied under,
+-- so a timer started from the note runs on it; deleting the task unlinks the
+-- note. `reads` is every read-through timed from the top on that task's
+-- clock, [{"seconds":840,"words":2400,"at":"..."}], newest last and kept to
+-- the last 30. It is what the reader's own pace is worked out from.
+alter table notes add column if not exists task_id uuid references tasks(id) on delete set null;
+alter table notes add column if not exists reads jsonb not null default '[]'::jsonb;
+do $$ begin
+  alter table notes add constraint notes_reads_array check (jsonb_typeof(reads) = 'array');
+exception when duplicate_object then null; end $$;
+
 -- ============================================================
 -- 4. SEMESTERS
 --
@@ -613,6 +624,7 @@ create index if not exists recall_items_semester_idx      on recall_items (user_
 create index if not exists recall_items_course_idx        on recall_items (course_id);
 create index if not exists notes_user_updated_idx         on notes (user_id, updated_at desc);
 create index if not exists notes_course_idx               on notes (course_id);
+create index if not exists notes_task_idx                 on notes (task_id);
 
 -- ============================================================
 -- 9. DATA INTEGRITY CONSTRAINTS

@@ -301,6 +301,17 @@ export type NoteSource = 'app' | 'import' | 'mcp';
 export type NoteCheckResult = 'got' | 'miss';
 
 /**
+ * One read-through of a note, timed on its task's clock from the top to the
+ * end. Only a read started from the top counts, since half a note says
+ * nothing about how long the whole one takes.
+ */
+export interface NoteRead {
+  seconds: number;
+  words: number;
+  at: string;
+}
+
+/**
  * A study note, the markdown Markd used to keep in the browser. Not scoped to
  * a semester: a note on a course outlives the term it was written in, and
  * `courseId` goes null rather than taking the note with it when the course is
@@ -313,6 +324,10 @@ export interface StudyNote {
   markdown: string;
   checks: Record<string, NoteCheckResult>;
   source: NoteSource;
+  /** The task the note is studied under, when it has one. */
+  taskId: string | null;
+  /** Timed read-throughs, oldest first. See NoteRead. */
+  reads: NoteRead[];
   createdAt: string;
   updatedAt: string;
 }
@@ -326,6 +341,10 @@ export interface StudyNoteInput {
   source?: NoteSource;
   /** Left out, a note keeps the results it has. */
   checks?: Record<string, NoteCheckResult>;
+  /** Left out, a note keeps the task it has; null unlinks it. */
+  taskId?: string | null;
+  /** Left out, a note keeps its reads. Only undo writes them whole. */
+  reads?: NoteRead[];
   createdAt?: string;
 }
 

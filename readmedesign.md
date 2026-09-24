@@ -832,6 +832,46 @@ out differently.
   right. At the end, the hand tick, "that's the lot", how long the reader sat
   with it, and the next note on the pile, which `]` also opens in focus.
 
+#### Studying a note, and the reader's pace
+
+A note can be **studied under a task**. "Study this" (in the reader's head,
+and as "Study" in the focus bar) opens a popover that either names the task
+the note is under, with Start and Unlink, or offers the ways to give it one:
+a course picked with highlighter marks, "New reading: *title*" (a `reading`
+task made from the note on the spot), the open tasks already on that course
+(readings first, then any whose title shares a word with the note's), and
+"or just time it, without a task". Every path ends in the usual start
+popover, so the block length is chosen the same way it is from a task row.
+The link is `notes.task_id`, `on delete set null`, so deleting the task
+leaves the note alone. A task with a note shows it on its sheet: the title,
+where it was left and how long is left, **Resume** into the reader and
+**Focus**, which picks up in the same section.
+
+**Resuming.** A note opened partway through goes back to where it was left
+and says so in the slip, "Picked up in *section*", with **Start from the top**
+beside it. Focus opened from the shelf or a task does the same, with the
+same offer in a chip at the foot of the desk.
+
+**A read-through is timed only from the top.** With a sitting running on the
+note's task and the reader at the top of the note, a run begins; reaching
+the end keeps it as `{ seconds, words, at }` in `notes.reads`. The time is the
+sitting's focus time, so a break in the middle is not counted as reading. A
+run started partway down never begins, one whose sitting ends before the
+note does is dropped, and one faster than 600 words a minute or shorter than
+a minute is thrown away as a skim. While a run is going the standfirst and
+the focus foot say "timing this read" and nothing else.
+
+**The pace is the reader's own.** `readingPace` in `lib/notes/reads.ts` takes
+the median words a minute over every timed read once there are two, per
+course once a course has two, and every "min left", "min read" and
+"of reading" in Notes goes through `minutesForNote`: a note's own last read
+scaled to its current length, then the course pace, then the reader's, then
+200. The reader's standfirst says which it is ("read in 14 min last time",
+"~12 min at your pace", "12 min read"). Under the shelf, **Your reading** says
+it back in one line of serif with the figures in mono: words a minute, how
+long a read-through takes, how many are behind it. Before any read is timed
+that line says, once, how the minutes become theirs.
+
 Notes live in the `notes` table in Supabase, owned by the student and not
 scoped to a semester; a note linked to a course takes the course's colour for
 its stripe and its code in the standfirst, and one sent by an assistant over

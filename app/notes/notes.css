@@ -501,3 +501,50 @@
   .notes .nf, .notes .nf-page, .notes .nf-section, .notes .lead-main, .notes .lead-side { animation: none; }
   .notes .nf .markdown-body > *, .notes .nf-bar { transition: none; }
 }
+
+/* ── Studying a note under a task ──────────────────────────────────────
+   One button and a popover: the task it is studied under, or the ways to
+   give it one. Rows are written in the popover, not boxed. */
+.notes .study { position: relative; }
+.notes .study-pop { width: 320px; }
+.notes .study-pop > .eyebrow { display: block; margin-bottom: 8px; }
+.notes .study-pop .choice-row { margin-bottom: 10px; }
+.notes .study-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: calc(100% + 16px); min-height: 38px; margin: 0 -8px; padding: 6px 8px; box-sizing: border-box; border: 0; border-radius: 8px; background: none; color: var(--ink); text-align: left; font: 14px/1.35 var(--font-serif); cursor: pointer; transition: background .15s; }
+.notes .study-row:hover:not(:disabled) { background: var(--bg-tint); }
+.notes .study-row:disabled { opacity: .5; cursor: default; }
+.notes .study-new { justify-content: flex-start; gap: 8px; font-family: var(--font-sans); font-size: 13px; color: var(--ink-soft); }
+.notes .study-new em { font: italic 14px var(--font-serif); color: var(--ink); }
+.notes .study-sub { display: block; margin: 14px 0 4px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.notes .study-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.notes .study-task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notes .study-linked { display: flex; align-items: center; gap: 8px; margin: 0; font: 16px/1.35 var(--font-serif); color: var(--ink); }
+.notes .study-linked .study-task-title { margin-left: 2px; }
+.notes .study-actions { display: flex; gap: 6px; margin-top: 14px; }
+.notes .study-actions .btn { height: 36px; }
+.notes .study-just { display: block; margin-top: 14px; }
+.notes .nf-tools .study-pop { top: 44px; }
+
+.notes .standfirst .timing { color: var(--ink-soft); }
+
+.notes .nf-resume { position: absolute; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 32px); padding: 9px 9px 9px 16px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, var(--paper) 96%, transparent); box-shadow: var(--shadow-float); backdrop-filter: blur(6px); font: italic 13px/1.4 var(--font-serif); color: var(--muted); transform: translateX(-50%); animation: nf-chip .4s .3s cubic-bezier(.2, .7, .2, 1) both; }
+.notes .nf-resume em { color: var(--ink); }
+.notes .nf-resume button { flex: none; height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--bg-tint); font: 500 12.5px/1 var(--font-sans); color: var(--ink); cursor: pointer; }
+.notes .nf-timing { margin-left: 14px; color: var(--muted); }
+@keyframes nf-chip { from { opacity: 0; transform: translate(-50%, 10px); } }
+
+/* What the timed reads have taught, above the keys. */
+.notes .pace-line { margin: 36px 0 0; font: italic 13px/1.5 var(--font-serif); color: var(--muted); }
+.notes .pace-known { display: grid; gap: 6px; }
+.notes .pace-known p { margin: 0; font: italic 14px/1.5 var(--font-serif); color: var(--ink-soft); }
+.notes .pace-known b { font: 500 12.5px var(--font-mono); font-style: normal; color: var(--ink); }
+.notes .pace-line + .keys-foot { margin-top: 20px; }
+@media (prefers-reduced-motion: reduce) { .notes .nf-resume { animation: none; } }
+
+/* The reader's head carries eight actions now; the standfirst gets the full
+   measure and the actions sit under it, rather than squeezing it into a
+   column beside them. */
+.notes .reader .page-head { flex-direction: column; align-items: stretch; gap: 10px; }
+.notes .reader .page-head .actions { margin-left: -10px; }
+.notes .reader .page-head .popover { left: 0; right: auto; }
+.notes .reader .study .popover { left: 0; right: auto; }
+.notes .slip button { flex: none; white-space: nowrap; }

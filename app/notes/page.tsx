@@ -12,17 +12,20 @@ import PromptSheet from '@/components/notes/PromptSheet';
 import Icon from '@/components/notes/Icon';
 import { CheckStrokes, MinutesLeft, TocList } from '@/components/notes/Contents';
 import FocusMode from '@/components/notes/FocusMode';
+import StudyThis from '@/components/notes/StudyThis';
 import Shelf from '@/components/notes/Shelf';
 import {
-  DOCS_KEY, READER_KEY, checksKey, dateLabel, downloadNote, draftKey, loadChecks, loadNotes, minutesFor,
-  readStore, rememberReading, removeStore, sampleNote, scrollKey, titleFromMarkdown, unwrapFence, wordCount,
+  DOCS_KEY, READER_KEY, checksKey, dateLabel, downloadNote, draftKey, loadChecks, loadNotes,
+  readProgress, readSection, readStore, rememberReading, removeStore, sampleNote, scrollKey, titleFromMarkdown, unwrapFence, wordCount,
   writeStore, type CheckResult, type Note,
 } from '@/lib/notes/store';
-import { useCourses, useNotes, saveNote, deleteNoteOptimistic, setNoteChecksOptimistic } from '@/lib/data-hooks';
-import type { NoteSource, StudyNote } from '@/lib/data';
+import { useCourses, useNotes, saveNote, deleteNoteOptimistic, setNoteChecksOptimistic, addNoteReadOptimistic } from '@/lib/data-hooks';
+import type { NoteRead, NoteSource, StudyNote } from '@/lib/data';
+import { minutesForNote, readingPace } from '@/lib/notes/reads';
+import { useReadThrough } from '@/lib/notes/use-read-through';
 
 /** The page's view of a stored note: times as numbers, the way it compares them. */
-type ShelfNote = Note & { courseId: string | null; checks: Record<string, CheckResult>; source: NoteSource; stored: StudyNote };
+type ShelfNote = Note & { courseId: string | null; checks: Record<string, CheckResult>; source: NoteSource; taskId: string | null; reads: NoteRead[]; stored: StudyNote };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -70,6 +73,9 @@ function NotesContent() {
   const editing = params.get('edit') === '1';
   const writingNew = params.get('new') === '1';
   const focusParam = params.get('focus') === '1';
+  // Focus opened from outside the page (a task's sheet) picks up where the
+  // note was left, the way the shelf's Focus does.
+  const fromSaved = params.get('from') === 'saved';
 
   const { notes: stored, loaded, available } = useNotes();
   const { courses } = useCourses();
@@ -83,6 +89,8 @@ function NotesContent() {
       courseId: n.courseId,
       checks: n.checks,
       source: n.source,
+      taskId: n.taskId,
+      reads: n.reads,
       stored: n,
     })),
     [stored],
@@ -161,7 +169,8 @@ function NotesContent() {
   const words = useMemo(() => wordCount(markdown), [markdown]);
   const totalChecks = useMemo(() => countChecks(markdown), [markdown]);
   const hasOwnTitle = /^\s*#\s+/.test(markdown);
-  const minutes = minutesFor(words);
+  const pace = useMemo(() => readingPace(stored), [stored]);
+  const minutes = active ? minutesForNote(active, words, pace) : 1;
   const minutesLeft = Math.round(minutes * (1 - progress));
   const index = notes.findIndex((n) => n.id === openId);
   const nextNote = index >= 0 && notes.length > 1 ? notes[(index + 1) % notes.length] : undefined;
@@ -179,18 +188,46 @@ function NotesContent() {
   // a pixel offset from one lands somewhere else on the other.
   const returnHeading = useRef('');
   const [focusStart, setFocusStart] = useState('');
+  // The note whose place has been put back. Until then the page sits at the
+  // top for a frame, which must not read as a read from the top.
+  const [placedId, setPlacedId] = useState('');
   useEffect(() => {
     if (!ready || mode !== 'read' || !openId || focusing) return;
     const heading = returnHeading.current;
     returnHeading.current = '';
     const y = Number(readStore(scrollKey(openId)) || 0);
+    const saved = readProgress(openId);
     const timer = window.setTimeout(() => {
       const el = heading ? document.getElementById(heading) : null;
       if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 32, behavior: 'instant' });
       else window.scrollTo({ top: Number.isFinite(y) ? y : 0, behavior: 'instant' });
+      setPlacedId(openId);
+      // Opening a note partway through says where it picked up, and offers
+      // the top: a read from the top is the one that gets timed.
+      if (!el && y > 40 && saved > 0.03 && saved < 0.98) {
+        const section = readSection(openId);
+        say(section ? `Picked up in “${section}”.` : 'Picked up where you left off.', {
+          label: 'Start from the top',
+          run: () => {
+            rememberReading(openId, 0, '');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          },
+        });
+      }
     }, 60);
     return () => window.clearTimeout(timer);
+    // `say` is stable; the place is put back once per note.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, mode, ready, focusing]);
+
+  const onRead = useCallback((read: NoteRead) => {
+    if (!active) return;
+    const mins = Math.max(1, Math.round(read.seconds / 60));
+    addNoteReadOptimistic(active.stored, read)
+      .then(() => say(`Read through in ${mins} min on the clock. Kept for your pace.`))
+      .catch((cause) => say(cause instanceof Error && cause.message ? cause.message : 'That read-through didn’t save.'));
+  }, [active, say]);
+  const timing = useReadThrough({ note: active, words, progress, enabled: ready && mode === 'read' && !focusing && placedId === openId, onRead });
 
   useEffect(() => {
     if (mode !== 'read' || focusing) return;
@@ -419,11 +456,34 @@ function NotesContent() {
   };
 
   /* ── Focus ────────────────────────────────────────────────────────── */
+  const [focusResumed, setFocusResumed] = useState('');
+  const savedStart = useMemo(() => {
+    if (!fromSaved || !active || !ready) return { id: '', text: '' };
+    const saved = readProgress(active.id);
+    const text = readSection(active.id);
+    const heading = text && saved > 0.03 && saved < 0.98
+      ? getMarkdownHeadings(active.markdown).find((h) => h.level === 2 && h.text === text)
+      : undefined;
+    return { id: heading?.id ?? '', text: heading?.text ?? '' };
+  }, [fromSaved, active, ready]);
   const enterFocus = useCallback((id: string) => {
-    // From the page behind, focus opens on the section being read.
-    setFocusStart(id === openId && mode === 'read' && window.scrollY > 120 ? activeHeading : '');
+    // From the page behind, focus opens on the section being read. From the
+    // shelf, on the section the note was left in, and says so.
+    if (id === openId && mode === 'read') {
+      setFocusStart(window.scrollY > 120 ? activeHeading : '');
+      setFocusResumed('');
+    } else {
+      const note = notes.find((n) => n.id === id);
+      const saved = readProgress(id);
+      const text = readSection(id);
+      const heading = note && text && saved > 0.03 && saved < 0.98
+        ? getMarkdownHeadings(note.markdown).find((h) => h.level === 2 && h.text === text)
+        : undefined;
+      setFocusStart(heading?.id ?? '');
+      setFocusResumed(heading?.text ?? '');
+    }
     go(`n=${encodeURIComponent(id)}&focus=1`);
-  }, [go, openId, mode, activeHeading]);
+  }, [go, openId, mode, activeHeading, notes]);
   const leaveFocus = useCallback((heading: string) => {
     if (!active) return;
     returnHeading.current = heading;
@@ -432,6 +492,7 @@ function NotesContent() {
   const focusNext = useCallback(() => {
     if (!nextNote) return;
     setFocusStart('');
+    setFocusResumed('');
     router.replace(`/notes?n=${encodeURIComponent(nextNote.id)}&focus=1`);
   }, [nextNote, router]);
 
@@ -564,7 +625,12 @@ function NotesContent() {
         size={reader.size}
         onSize={(size) => updateReader({ size })}
         measure={reader.measure}
-        startAt={focusStart}
+        startAt={focusStart || savedStart.id}
+        resumedAt={focusResumed || savedStart.text}
+        minutes={minutes}
+        courses={courses}
+        onSay={say}
+        onRead={onRead}
         nextNote={nextNote}
         onNext={focusNext}
         onLeave={leaveFocus}
@@ -583,7 +649,9 @@ function NotesContent() {
                   <span className="eyebrow" style={{ color: 'var(--ink-soft)' }}>{activeCourse.code}</span>
                 </span>
               )}
-              {active.source === 'mcp' ? 'From your assistant' : 'Edited'} {dateLabel(active.updatedAt)} · {words.toLocaleString()} words · {minutes} min read
+              {active.source === 'mcp' ? 'From your assistant' : 'Edited'} {dateLabel(active.updatedAt)} · {words.toLocaleString()} words ·{' '}
+              {active.reads.length ? `read in ${Math.max(1, Math.round(active.reads[active.reads.length - 1].seconds / 60))} min last time` : pace.personal ? `~${minutes} min at your pace` : `${minutes} min read`}
+              {timing && <span className="timing"> · timing this read</span>}
             </p>
             <div className="actions">
               <button type="button" className="btn btn-ghost" onClick={() => go(`n=${encodeURIComponent(active.id)}&edit=1`)} title="Edit (E)">
@@ -592,6 +660,7 @@ function NotesContent() {
               <button type="button" className="btn btn-ghost" onClick={() => enterFocus(active.id)} title="Read in focus (F)">
                 <Icon name="focus" size={16} />Focus
               </button>
+              <StudyThis note={active} courses={courses} onSay={say} />
               {showToc && (
                 <button type="button" className="btn btn-ghost btn-icon toc-toggle" onClick={() => setContentsOpen(true)} aria-label="Contents" title="Contents">
                   <Icon name="contents" size={16} />

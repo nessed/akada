@@ -5,7 +5,9 @@ import HandNote from '@/components/notebook/HandNote';
 import HandCheck from '@/components/notebook/HandCheck';
 import Icon from './Icon';
 import { countChecks, getMarkdownHeadings } from './MarkdownReader';
-import { minutesFor, noteColor, readLastRead, readProgress, relativeLabel, wordCount, type CheckResult } from '@/lib/notes/store';
+import { noteColor, readLastRead, readProgress, relativeLabel, wordCount, type CheckResult } from '@/lib/notes/store';
+import { minutesForNote, readingPace, type ReadingPace } from '@/lib/notes/reads';
+import type { NoteRead } from '@/lib/data';
 import { resolveTint } from '@/lib/utils';
 import type { Course } from '@/lib/data';
 
@@ -17,6 +19,8 @@ export type ShelfEntry = {
   courseId: string | null;
   checks: Record<string, CheckResult>;
   source: string;
+  taskId: string | null;
+  reads: NoteRead[];
 };
 
 type Sort = 'recent' | 'title';
@@ -88,6 +92,8 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
   const listRef = useRef<HTMLUListElement>(null);
 
   const courseOf = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
+  const pace = useMemo(() => readingPace(notes), [notes]);
+  const minutesOf = (note: ShelfEntry) => minutesForNote(note, wordCount(note.markdown), pace);
 
   // Reading positions live in this browser, so they are read on the client
   // only; the shelf does not render before the page's own prefs are in.
@@ -106,11 +112,11 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
     let minutes = 0;
     let revisit = 0;
     for (const note of notes) {
-      minutes += minutesFor(wordCount(note.markdown));
+      minutes += minutesForNote(note, wordCount(note.markdown), pace);
       revisit += Object.values(note.checks).filter((r) => r === 'miss').length;
     }
     return { minutes, revisit };
-  }, [notes]);
+  }, [notes, pace]);
 
   const filters = useMemo(() => {
     const used = new Set(notes.map((n) => n.courseId).filter((id): id is string => !!id && courseOf.has(id)));
@@ -199,7 +205,7 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
       <header className="page-head">
         <div>
           <p className="standfirst">
-            {notes.length} {notes.length === 1 ? 'note' : 'notes'} · {hoursLabel(stats.minutes)} of reading
+            {notes.length} {notes.length === 1 ? 'note' : 'notes'} · {hoursLabel(stats.minutes)} of reading{pace.personal ? ' at your pace' : ''}
             {stats.revisit > 0 && <> · {stats.revisit} {stats.revisit === 1 ? 'check' : 'checks'} to revisit</>}
           </p>
           <h1 className="screen-title">Notes</h1>
@@ -217,7 +223,7 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
         </div>
       </header>
 
-      {last && <LeadBand note={last.note} section={last.section} at={last.at} progress={reading.get(last.note.id) ?? 0} course={last.note.courseId ? courseOf.get(last.note.courseId) : undefined} onOpen={onOpen} onFocus={onFocus} />}
+      {last && <LeadBand pace={pace} note={last.note} section={last.section} at={last.at} progress={reading.get(last.note.id) ?? 0} course={last.note.courseId ? courseOf.get(last.note.courseId) : undefined} onOpen={onOpen} onFocus={onFocus} />}
 
       <div className="fold" />
 
@@ -266,7 +272,7 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
             {group.notes.map((note) => {
               const i = indexOf.get(note.id) ?? -1;
               const course = note.courseId ? courseOf.get(note.courseId) : undefined;
-              const minutes = minutesFor(wordCount(note.markdown));
+              const minutes = minutesOf(note);
               const done = reading.get(note.id) ?? 0;
               const total = countChecks(note.markdown);
               const text = plain(note.markdown);
@@ -296,7 +302,7 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
                         {Array.from({ length: total }, (_, k) => <span key={k} data-r={note.checks[String(k)] ?? ''} />)}
                       </span>
                     )}
-                    <span className="mins" title={done >= 0.98 ? 'Read through' : done > 0.03 ? `${minutes} min in all` : undefined}>
+                    <span className="mins" title={note.reads.length ? `Read through in ${minutes} min last time, on the clock` : done >= 0.98 ? 'Read through' : done > 0.03 ? `${minutes} min in all` : undefined}>
                       {done >= 0.98 ? <span className="read-through"><HandCheck size={14} /></span>
                         : done > 0.03 ? <>{Math.max(1, Math.round(minutes * (1 - done)))}m <em>left</em></>
                           : <>{minutes}m</>}
@@ -334,6 +340,8 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
         </p>
       )}
 
+      <PaceLine pace={pace} />
+
       <div className="keys keys-foot" aria-label="Keyboard shortcuts">
         <span><span className="kbd">↑</span><span className="kbd">↓</span> move</span>
         <span><span className="kbd">Enter</span> read</span>
@@ -352,7 +360,8 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
  * draws a week: "four of seven" is where you are in a note, a bar would only
  * say how much.
  */
-function LeadBand({ note, section, at, progress, course, onOpen, onFocus }: {
+function LeadBand({ pace, note, section, at, progress, course, onOpen, onFocus }: {
+  pace: ReadingPace;
   note: ShelfEntry;
   section: string;
   at: number;
@@ -363,7 +372,7 @@ function LeadBand({ note, section, at, progress, course, onOpen, onFocus }: {
 }) {
   const sections = useMemo(() => getMarkdownHeadings(note.markdown).filter((h) => h.level === 2), [note.markdown]);
   const at2 = sections.findIndex((s) => s.text === section);
-  const minutes = minutesFor(wordCount(note.markdown));
+  const minutes = minutesForNote(note, wordCount(note.markdown), pace);
   const left = Math.max(0, Math.round(minutes * (1 - progress)));
   const finished = progress >= 0.98;
   const excerpt = useMemo(() => {
@@ -424,5 +433,30 @@ function LeadBand({ note, section, at, progress, course, onOpen, onFocus }: {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * What the timed reads have taught, said back in a line. Before any read has
+ * been timed it says how that happens, once, since otherwise the minutes on
+ * every row are a guess nobody knows how to improve.
+ */
+function PaceLine({ pace }: { pace: ReadingPace }) {
+  if (!pace.timed) {
+    return (
+      <p className="pace-line">
+        minutes assume 200 words a minute until you time a read from the top, on a task’s clock
+      </p>
+    );
+  }
+  return (
+    <div className="pace-line pace-known">
+      <span className="eyebrow">Your reading</span>
+      <p>
+        {pace.personal ? <>about <b>{Math.round(pace.wpm)}</b> words a minute · </> : null}
+        a read-through takes you <b>{Math.max(1, Math.round(pace.medianMinutes))}</b> min · <b>{pace.timed}</b> timed across <b>{pace.notesTimed}</b> {pace.notesTimed === 1 ? 'note' : 'notes'}
+        {!pace.personal && <> · one more and the minutes here are yours</>}
+      </p>
+    </div>
   );
 }

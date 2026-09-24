@@ -71,9 +71,11 @@ interface Props {
   onStarted?: () => void;
   /** Stay on the current screen rather than following the session to /timer. */
   stayPut?: boolean;
+  /** Above a full-screen layer, such as Notes' focus mode. */
+  raised?: boolean;
 }
 
-export default function StartTimerPopover({ target, onClose, onStarted, stayPut }: Props) {
+export default function StartTimerPopover({ target, onClose, onStarted, stayPut, raised }: Props) {
   const router = useRouter();
   const { start } = useTimer();
   const { logged } = useProgression();
@@ -164,7 +166,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut 
       ref={panelRef}
       role="dialog"
       aria-label="Start timer"
-      className="fixed z-50 w-[360px] animate-fade-in rounded-[14px] border border-line bg-paper p-5 shadow-[0_8px_20px_rgba(57,48,36,.12)]"
+      className={`fixed ${raised ? 'z-[85]' : 'z-50'} w-[360px] animate-fade-in rounded-[14px] border border-line bg-paper p-5 shadow-[0_8px_20px_rgba(57,48,36,.12)]`}
       style={{ top: pos.top, left: pos.left }}
     >
       <p className="eyebrow m-0">Start timer</p>
