@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useSyncExternalStore } from 'react';
 
 /**
  * The paper a reader chooses to work on. Four of these are daylight papers;
@@ -512,27 +512,59 @@ export function plannerDate(value = new Date()): string {
   return `${adjusted.getFullYear()}-${String(adjusted.getMonth() + 1).padStart(2, '0')}-${String(adjusted.getDate()).padStart(2, '0')}`;
 }
 
+/* ───────── one record for the whole app ─────────
+   Every screen used to hold its own copy of the preferences in useState.
+   Today renders the settings sheet and its own Up next sort side by side, so
+   picking White in the sheet and then tapping the sort wrote the page's stale
+   copy back over it, and the reader was on Paper again. One record here, and
+   every caller of usePreferences reads and writes that same one. */
+
+let current: Preferences | null = null;
+const listeners = new Set<() => void>();
+
+function snapshot(): Preferences {
+  if (current === null) current = readFromStorage();
+  return current;
+}
+
+function serverSnapshot(): Preferences {
+  return DEFAULTS;
+}
+
+function emit() {
+  listeners.forEach((listener) => listener());
+}
+
+/** Another tab changed the record: take it, so two open tabs cannot fight. */
+function onStorage(event: StorageEvent) {
+  if (event.key !== STORAGE_KEY) return;
+  current = readFromStorage();
+  applyPreferences(current);
+  emit();
+}
+
+function subscribe(listener: () => void) {
+  if (listeners.size === 0) window.addEventListener('storage', onStorage);
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) window.removeEventListener('storage', onStorage);
+  };
+}
+
+function updatePreferences(patch: Partial<Preferences>) {
+  const next = sanitizePreferences({ ...snapshot(), ...patch });
+  current = next;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore quota / private mode
+  }
+  applyPreferences(next);
+  emit();
+}
+
 export function usePreferences(): [Preferences, (patch: Partial<Preferences>) => void] {
-  const [prefs, setPrefs] = useState<Preferences>(DEFAULTS);
-
-  useEffect(() => {
-    const next = readFromStorage();
-    setPrefs(next);
-    applyPreferences(next);
-  }, []);
-
-  const update = useCallback((patch: Partial<Preferences>) => {
-    setPrefs((current) => {
-      const next = sanitizePreferences({ ...current, ...patch });
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        // ignore quota / private mode
-      }
-      applyPreferences(next);
-      return next;
-    });
-  }, []);
-
-  return [prefs, update];
+  const prefs = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  return [prefs, updatePreferences];
 }
