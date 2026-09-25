@@ -11,6 +11,9 @@ import type {
   StudyNotes,
   NoteCheckResult,
   NoteRead,
+  Quiz,
+  QuizAttempt,
+  Quizzes,
   Task,
   Semester,
   NewSemesterInput,
@@ -30,6 +33,7 @@ import { seasonLabel } from '@/lib/utils';
 import { cleanChecks } from '@/lib/notes/checks';
 import { cleanReads } from '@/lib/notes/reads';
 import { cleanNoteMarkdown, cleanNoteTitle } from '@/lib/notes/limits';
+import { cleanAttempts } from '@/lib/quiz/format';
 import {
   clampDailyGoalHours,
   clampWeeklyGoalHours,
@@ -67,6 +71,7 @@ const KEYS = {
   userSettings: 'lums.userSettings',
   recall: 'lums.recall',
   notes: 'lums.notes',
+  quizzes: 'lums.quizzes',
 } as const;
 
 /**
@@ -649,6 +654,22 @@ export class LocalAdapter implements DataProvider {
 
   async deleteNote(id: string): Promise<void> {
     write(KEYS.notes, read<StudyNote[]>(KEYS.notes, []).filter((n) => n.id !== id));
+  }
+
+  // ---- Quizzes. Only an assistant over MCP writes them, and that needs an
+  // account, so a local shelf has them only if something put them there.
+  async getQuizzes(): Promise<Quizzes> {
+    const quizzes = read<Quiz[]>(KEYS.quizzes, []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return { quizzes, available: true };
+  }
+
+  async setQuizAttempts(id: string, attempts: QuizAttempt[]): Promise<void> {
+    const now = new Date().toISOString();
+    write(KEYS.quizzes, read<Quiz[]>(KEYS.quizzes, []).map((q) => (q.id === id ? { ...q, attempts: cleanAttempts(attempts), updatedAt: now } : q)));
+  }
+
+  async deleteQuiz(id: string): Promise<void> {
+    write(KEYS.quizzes, read<Quiz[]>(KEYS.quizzes, []).filter((q) => q.id !== id));
   }
 
   async resetAll(): Promise<void> {

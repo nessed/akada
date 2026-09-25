@@ -28,11 +28,15 @@ import type {
   StudyNotes,
   NoteCheckResult,
   NoteRead,
+  Quiz,
+  QuizAttempt,
+  Quizzes,
   Task,
   UserSettings,
 } from './data';
 import { db } from './data';
 import { cleanReads } from './notes/reads';
+import { cleanAttempts } from './quiz/format';
 import { clearStoredTimerState } from './timer-context';
 
 const KEY = {
@@ -45,6 +49,7 @@ const KEY = {
   userSettings: 'user-settings',
   recall: 'recall',
   notes: 'notes',
+  quizzes: 'quizzes',
 } as const;
 
 /* ───────── Reads ───────── */
@@ -123,6 +128,19 @@ export function useNotes() {
   const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.notes, () => db.getNotes());
   return {
     notes: data?.notes ?? [],
+    loaded: data !== undefined,
+    available: data?.available ?? true,
+    error,
+    isLoading,
+    revalidate,
+  };
+}
+
+/** Every quiz an assistant has sent, newest first. */
+export function useQuizzes() {
+  const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.quizzes, () => db.getQuizzes());
+  return {
+    quizzes: data?.quizzes ?? [],
     loaded: data !== undefined,
     available: data?.available ?? true,
     error,
@@ -653,6 +671,7 @@ export async function resetAllData() {
     mutate(KEY.userSettings, null, { revalidate: false }),
     mutate(KEY.recall, { records: [], available: true }, { revalidate: false }),
     mutate(KEY.notes, { notes: [], available: true }, { revalidate: false }),
+    mutate(KEY.quizzes, { quizzes: [], available: true }, { revalidate: false }),
   ]);
 }
 
@@ -674,6 +693,7 @@ export async function deleteAccountAndData() {
     mutate(KEY.userSettings, null, { revalidate: false }),
     mutate(KEY.recall, { records: [], available: true }, { revalidate: false }),
     mutate(KEY.notes, { notes: [], available: true }, { revalidate: false }),
+    mutate(KEY.quizzes, { quizzes: [], available: true }, { revalidate: false }),
   ]);
 }
 
@@ -773,6 +793,52 @@ export async function deleteNoteOptimistic(id: string) {
     {
       optimisticData: (current: StudyNotes | undefined) => ({
         notes: (current?.notes ?? []).filter((n) => n.id !== id),
+        available: current?.available ?? true,
+      }),
+      rollbackOnError: true,
+      populateCache: true,
+      revalidate: false,
+    },
+  );
+}
+
+/* ───────── Quiz mutations ───────── */
+
+function patchQuiz(current: Quizzes | undefined, id: string, patch: Partial<Quiz>): Quizzes {
+  return {
+    quizzes: (current?.quizzes ?? []).map((q) => (q.id === id ? { ...q, ...patch } : q)),
+    available: current?.available ?? true,
+  };
+}
+
+/** Files one sitting of a quiz under it, keeping the last QUIZ_ATTEMPTS_MAX. */
+export async function addQuizAttemptOptimistic(quiz: Quiz, attempt: QuizAttempt) {
+  const attempts = cleanAttempts([...quiz.attempts, attempt]);
+  await mutate(
+    KEY.quizzes,
+    async (current: Quizzes | undefined) => {
+      await db.setQuizAttempts(quiz.id, attempts);
+      return patchQuiz(current, quiz.id, { attempts });
+    },
+    {
+      optimisticData: (current: Quizzes | undefined) => patchQuiz(current, quiz.id, { attempts }),
+      rollbackOnError: true,
+      populateCache: true,
+      revalidate: false,
+    },
+  );
+}
+
+export async function deleteQuizOptimistic(id: string) {
+  await mutate(
+    KEY.quizzes,
+    async (current: Quizzes | undefined) => {
+      await db.deleteQuiz(id);
+      return { quizzes: (current?.quizzes ?? []).filter((q) => q.id !== id), available: true };
+    },
+    {
+      optimisticData: (current: Quizzes | undefined) => ({
+        quizzes: (current?.quizzes ?? []).filter((q) => q.id !== id),
         available: current?.available ?? true,
       }),
       rollbackOnError: true,

@@ -354,6 +354,46 @@ export interface StudyNotes {
   available: boolean;
 }
 
+/** One multiple-choice question. `answer` is the index of the right option. */
+export interface QuizQuestion {
+  prompt: string;
+  options: string[];
+  answer: number;
+  explain?: string;
+}
+
+/** One sitting of a quiz: what was picked for each question (-1 blank), and the mark. */
+export interface QuizAttempt {
+  at: string;
+  picks: number[];
+  score: number;
+  total: number;
+}
+
+/**
+ * A multiple-choice quiz an assistant sent over MCP, filed under a course and
+ * optionally the task (a chapter, a reading) or the note it tests. Attempts
+ * are kept oldest first, so the latest mark is the last one.
+ */
+export interface Quiz {
+  id: string;
+  courseId: string | null;
+  taskId: string | null;
+  noteId: string | null;
+  title: string;
+  context: string;
+  questions: QuizQuestion[];
+  attempts: QuizAttempt[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `available` is false against a database without the quizzes table yet. */
+export interface Quizzes {
+  quizzes: Quiz[];
+  available: boolean;
+}
+
 export interface Semester {
   id: string;
   label: string;

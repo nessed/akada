@@ -63,8 +63,13 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `update_note`: Replace a note, append a section to it, retitle it, or link it to a course.
 - `record_note_checks`: Record how the student did on a note's self-checks after a quiz in chat.
 - `delete_note`: Permanently delete a note.
+- `get_quiz_format`: The text format Akada parses multiple-choice quizzes from.
+- `send_quiz`: Send a multiple-choice quiz with its answer key; it lands on the Notes screen to be taken and marked in Akada.
+- `list_quizzes`: List quizzes with what they're filed under and the last and best marks.
+- `get_quiz`: Read one quiz with its key, what the student picked last time, and every past mark.
+- `delete_quiz`: Permanently delete a quiz and its marks.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `record_grade`, `reorder_courses`, `delete_course`, `delete_tasks`, `delete_study_session`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks` and `delete_note` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `record_grade`, `reorder_courses`, `delete_course`, `delete_tasks`, `delete_study_session`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks`, `delete_note`, `send_quiz` and `delete_quiz` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -203,6 +208,22 @@ Things to ask Claude once it's connected:
 - "Quiz me on my Harrod-Domar note." (reads the checks, asks one at a time, records got/not yet)
 - "Add three harder check questions to that note."
 - "Which of my notes have checks I keep missing?"
+
+### Quizzes: `get_quiz_format`, `send_quiz`, `list_quizzes`, `get_quiz`, `delete_quiz`
+
+Quizzes live in the `quizzes` table (see `supabase/schema.sql`). The assistant writes the quiz as plain text in the format `lib/quiz/format.ts` sets out (`# Title`, numbered questions, `A)`…`F)` options, `Answer: B`, optional `Why: ...`), and `parseQuiz` in the same file reads it. The rules ride in `send_quiz`'s description and come back from `get_quiz_format`; text that doesn't parse is refused with every problem listed by question number, so the assistant fixes and resends it.
+
+- **`get_quiz_format`** (`readOnlyHint: true`): no input. Returns the format.
+- **`send_quiz`** (`destructiveHint: false`): `quiz` (the text), optional `course_id`, `task_id` (the chapter or reading it tests), `note_id`. A task or note fills in its course. Returns the quiz's id and a `url` (`/notes/quiz?q=...`).
+- **`list_quizzes`** (`readOnlyHint: true`): optional `course_id`, `task_id`, `limit` (1-50, default 20). Newest first, with `last_score` and `best_score`.
+- **`get_quiz`** (`readOnlyHint: true`): `quiz_id`. Every question with its options, `answer`, `why`, the latest attempt's `last_pick` and `last_correct`, and `history` of marks.
+- **`delete_quiz`** (`destructiveHint: true`): `quiz_id`.
+
+The student takes the quiz in Akada; the mark is written onto the quiz (last 30 sittings kept), so `get_quiz` sees it straight after.
+
+Things to ask Claude once it's connected:
+- "Here's chapter 5, quiz me on it in Akada, 10 questions, file it under the chapter 5 reading."
+- "How did I do on that quiz? Go over the ones I missed."
 
 ### 5. `log_study_session`
 - **Title**: Log study time in Akada

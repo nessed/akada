@@ -9,6 +9,8 @@ import type {
   StudyNotes,
   NoteCheckResult,
   NoteRead,
+  QuizAttempt,
+  Quizzes,
   Task,
   Semester,
   NewSemesterInput,
@@ -91,6 +93,12 @@ export interface DataProvider {
   /** Writes a note's timed read-throughs whole. */
   setNoteReads(id: string, reads: NoteRead[]): Promise<void>;
   deleteNote(id: string): Promise<void>;
+
+  // Quizzes. Sent by an assistant over MCP; the app only takes them.
+  getQuizzes(): Promise<Quizzes>;
+  /** Writes a quiz's attempts whole. */
+  setQuizAttempts(id: string, attempts: QuizAttempt[]): Promise<void>;
+  deleteQuiz(id: string): Promise<void>;
 
   // Semesters
   /** The semester Dashboard/Tasks/Timer currently write into, or null before onboarding finishes it. */
