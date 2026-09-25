@@ -155,6 +155,12 @@ interface ToneTokens {
   mutedSoft: string;
   glowA: string;
   glowB: string;
+  /**
+   * The desk under the page on desktop: what the rail sits on, a step darker
+   * than `bg`, so the page reads as a sheet lying over the margin with no
+   * line between them.
+   */
+  desk: string;
 }
 
 /** The ink family every daylight paper shares. Mirrored into `:root`. */
@@ -178,6 +184,7 @@ export const PAPER_TONES: Record<PaperTone, ToneTokens> = {
     ...DAY_INK,
     glowA: 'rgba(190, 170, 120, 0.10)',
     glowB: 'rgba(180, 150, 110, 0.07)',
+    desk: '#EEE9DD',
   },
   paper: {
     bg: '#F5F1E8',
@@ -190,6 +197,7 @@ export const PAPER_TONES: Record<PaperTone, ToneTokens> = {
     ...DAY_INK,
     glowA: 'rgba(178, 152, 92, 0.10)',
     glowB: 'rgba(132, 112, 78, 0.08)',
+    desk: '#E8E2D5',
   },
   stone: {
     bg: '#F4F4F1',
@@ -202,6 +210,7 @@ export const PAPER_TONES: Record<PaperTone, ToneTokens> = {
     ...DAY_INK,
     glowA: 'rgba(130, 132, 120, 0.08)',
     glowB: 'rgba(110, 112, 104, 0.06)',
+    desk: '#E7E7E1',
   },
   white: {
     bg: '#FFFFFF',
@@ -214,6 +223,7 @@ export const PAPER_TONES: Record<PaperTone, ToneTokens> = {
     ...DAY_INK,
     glowA: 'rgba(180, 180, 170, 0.05)',
     glowB: 'rgba(150, 150, 145, 0.04)',
+    desk: '#F0EFEB',
   },
   night: {
     // Warm ink on a dark page, not an inversion. The ground is a deep brown
@@ -240,6 +250,7 @@ export const PAPER_TONES: Record<PaperTone, ToneTokens> = {
     mutedSoft: '#6B6459',
     glowA: 'rgba(196, 168, 106, 0.07)',
     glowB: 'rgba(138, 120, 92, 0.05)',
+    desk: '#110F0D',
   },
 };
 
@@ -284,6 +295,10 @@ const NIGHT_TOKENS: Record<string, string> = {
   '--underline-svg':
     "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%23EFE9DC' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.55'/></svg>\")",
   '--scrim': 'rgba(8, 7, 6, 0.55)',
+  // The page lying over the margin: a shadow reads on cream and vanishes on
+  // the night desk, so there the edge is carried by a lit hairline and a
+  // deeper shadow, and the second sheet under the curve is left out.
+  '--sheet-shadow': '-1px 0 0 rgba(255, 240, 220, 0.06), -12px 0 30px rgba(0, 0, 0, 0.55)',
   '--noise-blend': 'screen',
   '--noise-opacity': '0.14',
 };
@@ -358,6 +373,7 @@ function toneVariables(tone: ToneTokens): Record<string, string> {
     '--muted-soft': tone.mutedSoft,
     '--paper-glow-a': tone.glowA,
     '--paper-glow-b': tone.glowB,
+    '--desk': tone.desk,
   };
 }
 

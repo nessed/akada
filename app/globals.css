@@ -25,6 +25,14 @@
 
   --paper-glow-a: rgba(178, 152, 92, 0.10);
   --paper-glow-b: rgba(132, 112, 78, 0.08);
+  --desk: #E8E2D5;
+  /* The page's edge where it lies over the rail: its hairline, the edge of
+     a second sheet 4px under it along the curve, and a soft fall of shadow
+     onto the desk. Night has its own (NIGHT_TOKENS). */
+  --sheet-shadow: -1px 0 0 color-mix(in srgb, var(--line) 70%, transparent),
+    -4px 0 0 color-mix(in srgb, var(--bg) 60%, var(--desk)),
+    -5px 0 0 color-mix(in srgb, var(--line) 50%, transparent),
+    -10px 0 30px rgba(40, 30, 15, 0.1);
 
   /* The wash behind a sheet or a modal. A token rather than an ink opacity,
      because on the night paper the ink is the light value and `bg-ink/35`
@@ -714,13 +722,32 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .rail {
   width: var(--rail);
   container: rail / inline-size;
-  /* The margin rule a ruled pad has, the same faint rose as Focus's sheet. */
-  border-right: 1px solid color-mix(in srgb, var(--rose) 38%, transparent);
+  /* No rule: the rail sits on the desk and the page lies over it. */
+  background: var(--desk);
   transition: width 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 .rail[data-open] {
   width: 232px;
   box-shadow: 0 8px 20px rgba(57, 48, 36, 0.12);
+}
+
+/* The page as a sheet lying over the margin. Fixed behind the content, it
+   runs to the top, the foot and the right edge, and only the edge over the
+   rail curves, with a soft shadow falling onto the desk. It follows --rail,
+   so it moves with the rail when that folds. It sits at z-index 0 and the
+   content after it is merely positioned, which paints it above the sheet
+   without a stacking context of its own, so a popover or sheet opened from
+   the page still rises over the rail. A second sheet shows faintly
+   along the curve on daylight paper; the night desk leaves it out. */
+.page-sheet {
+  position: fixed;
+  inset: 0 0 0 var(--rail);
+  z-index: 0;
+  pointer-events: none;
+  background: var(--bg);
+  border-radius: 22px 0 0 22px;
+  box-shadow: var(--sheet-shadow);
+  transition: left 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 @container rail (max-width: 120px) {
   .rail-wide {

@@ -378,7 +378,7 @@ export default function DesktopRail() {
         onPointerLeave={() => setTip(null)}
         onFocus={(e) => tipFrom(e.target)}
         onBlur={() => setTip(null)}
-        className={`rail fixed inset-y-0 left-0 hidden shrink-0 flex-col gap-0.5 bg-bg px-2 pb-4 pt-5 md:flex ${
+        className={`rail fixed inset-y-0 left-0 hidden shrink-0 flex-col gap-0.5 px-2 pb-4 pt-5 md:flex ${
           overlay ? 'z-50' : 'z-40'
         }`}
       >
