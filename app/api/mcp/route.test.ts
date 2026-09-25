@@ -10,6 +10,7 @@ import {
   getRecallTool,
   getWeeklyStats,
   keepForRecallTool,
+  listStudySessions,
   logStudySession,
   recordGrade,
   recordRecallTool,
@@ -138,6 +139,10 @@ function fakeSupabase(tables: Record<string, Row[]>, schema: Record<string, stri
         },
         gte(col: string, value: unknown) {
           if (!failure) rows = rows.filter((row) => (row[col] as string) >= (value as string));
+          return builder;
+        },
+        lte(col: string, value: unknown) {
+          if (!failure) rows = rows.filter((row) => (row[col] as string) <= (value as string));
           return builder;
         },
         in(col: string, values: unknown[]) {
@@ -802,6 +807,91 @@ test('delete_study_session refuses a session it cannot find', async () => {
   const output = (await deleteStudySession(TOKEN, { session_id: TASK_A }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
   assert.equal(output.isError, true);
   assert.equal(db.sessions.length, 1);
+});
+
+// ---- Study session history ----
+
+const OTHER_COURSE = '55555555-5555-4555-8555-555555555555';
+
+// Two courses in the active semester, one from an older one, and a second
+// student whose rows sit in the same semester and course ids, so only the
+// user_id filter keeps them out.
+function history(): Record<string, Row[]> {
+  const db = deletable();
+  db.courses.push({ id: OTHER_COURSE, user_id: 'user-1', semester_id: 'sem-1', code: 'MATH200', name: 'Linear Algebra', weekly_goal_hours: 4 });
+  const sitting = (id: string, course_id: string, date: string, extra: Row = {}): Row => ({
+    id, user_id: 'user-1', semester_id: 'sem-1', course_id, task_id: null, date, duration_seconds: 1800, note: id, ...extra,
+  });
+  db.sessions = [
+    sitting('econ-1', COURSE_ID, '2026-09-01'),
+    sitting('econ-2', COURSE_ID, '2026-09-05'),
+    sitting('econ-3', COURSE_ID, '2026-09-10'),
+    sitting('econ-4', COURSE_ID, '2026-09-10'),
+    sitting('econ-5', COURSE_ID, '2026-09-18'),
+    sitting('math-1', OTHER_COURSE, '2026-09-19'),
+    sitting('math-2', OTHER_COURSE, '2026-09-20'),
+    sitting('old-1', 'course-old', '2026-02-01', { semester_id: 'sem-0' }),
+    sitting('theirs-1', COURSE_ID, '2026-09-11', { user_id: 'user-2' }),
+    sitting('theirs-2', OTHER_COURSE, '2026-09-21', { user_id: 'user-2' }),
+  ];
+  db.user_settings.push({ user_id: 'user-2', active_semester_id: 'sem-1' });
+  return db;
+}
+
+const ids = (output: Reply) => (output.structuredContent!.sessions as Row[]).map((row) => row.id);
+
+test('list_study_sessions narrows to one course, newest first', async () => {
+  const output = (await listStudySessions(TOKEN, { course_id: COURSE_ID, limit: 50 }, fakeSupabase(history(), GRADED_SCHEMA))) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  assert.deepEqual(ids(output), ['econ-5', 'econ-4', 'econ-3', 'econ-2', 'econ-1']);
+  const first = (output.structuredContent!.sessions as Row[])[0];
+  assert.deepEqual(first, {
+    id: 'econ-5', date: '2026-09-18', duration_seconds: 1800, note: 'econ-5',
+    course: { id: COURSE_ID, code: 'ECON 240', name: 'Development' },
+  });
+  assert.equal((output.structuredContent!.meta as Row).total, 5);
+  assert.equal(output.structuredContent!.next_cursor, undefined);
+});
+
+test('list_study_sessions reads an inclusive date range', async () => {
+  const output = (await listStudySessions(TOKEN, { from: '2026-09-05', to: '2026-09-19', limit: 50 }, fakeSupabase(history(), GRADED_SCHEMA))) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  assert.deepEqual(ids(output), ['math-1', 'econ-5', 'econ-4', 'econ-3', 'econ-2']);
+
+  const backwards = (await listStudySessions(TOKEN, { from: '2026-09-19', to: '2026-09-05', limit: 50 }, fakeSupabase(history(), GRADED_SCHEMA))) as Reply;
+  assert.equal(backwards.isError, true);
+});
+
+test('list_study_sessions pages with a cursor and never repeats or skips a sitting', async () => {
+  const db = history();
+  const seen: unknown[] = [];
+  let cursor: string | undefined;
+  let pages = 0;
+  do {
+    const output = (await listStudySessions(TOKEN, { limit: 3, cursor }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
+    assert.equal(output.isError, undefined, output.content[0].text);
+    assert.equal((output.structuredContent!.meta as Row).total, 7);
+    seen.push(...ids(output));
+    cursor = output.structuredContent!.next_cursor as string | undefined;
+    pages += 1;
+  } while (cursor && pages < 10);
+  assert.equal(pages, 3);
+  assert.deepEqual(seen, ['math-2', 'math-1', 'econ-5', 'econ-4', 'econ-3', 'econ-2', 'econ-1']);
+
+  const junk = (await listStudySessions(TOKEN, { limit: 3, cursor: 'not-a-cursor' }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
+  assert.equal(junk.isError, true);
+});
+
+test('list_study_sessions never shows another student\'s sessions, or another semester\'s', async () => {
+  const output = (await listStudySessions(TOKEN, { limit: 200 }, fakeSupabase(history(), GRADED_SCHEMA))) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  const seen = ids(output);
+  assert.ok(!seen.some((id) => String(id).startsWith('theirs-')), `leaked: ${seen.join(', ')}`);
+  assert.ok(!seen.includes('old-1'));
+  assert.equal((output.structuredContent!.meta as Row).total, 7);
+
+  const theirs = (await listStudySessions({ ...TOKEN, userId: 'user-2' }, { limit: 200 }, fakeSupabase(history(), GRADED_SCHEMA))) as Reply;
+  assert.deepEqual(ids(theirs), []);
 });
 
 // ---- Reading backlog ----

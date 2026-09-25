@@ -1721,6 +1721,120 @@ export async function deleteStudySession(
   }
 }
 
+// ---- Study session history ----
+
+const MAX_SESSIONS_PER_READ = 200;
+
+const ListStudySessionsInput = z.object({
+  course_id: z.string().uuid().optional(),
+  from: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional().describe('Only sessions on or after this date, the student’s own calendar day.'),
+  to: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional().describe('Only sessions on or before this date, the student’s own calendar day. For "before the 10th", pass the 9th.'),
+  limit: z.number().int().min(1).max(MAX_SESSIONS_PER_READ).default(50),
+  cursor: z.string().max(500).optional().describe('`next_cursor` from the previous page, with the same filters.'),
+});
+
+const LIST_STUDY_SESSIONS_DESCRIPTION =
+  'List the signed-in student’s logged study sessions in the active semester, newest first. This is the tool for "what did I study in course X", for sessions before or between dates, and for any sitting older than the handful get_overview shows. Narrow with `course_id`, and with `from` and `to` (both inclusive, YYYY-MM-DD, the student’s own calendar day). Each session carries its `id`, `date`, `duration_seconds`, `note` and `course`. `meta.total` is how many matched; when there are more than `limit`, pass `next_cursor` back as `cursor` with the same filters for the next page. This tool never changes Akada data.';
+
+// The order a page is cut in, newest first. created_at and id break ties
+// between sittings on the same day, so the cursor always lands on one row.
+type SessionPosition = { date: string; created_at: string; id: string };
+
+function sessionPosition(row: Record<string, unknown>): SessionPosition {
+  return { date: String(row.date ?? ''), created_at: String(row.created_at ?? ''), id: String(row.id ?? '') };
+}
+
+function newerFirst(a: SessionPosition, b: SessionPosition) {
+  if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+  if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+}
+
+// Keyset rather than an offset, so a sitting logged while the student pages
+// back does not shift every later page by one.
+function encodeSessionCursor(position: SessionPosition) {
+  return Buffer.from(JSON.stringify([position.date, position.created_at, position.id])).toString('base64url');
+}
+
+function decodeSessionCursor(cursor: string): SessionPosition | null {
+  try {
+    const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (!Array.isArray(value) || value.length !== 3 || !value.every((part) => typeof part === 'string')) return null;
+    return { date: value[0], created_at: value[1], id: value[2] };
+  } catch {
+    return null;
+  }
+}
+
+export async function listStudySessions(
+  token: AuthenticatedToken,
+  { course_id, from, to, limit, cursor }: z.infer<typeof ListStudySessionsInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    if (from && to && from > to) {
+      return toolError(`from (${from}) is later than to (${to}), so nothing could match. Swap them.`);
+    }
+    const after = cursor ? decodeSessionCursor(cursor) : null;
+    if (cursor && !after) return toolError('That cursor is not one list_study_sessions gave out. Leave it out to start from the newest session.');
+    const semesterId = await activeSemesterId(token, supabase);
+    if (!semesterId) return result({ sessions: [], meta: { total: 0, count: 0 }, message: 'No active semester is set in Akada.' });
+
+    const { data: courses, error: coursesError } = await supabase
+      .from('courses')
+      .select('id, code, name')
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId);
+    if (coursesError) return queryFailed('list_study_sessions', 'courses read', coursesError, 'Akada could not load courses.');
+    const byId = new Map((courses ?? []).map((course) => [course.id as string, course]));
+    if (course_id && !byId.has(course_id)) return toolError('That course is not available in your active Akada semester.');
+
+    // `*` for the same reason as everywhere else here: an un-migrated project
+    // still answers. Scoped by user and semester like get_overview; ordering
+    // and paging happen below so the total and the cursor come from one read.
+    let query = supabase
+      .from('sessions')
+      .select('*')
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId);
+    if (course_id) query = query.eq('course_id', course_id);
+    if (from) query = query.gte('date', from);
+    if (to) query = query.lte('date', to);
+    const { data, error } = await query;
+    if (error) return queryFailed('list_study_sessions', 'sessions read', error, 'Akada could not load study sessions.');
+
+    const matched = ((data ?? []) as Record<string, unknown>[])
+      .filter((row) => byId.has(row.course_id as string))
+      .sort((a, b) => newerFirst(sessionPosition(a), sessionPosition(b)));
+    const remaining = after ? matched.filter((row) => newerFirst(sessionPosition(row), after) > 0) : matched;
+    const page = remaining.slice(0, limit);
+    const more = remaining.length > page.length;
+
+    return result({
+      sessions: page.map((row) => {
+        const course = byId.get(row.course_id as string)!;
+        return {
+          id: String(row.id ?? ''),
+          date: (row.date as string | null) ?? null,
+          duration_seconds: Number(row.duration_seconds ?? 0),
+          note: typeof row.note === 'string' ? row.note : '',
+          course: { id: course.id, code: course.code, name: course.name },
+        };
+      }),
+      meta: {
+        total: matched.length,
+        count: page.length,
+        course_id: course_id ?? null,
+        from: from ?? null,
+        to: to ?? null,
+      },
+      ...(more ? { next_cursor: encodeSessionCursor(sessionPosition(page[page.length - 1])) } : {}),
+    });
+  } catch (cause) {
+    return toolCrashed('list_study_sessions', cause);
+  }
+}
+
 // ---- Reading backlog ----
 
 const MAX_BACKLOG_ROWS = 50;
@@ -2811,6 +2925,17 @@ function createServer(token: AuthenticatedToken) {
       annotations: { destructiveHint: true },
     },
     async (input) => deleteStudySession(token, input),
+  );
+
+  server.registerTool(
+    'list_study_sessions',
+    {
+      title: 'List Akada study sessions',
+      description: LIST_STUDY_SESSIONS_DESCRIPTION,
+      inputSchema: ListStudySessionsInput,
+      annotations: { readOnlyHint: true },
+    },
+    async (input) => listStudySessions(token, input),
   );
 
   server.registerTool(

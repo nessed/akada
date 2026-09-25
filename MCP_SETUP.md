@@ -44,6 +44,7 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `log_study_session`: Record study time against a course, with an optional task, note, and practice-paper score.
 - `update_study_session`: Fix or rewrite the note on a session that is already logged. Only the note changes.
 - `delete_study_session`: Permanently delete a sitting that should not be there.
+- `list_study_sessions`: List logged sessions newest first, optionally for one course and between two dates, with paging.
 - `get_reading_backlog`: Read the unfinished reading and how many hours it comes to at the student's pace, optionally by a date.
 - `get_weekly_stats`: Read one week's hours against goal, break time, tasks closed, and the weekly run.
 - `get_focus_pattern`: Read how the sittings themselves were shaped: block lengths, breaks against the lengths they were set to, and when in the day the work happens.
@@ -456,6 +457,23 @@ Today screen uses: finished reading pages over hours logged against readings,
 and a plain 20 until there are at least 20 pages over an hour. `measured` is
 false then, and the message says it is a default rather than the student's
 pace. `days_left` counts today.
+
+### 16. `list_study_sessions`
+- **Title**: List Akada study sessions
+- **Annotations**: `readOnlyHint: true`
+- **Parameters**:
+  - `course_id` (UUID, optional).
+  - `from`, `to` (`YYYY-MM-DD`, optional, both inclusive): the session's own `date`, which is the student's calendar day it was logged on. `from` later than `to` is refused.
+  - `limit` (`integer`, 1 to 200, default 50).
+  - `cursor` (`string`, optional): `next_cursor` from the previous page. Send the same filters with it.
+- **Output**: `sessions`, newest first, each `id`, `date`, `duration_seconds`, `note`, `course` (`id`, `code`, `name`); `meta` (`total` matched across all pages, `count` on this page, and the `course_id`, `from` and `to` it was read with); and `next_cursor` only when there are more.
+
+Scoped the way `get_overview` scopes its `recent_sessions`: the student's
+`user_id` and the active `semester_id`, and a `course_id` outside the active
+semester is refused. It exists because `get_overview` only shows the last
+dozen sittings across every course, so a quiet course's older sessions fall
+off it. The cursor is a keyset on date, then `created_at`, then id, so a
+sitting logged while paging back does not shift later pages.
 
 ---
 
