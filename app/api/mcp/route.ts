@@ -36,6 +36,7 @@ import {
 import { daysBetween, isoDate, startOfWeek, endOfWeek } from '@/lib/utils';
 import { readCredit } from '@/lib/progression/credit';
 import { readRuns } from '@/lib/progression/runs';
+import { compareCourseOrder } from '@/lib/data/course-order';
 import { mcpSupabase, mcpUrl, siteUrl } from './_shared';
 import { registerNoteTools } from './notes-tools';
 
@@ -57,6 +58,8 @@ const MAX_COMPONENTS = 40;
 const MAX_DROP_RULES = 20;
 const MAX_GRADING_NOTE = 600;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const TASK_SORTS = ['due', 'priority', 'newest'] as const;
+type TaskSort = (typeof TASK_SORTS)[number];
 
 // This is deliberately independent of optional app-migration columns. MCP
 // must continue to read a student's tasks while a deployment is rolling out
@@ -99,6 +102,8 @@ const TasksReadResponseSchema = z.object({
       .optional(),
     // Matches before `limit` cut the list, so "showing 10 of 23" can be said.
     matching: z.number().int().optional(),
+    // Present only when asked for an order other than the default.
+    sort: z.enum(TASK_SORTS).optional(),
   }),
   message: z.string().optional(),
 });
@@ -395,6 +400,15 @@ function byDueDate(a: TaskRead, b: TaskRead) {
   }
   if (a.created_at === b.created_at) return 0;
   return a.created_at < b.created_at ? 1 : -1;
+}
+
+
+// The three orders the Tasks screen offers. `priority` is its "what matters":
+// high priority first, then soonest due.
+export function taskOrder(sort: TaskSort) {
+  if (sort === 'newest') return (a: TaskRead, b: TaskRead) => (a.created_at === b.created_at ? 0 : a.created_at < b.created_at ? 1 : -1);
+  if (sort === 'priority') return (a: TaskRead, b: TaskRead) => (a.priority !== b.priority ? (a.priority === 'high' ? -1 : 1) : byDueDate(a, b));
+  return byDueDate;
 }
 
 // Split out of `get_weekly_stats`'s registration so a test can call it
@@ -1721,6 +1735,191 @@ export async function deleteStudySession(
   }
 }
 
+// ---- Course order ----
+
+// What compareCourseOrder reads off a course, taken from a raw row. A project
+// without sort_order reads every course as unplaced, oldest first.
+function courseOrderKey(row: Record<string, unknown>) {
+  return {
+    position: typeof row.sort_order === 'number' ? row.sort_order : undefined,
+    createdAt: String(row.created_at ?? ''),
+  } as Course;
+}
+
+const MAX_COURSES_PER_REORDER = 40;
+
+const ReorderCoursesInput = z.object({
+  course_ids: z
+    .array(z.string().uuid())
+    .min(1)
+    .max(MAX_COURSES_PER_REORDER)
+    .describe('Courses in the order they should go, first to last. Any course left out keeps its place after these.'),
+});
+
+const REORDER_COURSES_DESCRIPTION =
+  'Change the order the student’s active-semester courses sit in on their dashboard, the same order dragging the cards sets. Pass `course_ids` first to last; use find_course or get_overview for the ids. A partial list is fine: the courses named go first in that order and the rest follow in the order they already had. Only the order changes, nothing else about any course. Returns the full new order.';
+
+export async function reorderCourses(
+  token: AuthenticatedToken,
+  { course_ids }: z.infer<typeof ReorderCoursesInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    if (new Set(course_ids).size !== course_ids.length) return toolError('A course is named twice. Name each course once.');
+    const semesterId = await activeSemesterId(token, supabase);
+    if (!semesterId) return toolError('No active semester is set in Akada.');
+    const { data, error } = await supabase
+      .from('courses')
+      .select('*')
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId);
+    if (error) return queryFailed('reorder_courses', 'courses read', error, 'Akada could not load courses.');
+    const rows = ((data ?? []) as Record<string, unknown>[]).sort((a, b) => compareCourseOrder(courseOrderKey(a), courseOrderKey(b)));
+    const byId = new Map(rows.map((row) => [String(row.id), row]));
+    const missing = course_ids.filter((id) => !byId.has(id));
+    if (missing.length > 0) {
+      return toolError(`${missing.length === course_ids.length ? 'No' : 'Not every'} course in that request is in your active Akada semester. Find the courses again with find_course and use the ids it returns.`);
+    }
+    const named = new Set(course_ids);
+    const order = [...course_ids.map((id) => byId.get(id)!), ...rows.filter((row) => !named.has(String(row.id)))];
+
+    // One write per course, the way the dashboard's reorderCourses does it,
+    // each repeating the user_id filter rather than trusting the read.
+    const writes = await Promise.all(
+      order.map((row, index) =>
+        supabase.from('courses').update({ sort_order: index }).eq('id', String(row.id)).eq('user_id', token.userId),
+      ),
+    );
+    const failure = writes.find((write) => write.error)?.error ?? null;
+    if (failure) {
+      if (failure.code === '42703' || failure.code === 'PGRST204') {
+        return queryFailed('reorder_courses', 'order write', failure, 'Course order could not be saved. This Akada project needs the latest supabase/schema.sql run once first.');
+      }
+      return queryFailed('reorder_courses', 'order write', failure, 'Akada could not save the course order.');
+    }
+    return result({
+      courses: order.map((row, index) => ({ id: String(row.id), code: String(row.code ?? ''), name: String(row.name ?? ''), position: index })),
+      message: `Courses are now in this order: ${order.map((row) => String(row.code ?? '')).join(', ')}.`,
+    });
+  } catch (cause) {
+    return toolCrashed('reorder_courses', cause);
+  }
+}
+
+// ---- Study session history ----
+
+const MAX_SESSIONS_PER_READ = 200;
+
+const ListStudySessionsInput = z.object({
+  course_id: z.string().uuid().optional(),
+  from: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional().describe('Only sessions on or after this date, the student’s own calendar day.'),
+  to: z.string().regex(DATE, 'Use YYYY-MM-DD.').optional().describe('Only sessions on or before this date, the student’s own calendar day. For "before the 10th", pass the 9th.'),
+  limit: z.number().int().min(1).max(MAX_SESSIONS_PER_READ).default(50),
+  cursor: z.string().max(500).optional().describe('`next_cursor` from the previous page, with the same filters.'),
+});
+
+const LIST_STUDY_SESSIONS_DESCRIPTION =
+  'List the signed-in student’s logged study sessions in the active semester, newest first. This is the tool for "what did I study in course X", for sessions before or between dates, and for any sitting older than the handful get_overview shows. Narrow with `course_id`, and with `from` and `to` (both inclusive, YYYY-MM-DD, the student’s own calendar day). Each session carries its `id`, `date`, `duration_seconds`, `note` and `course`. `meta.total` is how many matched; when there are more than `limit`, pass `next_cursor` back as `cursor` with the same filters for the next page. This tool never changes Akada data.';
+
+// The order a page is cut in, newest first. created_at and id break ties
+// between sittings on the same day, so the cursor always lands on one row.
+type SessionPosition = { date: string; created_at: string; id: string };
+
+function sessionPosition(row: Record<string, unknown>): SessionPosition {
+  return { date: String(row.date ?? ''), created_at: String(row.created_at ?? ''), id: String(row.id ?? '') };
+}
+
+function newerFirst(a: SessionPosition, b: SessionPosition) {
+  if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+  if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1;
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+}
+
+// Keyset rather than an offset, so a sitting logged while the student pages
+// back does not shift every later page by one.
+function encodeSessionCursor(position: SessionPosition) {
+  return Buffer.from(JSON.stringify([position.date, position.created_at, position.id])).toString('base64url');
+}
+
+function decodeSessionCursor(cursor: string): SessionPosition | null {
+  try {
+    const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (!Array.isArray(value) || value.length !== 3 || !value.every((part) => typeof part === 'string')) return null;
+    return { date: value[0], created_at: value[1], id: value[2] };
+  } catch {
+    return null;
+  }
+}
+
+export async function listStudySessions(
+  token: AuthenticatedToken,
+  { course_id, from, to, limit, cursor }: z.infer<typeof ListStudySessionsInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    if (from && to && from > to) {
+      return toolError(`from (${from}) is later than to (${to}), so nothing could match. Swap them.`);
+    }
+    const after = cursor ? decodeSessionCursor(cursor) : null;
+    if (cursor && !after) return toolError('That cursor is not one list_study_sessions gave out. Leave it out to start from the newest session.');
+    const semesterId = await activeSemesterId(token, supabase);
+    if (!semesterId) return result({ sessions: [], meta: { total: 0, count: 0 }, message: 'No active semester is set in Akada.' });
+
+    const { data: courses, error: coursesError } = await supabase
+      .from('courses')
+      .select('id, code, name')
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId);
+    if (coursesError) return queryFailed('list_study_sessions', 'courses read', coursesError, 'Akada could not load courses.');
+    const byId = new Map((courses ?? []).map((course) => [course.id as string, course]));
+    if (course_id && !byId.has(course_id)) return toolError('That course is not available in your active Akada semester.');
+
+    // `*` for the same reason as everywhere else here: an un-migrated project
+    // still answers. Scoped by user and semester like get_overview; ordering
+    // and paging happen below so the total and the cursor come from one read.
+    let query = supabase
+      .from('sessions')
+      .select('*')
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId);
+    if (course_id) query = query.eq('course_id', course_id);
+    if (from) query = query.gte('date', from);
+    if (to) query = query.lte('date', to);
+    const { data, error } = await query;
+    if (error) return queryFailed('list_study_sessions', 'sessions read', error, 'Akada could not load study sessions.');
+
+    const matched = ((data ?? []) as Record<string, unknown>[])
+      .filter((row) => byId.has(row.course_id as string))
+      .sort((a, b) => newerFirst(sessionPosition(a), sessionPosition(b)));
+    const remaining = after ? matched.filter((row) => newerFirst(sessionPosition(row), after) > 0) : matched;
+    const page = remaining.slice(0, limit);
+    const more = remaining.length > page.length;
+
+    return result({
+      sessions: page.map((row) => {
+        const course = byId.get(row.course_id as string)!;
+        return {
+          id: String(row.id ?? ''),
+          date: (row.date as string | null) ?? null,
+          duration_seconds: Number(row.duration_seconds ?? 0),
+          note: typeof row.note === 'string' ? row.note : '',
+          course: { id: course.id, code: course.code, name: course.name },
+        };
+      }),
+      meta: {
+        total: matched.length,
+        count: page.length,
+        course_id: course_id ?? null,
+        from: from ?? null,
+        to: to ?? null,
+      },
+      ...(more ? { next_cursor: encodeSessionCursor(sessionPosition(page[page.length - 1])) } : {}),
+    });
+  } catch (cause) {
+    return toolCrashed('list_study_sessions', cause);
+  }
+}
+
 // ---- Reading backlog ----
 
 const MAX_BACKLOG_ROWS = 50;
@@ -1891,7 +2090,7 @@ function createServer(token: AuthenticatedToken) {
     'get_tasks',
     {
       title: 'Read Akada tasks',
-      description: 'Read the signed-in student’s active-semester tasks, soonest due first. Optionally narrow to a course, include completed tasks, or filter: `due_after` and `due_before` (both inclusive, YYYY-MM-DD) for "what is due this week", `priority`, and `kind` (exam, reading or task) for "when are my midterms". A date filter leaves out tasks with no due date. `limit` caps how many come back; `meta.matching` says how many matched before it. This tool never changes Akada data.',
+      description: 'Read the signed-in student’s active-semester tasks, soonest due first. Optionally narrow to a course, include completed tasks, or filter: `due_after` and `due_before` (both inclusive, YYYY-MM-DD) for "what is due this week", `priority`, and `kind` (exam, reading or task) for "when are my midterms". A date filter leaves out tasks with no due date. `sort` picks the order: `due` (default, soonest first, undated last), `priority` (high priority first, then soonest due, the app’s "what matters" order), or `newest` (most recently added first). `limit` caps how many come back after sorting; `meta.matching` says how many matched before it. This tool never changes Akada data.',
       inputSchema: z.object({
         course_id: z.string().uuid().optional(),
         include_completed: z.boolean().default(false),
@@ -1900,10 +2099,11 @@ function createServer(token: AuthenticatedToken) {
         priority: z.enum(['high', 'normal']).optional(),
         kind: z.enum(TASK_KINDS).optional().describe('exam for midterms, finals and quizzes; reading; task for everything else.'),
         limit: z.number().int().min(1).max(MAX_TASKS_PER_READ).default(MAX_TASKS_PER_READ),
+        sort: z.enum(TASK_SORTS).default('due').describe('due (default), priority (what matters most first), or newest.'),
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ course_id, include_completed, due_after, due_before, priority, kind, limit }) => {
+    async ({ course_id, include_completed, due_after, due_before, priority, kind, limit, sort }) => {
       try {
         if (due_after && due_before && due_after > due_before) {
           return toolError(`due_after (${due_after}) is later than due_before (${due_before}), so nothing could match. Swap them.`);
@@ -1967,7 +2167,7 @@ function createServer(token: AuthenticatedToken) {
             (!due_before || (task.due_date !== null && task.due_date <= due_before)) &&
             (!priority || task.priority === priority) &&
             (!kind || task.kind === kind))
-          .sort(byDueDate);
+          .sort(taskOrder(sort));
         const shown = tasks.slice(0, limit);
         return result(TasksReadResponseSchema.parse({
           schema_version: 'akada.tasks.v1',
@@ -1980,6 +2180,7 @@ function createServer(token: AuthenticatedToken) {
               ? { filters: { due_after: due_after ?? null, due_before: due_before ?? null, priority: priority ?? null, kind: kind ?? null } }
               : {}),
             ...(tasks.length > shown.length ? { matching: tasks.length } : {}),
+            ...(sort !== 'due' ? { sort } : {}),
           },
         }));
       } catch (cause) {
@@ -1992,7 +2193,7 @@ function createServer(token: AuthenticatedToken) {
     'get_overview',
     {
       title: 'Read Akada study overview',
-      description: 'Read a compact, read-only snapshot of active-semester courses, open-task counts, and recent study sessions for the signed-in student. Each recent session carries its `id`, which is what update_study_session takes to fix its note.',
+      description: 'Read a compact, read-only snapshot of active-semester courses, open-task counts, and recent study sessions for the signed-in student. Courses come in the order the student keeps them on their dashboard, which reorder_courses changes. Each recent session carries its `id`, which is what update_study_session takes to fix its note.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
@@ -2002,7 +2203,9 @@ function createServer(token: AuthenticatedToken) {
         if (!semesterId) return result({ courses: [], recent_sessions: [], message: 'No active semester is set in Akada.' });
         const supabase = mcpSupabase(token.supabaseAccessToken);
         const [{ data: courses, error: coursesError }, { data: tasks, error: tasksError }, { data: sessions, error: sessionsError }] = await Promise.all([
-          supabase.from('courses').select('id, code, name, weekly_goal_hours').eq('user_id', token.userId).eq('semester_id', semesterId).order('code'),
+          // `*` so the dashboard order (sort_order, an additive column) is
+          // read where it exists and simply absent where it does not.
+          supabase.from('courses').select('*').eq('user_id', token.userId).eq('semester_id', semesterId),
           supabase.from('tasks').select('course_id, completed').eq('user_id', token.userId).eq('semester_id', semesterId),
           // `*` so a practice score comes back where a project has the
           // columns, and nothing breaks where it does not.
@@ -2015,9 +2218,10 @@ function createServer(token: AuthenticatedToken) {
         }
         const openByCourse = new Map<string, number>();
         (tasks ?? []).filter((task) => !task.completed).forEach((task) => openByCourse.set(task.course_id, (openByCourse.get(task.course_id) ?? 0) + 1));
-        const courseById = new Map((courses ?? []).map((course) => [course.id, course]));
+        const courseById = new Map((courses ?? []).map((course) => [course.id, { id: course.id, code: course.code, name: course.name, weekly_goal_hours: course.weekly_goal_hours }]));
+        const ordered = [...(courses ?? [])].sort((a, b) => compareCourseOrder(courseOrderKey(a), courseOrderKey(b)));
         return result({
-          courses: (courses ?? []).map((course) => ({ id: course.id, code: course.code, name: course.name, weekly_study_goal_hours: Number(course.weekly_goal_hours), open_task_count: openByCourse.get(course.id) ?? 0 })),
+          courses: ordered.map((course) => ({ id: course.id, code: course.code, name: course.name, weekly_study_goal_hours: Number(course.weekly_goal_hours), open_task_count: openByCourse.get(course.id) ?? 0 })),
           recent_sessions: (sessions ?? []).map((session) => {
             const practice = cleanScore(session.score, session.score_out_of);
             return {
@@ -2811,6 +3015,28 @@ function createServer(token: AuthenticatedToken) {
       annotations: { destructiveHint: true },
     },
     async (input) => deleteStudySession(token, input),
+  );
+
+  server.registerTool(
+    'reorder_courses',
+    {
+      title: 'Reorder Akada courses',
+      description: REORDER_COURSES_DESCRIPTION,
+      inputSchema: ReorderCoursesInput,
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async (input) => reorderCourses(token, input),
+  );
+
+  server.registerTool(
+    'list_study_sessions',
+    {
+      title: 'List Akada study sessions',
+      description: LIST_STUDY_SESSIONS_DESCRIPTION,
+      inputSchema: ListStudySessionsInput,
+      annotations: { readOnlyHint: true },
+    },
+    async (input) => listStudySessions(token, input),
   );
 
   server.registerTool(

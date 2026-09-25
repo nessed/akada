@@ -35,15 +35,17 @@ normally does not disconnect Claude, but revoking all sessions does.
 
 The connector provides tools for interacting with courses and tasks in your active semester:
 - `find_course`: Look up courses by code or title.
-- `get_tasks`: Read the active semester's tasks, optionally narrowed to one course, a due-date range, a priority or a kind.
+- `get_tasks`: Read the active semester's tasks, optionally narrowed to one course, a due-date range, a priority or a kind, and sorted by due date, priority or newest.
 - `delete_tasks`: Permanently delete tasks, for duplicates and mistakes.
-- `get_overview`: Read a snapshot of courses, open-task counts, and recent study sessions (with their ids).
+- `get_overview`: Read a snapshot of courses (in dashboard order), open-task counts, and recent study sessions (with their ids).
+- `reorder_courses`: Change the order courses sit in on the dashboard, the same order dragging the cards sets.
 - `create_tasks`: Bulk-insert tasks into an active course, with notes, subtasks, and what each one is (task, reading or exam) and is worth.
 - `update_tasks`: Change tasks that already exist, including their notes, subtasks, kind, weight and pages.
 - `complete_tasks`: Tick tasks off, or put them back on the list.
 - `log_study_session`: Record study time against a course, with an optional task, note, and practice-paper score.
 - `update_study_session`: Fix or rewrite the note on a session that is already logged. Only the note changes.
 - `delete_study_session`: Permanently delete a sitting that should not be there.
+- `list_study_sessions`: List logged sessions newest first, optionally for one course and between two dates, with paging.
 - `get_reading_backlog`: Read the unfinished reading and how many hours it comes to at the student's pace, optionally by a date.
 - `get_weekly_stats`: Read one week's hours against goal, break time, tasks closed, and the weekly run.
 - `get_focus_pattern`: Read how the sittings themselves were shaped: block lengths, breaks against the lengths they were set to, and when in the day the work happens.
@@ -62,7 +64,7 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `record_note_checks`: Record how the student did on a note's self-checks after a quiz in chat.
 - `delete_note`: Permanently delete a note.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `record_grade`, `delete_course`, `delete_tasks`, `delete_study_session`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks` and `delete_note` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `record_grade`, `reorder_courses`, `delete_course`, `delete_tasks`, `delete_study_session`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks` and `delete_note` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -384,7 +386,8 @@ been marked, nothing the student already holds is thrown away.
 `get_tasks` takes, beside `course_id` and `include_completed`:
 - `due_after` / `due_before` (`YYYY-MM-DD`, both inclusive). Either one leaves out tasks with no due date.
 - `priority` (`"high" | "normal"`) and `kind` (`"exam" | "reading" | "task"`).
-- `limit` (1-100, default 100).
+- `limit` (1-100, default 100), applied after sorting.
+- `sort` (`"due" | "priority" | "newest"`, default `"due"`). `due` is soonest first with undated tasks last, as it always was. `priority` is the Tasks screen's "what matters": high priority first, then soonest due. `newest` is most recently added first. `meta.sort` echoes it when it is not `due`.
 
 Filtering happens after the same `select('*')` read the app makes, so a
 project without the `kind` column still answers. When a filter is set,
@@ -456,6 +459,37 @@ Today screen uses: finished reading pages over hours logged against readings,
 and a plain 20 until there are at least 20 pages over an hour. `measured` is
 false then, and the message says it is a default rather than the student's
 pace. `days_left` counts today.
+
+### 16. `list_study_sessions`
+- **Title**: List Akada study sessions
+- **Annotations**: `readOnlyHint: true`
+- **Parameters**:
+  - `course_id` (UUID, optional).
+  - `from`, `to` (`YYYY-MM-DD`, optional, both inclusive): the session's own `date`, which is the student's calendar day it was logged on. `from` later than `to` is refused.
+  - `limit` (`integer`, 1 to 200, default 50).
+  - `cursor` (`string`, optional): `next_cursor` from the previous page. Send the same filters with it.
+- **Output**: `sessions`, newest first, each `id`, `date`, `duration_seconds`, `note`, `course` (`id`, `code`, `name`); `meta` (`total` matched across all pages, `count` on this page, and the `course_id`, `from` and `to` it was read with); and `next_cursor` only when there are more.
+
+Scoped the way `get_overview` scopes its `recent_sessions`: the student's
+`user_id` and the active `semester_id`, and a `course_id` outside the active
+semester is refused. It exists because `get_overview` only shows the last
+dozen sittings across every course, so a quiet course's older sessions fall
+off it. The cursor is a keyset on date, then `created_at`, then id, so a
+sitting logged while paging back does not shift later pages.
+
+### 17. `reorder_courses`
+- **Title**: Reorder Akada courses
+- **Annotations**: `destructiveHint: false`, `idempotentHint: true`
+- **Parameters**: `course_ids` (UUIDs, 1 to 40, no repeats), first to last. A partial list puts those courses first in that order; the rest follow in the order they already had.
+- **Output**: `courses` in the new order (`id`, `code`, `name`, `position`) and a `message`.
+
+Writes `courses.sort_order` the way the dashboard's `reorderCourses` does,
+one update per course in the active semester, each filtered by `user_id`.
+Every id has to be one of the student's active-semester courses or nothing is
+written. On a project that has not re-run `supabase/schema.sql` there is no
+`sort_order` column, and the tool says so instead of pretending. `get_overview`
+reads its courses in this order (through `compareCourseOrder` in
+`lib/data/course-order.ts`), so a reorder shows up there straight away.
 
 ---
 
