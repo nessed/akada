@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import { Suspense, useEffect, useMemo, useState } from 'react';
@@ -342,6 +343,9 @@ function Welcome({ onNext }: { onNext: () => void }) {
       >
         Start planning
       </button>
+      <Link href="/guide" className="hand-underline mt-5 font-serif text-[14px] text-muted">
+        or read how it works first
+      </Link>
     </div>
   );
 }

@@ -369,6 +369,7 @@ export default function SettingsPage() {
             <>
               <SettingGroup label="Data" first>
                 <SettingRow label="Export sessions as CSV" onClick={exportSessions} />
+                <SettingRow label="How Akada works" href="/guide" />
                 <SettingRow label="Privacy policy" href="/privacy" />
                 <SettingRow label="Terms" href="/terms" />
                 <SettingRow label="Contact" href={`mailto:${CONTACT_EMAIL}`} />

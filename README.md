@@ -109,6 +109,9 @@ a 2am session counts toward the right day), whether weekends count, CSV export,
 and appearance. Appearance is five paper tones including a night one, four
 heading serifs, three densities and two accents.
 
+`/guide` walks through all of the above in plain words for someone who has
+never used a planner, and is the link to send a friend before they sign up.
+
 Semesters sit under all of it. One is active and everything writes into it;
 past terms are archived and readable, with their courses and sessions intact.
 

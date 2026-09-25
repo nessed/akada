@@ -829,6 +829,20 @@ function DashboardPageContent() {
         </div>
       </header>
 
+      {/* For an account that has barely started, one line pointing at the
+          guide, since most of what the app does can't be found by poking
+          around. Worked out from the sessions rather than a dismissed flag,
+          so it leaves on its own once the timer has been used a few times. */}
+      {!sessionsLoading && rawSessions.length < 3 && (
+        <p className="m-0 mb-6 font-serif italic text-[14px] text-ink-soft">
+          New here?{' '}
+          <Link className="hand-underline text-ink" href="/guide">
+            How Akada works
+          </Link>
+          , in five minutes.
+        </p>
+      )}
+
       {/* Next Mark. One quiet line naming the nearest true thing, and
           nothing at all when nothing is close. See components/progression. */}
       <NextMarkLine surface="today" />
