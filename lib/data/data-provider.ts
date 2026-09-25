@@ -96,8 +96,12 @@ export interface DataProvider {
 
   // Quizzes. Sent by an assistant over MCP; the app only takes them.
   getQuizzes(): Promise<Quizzes>;
-  /** Writes a quiz's attempts whole. */
-  setQuizAttempts(id: string, attempts: QuizAttempt[]): Promise<void>;
+  /**
+   * Files one sitting under a quiz and returns every sitting as stored. Read
+   * fresh before it appends, so marks the assistant wrote in the meantime are
+   * kept rather than written over from a stale copy.
+   */
+  addQuizAttempt(id: string, attempt: QuizAttempt): Promise<QuizAttempt[]>;
   deleteQuiz(id: string): Promise<void>;
 
   // Semesters

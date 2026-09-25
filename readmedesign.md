@@ -963,11 +963,14 @@ reader draws lives in `app/notes/notes.css`, scoped under `.notes`.
 ### Notes: quizzes
 
 A quiz is sent by an assistant over MCP and lands on the Notes shelf under
-its own `.eyebrow` label, **Quizzes**, below the notes. Each is a shelf row
+its own `.eyebrow` label, **Quizzes**, above the notes, straight after the
+note last read, so a new one is the first thing on the shelf. Each is a shelf row
 like a note's: the course stripe, the title, a serif sub-line (course, task,
 question count, when), the last sitting's strokes in sage and peach, and the
 last mark in mono where a note has its minutes, or an italic *new* before it
-has been taken. Nothing is drawn until there is a quiz.
+has been taken, or *to mark* while written answers wait on the assistant.
+Before any quiz arrives the label stands alone with one italic serif line
+saying how one gets there, since nothing in the app makes one.
 
 Taken (`/notes/quiz?q=…`), a quiz is a paper at a 720px measure: numbered
 questions (the number in mono, it is a digit), the prompt in the serif, and
@@ -977,7 +980,17 @@ marked until **Hand it in**. Then the mark is written in the margin in the
 handwriting face (`7 / 10`) beside one stroke per question, the right option
 takes a sage circle and a sage wash, a wrong pick a peach circle and a peach
 wash (never a strikethrough), the rest fade, and the *why* sits under each
-question in muted italic serif. Past sittings are listed above the paper as
+question in muted italic serif.
+
+A written question has no options. It carries its marks in italic after the
+prompt and takes its answer on ruled lines (a borderless textarea over the
+page's own rule), not in a box. Handed in, the answer stays on its lines and
+waits: its stroke is an empty dashed one and the margin says *written: to
+mark* and to tell the assistant. When the assistant has marked it the mark
+is written by hand under the answer, its feedback follows in the serif, and
+*What a full answer says* folds open the model answer. A part mark is a
+half-inked stroke. A quiz with written questions opens on its last sitting,
+so the whole of it is marked in one place when the student comes back. Past sittings are listed above the paper as
 a mono mark, a row of strokes and when. A quiz filed under a task shows on
 that task's sheet under the note line, as an `.eyebrow` *Quiz*, its title and
 the last mark. Everything is in

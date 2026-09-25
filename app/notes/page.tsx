@@ -793,12 +793,12 @@ function NotesContent() {
         <div style={{ marginTop: 18 }}>
           <button type="button" className="link" onClick={() => void addNotes([sampleNote()], 'Here’s a sample to read.', 'app')}>or read a sample note first</button>
         </div>
+        {quizShelf}
         <div className="keys" aria-label="Keyboard shortcuts">
           <div><span className="kbd">N</span> new note</div>
           <div><span className="kbd">O</span> open a file</div>
           <div><span className="kbd">Ctrl V</span> paste markdown as a note</div>
         </div>
-        {quizShelf}
       </div>
     );
   } else {

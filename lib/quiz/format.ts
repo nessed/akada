@@ -1,4 +1,4 @@
-import type { QuizAttempt, QuizQuestion } from '@/lib/data/types';
+import type { QuizAttempt, QuizQuestion, QuizWrittenMark } from '@/lib/data/types';
 
 /**
  * The quiz format, written once. The connector hands it to an assistant so a
@@ -27,14 +27,19 @@ B) ...
 Answer: A
 Why: ...
 
+3. A written question: no options, the student types an answer.
+Model answer: What a full-marks answer says. Hidden until it is marked; you mark against it.
+Marks: 4
+
 RULES
 1. The first line is "# " and the title. The line after it, if it is not a question, is kept as the context line.
 2. Number questions "1.", "2.", ... at the start of the line. A question can run over several lines until its first option.
 3. Options are a capital letter and ")" at the start of the line: "A) ", "B) ", up to "F) ". Between 2 and 6 options, in order, no gaps.
 4. Exactly one right answer per question, given as "Answer: " and its letter.
 5. "Why: " is optional but wanted. It is shown after the student answers, so explain the idea, not just the letter.
-6. Plain words. $inline LaTeX$ is fine. No "All of the above" or "None of the above".
-7. Between 1 and 50 questions. Leave a blank line between questions.`;
+6. A written question has no options. Instead it has "Model answer: " (required) and optionally "Marks: " with a whole number from 1 to 20 (default 1). Use them for explain, compare, derive or apply questions. Multiple-choice questions are marked in Akada the moment the student hands in; written ones wait for you: when the student comes back, call get_quiz to read what they wrote and grade_quiz to mark it.
+7. Plain words. $inline LaTeX$ is fine. No "All of the above" or "None of the above".
+8. Between 1 and 50 questions, in any mix. Leave a blank line between questions.`;
 
 export const QUIZ_TITLE_MAX = 300;
 export const QUIZ_TEXT_MAX = 100_000;
@@ -54,6 +59,9 @@ const QUESTION = /^\s*(\d{1,3})[.)]\s+(.*)$/;
 const OPTION = /^\s*\(?([A-Fa-f])[.)]\s+(.*)$/;
 const ANSWER = /^\s*\**answer\**\s*[:：]\**\s*\(?([A-Fa-f])\)?\b/i;
 const WHY = /^\s*\**(why|explanation|because)\**\s*[:：]\**\s*(.*)$/i;
+const MODEL = /^\s*\**(model answer|mark scheme|rubric)\**\s*[:：]\**\s*(.*)$/i;
+const MARKS = /^\s*\**marks?\**\s*[:：]\**\s*(\d{1,3})\s*$/i;
+export const WRITTEN_MARKS_MAX = 20;
 const TITLE = /^\s*#\s+(.+)$/;
 
 /**
@@ -66,7 +74,7 @@ export function parseQuiz(text: string): ParseResult {
   let title = '';
   let context = '';
   const questions: QuizQuestion[] = [];
-  type Draft = { n: number; prompt: string[]; options: string[]; letters: string[]; answer: string | null; why: string[]; mode: 'prompt' | 'options' | 'why' };
+  type Draft = { n: number; prompt: string[]; options: string[]; letters: string[]; answer: string | null; why: string[]; model: string[]; marks: number | null; mode: 'prompt' | 'options' | 'why' | 'model' };
   let draft: Draft | null = null;
 
   const close = () => {
@@ -76,6 +84,18 @@ export function parseQuiz(text: string): ParseResult {
     const label = `Question ${d.n}`;
     const prompt = d.prompt.join(' ').replace(/\s+/g, ' ').trim();
     if (!prompt) errors.push(`${label}: the question text is empty.`);
+    const modelAnswer = d.model.join('\n').trim();
+    if (!d.options.length) {
+      // No options: a written question, marked later against its model answer.
+      if (!modelAnswer) errors.push(`${label}: has no options, so it is a written question, and needs a "Model answer: " line. For multiple choice, give options "A) ...", "B) ...".`);
+      if (d.answer) errors.push(`${label}: has an "Answer: " letter but no options.`);
+      const marks = d.marks ?? 1;
+      if (marks < 1 || marks > WRITTEN_MARKS_MAX) errors.push(`${label}: marks must be between 1 and ${WRITTEN_MARKS_MAX}.`);
+      const explain = d.why.join(' ').replace(/\s+/g, ' ').trim();
+      questions.push({ kind: 'open', prompt, options: [], answer: -1, modelAnswer, marks, ...(explain ? { explain } : {}) });
+      return;
+    }
+    if (modelAnswer || d.marks !== null) errors.push(`${label}: "Model answer" and "Marks" are for written questions, which have no options.`);
     if (d.options.length < 2) errors.push(`${label}: needs at least 2 options written "A) ...", "B) ...".`);
     if (d.options.length > 6) errors.push(`${label}: has ${d.options.length} options; 6 at most.`);
     const expected = 'ABCDEF'.slice(0, d.letters.length);
@@ -91,7 +111,7 @@ export function parseQuiz(text: string): ParseResult {
   for (const raw of lines) {
     const line = raw.trimEnd();
     if (!line.trim()) {
-      if (draft && (draft as Draft).mode === 'why') (draft as Draft).mode = 'options';
+      if (draft && ((draft as Draft).mode === 'why' || (draft as Draft).mode === 'model')) (draft as Draft).mode = 'options';
       continue;
     }
     const t = TITLE.exec(line);
@@ -102,7 +122,7 @@ export function parseQuiz(text: string): ParseResult {
     const q = QUESTION.exec(line);
     if (q) {
       close();
-      draft = { n: Number(q[1]), prompt: [q[2]], options: [], letters: [], answer: null, why: [], mode: 'prompt' };
+      draft = { n: Number(q[1]), prompt: [q[2]], options: [], letters: [], answer: null, why: [], model: [], marks: null, mode: 'prompt' };
       continue;
     }
     if (!draft) {
@@ -117,6 +137,18 @@ export function parseQuiz(text: string): ParseResult {
       d.mode = 'options';
       continue;
     }
+    const mm = MODEL.exec(line);
+    if (mm) {
+      d.model.push(mm[2]);
+      d.mode = 'model';
+      continue;
+    }
+    const mk = MARKS.exec(line);
+    if (mk) {
+      d.marks = Number(mk[1]);
+      d.mode = 'options';
+      continue;
+    }
     const w = WHY.exec(line);
     if (w) {
       d.why.push(w[2]);
@@ -124,7 +156,7 @@ export function parseQuiz(text: string): ParseResult {
       continue;
     }
     const o = OPTION.exec(line);
-    if (o && d.mode !== 'why') {
+    if (o && d.mode !== 'why' && d.mode !== 'model') {
       d.letters.push(o[1].toUpperCase());
       d.options.push(o[2]);
       d.mode = 'options';
@@ -132,6 +164,7 @@ export function parseQuiz(text: string): ParseResult {
     }
     if (d.mode === 'prompt') d.prompt.push(line.trim());
     else if (d.mode === 'why') d.why.push(line.trim());
+    else if (d.mode === 'model') d.model.push(line.trim());
     else if (d.options.length && !d.answer) d.options[d.options.length - 1] += ` ${line.trim()}`;
     else errors.push(`Question ${d.n}: could not place the line "${line.trim().slice(0, 60)}".`);
   }
@@ -157,6 +190,20 @@ export function cleanQuestions(value: unknown): QuizQuestion[] {
   for (const item of value) {
     if (!item || typeof item !== 'object') continue;
     const q = item as Record<string, unknown>;
+    if (q.kind === 'open') {
+      if (typeof q.prompt !== 'string') continue;
+      const marks = Math.min(WRITTEN_MARKS_MAX, Math.max(1, Math.round(Number(q.marks) || 1)));
+      out.push({
+        kind: 'open',
+        prompt: q.prompt,
+        options: [],
+        answer: -1,
+        modelAnswer: typeof q.modelAnswer === 'string' ? q.modelAnswer : '',
+        marks,
+        ...(typeof q.explain === 'string' && q.explain ? { explain: q.explain } : {}),
+      });
+      continue;
+    }
     const options = Array.isArray(q.options) ? q.options.filter((o): o is string => typeof o === 'string') : [];
     const answer = Number(q.answer);
     if (typeof q.prompt !== 'string' || options.length < 2 || !Number.isInteger(answer) || answer < 0 || answer >= options.length) continue;
@@ -174,17 +221,81 @@ export function cleanAttempts(value: unknown): QuizAttempt[] {
     const picks = Array.isArray(a.picks) ? a.picks.map((p) => (Number.isInteger(p) ? (p as number) : -1)) : [];
     const score = Number(a.score);
     const total = Number(a.total);
-    if (typeof a.at !== 'string' || !Number.isFinite(score) || !Number.isFinite(total) || total < 1) continue;
-    out.push({ at: a.at, picks, score, total });
+    if (typeof a.at !== 'string' || !Number.isFinite(score) || !Number.isFinite(total) || total < 0) continue;
+    const attempt: QuizAttempt = { at: a.at, picks, score, total };
+    const written = cleanWritten(a.written);
+    if (Object.keys(written).length) attempt.written = written;
+    const marks = cleanMarks(a.marks);
+    if (Object.keys(marks).length) attempt.marks = marks;
+    if (typeof a.markedAt === 'string') attempt.markedAt = a.markedAt;
+    out.push(attempt);
   }
   return out.slice(-QUIZ_ATTEMPTS_MAX);
 }
 
-/** Marks a set of picks against the key. An unanswered question is -1 and counts wrong. */
-export function markQuiz(questions: QuizQuestion[], picks: number[]): QuizAttempt {
-  const clean = questions.map((_, i) => (Number.isInteger(picks[i]) ? picks[i] : -1));
-  const score = questions.reduce((n, q, i) => n + (clean[i] === q.answer ? 1 : 0), 0);
-  return { at: new Date().toISOString(), picks: clean, score, total: questions.length };
+export const WRITTEN_MAX = 5000;
+export const FEEDBACK_MAX = 2000;
+
+function cleanWritten(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, text] of Object.entries(value as Record<string, unknown>)) {
+    if (/^\d{1,2}$/.test(key) && typeof text === 'string' && text.trim()) out[key] = text.slice(0, WRITTEN_MAX);
+  }
+  return out;
+}
+
+function cleanMarks(value: unknown): Record<string, QuizWrittenMark> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, QuizWrittenMark> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^\d{1,2}$/.test(key) || !raw || typeof raw !== 'object') continue;
+    const m = raw as Record<string, unknown>;
+    const outOf = Number(m.outOf);
+    const score = Number(m.score);
+    if (!Number.isFinite(outOf) || outOf < 1 || !Number.isFinite(score) || score < 0 || score > outOf) continue;
+    out[key] = { score, outOf, feedback: typeof m.feedback === 'string' ? m.feedback.slice(0, FEEDBACK_MAX) : '' };
+  }
+  return out;
+}
+
+export const isWritten = (q: QuizQuestion) => q.kind === 'open';
+
+/**
+ * Marks a sitting. Multiple-choice questions are marked against the key on
+ * the spot, a blank (-1) counting wrong; `score` and `total` are that part
+ * alone. Written answers are kept, unmarked, for the assistant.
+ */
+export function markQuiz(questions: QuizQuestion[], picks: number[], written: Record<string, string> = {}): QuizAttempt {
+  const clean = questions.map((q, i) => (!isWritten(q) && Number.isInteger(picks[i]) ? picks[i] : -1));
+  const mcq = questions.filter((q) => !isWritten(q));
+  const score = questions.reduce((n, q, i) => n + (!isWritten(q) && clean[i] === q.answer ? 1 : 0), 0);
+  const attempt: QuizAttempt = { at: new Date().toISOString(), picks: clean, score, total: mcq.length };
+  const kept = cleanWritten(Object.fromEntries(Object.entries(written).filter(([k]) => questions[Number(k)] && isWritten(questions[Number(k)]))));
+  if (Object.keys(kept).length) attempt.written = kept;
+  return attempt;
+}
+
+/**
+ * Where a sitting's written part stands. `pending` is written questions not
+ * yet marked (a blank one is marked 0 by the assistant like any other, so it
+ * still waits), `score` and `outOf` what has been marked so far.
+ */
+export function writtenTally(questions: QuizQuestion[], attempt: QuizAttempt) {
+  let count = 0;
+  let pending = 0;
+  let score = 0;
+  let outOf = 0;
+  questions.forEach((q, i) => {
+    if (!isWritten(q)) return;
+    count++;
+    const mark = attempt.marks?.[String(i)];
+    if (mark) {
+      score += mark.score;
+      outOf += mark.outOf;
+    } else pending++;
+  });
+  return { count, pending, score, outOf, possible: questions.reduce((n, q) => n + (isWritten(q) ? q.marks ?? 1 : 0), 0) };
 }
 
 export const LETTERS = 'ABCDEF';

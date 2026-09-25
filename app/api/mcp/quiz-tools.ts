@@ -1,7 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { readAccessToken } from '@/lib/mcp-auth';
-import { LETTERS, QUIZ_FORMAT_RULES, QUIZ_TEXT_MAX, cleanAttempts, cleanQuestions, parseQuiz } from '@/lib/quiz/format';
+import { FEEDBACK_MAX, LETTERS, QUIZ_FORMAT_RULES, QUIZ_TEXT_MAX, cleanAttempts, cleanQuestions, isWritten, parseQuiz, writtenTally } from '@/lib/quiz/format';
+import type { QuizWrittenMark } from '@/lib/data/types';
 import { mcpSupabase, siteUrl } from './_shared';
 
 /**
@@ -83,6 +84,9 @@ function summary(row: QuizRow, refs: { courses: Map<string, Ref>; tasks: Map<str
   const attempts = cleanAttempts(row.attempts);
   const last = attempts[attempts.length - 1];
   const best = attempts.reduce((b, a) => Math.max(b, a.score), 0);
+  const mcqCount = questions.filter((q) => !isWritten(q)).length;
+  const written = questions.length - mcqCount;
+  const tally = last ? writtenTally(questions, last) : null;
   return {
     id: row.id,
     title: row.title,
@@ -91,9 +95,13 @@ function summary(row: QuizRow, refs: { courses: Map<string, Ref>; tasks: Map<str
     task: row.task_id ? { id: row.task_id, title: refs.tasks.get(row.task_id)?.label ?? null } : null,
     note: row.note_id ? { id: row.note_id, title: refs.notes.get(row.note_id)?.label ?? null } : null,
     questions: questions.length,
+    multiple_choice: mcqCount,
+    written,
     attempts: attempts.length,
-    last_score: last ? `${last.score}/${last.total}` : null,
-    best_score: attempts.length ? `${best}/${questions.length}` : null,
+    last_score: last && mcqCount ? `${last.score}/${last.total}` : null,
+    best_score: attempts.length && mcqCount ? `${best}/${mcqCount}` : null,
+    last_written: tally && written ? { marked: `${tally.score}/${tally.outOf}`, awaiting_marking: tally.pending, possible: tally.possible } : null,
+    awaiting_marking: !!tally && tally.pending > 0,
     created_at: row.created_at,
     url: quizUrl(row.id),
   };
@@ -125,6 +133,15 @@ export const ListQuizzesInput = z.object({
 
 export const GetQuizInput = z.object({ quiz_id: z.string().uuid() });
 export const DeleteQuizInput = z.object({ quiz_id: z.string().uuid() });
+
+export const GradeQuizInput = z.object({
+  quiz_id: z.string().uuid(),
+  attempt_at: z.string().max(64).optional(),
+  grades: z
+    .array(z.object({ number: z.number().int().min(1).max(50), score: z.number().min(0).max(20), feedback: z.string().trim().max(FEEDBACK_MAX) }))
+    .min(1)
+    .max(50),
+});
 
 /* ── Tools ──────────────────────────────────────────────────────────── */
 
@@ -229,8 +246,22 @@ export async function getQuizTool(
       quiz: {
         ...summary(row, await refsFor(supabase, token.userId, [row])),
         questions: questions.map((q, i) => {
+          if (isWritten(q)) {
+            const mark = last?.marks?.[String(i)];
+            return {
+              number: i + 1,
+              kind: 'written',
+              question: q.prompt,
+              model_answer: q.modelAnswer ?? '',
+              marks: q.marks ?? 1,
+              why: q.explain ?? null,
+              student_answer: last ? last.written?.[String(i)] ?? '' : null,
+              mark: mark ? { score: mark.score, out_of: mark.outOf, feedback: mark.feedback } : null,
+            };
+          }
           const pick = last?.picks[i];
           return {
+            kind: 'multiple_choice',
             number: i + 1,
             question: q.prompt,
             options: q.options.map((o, k) => `${LETTERS[k]}) ${o}`),
@@ -240,11 +271,66 @@ export async function getQuizTool(
             last_correct: last ? pick === q.answer : null,
           };
         }),
-        history: attempts.map((a) => ({ at: a.at, score: a.score, total: a.total })),
+        latest_attempt_at: last?.at ?? null,
+        history: attempts.map((a) => {
+          const t = writtenTally(questions, a);
+          return { at: a.at, multiple_choice: a.total ? `${a.score}/${a.total}` : null, written: t.count ? { marked: `${t.score}/${t.outOf}`, awaiting_marking: t.pending } : null };
+        }),
       },
     });
   } catch (cause) {
     return toolCrashed('get_quiz', cause);
+  }
+}
+
+export async function gradeQuizTool(
+  token: AuthenticatedToken,
+  { quiz_id, attempt_at, grades }: z.infer<typeof GradeQuizInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const { data, error } = await supabase.from('quizzes').select('*').eq('id', quiz_id).eq('user_id', token.userId).maybeSingle();
+    if (error) return queryFailed('grade_quiz', 'quiz read', error, 'Akada could not read that quiz.');
+    if (!data) return toolError('That quiz is not in the student’s Akada. Find it with list_quizzes and use the id it returns.');
+    const row = data as QuizRow;
+    const questions = cleanQuestions(row.questions);
+    const attempts = cleanAttempts(row.attempts);
+    if (!attempts.length) return toolError('The student has not handed this quiz in yet. They take it in Akada first.');
+    const at = attempt_at ?? attempts[attempts.length - 1].at;
+    const index = attempts.findIndex((a) => a.at === at);
+    if (index < 0) return toolError('No sitting at that time. Leave attempt_at out to mark the latest one, or take a time from get_quiz’s history.');
+
+    const problems: string[] = [];
+    const marks: Record<string, QuizWrittenMark> = { ...(attempts[index].marks ?? {}) };
+    for (const g of grades) {
+      const q = questions[g.number - 1];
+      if (!q) { problems.push(`There is no question ${g.number}.`); continue; }
+      if (!isWritten(q)) { problems.push(`Question ${g.number} is multiple choice; Akada marks it itself.`); continue; }
+      const outOf = q.marks ?? 1;
+      if (g.score > outOf) { problems.push(`Question ${g.number} is out of ${outOf}; ${g.score} is too many.`); continue; }
+      marks[String(g.number - 1)] = { score: g.score, outOf, feedback: g.feedback };
+    }
+    if (problems.length) return toolError(`Nothing was recorded. ${problems.join(' ')}`);
+
+    const next = attempts.map((a, i) => (i === index ? { ...a, marks, markedAt: new Date().toISOString() } : a));
+    const { error: writeError } = await supabase
+      .from('quizzes')
+      .update({ attempts: next, updated_at: new Date().toISOString() })
+      .eq('id', quiz_id)
+      .eq('user_id', token.userId);
+    if (writeError) return queryFailed('grade_quiz', 'marks update', writeError, 'Akada could not record those marks.');
+    const tally = writtenTally(questions, next[index]);
+    const a = next[index];
+    return result({
+      quiz_id,
+      attempt_at: at,
+      multiple_choice: a.total ? `${a.score}/${a.total}` : null,
+      written: `${tally.score}/${tally.outOf}`,
+      awaiting_marking: tally.pending,
+      message: `Marked. Written ${tally.score}/${tally.outOf}${tally.pending ? `, ${tally.pending} still to mark` : ''}${a.total ? `; multiple choice ${a.score}/${a.total}` : ''}. The student sees the marks and your feedback on the quiz in Akada.`,
+    });
+  } catch (cause) {
+    return toolCrashed('grade_quiz', cause);
   }
 }
 
@@ -267,15 +353,17 @@ export async function deleteQuizTool(
 
 const GET_QUIZ_FORMAT_DESCRIPTION = 'Get the exact text format Akada parses multiple-choice quizzes from. Call this before send_quiz the first time in a conversation, whenever the student asks to be quizzed and wants to take it in Akada. This tool never changes Akada data.';
 
-const SEND_QUIZ_DESCRIPTION = `Send a multiple-choice quiz with its answer key to the student's Akada, where they take it on the Notes screen and get marked. Use this when the student asks to be quizzed or tested on material (a book chapter, a reading, lecture slides, one of their notes) and wants to do it in Akada rather than in chat. Do not reveal the answers in chat. Write the quiz in this format exactly and pass the whole text as \`quiz\`:
+const SEND_QUIZ_DESCRIPTION = `Send a quiz, multiple-choice questions with their answer key and optionally written questions with a model answer, to the student's Akada, where they take it on the Notes screen and get marked. Use this when the student asks to be quizzed or tested on material (a book chapter, a reading, lecture slides, one of their notes) and wants to do it in Akada rather than in chat. Do not reveal the answers in chat. Write the quiz in this format exactly and pass the whole text as \`quiz\`:
 
 ${QUIZ_FORMAT_RULES}
 
 File it: course_id from find_course, task_id from get_tasks when it tests one chapter or reading task, note_id from list_notes when it tests a note. A task or note fills in its course. If the text does not parse, the reply lists what to fix; fix it and send again. The reply includes a url the student opens.`;
 
-const LIST_QUIZZES_DESCRIPTION = 'List the quizzes in the student’s Akada, newest first, with what each is filed under and the last and best marks. Optionally narrow to a course or task. This tool never changes Akada data.';
+const LIST_QUIZZES_DESCRIPTION = 'List the quizzes in the student’s Akada, newest first, with what each is filed under, the last and best multiple-choice marks, and `awaiting_marking` when their latest sitting has written answers for you to mark. When the student says they have finished a quiz or asks you to check or grade it, start here. Optionally narrow to a course or task. This tool never changes Akada data.';
 
-const GET_QUIZ_DESCRIPTION = 'Read one quiz from Akada with its answer key, what the student picked on their latest attempt and whether each was right, and every past mark. Use it after they have taken it to go over what they missed. This tool never changes Akada data.';
+const GRADE_QUIZ_DESCRIPTION = 'Mark the written answers on a quiz the student has handed in. Read them first with get_quiz (each written question has `student_answer`, `model_answer` and `marks`). Give every written question a `score` from 0 to its marks and `feedback`: what they got right, what was missing against the model answer, one line on how to get full marks. A blank answer scores 0. Marks the latest sitting unless `attempt_at` names another. Multiple-choice questions are already marked by Akada and cannot be marked here. After marking, go over the whole sitting with the student in one place: the multiple-choice mark, which ones they missed and why, and the written marks.';
+
+const GET_QUIZ_DESCRIPTION = 'Read one quiz from Akada with its answer key and the student’s latest sitting: for multiple choice, what they picked and whether it was right; for written questions, what they wrote, the model answer, the marks available and any mark already given. Also every past mark. Use it after they have taken it, before grade_quiz, and to go over what they missed. This tool never changes Akada data.';
 
 const DELETE_QUIZ_DESCRIPTION = 'Permanently delete a quiz and its marks from Akada. Only when the student clearly asks for that quiz to be deleted.';
 
@@ -299,6 +387,11 @@ export function registerQuizTools(server: McpServer, token: AuthenticatedToken) 
     'get_quiz',
     { title: 'Read an Akada quiz and its marks', description: GET_QUIZ_DESCRIPTION, inputSchema: GetQuizInput, annotations: { readOnlyHint: true } },
     async (input) => getQuizTool(token, input),
+  );
+  server.registerTool(
+    'grade_quiz',
+    { title: 'Mark written answers on an Akada quiz', description: GRADE_QUIZ_DESCRIPTION, inputSchema: GradeQuizInput, annotations: { destructiveHint: false, idempotentHint: true } },
+    async (input) => gradeQuizTool(token, input),
   );
   server.registerTool(
     'delete_quiz',

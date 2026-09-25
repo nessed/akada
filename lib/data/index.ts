@@ -57,6 +57,7 @@ export type {
   Quiz,
   QuizAttempt,
   QuizQuestion,
+  QuizWrittenMark,
   Quizzes,
   Task,
   TaskKind,

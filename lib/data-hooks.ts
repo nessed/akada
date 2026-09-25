@@ -813,15 +813,15 @@ function patchQuiz(current: Quizzes | undefined, id: string, patch: Partial<Quiz
 
 /** Files one sitting of a quiz under it, keeping the last QUIZ_ATTEMPTS_MAX. */
 export async function addQuizAttemptOptimistic(quiz: Quiz, attempt: QuizAttempt) {
-  const attempts = cleanAttempts([...quiz.attempts, attempt]);
+  const optimistic = cleanAttempts([...quiz.attempts, attempt]);
   await mutate(
     KEY.quizzes,
     async (current: Quizzes | undefined) => {
-      await db.setQuizAttempts(quiz.id, attempts);
+      const attempts = await db.addQuizAttempt(quiz.id, attempt);
       return patchQuiz(current, quiz.id, { attempts });
     },
     {
-      optimisticData: (current: Quizzes | undefined) => patchQuiz(current, quiz.id, { attempts }),
+      optimisticData: (current: Quizzes | undefined) => patchQuiz(current, quiz.id, { attempts: optimistic }),
       rollbackOnError: true,
       populateCache: true,
       revalidate: false,
