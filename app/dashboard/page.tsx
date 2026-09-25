@@ -31,7 +31,7 @@ import HandCheck from '@/components/notebook/HandCheck';
 import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
-import { pickUpNext } from '@/lib/derive';
+import { upNextFrom } from '@/lib/use-up-next';
 import { usePreferences } from '@/lib/preferences';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
@@ -729,10 +729,11 @@ function DashboardPageContent() {
      open, else the course that has gone longest without a session, or the
      oldest overdue thing if they have said they want that.
 
-     openTasks is passed because the resumed task is the one pick that can sit
-     outside the overdue/due-today pool: work you were in the middle of an
-     hour ago is live whether or not it happens to be due. */
-  const upNext = pickUpNext(prefs.upNextSort, overdueTasks, todayTasks, sessions, openTasks);
+     upNextFrom passes the open tasks too, because the resumed task is the one
+     pick that can sit outside the overdue/due-today pool: work you were in
+     the middle of an hour ago is live whether or not it happens to be due.
+     The rail's start reads the same function, so the two never disagree. */
+  const upNext = upNextFrom(tasks, sessions, prefs.upNextSort, today);
   /* The week's goal is the sum of the course goals, which is what the course
      panel is already measured against; a separate number would let the two
      disagree. */

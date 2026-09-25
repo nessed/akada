@@ -152,6 +152,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       // globals.css scrolls smoothly; this tells Next to drop that while it
       // moves between routes, so a new page opens at its top, not after a glide.
       data-scroll-behavior="smooth"
+      // The bootstrap script writes data-rail here before React hydrates.
+      suppressHydrationWarning
       className={`${inter.variable} ${mono.variable} ${fraunces.variable} ${lora.variable} ${merriweather.variable} ${cormorant.variable} ${caveat.variable}`}
     >
       <body className="font-sans bg-bg text-ink antialiased">

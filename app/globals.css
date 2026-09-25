@@ -688,6 +688,109 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background-position: 0 calc(100% - 1px);
 }
 
+/* The rail: the margin of the page.
+
+   Its width is --rail, which the bootstrap script sets before first paint
+   from data-rail on <html> (see RAIL_BOOTSTRAP in DesktopRail), so a page
+   that mounts with the rail collapsed never shows it open first. Between
+   768 and 1024 there is no room for 232px beside a page, so it takes 64
+   there whatever was chosen, and the handle lays the full rail over the
+   page instead (data-open).
+
+   What it draws follows its own width, through a container query, rather
+   than React state: the server and the first client render are the same
+   markup whichever way the rail was left. */
+:root {
+  --rail: 232px;
+}
+:root[data-rail='narrow'] {
+  --rail: 64px;
+}
+@media (max-width: 1023.98px) {
+  :root {
+    --rail: 64px;
+  }
+}
+.rail {
+  width: var(--rail);
+  container: rail / inline-size;
+  /* The margin rule a ruled pad has, the same faint rose as Focus's sheet. */
+  border-right: 1px solid color-mix(in srgb, var(--rose) 38%, transparent);
+  transition: width 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.rail[data-open] {
+  width: 232px;
+  box-shadow: 0 8px 20px rgba(57, 48, 36, 0.12);
+}
+@container rail (max-width: 120px) {
+  .rail-wide {
+    display: none !important;
+  }
+  /* Spines line up on their stripes; an icon or the start button centres
+     itself with auto margins. */
+  .rail-row {
+    justify-content: flex-start;
+    padding-inline: 9px;
+    gap: 5px;
+  }
+  /* Out of sight but still the link's name. */
+  .rail-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+@container rail (min-width: 121px) {
+  .rail-narrow {
+    display: none !important;
+  }
+}
+
+/* Pointing at a rail item draws the pencil underline a task title draws;
+   the page you are on already carries a highlighter swipe instead. */
+.rail-link:hover .rail-label:not(.hl):not(.hl-swipe) {
+  background-image: var(
+    --underline-svg,
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%231A1714' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.6'/></svg>")
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 6px;
+  background-position: 0 100%;
+}
+/* The keyboard gets the thin ink ring the task list's cursor draws, not the
+   browser's heavy default. */
+.rail-link:focus-visible {
+  outline: 1.5px solid var(--ink);
+  outline-offset: -1px;
+}
+
+/* The page you are on, swiped in quicker than Up next's title: this plays on
+   every change of screen, and a nav mark has no business taking 0.9s. */
+.hl-draw-quick {
+  animation: hl-draw 0.35s cubic-bezier(0.3, 0.6, 0.25, 1) both;
+}
+
+/* A course list with more below (or above) fades out at that edge, since the
+   app hides its scrollbars and a cut-off list otherwise reads as the end. */
+.rail-fade-bottom {
+  mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
+}
+.rail-fade-top {
+  mask-image: linear-gradient(0deg, #000 calc(100% - 28px), transparent);
+}
+.rail-fade-top.rail-fade-bottom {
+  mask-image: linear-gradient(
+    180deg,
+    transparent,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent
+  );
+}
+
 /* Hand-drawn rounded-rect (replaces a checkbox border) */
 .scribble-box {
   border: 1.4px solid var(--ink);

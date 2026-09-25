@@ -57,9 +57,9 @@ export default function ActiveTimerDock() {
          on that line, so the dock goes to the foot of the screen instead,
          which is empty there: the bottom bar is phone-only.
 
-         The left padding clears the rail by the same width the content does.
-         --rail is set on the frame in PageShell and is absent on phone, where
-         the rail is never rendered, hence the 0px fallback. */
+         The left padding clears the rail by the same width the content does:
+         --rail, set in globals.css from data-rail on <html>. It only applies
+         from md, since the rail is never rendered on a phone. */
       className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] md:top-auto md:bottom-8 z-50 px-[var(--density-gutter)] md:pl-[calc(var(--rail,0px)+3rem)] md:pr-12 pointer-events-none animate-fade-in"
     >
       {/* pointer-events stay off the full-width row, it would otherwise be an
