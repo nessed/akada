@@ -35,10 +35,11 @@ normally does not disconnect Claude, but revoking all sessions does.
 
 The connector provides tools for interacting with courses and tasks in your active semester:
 - `find_course`: Look up courses by code or title.
-- `get_tasks`: Read the active semester's tasks, optionally narrowed to one course, a due-date range, a priority or a kind, and sorted by due date, priority or newest.
+- `get_tasks`: Read the active semester's tasks, optionally narrowed to one course, a due-date range, a priority or a kind, and sorted by due date, priority, newest, or the order the student arranged.
 - `delete_tasks`: Permanently delete tasks, for duplicates and mistakes.
 - `get_overview`: Read a snapshot of courses (in dashboard order), open-task counts, and recent study sessions (with their ids).
 - `reorder_courses`: Change the order courses sit in on the dashboard, the same order dragging the cards sets.
+- `reorder_tasks`: Change the order one course's open tasks sit in, the same order dragging them on the course page sets.
 - `create_tasks`: Bulk-insert tasks into an active course, with notes, subtasks, and what each one is (task, reading or exam) and is worth.
 - `update_tasks`: Change tasks that already exist, including their notes, subtasks, kind, weight and pages.
 - `complete_tasks`: Tick tasks off, or put them back on the list.
@@ -69,7 +70,7 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `get_quiz`: Read one quiz with its key, what the student picked last time, and every past mark.
 - `delete_quiz`: Permanently delete a quiz and its marks.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `record_grade`, `reorder_courses`, `delete_course`, `delete_tasks`, `delete_study_session`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks`, `delete_note`, `send_quiz` and `delete_quiz` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `record_grade`, `reorder_courses`, `reorder_tasks`, `delete_course`, `delete_tasks`, `delete_study_session`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks`, `delete_note`, `send_quiz` and `delete_quiz` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -408,7 +409,7 @@ been marked, nothing the student already holds is thrown away.
 - `due_after` / `due_before` (`YYYY-MM-DD`, both inclusive). Either one leaves out tasks with no due date.
 - `priority` (`"high" | "normal"`) and `kind` (`"exam" | "reading" | "task"`).
 - `limit` (1-100, default 100), applied after sorting.
-- `sort` (`"due" | "priority" | "newest"`, default `"due"`). `due` is soonest first with undated tasks last, as it always was. `priority` is the Tasks screen's "what matters": high priority first, then soonest due. `newest` is most recently added first. `meta.sort` echoes it when it is not `due`.
+- `sort` (`"due" | "priority" | "newest" | "mine"`, default `"due"`). `due` is soonest first with undated tasks last, as it always was. `priority` is the Tasks screen's "what matters": high priority first, then soonest due. `newest` is most recently added first. `mine` is the Tasks screen's "your order": course by course in the student's course order, each course's tasks as they were dragged or placed by `reorder_tasks`, unplaced ones after them in "what matters", finished ones last. `meta.sort` echoes it when it is not `due`.
 
 Filtering happens after the same `select('*')` read the app makes, so a
 project without the `kind` column still answers. When a filter is set,
@@ -511,6 +512,24 @@ written. On a project that has not re-run `supabase/schema.sql` there is no
 `sort_order` column, and the tool says so instead of pretending. `get_overview`
 reads its courses in this order (through `compareCourseOrder` in
 `lib/data/course-order.ts`), so a reorder shows up there straight away.
+
+### 18. `reorder_tasks`
+- **Title**: Reorder an Akada course's tasks
+- **Annotations**: `destructiveHint: false`, `idempotentHint: true`
+- **Parameters**: `course_id` (UUID) and `task_ids` (UUIDs, 1 to 200, no repeats), first to last. A partial list puts those tasks first in that order; the course's other open tasks follow in the order they already read.
+- **Output**: the `course`, its open `tasks` in the new order (`id`, `title`, `due_date`, `position`), and a `message`.
+
+Writes `tasks.sort_order`, the order the course page's list is dragged into,
+one update per open task of the course, each filtered by `user_id`. The course
+is checked through `loadOwnCourse`, and every id has to be an open task of it
+or nothing is written; a finished task is refused by name, since it has no
+place in the list. Unplaced tasks read after placed ones in "what matters"
+(`compareTaskOrder` in `lib/data/task-order.ts`, the same comparator the course
+page uses), so before anything is arranged the order is exactly the one the
+list always showed, and a task added later lands at the bottom. A task moved
+to another course in the app loses its place and goes to the bottom there. On
+a project without the column (run `supabase/schema.sql`, or the
+`20260925150000_add_task_sort_order` migration) the tool says so.
 
 ---
 

@@ -325,16 +325,50 @@ export async function addTaskOptimistic(
 }
 
 export async function updateTaskOptimistic(id: string, patch: Partial<Task>) {
+  // A task moved to another course leaves its place in the old list behind,
+  // as both adapters do, so it reads at the bottom of the new one straight away.
+  const apply = (t: Task): Task =>
+    t.id !== id
+      ? t
+      : patch.courseId !== undefined && patch.courseId !== t.courseId
+        ? { ...t, ...patch, position: undefined }
+        : { ...t, ...patch };
   await mutate(
     KEY.tasks,
     async (current: Task[] | undefined) => {
       await db.updateTask(id, patch);
-      const list = current ?? [];
-      return list.map((t) => (t.id === id ? { ...t, ...patch } : t));
+      return (current ?? []).map(apply);
     },
     {
-      optimisticData: (current: Task[] | undefined) =>
-        (current ?? []).map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      optimisticData: (current: Task[] | undefined) => (current ?? []).map(apply),
+      rollbackOnError: true,
+      populateCache: true,
+      revalidate: false,
+    },
+  );
+}
+
+/**
+ * Writes the order one course's open tasks were dragged into, the way
+ * reorderCoursesOptimistic writes the dashboard's. Every list sorts through
+ * compareTaskOrder, so setting the positions is enough to redraw it. Throws
+ * where the database has no tasks.sort_order, after putting the rows back.
+ */
+export async function reorderTasksOptimistic(orderedIds: string[]) {
+  const rank = new Map(orderedIds.map((id, index) => [id, index]));
+  const place = (current: Task[] | undefined) =>
+    (current ?? []).map((task) => {
+      const position = rank.get(task.id);
+      return position === undefined ? task : { ...task, position };
+    });
+  await mutate(
+    KEY.tasks,
+    async (current: Task[] | undefined) => {
+      await db.reorderTasks(orderedIds);
+      return place(current);
+    },
+    {
+      optimisticData: place,
       rollbackOnError: true,
       populateCache: true,
       revalidate: false,

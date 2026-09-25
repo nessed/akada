@@ -756,8 +756,13 @@ the one screen that looked like a spreadsheet. It is now a planner spread.
   highlighter swipe it always was; each course is its `.course-rule` and
   code, the chosen one swiped in its own tint; how the list is cut is two
   serif words, "day" and "course", with the chosen one hand-underlined; and
-  the order says what it is ("what matters", "by date", "newest") and changes
-  on a press or `S`.
+  the order says what it is ("what matters", "by date", "newest", "your
+  order") and changes on a press or `S`. "Your order" is the order each
+  course's tasks were dragged into on its course page, course by course in the
+  reader's own course order; tasks nobody has placed follow in "what
+  matters". There is no dragging on Tasks itself: a hand-made order across
+  date bands would fight the dates, so it is made where it means something,
+  inside one course.
 - **The bands.** By day, the list reads Overdue, Today, then each of the next
   seven days by name (Tomorrow, then Friday, Saturday...), then Later and
   Open ended. By course, one band per course. Each band holds its name in a
@@ -801,11 +806,15 @@ while a sitting is running, for the same reason it lists nothing else that
 is not bound.
 
 ### Rearranging by hand
-Four lists let the reader set their own order, and all four are the same
+Five lists let the reader set their own order, and all five are the same
 component, `ReorderList`: the **course list on Today** (carried as a `row`,
 since its entries are lines on the page), the
-**course panels in Settings**, the **subtasks inside a task**, and the
-**pieces of a marking scheme** on a course page. It is written against
+**course panels in Settings**, the **subtasks inside a task**, the
+**pieces of a marking scheme** on a course page, and the **open tasks on a
+course page** (a `row` carried from its grip, since every other part of a task
+row already does something). A course's tasks read in "what matters" until
+the first drag, and a task added after that, or moved in from another
+course, lands at the bottom. It is written against
 pointer events rather than a drag-and-drop library, because a carried thing
 here has to keep looking like a sheet of paper.
 

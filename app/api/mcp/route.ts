@@ -37,6 +37,7 @@ import { daysBetween, isoDate, startOfWeek, endOfWeek } from '@/lib/utils';
 import { readCredit } from '@/lib/progression/credit';
 import { readRuns } from '@/lib/progression/runs';
 import { compareCourseOrder } from '@/lib/data/course-order';
+import { compareTaskOrder } from '@/lib/data/task-order';
 import { mcpSupabase, mcpUrl, siteUrl } from './_shared';
 import { registerNoteTools } from './notes-tools';
 import { registerQuizTools } from './quiz-tools';
@@ -59,7 +60,7 @@ const MAX_COMPONENTS = 40;
 const MAX_DROP_RULES = 20;
 const MAX_GRADING_NOTE = 600;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const TASK_SORTS = ['due', 'priority', 'newest'] as const;
+const TASK_SORTS = ['due', 'priority', 'newest', 'mine'] as const;
 type TaskSort = (typeof TASK_SORTS)[number];
 
 // This is deliberately independent of optional app-migration columns. MCP
@@ -403,12 +404,30 @@ function byDueDate(a: TaskRead, b: TaskRead) {
   return a.created_at < b.created_at ? 1 : -1;
 }
 
+// Where the student has put things, for `mine`: each course's place in their
+// course order, and each task's place in its course's list. TaskRead carries
+// neither, so they travel beside it rather than changing akada.tasks.v1.
+type Arranged = { courseRank: Map<string, number>; position: Map<string, number> };
 
-// The three orders the Tasks screen offers. `priority` is its "what matters":
-// high priority first, then soonest due.
-export function taskOrder(sort: TaskSort) {
+const NOTHING_ARRANGED: Arranged = { courseRank: new Map(), position: new Map() };
+
+// The orders the Tasks screen offers. `priority` is its "what matters": high
+// priority first, then soonest due. `mine` is its "your order": course by
+// course in the student's course order, each course's tasks the way they were
+// dragged or placed by reorder_tasks, unplaced ones after in "what matters".
+export function taskOrder(sort: TaskSort, arranged: Arranged = NOTHING_ARRANGED) {
+  const priorityFirst = (a: TaskRead, b: TaskRead) => (a.priority !== b.priority ? (a.priority === 'high' ? -1 : 1) : byDueDate(a, b));
   if (sort === 'newest') return (a: TaskRead, b: TaskRead) => (a.created_at === b.created_at ? 0 : a.created_at < b.created_at ? 1 : -1);
-  if (sort === 'priority') return (a: TaskRead, b: TaskRead) => (a.priority !== b.priority ? (a.priority === 'high' ? -1 : 1) : byDueDate(a, b));
+  if (sort === 'priority') return priorityFirst;
+  if (sort === 'mine') {
+    return (a: TaskRead, b: TaskRead) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      if (a.course.id !== b.course.id) return (arranged.courseRank.get(a.course.id) ?? 0) - (arranged.courseRank.get(b.course.id) ?? 0);
+      const ap = arranged.position.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const bp = arranged.position.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return ap !== bp ? ap - bp : priorityFirst(a, b);
+    };
+  }
   return byDueDate;
 }
 
@@ -1807,6 +1826,92 @@ export async function reorderCourses(
   }
 }
 
+const MAX_TASKS_PER_REORDER = 200;
+
+const ReorderTasksInput = z.object({
+  course_id: z.string().uuid(),
+  task_ids: z
+    .array(z.string().uuid())
+    .min(1)
+    .max(MAX_TASKS_PER_REORDER)
+    .describe('Open tasks of that course, in the order they should go, first to last. Any open task left out keeps its place after these.'),
+});
+
+const REORDER_TASKS_DESCRIPTION =
+  'Change the order one active-semester course’s open tasks sit in: the order the student drags them into on the course page, and what get_tasks returns with `sort: "mine"`. Pass the course and `task_ids` first to last; get the ids from get_tasks. A partial list is fine, e.g. one id to put a task first: the tasks named go first in that order and the rest follow in the order they already had. Finished tasks have no place in the list and are refused. Only the order changes, nothing else about any task. Returns the course’s full new order.';
+
+export async function reorderTasks(
+  token: AuthenticatedToken,
+  { course_id, task_ids }: z.infer<typeof ReorderTasksInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    if (new Set(task_ids).size !== task_ids.length) return toolError('A task is named twice. Name each task once.');
+    const owned = await loadOwnCourse('reorder_tasks', token, course_id, supabase);
+    if (!owned.ok) return owned.error;
+    const { course } = owned;
+    // `*` for the same reason as everywhere else here: sort_order and kind are
+    // additive columns, and an un-migrated project still answers the read.
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', token.userId)
+      .eq('course_id', course.id);
+    if (error) return queryFailed('reorder_tasks', 'tasks read', error, 'Akada could not load that course’s tasks.');
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const done = new Set(rows.filter((row) => row.completed).map((row) => String(row.id)));
+    // The course's open list in the order it reads now, through the same
+    // comparator the course page draws with.
+    const open = rows
+      .filter((row) => !row.completed)
+      .map((row) => ({
+        id: String(row.id),
+        title: String(row.title ?? ''),
+        courseId: course.id,
+        dueDate: (row.due_date as string | null) ?? null,
+        priority: row.priority === 'high' ? ('high' as const) : ('normal' as const),
+        completed: false,
+        completedAt: null,
+        createdAt: String(row.created_at ?? ''),
+        position: typeof row.sort_order === 'number' ? row.sort_order : undefined,
+      }))
+      .sort(compareTaskOrder);
+    const byId = new Map(open.map((task) => [task.id, task]));
+    const finished = task_ids.filter((id) => done.has(id));
+    if (finished.length > 0) {
+      return toolError(`${finished.length === 1 ? 'One of those tasks is' : `${finished.length} of those tasks are`} already done, and a finished task has no place in the list. Leave ${finished.length === 1 ? 'it' : 'them'} out.`);
+    }
+    const missing = task_ids.filter((id) => !byId.has(id));
+    if (missing.length > 0) {
+      return toolError(`${missing.length === task_ids.length ? 'No' : 'Not every'} task in that request is an open task of ${course.code}. Read the course’s tasks again with get_tasks and use the ids it returns.`);
+    }
+    const named = new Set(task_ids);
+    const order = [...task_ids.map((id) => byId.get(id)!), ...open.filter((task) => !named.has(task.id))];
+
+    // One write per task, the way the course page's reorderTasks does it,
+    // each repeating the user_id filter rather than trusting the read.
+    const writes = await Promise.all(
+      order.map((task, index) =>
+        supabase.from('tasks').update({ sort_order: index }).eq('id', task.id).eq('user_id', token.userId),
+      ),
+    );
+    const failure = writes.find((write) => write.error)?.error ?? null;
+    if (failure) {
+      if (failure.code === '42703' || failure.code === 'PGRST204') {
+        return queryFailed('reorder_tasks', 'order write', failure, 'Task order could not be saved. This Akada project needs the latest supabase/schema.sql run once first.');
+      }
+      return queryFailed('reorder_tasks', 'order write', failure, 'Akada could not save the task order.');
+    }
+    return result({
+      course: { id: course.id, code: course.code, name: course.name },
+      tasks: order.map((task, index) => ({ id: task.id, title: task.title, due_date: task.dueDate, position: index })),
+      message: `${course.code}’s tasks are now in this order: ${order.map((task) => task.title).join('; ')}.`,
+    });
+  } catch (cause) {
+    return toolCrashed('reorder_tasks', cause);
+  }
+}
+
 // ---- Study session history ----
 
 const MAX_SESSIONS_PER_READ = 200;
@@ -2091,7 +2196,7 @@ function createServer(token: AuthenticatedToken) {
     'get_tasks',
     {
       title: 'Read Akada tasks',
-      description: 'Read the signed-in student’s active-semester tasks, soonest due first. Optionally narrow to a course, include completed tasks, or filter: `due_after` and `due_before` (both inclusive, YYYY-MM-DD) for "what is due this week", `priority`, and `kind` (exam, reading or task) for "when are my midterms". A date filter leaves out tasks with no due date. `sort` picks the order: `due` (default, soonest first, undated last), `priority` (high priority first, then soonest due, the app’s "what matters" order), or `newest` (most recently added first). `limit` caps how many come back after sorting; `meta.matching` says how many matched before it. This tool never changes Akada data.',
+      description: 'Read the signed-in student’s active-semester tasks, soonest due first. Optionally narrow to a course, include completed tasks, or filter: `due_after` and `due_before` (both inclusive, YYYY-MM-DD) for "what is due this week", `priority`, and `kind` (exam, reading or task) for "when are my midterms". A date filter leaves out tasks with no due date. `sort` picks the order: `due` (default, soonest first, undated last), `priority` (high priority first, then soonest due, the app’s "what matters" order), `newest` (most recently added first), or `mine` (the order the student arranged: course by course in their course order, each course’s tasks as they dragged them or reorder_tasks placed them). `limit` caps how many come back after sorting; `meta.matching` says how many matched before it. This tool never changes Akada data.',
       inputSchema: z.object({
         course_id: z.string().uuid().optional(),
         include_completed: z.boolean().default(false),
@@ -2100,7 +2205,7 @@ function createServer(token: AuthenticatedToken) {
         priority: z.enum(['high', 'normal']).optional(),
         kind: z.enum(TASK_KINDS).optional().describe('exam for midterms, finals and quizzes; reading; task for everything else.'),
         limit: z.number().int().min(1).max(MAX_TASKS_PER_READ).default(MAX_TASKS_PER_READ),
-        sort: z.enum(TASK_SORTS).default('due').describe('due (default), priority (what matters most first), or newest.'),
+        sort: z.enum(TASK_SORTS).default('due').describe('due (default), priority (what matters most first), newest, or mine (the order the student arranged).'),
       }),
       annotations: { readOnlyHint: true },
     },
@@ -2117,7 +2222,9 @@ function createServer(token: AuthenticatedToken) {
         const supabase = mcpSupabase(token.supabaseAccessToken);
         const { data: courses, error: courseError } = await supabase
           .from('courses')
-          .select('id, code, name')
+          // `*` so the course order (sort_order, an additive column) comes
+          // back where it exists, for `sort: mine`.
+          .select('*')
           .eq('user_id', token.userId)
           .eq('semester_id', semesterId);
         if (courseError) return queryFailed('get_tasks', 'courses read', courseError, 'Akada could not load courses.');
@@ -2168,7 +2275,14 @@ function createServer(token: AuthenticatedToken) {
             (!due_before || (task.due_date !== null && task.due_date <= due_before)) &&
             (!priority || task.priority === priority) &&
             (!kind || task.kind === kind))
-          .sort(taskOrder(sort));
+          .sort(taskOrder(sort, sort === 'mine' ? {
+            courseRank: new Map(
+              [...(courses ?? [])]
+                .sort((a, b) => compareCourseOrder(courseOrderKey(a), courseOrderKey(b)))
+                .map((course, index) => [String(course.id), index]),
+            ),
+            position: new Map(rows.flatMap((row) => (typeof row.sort_order === 'number' ? [[String(row.id), row.sort_order]] : []))),
+          } : undefined));
         const shown = tasks.slice(0, limit);
         return result(TasksReadResponseSchema.parse({
           schema_version: 'akada.tasks.v1',
@@ -3027,6 +3141,17 @@ function createServer(token: AuthenticatedToken) {
       annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (input) => reorderCourses(token, input),
+  );
+
+  server.registerTool(
+    'reorder_tasks',
+    {
+      title: 'Reorder an Akada course’s tasks',
+      description: REORDER_TASKS_DESCRIPTION,
+      inputSchema: ReorderTasksInput,
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async (input) => reorderTasks(token, input),
   );
 
   server.registerTool(

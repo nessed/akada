@@ -20,6 +20,7 @@ import TaskNoteLine from '@/components/notes/TaskNoteLine';
 import TaskQuizLine from '@/components/notes/TaskQuizLine';
 import { RecallGlyph, VerdictMark } from '@/components/recall/RecallMarks';
 import type { Course, Task, TaskKind } from '@/lib/data';
+import { compareTaskOrder } from '@/lib/data/task-order';
 import { useRecall } from '@/lib/recall/use-recall';
 import { keepTask, keepTickedSteps } from '@/lib/recall/actions';
 import { looksLikeReading, readingPrompt, recallOfTask, type RecallItem } from '@/lib/recall';
@@ -39,7 +40,11 @@ import {
 } from '@/lib/data-hooks';
 
 type Filter = 'all' | 'overdue' | 'today' | 'week' | 'done';
-type SortMode = 'smart' | 'due' | 'newest';
+// `mine` is the order the student dragged each course's tasks into on its
+// course page, course by course in their own course order.
+type SortMode = 'smart' | 'due' | 'newest' | 'mine';
+const NEXT_SORT: Record<SortMode, SortMode> = { smart: 'due', due: 'newest', newest: 'mine', mine: 'smart' };
+const SORT_WORDS: Record<SortMode, string> = { smart: 'what matters', due: 'by date', newest: 'newest', mine: 'your order' };
 type Grouping = 'due' | 'course';
 
 const FILTERS: { v: Filter; l: string }[] = [
@@ -176,7 +181,7 @@ function TasksPageContent() {
       }
       if (event.key.toLowerCase() === 's') {
         event.preventDefault();
-        setSortMode((current) => current === 'smart' ? 'due' : current === 'due' ? 'newest' : 'smart');
+        setSortMode((current) => NEXT_SORT[current]);
       }
       if (event.key === '?') {
         event.preventDefault();
@@ -301,6 +306,9 @@ function TasksPageContent() {
   const overdueCount = counts.overdue ?? 0;
   const filterLabel = FILTERS.find((f) => f.v === filter)?.l.toLowerCase() ?? '';
 
+  // Where each course sits in the student's own course order, for `mine`.
+  const courseRank = useMemo(() => new Map(courses.map((course, index) => [course.id, index])), [courses]);
+
   const visibleTasks = useMemo(() => {
     const list = tasks.filter(
       (t) =>
@@ -313,12 +321,17 @@ function TasksPageContent() {
     );
     return list.sort((a, b) => {
       if (sortMode === 'newest') return b.createdAt.localeCompare(a.createdAt);
+      if (sortMode === 'mine') {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        if (a.courseId !== b.courseId) return (courseRank.get(a.courseId) ?? 0) - (courseRank.get(b.courseId) ?? 0);
+        return compareTaskOrder(a, b);
+      }
       if (sortMode === 'due') return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
       if (a.completed !== b.completed) return a.completed ? 1 : -1;
       if (a.priority !== b.priority) return a.priority === 'high' ? -1 : 1;
       return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
     });
-  }, [bounds, courseFilter, dayFilter, filter, matchesFilter, sortMode, tasks]);
+  }, [bounds, courseFilter, courseRank, dayFilter, filter, matchesFilter, sortMode, tasks]);
 
   /**
    * The list in bands. By due date it is the four answers to "when", in the
@@ -979,15 +992,13 @@ function TasksPageContent() {
           <span aria-hidden className="mx-1.5 h-4 w-px bg-line" />
           <button
             type="button"
-            onClick={() =>
-              setSortMode((m) => (m === 'smart' ? 'due' : m === 'due' ? 'newest' : 'smart'))
-            }
+            onClick={() => setSortMode((m) => NEXT_SORT[m])}
             title="Change the order inside each band (S)"
             className="h-10 bg-transparent px-1.5 text-muted transition-colors hover:text-ink"
           >
             <span className="eyebrow mr-1.5">Order</span>
             <span className="font-serif italic text-ink-soft">
-              {sortMode === 'smart' ? 'what matters' : sortMode === 'due' ? 'by date' : 'newest'}
+              {SORT_WORDS[sortMode]}
             </span>
           </button>
         </div>

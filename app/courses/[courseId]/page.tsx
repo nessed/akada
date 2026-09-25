@@ -15,6 +15,7 @@ import DatePicker from '@/components/DatePicker';
 import DueDateBadge from '@/components/DueDateBadge';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import TaskRow from '@/components/TaskRow';
+import ReorderList from '@/components/ReorderList';
 import HourStrokes from '@/components/HourStrokes';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import Stamp from '@/components/notebook/Stamp';
@@ -25,6 +26,7 @@ import GradeStanding from '@/components/course/GradeStanding';
 import PracticeScores from '@/components/course/PracticeScores';
 import { useArchivedCourse } from '@/components/course/useArchivedCourse';
 import type { Course, Session, Task } from '@/lib/data';
+import { compareTaskOrder } from '@/lib/data/task-order';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { isLoggableDuration } from '@/lib/session-safety';
 import { useTimer } from '@/lib/timer-context';
@@ -45,6 +47,7 @@ import {
   toggleTaskOptimistic,
   deleteTaskOptimistic,
   updateTaskOptimistic,
+  reorderTasksOptimistic,
   updateCourseOptimistic,
 } from '@/lib/data-hooks';
 
@@ -59,9 +62,11 @@ import {
  * session.
  *
  * It deliberately does not become a second Tasks screen. The task list here
- * is this course's list and nothing else, with no filters and no sort: the
- * cross-course list, with its ordering, its editing and its reading view, is
- * still Tasks, and there is a link through to it at the foot of the section.
+ * is this course's list and nothing else, with no filters and no sort toggle:
+ * it reads in the order the student dragged it into (what matters, until they
+ * do). The cross-course list, with its filters, its editing and its reading
+ * view, is still Tasks, and there is a link through to it at the foot of the
+ * section.
  */
 export default function CoursePage() {
   const params = useParams<{ courseId: string }>();
@@ -129,17 +134,41 @@ export default function CoursePage() {
   const { open, done } = useMemo(() => {
     const mine = courseTasks;
     return {
-      open: mine
-        .filter((task) => !task.completed)
-        .sort((a, b) => {
-          if (a.priority !== b.priority) return a.priority === 'high' ? -1 : 1;
-          return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
-        }),
+      open: mine.filter((task) => !task.completed).sort(compareTaskOrder),
       done: mine
         .filter((task) => task.completed)
         .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || '')),
     };
   }, [courseTasks]);
+
+  function openRow(task: Task, course: Course) {
+    return (
+      <TaskRow
+        task={task}
+        course={course}
+        hideCourse
+        {...timerRowProps(task)}
+        onToggle={toggleTask}
+        onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
+        onOpen={openTask}
+        onOpenEnded={openEndTask}
+        onDelete={(t) => removeTask(t.id)}
+        ground="page"
+      />
+    );
+  }
+
+  async function moveTask(orderedIds: string[]) {
+    try {
+      await reorderTasksOptimistic(orderedIds);
+    } catch (error) {
+      console.error('Failed to reorder tasks:', error);
+      // A database that has not run the latest schema is by far the likeliest
+      // reason, and reorderTasks says exactly that.
+      notify(error instanceof Error ? error.message : 'That order was not saved.');
+      throw error;
+    }
+  }
 
   function goBack() {
     // The course list lives on the dashboard, so that is where "back" means,
@@ -314,9 +343,11 @@ export default function CoursePage() {
   const today = isoDate();
   const weekSeconds = totalSeconds(sessionsThisWeek(courseSessions));
   const overdueCount = open.filter((t) => t.dueDate && t.dueDate < today).length;
-  // The earliest dated task still open. Open is already sorted by due date,
-  // so this is the first one that has a date at all.
-  const nextDue = open.find((t) => t.dueDate) ?? null;
+  // The earliest dated task still open, whatever order the list is in.
+  const nextDue = open.reduce<Task | null>(
+    (soonest, t) => (t.dueDate && (!soonest?.dueDate || t.dueDate < soonest.dueDate) ? t : soonest),
+    null,
+  );
   const lastSession = log[0] ?? null;
   const lastSessionLabel = lastSession ? formatRelativeDate(lastSession.date).toLowerCase() : null;
 
@@ -475,21 +506,23 @@ export default function CoursePage() {
             {/* The rows are written on the page; their wash reaches a little
                 past the column on either side, the way a highlighter does. */}
             <div className="-mx-[15px]">
-              {open.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  course={course}
-                  hideCourse
-                  {...timerRowProps(task)}
-                  onToggle={toggleTask}
-                  onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
-                  onOpen={openTask}
-                  onOpenEnded={openEndTask}
-                  onDelete={(t) => removeTask(t.id)}
-                  ground="page"
+              {/* Carried from the grip in the margin: every other part of a
+                  row already does something when pressed. */}
+              {open.length > 1 ? (
+                <ReorderList
+                  items={open}
+                  getId={(task) => task.id}
+                  getLabel={(task) => task.title}
+                  label={`${course.code} tasks, in the order you arranged them`}
+                  shape="row"
+                  carry="grip"
+                  className=""
+                  onReorder={moveTask}
+                  renderItem={(task) => openRow(task, course)}
                 />
-              ))}
+              ) : (
+                open.map((task) => <div key={task.id}>{openRow(task, course)}</div>)
+              )}
 
               {showDone &&
                 done.map((task) => (

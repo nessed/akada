@@ -49,6 +49,14 @@ export interface DataProvider {
   addTask(task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>): Promise<Task>;
   updateTask(id: string, updates: Partial<Task>): Promise<Task>;
   deleteTask(id: string): Promise<void>;
+  /**
+   * Writes the order the student dragged one course's tasks into.
+   * `orderedIds` is that course's open list, first task first; a task not
+   * named keeps the position it had. Unavailable the way reorderCourses is:
+   * against a database without tasks.sort_order it throws, and the list puts
+   * the rows back and says the order did not save.
+   */
+  reorderTasks(orderedIds: string[]): Promise<void>;
 
   // Recall, scoped to the active semester, same rule as courses.
   /**

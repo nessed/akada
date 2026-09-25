@@ -105,6 +105,13 @@ alter table tasks add column if not exists weight numeric
 alter table tasks add column if not exists pages integer
   check (pages is null or (pages >= 1 and pages <= 10000));
 
+-- The order the student dragged a course's tasks into, smallest first, scoped
+-- to the task's course. Nullable and purely additive, like courses.sort_order:
+-- a task nobody has placed has none, and lib/data/task-order.ts puts it after
+-- the placed ones in the "what matters" order the list always had. No
+-- backfill, because that fallback already is the order every list showed.
+alter table tasks add column if not exists sort_order integer;
+
 -- The same three columns went onto production through the MCP as the
 -- migration add_task_kind_weight_pages (supabase/migrations/), with a page
 -- count of at least 1. An earlier version of this file allowed 0. A zero

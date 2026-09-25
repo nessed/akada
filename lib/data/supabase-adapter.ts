@@ -125,6 +125,7 @@ interface TaskRow {
   kind?: string | null;
   weight?: number | string | null;
   pages?: number | string | null;
+  sort_order?: number | null;
 }
 
 interface RecallRow {
@@ -263,6 +264,7 @@ function rowToTask(r: TaskRow): Task {
     kind: cleanKind(r.kind),
     weight: cleanWeight(r.weight),
     pages: cleanPages(r.pages),
+    position: typeof r.sort_order === 'number' ? r.sort_order : undefined,
   };
 }
 
@@ -358,6 +360,9 @@ function taskExtras(input: Partial<Task>): Record<string, unknown> {
   if (pages !== null) extras.pages = pages;
   return extras;
 }
+
+const TASK_ORDER_UNAVAILABLE =
+  'Task order could not be saved. Run the latest supabase/schema.sql once and try again.';
 
 const COURSE_ORDER_UNAVAILABLE =
   'Course order could not be saved. Run the latest supabase/schema.sql once and try again.';
@@ -932,15 +937,36 @@ export class SupabaseAdapter implements DataProvider {
     if (updates.weight !== undefined) patch.weight = cleanWeight(updates.weight);
     if (updates.pages !== undefined) patch.pages = cleanPages(updates.pages);
 
-    const { data, error } = await this.supabase
-      .from('tasks')
-      .update(patch)
-      .eq('id', id)
-      .eq('user_id', uid)
-      .select()
-      .single();
+    const write = (values: Record<string, unknown>) =>
+      this.supabase.from('tasks').update(values).eq('id', id).eq('user_id', uid).select().single();
+    // A task moved to another course leaves its place in the old one behind:
+    // a position means nothing among another course's tasks, so it goes to
+    // the bottom of its new list. Without the column there is no place to
+    // leave, and the move is written without it.
+    let { data, error } = await write(patch.course_id ? { ...patch, sort_order: null } : patch);
+    if (error && patch.course_id && isMissingOrderColumn(error)) ({ data, error } = await write(patch));
     if (error) throw error;
     return rowToTask(data as TaskRow);
+  }
+
+  async reorderTasks(orderedIds: string[]): Promise<void> {
+    if (orderedIds.length === 0) return;
+    const uid = await this.userId();
+    const results = await Promise.all(
+      orderedIds.map((id, index) =>
+        this.supabase
+          .from('tasks')
+          .update({ sort_order: index })
+          .eq('id', id)
+          .eq('user_id', uid),
+      ),
+    );
+    const failure = results.find((result) => result.error)?.error;
+    if (failure) {
+      throw isMissingOrderColumn(failure)
+        ? new Error(TASK_ORDER_UNAVAILABLE)
+        : (failure as unknown as Error);
+    }
   }
 
   async deleteTask(id: string): Promise<void> {
