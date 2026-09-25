@@ -484,6 +484,82 @@ input[type='date']::-webkit-calendar-picker-indicator {
   pointer-events: none;
 }
 
+/* A screen arriving. Every page used to cut in whole while Stats, Up next
+   and the timer each had an entrance of their own, so moving between tabs
+   felt like two different apps. The content column comes up 6px and in, on
+   the same curve as everything else; the rail, the bar and the dock hold
+   still around it. Backwards fill only, so once it has landed main carries
+   no transform and a fixed sheet inside it is placed against the viewport. */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+.page-in {
+  animation: page-in 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* A sheet going back down. Sheets slid up and then vanished in a frame;
+   `useLeaving` holds one on screen for this long so it can leave the way it
+   came. The panel is always the wrapper's last child. */
+@keyframes sheet-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes sheet-down {
+  to {
+    translate: 0 32px;
+  }
+}
+.sheet-leaving {
+  animation: sheet-out 0.22s ease-in forwards;
+  pointer-events: none;
+}
+.sheet-leaving > :last-child {
+  animation: sheet-down 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+/* A box ticked by hand. The box fills with a small press, and the check is
+   written into it a beat later, the way a pen puts it down. Only on the tick
+   itself: a task that loads already done is drawn done. */
+@keyframes check-press {
+  from {
+    scale: 0.6;
+  }
+  60% {
+    scale: 1.12;
+  }
+}
+.check-press {
+  animation: check-press 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.check-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: ink-in 0.3s cubic-bezier(0.3, 0.6, 0.25, 1) 0.1s forwards;
+}
+
+/* Hour strokes fill from the bottom when they are first drawn, one after
+   another, and a part hour rises in place while the clock runs. */
+.stroke-fill {
+  transform-origin: bottom center;
+  animation: bar-grow 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  transition: height 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* The tab you are on. The little rule under it is drawn out from the middle
+   when the screen changes, rather than being there already. */
+@keyframes nav-mark {
+  from {
+    scale: 0 1;
+  }
+}
+.nav-mark {
+  animation: nav-mark 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) 0.06s backwards;
+}
+
 /* Anyone who has asked their system for less movement gets the app without
    it, including the tick, which otherwise pulses for a whole session. */
 @media (prefers-reduced-motion: reduce) {
@@ -771,7 +847,10 @@ input[type='date']::-webkit-calendar-picker-indicator {
   .pop-in,
   .stamp-down,
   .rule-draw,
-  .tally-fresh {
+  .tally-fresh,
+  .check-draw,
+  .stroke-fill,
+  .nav-mark {
     animation-delay: 0s !important;
   }
 }

@@ -29,6 +29,8 @@ interface Props {
   className?: string;
   /** Screen-reader text; without one the row is silent to a reader. */
   label?: string;
+  /** Fill the strokes up from the bottom when they are first drawn. */
+  grow?: boolean;
 }
 
 export default function HourStrokes({
@@ -40,6 +42,7 @@ export default function HourStrokes({
   max = 12,
   className = '',
   label,
+  grow = true,
 }: Props) {
   const goal = Math.max(0, goalHours);
   if (goal <= 0) return null;
@@ -64,19 +67,26 @@ export default function HourStrokes({
           <span
             key={i}
             aria-hidden
-            className="block shrink-0 rounded-[2px]"
+            className="relative block shrink-0 overflow-hidden rounded-[2px]"
             style={{
               width,
               height,
               border: outlined ? '1px solid var(--line)' : undefined,
-              background:
-                filled >= 1
-                  ? color
-                  : filled > 0
-                    ? `linear-gradient(180deg, transparent ${(1 - filled) * 100}%, ${color} ${(1 - filled) * 100}%)`
-                    : undefined,
             }}
-          />
+          >
+            {/* The fill is its own layer so it can rise into the stroke,
+                one hour after another, and keep rising while a clock runs. */}
+            {filled > 0 && (
+              <span
+                className={`absolute inset-x-0 bottom-0 block ${grow ? 'stroke-fill' : ''}`}
+                style={{
+                  height: `${filled * 100}%`,
+                  background: color,
+                  animationDelay: grow ? `${i * 45}ms` : undefined,
+                }}
+              />
+            )}
+          </span>
         );
       })}
     </div>
@@ -103,6 +113,7 @@ export function HourTicks({
       width={7}
       max={max}
       label={label}
+      grow={false}
     />
   );
 }
