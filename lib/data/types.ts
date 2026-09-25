@@ -221,6 +221,13 @@ export interface Task {
    * the backlog into hours. Bounds match the check on `tasks.pages`.
    */
   pages?: number | null;
+  /**
+   * Where this task sits in its course's list, smallest first, once the
+   * student has dragged it there or the MCP has placed it. Optional the way
+   * Course.position is: an unplaced task follows the placed ones in the
+   * "what matters" order. See lib/data/task-order.ts.
+   */
+  position?: number;
 }
 
 /**

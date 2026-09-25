@@ -201,6 +201,7 @@ function sanitizeTask(task: Task): Task {
     kind: cleanKind(task.kind),
     weight: cleanWeight(task.weight),
     pages: cleanPages(task.pages),
+    position: cleanPosition(task.position),
   };
 }
 
@@ -449,9 +450,22 @@ export class LocalAdapter implements DataProvider {
       safeUpdates.priority = updates.priority === 'high' ? 'high' : 'normal';
     }
     const draft: StoredTask = { ...tasks[idx], ...safeUpdates, id, createdAt: tasks[idx].createdAt };
+    // Moved to another course: its place was in the old list, so it goes to
+    // the bottom of the new one, the way the Supabase adapter clears it.
+    if (safeUpdates.courseId !== undefined && safeUpdates.courseId !== tasks[idx].courseId) draft.position = undefined;
     tasks[idx] = { ...sanitizeTask(draft), semesterId: draft.semesterId };
     write(KEYS.tasks, tasks);
     return tasks[idx];
+  }
+
+  async reorderTasks(orderedIds: string[]): Promise<void> {
+    if (orderedIds.length === 0) return;
+    const rank = new Map(orderedIds.map((id, index) => [id, index]));
+    const tasks = read<StoredTask[]>(KEYS.tasks, []).map((task) => {
+      const position = rank.get(task.id);
+      return position === undefined ? task : { ...task, position };
+    });
+    write(KEYS.tasks, tasks);
   }
 
   async deleteTask(id: string): Promise<void> {

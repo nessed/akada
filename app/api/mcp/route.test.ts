@@ -15,6 +15,7 @@ import {
   recordGrade,
   recordRecallTool,
   reorderCourses,
+  reorderTasks,
   taskOrder,
   updateStudySession,
 } from './route';
@@ -962,6 +963,98 @@ test('get_tasks orders by due date, by what matters, or newest first', () => {
   assert.deepEqual(order('due'), ['soon-normal', 'late-high', 'late-normal', 'undated-high']);
   assert.deepEqual(order('priority'), ['late-high', 'undated-high', 'soon-normal', 'late-normal']);
   assert.deepEqual(order('newest'), ['late-high', 'late-normal', 'soon-normal', 'undated-high']);
+});
+
+// ---- Task order ----
+
+const T1 = '88888888-8888-4888-8888-888888888881';
+const T2 = '88888888-8888-4888-8888-888888888882';
+const T3 = '88888888-8888-4888-8888-888888888883';
+const T_DONE = '88888888-8888-4888-8888-888888888884';
+const T_OTHER = '88888888-8888-4888-8888-888888888885';
+const ARRANGED_SCHEMA: Record<string, string[]> = {
+  ...GRADED_SCHEMA,
+  courses: [...GRADED_SCHEMA.courses, 'sort_order', 'created_at'],
+  tasks: [...GRADED_SCHEMA.tasks, 'sort_order'],
+};
+
+// Nothing placed yet, so the course reads in "what matters": the high
+// priority one first, then soonest due.
+function arrangeable(): Record<string, Row[]> {
+  const db = gradedFixtures();
+  db.courses.push({ id: OTHER_COURSE, user_id: 'user-1', semester_id: 'sem-1', code: 'MATH200', name: 'Linear Algebra', weekly_goal_hours: 4, assessments: [], grading: null });
+  const task = (id: string, title: string, extra: Row = {}): Row => ({
+    id, user_id: 'user-1', semester_id: 'sem-1', course_id: COURSE_ID, title, due_date: null, priority: 'normal',
+    completed: false, completed_at: null, created_at: '2026-09-01T00:00:00.000Z', ...extra,
+  });
+  db.tasks = [
+    task(T1, 'Problem set', { due_date: '2026-10-01' }),
+    task(T2, 'Midterm prep', { priority: 'high', due_date: '2026-10-20' }),
+    task(T3, 'Read ch. 4', { due_date: '2026-10-05' }),
+    task(T_DONE, 'Quiz 1', { completed: true, completed_at: '2026-09-20T00:00:00.000Z' }),
+    task(T_OTHER, 'Matrix drills', { course_id: OTHER_COURSE }),
+  ];
+  return db;
+}
+
+const placed = (db: Record<string, Row[]>) =>
+  db.tasks.filter((t) => t.course_id === COURSE_ID && !t.completed)
+    .sort((a, b) => (a.sort_order as number) - (b.sort_order as number)).map((t) => t.title);
+
+test('reorder_tasks puts the named tasks first and keeps the rest in the order they read', async () => {
+  const db = arrangeable();
+  const output = (await reorderTasks(TOKEN, { course_id: COURSE_ID, task_ids: [T3] }, fakeSupabase(db, ARRANGED_SCHEMA))) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  assert.deepEqual(placed(db), ['Read ch. 4', 'Midterm prep', 'Problem set']);
+  assert.deepEqual((output.structuredContent!.tasks as Row[]).map((t) => t.title), ['Read ch. 4', 'Midterm prep', 'Problem set']);
+  assert.equal(db.tasks.find((t) => t.id === T_DONE)!.sort_order, undefined);
+  assert.equal(db.tasks.find((t) => t.id === T_OTHER)!.sort_order, undefined);
+
+  // And a second move reads the first one back as the order to keep.
+  await reorderTasks(TOKEN, { course_id: COURSE_ID, task_ids: [T1] }, fakeSupabase(db, ARRANGED_SCHEMA));
+  assert.deepEqual(placed(db), ['Problem set', 'Read ch. 4', 'Midterm prep']);
+});
+
+test('reorder_tasks writes nothing for a finished task, another course\'s, or one named twice', async () => {
+  const db = arrangeable();
+  for (const task_ids of [[T1, T_DONE], [T1, T_OTHER], [T1, T1]]) {
+    const output = (await reorderTasks(TOKEN, { course_id: COURSE_ID, task_ids }, fakeSupabase(db, ARRANGED_SCHEMA))) as Reply;
+    assert.equal(output.isError, true, task_ids.join(','));
+  }
+  assert.ok(db.tasks.every((t) => t.sort_order === undefined));
+});
+
+test('reorder_tasks will not touch another student\'s course', async () => {
+  const db = arrangeable();
+  const output = (await reorderTasks({ ...TOKEN, userId: 'user-2' }, { course_id: COURSE_ID, task_ids: [T1] }, fakeSupabase(db, ARRANGED_SCHEMA))) as Reply;
+  assert.equal(output.isError, true);
+  assert.ok(db.tasks.every((t) => t.sort_order === undefined));
+});
+
+test('reorder_tasks says the schema needs running on a project without tasks.sort_order', async () => {
+  const output = (await reorderTasks(TOKEN, { course_id: COURSE_ID, task_ids: [T1] }, fakeSupabase(arrangeable(), GRADED_SCHEMA))) as Reply;
+  assert.equal(output.isError, true);
+  assert.match(output.content[0].text, /schema\.sql/);
+});
+
+test('get_tasks reads "mine" course by course, placed tasks first, the rest by what matters', () => {
+  const task = (id: string, course: string, priority: 'high' | 'normal', due_date: string | null, completed = false) =>
+    ({ id, course: { id: course }, priority, due_date, completed, created_at: '2026-09-01' }) as Parameters<ReturnType<typeof taskOrder>>[0];
+  const list = [
+    task('b-unplaced', 'B', 'normal', '2026-10-01'),
+    task('a-unplaced-high', 'A', 'high', '2026-10-30'),
+    task('a-second', 'A', 'normal', null),
+    task('a-first', 'A', 'normal', '2026-12-01'),
+    task('a-done', 'A', 'high', '2026-09-01', true),
+    task('b-first', 'B', 'normal', null),
+  ];
+  const arranged = {
+    courseRank: new Map([['A', 0], ['B', 1]]),
+    position: new Map([['a-first', 0], ['a-second', 1], ['b-first', 0]]),
+  };
+  assert.deepEqual([...list].sort(taskOrder('mine', arranged)).map((t) => t.id), [
+    'a-first', 'a-second', 'a-unplaced-high', 'b-first', 'b-unplaced', 'a-done',
+  ]);
 });
 
 // ---- Reading backlog ----
