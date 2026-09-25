@@ -1362,14 +1362,24 @@ export class SupabaseAdapter implements DataProvider {
     return { quizzes: (data as QuizRow[]).map(rowToQuiz), available: true };
   }
 
-  async setQuizAttempts(id: string, attempts: QuizAttempt[]): Promise<void> {
+  async addQuizAttempt(id: string, attempt: QuizAttempt): Promise<QuizAttempt[]> {
     const uid = await this.userId();
+    const { data, error: readError } = await this.supabase
+      .from('quizzes')
+      .select('attempts')
+      .eq('id', id)
+      .eq('user_id', uid)
+      .maybeSingle();
+    if (readError) throw isMissingRecall(readError) ? new Error(QUIZZES_UNAVAILABLE) : readError;
+    if (!data) throw new Error('That quiz is not there any more.');
+    const attempts = cleanAttempts([...cleanAttempts(data.attempts), attempt]);
     const { error } = await this.supabase
       .from('quizzes')
-      .update({ attempts: cleanAttempts(attempts), updated_at: new Date().toISOString() })
+      .update({ attempts, updated_at: new Date().toISOString() })
       .eq('id', id)
       .eq('user_id', uid);
     if (error) throw isMissingRecall(error) ? new Error(QUIZZES_UNAVAILABLE) : error;
+    return attempts;
   }
 
   async deleteQuiz(id: string): Promise<void> {
