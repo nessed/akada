@@ -677,9 +677,12 @@ export class LocalAdapter implements DataProvider {
     return { quizzes, available: true };
   }
 
-  async setQuizAttempts(id: string, attempts: QuizAttempt[]): Promise<void> {
+  async addQuizAttempt(id: string, attempt: QuizAttempt): Promise<QuizAttempt[]> {
     const now = new Date().toISOString();
-    write(KEYS.quizzes, read<Quiz[]>(KEYS.quizzes, []).map((q) => (q.id === id ? { ...q, attempts: cleanAttempts(attempts), updatedAt: now } : q)));
+    const quizzes = read<Quiz[]>(KEYS.quizzes, []);
+    const attempts = cleanAttempts([...(quizzes.find((q) => q.id === id)?.attempts ?? []), attempt]);
+    write(KEYS.quizzes, quizzes.map((q) => (q.id === id ? { ...q, attempts, updatedAt: now } : q)));
+    return attempts;
   }
 
   async deleteQuiz(id: string): Promise<void> {

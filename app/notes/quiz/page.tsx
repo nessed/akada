@@ -8,9 +8,9 @@ import HandNote from '@/components/notebook/HandNote';
 import Icon from '@/components/notes/Icon';
 import QuizText from '@/components/notes/QuizText';
 import { addQuizAttemptOptimistic, useCourses, useNotes, useQuizzes, useTasks } from '@/lib/data-hooks';
-import { LETTERS, markQuiz } from '@/lib/quiz/format';
+import { LETTERS, isWritten, markQuiz, writtenTally } from '@/lib/quiz/format';
 import { relativeLabel } from '@/lib/notes/store';
-import type { Quiz, QuizAttempt } from '@/lib/data';
+import type { Quiz, QuizAttempt, QuizQuestion } from '@/lib/data';
 
 export default function QuizPage() {
   return (
@@ -46,10 +46,13 @@ function QuizScreen() {
 }
 
 /**
- * One sitting. Picks are pencilled in with highlighter, nothing is marked
- * until the whole paper is handed in, and then every question shows what was
- * right and why. The mark is filed under the quiz, and so under its course
- * and task, the moment it is handed in.
+ * One sitting. Picks are pencilled in with highlighter and written answers
+ * go on ruled lines; nothing is marked until the whole paper is handed in.
+ * Then the multiple choice is marked on the spot, every question shows what
+ * was right and why, and the written answers wait for the assistant, whose
+ * marks and notes fill in on the same page when it has read them. A quiz
+ * with written questions opens on its last sitting, so coming back after the
+ * assistant has marked it shows everything in one place.
  */
 function Sitting({ quiz }: { quiz: Quiz }) {
   const { courses } = useCourses();
@@ -59,20 +62,26 @@ function Sitting({ quiz }: { quiz: Quiz }) {
   const task = quiz.taskId ? tasks.find((t) => t.id === quiz.taskId) : undefined;
   const note = quiz.noteId ? notes.find((n) => n.id === quiz.noteId) : undefined;
 
+  const hasWritten = quiz.questions.some(isWritten);
+  const latest = quiz.attempts[quiz.attempts.length - 1];
   const [picks, setPicks] = useState<number[]>(() => quiz.questions.map(() => -1));
-  const [marked, setMarked] = useState<QuizAttempt | null>(null);
+  const [written, setWritten] = useState<Record<string, string>>({});
+  // The sitting on show, by when it was handed in; null is a fresh paper.
+  const [viewing, setViewing] = useState<string | null>(() => (hasWritten && latest ? latest.at : null));
+  const [pending, setPending] = useState<QuizAttempt | null>(null);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
-  const answered = picks.filter((p) => p >= 0).length;
+  // The stored copy, so marks the assistant writes show up here when they land.
+  const marked = viewing ? quiz.attempts.find((a) => a.at === viewing) ?? (pending?.at === viewing ? pending : null) : null;
+  const answered = quiz.questions.filter((q, i) => (isWritten(q) ? !!written[String(i)]?.trim() : picks[i] >= 0)).length;
   const total = quiz.questions.length;
+  const mcqCount = total - quiz.questions.filter(isWritten).length;
 
   useEffect(() => {
-    if (marked) window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [marked]);
+    if (viewing) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [viewing]);
 
-  const handIn = async () => {
-    const attempt = markQuiz(quiz.questions, picks);
-    setMarked(attempt);
+  const file = async (attempt: QuizAttempt) => {
     setSaving(true);
     setFailed(false);
     try {
@@ -84,15 +93,36 @@ function Sitting({ quiz }: { quiz: Quiz }) {
     }
   };
 
+  const handIn = () => {
+    const attempt = markQuiz(quiz.questions, picks, written);
+    setPending(attempt);
+    setViewing(attempt.at);
+    void file(attempt);
+  };
+
   const again = () => {
     setPicks(quiz.questions.map(() => -1));
-    setMarked(null);
+    setWritten({});
+    setViewing(null);
+    setPending(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const history = quiz.attempts;
   const best = useMemo(() => history.reduce((b, a) => Math.max(b, a.score), 0), [history]);
-  const standfirst = [course?.code, task?.title, `${total} ${total === 1 ? 'question' : 'questions'}`].filter(Boolean).join(' · ');
+  const tally = marked ? writtenTally(quiz.questions, marked) : null;
+  const standfirst = [
+    course?.code,
+    task?.title,
+    `${total} ${total === 1 ? 'question' : 'questions'}${hasWritten && mcqCount ? `, ${total - mcqCount} written` : ''}`,
+  ].filter(Boolean).join(' · ');
+
+  const strokeFor = (attempt: QuizAttempt, q: QuizQuestion, i: number) => {
+    if (!isWritten(q)) return attempt.picks[i] === q.answer ? 'got' : 'miss';
+    const mark = attempt.marks?.[String(i)];
+    if (!mark) return 'wait';
+    return mark.score >= mark.outOf ? 'got' : mark.score > 0 ? 'part' : 'miss';
+  };
 
   return (
     <article style={{ ['--c' as string]: course?.color ?? 'var(--line-strong)' }}>
@@ -109,15 +139,26 @@ function Sitting({ quiz }: { quiz: Quiz }) {
         </div>
       </header>
 
-      {marked ? (
+      {marked && tally ? (
         <section className="quiz-mark" aria-live="polite">
-          <HandNote size={34} rotate={-4}>{marked.score} / {marked.total}</HandNote>
+          <div className="quiz-mark-hand">
+            {mcqCount > 0 && <HandNote size={34} rotate={-4}>{marked.score} / {marked.total}</HandNote>}
+            {tally.count > 0 && (
+              <HandNote size={mcqCount ? 21 : 34} rotate={-3}>
+                {tally.pending === tally.count ? 'written: to mark' : `${mcqCount ? 'written ' : ''}${tally.score} / ${tally.pending ? tally.outOf : tally.possible}`}
+              </HandNote>
+            )}
+          </div>
           <div>
             <div className="strokes" aria-hidden>
-              {quiz.questions.map((q, i) => <span key={i} data-r={marked.picks[i] === q.answer ? 'got' : 'miss'} />)}
+              {quiz.questions.map((q, i) => <span key={i} data-r={strokeFor(marked, q, i)} />)}
             </div>
             <p className="strokes-label">
-              {saving ? 'filing it…' : failed ? 'the mark didn’t save, try handing in again' : <>filed{course ? <> under <em>{course.code}</em></> : null}{history.length > 1 ? <> · best <b>{Math.max(best, marked.score)}</b>/{total}</> : null}</>}
+              {saving ? 'filing it…'
+                : failed ? 'it didn’t save, try handing in again'
+                  : tally.pending > 0
+                    ? <>{tally.pending} written {tally.pending === 1 ? 'answer' : 'answers'} waiting · tell your assistant “grade my quiz”</>
+                    : <>filed{course ? <> under <em>{course.code}</em></> : null}{mcqCount && history.length > 1 ? <> · best <b>{Math.max(best, marked.score)}</b>/{mcqCount}</> : null}</>}
             </p>
           </div>
         </section>
@@ -125,21 +166,70 @@ function Sitting({ quiz }: { quiz: Quiz }) {
         <section className="quiz-history" aria-label="Past sittings">
           <span className="eyebrow">Before</span>
           <ul>
-            {history.slice(-5).reverse().map((a) => (
-              <li key={a.at}>
-                <span className="quiz-score">{a.score}/{a.total}</span>
-                <span className="strokes" aria-hidden>
-                  {quiz.questions.map((q, i) => <span key={i} data-r={a.picks[i] === q.answer ? 'got' : 'miss'} />)}
-                </span>
-                <span className="quiz-when">{relativeLabel(Date.parse(a.at)).toLowerCase()}</span>
-              </li>
-            ))}
+            {history.slice(-5).reverse().map((a) => {
+              const t = writtenTally(quiz.questions, a);
+              return (
+                <li key={a.at}>
+                  <button type="button" className="quiz-past" onClick={() => setViewing(a.at)} title="See this sitting">
+                    <span className="quiz-score">{mcqCount ? `${a.score}/${a.total}` : `${t.score}/${t.pending ? t.outOf : t.possible}`}</span>
+                    <span className="strokes" aria-hidden>
+                      {quiz.questions.map((q, i) => <span key={i} data-r={strokeFor(a, q, i)} />)}
+                    </span>
+                    <span className="quiz-when">{relativeLabel(Date.parse(a.at)).toLowerCase()}{t.pending ? ' · to mark' : ''}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
 
       <ol className="quiz-list">
         {quiz.questions.map((q, i) => {
+          if (isWritten(q)) {
+            const text = marked ? marked.written?.[String(i)] ?? '' : written[String(i)] ?? '';
+            const mark = marked?.marks?.[String(i)];
+            const state = marked ? (mark ? (mark.score >= mark.outOf ? 'got' : mark.score > 0 ? 'part' : 'miss') : 'wait') : undefined;
+            return (
+              <li key={i} className="quiz-q quiz-written" data-state={state}>
+                <p className="quiz-prompt">
+                  <span className="quiz-n">{i + 1}</span>
+                  <span>
+                    <QuizText text={q.prompt} />
+                    <span className="quiz-marks">{q.marks ?? 1} {(q.marks ?? 1) === 1 ? 'mark' : 'marks'}</span>
+                  </span>
+                </p>
+                {marked ? (
+                  <div className="quiz-answer-read">{text || <em>left blank</em>}</div>
+                ) : (
+                  <textarea
+                    className="quiz-answer"
+                    aria-label={`Answer to question ${i + 1}`}
+                    placeholder="Write your answer"
+                    rows={4}
+                    value={text}
+                    onChange={(event) => { const value = event.target.value; setWritten((all) => ({ ...all, [String(i)]: value })); }}
+                  />
+                )}
+                {marked && (
+                  mark ? (
+                    <div className="quiz-feedback">
+                      <HandNote size={19} rotate={-2}>{mark.score} / {mark.outOf}</HandNote>
+                      {mark.feedback && <p>{mark.feedback}</p>}
+                      {q.modelAnswer && (
+                        <details>
+                          <summary>What a full answer says</summary>
+                          <p><QuizText text={q.modelAnswer} /></p>
+                        </details>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="quiz-why">waiting for your assistant to mark it</p>
+                  )
+                )}
+              </li>
+            );
+          }
           const pick = marked ? marked.picks[i] : picks[i];
           const right = marked && pick === q.answer;
           return (
@@ -185,7 +275,7 @@ function Sitting({ quiz }: { quiz: Quiz }) {
         {marked ? (
           <>
             <button type="button" className="btn btn-primary" onClick={again}><Icon name="read" size={16} />Take it again</button>
-            {failed && <button type="button" className="btn" onClick={handIn}>Save the mark</button>}
+            {failed && pending && <button type="button" className="btn" onClick={() => void file(pending)}>Save it</button>}
             <Link href="/notes" className="btn btn-ghost">Back to notes</Link>
           </>
         ) : (

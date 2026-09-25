@@ -76,7 +76,7 @@ interface Props {
   onNew: () => void;
   onOpenFile: () => void;
   onPrompt: () => void;
-  /** The quizzes, drawn between the notes and the pace line. */
+  /** The quizzes, drawn above the notes. */
   quizzes?: React.ReactNode;
 }
 
@@ -227,6 +227,8 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
 
       {last && <LeadBand pace={pace} note={last.note} section={last.section} at={last.at} progress={reading.get(last.note.id) ?? 0} course={last.note.courseId ? courseOf.get(last.note.courseId) : undefined} onOpen={onOpen} onFocus={onFocus} />}
 
+      {quizzes}
+
       <div className="fold" />
 
       <div className="shelf-tools">
@@ -341,8 +343,6 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
           {q ? 'No note mentions that.' : 'Nothing filed here yet.'}
         </p>
       )}
-
-      {quizzes}
 
       <PaceLine pace={pace} />
 

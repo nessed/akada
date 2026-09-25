@@ -361,20 +361,45 @@ export interface StudyNotes {
   available: boolean;
 }
 
-/** One multiple-choice question. `answer` is the index of the right option. */
+/**
+ * One question. A multiple-choice one has `options` and `answer`, the index
+ * of the right option, and is marked on the spot. A written one (`kind:
+ * 'open'`) has no options and `answer` -1; the student writes an answer and
+ * the assistant marks it later against `modelAnswer`, out of `marks`.
+ */
 export interface QuizQuestion {
+  kind?: 'mcq' | 'open';
   prompt: string;
   options: string[];
   answer: number;
   explain?: string;
+  modelAnswer?: string;
+  marks?: number;
 }
 
-/** One sitting of a quiz: what was picked for each question (-1 blank), and the mark. */
+/** The assistant's mark on one written answer. */
+export interface QuizWrittenMark {
+  score: number;
+  outOf: number;
+  feedback: string;
+}
+
+/**
+ * One sitting of a quiz. `picks` is what was chosen for each question (-1
+ * blank, and always -1 on a written one); `score` and `total` are the
+ * multiple-choice mark alone, which is known the moment it is handed in.
+ * `written` holds what was written, by question index, and `marks` the
+ * assistant's marks on those answers, by the same index, once it has marked
+ * them.
+ */
 export interface QuizAttempt {
   at: string;
   picks: number[];
   score: number;
   total: number;
+  written?: Record<string, string>;
+  marks?: Record<string, QuizWrittenMark>;
+  markedAt?: string;
 }
 
 /**
