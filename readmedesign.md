@@ -24,8 +24,9 @@ are the alternatives. Every value below is the shipped `Paper` tone, and the
 authority for all of them is `PAPER_TONES` in `lib/preferences.ts`, mirrored
 into `:root` in `globals.css` so the first paint needs no correction.
 
-- **Backgrounds (`bg`, `bg-tint`, `paper`, `paper-2`)**: `#F5F1E8`, `#EDE7D8`,
-  `#FBF8EF`, `#F7F3E6`. Warm cream throughout, cards are a lighter cream, not
+- **Backgrounds (`bg`, `bg-tint`, `paper`, `paper-2`, `desk`)**: `#F5F1E8`,
+  `#EDE7D8`, `#FBF8EF`, `#F7F3E6`, `#E8E2D5`. `desk` is what the page lies on
+  at desktop widths, under the rail (see Layout). Warm cream throughout, cards are a lighter cream, not
   white. True `#FFFFFF` appears only in the `Stone` and `White` tones.
   `bg-tint` is the wash a selection, a hover or a progress track is filled
   with. Most of those are drawn on a `paper` card
@@ -123,10 +124,20 @@ along the bottom (Today, Tasks, Notes, Stats, Record), and the timer dock
 floating at the top while a session runs.
 
 At `md` and above a **232px rail** takes over and both of those hide
-themselves. The rail is **the margin of the page**: the strip left of a ruled
-pad's rose margin rule, where the contents and the tabs get written. Its right
-edge is that rule, the same faint rose Focus draws down its sheet, not a grey
-border.
+themselves. The rail is **the margin of the page**, where the contents and
+the tabs get written. There is no line between it and the page. The rail sits
+on the **desk** (`--desk`, a step darker than `bg`, one per paper tone in
+`PAPER_TONES`), and the page is a sheet lying over it (`.page-sheet`): it runs
+to the top, the foot and the right edge, and only the edge over the rail
+curves, 22px, with a soft shadow falling onto the desk. On daylight paper the
+edge of a second sheet shows 4px under that curve. On the night paper a shadow
+disappears into the dark, so the desk goes near black and the edge is a lit
+hairline and a deeper shadow instead, with no second sheet (`--sheet-shadow`
+in `NIGHT_TOKENS`). The sheet follows `--rail`, so it slides with the rail
+when that folds. It is fixed behind the content at z-index 0 and the content
+is only positioned after it, never given a z-index, so a popover or sheet
+opened from the page still rises over the rail. Phone has no desk: the page
+is the whole screen, as it always was.
 
 - **The six screens** are words in the serif at 15px (so they follow the
   heading font), the same face as the titles they lead to, with no icons. The

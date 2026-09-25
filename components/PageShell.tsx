@@ -26,8 +26,11 @@ interface Props {
  */
 export default function PageShell({ children, hideNav, wide }: Props) {
   return (
-    <div className="min-h-[100dvh] bg-bg">
+    <div className={`min-h-[100dvh] bg-bg ${hideNav ? '' : 'md:bg-[var(--desk)]'}`}>
       {!hideNav && <DesktopRail />}
+      {/* On desktop the rail sits on the desk and the page is a sheet lying
+          over it (.page-sheet in globals.css): no rule between them. */}
+      {!hideNav && <div aria-hidden className="page-sheet hidden md:block" />}
       {/* data-scroll-content is what SmoothScroll pulls past the ends of
           the page. The rail, the dock and the bar are outside it on purpose. */}
       {/* --rail is the rail's width, set in globals.css from data-rail on
@@ -37,7 +40,7 @@ export default function PageShell({ children, hideNav, wide }: Props) {
           variable. */}
       <div
         data-scroll-content
-        className={`transition-[padding] duration-200 ease-[cubic-bezier(0.2,0.7,0.2,1)] ${hideNav ? '' : 'md:pl-[var(--rail)]'}`}
+        className={`relative transition-[padding] duration-200 ease-[cubic-bezier(0.2,0.7,0.2,1)] ${hideNav ? '' : 'md:pl-[var(--rail)]'}`}
       >
         <main
           className={`page-in mx-auto px-[var(--density-gutter)] md:px-12 ${
