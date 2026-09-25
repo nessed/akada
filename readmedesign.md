@@ -960,6 +960,29 @@ the browser. Notes written before this, when they lived in localStorage, are
 carried up into the account the first time the shelf loads. Everything the
 reader draws lives in `app/notes/notes.css`, scoped under `.notes`.
 
+### Notes: quizzes
+
+A quiz is sent by an assistant over MCP and lands on the Notes shelf under
+its own `.eyebrow` label, **Quizzes**, below the notes. Each is a shelf row
+like a note's: the course stripe, the title, a serif sub-line (course, task,
+question count, when), the last sitting's strokes in sage and peach, and the
+last mark in mono where a note has its minutes, or an italic *new* before it
+has been taken. Nothing is drawn until there is a quiz.
+
+Taken (`/notes/quiz?q=…`), a quiz is a paper at a 720px measure: numbered
+questions (the number in mono, it is a digit), the prompt in the serif, and
+options as quiet rows with a small lettered circle. Picking one fills the
+circle in ink and sweeps a yellow highlighter under the words; nothing is
+marked until **Hand it in**. Then the mark is written in the margin in the
+handwriting face (`7 / 10`) beside one stroke per question, the right option
+takes a sage circle and a sage wash, a wrong pick a peach circle and a peach
+wash (never a strikethrough), the rest fade, and the *why* sits under each
+question in muted italic serif. Past sittings are listed above the paper as
+a mono mark, a row of strokes and when. A quiz filed under a task shows on
+that task's sheet under the note line, as an `.eyebrow` *Quiz*, its title and
+the last mark. Everything is in
+`app/notes/notes.css` under `.notes`.
+
 ### Courses: the shelf
 
 `/courses` is the term as a bookshelf, laid out as a grid of books standing

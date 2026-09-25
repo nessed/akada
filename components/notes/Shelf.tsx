@@ -76,6 +76,8 @@ interface Props {
   onNew: () => void;
   onOpenFile: () => void;
   onPrompt: () => void;
+  /** The quizzes, drawn between the notes and the pace line. */
+  quizzes?: React.ReactNode;
 }
 
 /**
@@ -83,7 +85,7 @@ interface Props {
  * and the rest are rows written under the fold, sorted and filtered with
  * highlighter rather than tabs.
  */
-export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew, onOpenFile, onPrompt }: Props) {
+export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew, onOpenFile, onPrompt, quizzes }: Props) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<string>('all');
   const [sort, setSort] = useState<Sort>('recent');
@@ -339,6 +341,8 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
           {q ? 'No note mentions that.' : 'Nothing filed here yet.'}
         </p>
       )}
+
+      {quizzes}
 
       <PaceLine pace={pace} />
 

@@ -13,6 +13,9 @@ import type {
   NoteCheckResult,
   NoteRead,
   NoteSource,
+  Quiz,
+  QuizAttempt,
+  Quizzes,
   Task,
   TaskSubtask,
   Semester,
@@ -33,6 +36,7 @@ import { seasonLabel } from '@/lib/utils';
 import { cleanChecks } from '@/lib/notes/checks';
 import { cleanReads } from '@/lib/notes/reads';
 import { cleanNoteMarkdown, cleanNoteTitle } from '@/lib/notes/limits';
+import { cleanAttempts, cleanQuestions } from '@/lib/quiz/format';
 import { attachSegments, dropCutChain, segmentWindowStart } from './segment-rows';
 import {
   clampDailyGoalHours,
@@ -164,6 +168,37 @@ function rowToNote(r: NoteRow): StudyNote {
     updatedAt: r.updated_at,
   };
 }
+
+interface QuizRow {
+  id: string;
+  course_id: string | null;
+  task_id: string | null;
+  note_id: string | null;
+  title: string;
+  context: string | null;
+  questions: unknown;
+  attempts: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+function rowToQuiz(r: QuizRow): Quiz {
+  return {
+    id: r.id,
+    courseId: r.course_id,
+    taskId: r.task_id,
+    noteId: r.note_id,
+    title: r.title,
+    context: r.context ?? '',
+    questions: cleanQuestions(r.questions),
+    attempts: cleanAttempts(r.attempts),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+const QUIZZES_UNAVAILABLE =
+  'Quizzes could not be saved. Run the latest supabase/schema.sql once and try again.';
 
 const NOTES_UNAVAILABLE =
   'Notes could not be saved. Run the latest supabase/schema.sql once and try again.';
@@ -1310,6 +1345,39 @@ export class SupabaseAdapter implements DataProvider {
     if (error) throw error;
   }
 
+  // ---- Quizzes ----
+  // Written by the connector; the app reads them and adds attempts.
+
+  async getQuizzes(): Promise<Quizzes> {
+    const uid = await this.userId();
+    const { data, error } = await this.supabase
+      .from('quizzes')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+    if (error) {
+      if (isMissingRecall(error)) return { quizzes: [], available: false };
+      throw error;
+    }
+    return { quizzes: (data as QuizRow[]).map(rowToQuiz), available: true };
+  }
+
+  async setQuizAttempts(id: string, attempts: QuizAttempt[]): Promise<void> {
+    const uid = await this.userId();
+    const { error } = await this.supabase
+      .from('quizzes')
+      .update({ attempts: cleanAttempts(attempts), updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', uid);
+    if (error) throw isMissingRecall(error) ? new Error(QUIZZES_UNAVAILABLE) : error;
+  }
+
+  async deleteQuiz(id: string): Promise<void> {
+    const uid = await this.userId();
+    const { error } = await this.supabase.from('quizzes').delete().eq('id', id).eq('user_id', uid);
+    if (error) throw error;
+  }
+
   // ---- Dev / debugging ----
 
   async resetAll(): Promise<void> {
@@ -1317,6 +1385,7 @@ export class SupabaseAdapter implements DataProvider {
     // Delete in FK-safe order. recall_items would go with its courses anyway;
     // it is named so a project without the table simply skips it.
     await this.supabase.from('recall_items').delete().eq('user_id', uid);
+    await this.supabase.from('quizzes').delete().eq('user_id', uid);
     await this.supabase.from('notes').delete().eq('user_id', uid);
     await this.supabase.from('sessions').delete().eq('user_id', uid);
     await this.supabase.from('tasks').delete().eq('user_id', uid);

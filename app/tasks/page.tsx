@@ -17,6 +17,7 @@ import Fortnight from '@/components/tasks/Fortnight';
 import ReorderList from '@/components/ReorderList';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import TaskNoteLine from '@/components/notes/TaskNoteLine';
+import TaskQuizLine from '@/components/notes/TaskQuizLine';
 import { RecallGlyph, VerdictMark } from '@/components/recall/RecallMarks';
 import type { Course, Task, TaskKind } from '@/lib/data';
 import { useRecall } from '@/lib/recall/use-recall';
@@ -1587,6 +1588,7 @@ function TasksPageContent() {
 
               {/* The note this task is studied from, and the way back in. */}
               <TaskNoteLine taskId={viewingTask.id} />
+              <TaskQuizLine taskId={viewingTask.id} />
 
               {/* Where a finished task stands in recall, in one line; or, for
                   one that is not in it, the word that keeps it. An open task

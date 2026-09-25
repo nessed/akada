@@ -38,6 +38,7 @@ import { readCredit } from '@/lib/progression/credit';
 import { readRuns } from '@/lib/progression/runs';
 import { mcpSupabase, mcpUrl, siteUrl } from './_shared';
 import { registerNoteTools } from './notes-tools';
+import { registerQuizTools } from './quiz-tools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -2825,6 +2826,7 @@ function createServer(token: AuthenticatedToken) {
   );
 
   registerNoteTools(server, token);
+  registerQuizTools(server, token);
 
   return server;
 }

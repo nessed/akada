@@ -14,12 +14,14 @@ import { CheckStrokes, MinutesLeft, TocList } from '@/components/notes/Contents'
 import FocusMode from '@/components/notes/FocusMode';
 import StudyThis from '@/components/notes/StudyThis';
 import Shelf from '@/components/notes/Shelf';
+import QuizShelf from '@/components/notes/QuizShelf';
+import ConfirmSheet from '@/components/ConfirmSheet';
 import {
   DOCS_KEY, READER_KEY, checksKey, dateLabel, downloadNote, draftKey, loadChecks, loadNotes,
   readProgress, readSection, readStore, rememberReading, removeStore, sampleNote, scrollKey, titleFromMarkdown, unwrapFence, wordCount,
   writeStore, type CheckResult, type Note,
 } from '@/lib/notes/store';
-import { useCourses, useNotes, saveNote, deleteNoteOptimistic, setNoteChecksOptimistic, addNoteReadOptimistic } from '@/lib/data-hooks';
+import { useCourses, useNotes, saveNote, deleteNoteOptimistic, deleteQuizOptimistic, setNoteChecksOptimistic, addNoteReadOptimistic } from '@/lib/data-hooks';
 import type { NoteRead, NoteSource, StudyNote } from '@/lib/data';
 import { minutesForNote, readingPace } from '@/lib/notes/reads';
 import { useReadThrough } from '@/lib/notes/use-read-through';
@@ -438,6 +440,18 @@ function NotesContent() {
     });
   }, [notes, openId, router, say]);
 
+  const [quizToDelete, setQuizToDelete] = useState<{ id: string; title: string } | null>(null);
+  const confirmDeleteQuiz = () => {
+    if (!quizToDelete) return;
+    const { title } = quizToDelete;
+    deleteQuizOptimistic(quizToDelete.id).then(
+      () => say(`Deleted “${title}”.`),
+      () => say('That quiz didn’t delete. Try again in a moment.'),
+    );
+    setQuizToDelete(null);
+  };
+  const quizShelf = <QuizShelf onDelete={(id, title) => setQuizToDelete({ id, title })} />;
+
   const linkCourse = (courseId: string | null) => {
     if (!active) return;
     saveNote({ id: active.id, title: active.title, markdown: active.markdown, courseId }).catch(() =>
@@ -784,6 +798,7 @@ function NotesContent() {
           <div><span className="kbd">O</span> open a file</div>
           <div><span className="kbd">Ctrl V</span> paste markdown as a note</div>
         </div>
+        {quizShelf}
       </div>
     );
   } else {
@@ -797,6 +812,7 @@ function NotesContent() {
         onNew={() => go('new=1')}
         onOpenFile={() => fileRef.current?.click()}
         onPrompt={() => setPromptOpen(true)}
+        quizzes={quizShelf}
       />
     );
   }
@@ -828,6 +844,14 @@ function NotesContent() {
             )}
           </Sheet>
         )}
+        <ConfirmSheet
+          open={!!quizToDelete}
+          title="Delete this quiz?"
+          body={quizToDelete ? `“${quizToDelete.title}” and every mark on it go for good.` : undefined}
+          confirmLabel="Delete"
+          onConfirm={confirmDeleteQuiz}
+          onCancel={() => setQuizToDelete(null)}
+        />
         {promptOpen && (
           <PromptSheet
             onClose={() => setPromptOpen(false)}
