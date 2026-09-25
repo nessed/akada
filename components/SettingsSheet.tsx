@@ -16,6 +16,7 @@ import {
   type PrimaryAccent,
 } from '@/lib/preferences';
 import ConfirmSheet from './ConfirmSheet';
+import { useLeaving } from './Leaving';
 import { CONTACT_EMAIL } from '@/lib/contact';
 import { useNotice } from './Notice';
 import AppearanceEditor from './settings/AppearanceEditor';
@@ -85,7 +86,9 @@ export default function SettingsSheet({
     if (open) setSection('overview');
   }, [open]);
 
-  if (!open) return null;
+  const [shown, leaving] = useLeaving(open);
+
+  if (!shown) return null;
 
   const safeSessions = sessions.filter((session) => isLoggableDuration(session.durationSeconds));
   const totalHours = totalSeconds(safeSessions) / 3600;
@@ -122,7 +125,7 @@ export default function SettingsSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] animate-fade-in">
+    <div className={`fixed inset-0 z-[90] ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
       <ConfirmSheet
         open={confirming === 'reset'}
         title="Reset the planner?"

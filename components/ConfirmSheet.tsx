@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ButtonSpinner } from './LoadingIndicator';
+import { useLeaving } from './Leaving';
 
 interface Props {
   open: boolean;
@@ -56,12 +57,14 @@ export default function ConfirmSheet({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open, onCancel]);
 
-  if (!open) return null;
+  const [shown, leaving] = useLeaving(open);
+
+  if (!shown) return null;
 
   const armed = !busy && (!requirePhrase || typed.trim().toLowerCase() === requirePhrase.toLowerCase());
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-end animate-fade-in">
+    <div className={`fixed inset-0 z-[95] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
       <button
         type="button"
         aria-label={cancelLabel}

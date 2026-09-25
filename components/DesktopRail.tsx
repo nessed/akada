@@ -222,14 +222,14 @@ export default function DesktopRail() {
             <span className="relative flex">
               {item.icon}
               {news && collapsed && (
-                <span aria-hidden className="absolute -right-1 -top-0.5 h-[6px] w-[6px] rounded-full bg-ink" />
+                <span aria-hidden className="pop-in absolute -right-1 -top-0.5 h-[6px] w-[6px] rounded-full bg-ink" />
               )}
             </span>
             {news && <span className="sr-only">Something new on the record</span>}
             {!collapsed && (
               <>
                 <span className="font-medium">{item.label}</span>
-                {news && <span aria-hidden className="ml-auto h-[6px] w-[6px] rounded-full bg-ink" />}
+                {news && <span aria-hidden className="pop-in ml-auto h-[6px] w-[6px] rounded-full bg-ink" />}
                 {count > 0 && (
                   <span className="ml-auto font-mono text-[11px] tabular-nums text-muted">{count}</span>
                 )}

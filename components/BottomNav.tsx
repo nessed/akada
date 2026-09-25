@@ -144,7 +144,7 @@ export default function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`relative flex flex-col items-center gap-1 px-3.5 py-1.5 ${
+              className={`relative flex flex-col items-center gap-1 px-3.5 py-1.5 transition-[color,transform] duration-150 active:scale-[0.94] ${
                 active ? 'text-primary' : 'text-muted-soft'
               }`}
               style={{ strokeWidth: active ? 1.8 : 1.4 }}
@@ -153,14 +153,14 @@ export default function BottomNav() {
               {/* Something earned since Record was last opened: an ink dot,
                   never a count and never red. */}
               {news && (
-                <span aria-hidden className="absolute right-3 top-1 h-[6px] w-[6px] rounded-full bg-ink" />
+                <span aria-hidden className="pop-in absolute right-3 top-1 h-[6px] w-[6px] rounded-full bg-ink" />
               )}
               <span className="text-[10px] font-medium tracking-[0.04em]">
                 {tab.label}
                 {news && <span className="sr-only"> (something new)</span>}
               </span>
               {active && (
-                <span className="absolute -bottom-0.5 w-[18px] h-[1.5px] rounded-full bg-primary" />
+                <span className="nav-mark absolute -bottom-0.5 w-[18px] h-[1.5px] rounded-full bg-primary" />
               )}
             </Link>
           );

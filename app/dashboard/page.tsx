@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
+import Leaving from '@/components/Leaving';
 import NextMarkLine from '@/components/progression/NextMarkLine';
 import Marginalia from '@/components/progression/Marginalia';
 import { useProgression } from '@/lib/progression/use-progression';
@@ -1035,8 +1036,8 @@ function DashboardPageContent() {
       <StartTimerPopover target={startTarget} onClose={() => setStartTarget(null)} />
 
       {/* Quick task modal */}
-      {addingTaskFor && (
-        <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+      <Leaving value={addingTaskFor}>{(addingTaskFor, leaving) => (
+        <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Cancel"
@@ -1156,11 +1157,11 @@ function DashboardPageContent() {
             </div>
           </div>
         </div>
-      )}
+      )}</Leaving>
 
       {/* Add course sheet */}
-      {addingCourse && (
-        <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+      <Leaving value={addingCourse}>{(_open, leaving) => (
+        <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Cancel"
@@ -1299,12 +1300,12 @@ function DashboardPageContent() {
             </div>
           </div>
         </div>
-      )}
+      )}</Leaving>
 
       {/* Course details stay close to the original add-course sheet: a few
           calm fields, the notebook slider, then one clear save action. */}
-      {editingCourse && (
-        <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+      <Leaving value={editingCourse}>{(editingCourse, leaving) => (
+        <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Cancel editing course"
@@ -1411,7 +1412,7 @@ function DashboardPageContent() {
             </div>
           </div>
         </div>
-      )}
+      )}</Leaving>
       <ConfirmSheet
         open={deletingCourse !== null}
         title={`Delete ${deletingCourse?.name ?? 'this course'}?`}

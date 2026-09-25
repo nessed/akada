@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
+import Leaving from '@/components/Leaving';
 import { useNotice } from '@/components/Notice';
 import SelectField from '@/components/SelectField';
 import HandCheck from '@/components/notebook/HandCheck';
@@ -1221,8 +1222,8 @@ function TasksPageContent() {
 
       <StartTimerPopover target={startTarget} onClose={() => setStartTarget(null)} />
 
-      {editingTask && (
-        <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+      <Leaving value={editingTask}>{(editingTask, leaving) => (
+        <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Cancel editing"
@@ -1376,13 +1377,13 @@ function TasksPageContent() {
             </div>
           </div>
         </div>
-      )}
+      )}</Leaving>
 
       {/* The reading view. Not a spec table: the course in its own colour,
           the title set as a title, the notes as prose, the dates written the
           way the rest of the app writes them, and the marks left in the
           margin. */}
-      {viewingTask && (() => {
+      <Leaving value={viewingTask}>{(viewingTask, leaving) => {
         const course = courses.find((item) => item.id === viewingTask.courseId);
         const subtasks = viewingTask.subtasks ?? [];
         const done = subtasks.filter((item) => item.completed).length;
@@ -1497,7 +1498,7 @@ function TasksPageContent() {
         );
 
         return (
-          <div className="fixed inset-0 z-[75] flex items-end animate-fade-in">
+          <div className={`fixed inset-0 z-[75] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
             <button
               type="button"
               aria-label="Close task details"
@@ -1746,12 +1747,12 @@ function TasksPageContent() {
             </section>
           </div>
         );
-      })()}
+      }}</Leaving>
 
       {/* The keyboard, asked for rather than announced. Same chrome as every
           other sheet in the app, and the keys are postmarks. */}
-      {shortcutHelpOpen && (
-        <div className="fixed inset-0 z-[85] flex items-end animate-fade-in">
+      <Leaving value={shortcutHelpOpen}>{(_open, leaving) => (
+        <div className={`fixed inset-0 z-[85] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Close shortcuts"
@@ -1806,7 +1807,7 @@ function TasksPageContent() {
             </button>
           </section>
         </div>
-      )}
+      )}</Leaving>
     </PageShell>
   );
 }

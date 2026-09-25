@@ -24,6 +24,8 @@ import HandCheck from './notebook/HandCheck';
 /** The menu's own box, used to place it against the trigger. */
 const MENU_W = 176;
 const MENU_H = 224;
+/** How long a tick is on screen before it is saved. */
+const TICK_MS = 420;
 
 interface Props {
   task: Task;
@@ -85,6 +87,51 @@ export default function TaskRow({
   ground = 'paper',
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Whether this row was ticked while on screen, so the box fills and the
+  // check is written in. A task that arrives done is simply drawn done.
+  const [wasDone, setWasDone] = useState(task.completed);
+  const [justDone, setJustDone] = useState(false);
+  if (task.completed !== wasDone) {
+    setWasDone(task.completed);
+    setJustDone(task.completed);
+  }
+
+  // A tick is shown before it is saved. Lists that hide finished work took
+  // the row away in the same frame it was ticked, so the check was never
+  // seen; now the box fills and the row fades first, and the toggle lands a
+  // moment later. Leaving the screen in that moment still saves it.
+  const [ticking, setTicking] = useState(false);
+  const pendingTick = useRef<{ timer: number; run: () => void } | null>(null);
+  useEffect(
+    () => () => {
+      const pending = pendingTick.current;
+      if (!pending) return;
+      window.clearTimeout(pending.timer);
+      pending.run();
+    },
+    [],
+  );
+  function tick() {
+    if (task.completed) {
+      onToggle(task);
+      return;
+    }
+    if (pendingTick.current) return;
+    const run = () => {
+      pendingTick.current = null;
+      setTicking(false);
+      onToggle(task);
+    };
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (still) {
+      run();
+      return;
+    }
+    setTicking(true);
+    setJustDone(true);
+    pendingTick.current = { timer: window.setTimeout(run, TICK_MS), run };
+  }
+  const done = task.completed || ticking;
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -146,9 +193,9 @@ export default function TaskRow({
   const row = (
     <div
       data-task-row={task.id}
-      className={`group relative grid h-12 items-center gap-x-2 border-b border-line-soft pl-1 pr-2 text-ink transition-colors last:border-b-0 md:gap-x-0 ${
+      className={`group relative grid h-12 items-center gap-x-2 border-b border-line-soft pl-1 pr-2 text-ink transition-[background-color,opacity] duration-300 last:border-b-0 md:gap-x-0 ${
         selected ? 'bg-bg-tint' : ground === 'page' ? 'bg-bg hover:bg-bg-tint' : 'bg-paper hover:bg-paper-2'
-      } ${task.completed ? 'opacity-50' : ''} ${
+      } ${done ? 'opacity-50' : ''} ${
         hideDue
           ? hideCourse
             ? 'grid-cols-[40px_minmax(0,1fr)_40px] md:grid-cols-[40px_minmax(0,1fr)_128px_88px]'
@@ -169,16 +216,20 @@ export default function TaskRow({
             onSelect(task, true);
             return;
           }
-          onToggle(task);
+          tick();
         }}
         aria-label={task.completed ? 'Mark incomplete' : 'Complete'}
         className="grid h-10 w-10 place-items-center bg-transparent"
       >
         <span
-          className={`grid h-[18px] w-[18px] place-items-center ${task.completed ? 'rounded-md' : 'scribble-box'}`}
-          style={task.completed ? { background: color, border: `1.4px solid ${color}` } : undefined}
+          className={`grid h-[18px] w-[18px] place-items-center ${done ? 'rounded-md' : 'scribble-box'} ${
+            justDone ? 'check-press' : ''
+          }`}
+          style={done ? { background: color, border: `1.4px solid ${color}` } : undefined}
         >
-          {task.completed && <HandCheck size={12} color="var(--paper)" strokeWidth={1.8} />}
+          {done && (
+            <HandCheck size={12} color="var(--paper)" strokeWidth={1.8} drawn={justDone} />
+          )}
         </span>
       </button>
 

@@ -9,6 +9,7 @@ import HandCheck from '@/components/notebook/HandCheck';
 import SessionChain from '@/components/SessionChain';
 import TallyMarks from '@/components/progression/TallyMarks';
 import { ButtonSpinner } from './LoadingIndicator';
+import { useLeaving } from './Leaving';
 
 // Quick-reflection tag chips. Tapping appends `#tag` into the note so the
 // data shape stays the same, no schema migration needed for this flourish.
@@ -104,7 +105,9 @@ export default function SessionLogModal({
     sheetRef.current?.focus();
   }, [open]);
 
-  if (!open || !course) return null;
+  const [shown, leaving] = useLeaving(open);
+
+  if (!shown || !course) return null;
   const canSave = isLoggableDuration(durationSeconds) && !saving;
   const safeSeconds = clampSessionSeconds(durationSeconds);
   // Big mono digits, same `00:48:23` shape as the timer ring so the user sees
@@ -153,7 +156,7 @@ export default function SessionLogModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end animate-fade-in">
+    <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
       {/* The scrim was a real <button> with an aria-label and no onClick: a
           focus stop that announced itself and then did nothing. Dismissing
           here discards a session, which is not something a stray tap on the
