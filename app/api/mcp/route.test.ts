@@ -14,6 +14,8 @@ import {
   logStudySession,
   recordGrade,
   recordRecallTool,
+  reorderCourses,
+  taskOrder,
   updateStudySession,
 } from './route';
 
@@ -892,6 +894,74 @@ test('list_study_sessions never shows another student\'s sessions, or another se
 
   const theirs = (await listStudySessions({ ...TOKEN, userId: 'user-2' }, { limit: 200 }, fakeSupabase(history(), GRADED_SCHEMA))) as Reply;
   assert.deepEqual(ids(theirs), []);
+});
+
+// ---- Ordering ----
+
+const COURSE_A = '66666666-6666-4666-8666-666666666661';
+const COURSE_B = '66666666-6666-4666-8666-666666666662';
+const COURSE_C = '66666666-6666-4666-8666-666666666663';
+const ORDERED_SCHEMA: Record<string, string[]> = { ...SCHEMA, courses: [...SCHEMA.courses, 'sort_order', 'created_at'] };
+
+function ordered(): Record<string, Row[]> {
+  const course = (id: string, code: string, sort_order: number, created_at: string, extra: Row = {}): Row => ({
+    id, user_id: 'user-1', semester_id: 'sem-1', code, name: code, weekly_goal_hours: 3, sort_order, created_at, ...extra,
+  });
+  return {
+    user_settings: [{ user_id: 'user-1', active_semester_id: 'sem-1' }],
+    courses: [
+      course(COURSE_A, 'AAA', 0, '2026-09-01'),
+      course(COURSE_B, 'BBB', 1, '2026-09-02'),
+      course(COURSE_C, 'CCC', 2, '2026-09-03'),
+      course('theirs', 'ZZZ', 0, '2026-09-01', { user_id: 'user-2' }),
+    ],
+    sessions: [],
+    tasks: [],
+  };
+}
+
+const positions = (db: Record<string, Row[]>) =>
+  db.courses.filter((c) => c.user_id === 'user-1').sort((a, b) => (a.sort_order as number) - (b.sort_order as number)).map((c) => c.code);
+
+test('reorder_courses writes the whole order, and a partial list puts those first', async () => {
+  const db = ordered();
+  const output = (await reorderCourses(TOKEN, { course_ids: [COURSE_C] }, fakeSupabase(db, ORDERED_SCHEMA))) as Reply;
+  assert.equal(output.isError, undefined, output.content[0].text);
+  assert.deepEqual(positions(db), ['CCC', 'AAA', 'BBB']);
+  assert.deepEqual((output.structuredContent!.courses as Row[]).map((c) => c.code), ['CCC', 'AAA', 'BBB']);
+  assert.equal(db.courses.find((c) => c.id === 'theirs')!.sort_order, 0);
+});
+
+test('reorder_courses writes nothing for a course outside the semester, or named twice', async () => {
+  const db = ordered();
+  const foreign = (await reorderCourses(TOKEN, { course_ids: [COURSE_B, '77777777-7777-4777-8777-777777777777'] }, fakeSupabase(db, ORDERED_SCHEMA))) as Reply;
+  assert.equal(foreign.isError, true);
+  const twice = (await reorderCourses(TOKEN, { course_ids: [COURSE_B, COURSE_B] }, fakeSupabase(db, ORDERED_SCHEMA))) as Reply;
+  assert.equal(twice.isError, true);
+  assert.deepEqual(positions(db), ['AAA', 'BBB', 'CCC']);
+});
+
+test('reorder_courses says the schema needs running on a project without sort_order', async () => {
+  const db = ordered();
+  db.courses.forEach((c) => { delete c.sort_order; delete c.created_at; });
+  const output = (await reorderCourses(TOKEN, { course_ids: [COURSE_B] }, fakeSupabase(db))) as Reply;
+  assert.equal(output.isError, true);
+  assert.match(output.content[0].text, /schema\.sql/);
+});
+
+test('get_tasks orders by due date, by what matters, or newest first', () => {
+  const task = (id: string, due_date: string | null, priority: 'high' | 'normal', created_at: string) =>
+    ({ id, due_date, priority, created_at }) as Parameters<ReturnType<typeof taskOrder>>[0];
+  const list = [
+    task('late-normal', '2026-10-20', 'normal', '2026-09-03'),
+    task('undated-high', null, 'high', '2026-09-01'),
+    task('soon-normal', '2026-10-01', 'normal', '2026-09-02'),
+    task('late-high', '2026-10-15', 'high', '2026-09-04'),
+  ];
+  const order = (sort: 'due' | 'priority' | 'newest') => [...list].sort(taskOrder(sort)).map((t) => t.id);
+  assert.deepEqual(order('due'), ['soon-normal', 'late-high', 'late-normal', 'undated-high']);
+  assert.deepEqual(order('priority'), ['late-high', 'undated-high', 'soon-normal', 'late-normal']);
+  assert.deepEqual(order('newest'), ['late-high', 'late-normal', 'soon-normal', 'undated-high']);
 });
 
 // ---- Reading backlog ----
