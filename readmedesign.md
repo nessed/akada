@@ -27,8 +27,8 @@ into `:root` in `globals.css` so the first paint needs no correction.
 - **Backgrounds (`bg`, `bg-tint`, `paper`, `paper-2`)**: `#F5F1E8`, `#EDE7D8`,
   `#FBF8EF`, `#F7F3E6`. Warm cream throughout, cards are a lighter cream, not
   white. True `#FFFFFF` appears only in the `Stone` and `White` tones.
-  `bg-tint` is the wash a selection, an active rail item, a hover or a
-  progress track is filled with. Most of those are drawn on a `paper` card
+  `bg-tint` is the wash a selection, a hover or a progress track is filled
+  with. Most of those are drawn on a `paper` card
   rather than on the ground, so a tone's tint has to stay a readable step off
   its `paper`, in whichever direction its ink lies.
 - **Lines (`line`, `line-soft`, `line-strong`)**: `#DDD6C2`, `#EAE4D3`,
@@ -119,16 +119,59 @@ sheets). Hit targets are 40px and a task row is 48px.
 The app is one design read at two widths.
 
 Below `md` it is the sheet it has always been: a centred column, `BottomNav`
-along the bottom (Today, Tasks, Stats, Record), and the timer dock floating
-at the top while a session runs.
+along the bottom (Today, Tasks, Notes, Stats, Record), and the timer dock
+floating at the top while a session runs.
 
 At `md` and above a **232px rail** takes over and both of those hide
-themselves. The rail carries the five screens, the term's courses under them
-in the order they were dragged into, the timer, and Settings. It
-collapses to a 64px strip of icons, the choice is remembered, and `PageShell`
-mirrors its width so the content recentres rather than staying pinned to a
-phone column in the middle of a 1440px screen. Pages that lay themselves out
-in two columns pass `wide` to opt out of the phone measure.
+themselves. The rail is **the margin of the page**: the strip left of a ruled
+pad's rose margin rule, where the contents and the tabs get written. Its right
+edge is that rule, the same faint rose Focus draws down its sheet, not a grey
+border.
+
+- **The six screens** are words in the serif at 15px (so they follow the
+  heading font), the same face as the titles they lead to, with no icons. The
+  screen you are on is swiped with the yellow `.hl`, drawn in quickly
+  (`.hl-draw-quick`, 0.35s) whenever the screen changes; a pointer draws the
+  pencil underline a task title draws; the keyboard gets a thin ink ring, the
+  task list's cursor. Three marks, never confused. A course page swipes its
+  course and leaves Courses in ink, so a page has one mark. Tasks carries the
+  open count in mono; Record carries the news dot.
+- **The courses**, in the order they were dragged into, each a 3px spine in
+  its colour with its code and open count. The one you are on is swiped in its
+  own tint, as on the Tasks filter. A sitting on the clock puts a 6px dot in
+  the course colour pulsing on `tick` on its row; the rail never draws a
+  second clock. A long list fades at whichever end has more behind it and
+  keeps the current course in view. Pointing at the list shows a dashed
+  "add a course" line after the last one, always there when the term has none.
+- **The start** at the foot offers what Up next would start, through the same
+  popover a row opens: the round start button in the course tint, the task in
+  the serif and its course under it. With no open work it offers to time the
+  first course; with no courses, or with a sitting already running, it steps
+  aside. `useUpNext` (`lib/use-up-next.ts`) is what both it and Today read, so
+  the two never offer different tasks. It used to be a dashed box with a
+  `00:00` in it that linked to `/timer`, which sends anyone without a running
+  sitting straight back to Today: a start button that started nothing.
+- **Settings** at the very foot, set like the screens.
+
+It collapses to a **64px strip**: the AkadaMark is the handle, the screens are
+their icons, and each course is a spine label, the letters of its code over
+the number in mono ("MATH" over "120"), so courses stay tellable apart
+without a pointer. Names come up on a paper tip beside the strip (edge, warm
+shadow, like anything that floats). The choice is remembered, and written onto
+`<html>` as `data-rail` by the bootstrap script before the first paint
+(`lib/rail.ts`); `--rail` in `globals.css` reads it, and the rail and
+`PageShell` both take their width from it. They used to read it from an
+effect, so a collapsed rail opened for a frame on every navigation and the
+page slid back after it. What the rail draws follows its own width through a
+container query, so the server's markup is the same whichever way it was left.
+
+From 768 to 1024 there is no room for 232px beside a page: the rail is always
+the strip there, and its handle lays the full rail **over** the page instead
+(paper, warm shadow), closed by Esc, a click outside, the handle or a
+navigation, with focus going in and coming back to the handle. `PageShell`
+recentres the content in whatever the rail leaves rather than staying pinned
+to a phone column in the middle of a 1440px screen. Pages that lay themselves
+out in two columns pass `wide` to opt out of the phone measure.
 
 Two things follow from the rail. Settings is a **page** on desktop, because a
 modal reached from a permanent nav item is a screen pretending to be an
@@ -641,7 +684,8 @@ The app does not use pills. A capsule with a tinted fill is how software says
 `.hl-swipe` with `--hl` set to a course's tint), a **hand-drawn underline**
 (`.hand-underline`), a **scribble box** and tick (`.scribble-box` +
 `HandCheck`), or a note in the margin (`HandNote`, Caveat). Filters, chosen
-courses, reflection tags, timer goals and priority marks all read this way.
+courses, reflection tags, timer goals, priority marks and the page you are on
+in the rail all read this way.
 
 The exceptions are deliberate: a **dashed outline** for "there is more you
 could add here", and the timer's single filled action.

@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import BottomNav from './BottomNav';
 import ActiveTimerDock from './ActiveTimerDock';
 import PendingSessionLogSheet from './PendingSessionLogSheet';
-import DesktopRail, { RAIL_WIDTHS } from './DesktopRail';
+import DesktopRail from './DesktopRail';
 
 interface Props {
   children: React.ReactNode;
@@ -26,53 +25,20 @@ interface Props {
  * column in the middle of a 1440px screen.
  */
 export default function PageShell({ children, hideNav, wide }: Props) {
-  const [railWidth, setRailWidth] = useState(RAIL_WIDTHS.wide);
-
-  /* The rail's width has to reach the content's left margin, and the rail is
-     fixed, so the gutter cannot simply be a sibling in a flex row: the page
-     would jump on every collapse before the rail finished animating. The
-     width is mirrored here instead and both move together. */
-  useEffect(() => {
-    if (hideNav) return;
-    const read = () => {
-      try {
-        return window.localStorage.getItem('akada.rail.collapsed') === 'true';
-      } catch {
-        return false;
-      }
-    };
-    const apply = (collapsed: boolean) =>
-      setRailWidth(collapsed ? RAIL_WIDTHS.narrow : RAIL_WIDTHS.wide);
-
-    apply(read());
-    const onRail = (e: Event) => apply(Boolean((e as CustomEvent).detail));
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'akada.rail.collapsed') apply(e.newValue === 'true');
-    };
-    window.addEventListener('akada:rail', onRail);
-    window.addEventListener('storage', onStorage);
-    return () => {
-      window.removeEventListener('akada:rail', onRail);
-      window.removeEventListener('storage', onStorage);
-    };
-  }, [hideNav]);
-
   return (
-    <div
-      className="min-h-[100dvh] bg-bg"
-      /* --rail lives on the frame rather than on the content wrapper, because
-         the timer dock is a sibling of that wrapper and has to clear the rail
-         by the same width the content does. */
-      style={
-        hideNav
-          ? undefined
-          : ({ ['--rail' as string]: `${railWidth}px` } as React.CSSProperties)
-      }
-    >
+    <div className="min-h-[100dvh] bg-bg">
       {!hideNav && <DesktopRail />}
       {/* data-scroll-content is what SmoothScroll pulls past the ends of
           the page. The rail, the dock and the bar are outside it on purpose. */}
-      <div data-scroll-content className="transition-[padding] duration-200 md:pl-[var(--rail)]">
+      {/* --rail is the rail's width, set in globals.css from data-rail on
+          <html>, which is written before the first paint. It was mirrored
+          here from an effect, so a collapsed rail's page mounted at 232px and
+          slid back on every navigation. The dock clears the rail by the same
+          variable. */}
+      <div
+        data-scroll-content
+        className={`transition-[padding] duration-200 ease-[cubic-bezier(0.2,0.7,0.2,1)] ${hideNav ? '' : 'md:pl-[var(--rail)]'}`}
+      >
         <main
           className={`page-in mx-auto px-[var(--density-gutter)] md:px-12 ${
             wide ? 'md:max-w-[1136px]' : 'max-w-2xl md:max-w-3xl'
@@ -81,9 +47,9 @@ export default function PageShell({ children, hideNav, wide }: Props) {
           {children}
         </main>
       </div>
-      {/* The running clock, on every size. The rail keeps the dashed box that
-          starts a timer; once one is running the dock is the only clock, so
-          there is never a second one to disagree with it. */}
+      {/* The running clock, on every size. The rail offers a start; once a
+          sitting runs the dock is the only clock, so there is never a second
+          one to disagree with it. */}
       {!hideNav && <ActiveTimerDock />}
       <PendingSessionLogSheet />
       {!hideNav && <BottomNav />}
