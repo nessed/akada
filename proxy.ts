@@ -17,6 +17,8 @@ const PUBLIC_PATHS = new Set([
   // crawler.
   '/privacy',
   '/terms',
+  // The walk-through, which is the link to send someone before they sign up.
+  '/guide',
   // Next metadata route with no file extension. Social crawlers fetch it
   // unauthenticated, so leaving it protected silently kills link previews.
   '/opengraph-image',

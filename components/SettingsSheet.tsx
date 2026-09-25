@@ -339,6 +339,7 @@ export default function SettingsSheet({
                 sub={CONTACT_EMAIL}
                 href={`mailto:${CONTACT_EMAIL}`}
               />
+              <SettingRow label="How Akada works" sub="A walk through every screen" href="/guide" />
               <SettingRow label="Privacy" sub="How your data is handled" href="/privacy" />
               <SettingRow label="Terms" sub="What you agree to" href="/terms" />
               <SettingRow label="Sign out" onClick={() => setConfirming('signOut')} />

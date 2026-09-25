@@ -52,22 +52,39 @@ const sampleCourses = [
   },
 ];
 
+// The parts a first-time reader would never find by poking around, said in
+// the plainest words that are still true. Each links to its section of the
+// guide, which says how to use it.
 const features = [
   {
-    title: 'Courses',
-    text: 'Set weekly study goals and see which classes need attention.',
+    title: 'Reading, in hours',
+    text: 'Put in the page count and Akada learns how fast you read, so four readings becomes about six hours before Thursday.',
+    href: '/guide#tasks',
   },
   {
-    title: 'Tasks',
-    text: 'Track assignments with priorities and clear due dates.',
+    title: 'Your real grade',
+    text: 'Marks are counted out of what has come back, not out of 100. An 80 on the first quiz means you are on 80.',
+    href: '/guide#marks',
   },
   {
-    title: 'Timer',
-    text: 'Start focused sessions from a course or a specific task.',
+    title: 'Recall',
+    text: 'What you finished comes back a day later as a question. Answer it from memory, and the gaps widen as it sticks.',
+    href: '/guide#recall',
   },
   {
-    title: 'Stats',
-    text: 'Review study streaks, weekly totals, heatmaps, and course averages.',
+    title: 'Claude does the typing',
+    text: 'Connect Claude once, hand it your course outlines, and every deadline and weighting goes in for you.',
+    href: '/guide#claude',
+  },
+  {
+    title: 'A run in weeks',
+    text: 'Your streak is counted by the week, so one day off costs nothing. Course pages fill in and get bound as you log hours.',
+    href: '/guide#stats',
+  },
+  {
+    title: 'A timer worth watching',
+    text: 'Start it from any task or course. Everything Akada tells you is worked out from the time you log.',
+    href: '/guide#timer',
   },
 ];
 
@@ -148,8 +165,11 @@ export default function LandingPage() {
                 </Link>
               </div>
 
-              <p className="mt-5 mb-0 font-mono text-[12px] text-muted">
-                Free. Works offline. Your data stays yours.
+              <p className="mt-5 mb-0 text-[13px] text-muted">
+                Free. Works offline. Your data stays yours.{' '}
+                <Link className="hand-underline text-ink-soft" href="/guide">
+                  See how it works
+                </Link>
               </p>
             </div>
 
@@ -159,11 +179,13 @@ export default function LandingPage() {
       </section>
 
       <section className="mx-auto max-w-5xl px-6 pb-16 sm:px-8 lg:px-10">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <p className="eyebrow m-0">What it does that a to-do list doesn&apos;t</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
-            <article
+            <Link
               key={feature.title}
-              className="rounded-[14px] border border-line bg-paper px-5 py-5"
+              href={feature.href}
+              className="rounded-[14px] border border-line bg-paper px-5 py-5 text-ink no-underline transition-colors hover:border-line-strong"
             >
               <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">
                 {feature.title}
@@ -171,9 +193,16 @@ export default function LandingPage() {
               <p className="mt-2 mb-0 text-[13px] leading-[1.55] text-ink-soft">
                 {feature.text}
               </p>
-            </article>
+            </Link>
           ))}
         </div>
+        <p className="mt-6 mb-0 text-center font-serif text-[15px] text-ink-soft">
+          New to it?{' '}
+          <Link className="hand-underline text-ink" href="/guide">
+            Read how it all works
+          </Link>
+          , it takes five minutes.
+        </p>
       </section>
 
       {/* The timer, shown rather than described. The fan is the one part of
@@ -233,6 +262,9 @@ export default function LandingPage() {
             Akada, made with quiet hands.
           </p>
           <nav className="flex items-center gap-5 font-serif text-[13px] text-muted">
+            <Link className="hand-underline" href="/guide">
+              How it works
+            </Link>
             <Link className="hand-underline" href="/privacy">
               Privacy
             </Link>

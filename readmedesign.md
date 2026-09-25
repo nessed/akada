@@ -1049,6 +1049,27 @@ headers, the one screen that still looked like a settings panel.
   is ever named. A stamp struck since the last visit comes down with
   `.stamp-down` and wears the `warn` "New" stamp.
 
+### The guide
+`/guide` is the one place the app is allowed to explain itself at length,
+which is exactly why "No Over-Explaining" holds everywhere else: the screens
+stay quiet and the guide does the talking. It is public, set in the same
+serif document shell as the privacy page and the terms (`LegalPage`, with a
+standfirst instead of an "Updated" date), and written for someone who has
+never used a planner. Bold words in it are the labels on the screen, so a
+reader can go and find them.
+
+It is reached from the landing page (the hero line, the feature cards, which
+each link to their section, and the footer), from the onboarding welcome,
+from Settings, and from one serif line on Today, "New here? How Akada works",
+which shows only while the account has fewer than three sessions. That line
+is derived from the sessions like everything else, so there is no dismissed
+flag and it leaves on its own.
+
+The landing feature cards lead with what a to-do list can't do (reading in
+hours, the grade out of what has come back, recall, Claude, the weekly run,
+the timer) rather than naming screens. If a card's claim stops being true,
+change the card.
+
 ### Buttons
 Two shapes, not four:
 - **Page CTA**, full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.
