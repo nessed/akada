@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="1 September 2026">
+    <LegalPage title="Privacy" updated="26 September 2026">
       <Section title="Who holds your data">
         <p>
           Akada is run by {CONTROLLER_NAME}. Anything in this policy, and any request
@@ -39,6 +39,11 @@ export default function PrivacyPage() {
           <li>Your tasks, their due dates and whether they are done.</li>
           <li>Your study sessions: date, duration and any note you wrote on one.</li>
           <li>Your semester dates and your weekly and daily goals.</li>
+          <li>
+            The marks you record and how each course is graded, the things you keep for
+            recall and how each recall went, your notes, and your quizzes with their
+            answers and marks.
+          </li>
         </ul>
         <p>
           Your hosting and database providers also keep ordinary server logs, which
@@ -76,15 +81,64 @@ export default function PrivacyPage() {
           Two companies process data on Akada&rsquo;s behalf: <strong>Supabase</strong>,
           which holds the database and runs sign-in, and <strong>Vercel</strong>, which
           hosts the site. Both keep server logs. Neither uses your data for anything of
-          their own. Nobody else receives it.
+          their own. Nobody else receives it, unless you connect an assistant yourself,
+          as below.
         </p>
+      </Section>
+
+      <Section id="assistants" title="If you connect Claude or another assistant">
+        <p>
+          Akada can be connected to an AI assistant such as Claude, so the assistant can
+          read and write your planner for you. Nothing is shared until you connect one,
+          and it happens only with the assistant you connected, through your own sign-in.
+        </p>
+        <ul>
+          <li>
+            <strong>What the assistant can see and do.</strong>{' '}Everything in your
+            planner: courses, tasks, study sessions, marks, recall, notes and quizzes. It
+            can add, change and delete them. It never sees your password or anyone
+            else&apos;s planner, and it cannot delete your account. The full list of what
+            it can do is on the{' '}
+            <Link className="hand-underline text-ink" href="/docs">
+              connector page
+            </Link>
+            .
+          </li>
+          <li>
+            <strong>What goes to the assistant&apos;s company.</strong>{' '}Whatever a tool
+            returns in answer to a request is sent to the assistant, so it becomes part
+            of your conversation there. From then on it is handled by that company under
+            its own privacy policy (for Claude, Anthropic&apos;s), not by Akada.
+          </li>
+          <li>
+            <strong>What Akada receives.</strong>{' '}Only the requests the assistant
+            makes of Akada, such as &ldquo;add these tasks&rdquo;, and what they write.
+            Akada never sees the rest of your conversation.
+          </li>
+          <li>
+            <strong>What is stored for the connection.</strong>{' '}Connecting starts a
+            sign-in of its own with Supabase, the same kind your browser has. The
+            assistant holds an encrypted, expiring key to it. Akada keeps no copy of that
+            key, and uses it for nothing except answering that assistant&apos;s
+            requests.
+          </li>
+          <li>
+            <strong>How long it lasts.</strong>{' '}Each key works for at most an hour and
+            is renewed while the assistant keeps using it. Left unused for thirty days,
+            the connection ends. Removing the connector in the assistant ends it at once,
+            and so does deleting your Akada account. If a request fails, the error is
+            written to Akada&apos;s server log so it can be fixed, and ages out with the
+            rest of that log.
+          </li>
+        </ul>
       </Section>
 
       <Section title="How long it is kept">
         <p>
           For as long as your account exists. Delete the account and the courses, tasks,
-          sessions, semesters and settings are deleted along with it, immediately and by
-          the database itself. Server and crash logs age out on the providers&rsquo; own
+          sessions, semesters, marks, recall, notes, quizzes and settings are deleted
+          along with it, immediately and by the database itself, and any connected
+          assistant loses its access. Server and crash logs age out on the providers&rsquo; own
           schedules, within weeks.
         </p>
       </Section>
