@@ -881,10 +881,17 @@ back button walks out the way you came in.
   in, the opening lines of that section, and **Keep reading** / **Focus**.
   Beside it, the note's sections as strokes, the ones behind the reader inked
   in the course colour, and "~ 6 min left" in Caveat. Then the fold, then the
-  tools: course filters and Recent / A–Z as highlighter marks (never tabs),
-  and a search that looks through every note and shows the words around the
-  hit. Rows are written on the page with a `line-soft` hairline between them,
-  split into "This week" and "Earlier" when sorted by recent. Each note
+  tools on one line: Everything / Notes / Quizzes (once any quiz exists), a
+  hairline, the course filters, and Recent / A–Z, all as highlighter marks
+  (never tabs), and a search that looks through every note and quiz and shows
+  the words around the hit. Notes and quizzes are **one list**, and the
+  course filter and search apply to both. Rows are written on the page with
+  a `line-soft` hairline between them, split into "This week" and "Earlier"
+  when sorted by recent. **What is finished folds away**: a note read through
+  and a quiz taken and fully marked drop out of the list into **Done** at its
+  foot, an `.eyebrow` with its count in mono that opens and closes them, the
+  rows under it let down a little. A search opens Done for itself. Which
+  kind is shown and whether Done is open stay in the browser. Each note
   gets a pastel from the course palette, picked from its id, drawn as the
   same 3px stripe a course carries in the rail. On the right of a row, what
   is left to read in mono ("4m left"), a hand tick once it has been read
@@ -996,15 +1003,17 @@ reader draws lives in `app/notes/notes.css`, scoped under `.notes`.
 
 ### Notes: quizzes
 
-A quiz is sent by an assistant over MCP and lands on the Notes shelf under
-its own `.eyebrow` label, **Quizzes**, above the notes, straight after the
-note last read, so a new one is the first thing on the shelf. Each is a shelf row
-like a note's: the course stripe, the title, a serif sub-line (course, task,
-question count, when), the last sitting's strokes in sage and peach, and the
+A quiz is sent by an assistant over MCP and lands on the Notes shelf in the
+same list as the notes, dated by its last sitting or marking (or its arrival),
+so a new one sits at the top of "This week". The standfirst counts them and
+says how many are to take or waiting on the assistant. Each is a shelf row
+like a note's: the course stripe, the title, a sans sub-line opening with
+"quiz" (then course, task, question count, when), the last sitting's strokes in sage and peach, and the
 last mark in mono where a note has its minutes, or an italic *new* before it
 has been taken, or *to mark* while written answers wait on the assistant.
-Before any quiz arrives the label stands alone with one italic serif line
-saying how one gets there, since nothing in the app makes one.
+Before any quiz arrives, an `.eyebrow` **Quizzes** under the list stands
+with one italic serif line saying how one gets there, since nothing in the
+app makes one (on an empty shelf it sits under the ways to start a note).
 
 Taken (`/notes/quiz?q=…`), a quiz is a paper at a 720px measure: numbered
 questions (the number in mono, it is a digit), the prompt in the serif, and
