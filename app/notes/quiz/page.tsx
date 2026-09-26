@@ -8,7 +8,7 @@ import HandNote from '@/components/notebook/HandNote';
 import Icon from '@/components/notes/Icon';
 import QuizText from '@/components/notes/QuizText';
 import { addQuizAttemptOptimistic, useCourses, useNotes, useQuizzes, useTasks } from '@/lib/data-hooks';
-import { LETTERS, isWritten, markQuiz, writtenTally } from '@/lib/quiz/format';
+import { LETTERS, bestSitting, isWritten, markQuiz, writtenTally } from '@/lib/quiz/format';
 import { relativeLabel } from '@/lib/notes/store';
 import type { Quiz, QuizAttempt, QuizQuestion } from '@/lib/data';
 
@@ -66,6 +66,8 @@ function Sitting({ quiz }: { quiz: Quiz }) {
   const latest = quiz.attempts[quiz.attempts.length - 1];
   const [picks, setPicks] = useState<number[]>(() => quiz.questions.map(() => -1));
   const [written, setWritten] = useState<Record<string, string>>({});
+  // Questions flagged as unclear on this paper; they're marked but don't count.
+  const [unclear, setUnclear] = useState<number[]>([]);
   // The sitting on show, by when it was handed in; null is a fresh paper.
   const [viewing, setViewing] = useState<string | null>(() => (hasWritten && latest ? latest.at : null));
   const [pending, setPending] = useState<QuizAttempt | null>(null);
@@ -73,7 +75,7 @@ function Sitting({ quiz }: { quiz: Quiz }) {
   const [failed, setFailed] = useState(false);
   // The stored copy, so marks the assistant writes show up here when they land.
   const marked = viewing ? quiz.attempts.find((a) => a.at === viewing) ?? (pending?.at === viewing ? pending : null) : null;
-  const answered = quiz.questions.filter((q, i) => (isWritten(q) ? !!written[String(i)]?.trim() : picks[i] >= 0)).length;
+  const answered = quiz.questions.filter((q, i) => (isWritten(q) ? !!written[String(i)]?.trim() : picks[i] >= 0 || unclear.includes(i))).length;
   const total = quiz.questions.length;
   const mcqCount = total - quiz.questions.filter(isWritten).length;
 
@@ -94,7 +96,7 @@ function Sitting({ quiz }: { quiz: Quiz }) {
   };
 
   const handIn = () => {
-    const attempt = markQuiz(quiz.questions, picks, written);
+    const attempt = markQuiz(quiz.questions, picks, written, unclear);
     setPending(attempt);
     setViewing(attempt.at);
     void file(attempt);
@@ -103,13 +105,14 @@ function Sitting({ quiz }: { quiz: Quiz }) {
   const again = () => {
     setPicks(quiz.questions.map(() => -1));
     setWritten({});
+    setUnclear([]);
     setViewing(null);
     setPending(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const history = quiz.attempts;
-  const best = useMemo(() => history.reduce((b, a) => Math.max(b, a.score), 0), [history]);
+  const best = useMemo(() => bestSitting(marked ? [...history, marked] : history), [history, marked]);
   const tally = marked ? writtenTally(quiz.questions, marked) : null;
   const standfirst = [
     course?.code,
@@ -118,7 +121,7 @@ function Sitting({ quiz }: { quiz: Quiz }) {
   ].filter(Boolean).join(' · ');
 
   const strokeFor = (attempt: QuizAttempt, q: QuizQuestion, i: number) => {
-    if (!isWritten(q)) return attempt.picks[i] === q.answer ? 'got' : 'miss';
+    if (!isWritten(q)) return attempt.unclear?.includes(i) ? 'unclear' : attempt.picks[i] === q.answer ? 'got' : 'miss';
     const mark = attempt.marks?.[String(i)];
     if (!mark) return 'wait';
     return mark.score >= mark.outOf ? 'got' : mark.score > 0 ? 'part' : 'miss';
@@ -158,7 +161,7 @@ function Sitting({ quiz }: { quiz: Quiz }) {
                 : failed ? 'it didn’t save, try handing in again'
                   : tally.pending > 0
                     ? <>{tally.pending} written {tally.pending === 1 ? 'answer' : 'answers'} waiting · tell your assistant “grade my quiz”</>
-                    : <>filed{course ? <> under <em>{course.code}</em></> : null}{mcqCount && history.length > 1 ? <> · best <b>{Math.max(best, marked.score)}</b>/{mcqCount}</> : null}</>}
+                    : <>filed{course ? <> under <em>{course.code}</em></> : null}{marked.unclear?.length ? <> · {marked.unclear.length} unclear, not counted</> : null}{best && history.length > 1 ? <> · best <b>{best.score}</b>/{best.total}</> : null}</>}
             </p>
           </div>
         </section>
@@ -232,8 +235,9 @@ function Sitting({ quiz }: { quiz: Quiz }) {
           }
           const pick = marked ? marked.picks[i] : picks[i];
           const right = marked && pick === q.answer;
+          const flagged = marked ? !!marked.unclear?.includes(i) : unclear.includes(i);
           return (
-            <li key={i} className="quiz-q" data-state={marked ? (right ? 'got' : 'miss') : undefined}>
+            <li key={i} className="quiz-q" data-state={marked ? (flagged ? 'unclear' : right ? 'got' : 'miss') : undefined} data-unclear={flagged || undefined}>
               <p className="quiz-prompt">
                 <span className="quiz-n">{i + 1}</span>
                 <QuizText text={q.prompt} />
@@ -260,9 +264,21 @@ function Sitting({ quiz }: { quiz: Quiz }) {
                   );
                 })}
               </div>
+              {!marked && (
+                <button
+                  type="button"
+                  className="quiz-flag"
+                  aria-pressed={flagged}
+                  title={flagged ? 'Count this question again' : 'Badly worded? Flag it and it won’t count toward your mark'}
+                  onClick={() => setUnclear((all) => (all.includes(i) ? all.filter((j) => j !== i) : [...all, i]))}
+                >
+                  {flagged ? 'unclear · won’t count' : 'unclear?'}
+                </button>
+              )}
               {marked && (
                 <p className="quiz-why">
-                  {right ? null : pick < 0 ? <>left blank · it was <b>{LETTERS[q.answer]}</b>. </> : <>it was <b>{LETTERS[q.answer]}</b>. </>}
+                  {flagged ? <>marked unclear, not counted · it was <b>{LETTERS[q.answer]}</b>. </>
+                    : right ? null : pick < 0 ? <>left blank · it was <b>{LETTERS[q.answer]}</b>. </> : <>it was <b>{LETTERS[q.answer]}</b>. </>}
                   {q.explain ? <QuizText text={q.explain} /> : null}
                 </p>
               )}

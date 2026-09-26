@@ -597,10 +597,15 @@
 .notes .quiz-q[data-state] .quiz-option:not([data-state]) { opacity: .55; }
 .notes .quiz-why { margin: 12px 0 0 34px; max-width: 58ch; font: italic 14px/1.55 var(--font-serif); color: var(--muted); animation: notes-fade-up .3s cubic-bezier(.2, .7, .2, 1) both; }
 .notes .quiz-why b { font-style: normal; font-weight: 500; color: var(--ink-soft); }
+.notes .quiz-flag { display: block; margin: 8px 0 0 34px; padding: 0; border: 0; background: none; font: italic 13px var(--font-serif); color: var(--muted-soft); cursor: pointer; transition: color .15s; }
+.notes .quiz-flag:hover { color: var(--ink-soft); }
+.notes .quiz-flag[aria-pressed='true'] { color: var(--ink-soft); text-decoration: underline wavy var(--line-strong); text-underline-offset: 4px; }
+.notes .quiz-q[data-unclear] .quiz-prompt { color: var(--ink-soft); }
+.notes .quiz-q[data-state='unclear'] .quiz-n { color: var(--muted-soft); }
 .notes .quiz-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 26px 0 40px; border-top: 1px solid var(--line-soft); }
 .notes .quiz-foot .standfirst { margin: 0; }
 @media (max-width: 640px) {
-  .notes .quiz-options, .notes .quiz-why { margin-left: 0; }
+  .notes .quiz-options, .notes .quiz-why, .notes .quiz-flag { margin-left: 0; }
   .notes .quiz-option { margin: 0; }
 }
 
@@ -608,6 +613,8 @@
    part mark is half inked. */
 .notes .strokes span[data-r='wait'],
 .notes .shelf-row .mini span[data-r='wait'] { background: transparent; border: 1px dashed var(--line-strong); }
+.notes .strokes span[data-r='unclear'] { background: var(--line); border-color: var(--line); opacity: .6; }
+.notes .shelf-row .mini span[data-r='unclear'] { background: var(--line); opacity: .6; }
 .notes .strokes span[data-r='part'] { background: linear-gradient(to top, var(--sage) 50%, transparent 50%); border-color: var(--sage); }
 .notes .shelf-row .mini span[data-r='part'] { background: linear-gradient(to top, var(--sage) 50%, var(--line) 50%); }
 .notes .quiz-mark-hand { display: grid; gap: 2px; justify-items: start; }

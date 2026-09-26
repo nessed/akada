@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { markQuiz, parseQuiz, writtenTally } from './format';
+import { bestSitting, cleanAttempts, markQuiz, parseQuiz, writtenTally } from './format';
 
 const GOOD = `# Cell respiration
 BIO 101 · Chapter 4
@@ -95,4 +95,21 @@ test('written answers are kept unmarked; the MCQ mark stands on its own', () => 
   assert.deepEqual(attempt.written, { '1': 'Scattering.' });
   const tally = writtenTally(parsed.quiz.questions, { ...attempt, marks: { '1': { score: 2, outOf: 3, feedback: 'ok' } } });
   assert.deepEqual(tally, { count: 2, pending: 1, score: 2, outOf: 3, possible: 4 });
+});
+
+test('an unclear question is left out of score and total, right or wrong', () => {
+  const parsed = parseQuiz(GOOD);
+  assert.ok(parsed.ok);
+  if (!parsed.ok) return;
+  const right = markQuiz(parsed.quiz.questions, [0, -1], {}, [0]);
+  assert.equal(right.score, 0);
+  assert.equal(right.total, 1);
+  assert.deepEqual(right.unclear, [0]);
+  const wrong = markQuiz(parsed.quiz.questions, [0, -1], {}, [1, 1, 9]);
+  assert.equal(wrong.score, 1);
+  assert.equal(wrong.total, 1);
+  assert.deepEqual(wrong.unclear, [1]);
+  assert.equal(markQuiz(parsed.quiz.questions, [0]).unclear, undefined);
+  assert.deepEqual(cleanAttempts([wrong])[0].unclear, [1]);
+  assert.equal(bestSitting([right, wrong]), wrong);
 });

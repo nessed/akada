@@ -390,7 +390,9 @@ export interface QuizWrittenMark {
  * multiple-choice mark alone, which is known the moment it is handed in.
  * `written` holds what was written, by question index, and `marks` the
  * assistant's marks on those answers, by the same index, once it has marked
- * them.
+ * them. `unclear` is the multiple-choice questions flagged as badly worded
+ * while sitting it, by index: they are left out of `score` and `total`
+ * whatever was picked.
  */
 export interface QuizAttempt {
   at: string;
@@ -400,6 +402,7 @@ export interface QuizAttempt {
   written?: Record<string, string>;
   marks?: Record<string, QuizWrittenMark>;
   markedAt?: string;
+  unclear?: number[];
 }
 
 /**
