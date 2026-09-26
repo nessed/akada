@@ -176,7 +176,12 @@ is the whole screen, as it always was.
   the two never offer different tasks. It used to be a dashed box with a
   `00:00` in it that linked to `/timer`, which sends anyone without a running
   sitting straight back to Today: a start button that started nothing.
-- **Settings** at the very foot, set like the screens.
+- **Settings** at the very foot, set like the screens. On the strip its icon
+  becomes the reader's own face once there is one to show — the photo or
+  initials-on-peach circle from the Settings profile card, a small gear badge
+  at its corner so the row still reads as Settings — and falls back to the
+  plain gear with neither a name nor a photo set (`SettingsGlyph`). The
+  mobile header's own way into Settings uses the same glyph.
 
 It collapses to a **64px strip**: the AkadaMark is the handle, the screens are
 their icons, and each course is a spine label, the letters of its code over
@@ -831,9 +836,10 @@ while a sitting is running, for the same reason it lists nothing else that
 is not bound.
 
 ### Rearranging by hand
-Five lists let the reader set their own order, and all five are the same
+Six lists let the reader set their own order, and all six are the same
 component, `ReorderList`: the **course list on Today** (carried as a `row`,
-since its entries are lines on the page), the
+since its entries are lines on the page), the **course spines in the rail**
+(a `row` carried on press too, since each is a whole link), the
 **course panels in Settings**, the **subtasks inside a task**, the
 **pieces of a marking scheme** on a course page, and the **open tasks on a
 course page** (a `row` carried from its grip, since every other part of a task
@@ -881,10 +887,17 @@ back button walks out the way you came in.
   in, the opening lines of that section, and **Keep reading** / **Focus**.
   Beside it, the note's sections as strokes, the ones behind the reader inked
   in the course colour, and "~ 6 min left" in Caveat. Then the fold, then the
-  tools: course filters and Recent / A–Z as highlighter marks (never tabs),
-  and a search that looks through every note and shows the words around the
-  hit. Rows are written on the page with a `line-soft` hairline between them,
-  split into "This week" and "Earlier" when sorted by recent. Each note
+  tools on one line: Everything / Notes / Quizzes (once any quiz exists), a
+  hairline, the course filters, and Recent / A–Z, all as highlighter marks
+  (never tabs), and a search that looks through every note and quiz and shows
+  the words around the hit. Notes and quizzes are **one list**, and the
+  course filter and search apply to both. Rows are written on the page with
+  a `line-soft` hairline between them, split into "This week" and "Earlier"
+  when sorted by recent. **What is finished folds away**: a note read through
+  and a quiz taken and fully marked drop out of the list into **Done** at its
+  foot, an `.eyebrow` with its count in mono that opens and closes them, the
+  rows under it let down a little. A search opens Done for itself. Which
+  kind is shown and whether Done is open stay in the browser. Each note
   gets a pastel from the course palette, picked from its id, drawn as the
   same 3px stripe a course carries in the rail. On the right of a row, what
   is left to read in mono ("4m left"), a hand tick once it has been read
@@ -996,15 +1009,17 @@ reader draws lives in `app/notes/notes.css`, scoped under `.notes`.
 
 ### Study: quizzes
 
-A quiz is sent by an assistant over MCP and lands on the Study shelf under
-its own `.eyebrow` label, **Quizzes**, above the notes, straight after the
-note last read, so a new one is the first thing on the shelf. Each is a shelf row
-like a note's: the course stripe, the title, a serif sub-line (course, task,
-question count, when), the last sitting's strokes in sage and peach, and the
+A quiz is sent by an assistant over MCP and lands on the Study shelf in the
+same list as the notes, dated by its last sitting or marking (or its arrival),
+so a new one sits at the top of "This week". The standfirst counts them and
+says how many are to take or waiting on the assistant. Each is a shelf row
+like a note's: the course stripe, the title, a sans sub-line opening with
+"quiz" (then course, task, question count, when), the last sitting's strokes in sage and peach, and the
 last mark in mono where a note has its minutes, or an italic *new* before it
 has been taken, or *to mark* while written answers wait on the assistant.
-Before any quiz arrives the label stands alone with one italic serif line
-saying how one gets there, since nothing in the app makes one.
+Before any quiz arrives, an `.eyebrow` **Quizzes** under the list stands
+with one italic serif line saying how one gets there, since nothing in the
+app makes one (on an empty shelf it sits under the ways to start a note).
 
 Taken (`/notes/quiz?q=…`), a quiz is a paper at a 720px measure: numbered
 questions (the number in mono, it is a digit), the prompt in the serif, and
@@ -1031,6 +1046,19 @@ every keystroke, every *unclear* flag), so a refresh or a closed tab opens it
 back where it was; the count beside **Hand it in** adds *kept on this
 device* once anything is answered. It is cleared when the sitting is filed
 or started again.
+
+When the assistant judged the paper should run against a clock, it says so
+sending it, and Akada shows the time it set as a running countdown, mono
+digits at 21px, directly under the title, from the moment the paper opens.
+Turning it off is a quiet italic serif link beside the face, in the same
+hand as *unclear?* below — never a switch, since this is a one-off choice
+for the sitting rather than a setting. Off, the face freezes where it was
+rather than disappearing, so the time already spent is still there to see;
+tapping the link again picks the clock back up from that point. Time running
+low is a warm shift on the digits themselves (the paper tone's peach), never
+a flashing or shaking indicator: the app has no alarmist ones. Running out
+hands the paper in exactly as **Hand it in** would, whatever is filled in.
+A quiz the assistant sent with no time on it shows no timer at all, and nothing changes.
 
 A written question has no options. It carries its marks in italic after the
 prompt and takes its answer on ruled lines (a borderless textarea over the

@@ -183,6 +183,7 @@ interface QuizRow {
   context: string | null;
   questions: unknown;
   attempts: unknown;
+  timer_minutes?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -197,9 +198,15 @@ function rowToQuiz(r: QuizRow): Quiz {
     context: r.context ?? '',
     questions: cleanQuestions(r.questions),
     attempts: cleanAttempts(r.attempts),
+    timerMinutes: cleanTimerMinutes(r.timer_minutes),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+/** A pre-migration project has no `timer_minutes` column at all; either way, garbage in storage never reaches the student as a countdown. */
+function cleanTimerMinutes(value: number | null | undefined): number | null {
+  return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 180 ? (value as number) : null;
 }
 
 interface WeakPointRow {

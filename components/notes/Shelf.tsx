@@ -1,15 +1,18 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import HandNote from '@/components/notebook/HandNote';
 import HandCheck from '@/components/notebook/HandCheck';
 import Icon from './Icon';
+import { NoQuizzesYet, QuizRow, quizDone, quizHref, quizStatus, quizTouched } from './QuizShelf';
 import { countChecks, getMarkdownHeadings } from './MarkdownReader';
-import { noteColor, readLastRead, readProgress, relativeLabel, wordCount, type CheckResult } from '@/lib/notes/store';
+import { noteColor, readLastRead, readProgress, readStore, relativeLabel, wordCount, writeStore, type CheckResult } from '@/lib/notes/store';
 import { minutesForNote, readingPace, type ReadingPace } from '@/lib/notes/reads';
 import type { NoteRead } from '@/lib/data';
 import { resolveTint } from '@/lib/utils';
-import type { Course } from '@/lib/data';
+import type { Course, Quiz } from '@/lib/data';
+import { useQuizzes, useTasks } from '@/lib/data-hooks';
 
 export type ShelfEntry = {
   id: string;
@@ -24,6 +27,24 @@ export type ShelfEntry = {
 };
 
 type Sort = 'recent' | 'title';
+type Kind = 'all' | 'notes' | 'quizzes';
+// What the shelf shows, and whether Done is open, stay put between visits:
+// coming back out of a note should not undo them.
+const SHELF_KEY = 'akada.notes.shelf.v1';
+
+function readShelf(): { kind: Kind; doneOpen: boolean } {
+  try {
+    const raw = JSON.parse(readStore(SHELF_KEY) || '{}');
+    return { kind: raw.kind === 'notes' || raw.kind === 'quizzes' ? raw.kind : 'all', doneOpen: raw.doneOpen === true };
+  } catch {
+    return { kind: 'all', doneOpen: false };
+  }
+}
+
+/** A row on the shelf: a note or a quiz, and whether anything is left to do on it. */
+type Item =
+  | { kind: 'note'; id: string; title: string; at: number; courseId: string | null; done: boolean; note: ShelfEntry }
+  | { kind: 'quiz'; id: string; title: string; at: number; courseId: string | null; done: boolean; quiz: Quiz };
 const WEEK = 7 * 86_400_000;
 
 const isTyping = (target: EventTarget | null) =>
@@ -76,24 +97,34 @@ interface Props {
   onNew: () => void;
   onOpenFile: () => void;
   onPrompt: () => void;
-  /** The quizzes, drawn above the notes. */
-  quizzes?: React.ReactNode;
+  onDeleteQuiz: (id: string, title: string) => void;
 }
 
 /**
  * The shelf. The note last read leads the page, the way Up next leads Today,
- * and the rest are rows written under the fold, sorted and filtered with
- * highlighter rather than tabs.
+ * and everything else, notes and quizzes together, is rows written under the
+ * fold, sorted and filtered with highlighter rather than tabs. What still
+ * wants something (a note not read through, a quiz not taken or not marked)
+ * is on the page; what is finished folds away under Done at the foot.
  */
-export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew, onOpenFile, onPrompt, quizzes }: Props) {
+export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew, onOpenFile, onPrompt, onDeleteQuiz }: Props) {
+  const router = useRouter();
+  const { quizzes: allQuizzes, loaded: quizzesLoaded, available: quizzesAvailable } = useQuizzes();
+  const quizzes = useMemo(() => (quizzesAvailable ? allQuizzes : []), [allQuizzes, quizzesAvailable]);
+  const { tasks } = useTasks();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<string>('all');
+  // The shelf only renders once the page's prefs are read on the client.
+  const [kind, setKind] = useState<Kind>(() => readShelf().kind);
   const [sort, setSort] = useState<Sort>('recent');
+  const [doneOpen, setDoneOpen] = useState(() => readShelf().doneOpen);
+  useEffect(() => { writeStore(SHELF_KEY, JSON.stringify({ kind, doneOpen })); }, [kind, doneOpen]);
   const [cursor, setCursor] = useState(-1);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
   const courseOf = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
+  const taskOf = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   const pace = useMemo(() => readingPace(notes), [notes]);
   const minutesOf = (note: ShelfEntry) => minutesForNote(note, wordCount(note.markdown), pace);
 
@@ -120,33 +151,50 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
     return { minutes, revisit };
   }, [notes, pace]);
 
+  const items = useMemo<Item[]>(() => [
+    ...notes.map((note): Item => ({ kind: 'note', id: note.id, title: note.title, at: note.updatedAt, courseId: note.courseId, done: (reading.get(note.id) ?? 0) >= 0.98, note })),
+    ...quizzes.map((quiz): Item => ({ kind: 'quiz', id: quiz.id, title: quiz.title, at: quizTouched(quiz), courseId: quiz.courseId, done: quizDone(quiz), quiz })),
+  ], [notes, quizzes, reading]);
+
   const filters = useMemo(() => {
-    const used = new Set(notes.map((n) => n.courseId).filter((id): id is string => !!id && courseOf.has(id)));
+    const used = new Set(items.map((n) => n.courseId).filter((id): id is string => !!id && courseOf.has(id)));
     const list = courses.filter((c) => used.has(c.id));
-    const unfiled = notes.some((n) => !n.courseId || !courseOf.has(n.courseId));
+    const unfiled = items.some((n) => !n.courseId || !courseOf.has(n.courseId));
     return { list, unfiled };
-  }, [notes, courses, courseOf]);
+  }, [items, courses, courseOf]);
 
   const q = query.trim();
-  const shown = useMemo(() => {
+  const matched = useMemo(() => {
     const needle = q.toLowerCase();
-    let list = notes.filter((n) => {
-      if (filter === 'none' && n.courseId && courseOf.has(n.courseId)) return false;
-      if (filter !== 'all' && filter !== 'none' && n.courseId !== filter) return false;
-      return !needle || n.title.toLowerCase().includes(needle) || n.markdown.toLowerCase().includes(needle);
+    const has = (text: string) => text.toLowerCase().includes(needle);
+    const list = items.filter((item) => {
+      if (kind === 'notes' && item.kind !== 'note') return false;
+      if (kind === 'quizzes' && item.kind !== 'quiz') return false;
+      if (filter === 'none' && item.courseId && courseOf.has(item.courseId)) return false;
+      if (filter !== 'all' && filter !== 'none' && item.courseId !== filter) return false;
+      if (!needle) return true;
+      if (has(item.title)) return true;
+      return item.kind === 'note'
+        ? has(item.note.markdown)
+        : has(item.quiz.context) || item.quiz.questions.some((question) => has(question.prompt));
     });
-    list = [...list].sort((a, b) => (sort === 'title' ? a.title.localeCompare(b.title) : b.updatedAt - a.updatedAt));
-    return list;
-  }, [notes, q, filter, sort, courseOf]);
+    return list.sort((a, b) => (sort === 'title' ? a.title.localeCompare(b.title) : b.at - a.at));
+  }, [items, q, kind, filter, sort, courseOf]);
+
+  const open = useMemo(() => matched.filter((item) => !item.done), [matched]);
+  const done = useMemo(() => matched.filter((item) => item.done), [matched]);
+  // A search looks through the finished ones too, so they open for it.
+  const doneShown = doneOpen || !!q;
+  const shown = useMemo(() => (doneShown ? [...open, ...done] : open), [open, done, doneShown]);
 
   const groups = useMemo(() => {
-    if (sort !== 'recent' || q) return [{ label: '', notes: shown }];
+    if (sort !== 'recent' || q) return [{ label: '', items: open }];
     const cut = Date.now() - WEEK;
-    const recent = shown.filter((n) => n.updatedAt >= cut);
-    const earlier = shown.filter((n) => n.updatedAt < cut);
-    if (!recent.length || !earlier.length) return [{ label: '', notes: shown }];
-    return [{ label: 'This week', notes: recent }, { label: 'Earlier', notes: earlier }];
-  }, [shown, sort, q]);
+    const recent = open.filter((n) => n.at >= cut);
+    const earlier = open.filter((n) => n.at < cut);
+    if (!recent.length || !earlier.length) return [{ label: '', items: open }];
+    return [{ label: 'This week', items: recent }, { label: 'Earlier', items: earlier }];
+  }, [open, sort, q]);
 
   // The cursor walks what is shown; changing what is shown puts it down.
   const shownKey = shown.map((n) => n.id).join(',');
@@ -183,12 +231,15 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
         setCursor((c) => Math.max(0, c - 1));
       } else if (event.key === 'Enter' && cursor >= 0 && shown[cursor]) {
         event.preventDefault();
-        onOpen(shown[cursor].id);
+        const item = shown[cursor];
+        if (item.kind === 'quiz') router.push(quizHref(item.id));
+        else onOpen(item.id);
       } else if (event.key === 'f') {
-        const target = cursor >= 0 ? shown[cursor] : last?.note ?? shown[0];
-        if (target) {
+        const at = cursor >= 0 ? shown[cursor] : undefined;
+        const id = at ? (at.kind === 'note' ? at.id : '') : last?.note.id ?? shown.find((item) => item.kind === 'note')?.id;
+        if (id) {
           event.preventDefault();
-          onFocus(target.id);
+          onFocus(id);
         }
       } else if (event.key === '/' && searchRef.current) {
         event.preventDefault();
@@ -197,10 +248,82 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [shown, cursor, last, onOpen, onFocus]);
+  }, [shown, cursor, last, onOpen, onFocus, router]);
 
   const indexOf = new Map(shown.map((n, i) => [n.id, i]));
-  const searchable = notes.length > 3;
+  const searchable = items.length > 3;
+  const quizLine = quizStatus(quizzes);
+
+  const row = (item: Item) => {
+    const i = indexOf.get(item.id) ?? -1;
+    const course = item.courseId ? courseOf.get(item.courseId) : undefined;
+    if (item.kind === 'quiz') {
+      return (
+        <li key={`q-${item.id}`}>
+          <QuizRow quiz={item.quiz} course={course} task={item.quiz.taskId ? taskOf.get(item.quiz.taskId) : undefined} index={i} cursor={i === cursor} onDelete={onDeleteQuiz} />
+        </li>
+      );
+    }
+    const note = item.note;
+    const minutes = minutesOf(note);
+    const read = reading.get(note.id) ?? 0;
+    const total = countChecks(note.markdown);
+    const text = plain(note.markdown);
+    const parts = [course?.code, relativeLabel(note.updatedAt), note.source === 'mcp' ? 'from your assistant' : ''].filter(Boolean).join(' · ');
+    return (
+      <li key={note.id}>
+        <div
+          className="shelf-row"
+          role="link"
+          tabIndex={0}
+          data-index={i}
+          data-cursor={i === cursor || undefined}
+          onClick={() => onOpen(note.id)}
+          onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) onOpen(note.id); }}
+          style={{ ['--c' as string]: course?.color ?? noteColor(note.id) }}
+        >
+          <span className="stripe" aria-hidden />
+          <span className="body">
+            <span className="title">{note.title}</span>
+            <span className="sub">
+              {parts}
+              {text && <span className="gist"> · {q ? <Snippet text={text} query={q} /> : text.slice(0, 140)}</span>}
+            </span>
+          </span>
+          {total > 0 && (
+            <span className="mini" aria-label={`${Object.values(note.checks).filter((r) => r === 'got').length} of ${total} checks got`}>
+              {Array.from({ length: total }, (_, k) => <span key={k} data-r={note.checks[String(k)] ?? ''} />)}
+            </span>
+          )}
+          <span className="mins" title={note.reads.length ? `Read through in ${minutes} min last time, on the clock` : read >= 0.98 ? 'Read through' : read > 0.03 ? `${minutes} min in all` : undefined}>
+            {read >= 0.98 ? <span className="read-through"><HandCheck size={14} /></span>
+              : read > 0.03 ? <>{Math.max(1, Math.round(minutes * (1 - read)))}m <em>left</em></>
+                : <>{minutes}m</>}
+          </span>
+          <span className="row-tools">
+            <button
+              type="button"
+              className="row-tool"
+              aria-label={`Read ${note.title} in focus`}
+              title="Read in focus (F)"
+              onClick={(event) => { event.stopPropagation(); onFocus(note.id); }}
+            >
+              <Icon name="focus" size={15} />
+            </button>
+            <button
+              type="button"
+              className="row-tool del"
+              aria-label={`Delete ${note.title}`}
+              title="Delete"
+              onClick={(event) => { event.stopPropagation(); onDelete(note.id); }}
+            >
+              <Icon name="trash" size={15} />
+            </button>
+          </span>
+        </div>
+      </li>
+    );
+  };
 
   return (
     <>
@@ -209,6 +332,7 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
           <p className="standfirst">
             {notes.length} {notes.length === 1 ? 'note' : 'notes'} · {hoursLabel(stats.minutes)} of reading{pace.personal ? ' at your pace' : ''}
             {stats.revisit > 0 && <> · {stats.revisit} {stats.revisit === 1 ? 'check' : 'checks'} to revisit</>}
+            {quizzes.length > 0 && <> · {quizzes.length} {quizzes.length === 1 ? 'quiz' : 'quizzes'}{quizLine && <>, {quizLine}</>}</>}
           </p>
           <h1 className="screen-title">Study</h1>
         </div>
@@ -227,13 +351,18 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
 
       {last && <LeadBand pace={pace} note={last.note} section={last.section} at={last.at} progress={reading.get(last.note.id) ?? 0} course={last.note.courseId ? courseOf.get(last.note.courseId) : undefined} onOpen={onOpen} onFocus={onFocus} />}
 
-      {quizzes}
-
       <div className="fold" />
 
       <div className="shelf-tools">
+        {quizzes.length > 0 && (
+          <div className="marks kinds" role="group" aria-label="Show">
+            <button type="button" className="mark" aria-pressed={kind === 'all'} onClick={() => setKind('all')}><span>Everything</span></button>
+            <button type="button" className="mark" aria-pressed={kind === 'notes'} onClick={() => setKind(kind === 'notes' ? 'all' : 'notes')}><span>Notes</span></button>
+            <button type="button" className="mark" aria-pressed={kind === 'quizzes'} onClick={() => setKind(kind === 'quizzes' ? 'all' : 'quizzes')}><span>Quizzes</span></button>
+          </div>
+        )}
         {(filters.list.length > 0) && (
-          <div className="marks" role="group" aria-label="Show">
+          <div className="marks" role="group" aria-label="Course">
             <button type="button" className="mark" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}><span>All</span></button>
             {filters.list.map((c) => (
               <button
@@ -261,87 +390,45 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
           {searchable && (
             <label className="search">
               <Icon name="search" size={14} />
-              <span className="sr-only">Search notes</span>
-              <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search every note" />
+              <span className="sr-only">{quizzes.length ? 'Search notes and quizzes' : 'Search notes'}</span>
+              <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={quizzes.length ? 'Search everything' : 'Search every note'} />
               {!query && <span className="kbd search-kbd" aria-hidden>/</span>}
             </label>
           )}
         </div>
       </div>
 
+      {open.length === 0 && done.length > 0 && !q && (
+        <p className="standfirst" style={{ marginTop: 20 }}>All read and taken. The finished ones are under Done.</p>
+      )}
       <ul className="shelf" ref={listRef}>
         {groups.map((group) => (
           <Fragment key={group.label || 'all'}>
             {group.label && <li className="shelf-group"><span className="eyebrow">{group.label}</span></li>}
-            {group.notes.map((note) => {
-              const i = indexOf.get(note.id) ?? -1;
-              const course = note.courseId ? courseOf.get(note.courseId) : undefined;
-              const minutes = minutesOf(note);
-              const done = reading.get(note.id) ?? 0;
-              const total = countChecks(note.markdown);
-              const text = plain(note.markdown);
-              const parts = [course?.code, relativeLabel(note.updatedAt), note.source === 'mcp' ? 'from your assistant' : ''].filter(Boolean).join(' · ');
-              return (
-                <li key={note.id}>
-                  <div
-                    className="shelf-row"
-                    role="link"
-                    tabIndex={0}
-                    data-index={i}
-                    data-cursor={i === cursor || undefined}
-                    onClick={() => onOpen(note.id)}
-                    onKeyDown={(event) => { if (event.key === 'Enter' && event.target === event.currentTarget) onOpen(note.id); }}
-                    style={{ ['--c' as string]: course?.color ?? noteColor(note.id) }}
-                  >
-                    <span className="stripe" aria-hidden />
-                    <span className="body">
-                      <span className="title">{note.title}</span>
-                      <span className="sub">
-                        {parts}
-                        {text && <span className="gist"> · {q ? <Snippet text={text} query={q} /> : text.slice(0, 140)}</span>}
-                      </span>
-                    </span>
-                    {total > 0 && (
-                      <span className="mini" aria-label={`${Object.values(note.checks).filter((r) => r === 'got').length} of ${total} checks got`}>
-                        {Array.from({ length: total }, (_, k) => <span key={k} data-r={note.checks[String(k)] ?? ''} />)}
-                      </span>
-                    )}
-                    <span className="mins" title={note.reads.length ? `Read through in ${minutes} min last time, on the clock` : done >= 0.98 ? 'Read through' : done > 0.03 ? `${minutes} min in all` : undefined}>
-                      {done >= 0.98 ? <span className="read-through"><HandCheck size={14} /></span>
-                        : done > 0.03 ? <>{Math.max(1, Math.round(minutes * (1 - done)))}m <em>left</em></>
-                          : <>{minutes}m</>}
-                    </span>
-                    <span className="row-tools">
-                      <button
-                        type="button"
-                        className="row-tool"
-                        aria-label={`Read ${note.title} in focus`}
-                        title="Read in focus (F)"
-                        onClick={(event) => { event.stopPropagation(); onFocus(note.id); }}
-                      >
-                        <Icon name="focus" size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        className="row-tool del"
-                        aria-label={`Delete ${note.title}`}
-                        title="Delete"
-                        onClick={(event) => { event.stopPropagation(); onDelete(note.id); }}
-                      >
-                        <Icon name="trash" size={15} />
-                      </button>
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
+            {group.items.map(row)}
           </Fragment>
         ))}
+        {done.length > 0 && (
+          <li className="shelf-group shelf-done">
+            {q ? <span className="eyebrow">Done</span> : (
+              <button type="button" className="done-fold" aria-expanded={doneShown} onClick={() => setDoneOpen((o) => !o)}>
+                <span className="eyebrow">Done</span>
+                <span className="n">{done.length}</span>
+                <Icon name={doneShown ? 'fold' : 'unfold'} size={13} />
+              </button>
+            )}
+          </li>
+        )}
+        {doneShown && done.map(row)}
       </ul>
-      {shown.length === 0 && (
+      {matched.length === 0 ? (
         <p className="standfirst" style={{ marginTop: 20 }}>
-          {q ? 'No note mentions that.' : 'Nothing filed here yet.'}
+          {q ? 'Nothing mentions that.' : 'Nothing filed here yet.'}
         </p>
+      ) : null}
+
+      {quizzesLoaded && quizzesAvailable && quizzes.length === 0 && (
+        <p className="quiz-hint"><span className="eyebrow">Quizzes</span> <NoQuizzesYet /></p>
       )}
 
       <PaceLine pace={pace} />

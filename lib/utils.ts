@@ -296,6 +296,18 @@ export function findCourse(courses: Course[], id: string): Course | undefined {
   return courses.find((c) => c.id === id);
 }
 
+/** Up to two initials from a display name, uppercased, or '' with nothing to read. */
+export function initialsFor(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0))
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
 export function lastSeenByCourse(sessions: Session[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const s of sessions.filter((session) => isLoggableDuration(session.durationSeconds))) {

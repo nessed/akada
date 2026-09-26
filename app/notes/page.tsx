@@ -450,7 +450,6 @@ function NotesContent() {
     );
     setQuizToDelete(null);
   };
-  const quizShelf = <QuizShelf onDelete={(id, title) => setQuizToDelete({ id, title })} />;
 
   const linkCourse = (courseId: string | null) => {
     if (!active) return;
@@ -793,7 +792,7 @@ function NotesContent() {
         <div style={{ marginTop: 18 }}>
           <button type="button" className="link" onClick={() => void addNotes([sampleNote()], 'Here’s a sample to read.', 'app')}>or read a sample note first</button>
         </div>
-        {quizShelf}
+        <QuizShelf onDelete={(id, title) => setQuizToDelete({ id, title })} />
         <div className="keys" aria-label="Keyboard shortcuts">
           <div><span className="kbd">N</span> new note</div>
           <div><span className="kbd">O</span> open a file</div>
@@ -812,7 +811,7 @@ function NotesContent() {
         onNew={() => go('new=1')}
         onOpenFile={() => fileRef.current?.click()}
         onPrompt={() => setPromptOpen(true)}
-        quizzes={quizShelf}
+        onDeleteQuiz={(id, title) => setQuizToDelete({ id, title })}
       />
     );
   }
