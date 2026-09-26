@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import Leaving from '@/components/Leaving';
 import { useNotice } from '@/components/Notice';
+import { finishedUndo, useUndo } from '@/components/Undo';
 import SelectField from '@/components/SelectField';
 import HandCheck from '@/components/notebook/HandCheck';
 import HandNote from '@/components/notebook/HandNote';
@@ -76,12 +77,6 @@ interface Band {
   tasks: Task[];
 }
 
-/** What an undone bulk action needs to put itself back. */
-interface UndoEntry {
-  label: string;
-  restore: () => Promise<void>;
-}
-
 export default function TasksPage() {
   return (
     <Suspense fallback={<TasksPageFallback />}>
@@ -95,6 +90,7 @@ function TasksPageContent() {
   const searchParams = useSearchParams();
   const { active, start, pause, resume, focusSeconds } = useTimer();
   const { notify } = useNotice();
+  const { offer: offerUndo } = useUndo();
   // Guards the two writes that were previously fire-and-forget from the UI's
   // point of view: nothing changed on the button while they were in flight.
   const [savingTask, setSavingTask] = useState(false);
@@ -116,7 +112,6 @@ function TasksPageContent() {
   // pile of late ones at its left edge.
   const [dayFilter, setDayFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [undo, setUndo] = useState<UndoEntry | null>(null);
   const [startTarget, setStartTarget] = useState<StartTarget | null>(null);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
@@ -143,8 +138,6 @@ function TasksPageContent() {
 
   /* The keydown listener is bound once, so it reads what it needs through
      refs rather than closing over the render that bound it. */
-  const undoRef = useRef<UndoEntry | null>(null);
-  const runUndoRef = useRef<() => void>(() => {});
   const sheetOpenRef = useRef(false);
   const moveCursorRef = useRef<(delta: number) => void>(() => {});
   const cursorTaskRef = useRef<Task | null>(null);
@@ -186,14 +179,6 @@ function TasksPageContent() {
       if (event.key === '?') {
         event.preventDefault();
         setShortcutHelpOpen(true);
-      }
-      // Undo is the only way back from a bulk move, and the hint under the
-      // list has always said so. It reaches the same run the toast does.
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
-        if (!undoRef.current) return;
-        event.preventDefault();
-        runUndoRef.current();
-        return;
       }
       if (event.key === 'Escape') {
         setAddingFor(null);
@@ -471,8 +456,6 @@ function TasksPageContent() {
   /* Runs after every render, which is the point: the one bound listener
      always reaches this render's handlers. */
   useEffect(() => {
-    undoRef.current = undo;
-    runUndoRef.current = runUndo;
     sheetOpenRef.current = Boolean(
       viewingTask || editingTask || addingFor || shortcutHelpOpen,
     );
@@ -487,15 +470,6 @@ function TasksPageContent() {
   useEffect(() => {
     setSelected(new Set());
   }, [filter, courseFilter, dayFilter]);
-
-  /* The toast is the only way back from a bulk action, so it stays long
-     enough to be read and reached, and a new one replaces it rather than
-     stacking. */
-  useEffect(() => {
-    if (!undo) return;
-    const t = window.setTimeout(() => setUndo(null), 8000);
-    return () => window.clearTimeout(t);
-  }, [undo]);
 
   function toggleSelected(task: Task) {
     setSelected((current) => {
@@ -517,7 +491,7 @@ function TasksPageContent() {
     setSelected(new Set());
     try {
       await Promise.all(batch.map((t) => toggleTaskOptimistic(t)));
-      setUndo({
+      offerUndo({
         label: `Completed ${batch.length} ${batch.length === 1 ? 'task' : 'tasks'}`,
         restore: async () => {
           await Promise.all(
@@ -542,7 +516,7 @@ function TasksPageContent() {
     const before = batch.map((t) => ({ id: t.id, dueDate: t.dueDate }));
     try {
       await Promise.all(batch.map((t) => updateTaskOptimistic(t.id, { dueDate: bounds.today })));
-      setUndo({
+      offerUndo({
         label: `Moved ${batch.length} to today`,
         restore: async () => {
           await Promise.all(before.map((b) => updateTaskOptimistic(b.id, { dueDate: b.dueDate })));
@@ -560,7 +534,7 @@ function TasksPageContent() {
     setSelected(new Set());
     try {
       await Promise.all(batch.map((t) => deleteTaskOptimistic(t.id)));
-      setUndo({
+      offerUndo({
         label: `Deleted ${batch.length} ${batch.length === 1 ? 'task' : 'tasks'}`,
         restore: async () => {
           // A deleted row cannot come back with its old id, so undo writes
@@ -603,18 +577,6 @@ function TasksPageContent() {
     }
   }
 
-  async function runUndo() {
-    if (!undo) return;
-    const entry = undo;
-    setUndo(null);
-    try {
-      await entry.restore();
-    } catch (error) {
-      console.error('Failed to undo:', error);
-      notify('That could not be undone.');
-    }
-  }
-
   async function snoozeTask(task: Task) {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -636,7 +598,7 @@ function TasksPageContent() {
     const before = task.dueDate;
     try {
       await updateTaskOptimistic(task.id, { dueDate: null });
-      setUndo({
+      offerUndo({
         label: `${task.title} is open ended`,
         restore: async () => {
           await updateTaskOptimistic(task.id, { dueDate: before });
@@ -651,6 +613,7 @@ function TasksPageContent() {
   async function toggleTask(t: Task) {
     try {
       await toggleTaskOptimistic(t);
+      if (!t.completed) offerUndo(finishedUndo(t));
     } catch (error) {
       console.error('Failed to update task:', error);
       notify('That task did not update.');
@@ -1186,7 +1149,7 @@ function TasksPageContent() {
       {/* Every one of these is bound. The line used to offer X and undo with
           nothing behind either, which is a worse lie than saying nothing. */}
       <p className="key-hint mt-4 px-1 font-mono text-[11px] text-muted-soft">
-        ↑↓ move · X select · Enter open · N new · S sort · ⌘Z undo
+        ↑↓ move · X select · Enter open · N new · S sort · Z undo
       </p>
 
       {/* The bulk bar. It only exists while something is selected, and it
@@ -1217,23 +1180,6 @@ function TasksPageContent() {
               className="ml-1 grid h-10 w-10 place-items-center rounded-[8px] font-mono text-[11px] text-muted transition-colors hover:bg-bg-tint hover:text-ink"
             >
               Esc
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* The undo toast. Every destructive bulk action leaves one, because
-          "Delete 6" with no way back is not a thing to put behind one click. */}
-      {undo && (
-        <div className="fixed inset-x-0 bottom-[calc(160px+env(safe-area-inset-bottom))] z-40 flex animate-fade-in justify-center px-4 md:bottom-24">
-          <div className="flex items-center gap-3 rounded-[10px] border border-line bg-paper py-2 pl-3.5 pr-2 shadow-[0_8px_20px_rgba(57,48,36,.12)]">
-            <span className="text-[13px] text-ink">{undo.label}</span>
-            <button
-              type="button"
-              onClick={runUndo}
-              className="h-9 rounded-[8px] px-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
-            >
-              Undo
             </button>
           </div>
         </div>
@@ -1803,7 +1749,7 @@ function TasksPageContent() {
                         { k: 'K', l: 'Finish the sitting and log it' },
                       ]
                     : []),
-                  { k: '⌘Z', l: 'Undo the last bulk change' },
+                  { k: 'Z', l: 'Undo the last change, a tick included' },
                   { k: 'Esc', l: 'Close the sheet' },
                 ] as { k: string; l: string }[]
               ).map((row) => (

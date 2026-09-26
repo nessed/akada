@@ -31,6 +31,7 @@ import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import HandCheck from '@/components/notebook/HandCheck';
 import { useNotice } from '@/components/Notice';
+import { finishedUndo, useUndo } from '@/components/Undo';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Task } from '@/lib/data';
 import { upNextFrom } from '@/lib/use-up-next';
@@ -130,6 +131,7 @@ function DashboardPageContent() {
   const searchParams = useSearchParams();
   const { active, start, pause, resume, focusSeconds, clearTimerState } = useTimer();
   const { notify } = useNotice();
+  const { offer } = useUndo();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
@@ -319,6 +321,7 @@ function DashboardPageContent() {
   async function handleToggleTask(task: Task) {
     try {
       await toggleTaskOptimistic(task);
+      if (!task.completed) offer(finishedUndo(task));
     } catch (error) {
       console.error('Failed to update task:', error);
       notify('That task did not update.');
