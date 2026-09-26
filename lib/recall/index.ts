@@ -6,6 +6,7 @@ import type {
   RecallVerdict,
   Task,
 } from '../data';
+import { isSkipped } from '../derive';
 import { daysBetween, isoDate, logicalDateOf } from '../utils';
 import {
   RECALL_EXAM_MIN_WEIGHT,
@@ -356,7 +357,8 @@ function readItems(
   // first, and the others are its twins.
   const readings = new Map<string, Map<string, RecallItem[]>>();
   for (const task of tasks) {
-    if (!task.completed || !courseIds.has(task.courseId) || !looksLikeReading(task)) continue;
+    // A skipped reading was not read, so there is nothing to ask for back.
+    if (!task.completed || isSkipped(task) || !courseIds.has(task.courseId) || !looksLikeReading(task)) continue;
     const key = `task:${task.id}`;
     const record = byKey.get(key) ?? null;
     const item: RecallItem = {
@@ -417,6 +419,8 @@ function readItems(
     // A step is different: "gone" unticks it on purpose and it still has to
     // come back tomorrow.
     if (task && !task.completed && (record.source === 'reading' || record.source === 'task')) continue;
+    // Nor is a task skipped rather than done, which was never learned.
+    if (task && isSkipped(task) && (record.source === 'reading' || record.source === 'task')) continue;
     const step = subtaskId ? task?.subtasks?.find((s) => s.id === subtaskId) : undefined;
     // The task's own words while it exists, so a renamed step reads as it is
     // now; the stored prompt once it is gone, which is what the prompt is

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Assessment, Session, Task } from './data';
-import { gradeProjection, pickUpNext, readingRateDetail } from './derive';
+import { gradeProjection, isSkipped, pickUpNext, readingRateDetail, workedTaskIds } from './derive';
 import { isoDate } from './utils';
 
 /** A calendar date `n` days from today, the way a due date is written. */
@@ -130,4 +130,43 @@ test('the reading rate says when it is only the default', () => {
   assert.deepEqual(readingRateDetail([], []), { pagesPerHour: 20, measured: false, pagesRead: 0, hoursRead: 0 });
   const done = { id: 'r', kind: 'reading' as const, completed: true, pages: 50 };
   assert.equal(readingRateDetail([done], [{ taskId: 'r', durationSeconds: 7200 }]).pagesPerHour, 25);
+});
+
+test('a finished task is worked only when time was logged against it', () => {
+  const ticked = task('ticked', { completed: true, completedAt: `${day(-1)}T10:00:00.000Z` });
+  const timed = task('timed', { completed: true, completedAt: `${day(-1)}T10:00:00.000Z` });
+  const read = task('read', { completed: true, completedAt: `${day(-1)}T10:00:00.000Z` });
+  const open = task('open');
+  const sessions = [
+    { ...session('course-a', 1), taskId: 'timed' },
+    { ...session('course-a', 1), taskId: 'open' },
+  ];
+  const notes = [{ taskId: 'read', reads: [{ seconds: 600, words: 2000, at: day(-1) }] }];
+  const worked = workedTaskIds([ticked, timed, read, open], sessions, notes);
+  assert.deepEqual([...worked].sort(), ['read', 'timed']);
+});
+
+test('a note with no kept read-through does not make its task worked', () => {
+  const done = task('done', { completed: true });
+  assert.equal(workedTaskIds([done], [], [{ taskId: 'done', reads: [] }]).size, 0);
+});
+
+test('a session of no length is not time logged', () => {
+  const done = task('done', { completed: true });
+  const empty = { ...session('course-a', 1), taskId: 'done', durationSeconds: 0 };
+  assert.equal(workedTaskIds([done], [empty]).size, 0);
+});
+
+test('a skipped task is never worked, whatever time went on it', () => {
+  const skipped = task('skipped', { completed: true, completedVia: 'skip' });
+  assert.equal(isSkipped(skipped), true);
+  assert.equal(isSkipped({ ...skipped, completed: false }), false);
+  const sessions = [{ ...session('course-a', 1), taskId: 'skipped' }];
+  assert.equal(workedTaskIds([skipped], sessions).size, 0);
+});
+
+test('finished through the log sheet and timed is worked like any other', () => {
+  const done = task('done', { completed: true, completedVia: 'session' });
+  const sessions = [{ ...session('course-a', 1), taskId: 'done' }];
+  assert.deepEqual([...workedTaskIds([done], sessions)], ['done']);
 });

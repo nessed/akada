@@ -46,6 +46,7 @@ import {
   useTasks,
   addTaskOptimistic,
   toggleTaskOptimistic,
+  skipTaskOptimistic,
   deleteTaskOptimistic,
   updateTaskOptimistic,
   reorderTasksOptimistic,
@@ -153,6 +154,7 @@ export default function CoursePage() {
         onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
         onOpen={openTask}
         onOpenEnded={openEndTask}
+        onSkip={skipTask}
         onDelete={(t) => removeTask(t.id)}
         ground="page"
       />
@@ -201,6 +203,15 @@ export default function CoursePage() {
     }
     start(task.courseId, task.id);
     router.push('/timer');
+  }
+
+  async function skipTask(task: Task) {
+    try {
+      await skipTaskOptimistic(task);
+    } catch (error) {
+      console.error('Failed to skip task:', error);
+      notify(error instanceof Error && error.message.startsWith('Skip') ? error.message : 'That task did not skip.');
+    }
   }
 
   async function toggleTask(task: Task) {

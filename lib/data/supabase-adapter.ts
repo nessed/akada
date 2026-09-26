@@ -54,6 +54,7 @@ import {
   cleanMeetingTime,
   cleanSection,
   cleanDisplayName,
+  cleanCompletedVia,
   cleanKind,
   cleanOptionalDate,
   cleanPages,
@@ -125,6 +126,8 @@ interface TaskRow {
   completed: boolean;
   completed_at: string | null;
   created_at: string;
+  /** Added with Skip, so absent on a database still on an older schema. */
+  completed_via?: string | null;
   /** Added after the fact, so absent on a database still on an older schema. */
   kind?: string | null;
   weight?: number | string | null;
@@ -310,6 +313,7 @@ function rowToTask(r: TaskRow): Task {
     priority: r.priority === 'high' ? 'high' : 'normal',
     completed: Boolean(r.completed),
     completedAt: r.completed_at,
+    completedVia: cleanCompletedVia(r.completed_via, Boolean(r.completed)),
     createdAt: r.created_at,
     kind: cleanKind(r.kind),
     weight: cleanWeight(r.weight),
@@ -414,6 +418,9 @@ function taskExtras(input: Partial<Task>): Record<string, unknown> {
   if (pages !== null) extras.pages = pages;
   return extras;
 }
+
+const SKIP_UNAVAILABLE =
+  'Skip could not be saved. Run the latest supabase/schema.sql once and try again.';
 
 const TASK_ORDER_UNAVAILABLE =
   'Task order could not be saved. Run the latest supabase/schema.sql once and try again.';
@@ -985,8 +992,13 @@ export class SupabaseAdapter implements DataProvider {
     if (updates.completed !== undefined) {
       patch.completed = updates.completed;
       patch.completed_at = updates.completed ? new Date().toISOString() : null;
+      // Reopened, it is no longer finished any way at all.
+      if (!updates.completed) patch.completed_via = null;
     }
     if (updates.completedAt !== undefined) patch.completed_at = updates.completedAt;
+    if (updates.completedVia !== undefined) {
+      patch.completed_via = cleanCompletedVia(updates.completedVia, updates.completed ?? true);
+    }
     if (updates.kind !== undefined) patch.kind = cleanKind(updates.kind);
     if (updates.weight !== undefined) patch.weight = cleanWeight(updates.weight);
     if (updates.pages !== undefined) patch.pages = cleanPages(updates.pages);
@@ -999,6 +1011,16 @@ export class SupabaseAdapter implements DataProvider {
     // leave, and the move is written without it.
     let { data, error } = await write(patch.course_id ? { ...patch, sort_order: null } : patch);
     if (error && patch.course_id && isMissingOrderColumn(error)) ({ data, error } = await write(patch));
+    // A database without completed_via: a tick, a reopen or a session's
+    // "mark done" is still the tick it always was, so it goes through without
+    // the column. A skip written as a tick would be a lie in every figure the
+    // app reads off ticks, so that one refuses instead.
+    if (error && 'completed_via' in patch && isMissingColumn(error)) {
+      if (patch.completed_via === 'skip') throw new Error(SKIP_UNAVAILABLE);
+      const { completed_via: _unused, ...rest } = patch;
+      void _unused;
+      ({ data, error } = await write(rest));
+    }
     if (error) throw error;
     return rowToTask(data as TaskRow);
   }

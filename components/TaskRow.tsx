@@ -23,7 +23,7 @@ import HandCheck from './notebook/HandCheck';
 
 /** The menu's own box, used to place it against the trigger. */
 const MENU_W = 176;
-const MENU_H = 224;
+const MENU_H = 264;
 /** How long a tick is on screen before it is saved. */
 const TICK_MS = 420;
 
@@ -51,6 +51,12 @@ interface Props {
   onReschedule?: (task: Task) => void;
   /** Take the date off the task and leave it open ended. */
   onOpenEnded?: (task: Task) => void;
+  /**
+   * Take the task off the list without it being done. It leaves the list the
+   * way a finished one does, and nothing that reads finished work as work
+   * ever counts it. See skipTaskOptimistic.
+   */
+  onSkip?: (task: Task) => void;
   onDelete?: (task: Task) => void;
   /** Hide the course column on a screen that is already one course. */
   hideCourse?: boolean;
@@ -81,6 +87,7 @@ export default function TaskRow({
   onSelect,
   onReschedule,
   onOpenEnded,
+  onSkip,
   onDelete,
   hideCourse = false,
   hideDue = false,
@@ -132,6 +139,7 @@ export default function TaskRow({
     pendingTick.current = { timer: window.setTimeout(run, TICK_MS), run };
   }
   const done = task.completed || ticking;
+  const skipped = task.completed && task.completedVia === 'skip';
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -218,17 +226,28 @@ export default function TaskRow({
           }
           tick();
         }}
-        aria-label={task.completed ? 'Mark incomplete' : 'Complete'}
+        aria-label={skipped ? 'Skipped. Put it back on the list' : task.completed ? 'Mark incomplete' : 'Complete'}
         className="grid h-10 w-10 place-items-center bg-transparent"
       >
+        {/* Skipped is drawn apart from done: the box left unfilled and the
+            check struck through, so a glance down the list tells the work
+            that was done from the work that was let go. */}
         <span
           className={`grid h-[18px] w-[18px] place-items-center ${done ? 'rounded-md' : 'scribble-box'} ${
             justDone ? 'check-press' : ''
           }`}
-          style={done ? { background: color, border: `1.4px solid ${color}` } : undefined}
+          style={
+            skipped
+              ? { border: '1.4px solid var(--line-strong)' }
+              : done
+                ? { background: color, border: `1.4px solid ${color}` }
+                : undefined
+          }
         >
-          {done && (
-            <HandCheck size={12} color="var(--paper)" strokeWidth={1.8} drawn={justDone} />
+          {skipped ? (
+            <HandCheck size={12} color="var(--muted)" strokeWidth={1.6} struck />
+          ) : (
+            done && <HandCheck size={12} color="var(--paper)" strokeWidth={1.8} drawn={justDone} />
           )}
         </span>
       </button>
@@ -321,7 +340,9 @@ export default function TaskRow({
         }`}
       >
         {task.completed
-          ? 'done'
+          ? skipped
+            ? 'skipped'
+            : 'done'
           : due
             ? due.category === 'overdue'
               ? `${due.formattedDate} · ${-due.days}d`
@@ -441,6 +462,15 @@ export default function TaskRow({
                 onClick={() => {
                   setMenuOpen(false);
                   onOpenEnded(task);
+                }}
+              />
+            )}
+            {onSkip && !task.completed && (
+              <MenuItem
+                label="Skip"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onSkip(task);
                 }}
               />
             )}

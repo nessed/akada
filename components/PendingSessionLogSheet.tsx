@@ -141,6 +141,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
           await updateTaskOptimistic(task.id, {
             completed: true,
             completedAt: new Date().toISOString(),
+            completedVia: 'session',
           });
         } catch (error) {
           console.error('Failed to complete the task:', error);
