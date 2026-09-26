@@ -1024,7 +1024,8 @@ or started again.
 
 A written question has no options. It carries its marks in italic after the
 prompt and takes its answer on ruled lines (a borderless textarea over the
-page's own rule), not in a box. Handed in, the answer stays on its lines and
+page's own rule), not in a box. The lines grow with the answer, a line at a
+time, so a long answer never scrolls inside itself. Handed in, the answer stays on its lines and
 waits: its stroke is an empty dashed one and the margin says *written: to
 mark* and to tell the assistant. When the assistant has marked it the mark
 is written by hand under the answer, its feedback follows in the serif, and

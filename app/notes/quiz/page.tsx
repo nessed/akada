@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
@@ -215,13 +215,10 @@ function Sitting({ quiz }: { quiz: Quiz }) {
                 {marked ? (
                   <div className="quiz-answer-read">{text || <em>left blank</em>}</div>
                 ) : (
-                  <textarea
-                    className="quiz-answer"
-                    aria-label={`Answer to question ${i + 1}`}
-                    placeholder="Write your answer"
-                    rows={4}
+                  <AnswerLines
+                    label={`Answer to question ${i + 1}`}
                     value={text}
-                    onChange={(event) => { const value = event.target.value; setWritten((all) => ({ ...all, [String(i)]: value })); }}
+                    onChange={(value) => setWritten((all) => ({ ...all, [String(i)]: value }))}
                   />
                 )}
                 {marked && (
@@ -314,5 +311,39 @@ function Sitting({ quiz }: { quiz: Quiz }) {
         )}
       </footer>
     </article>
+  );
+}
+
+/**
+ * A written answer on ruled lines that grows a line at a time as it fills, so
+ * a long answer stays on the page instead of scrolling inside a box.
+ */
+function AnswerLines({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const grow = () => {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    };
+    grow();
+    // A narrower page wraps the same words onto more lines.
+    const observer = new ResizeObserver(grow);
+    observer.observe(el.parentElement ?? el);
+    return () => observer.disconnect();
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      className="quiz-answer"
+      aria-label={label}
+      placeholder="Write your answer"
+      rows={4}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
   );
 }
