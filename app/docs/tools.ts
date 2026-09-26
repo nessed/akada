@@ -10,6 +10,7 @@ export const GROUPS: { id: string; title: string; tools: Tool[] }[] = [
     id: 'courses',
     title: 'Courses and tasks',
     tools: [
+      { name: 'get_briefing', access: 'Reads', does: 'Where you stand today in one read: what is up next, what is due, how ready each course is for what is coming, your week against your goals, and the loose ends worth sorting first.' },
       { name: 'find_course', access: 'Reads', does: 'Finds one of your courses in the current term by its code or name.' },
       { name: 'get_overview', access: 'Reads', does: 'Your courses in dashboard order, how many tasks are open in each, and your recent study sessions.' },
       { name: 'get_tasks', access: 'Reads', does: 'The term’s tasks, narrowed to a course, a date range, a priority or a kind if asked, and sorted by due date, priority, newest or your own order.' },
@@ -88,4 +89,18 @@ export const GROUPS: { id: string; title: string; tools: Tool[] }[] = [
       { name: 'reopen_weak_point', access: 'Changes', does: 'Puts a fixed weak point back on the list.' },
     ],
   },
+];
+
+export type Prompt = { name: string; title: string; does: string; writes: boolean };
+
+// Mirrors the prompts registered in app/api/mcp/prompts.ts, which offer the
+// ones that write only on a connection allowed to write. prompts.test.ts
+// fails if this and the server disagree.
+export const PROMPTS: Prompt[] = [
+  { name: 'plan_week', title: 'Plan my week', does: 'Where you stand this week, and a plan by day sized to how long you actually study.', writes: false },
+  { name: 'study_now', title: 'What should I study now?', does: 'One thing to do with the time you have, and why it beats the rest.', writes: false },
+  { name: 'import_outline', title: 'Put a course outline into Akada', does: 'Waits for you to attach the outline, then proposes the grading scheme and puts every dated exam, reading and deadline on the list.', writes: true },
+  { name: 'recall_round', title: 'Quiz me on what is due', does: 'A recall round on what is due, one question at a time, with each answer recorded back.', writes: true },
+  { name: 'exam_prep', title: 'Get ready for an exam', does: 'What is still shaky before the next exam in a course, a spaced plan to it, and a retest of the weakest point first.', writes: true },
+  { name: 'log_sitting', title: 'Log a study sitting', does: 'Tell Claude what you just did; it goes in exactly as you said it, with one thing kept for recall if you want.', writes: true },
 ];

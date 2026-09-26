@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
+import ClockSync from '@/components/ClockSync';
 import NoticeProvider from '@/components/Notice';
 import SWRRoot from '@/components/SWRRoot';
 import TimerDocumentTitle from '@/components/TimerDocumentTitle';
@@ -158,6 +159,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="font-sans bg-bg text-ink antialiased">
         <PreferencesBootstrap />
+        <ClockSync />
         <SWRRoot>
           <TimerProvider>
             <TimerDocumentTitle />

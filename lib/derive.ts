@@ -299,10 +299,13 @@ export function pickUpNext(
   todayTasks: Task[],
   sessions: Session[] = [],
   openTasks: Task[] = [],
+  // The reader's date. This device's by default; the connector passes the
+  // student's, since its server's clock is not anybody's day.
+  today: string = isoDate(),
 ): Task | null {
   return (
-    pickFromToday(sort, overdueTasks, todayTasks, sessions, openTasks) ??
-    pickBeyondToday(openTasks, sessions)
+    pickFromToday(sort, overdueTasks, todayTasks, sessions, openTasks, today) ??
+    pickBeyondToday(openTasks, sessions, today)
   );
 }
 
@@ -322,8 +325,7 @@ const AHEAD_DAYS = 7;
  * uses. Nothing further than that: an undated task of normal priority is a
  * note to self, not a claim on the evening.
  */
-function pickBeyondToday(openTasks: Task[], sessions: Session[]): Task | null {
-  const today = isoDate();
+function pickBeyondToday(openTasks: Task[], sessions: Session[], today: string): Task | null {
   const open = openTasks.filter((t) => !t.completed);
 
   const soon = open
@@ -363,6 +365,7 @@ function pickFromToday(
   todayTasks: Task[],
   sessions: Session[],
   openTasks: Task[],
+  today: string,
 ): Task | null {
   const oldestDueFirst = (a: Task, b: Task) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '');
 
@@ -371,7 +374,7 @@ function pickFromToday(
   }
 
   if (sort === 'in-progress') {
-    const resumed = pickResumed(sessions, overdueTasks, todayTasks, openTasks);
+    const resumed = pickResumed(sessions, overdueTasks, todayTasks, openTasks, today);
     if (resumed) return resumed;
     // Nothing worked on lately, so there is no thread to pick back up and the
     // question falls back to which course has been left alone the longest.
@@ -409,8 +412,8 @@ function pickResumed(
   overdueTasks: Task[],
   todayTasks: Task[],
   openTasks: Task[],
+  today: string,
 ): Task | null {
-  const today = isoDate();
   const recent = sessions
     .filter((s) => s.date <= today && daysBetween(s.date, today) <= RESUME_WINDOW_DAYS)
     .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));

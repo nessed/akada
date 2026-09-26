@@ -25,7 +25,7 @@ export function upNextFrom(
   const open = tasks.filter((t) => !t.completed);
   const dueToday = open.filter((t) => t.dueDate === today);
   const overdue = open.filter((t) => t.dueDate && t.dueDate < today);
-  return pickUpNext(sort, overdue, dueToday, sessions, open);
+  return pickUpNext(sort, overdue, dueToday, sessions, open, today);
 }
 
 /** Up next from anywhere, read off the logged record rather than the clock. */

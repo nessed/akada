@@ -120,7 +120,86 @@ In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `
 
 ---
 
+## How the server introduces itself
+
+Three things reach Claude before it calls a single tool, and they are what
+turn forty tools into something that behaves like one planner.
+
+**Instructions.** The `initialize` reply carries a short playbook
+(`app/api/mcp/instructions.ts`): start with `get_briefing`, where ids come
+from, the loops and the tool that closes each (outline in, work finished,
+sitting done, recall, written quiz, marks back), how dates work, and that
+deletes are permanent. Anything that belongs to one tool stays in that tool's
+description; this is only the map.
+
+**`get_briefing` first.** It is registered first so it is the first tool a
+client lists. See below.
+
+**Prompts.** `app/api/mcp/prompts.ts` registers six, which Claude shows under
+Akada in its **+** menu and Claude Code as slash commands:
+
+| Prompt | Arguments | Needs write scope |
+| --- | --- | --- |
+| `plan_week` | none | no |
+| `study_now` | `minutes` (optional) | no |
+| `import_outline` | `course` | yes |
+| `recall_round` | `course` (optional) | yes |
+| `exam_prep` | `course` | yes |
+| `log_sitting` | none | yes |
+
+A `course` argument completes from the student's own course codes in the
+active semester. The ones that write are not offered on a read-only grant,
+where the tools they name are switched off. `/docs` lists them from
+`PROMPTS` in `app/docs/tools.ts`, and `prompts.test.ts` fails if the two
+disagree.
+
+## The student's day
+
+The server runs in UTC, and the student does not. The app writes two columns
+onto `user_settings` from the student's own device, `time_zone` (the IANA
+zone the browser reports) and `day_ending_hour` (Settings, "when your day
+ends"), whenever either changes (`components/ClockSync.tsx`). The connector
+turns them back into a date with `lib/student-day.ts`, so a sitting logged at
+1am, "this week" on a Monday morning, a recall answer and the briefing all
+land on the day the app would put them on.
+
+In order of precedence: a `utc_offset_minutes` passed to a recall tool (the
+prompts the app copies still carry one), then the stored clock, then a `date`
+the model passes, then UTC. A project that has not run the
+`20260927010000_add_student_clock` migration (or the latest `schema.sql`)
+simply has no clock and keeps dating in UTC, as it always did.
+
 ## Available MCP Tools
+
+### 0. `get_briefing`
+- **Title**: Brief me on the student’s day in Akada
+- **Annotations**: `readOnlyHint: true`
+- **Parameters**: none.
+- **What it is**: one read of everything Today knows, on the student's own
+  day, joined in the one place the app never joins it (`lib/briefing.ts` does
+  the reading; `app/api/mcp/briefing-tool.ts` loads and formats it):
+  - `up_next`: the task Today's Up next would show (`pickUpNext`, the
+    `in-progress` rule) and `why` (in progress, overdue, due today, due soon,
+    high priority with no date).
+  - `overdue` and `due_this_week`.
+  - `coming`: exams and weighted work (`countdowns`), each with its course's
+    recall (kept, settled, due), its open weak points, and whether the course
+    has an accepted grading scheme.
+  - `week`: hours against each course's goal, how far short, and days since
+    each course was last studied; the day's hours and daily goal.
+  - `recall`, `reading_backlog`, `weak_points`, `quizzes_awaiting_marking`.
+  - `loose_ends`: grading proposals waiting to be accepted, courses without a
+    scheme, courses with nothing on the list, and whether any exam has been
+    entered at all.
+  - `about_the_student`: reading pace, sittings, study days and median sitting
+    length over 28 days, the last four weeks' hours, and practice paper
+    scores per course. So advice is sized to how the student actually works.
+  - `suggestions`: up to eight loose ends, most costly first, each naming the
+    tool that deals with it.
+  - `day_known_from` is `device` when the stored clock was used, `utc` when
+    there is none yet (with a `day_note` saying so).
+- A project without the recall, weak points or quizzes tables still gets a
+  briefing; those parts read as unavailable rather than failing the call.
 
 ### 1. `find_course`
 - **Title**: Find an Akada course

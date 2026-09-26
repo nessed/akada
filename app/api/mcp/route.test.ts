@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isoDate, startOfWeek } from '@/lib/utils';
+import { weekOf } from '@/lib/student-day';
 import {
   createTasks,
   deleteStudySession,
@@ -1096,4 +1097,50 @@ test('get_reading_backlog does not call the default rate the student’s pace', 
   const body = output.structuredContent!;
   assert.equal((body.pace as Row).measured, false);
   assert.match(String(body.message), /default 20 pages an hour/);
+});
+
+/* ── The student's own day, off the clock the app stored ─────────────── */
+
+const WITH_CLOCK: Record<string, string[]> = {
+  ...WITH_SCORES,
+  user_settings: [...SCHEMA.user_settings, 'time_zone', 'day_ending_hour'],
+};
+
+const dayIn = (timeZone: string) => new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
+
+// UTC+14 and UTC-11 are 25 hours apart, so at any moment at least one of
+// them is on a different date from UTC: a tool still dating in UTC fails
+// one of these whenever it runs.
+const FAR_ZONES = ['Pacific/Kiritimati', 'Pacific/Pago_Pago'];
+
+test('log_study_session dates a sitting on the student\'s own day when none is given', async () => {
+  for (const zone of FAR_ZONES) {
+    const tables = fixtures();
+    tables.user_settings[0].time_zone = zone;
+    const { date: _given, ...undated } = sitting;
+    void _given;
+    const output = (await logStudySession(TOKEN, undated, fakeSupabase(tables, WITH_CLOCK))) as LogOutput;
+    assert.ok(!output.isError, `${zone}: ${JSON.stringify(output)}`);
+    assert.equal(tables.sessions.at(-1)!.date, dayIn(zone), zone);
+  }
+});
+
+test('get_weekly_stats reads the week the student is in, not the server\'s', async () => {
+  for (const zone of FAR_ZONES) {
+    const tables = fixtures();
+    tables.user_settings[0].time_zone = zone;
+    const output = (await getWeeklyStats(TOKEN, { week_offset: 0 }, fakeSupabase(tables, WITH_CLOCK))) as {
+      structuredContent?: { week: { from: string; to: string } };
+    };
+    assert.deepEqual(output.structuredContent?.week, { ...weekOf(dayIn(zone)), offset: 0 }, zone);
+  }
+});
+
+test('a project without the clock columns still dates in UTC, as before', async () => {
+  const tables = fixtures();
+  const { date: _given, ...undated } = sitting;
+  void _given;
+  const output = (await logStudySession(TOKEN, undated, fakeSupabase(tables, WITH_SCORES))) as LogOutput;
+  assert.ok(!output.isError, JSON.stringify(output));
+  assert.equal(tables.sessions.at(-1)!.date, new Date().toISOString().slice(0, 10));
 });

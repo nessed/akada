@@ -33,16 +33,20 @@ import {
   scheduleRecall,
   type RecallState,
 } from '@/lib/recall';
-import { daysBetween, isoDate, startOfWeek, endOfWeek } from '@/lib/utils';
+import { daysBetween } from '@/lib/utils';
+import { shiftDate, studentDay, weekOf } from '@/lib/student-day';
 import { readCredit } from '@/lib/progression/credit';
 import { readRuns } from '@/lib/progression/runs';
 import { compareCourseOrder } from '@/lib/data/course-order';
 import { compareTaskOrder } from '@/lib/data/task-order';
-import { checkResource, MCP_SCOPES, mcpSupabase, mcpUrl, siteUrl } from './_shared';
-import { limitToGrantedScopes } from './scopes';
+import { checkResource, MCP_SCOPES, mcpSupabase, mcpUrl, readStudentSettings, siteUrl } from './_shared';
+import { limitToGrantedScopes, WRITE_SCOPE } from './scopes';
 import { registerNoteTools } from './notes-tools';
 import { registerQuizTools } from './quiz-tools';
 import { registerWeakPointTools } from './weak-point-tools';
+import { registerBriefingTool } from './briefing-tool';
+import { SERVER_INSTRUCTIONS } from './instructions';
+import { registerPrompts } from './prompts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -167,17 +171,14 @@ function toolCrashed(tool: string, cause: unknown) {
 
 type McpSupabaseClient = ReturnType<typeof mcpSupabase>;
 
-// `supabase` is injectable (defaulting to a real client) so a test can drive
-// this against an in-memory double instead of a live project.
 async function activeSemesterId(token: AuthenticatedToken, supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken)) {
-  const { data, error } = await supabase
-    .from('user_settings')
-    .select('active_semester_id')
-    .eq('user_id', token.userId)
-    .maybeSingle();
-  // Carry the cause up rather than flattening it: the outer catch logs it.
-  if (error) throw new Error(`Akada could not load your active semester. ${describe(error)}`);
-  return data?.active_semester_id as string | null;
+  return (await readStudentSettings(token, supabase)).semesterId;
+}
+
+/** The student's day, off the clock the app stored; UTC where it has not. */
+async function studentToday(token: AuthenticatedToken, supabase: McpSupabaseClient) {
+  const settings = await readStudentSettings(token, supabase);
+  return { settings, day: studentDay({ timeZone: settings.timeZone, dayEndingHour: settings.dayEndingHour }) };
 }
 
 /**
@@ -442,14 +443,13 @@ export async function getWeeklyStats(
   supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
 ) {
   try {
-    const semesterId = await activeSemesterId(token, supabase);
+    const { settings, day } = await studentToday(token, supabase);
+    const semesterId = settings.semesterId;
     if (!semesterId) return result({ courses: [], message: 'No active semester is set in Akada.' });
-    // Monday-first, the same week the app's own weekBounds draws, so a
-    // number read here and a number read on the Stats screen agree.
-    const anchor = new Date();
-    anchor.setDate(anchor.getDate() + week_offset * 7);
-    const from = isoDate(startOfWeek(anchor));
-    const to = isoDate(endOfWeek(anchor));
+    // Monday-first, the same week the app's own weekBounds draws, and on the
+    // student's own day, so a number read here at 1am on a Monday and a
+    // number read on the Stats screen agree.
+    const { from, to } = weekOf(day.today, week_offset);
 
     const { data: courses, error: coursesError } = await supabase
       .from('courses')
@@ -464,8 +464,7 @@ export async function getWeeklyStats(
 
     // The run needs weeks before this one, so sessions are read over a
     // wider window than the week being reported and filtered twice.
-    const runFloor = new Date();
-    runFloor.setDate(runFloor.getDate() - 120);
+    const runFloor = shiftDate(day.today, -120);
     const [{ data: sessions, error: sessionsError }, { data: tasks, error: tasksError }] = await Promise.all([
       supabase
         .from('sessions')
@@ -475,7 +474,7 @@ export async function getWeeklyStats(
         .select('*')
         .eq('user_id', token.userId)
         .eq('semester_id', semesterId)
-        .gte('date', isoDate(runFloor)),
+        .gte('date', runFloor),
       // Same reasoning as sessions above: `pages` (like `description` and
       // `subtasks` in get_tasks) is an additive migration column, and a
       // named list breaks the whole query with 42703 outright on a project
@@ -541,12 +540,15 @@ export async function getWeeklyStats(
           pages: task.pages ?? null,
         })),
       ),
-      isoDate(),
+      day.today,
     );
 
     const closed = (tasks ?? []).filter((task) => {
-      const day = typeof task.completed_at === 'string' ? task.completed_at.slice(0, 10) : '';
-      if (day < from || day > to) return false;
+      // The day the tick fell on for the student, not in UTC: a reading
+      // finished at 1am on a Monday belongs to the week the app puts it in.
+      const at = typeof task.completed_at === 'string' ? new Date(task.completed_at) : null;
+      const on = at && !Number.isNaN(at.getTime()) ? day.dayOf(at) : '';
+      if (on < from || on > to) return false;
       return !course_id || task.course_id === course_id;
     });
 
@@ -735,7 +737,9 @@ const RecallDay = {
 };
 
 const RECALL_DAY_WORDS =
-  '`utc_offset_minutes` is the student\'s offset from UTC (300 for UTC+5); a prompt copied from Akada gives it, and when it is given the student\'s day is worked out from it. Otherwise pass `date`, the student\'s own date, YYYY-MM-DD. Akada\'s server keeps UTC, which is a day out for part of every day away from Greenwich, and an answer dated a day early comes straight back as due.';
+  'Akada already knows the student\'s day once they have opened the app since it started recording their time zone, so both of these are only overrides. `utc_offset_minutes` is the student\'s offset from UTC (300 for UTC+5); a prompt copied from Akada gives it, and when it is given the student\'s day is worked out from it. `date` is the student\'s own date, YYYY-MM-DD, used only when Akada has no clock for them. Without either, an answer is dated on UTC, which is a day out for part of every day away from Greenwich, and an answer dated a day early comes straight back as due.';
+
+type StoredClock = { timeZone: string; dayEndingHour: number };
 
 /**
  * The student's day, and the day any stored instant fell on for them.
@@ -745,19 +749,19 @@ const RECALL_DAY_WORDS =
  * morning, where a slip is then due again the moment Today opens; and on the
  * day after for someone in the Americas answering in the evening. So the
  * offset decides when there is one: it comes from the student's own device,
- * by way of the copied prompt, where a `date` comes from the model, which may
- * be carrying the date a conversation started on past midnight. Then `date`,
- * then UTC. A date more than a day from the server's cannot be anybody's
- * today, so it is refused rather than written into a history where it would
- * sit ahead of every real answer.
+ * by way of the copied prompt. Then the clock the app stored for them, which
+ * is the same device's answer written ahead of time. Then `date`, which comes
+ * from the model and may be carrying the date a conversation started on past
+ * midnight. Then UTC. A date more than a day from the server's cannot be
+ * anybody's today, so it is refused rather than written into a history where
+ * it would sit ahead of every real answer.
  */
 function recallDays(
   date: string | undefined,
   offsetMinutes: number | undefined,
+  clock: StoredClock,
 ): { ok: true; today: string; dayOf: (instant: Date) => string } | { ok: false; error: ReturnType<typeof toolError> } {
-  const offset = offsetMinutes ?? 0;
-  const dayOf = (instant: Date) => new Date(instant.getTime() + offset * 60_000).toISOString().slice(0, 10);
-  const today = offsetMinutes !== undefined ? dayOf(new Date()) : (date ?? dayOf(new Date()));
+  const { today, dayOf } = studentDay({ ...clock, offsetMinutes, date });
   if (Math.abs(daysBetween(new Date().toISOString().slice(0, 10), today)) > 1) {
     return {
       ok: false,
@@ -784,10 +788,10 @@ async function loadRecall(
   tool: string,
   token: AuthenticatedToken,
   supabase: McpSupabaseClient,
+  semesterId: string | null,
   today: string,
   dayOf?: (instant: Date) => string,
 ) {
-  const semesterId = await activeSemesterId(token, supabase);
   if (!semesterId) return { ok: false, error: toolError('No active semester is set in Akada.') } as const;
   const [coursesRead, tasksRead, recallRead] = await Promise.all([
     supabase.from('courses').select('*').eq('user_id', token.userId).eq('semester_id', semesterId),
@@ -895,9 +899,10 @@ export async function getRecallTool(
   supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
 ) {
   try {
-    const days = recallDays(date, utc_offset_minutes);
+    const settings = await readStudentSettings(token, supabase);
+    const days = recallDays(date, utc_offset_minutes, settings);
     if (!days.ok) return days.error;
-    const loaded = await loadRecall('get_recall', token, supabase, days.today, days.dayOf);
+    const loaded = await loadRecall('get_recall', token, supabase, settings.semesterId, days.today, days.dayOf);
     if (!loaded.ok) return loaded.error;
     if (course_id && !loaded.courses.has(course_id)) {
       return toolError('That course is not in your active Akada semester. Find the course again with find_course and use the id it returns.');
@@ -959,10 +964,11 @@ export async function recordRecallTool(
   supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
 ) {
   try {
-    const days = recallDays(date, utc_offset_minutes);
+    const settings = await readStudentSettings(token, supabase);
+    const days = recallDays(date, utc_offset_minutes, settings);
     if (!days.ok) return days.error;
     const today = days.today;
-    const loaded = await loadRecall('record_recall', token, supabase, today, days.dayOf);
+    const loaded = await loadRecall('record_recall', token, supabase, settings.semesterId, today, days.dayOf);
     if (!loaded.ok) return loaded.error;
     if (!loaded.available) return toolError(RECALL_NOT_STORED);
 
@@ -1037,7 +1043,7 @@ export async function recordRecallTool(
 
     return result({
       recorded: rows.map(({ state, verdict, history }) => {
-        const examOn = state.examDays != null ? shiftDays(today, state.examDays) : null;
+        const examOn = state.examDays != null ? shiftDate(today, state.examDays) : null;
         return {
           key: state.key,
           prompt: state.prompt,
@@ -1050,12 +1056,6 @@ export async function recordRecallTool(
   } catch (cause) {
     return toolCrashed('record_recall', cause);
   }
-}
-
-function shiftDays(iso: string, days: number): string {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return isoDate(d);
 }
 
 const KeepForRecallInput = z.object({
@@ -1077,7 +1077,8 @@ export async function keepForRecallTool(
     if ((items?.length ?? 0) === 0 && !task_id) {
       return toolError('Nothing to keep. Pass `items`, or a `task_id` for a finished task or its ticked steps.');
     }
-    const loaded = await loadRecall('keep_for_recall', token, supabase, isoDate(new Date()));
+    const { settings, day } = await studentToday(token, supabase);
+    const loaded = await loadRecall('keep_for_recall', token, supabase, settings.semesterId, day.today, day.dayOf);
     if (!loaded.ok) return loaded.error;
     if (!loaded.available) return toolError(RECALL_NOT_STORED);
     const course = loaded.courses.get(course_id);
@@ -1202,7 +1203,7 @@ const LogStudySessionInput = z.object({
 });
 
 const LOG_STUDY_SESSION_DESCRIPTION =
-  'Record time the student actually spent studying one active-semester course, optionally against a specific task, with a note about what the sitting covered. Only log time the student reports; never estimate it. `date` defaults to today and takes a past date for a sitting being written up after the fact. `duration_minutes` is focus time and must never include breaks; put rest in `break_minutes`, which is reported separately and does not count toward any goal. When the sitting was a practice paper the student marked, pass what it scored as `score` and what it was out of as `score_out_of`, both or neither (4.5 and 8 for 4.5/8). Only a score the student gives you: never estimate one, and never turn a percentage into a score out of something the paper was not marked out of. A score that does not add up is left off and said so; the sitting is logged either way.';
+  'Record time the student actually spent studying one active-semester course, optionally against a specific task, with a note about what the sitting covered. Only log time the student reports; never estimate it. `date` defaults to the student’s own today (Akada keeps their time zone and when their day ends, so a sitting logged past midnight lands where the app would put it) and takes a past date for a sitting being written up after the fact. `duration_minutes` is focus time and must never include breaks; put rest in `break_minutes`, which is reported separately and does not count toward any goal. When the sitting was a practice paper the student marked, pass what it scored as `score` and what it was out of as `score_out_of`, both or neither (4.5 and 8 for 4.5/8). Only a score the student gives you: never estimate one, and never turn a percentage into a score out of something the paper was not marked out of. A score that does not add up is left off and said so; the sitting is logged either way.';
 
 // Split out like createTasks, so a test can drive it against a double: this
 // is the one write whose whole job is not to lose the hours, whatever comes
@@ -1215,7 +1216,8 @@ export async function logStudySession(
   try {
     const practice = cleanScore(score, score_out_of);
     const scoreRefused = (score !== undefined || score_out_of !== undefined) && !practice;
-    const semesterId = await activeSemesterId(token, supabase);
+    const { settings, day } = await studentToday(token, supabase);
+    const semesterId = settings.semesterId;
     if (!semesterId) return toolError('No active semester is set in Akada.');
     const { data: course, error: courseError } = await supabase
       .from('courses')
@@ -1232,7 +1234,7 @@ export async function logStudySession(
     // sessions.task_id is only `on delete set null` and nothing ties the
     // pair together. Checked here rather than trusted.
     if (task_id) {
-      const owned = await loadOwnTasks('log_study_session', token, [task_id]);
+      const owned = await loadOwnTasks('log_study_session', token, [task_id], supabase);
       if (!owned.ok) return owned.error;
       const task = owned.tasks[0];
       if (String(task.course_id) !== course.id) {
@@ -1244,9 +1246,10 @@ export async function logStudySession(
       user_id: token.userId,
       course_id: course.id,
       task_id: task_id ?? null,
-      // The server clock is UTC, which is a day boundary the student
-      // does not live in. Their own date wins whenever they give one.
-      date: date ?? isoDate(new Date()),
+      // The student's day off the clock the app stored, not the server's
+      // UTC one, so a sitting logged at 1am lands where the app would put
+      // it. Their own date still wins whenever they give one.
+      date: date ?? day.today,
       duration_seconds: duration_minutes * 60,
       note: note ?? '',
       // Left out entirely when there were none, so the insert still
@@ -2050,9 +2053,10 @@ export async function getReadingBacklog(
   supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
 ) {
   try {
-    const semesterId = await activeSemesterId(token, supabase);
+    const { settings, day } = await studentToday(token, supabase);
+    const semesterId = settings.semesterId;
     if (!semesterId) return result({ readings: [], message: 'No active semester is set in Akada.' });
-    const today = isoDate();
+    const today = day.today;
     if (by_date && by_date < today) return toolError(`${by_date} has already passed. Give a date from today on.`);
 
     const [{ data: courses, error: coursesError }, { data: taskRows, error: tasksError }, { data: sessionRows, error: sessionsError }] = await Promise.all([
@@ -2155,10 +2159,14 @@ export async function getReadingBacklog(
 }
 
 export function createServer(token: AuthenticatedToken) {
+  const scopes = token.scope.split(/\s+/).filter(Boolean);
   const server = limitToGrantedScopes(
-    new McpServer({ name: 'Akada', version: '1.0.0' }),
-    token.scope.split(/\s+/).filter(Boolean),
+    new McpServer({ name: 'Akada', version: '1.1.0' }, { instructions: SERVER_INSTRUCTIONS }),
+    scopes,
   );
+
+  // First, so it is the first thing a client lists.
+  registerBriefingTool(server, token);
 
   server.registerTool(
     'find_course',
@@ -2542,24 +2550,27 @@ export function createServer(token: AuthenticatedToken) {
     'get_focus_pattern',
     {
       title: 'Read the shape of Akada study sittings',
-      description: 'Read how the student actually studies rather than how much: how long their blocks run, how often they finish the block they set, how long their breaks run against how long they meant them to, how much focus they get before the first break, and when in the day the work happens. Use this for questions about habits, rhythm, breaks and drift. For hours against goals use get_weekly_stats instead. `utc_offset_minutes` is the student’s offset from UTC (300 for UTC+5); without it the hourly breakdown is in UTC and says so. `recent_sittings` carries what each block actually covered, written by the student on the break straight after it, so questions about rhythm and questions about content can be answered together. Only sittings timed in Akada with continuous mode have a shape to read; time logged after the fact contributes its totals but not its chain. This tool never changes Akada data.',
+      description: 'Read how the student actually studies rather than how much: how long their blocks run, how often they finish the block they set, how long their breaks run against how long they meant them to, how much focus they get before the first break, and when in the day the work happens. Use this for questions about habits, rhythm, breaks and drift. For hours against goals use get_weekly_stats instead. The hourly breakdown is in the student’s own time zone once they have opened the app since Akada started keeping it; `utc_offset_minutes` (300 for UTC+5) overrides that, and with neither the breakdown is in UTC and `by_hour_offset_minutes` says so. `recent_sittings` carries what each block actually covered, written by the student on the break straight after it, so questions about rhythm and questions about content can be answered together. Only sittings timed in Akada with continuous mode have a shape to read; time logged after the fact contributes its totals but not its chain. This tool never changes Akada data.',
       inputSchema: z.object({
         days: z.number().int().min(1).max(180).default(28),
         course_id: z.string().uuid().optional(),
-        utc_offset_minutes: z.number().int().min(-840).max(840).default(0),
+        utc_offset_minutes: z.number().int().min(-840).max(840).optional(),
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ days, course_id, utc_offset_minutes }) => {
+    async ({ days, course_id, utc_offset_minutes: offsetOverride }) => {
       try {
-        const semesterId = await activeSemesterId(token);
-        if (!semesterId) return toolError('No active semester is set in Akada.');
         const supabase = mcpSupabase(token.supabaseAccessToken);
+        const { settings, day } = await studentToday(token, supabase);
+        const semesterId = settings.semesterId;
+        if (!semesterId) return toolError('No active semester is set in Akada.');
+        // Hours of the student's day, off their stored zone unless told
+        // otherwise. Only the zone: the late night cutoff moves which date a
+        // sitting counts on, not what the clock on the wall said.
+        const utc_offset_minutes = offsetOverride ?? day.zoneOffsetMinutes ?? 0;
 
-        const floor = new Date();
-        floor.setDate(floor.getDate() - (days - 1));
-        const from = isoDate(floor);
-        const to = isoDate(new Date());
+        const to = day.today;
+        const from = shiftDate(to, -(days - 1));
         const window = { from, to, days };
 
         let sessionQuery = supabase
@@ -3184,6 +3195,7 @@ export function createServer(token: AuthenticatedToken) {
   registerNoteTools(server, token);
   registerQuizTools(server, token);
   registerWeakPointTools(server, token);
+  registerPrompts(server, token, scopes.includes(WRITE_SCOPE));
 
   return server;
 }
