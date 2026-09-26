@@ -137,9 +137,10 @@ link to send a friend before they sign up. `/claude` is the same for the
 Claude side, and the one to send a friend who already uses Claude.
 
 The landing page is written for a LUMS student arriving from a group chat on
-a phone. Its pictures of Today are real screenshots, taken by
-`scripts/landing-shots.mjs` off the app running on a made-up LUMS term; retake
-them when Today changes rather than drawing them by hand.
+a phone, and drawn in the app's own hand: ruled paper, loose taped sheets,
+notes in the margin. Its Today is drawn in markup
+(`components/public/TodaySketch.tsx`) so it sits on whichever paper the
+reader has; when Today changes, change the sketch with it.
 
 Semesters sit under all of it. One is active and everything writes into it;
 past terms are archived and readable, with their courses and sessions intact.

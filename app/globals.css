@@ -34,6 +34,9 @@
     -4px 0 0 color-mix(in srgb, var(--bg) 60%, var(--desk)),
     -5px 0 0 color-mix(in srgb, var(--line) 50%, transparent),
     -10px 0 30px rgba(40, 30, 15, 0.1);
+  /* A loose sheet lifted off the page: the drawn Today, the chat on the
+     public pages. A hairline and a fall of shadow; night has its own. */
+  --lift-shadow: 0 0 0 1px var(--line-soft), 0 26px 60px -14px rgba(57, 45, 28, 0.22);
 
   /* The wash behind a sheet or a modal. A token rather than an ink opacity,
      because on the night paper the ink is the light value and `bg-ink/35`
@@ -1010,4 +1013,47 @@ input[type='date']::-webkit-calendar-picker-indicator {
     ) {
     font-size: 16px;
   }
+}
+
+/* ───────── the public pages ─────────
+   The landing and the documents (guide, Claude, connector reference, privacy,
+   terms) are drawn in the app's own hand: ruled paper with the notebook's
+   margin line, loose sheets taped on, notes in the margin. */
+
+/* Faint ruled lines, one every 36px, running the height of the page. */
+.ruled-paper {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 35px,
+    color-mix(in srgb, var(--line) 55%, transparent) 35px,
+    color-mix(in srgb, var(--line) 55%, transparent) 36px
+  );
+}
+
+/* The margin rule: a thin double line in faded rose, down the left of the
+   page the way a notebook has it. Place it absolutely; it is decoration. */
+.margin-rule {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  pointer-events: none;
+  border-left: 1px solid color-mix(in srgb, var(--rose) 26%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--rose) 14%, transparent);
+}
+
+/* A loose sheet, lifted. Pair with bg-paper and a rounded corner. */
+.lift {
+  box-shadow: var(--lift-shadow);
+}
+
+/* A strip of tape holding a loose sheet down. Mixed from the ink so it reads
+   on every paper: a grey strip on cream, a pale one under the lamp. */
+.tape-strip {
+  position: absolute;
+  width: 92px;
+  height: 24px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
 }

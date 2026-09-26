@@ -1256,7 +1256,7 @@ screens come after. Every sentence in it has to stay true of the app, so a
 screen that changes changes its sentence here too. Bold words in it are the labels on the screen, so a
 reader can go and find them.
 
-It is reached from the landing page (the hero line, the feature cards, which
+It is reached from the landing page (the hero line, the feature rows, which
 each link to their section, and the footer), from the onboarding welcome,
 from Settings, and from one serif line on Today, "New here? How Akada works",
 which shows only while the account has fewer than three sessions. That line
@@ -1280,17 +1280,42 @@ are linked, never restated. Everything in the app that hands work to Claude
 **The landing page** is written for a LUMS student arriving from a group
 chat link on a phone. The hero says the outcome (every deadline this term on
 one page, filled in from the course outlines) and names the LUMS catalog,
-since that is the hook nobody else has. Beside it is a photograph of the real
-Today, not a drawing of one: the drawing it replaced showed boxed course cards
-the app had stopped drawing months earlier. The photographs are taken by
-`scripts/landing-shots.mjs`, which runs the app on local data with a made-up
-LUMS term, and live in `public/landing/`. Re-run it when Today changes. Under
-the hero, "How it goes" is the setup in three steps; then Claude gets a
-section of its own with the same drawn exchange as `/claude`; then the
-feature cards, which lead with what a to-do list can't do rather than naming
-screens. If a card's claim stops being true, change the card. The page makes
-no claim it cannot back: it said "works offline" for a while, with no service
-worker behind it.
+since that is the hook nobody else has.
+
+It is drawn in the app's own hand, because the page it replaced looked
+nothing like the app it was selling: boxed cards on a flat ground, and cream
+screenshots on a dark page. Now the page is **ruled paper** (`.ruled-paper`,
+one faint line every 36px) with the notebook's **margin rule** down the left
+(`.margin-rule`, a thin double line in faded rose), and everything sits on
+rules rather than in panels:
+
+- **Today, drawn** (`components/public/TodaySketch.tsx`) as a loose sheet
+  (`.lift`, `bg-paper`) taped down (`.tape-strip`) over a second sheet turned
+  the other way. Markup, not a screenshot, so it sits on the reader's paper.
+  The screenshots it replaced went stale twice, once in tone and once in
+  words; the drawing goes stale the same way if nobody minds it, so **when
+  Today's parts or their names change, change the sketch in the same PR**.
+  It shows only what Today really shows: the date line, Up next with its
+  course rule and mint swipe, Start/Untimed/Done, today's hours with the goal
+  strokes, and Coming.
+- **Margin notes** in the hand face (`font-hand`, muted ink), a few words
+  each, with a drawn arrow where one points at something. Only where there is
+  a margin: the ones beside the sketch appear at `xl`.
+- **How it goes**: three steps divided by rules, numbered in mono (`01` `02`
+  `03`), since those are digits.
+- **Works inside Claude**: the same drawn exchange as `/claude` (ChatSketch,
+  now two taped sheets), and beside the copy a two-column **Akada gets / Never
+  gets** under a rule, each headed by a course rule in sage or rose rather
+  than coloured text, which would fail contrast on cream.
+- **What a to-do list doesn't do**: six rows on rules, two columns wide, each
+  with a small drawing of the thing itself (48 pages over 2h 24m, a mono 80,
+  clear/hazy/gone, week squares, a tally gate, a fan). Each row links to its
+  guide section. If a row's claim stops being true, change the row.
+- **The timer**: the real StudyFan standing on a rule, not boxed.
+
+Highlighter (`.hl`) goes under "on one page" twice, top and bottom, and
+nowhere else. The page makes no claim it cannot back: it said "works
+offline" for a while, with no service worker behind it.
 
 ### The connector docs
 `/docs` is the guide's sibling for the Claude connector, in the same
