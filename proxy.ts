@@ -19,6 +19,9 @@ const PUBLIC_PATHS = new Set([
   '/terms',
   // The walk-through, which is the link to send someone before they sign up.
   '/guide',
+  // The connector's setup and tool reference, linked from the Claude
+  // directory listing and the protected resource metadata.
+  '/docs',
   // Next metadata route with no file extension. Social crawlers fetch it
   // unauthenticated, so leaving it protected silently kills link previews.
   '/opengraph-image',

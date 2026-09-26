@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createServer } from './route';
 import { READ_SCOPE, WRITE_SCOPE } from './scopes';
+import { GROUPS } from '@/app/docs/tools';
 
 type Tool = { title?: string; enabled: boolean; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean } };
 
@@ -48,4 +49,15 @@ test('a read-only grant exposes only the read-only tools', () => {
   }
   assert.equal(tools.delete_course.enabled, false);
   assert.equal(tools.get_tasks.enabled, true);
+});
+
+test('the /docs tool list matches the server, tool for tool and hint for hint', () => {
+  const tools = toolsFor(`${READ_SCOPE} ${WRITE_SCOPE}`);
+  const documented = GROUPS.flatMap((group) => group.tools);
+  assert.deepEqual(documented.map((tool) => tool.name).sort(), Object.keys(tools).sort());
+  for (const doc of documented) {
+    const { annotations } = tools[doc.name];
+    const access = annotations?.readOnlyHint ? 'Reads' : annotations?.destructiveHint ? 'Deletes' : 'Changes';
+    assert.equal(doc.access, access, doc.name);
+  }
 });
