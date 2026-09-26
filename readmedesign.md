@@ -1195,6 +1195,20 @@ which shows only while the account has fewer than three sessions. That line
 is derived from the sessions like everything else, so there is no dismissed
 flag and it leaves on its own.
 
+**Akada in Claude** (`/claude`) is the guide's sibling for the connector,
+in the same shell and public for the same reason: it is the page to send a
+friend. It shows the exchange (an outline handed over, the deadlines landing
+on Today) as a drawn example labelled as one, the three-step setup, things
+to say with a copy beside each, and what happens to data, in claims the code
+backs. It never says "MCP", says "connector" only where Claude's own screens
+do, and names no Claude plan. `/docs` stays the reference for every tool, and
+`/privacy#assistants` the policy; both belong to the connector's own work and
+are linked, never restated. Everything in the app that hands work to Claude
+(Say how it is marked, ask Claude, the Notes prompt and the quiz shelf) says
+"a Claude chat with Akada switched on" in the same words and leads to
+`/claude` for anyone not connected yet, through `CLAUDE_PAGE` in
+`lib/claude-page.ts`. Settings has a Claude section for the same three links.
+
 The landing feature cards lead with what a to-do list can't do (reading in
 hours, the grade out of what has come back, recall, Claude, the weekly run,
 the timer) rather than naming screens. If a card's claim stops being true,

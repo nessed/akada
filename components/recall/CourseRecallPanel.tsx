@@ -63,7 +63,7 @@ export default function CourseRecallPanel({
         coursePrompt({ courseId: course.id, courseCode: course.code, courseName: course.name }),
       );
       notify(
-        `Copied. Paste it into a chat with the Akada connector on, and it will quiz you on what is due for ${course.code}, mixed.`,
+        `Copied. Paste it into a Claude chat with Akada switched on, and it will quiz you on what is due for ${course.code}, mixed.`,
       );
     } catch (error) {
       console.error('Failed to copy the recall prompt:', error);

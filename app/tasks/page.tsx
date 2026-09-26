@@ -1454,7 +1454,7 @@ function TasksPageContent() {
                 detail: task.description || undefined,
               }),
             );
-            notify('Copied. Paste it into a chat with the Akada connector on before you start reading.');
+            notify('Copied. Paste it into a Claude chat with Akada switched on before you start reading.');
           } catch (error) {
             console.error('Failed to copy the reading prompt:', error);
             notify('Akada could not reach the clipboard.');

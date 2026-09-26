@@ -165,7 +165,7 @@ export default function RecallDeck({
     });
     try {
       await navigator.clipboard.writeText(text);
-      notify('Copied. Paste it into a chat with the Akada connector on, and it will quiz you on this one.');
+      notify('Copied. Paste it into a Claude chat with Akada switched on, and it will quiz you on this one.');
     } catch (error) {
       console.error('Failed to copy the recall prompt:', error);
       notify('Akada could not reach the clipboard.');
