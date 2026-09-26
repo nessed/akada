@@ -121,7 +121,11 @@ The app is one design read at two widths.
 
 Below `md` it is the sheet it has always been: a centred column, `BottomNav`
 along the bottom (Today, Tasks, Notes, Stats, Record), and the timer dock
-floating at the top while a session runs.
+floating at the top while a session runs. **The Record waits for the first
+session.** Before one is logged it is empty pages and a vocabulary nobody has
+met, so the bar puts **Courses** in its slot and the rail leaves it out
+(`useRecordEarned`, read off the sessions, true while they load so it never
+blinks for someone who has them). It arrives with the first session.
 
 At `md` and above a **232px rail** takes over and both of those hide
 themselves. The rail is **the margin of the page**, where the contents and
@@ -350,10 +354,21 @@ reader has stopped deciding things is the wrong thing to hand them; "Back to
 it" is one tap, or the space bar.
 
 ### Next Mark, and the sitting on the clock
+**Words first.** The unit this layer inks is called a **tally** on every
+screen: forty credited minutes on a course, fifteen for the first. It was
+called a mark, which is also what a LUMS student calls a grade, and "the
+next mark on ECON 100" read as their next grade. "Marks" on any screen now
+means grades only. The code keeps its old names (`MARK_SECONDS`,
+`NextMarkLine`, `course-mark`) because they are stored in impression logs;
+only the words a reader sees changed. Stats' milestone counts in
+**strokes**, not tallies, because its unit is not forty minutes. There is
+one run in the app and it is counted in weeks: Stats says "weeks running"
+like Today and the Record, and nothing counts days in a row.
+
 The progression layer (`lib/progression`) is derived from logged sessions and
 tasks on every read and stores nothing. For a long time it read *only* logged
 sessions, so the one line it puts on Today and under the timer, "20 minutes to
-the next mark on MATH", sat there saying twenty for the whole forty minutes
+the next tally on MATH", sat there saying twenty for the whole forty minutes
 the timer ran underneath it. A prompt that does not move while you act on it
 is a caption.
 
@@ -366,8 +381,8 @@ difference between the two readings is **what the sitting has done**
 else:
 
 - **Under the timer**, on the same line as Next Mark. What has landed is set
-  in the ink, what is next a step softer, joined by a middle dot: "a mark
-  inked on MATH · today counts · 38 minutes to the next mark on MATH". The
+  in the ink, what is next a step softer, joined by a middle dot: "a tally
+  inked on MATH · today counts · 38 minutes to the next tally on MATH". The
   landed part stays for the rest of the sitting, because it is the sitting's
   own record. The open-mode night screen carries only the landed part and
   never a prompt, since that screen exists to hold one thing.
@@ -393,7 +408,7 @@ to go" counts down while the clock runs. Anything that *decides* something,
 which task is up next, which course has gone quiet, still reads the record.
 
 Two candidates were added to the ranking. The **first mark** on a course is
-now named ("15 minutes to the first mark on MATH"); it is the short one
+now named ("15 minutes to the first tally on MATH"); it is the short one
 precisely so it can be, and a course with no marks used to get no line at
 all. And the **week**: on the day that would make this week count, by either
 route, the line says so ("20 minutes makes this week count", "20 minutes
@@ -402,7 +417,7 @@ is the only thing on the board that moves the run. It sits at the top of the
 ranking beside the course just worked, and the shorter distance decides.
 
 The voice is unchanged: lowercase, factual, no praise. A sitting that inked a
-mark is told a mark was inked. It is not told well done.
+tally is told a tally was inked. It is not told well done.
 
 ### What the term teaches
 Everything above reads how *much* was studied. `lib/progression/habits.ts`
@@ -1058,7 +1073,7 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
   - **The next line** (`NextMilestone`). The next round number in the
     term's hours, named in the serif ("half a century", "the century"),
     counted out as `TallyMarks` from the last line crossed. Never more than
-    twenty five marks, so a long stretch has each mark stand for more than
+    twenty five strokes, so a long stretch has each stroke stand for more than
     an hour and the margin says how much. Not a bar.
   - **Your day, as a clock** (`StudyClock`). Midnight at the top, one stroke
     per hour as long as the time that has landed in it, the usual three hours
@@ -1094,16 +1109,19 @@ headers, the one screen that still looked like a settings panel.
   up, not where it is offered. On the right, the one figure the page is
   about: weeks running, in mono, with a Caveat note that says "best is N" or
   "your longest yet", so a broken run never hides the best.
-- **The ledger line**, the same newspaper rule as Stats: marks inked, pages
+- **The ledger line**, the same newspaper rule as Stats: tallies inked, pages
   bound, best run, margin days banked.
+- **Explained once.** Until the first page binds anywhere, a `FirstNote`
+  under the ledger line says what a tally is in minutes, that fifteen bind a
+  page, that the run counts weeks, and that stamps come with the hours.
 - **Course pages** (deckle card, serif heading). Each row is a link to the
   course: course rule and code, the name in the serif, the page's
   `TallyMarks` drawing themselves in on open, the distance to the next mark
   and to binding, and the bound pages drawn as the edge of a stack of ruled
   sheets. Ink fading is unchanged. The header says what a page is in hours
-  ("15 marks, about 10 hours, binds a page"), and a "how pages work"
+  ("15 tallies, about 10 hours, binds a page"), and a "how pages work"
   disclosure at the foot of the card (`PagesExplainer`, the same fold as
-  "what makes a week count") says in plain words what a mark is in minutes,
+  "what makes a week count") says in plain words what a tally is in minutes,
   what binding does, and that bound pages feed the Pages bound impression and
   nothing else. It shows before any course exists too, since that is when
   the question gets asked. The course screen's panel carries the same fold,

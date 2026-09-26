@@ -255,7 +255,7 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <p className="m-0 mt-0.5 text-[11px] text-muted">
-                    Counts toward the streak after 25 minutes
+                    What today&apos;s hours are drawn against on Today
                   </p>
                   <input
                     type="range"

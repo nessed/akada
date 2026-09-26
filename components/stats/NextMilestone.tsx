@@ -62,7 +62,7 @@ export default function NextMilestone({
         </span>
         {unitLabel && (
           <HandNote size={15} rotate={-1.5} color="var(--muted)">
-            each mark is {unitLabel}
+            each stroke is {unitLabel}
           </HandNote>
         )}
         <span className="font-mono text-[11px] font-semibold tabular-nums text-ink">

@@ -85,7 +85,7 @@ export function readSittingEffect(
   }
 
   if (pages === 0 && marks > 0) {
-    lines.push(marks === 1 ? `a mark inked on ${code}` : `${marks} marks inked on ${code}`);
+    lines.push(marks === 1 ? `a tally inked on ${code}` : `${marks} tallies inked on ${code}`);
   }
 
   // The day, said only when the week did not already say it.

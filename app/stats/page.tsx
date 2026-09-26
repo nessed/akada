@@ -1,5 +1,6 @@
 'use client';
 
+import { useProgression } from '@/lib/progression/use-progression';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -16,7 +17,6 @@ import {
   formatRelativeDate,
   isoDate,
   resolveTint,
-  studyStreakDays,
   totalSeconds,
 } from '@/lib/utils';
 import { usePreferences } from '@/lib/preferences';
@@ -253,7 +253,11 @@ export default function StatsPage() {
   const totalSec = totalSeconds(sessions);
   const dayCount = new Set(sessions.map((s) => s.date)).size;
   const avgPerDay = dayCount ? totalSec / dayCount : 0;
-  const streak = studyStreakDays(sessions);
+  // One run in the whole app, counted in weeks. This line used to count
+  // days while Today, the Record and the guide all said a day off costs
+  // nothing, which is two streaks disagreeing on the same screen pair.
+  const { progression } = useProgression();
+  const run = progression?.runs.current ?? 0;
 
   // Editorial computed bits, the Vol./Issue mark, totals, and "best day"
   // headline that the redesigned stats page leans on.
@@ -383,7 +387,7 @@ export default function StatsPage() {
       >
         <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1.5 font-serif text-[13px] italic text-muted">
           <span>
-            <Figure>{streak}</Figure> day{streak === 1 ? '' : 's'} running
+            <Figure>{run}</Figure> {run === 1 ? 'week' : 'weeks'} running
           </span>
           {avgPerDay > 0 && (
             <span>

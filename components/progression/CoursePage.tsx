@@ -83,18 +83,18 @@ export default function CoursePage({
               <span className="font-mono not-italic text-ink-soft">
                 {formatHM(record.toNextMark)}
               </span>{' '}
-              to the first mark
+              to the first tally
             </>
           ) : (
             <>
               <span className="font-mono not-italic text-ink-soft">
                 {formatHM(record.toNextMark)}
               </span>{' '}
-              to the next mark
+              to the next tally
               {' · '}
               {record.toBind === 1
                 ? 'one more binds the page'
-                : `${record.toBind} marks to bind the page`}
+                : `${record.toBind} tallies to bind the page`}
             </>
           )}
         </p>
