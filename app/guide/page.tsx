@@ -59,9 +59,9 @@ export default function GuidePage() {
 
       <Section id="first" title="The first ten minutes">
         <p>
-          Sign up and it asks for your name, your courses and your term dates. Search
-          the catalog for each course and pick your section, and the instructor and
-          class time come with it. If a course isn&apos;t there, type its name and carry on.
+          Sign up and it asks for your courses and your term dates. Search the catalog
+          for each course and pick your section, and the instructor and class time come
+          with it. If a course isn&apos;t there, type its name and add it anyway.
         </p>
         <p>
           Each course gets a <strong>weekly goal</strong> in hours. It is suggested off

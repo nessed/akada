@@ -1,3 +1,11 @@
+import type { CatalogCourse } from './types';
+import {
+  MEETING_TIME_MAX,
+  clampWeeklyGoalHours,
+  cleanCourseCode,
+  cleanCourseName,
+} from '@/lib/planner-safety';
+
 export type { CatalogCourse, CatalogSection } from './types';
 
 /**
@@ -53,4 +61,30 @@ export function deriveCourseCode(name: string): string {
   if (source.length === 0) return '';
   if (source.length === 1) return source[0].slice(0, 6).toUpperCase();
   return source.slice(0, 4).map((word) => word[0]).join('').toUpperCase();
+}
+
+/**
+ * A course as the planner stores it, from a catalog pick and the section
+ * chosen under it. Onboarding and Today's add-course sheet both read this, so
+ * a course added on the first day and one added in week eight carry the same
+ * instructor, time and credits.
+ */
+export function courseFromCatalog(course: CatalogCourse, sectionId: string) {
+  const chosen = course.sections?.find((sec) => sec.id === sectionId);
+  const withRoom = [chosen?.meets, chosen?.room].filter(Boolean).join(' · ');
+  return {
+    code: cleanCourseCode(course.code),
+    name: cleanCourseName(course.title),
+    credits: course.credits ?? 4,
+    section: sectionId || null,
+    instructor: chosen?.instructor ?? null,
+    // The room earns its place only when it does not push the line past
+    // what the field holds; the time is the half that must survive.
+    meetingTime: (withRoom.length <= MEETING_TIME_MAX ? withRoom : chosen?.meets) || null,
+  };
+}
+
+/** Two hours a week per credit hour, the usual rule for work outside class. */
+export function weeklyGoalForCredits(credits: number | null | undefined): number {
+  return clampWeeklyGoalHours(typeof credits === 'number' && credits > 0 ? credits * 2 : 8);
 }

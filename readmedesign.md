@@ -8,7 +8,7 @@ Akada's design moves away from the stark, high-contrast flat designs typical of 
 ### 🚫 What We Strictly Avoid (The Anti-Patterns)
 To maintain the soul of the app, we actively reject standard SaaS UI/UX "best practices" that add noise, urgency, or digital clutter. If an interface element wouldn't look right drawn with pen and highlighter on premium paper, it doesn't belong here:
 - **No Heavy UI Chrome:** We avoid thick borders, solid-filled high-contrast buttons (except for the single primary timer action), and harsh drop shadows. Elements should feel like light pencil marks or faint highlighter on a page.
-- **No Over-Explaining:** We avoid explicit, wordy labels (e.g., "0.0h logged out of 9h goal"). We rely on minimal text, visual hierarchy, and the user's intuition. The interface should not "talk" to the user more than absolutely necessary.
+- **No Over-Explaining, after the first time:** We avoid explicit, wordy labels (e.g., "0.0h logged out of 9h goal") on the screens a reader lives in. But a quiet screen only works for someone who already knows it, and for a long time this rule was read as "never explain anything", which left every new reader to find the app out by poking. A thing is explained **once, in place, the first time a reader meets it**, and then it goes quiet for good. See "Explained once".
 - **No Clutter & Cramping:** Generous whitespace is a strict requirement. We do not compress or compact elements just to fit more on a screen. 
 - **No Alarmist Indicators:** We avoid bright red badges, aggressive error alerts, or high-contrast strikethroughs. For example, completed tasks gently fade, and overdue items use muted tones rather than screaming for attention.
 - **No Mono Kicker Over a Serif Heading:** A tiny monospaced line stacked above a large serif title is the shape every generated app arrives in. Metadata above a screen title is a standfirst and is set in the serif. Mono is for digits.
@@ -1149,9 +1149,39 @@ headers, the one screen that still looked like a settings panel.
   is ever named. A stamp struck since the last visit comes down with
   `.stamp-down` and wears the `warn` "New" stamp.
 
+### Explained once
+The rule under the quiet. Every screen is written for someone on their
+thirtieth visit, and a screen written only for them is a wall to someone on
+their first. So a thing explains itself the first time it is met, where it is
+met, and never again:
+
+- **When it goes is read off the data**, never a dismissed flag. The note
+  under the first recall card shows until the reader has answered one; the
+  "Next Mark" line is not drawn at all on Today until the first session is
+  logged. Nothing to close, nothing to reset, and a returning reader who has
+  already done the thing never sees it.
+- **`FirstNote`** (`components/FirstNote.tsx`) is how it is set: the serif in
+  italic, 13.5px, `ink-soft`, a 2px `line-strong` rule down its left edge.
+  It is the one place the app writes a paragraph on a working screen, so it
+  is kept to three or four plain sentences that say what the thing is and
+  what to do with it. No "tip", no icon, no close button.
+- **An empty screen says what fills it.** A term with no tasks does not say
+  "nothing due", which reads as caught up; Up next says what the space is
+  for and offers the two ways to fill it (Claude, or adding a deadline), and
+  a course timer while no session exists. It goes when the first task lands.
+
+**Setup** (`/onboarding`) follows the same idea. It is four steps: what
+Akada is, the courses (searched in the catalog, section picked, weekly goal
+set at two hours a credit, a typed name for anything not listed), the term
+(the one under way is already chosen), and **what's due**: the two ways to
+get deadlines in, since everything Today draws runs off them. It asks for no
+photo and not for the name signup already took; the daily goal keeps its
+default and lives in Settings. Adding a new term's courses
+(`?newSemester=1`) is the courses step and the deadlines step.
+
 ### The guide
 `/guide` is the one place the app is allowed to explain itself at length,
-which is exactly why "No Over-Explaining" holds everywhere else: the screens
+which is why a screen explains a thing only once (see Explained once): the screens
 stay quiet and the guide does the talking. It is public, set in the same
 serif document shell as the privacy page and the terms (`LegalPage`, with a
 standfirst instead of an "Updated" date), and written for someone who has

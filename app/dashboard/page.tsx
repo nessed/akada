@@ -32,12 +32,13 @@ import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Session, Task } from '@/lib/data';
 import { upNextFrom } from '@/lib/use-up-next';
+import { CLAUDE_PAGE } from '@/lib/claude-page';
 import { usePreferences } from '@/lib/preferences';
 import { createClient } from '@/lib/supabase';
 import { clearClientSessionState } from '@/lib/session-cleanup';
 import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
 import type { CatalogCourse } from '@/lib/catalog';
-import { deriveCourseCode, parseCourseInput } from '@/lib/catalog';
+import { courseFromCatalog, deriveCourseCode, parseCourseInput, weeklyGoalForCredits } from '@/lib/catalog';
 import {
   formatHM,
   daysBetween,
@@ -464,21 +465,7 @@ function DashboardPageContent() {
    * suggestions still creates a normal manual course.
    */
   function resolveNewCourse() {
-    if (pickedCourse) {
-      const chosen = pickedCourse.sections?.find((sec) => sec.id === newCourseSection);
-      const withRoom = [chosen?.meets, chosen?.room].filter(Boolean).join(' · ');
-      return {
-        code: cleanCourseCode(pickedCourse.code),
-        name: cleanCourseName(pickedCourse.title),
-        credits: pickedCourse.credits ?? 4,
-        section: newCourseSection || null,
-        instructor: chosen?.instructor ?? null,
-        // The room earns its place only when it does not push the line past
-        // what the field holds; the time is the half that must survive.
-        meetingTime:
-          (withRoom.length <= MEETING_TIME_MAX ? withRoom : chosen?.meets) || null,
-      };
-    }
+    if (pickedCourse) return courseFromCatalog(pickedCourse, newCourseSection);
     const parsed = parseCourseInput(courseQuery);
     const name = cleanCourseName(newCourseName || parsed.name);
     return {
@@ -847,7 +834,9 @@ function DashboardPageContent() {
 
       {/* Next Mark. One quiet line naming the nearest true thing, and
           nothing at all when nothing is close. See components/progression. */}
-      <NextMarkLine surface="today" />
+      {/* Hidden until the first session is logged: the first line a new
+          reader met was a distance to a tally they had never heard of. */}
+      {!sessionsLoading && rawSessions.length > 0 && <NextMarkLine surface="today" />}
 
       {courses.length === 0 ? (
         <EmptyPanel action="Add a course" onAction={openAddCourse} />
@@ -869,6 +858,13 @@ function DashboardPageContent() {
                 sort={prefs.upNextSort}
                 onSortChange={(upNextSort) => updatePrefs({ upNextSort })}
                 sessions={shownSessions}
+              />
+            ) : !tasksLoading && tasks.length === 0 ? (
+              <GettingStarted
+                course={courses[0]}
+                hasSessions={rawSessions.length > 0}
+                onAddTask={() => setAddingTaskFor(courses[0].id)}
+                onStart={(el) => openStartFor(null, el, false, courses[0])}
               />
             ) : (
               <section>
@@ -909,6 +905,7 @@ function DashboardPageContent() {
               closing="That's today's recall."
               onStudy={studyRecall}
               available={recallAvailable}
+              explain={Boolean(recall) && !recall?.states.some((state) => state.last)}
             />
 
             {overdueTasks.length > 0 && (
@@ -1207,7 +1204,7 @@ function DashboardPageContent() {
                   onPick={(course) => {
                     setPickedCourse(course);
                     setNewCourseSection('');
-                    if (course?.credits) setNewCourseGoal(clampWeeklyGoalHours(course.credits * 2));
+                    if (course?.credits) setNewCourseGoal(weeklyGoalForCredits(course.credits));
                   }}
                   section={newCourseSection}
                   onSectionChange={setNewCourseSection}
@@ -1531,6 +1528,65 @@ function getSmartPrompts({
   }
 
   return prompts.slice(0, 2);
+}
+
+/**
+ * Up next for a term with nothing in it yet. It used to say "Nothing overdue
+ * and nothing due today. A clean page.", which to someone who has put no
+ * deadlines in reads as all caught up. It says what the space is for and the
+ * two ways to fill it, and goes the moment the first task exists.
+ */
+function GettingStarted({
+  course,
+  hasSessions,
+  onAddTask,
+  onStart,
+}: {
+  course: Course;
+  hasSessions: boolean;
+  onAddTask: () => void;
+  onStart: (anchor: HTMLElement) => void;
+}) {
+  return (
+    <section>
+      <p className="eyebrow m-0 text-ink-soft">Up next</p>
+      <p className="m-0 mt-3 max-w-[560px] font-serif text-[22px] leading-[1.3] tracking-[-0.01em] text-ink">
+        Put in what&apos;s due, and this is where Akada tells you what to do next.
+      </p>
+      <p className="m-0 mt-2 max-w-[520px] font-serif text-[14px] italic leading-[1.55] text-muted">
+        Quickest is to hand Claude your course outlines and let it write every deadline
+        in. Or add them one at a time.
+      </p>
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <Link
+          href={CLAUDE_PAGE}
+          className="inline-flex h-11 items-center rounded-[10px] bg-primary px-4 text-[13px] font-medium text-primary-contrast no-underline"
+        >
+          Get them in with Claude
+        </Link>
+        <button
+          type="button"
+          onClick={onAddTask}
+          className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+        >
+          Add a deadline
+        </button>
+      </div>
+      {!hasSessions && (
+        <p className="m-0 mt-5 flex flex-wrap items-center gap-x-1.5 font-serif text-[14px] text-ink-soft">
+          Studying right now?
+          <button
+            type="button"
+            onClick={(event) => onStart(event.currentTarget)}
+            className="hand-underline bg-transparent px-0.5 text-ink"
+          >
+            Start a timer on {course.code}
+          </button>
+          <span className="italic text-muted">and the hours start counting.</span>
+        </p>
+      )}
+    </section>
+  );
 }
 
 function EmptyPanel({ action, onAction }: { action: string; onAction: () => void }) {

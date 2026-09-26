@@ -6,10 +6,11 @@ import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { db } from '@/lib/data';
 import { createClient } from '@/lib/supabase';
-import { PASTEL_PALETTE } from '@/lib/utils';
 import AkadaMark from '@/components/notebook/AkadaMark';
 import HandNote from '@/components/notebook/HandNote';
-import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
+import HandCheck from '@/components/notebook/HandCheck';
+import DatePicker from '@/components/DatePicker';
+import CourseSearchInput from '@/components/CourseSearchInput';
 import { useNotice } from '@/components/Notice';
 import {
   addCourseOptimistic,
@@ -18,7 +19,6 @@ import {
   updateUserSettingsOptimistic,
 } from '@/lib/data-hooks';
 import {
-  clampDailyGoalHours,
   clampWeeklyGoalHours,
   cleanCourseCode,
   cleanCourseName,
@@ -26,30 +26,38 @@ import {
   hasDuplicateCourseCodes,
   isIsoDate,
 } from '@/lib/planner-safety';
-import { isoDate, resolveTint, seasonLabel } from '@/lib/utils';
-import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
-import HandCheck from '@/components/notebook/HandCheck';
-import DatePicker from '@/components/DatePicker';
+import {
+  courseFromCatalog,
+  deriveCourseCode,
+  parseCourseInput,
+  weeklyGoalForCredits,
+  type CatalogCourse,
+} from '@/lib/catalog';
+import { CLAUDE_PAGE } from '@/lib/claude-page';
+import { isoDate, PASTEL_PALETTE, resolveTint, seasonLabel } from '@/lib/utils';
 
-type Step = 'welcome' | 'name' | 'courses' | 'semester' | 'routine';
+type Step = 'welcome' | 'courses' | 'term' | 'deadlines';
 
-const STEPS: Step[] = ['welcome', 'name', 'courses', 'semester', 'routine'];
+/**
+ * Four steps, and the last one is the reason the app works at all. Setup
+ * used to ask for a photo, the name signup had just asked for, and a daily
+ * hours slider, then left the reader on a Today that said nothing was due,
+ * which to someone with no deadlines in reads as "all caught up". It now asks
+ * only what the planner cannot guess and ends on getting the deadlines in.
+ */
+const STEPS: Step[] = ['welcome', 'courses', 'term', 'deadlines'];
 
 interface DraftCourse {
   code: string;
   name: string;
+  credits: number;
+  section: string | null;
+  instructor: string | null;
+  meetingTime: string | null;
   color: string;
   tint: string;
   weeklyGoalHours: number;
 }
-
-const emptyDraft = (): DraftCourse => ({
-  code: '',
-  name: '',
-  color: PASTEL_PALETTE[0].value,
-  tint: PASTEL_PALETTE[0].tint,
-  weeklyGoalHours: 8,
-});
 
 export default function OnboardingPage() {
   return (
@@ -70,15 +78,12 @@ function OnboardingContent() {
   const { notify } = useNotice();
   const searchParams = useSearchParams();
   const newSemesterMode = searchParams.get('newSemester') === '1';
-  const setupSteps: Step[] = newSemesterMode ? ['courses', 'routine'] : STEPS;
+  const setupSteps: Step[] = newSemesterMode ? ['courses', 'deadlines'] : STEPS;
   const [step, setStep] = useState<Step>(() => (newSemesterMode ? 'courses' : 'welcome'));
   const [displayName, setDisplayName] = useState('');
-  const [courses, setCourses] = useState<DraftCourse[]>([emptyDraft()]);
-  const [editIdx, setEditIdx] = useState(0);
+  const [courses, setCourses] = useState<DraftCourse[]>([]);
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
-  const [dailyGoal, setDailyGoal] = useState(4);
-  const [avatarPreview, setAvatarPreview] = useState('');
   const [gate, setGate] = useState<'checking' | 'open'>('checking');
 
   useEffect(() => {
@@ -103,7 +108,8 @@ function OnboardingContent() {
         return;
       }
 
-      // Prefill is best-effort and must never block the form.
+      // The name was asked for at signup and rides on the account, so it is
+      // carried into the profile here rather than asked for a second time.
       try {
         const [settings, auth] = await Promise.all([
           db.getUserSettings(),
@@ -115,9 +121,8 @@ function OnboardingContent() {
             ? auth.data.user.user_metadata.display_name
             : '';
         setDisplayName((current) => current || settings?.displayName || metadataName || '');
-        setAvatarPreview((current) => current || settings?.avatarUrl || '');
       } catch {
-        // Local mode or unauthenticated edge: keep the form empty but usable.
+        // Local mode or unauthenticated edge: the name can be set in Settings.
       }
 
       if (active) setGate('open');
@@ -127,61 +132,43 @@ function OnboardingContent() {
     };
   }, [newSemesterMode, router]);
 
-  const editing = courses[editIdx];
-  function update(patch: Partial<DraftCourse>) {
-    setCourses((prev) => prev.map((c, i) => (i === editIdx ? { ...c, ...patch } : c)));
-  }
+  // The term already under way is the one nearly everybody is setting up
+  // for, so it is chosen before the step is reached. Changing it is a tap.
+  useEffect(() => {
+    if (start || end) return;
+    const [current] = upcomingSemesters();
+    if (current) {
+      setStart(current.start);
+      setEnd(current.end);
+    }
+  }, [start, end]);
 
-  function addAnother() {
-    const used = new Set(courses.map((c) => c.color));
-    const next =
-      PASTEL_PALETTE.find((p) => !used.has(p.value)) ||
-      PASTEL_PALETTE[courses.length % PASTEL_PALETTE.length];
-    setCourses((prev) => [
-      ...prev,
-      { code: '', name: '', color: next.value, tint: next.tint, weeklyGoalHours: 8 },
-    ]);
-    setEditIdx(courses.length);
+  function addCourse(course: Omit<DraftCourse, 'color' | 'tint'>) {
+    setCourses((prev) => {
+      const used = new Set(prev.map((c) => c.color));
+      const next =
+        PASTEL_PALETTE.find((p) => !used.has(p.value)) ||
+        PASTEL_PALETTE[prev.length % PASTEL_PALETTE.length];
+      return [...prev, { ...course, color: next.value, tint: next.tint }];
+    });
   }
 
   function removeCourse(i: number) {
-    if (courses.length === 1) return;
     setCourses((prev) => prev.filter((_, idx) => idx !== i));
-    setEditIdx(Math.max(0, editIdx - (i <= editIdx ? 1 : 0)));
   }
 
-  const validCourses = courses
-    .map((course) => ({
-      ...course,
-      code: cleanCourseCode(course.code),
-      name: cleanCourseName(course.name),
-      weeklyGoalHours: clampWeeklyGoalHours(course.weeklyGoalHours),
-    }))
-    .filter((course) => course.code && course.name);
-  const valid = validCourses.length >= 1 && !hasDuplicateCourseCodes(validCourses);
+  const valid = courses.length >= 1 && !hasDuplicateCourseCodes(courses);
   const canFinishSemester = isIsoDate(start) && isIsoDate(end) && end >= start;
-
 
   async function finish() {
     if (!valid || (!newSemesterMode && !canFinishSemester)) return;
     try {
-      let finalAvatar = avatarPreview;
-      if (avatarPreview && isUploadedImage(avatarPreview)) {
-        finalAvatar = await resizeAvatar(avatarPreview);
-      }
-
       // Use the optimistic helpers so the SWR cache is hot before we navigate
       // to /dashboard, otherwise the dashboard would briefly read a stale
       // "not onboarded" / empty-courses cache and bounce or flash.
-      await updateUserSettingsOptimistic(
-        newSemesterMode
-          ? { dailyGoalHours: clampDailyGoalHours(dailyGoal) }
-          : {
-              displayName: cleanDisplayName(displayName),
-              dailyGoalHours: clampDailyGoalHours(dailyGoal),
-              avatarUrl: finalAvatar,
-            },
-      );
+      if (!newSemesterMode && displayName) {
+        await updateUserSettingsOptimistic({ displayName: cleanDisplayName(displayName) });
+      }
       // The semester has to exist and be active *before* any course is
       // added, every course attaches to whichever semester is currently
       // active, so adding them first would silently create a nameless
@@ -198,17 +185,21 @@ function OnboardingContent() {
           endDate: end,
         });
       }
-      for (const c of validCourses) {
+      for (const c of courses) {
         await addCourseOptimistic({
           code: c.code,
           name: c.name,
+          credits: c.credits,
+          section: c.section,
+          instructor: c.instructor,
+          meetingTime: c.meetingTime,
           color: c.color,
           tint: c.tint,
-          weeklyGoalHours: c.weeklyGoalHours,
+          weeklyGoalHours: clampWeeklyGoalHours(c.weeklyGoalHours),
         });
       }
       await markOnboardingComplete();
-      router.replace('/dashboard');
+      setStep('deadlines');
     } catch (err: unknown) {
       console.error('Onboarding setup failed:', err);
       notify(err instanceof Error ? err.message : 'Setup did not finish.');
@@ -228,7 +219,6 @@ function OnboardingContent() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col">
-      {/* Step dots */}
       {/* Capped to the same width as the content below, so the progress
           bar tracks the card it belongs to instead of stretching the
           full width of a laptop screen. */}
@@ -247,32 +237,19 @@ function OnboardingContent() {
       </div>
 
       <div className="flex-1 flex flex-col mx-auto w-full max-w-xl">
-        {step === 'welcome' && <Welcome onNext={() => setStep('name')} />}
-        {step === 'name' && (
-          <NameStep
-            name={displayName}
-            setName={setDisplayName}
-            avatarPreview={avatarPreview}
-            setAvatarPreview={setAvatarPreview}
-            onBack={() => setStep('welcome')}
-            onNext={() => setStep('courses')}
-          />
-        )}
+        {step === 'welcome' && <Welcome onNext={() => setStep('courses')} />}
         {step === 'courses' && (
           <CoursesStep
             courses={courses}
-            editIdx={editIdx}
-            setEditIdx={setEditIdx}
-            editing={editing}
-            update={update}
-            addAnother={addAnother}
+            addCourse={addCourse}
             removeCourse={removeCourse}
             valid={valid}
-            onBack={() => (newSemesterMode ? router.replace('/dashboard') : setStep('name'))}
-            onNext={() => setStep(newSemesterMode ? 'routine' : 'semester')}
+            finishing={newSemesterMode}
+            onBack={() => (newSemesterMode ? router.replace('/dashboard') : setStep('welcome'))}
+            onNext={() => (newSemesterMode ? finish() : setStep('term'))}
           />
         )}
-        {step === 'semester' && (
+        {step === 'term' && (
           <SemesterStep
             start={start}
             end={end}
@@ -280,19 +257,14 @@ function OnboardingContent() {
             setEnd={setEnd}
             canFinish={canFinishSemester}
             onBack={() => setStep('courses')}
-            onNext={() => setStep('routine')}
+            onNext={finish}
           />
         )}
-        {step === 'routine' && (
-          <RoutineStep
-            dailyGoal={dailyGoal}
-            setDailyGoal={setDailyGoal}
-            displayName={displayName}
-            totalWeeklyGoal={courses
-              .filter((c) => c.code.trim() && c.name.trim())
-              .reduce((sum, c) => sum + clampWeeklyGoalHours(c.weeklyGoalHours), 0)}
-            onBack={() => setStep(newSemesterMode ? 'courses' : 'semester')}
-            onFinish={finish}
+        {step === 'deadlines' && (
+          <DeadlinesStep
+            onClaude={() => router.replace(CLAUDE_PAGE)}
+            onManual={() => router.replace('/tasks?newTask=1')}
+            onLater={() => router.replace('/dashboard')}
           />
         )}
       </div>
@@ -303,45 +275,32 @@ function OnboardingContent() {
 function Welcome({ onNext }: { onNext: () => void }) {
   return (
     <div className="relative flex-1 flex flex-col items-center justify-center text-center px-8 animate-fade-in">
-      {/* Off-grid arrow pointing toward the title, quiet hand-drawn touch */}
-      <div
-        aria-hidden
-        className="absolute"
-        style={{ top: 64, left: 28, transform: 'rotate(-9deg)', opacity: 0.7 }}
-      >
-        <svg aria-hidden width="42" height="42" viewBox="0 0 36 36" fill="none">
-          <path
-            d="M6 4 C 14 16, 18 22, 30 28 M22 22 L30 28 L24 32"
-            stroke="var(--muted-soft)"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-
       <AkadaMark size={62} />
-      <h1 className="font-serif font-medium text-[44px] leading-[1.04] tracking-[-0.025em] m-0 mt-7">
-        A quiet place
+      <h1 className="font-serif font-medium text-[40px] leading-[1.06] tracking-[-0.025em] m-0 mt-7">
+        Your term,
         <br />
-        <span className="italic font-normal">to study.</span>
+        <span className="italic font-normal">on one page.</span>
       </h1>
-      <p className="mt-5 font-serif italic text-[15px] text-ink-soft max-w-[280px] leading-[1.55]">
-        Track courses, tasks, and study sessions. Stay close to the work that matters.
+      <p className="mt-5 font-serif text-[16px] text-ink-soft max-w-[330px] leading-[1.6]">
+        Akada holds what is due in each of your courses and the hours you put in,
+        and tells you what to do next.
+      </p>
+      <p className="mt-3 font-serif italic text-[14px] text-muted max-w-[320px] leading-[1.6]">
+        Pick your courses, check the term dates, then get your deadlines in.
       </p>
 
-      <div className="mt-7">
+      <div className="mt-6">
         <HandNote color="var(--peach)" size={22} rotate={-3}>
-          ~ a minute to set up
+          ~ two minutes
         </HandNote>
       </div>
 
       <button
         type="button"
         onClick={onNext}
-        className="mt-9 w-full max-w-[280px] min-h-[56px] py-4 px-6 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em]"
+        className="mt-8 w-full max-w-[280px] min-h-[56px] py-4 px-6 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium tracking-[0.01em]"
       >
-        Start planning
+        Start
       </button>
       <Link href="/guide" className="hand-underline mt-5 font-serif text-[14px] text-muted">
         or read how it works first
@@ -350,41 +309,71 @@ function Welcome({ onNext }: { onNext: () => void }) {
   );
 }
 
-/* ─── Name step ─── */
-function NameStep({
-  name,
-  setName,
-  avatarPreview,
-  setAvatarPreview,
+/* ─── Courses step ─── */
+function CoursesStep({
+  courses,
+  addCourse,
+  removeCourse,
+  valid,
+  finishing,
   onBack,
   onNext,
 }: {
-  name: string;
-  setName: (v: string) => void;
-  avatarPreview: string;
-  setAvatarPreview: (v: string) => void;
+  courses: DraftCourse[];
+  addCourse: (course: Omit<DraftCourse, 'color' | 'tint'>) => void;
+  removeCourse: (i: number) => void;
+  valid: boolean;
+  /** Adding a new term's courses ends here rather than going on to dates. */
+  finishing: boolean;
   onBack: () => void;
-  onNext: () => void;
+  onNext: () => void | Promise<void>;
 }) {
-  const { notify } = useNotice();
+  const [query, setQuery] = useState('');
+  const [picked, setPicked] = useState<CatalogCourse | null>(null);
+  const [section, setSection] = useState('');
+  const [typedName, setTypedName] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  function handleAvatar(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      notify('That file is not an image.');
-      return;
-    }
-    if (file.size > 6 * 1024 * 1024) {
-      notify('That image is over 6 MB.');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => setAvatarPreview(reader.result as string);
-    reader.readAsDataURL(file);
+  const nextColor =
+    PASTEL_PALETTE.find((p) => !courses.some((c) => c.color === p.value)) ?? PASTEL_PALETTE[0];
+
+  function resolve() {
+    if (picked) return courseFromCatalog(picked, section);
+    const parsed = parseCourseInput(query);
+    const name = cleanCourseName(typedName || parsed.name);
+    return {
+      // Nobody is asked to type a code: one comes off the front of what was
+      // typed, or is built from the name.
+      code: cleanCourseCode(parsed.code || deriveCourseCode(name)),
+      name,
+      credits: 4,
+      section: null,
+      instructor: null,
+      meetingTime: null,
+    };
   }
 
-  const initials = name.trim() ? name.trim().charAt(0).toUpperCase() : '?';
+  const draft = resolve();
+  const canAdd = Boolean(draft.code && draft.name);
+  const duplicate = canAdd && courses.some((c) => c.code === draft.code) ? draft.code : '';
+
+  function add() {
+    if (!canAdd || duplicate) return;
+    addCourse({ ...draft, weeklyGoalHours: weeklyGoalForCredits(draft.credits) });
+    setQuery('');
+    setPicked(null);
+    setSection('');
+    setTypedName('');
+  }
+
+  async function next() {
+    setSaving(true);
+    try {
+      await onNext();
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="flex-1 flex flex-col animate-fade-in">
@@ -393,268 +382,130 @@ function NameStep({
           ← Back
         </button>
         <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
-          Set up your
-          <br />
-          <span className="italic font-normal">profile</span>
+          Your courses
         </h2>
-        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
-          Add a photo and your name.
+        <p className="mt-2 font-serif text-[15px] text-ink-soft leading-[1.55]">
+          Search by code or name and pick your section. The instructor and class time
+          come with it. Not on the list? Type the name and press Add.
         </p>
       </div>
 
-      <div className="px-7 pt-8 flex flex-col items-center">
-        {/* Avatar upload */}
-        <label className="relative cursor-pointer group mb-6">
-          <div
-            className="w-24 h-24 rounded-full border-2 border-dashed border-line-strong flex items-center justify-center overflow-hidden transition-colors group-hover:border-primary"
-            style={avatarPreview ? { borderStyle: 'solid', borderColor: 'var(--line)' } : {}}
-          >
-            {avatarPreview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-              <span className="font-serif italic text-[32px] text-muted-soft">{initials}</span>
-            )}
-          </div>
-          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-primary-contrast flex items-center justify-center text-sm shadow-sm">
-            <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-              <circle cx="12" cy="13" r="4" />
-            </svg>
-          </div>
-          <input type="file" accept="image/*" onChange={handleAvatar} className="hidden" />
-        </label>
-
-        <div className="w-full">
-          <Field label="Your name">
-            <input
+      <div className="px-7 pt-6 flex flex-col gap-2.5">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <CourseSearchInput
               autoFocus
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Ali"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && name.trim()) onNext();
+              query={query}
+              onQueryChange={(v) => {
+                setQuery(v);
+                setTypedName('');
               }}
-              className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary rounded-none"
+              picked={picked}
+              onPick={(course) => {
+                setPicked(course);
+                setSection('');
+              }}
+              section={section}
+              onSectionChange={setSection}
+              accent={nextColor.value}
+              accentTint={resolveTint(nextColor.value, nextColor.tint)}
+              onSubmit={add}
             />
-          </Field>
+          </div>
+          <button
+            type="button"
+            onClick={add}
+            disabled={!canAdd || Boolean(duplicate)}
+            className="h-[46px] shrink-0 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint disabled:opacity-30"
+          >
+            Add
+          </button>
         </div>
-      </div>
 
-      <div className="px-7 pt-8 pb-7 mt-auto">
-        <button
-          type="button"
-          disabled={!name.trim()}
-          onClick={onNext}
-          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          Continue
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setName('');
-            onNext();
-          }}
-          className="w-full mt-2 py-3 text-[13px] text-muted font-serif italic"
-        >
-          Skip for now
-        </button>
-      </div>
-    </div>
-  );
-}
-
-interface CoursesStepProps {
-  courses: DraftCourse[];
-  editIdx: number;
-  setEditIdx: (i: number) => void;
-  editing: DraftCourse;
-  update: (patch: Partial<DraftCourse>) => void;
-  addAnother: () => void;
-  removeCourse: (i: number) => void;
-  valid: boolean;
-  onBack: () => void;
-  onNext: () => void;
-}
-
-function CoursesStep({
-  courses,
-  editIdx,
-  setEditIdx,
-  editing,
-  update,
-  addAnother,
-  removeCourse,
-  valid,
-  onBack,
-  onNext,
-}: CoursesStepProps) {
-  // Which code is repeated, so the block can say so rather than just
-  // greying the button out.
-  const duplicateCode = (() => {
-    const seen = new Set<string>();
-    for (const course of courses) {
-      const code = cleanCourseCode(course.code);
-      if (!code) continue;
-      if (seen.has(code)) return code;
-      seen.add(code);
-    }
-    return '';
-  })();
-
-  return (
-    <div className="flex-1 flex flex-col overflow-y-auto app-scroll animate-fade-in">
-      <div className="px-7 pt-2">
-        <button
-          type="button"
-          onClick={onBack}
-          className="text-[13px] text-muted mb-[18px]"
-        >
-          ← Back
-        </button>
-        <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
-          Add your courses
-        </h2>
-        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
-          Set a weekly goal for each. You can edit anytime.
-        </p>
-      </div>
-
-      {courses.length > 1 && (
-        <div className="flex gap-2 px-7 pt-5 pb-1 overflow-x-auto app-scroll">
-          {courses.map((c, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setEditIdx(i)}
-              className={`shrink-0 bg-transparent px-0.5 py-1 font-mono text-[12px] font-semibold transition-colors ${
-                i === editIdx ? 'hl-swipe text-ink' : 'text-muted-soft'
-              }`}
-              style={
-                i === editIdx
-                  ? ({ '--hl': resolveTint(c.color, c.tint) } as React.CSSProperties)
-                  : undefined
+        {/* A code alone ("CS 200") leaves nothing to name the course by, so
+            that is the only follow-up field. */}
+        {!picked && query.trim().length > 0 && !draft.name && (
+          <input
+            type="text"
+            value={typedName}
+            onChange={(e) => setTypedName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                add();
               }
-            >
-              {c.code || `Course ${i + 1}`}
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeCourse(i);
-                }}
-                className="ml-1 text-muted-soft text-sm leading-none"
-              >
-                ×
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="px-7 pt-6 flex flex-col gap-[18px]">
-        <Field label="Course code">
-          <TextInput
-            value={editing.code}
-            onChange={(v) => update({ code: v.toUpperCase() })}
-            placeholder="e.g. POL 227"
+            }}
+            placeholder="Course name"
+            className="w-full bg-paper border border-line rounded-[10px] px-4 py-3 text-sm font-serif italic text-ink outline-none focus:border-line-strong animate-fade-in"
           />
-        </Field>
-        <Field label="Course name">
-          <TextInput
-            value={editing.name}
-            onChange={(v) => update({ name: v })}
-            placeholder="e.g. Comparative Politics"
-          />
-        </Field>
-        <Field label="Accent color">
-          <div className="flex flex-wrap gap-2.5">
-            {PASTEL_PALETTE.map((p) => {
-              const sel = editing.color === p.value;
-              return (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => update({ color: p.value, tint: p.tint })}
-                  aria-label={p.name}
-                  className="w-8 h-8 rounded-full border-0 transition-transform"
-                  style={{
-                    background: p.value,
-                    boxShadow: sel
-                      ? `0 0 0 2px var(--bg), 0 0 0 3.5px ${p.value}`
-                      : 'none',
-                    transform: sel ? 'scale(1.05)' : 'scale(1)',
-                  }}
-                />
-              );
-            })}
-          </div>
-        </Field>
-        <Field label="Weekly study goal">
-          <WeeklyGoalSlider
-            value={editing.weeklyGoalHours}
-            onChange={(weeklyGoalHours) => update({ weeklyGoalHours })}
-          />
-        </Field>
-
-
-        {/* WYSIWYG preview */}
-        <div className="relative bg-paper rounded-[14px] border border-line overflow-hidden mt-1">
-          <div
-            className="absolute left-0 top-0 bottom-0 w-1"
-            style={{ background: editing.color }}
-          />
-          <div className="py-[18px] pl-6 pr-5">
-            <p
-              className="eyebrow m-0"
-              style={{ color: editing.color }}
-            >
-              {editing.code || 'COURSE CODE'}
-            </p>
-            <h3 className="mt-1 mb-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
-              {editing.name || 'Course name'}
-            </h3>
-            <p className="mt-2.5 mb-0 text-xs text-muted font-serif italic">
-              {editing.weeklyGoalHours} hrs a week
-            </p>
-          </div>
-        </div>
-
-        {courses.length === 1 ? (
-          <button
-            type="button"
-            onClick={addAnother}
-            className="mt-1 py-3.5 rounded-xl border border-dashed border-line-strong text-ink-soft text-[13px] font-medium"
-          >
-            + Add another course
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={addAnother}
-            className="self-start rounded-full border border-dashed border-line-strong bg-transparent px-3.5 py-2 font-serif text-[13px] text-muted transition-colors hover:text-ink"
-          >
-            + Add another
-          </button>
         )}
-      </div>
-
-      <div className="px-7 pt-8 pb-7 mt-auto">
-        {duplicateCode && (
-          <p role="alert" className="mb-3 text-center font-serif text-[13px] italic text-priority">
-            Two courses share the code {duplicateCode}.
+        {duplicate && (
+          <p role="alert" className="m-0 font-serif text-[13px] italic text-priority">
+            {duplicate} is already on your list.
           </p>
         )}
+      </div>
+
+      {courses.length > 0 && (
+        <ul className="m-0 mt-6 list-none px-7">
+          {courses.map((c, i) => (
+            <li key={c.code} className="flex items-start gap-3 border-t border-line-soft py-3.5 first:border-t-0">
+              <div className="min-w-0 flex-1">
+                <p className="m-0 flex items-center gap-2.5">
+                  <span aria-hidden className="course-rule" style={{ ['--c' as string]: c.color }} />
+                  <span className="eyebrow text-ink-soft">{c.code}</span>
+                </p>
+                <p className="m-0 mt-1 truncate font-serif text-[17px] font-medium tracking-[-0.01em] text-ink">
+                  {c.name}
+                </p>
+                <p className="m-0 mt-0.5 truncate text-[12.5px] text-muted">
+                  {[c.section && `Sec ${c.section}`, c.instructor, c.meetingTime]
+                    .filter(Boolean)
+                    .join(' · ') || `${c.credits} credits`}
+                </p>
+              </div>
+              <span className="shrink-0 pt-5 font-mono text-[12px] text-ink-soft">
+                {c.weeklyGoalHours}h<span className="text-muted"> / wk</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => removeCourse(i)}
+                aria-label={`Remove ${c.code}`}
+                className="-mr-2 mt-3.5 grid h-10 w-10 shrink-0 place-items-center rounded-[10px] text-muted-soft transition-colors hover:bg-bg-tint hover:text-ink"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {courses.length > 0 && (
+        <p className="m-0 mt-2 px-7 font-serif text-[13px] italic leading-[1.55] text-muted">
+          Each course gets a weekly study goal of two hours per credit. Change it any
+          time on the course.
+        </p>
+      )}
+
+      <div className="px-7 pt-8 pb-7 mt-auto">
         <button
           type="button"
-          disabled={!valid}
-          onClick={onNext}
+          disabled={!valid || saving}
+          onClick={next}
           className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          Continue
+          {saving ? (
+            <span className="flex items-center justify-center gap-2.5">
+              <ButtonSpinner />
+              Adding your courses…
+            </span>
+          ) : finishing ? (
+            'Add these courses'
+          ) : courses.length === 0 ? (
+            'Add a course to continue'
+          ) : (
+            'Continue'
+          )}
         </button>
       </div>
     </div>
@@ -668,7 +519,7 @@ interface SemesterStepProps {
   setEnd: (s: string) => void;
   canFinish: boolean;
   onBack: () => void;
-  onNext: () => void;
+  onNext: () => Promise<void>;
 }
 
 /** Roughly when each term runs, as month/day pairs. */
@@ -728,6 +579,16 @@ function SemesterStep({
   const [custom, setCustom] = useState(false);
   const showCustom = custom || (Boolean(start || end) && !onAPreset);
 
+  const [saving, setSaving] = useState(false);
+  async function next() {
+    setSaving(true);
+    try {
+      await onNext();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const weeks = canFinish
     ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000 / 7)
     : null;
@@ -738,10 +599,11 @@ function SemesterStep({
           ← Back
         </button>
         <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
-          The semester
+          Your term
         </h2>
-        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
-          Select your upcoming term for countdowns and stats.
+        <p className="mt-2 font-serif text-[15px] text-ink-soft leading-[1.55]">
+          Week numbers and countdowns run off these dates. The one under way is
+          already picked.
         </p>
       </div>
 
@@ -814,11 +676,11 @@ function SemesterStep({
       <div className="px-7 pt-8 pb-7 mt-auto">
         <button
           type="button"
-          disabled={!canFinish}
-          onClick={onNext}
+          disabled={!canFinish || saving}
+          onClick={next}
           className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          Continue
+          {saving ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />Setting up your planner…</span> : 'Set up my planner'}
         </button>
       </div>
     </div>
@@ -826,123 +688,95 @@ function SemesterStep({
 }
 
 /* ─── Routine step (daily goal) ─── */
-function RoutineStep({
-  dailyGoal,
-  setDailyGoal,
-  displayName,
-  totalWeeklyGoal,
-  onBack,
-  onFinish,
+/* ─── Deadlines step ─── */
+/**
+ * The step that makes the rest of the app work. Up next, Coming, the reading
+ * hours and recall all read the deadlines, so setup ends by getting them in
+ * rather than by leaving the reader on an empty page.
+ */
+function DeadlinesStep({
+  onClaude,
+  onManual,
+  onLater,
 }: {
-  dailyGoal: number;
-  setDailyGoal: (v: number) => void;
-  displayName: string;
-  totalWeeklyGoal: number;
-  onBack: () => void;
-  onFinish: () => void;
+  onClaude: () => void;
+  onManual: () => void;
+  onLater: () => void;
 }) {
-  const [saving, setSaving] = useState(false);
-
-  async function handleFinish() {
-    setSaving(true);
-    try {
-      await onFinish();
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <div className="flex-1 flex flex-col animate-fade-in">
-      <div className="px-7 pt-2">
-        <button type="button" onClick={onBack} className="text-[13px] text-muted mb-[18px]">
-          ← Back
-        </button>
-        <h2 className="font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
-          Your daily rhythm
+      <div className="px-7 pt-6">
+        <HandNote color="var(--sage)" size={20} rotate={-2}>
+          courses in ✓
+        </HandNote>
+        <h2 className="mt-3 font-serif font-medium text-[30px] tracking-[-0.02em] m-0">
+          Now, what&apos;s due
         </h2>
-        <p className="mt-2 text-[14px] text-ink-soft leading-[1.5]">
-          How much study time feels right each day?
+        <p className="mt-2 font-serif text-[15px] text-ink-soft leading-[1.55]">
+          Everything Akada tells you, what to do next, how many hours of reading are
+          ahead, when the midterm is, runs off your deadlines. There are two ways to get
+          them in.
         </p>
       </div>
 
-      <div className="px-7 pt-8 flex flex-col gap-6">
-        <Field label="Daily study target">
-          <div className="flex items-center gap-4">
-            <input
-              type="range"
-              min="1"
-              max="12"
-              step="0.5"
-              value={dailyGoal}
-              onChange={(e) => setDailyGoal(clampDailyGoalHours(e.target.value))}
-              className="pl-range flex-1"
-              style={{ color: 'var(--ink)' }}
-            />
-            <div className="font-mono font-semibold text-sm text-ink w-14 text-right">
-              {dailyGoal}
-              <span className="text-muted ml-1">h</span>
-            </div>
-          </div>
-        </Field>
-
-        <HandNote className="self-start" rotate={-1.5}>
-          {dailyGoal >= 7 ? 'exam season' : dailyGoal >= 4 ? 'most students' : 'easy days'}
-        </HandNote>
-
-        {/* Summary card */}
-        <div className="py-5 px-[22px] bg-paper rounded-[14px] border border-line">
-          <p className="eyebrow m-0 text-muted">
-            Your plan
-          </p>
-          <p className="mt-1.5 mb-0 font-serif font-medium text-[20px] tracking-[-0.01em]">
-            {dailyGoal}h daily · {totalWeeklyGoal}h weekly
-          </p>
-        </div>
+      <div className="px-7 pt-7 flex flex-col gap-3">
+        <DeadlineChoice
+          title="Hand Claude your course outlines"
+          body="Connect Akada to Claude once, attach an outline, and ask it to put everything in. Every quiz, assignment and exam goes in with its date and weight. A few minutes for the whole term."
+          action="Show me how"
+          onClick={onClaude}
+          primary
+        />
+        <DeadlineChoice
+          title="Add them yourself"
+          body="Type each one in. Give readings their page count and exams their weight, and Akada can do more with them."
+          action="Add the first one"
+          onClick={onManual}
+        />
       </div>
 
-      <div className="px-7 pt-8 pb-7 mt-auto">
+      <div className="px-7 pt-6 pb-7 mt-auto">
         <button
           type="button"
-          disabled={saving}
-          onClick={handleFinish}
-          className="w-full py-4 rounded-2xl bg-primary text-primary-contrast text-[15px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={onLater}
+          className="w-full py-3 text-[13px] text-muted font-serif italic"
         >
-          {saving ? <span className="flex items-center justify-center gap-2.5"><ButtonSpinner />Setting up your planner…</span> : displayName ? `Let's go, ${cleanDisplayName(displayName)}` : 'Begin'}
+          Later, take me to Today
         </button>
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="eyebrow block text-muted mb-2.5">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function TextInput({
-  value,
-  onChange,
-  placeholder,
+function DeadlineChoice({
+  title,
+  body,
+  action,
+  onClick,
+  primary,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
+  title: string;
+  body: string;
+  action: string;
+  onClick: () => void;
+  primary?: boolean;
 }) {
   return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full bg-transparent border-0 border-b border-line-strong px-0.5 py-2.5 text-[15px] text-ink outline-none focus:border-primary rounded-none"
-    />
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-[14px] border px-[22px] py-5 text-left transition-colors hover:border-line-strong"
+      style={{
+        background: primary ? 'var(--paper)' : 'transparent',
+        borderColor: primary ? 'var(--line-strong)' : 'var(--line)',
+      }}
+    >
+      <p className="m-0 font-serif text-[19px] font-medium tracking-[-0.01em] text-ink">{title}</p>
+      <p className="m-0 mt-1.5 text-[13px] leading-[1.55] text-ink-soft">{body}</p>
+      <p className="m-0 mt-3 font-serif text-[14px] text-ink">
+        <span className="hand-underline">{action}</span> →
+      </p>
+    </button>
   );
 }
 
