@@ -67,7 +67,9 @@ export interface Preferences {
 }
 
 const DEFAULTS: Preferences = {
-  paperTone: 'paper',
+  // Night is what a new reader lands on. The daylight papers are one tap away
+  // in Appearance, and a record that already names a tone keeps it.
+  paperTone: 'night',
   headingFont: 'fraunces',
   upNextSort: 'in-progress',
   density: 'comfy',
@@ -77,7 +79,7 @@ const DEFAULTS: Preferences = {
   sessionSound: true,
   breakMinutes: 5,
   hideWeekends: false,
-  darkMode: false,
+  darkMode: true,
   dayEndingHour: 0,
 };
 
@@ -499,7 +501,7 @@ const TONE_THEME_COLOR: Record<PaperTone, string> = PAPER_TONE_VALUES.reduce(
 export const PREFERENCE_BOOTSTRAP_SCRIPT = `(function(){try{
 var T=${JSON.stringify(TONE_CSS)},D=${JSON.stringify(DENSITY_CSS)},F=${JSON.stringify(FONT_CSS)},A=${JSON.stringify(ACCENT_CSS)},C=${JSON.stringify(TONE_THEME_COLOR)};
 var p={};try{p=JSON.parse(window.localStorage.getItem(${JSON.stringify(STORAGE_KEY)}))||{};}catch(e){}
-var t=p.darkMode===true?'night':(T[p.paperTone]!==undefined?p.paperTone:'paper');
+var t=p.darkMode===true?'night':(T[p.paperTone]!==undefined?p.paperTone:'night');
 var d=D[p.density]!==undefined?p.density:'comfy';
 var f=F[p.headingFont]!==undefined?p.headingFont:'fraunces';
 var a=A[p.primaryAccent]!==undefined?p.primaryAccent:'classic';

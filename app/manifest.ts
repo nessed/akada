@@ -8,8 +8,9 @@ export default function manifest(): MetadataRoute.Manifest {
       'Plan courses, manage assignments, log focused study sessions, and track academic progress.',
     start_url: '/',
     display: 'standalone',
-    background_color: '#F5F1E8',
-    theme_color: '#F5F1E8',
+    // The night paper's ground, since that is the tone the app opens on.
+    background_color: '#1A1815',
+    theme_color: '#1A1815',
     orientation: 'portrait',
     // The PNGs are generated from icon.svg by scripts/build-icons.mjs. The
     // SVG stays first for anything that prefers it; the raster sizes are what
