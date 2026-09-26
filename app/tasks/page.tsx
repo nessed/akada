@@ -257,6 +257,13 @@ function TasksPageContent() {
         setDraftDue('');
         setDraftHigh(false);
       }
+    } else if (searchParams.get('newTask') === '1') {
+      // No course named, as from setup's "add them yourself": the form opens
+      // on the first course and the list stays unfiltered.
+      setAddingFor(courses[0].id);
+      setDraftTitle('');
+      setDraftDue('');
+      setDraftHigh(false);
     }
 
     const wanted = searchParams.get('filter');

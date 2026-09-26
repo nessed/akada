@@ -9,6 +9,7 @@ import { recallPrompt } from '@/lib/recall/prompt';
 import { daysAgoWords, originVerb, studyWords, whenWords } from '@/lib/recall/words';
 import { isoDate } from '@/lib/utils';
 import { VerdictMark } from './RecallMarks';
+import FirstNote from '@/components/FirstNote';
 
 /**
  * The recall card, one thing at a time.
@@ -55,6 +56,8 @@ interface Props {
    * nowhere to go, and the deck says so once rather than failing each tap.
    */
   available?: boolean;
+  /** The first card anyone meets says what recall is; see FirstNote. */
+  explain?: boolean;
   className?: string;
 }
 
@@ -74,6 +77,7 @@ export default function RecallDeck({
   onStudy,
   onClose,
   available = true,
+  explain = false,
   className = '',
 }: Props) {
   const { notify } = useNotice();
@@ -194,6 +198,14 @@ export default function RecallDeck({
           </span>
         )}
       </div>
+
+      {explain && card && (
+        <FirstNote className="mb-4">
+          This is recall. What you finish comes back a day later as a question. Answer it
+          with the book shut, then say how it went. Clear sends it further away, hazy or
+          gone brings it back sooner. A few a day is enough.
+        </FirstNote>
+      )}
 
       {card ? (
         // Written on the page like everything else under the double rule. It
