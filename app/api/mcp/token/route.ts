@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import {
+  ACCESS_TOKEN_LIFETIME,
   issueAccessToken,
   issueRefreshToken,
   pkceChallenge,
@@ -12,6 +13,16 @@ import { checkResource, mcpSupabase, mcpUrl, oauthError } from '../_shared';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// The access token wraps a Supabase JWT, so it is only good for as long as
+// that JWT is. Claude refreshes a few minutes before the expiry it is given;
+// claiming a full hour over a shorter Supabase session would hand it a dead
+// token in the meantime.
+function accessLifetime(supabaseExpiresAt: number | undefined) {
+  if (!supabaseExpiresAt) return ACCESS_TOKEN_LIFETIME;
+  const remaining = supabaseExpiresAt - Math.floor(Date.now() / 1000);
+  return Math.max(60, Math.min(ACCESS_TOKEN_LIFETIME, remaining));
+}
+
 function tokens(payload: {
   clientId: string;
   scope: string;
@@ -19,7 +30,9 @@ function tokens(payload: {
   userId: string;
   supabaseAccessToken: string;
   supabaseRefreshToken: string;
+  supabaseExpiresAt?: number;
 }) {
+  const lifetime = accessLifetime(payload.supabaseExpiresAt);
   return Response.json(
     {
       access_token: issueAccessToken({
@@ -28,9 +41,9 @@ function tokens(payload: {
         resource: payload.resource,
         userId: payload.userId,
         supabaseAccessToken: payload.supabaseAccessToken,
-      }),
+      }, lifetime),
       token_type: 'Bearer',
-      expires_in: 60 * 60,
+      expires_in: lifetime,
       refresh_token: issueRefreshToken({
         clientId: payload.clientId,
         scope: payload.scope,
@@ -98,6 +111,7 @@ export async function POST(request: NextRequest) {
         resource: payload.resource ?? mcpUrl(),
         supabaseAccessToken: data.session.access_token,
         supabaseRefreshToken: data.session.refresh_token,
+        supabaseExpiresAt: data.session.expires_at,
       });
     } catch {
       return oauthError('invalid_grant', 'The refresh token is invalid or expired.');
