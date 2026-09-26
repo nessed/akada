@@ -765,11 +765,22 @@ pressed.
 The list is walkable without a pointer: `↑ ↓` move a cursor, which the row
 draws as an ink ring rather than a fill; `X` selects the row under it and
 opens the bulk bar; `Enter` opens it; `N` starts a task, `S` changes the
-order, `⌘Z` undoes the last bulk move, `Esc` closes whatever is in front. The
-hint under the list names exactly these and nothing else. It used to offer
-`X select` and `⌘Z undo` with neither bound to anything, which is a worse lie
-than saying nothing, and the help sheet behind `?` listed a third, different
-set.
+order, `Z` (or `⌘Z`) undoes the last change, `Esc` closes whatever is in
+front. The hint under the list names exactly these and nothing else. It used
+to offer `X select` and `⌘Z undo` with neither bound to anything, which is a
+worse lie than saying nothing, and the help sheet behind `?` listed a third,
+different set.
+
+### Undo
+One slip, app wide (`components/Undo.tsx`, mounted in the root layout). A
+tick on any task row, on Today, Tasks or a course page, leaves "Done: <title>"
+with an Undo on it for eight seconds, and so does every bulk move and the
+open-ended date on Tasks. `Z` or `⌘Z` takes it from the keyboard, from any
+screen, but only while the slip is up, so the key is never bound to nothing.
+A new change replaces the slip rather than stacking, and undo only ever takes
+back the change the slip names. A tick is one tap on a phone and a list that
+hides finished work takes the row away as it lands, so without this a stray
+tick was a task gone with nothing to say where.
 
 ### Tasks: the planner
 `/tasks` used to be a bordered table with column heads and grey band strips,

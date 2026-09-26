@@ -4,6 +4,7 @@ import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import ClockSync from '@/components/ClockSync';
 import NoticeProvider from '@/components/Notice';
+import UndoProvider from '@/components/Undo';
 import SWRRoot from '@/components/SWRRoot';
 import TimerDocumentTitle from '@/components/TimerDocumentTitle';
 import TimerHotkeys from '@/components/TimerHotkeys';
@@ -166,7 +167,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* P and K reach the running clock from every screen. See the
                 component: they bind nothing unless a sitting is running. */}
             <TimerHotkeys />
-            <NoticeProvider>{children}</NoticeProvider>
+            <NoticeProvider>
+              <UndoProvider>{children}</UndoProvider>
+            </NoticeProvider>
           </TimerProvider>
         </SWRRoot>
         <PaperDoodle />

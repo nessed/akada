@@ -20,6 +20,7 @@ import HourStrokes from '@/components/HourStrokes';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import Stamp from '@/components/notebook/Stamp';
 import { useNotice } from '@/components/Notice';
+import { finishedUndo, useUndo } from '@/components/Undo';
 import CourseSessionLog from '@/components/course/CourseSessionLog';
 import CourseWeekCard from '@/components/course/CourseWeekCard';
 import GradeStanding from '@/components/course/GradeStanding';
@@ -74,6 +75,7 @@ export default function CoursePage() {
   const courseId = typeof params?.courseId === 'string' ? params.courseId : '';
   const router = useRouter();
   const { notify } = useNotice();
+  const { offer } = useUndo();
   const { active, start, pause, resume, focusSeconds } = useTimer();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
@@ -206,6 +208,7 @@ export default function CoursePage() {
   async function toggleTask(task: Task) {
     try {
       await toggleTaskOptimistic(task);
+      if (!task.completed) offer(finishedUndo(task));
     } catch (error) {
       console.error('Failed to update task:', error);
       notify('That task did not update.');
