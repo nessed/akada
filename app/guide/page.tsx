@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import LegalPage, { Section } from '@/components/LegalPage';
-import { SITE_URL } from '@/lib/site-url';
 import { CONTACT_EMAIL } from '@/lib/contact';
 
 export const metadata: Metadata = {
@@ -30,8 +29,6 @@ const CONTENTS = [
 ];
 
 export default function GuidePage() {
-  const connectorUrl = `${SITE_URL}/api/mcp`;
-
   return (
     <LegalPage
       title="How Akada works"
@@ -196,44 +193,18 @@ export default function GuidePage() {
 
       <Section id="claude" title="Letting Claude fill it in">
         <p>
-          If you use Claude, you can connect it to Akada once and from then on just talk
-          to it. It can read your planner and write into it. You need a Claude account;
-          the rest takes about two minutes.
+          If you use Claude, connect Akada to it once and from then on just talk to it.
+          It can read your planner and write into it. In Claude, open{' '}
+          <strong>Customize</strong>, then <strong>Connectors</strong>, search for{' '}
+          <strong>Akada</strong>, press <strong>Connect</strong> and sign in.
         </p>
-        <ul>
-          <li>
-            In Claude, open <strong>Customize</strong>, then{' '}
-            <strong>Connectors</strong>, then <strong>Add custom connector</strong>.
-          </li>
-          <li>
-            Call it Akada, and paste this as the server URL. Leave the rest as it is.{' '}
-            <code className="rounded bg-bg-tint px-1.5 py-0.5 font-sans text-[13px] text-ink break-all">
-              {connectorUrl}
-            </code>
-          </li>
-          <li>
-            Press <strong>Connect</strong>, sign in with your Akada email and password,
-            and allow it.
-          </li>
-          <li>
-            In a new chat, open the connectors menu and make sure Akada is switched on.
-          </li>
-        </ul>
-        <p>Then try things like:</p>
-        <ul>
-          <li>
-            &ldquo;Here&apos;s my outline for ECON 100. Put every assignment, reading and
-            exam into Akada with the right dates.&rdquo; (attach the PDF)
-          </li>
-          <li>&ldquo;What do I have due this week, and what should I start first?&rdquo;</li>
-          <li>&ldquo;Quiz me on what&apos;s due for recall today.&rdquo;</li>
-          <li>&ldquo;I got 17 out of 20 on the second quiz in PSY 101, write it in.&rdquo;</li>
-          <li>&ldquo;What do I need on the final to get an A-?&rdquo;</li>
-          <li>&ldquo;Log two hours on CS 200 from this afternoon.&rdquo;</li>
-        </ul>
         <p>
-          If you&apos;d rather check each change before it happens, set Akada&apos;s tools
-          to <strong>Needs approval</strong> in the same Connectors screen.
+          Then attach a course outline and ask it to put everything into Akada. Every
+          quiz, assignment, reading and exam goes in with its date and weight.{' '}
+          <Link className="hand-underline text-ink" href="/claude">
+            Akada in Claude
+          </Link>{' '}
+          has more things to ask and says exactly what happens to your data.
         </p>
       </Section>
 

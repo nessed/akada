@@ -34,7 +34,7 @@ export default function QuizShelf({ onDelete }: { onDelete: (id: string, title: 
         <span className="eyebrow">Quizzes</span>
         {quizzes.length > 0
           ? status && <span className="standfirst">{status}</span>
-          : <span className="standfirst">none yet · tell your assistant “quiz me on this in Akada” and it lands here</span>}
+          : <span className="standfirst">none yet · tell Claude “quiz me on this in Akada” and it lands here · <a className="link" href="/claude">connect Claude</a></span>}
       </div>
       <ul className="shelf">
         {quizzes.map((quiz) => {

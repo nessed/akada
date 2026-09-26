@@ -3,4 +3,4 @@
  * so onboarding, Today and every copied prompt send a student to the same
  * explanation.
  */
-export const CLAUDE_PAGE = '/guide#claude';
+export const CLAUDE_PAGE = '/claude';

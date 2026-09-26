@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { CLAUDE_PAGE } from '@/lib/claude-page';
 import { useMemo, useState } from 'react';
 import type { Assessment, Course, DropRule, Task } from '@/lib/data';
 import { gradeStanding } from '@/lib/derive';
@@ -104,7 +106,7 @@ export default function GradeStanding({
     const prompt = gradingPrompt({ courseId: course.id, courseCode: course.code });
     try {
       await navigator.clipboard.writeText(prompt);
-      notify(`Prompt copied. Paste it into a chat with the Akada connector on, and attach the ${course.code} outline.`);
+      notify(`Prompt copied. Paste it into a Claude chat with Akada switched on, and attach the ${course.code} outline.`);
     } catch (error) {
       console.error('Failed to copy the grading prompt:', error);
       notify('Akada could not reach the clipboard. Type it in instead.');
@@ -394,8 +396,11 @@ export default function GradeStanding({
           Say how it is marked
         </button>
         <p className="m-0 mt-2 text-center font-serif text-[12px] italic leading-[1.4] text-muted">
-          Copies a prompt. Paste it into a chat with the Akada connector on and
-          attach the outline.
+          Copies a message. Paste it into a Claude chat with Akada switched on and
+          attach the outline.{' '}
+          <Link href={CLAUDE_PAGE} className="hand-underline not-italic text-ink-soft">
+            Not connected yet?
+          </Link>
         </p>
         {/* The manual path is unchanged, and this is the only door left to it
             on a course with no pieces yet. */}

@@ -43,7 +43,7 @@ import {
  * pretending to be an interruption, so the same panels get a page instead.
  */
 
-type Section = 'profile' | 'term' | 'goals' | 'courses' | 'appearance' | 'data';
+type Section = 'profile' | 'term' | 'goals' | 'courses' | 'appearance' | 'claude' | 'data';
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'goals', label: 'Goals' },
@@ -51,6 +51,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'term', label: 'Term' },
   { id: 'courses', label: 'Courses' },
   { id: 'appearance', label: 'Appearance' },
+  { id: 'claude', label: 'Claude' },
   { id: 'data', label: 'Data' },
 ];
 
@@ -363,6 +364,19 @@ export default function SettingsPage() {
               setPrefs={setPrefs}
               onBack={() => setSection('goals')}
             />
+          )}
+
+          {section === 'claude' && (
+            <SettingGroup label="Akada in Claude" first>
+              <p className="m-0 px-[18px] py-4 font-serif text-[14px] leading-[1.6] text-ink-soft">
+                Connect Akada to Claude once and it can read your planner and write into
+                it. Hand it a course outline and every deadline goes in, ask it what to
+                start first, or have it quiz you on your recall.
+              </p>
+              <SettingRow label="How to connect it, and what to ask" href="/claude" />
+              <SettingRow label="Everything the connector can do" href="/docs" />
+              <SettingRow label="What happens to your data" href="/privacy#assistants" />
+            </SettingGroup>
           )}
 
           {section === 'data' && (

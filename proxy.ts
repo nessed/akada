@@ -19,6 +19,8 @@ const PUBLIC_PATHS = new Set([
   '/terms',
   // The walk-through, which is the link to send someone before they sign up.
   '/guide',
+  // What Akada does inside Claude, the page to send a friend who uses it.
+  '/claude',
   // The connector's setup and tool reference, linked from the Claude
   // directory listing and the protected resource metadata.
   '/docs',
