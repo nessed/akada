@@ -31,7 +31,7 @@ import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import HandCheck from '@/components/notebook/HandCheck';
 import { useNotice } from '@/components/Notice';
-import { finishedUndo, useUndo } from '@/components/Undo';
+import { finishedUndo, skippedUndo, useUndo } from '@/components/Undo';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Task } from '@/lib/data';
 import { upNextFrom } from '@/lib/use-up-next';
@@ -322,6 +322,7 @@ function DashboardPageContent() {
   async function handleSkipTask(task: Task) {
     try {
       await skipTaskOptimistic(task);
+      offer(skippedUndo(task));
     } catch (error) {
       console.error('Failed to skip task:', error);
       notify(error instanceof Error && error.message.startsWith('Skip') ? error.message : 'That task did not skip.');
