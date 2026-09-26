@@ -563,6 +563,17 @@
 
 .notes.quiz article { max-width: 720px; }
 .notes .quiz-context { margin: 8px 0 0; font: italic 14px/1.5 var(--font-serif); color: var(--muted); }
+
+/* The timer the assistant judged the paper should take. It runs from the
+   moment the paper opens; turning it off is a quiet italic link, the same
+   hand as "unclear?" below, not a switch. Time running low is a warm color
+   shift on the digits themselves, never a flashing or shaking indicator. */
+.notes .quiz-timer { display: flex; align-items: center; gap: 16px; margin: 6px 0 24px; }
+.notes .quiz-timer-face { font-family: var(--font-mono); font-size: 21px; font-weight: 500; letter-spacing: -0.01em; color: var(--ink); font-variant-numeric: tabular-nums; transition: color .3s; }
+.notes .quiz-timer[data-urgent] .quiz-timer-face { color: var(--peach); }
+.notes .quiz-timer-toggle { padding: 0; border: 0; background: none; font: italic 13px var(--font-serif); color: var(--muted-soft); cursor: pointer; transition: color .15s; }
+.notes .quiz-timer-toggle:hover { color: var(--ink-soft); }
+.notes .quiz-timer-toggle[aria-checked='false'] { color: var(--ink-soft); text-decoration: underline wavy var(--line-strong); text-underline-offset: 4px; }
 .notes .quiz-mark { display: flex; align-items: center; gap: 28px; margin: -4px 0 28px; animation: notes-fade-up .35s cubic-bezier(.2, .7, .2, 1) both; }
 .notes .quiz-mark .strokes { margin-top: 0; }
 .notes .quiz-mark .strokes-label em { color: var(--ink-soft); }

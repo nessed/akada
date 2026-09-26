@@ -297,25 +297,30 @@ exception when duplicate_object then null; end $$;
 -- the quiz rather than taking it. `questions` is
 -- [{"prompt":"...","options":["...","..."],"answer":1,"explain":"..."}],
 -- `attempts` every sitting in Akada, oldest first, kept to the last 30:
--- [{"at":"...","picks":[1,0,-1],"score":1,"total":3}].
+-- [{"at":"...","picks":[1,0,-1],"score":1,"total":3}]. `timer_minutes` is how
+-- long the assistant judged the paper should take, null when it sent none;
+-- whether a given sitting actually runs timed is the student's own call,
+-- kept only on their device.
 -- ============================================================
 create table if not exists quizzes (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  course_id   uuid references courses(id) on delete set null,
-  task_id     uuid references tasks(id) on delete set null,
-  note_id     uuid references notes(id) on delete set null,
-  title       text not null,
-  context     text,
-  questions   jsonb not null,
-  attempts    jsonb not null default '[]'::jsonb,
-  source      text not null default 'mcp' check (source in ('mcp')),
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  course_id     uuid references courses(id) on delete set null,
+  task_id       uuid references tasks(id) on delete set null,
+  note_id       uuid references notes(id) on delete set null,
+  title         text not null,
+  context       text,
+  questions     jsonb not null,
+  attempts      jsonb not null default '[]'::jsonb,
+  timer_minutes integer,
+  source        text not null default 'mcp' check (source in ('mcp')),
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
   constraint quizzes_title_length check (char_length(title) between 1 and 300),
   constraint quizzes_context_length check (context is null or char_length(context) <= 300),
   constraint quizzes_questions_array check (jsonb_typeof(questions) = 'array' and jsonb_array_length(questions) between 1 and 50),
-  constraint quizzes_attempts_array check (jsonb_typeof(attempts) = 'array')
+  constraint quizzes_attempts_array check (jsonb_typeof(attempts) = 'array'),
+  constraint quizzes_timer_minutes_range check (timer_minutes is null or timer_minutes between 1 and 180)
 );
 
 alter table quizzes enable row level security;
