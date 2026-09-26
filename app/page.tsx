@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
+import ChatSketch from '@/components/claude/ChatSketch';
 import StudyFan from '@/components/StudyFan';
 import { PASTEL_PALETTE } from '@/lib/utils';
 import { CONTACT_EMAIL } from '@/lib/contact';
@@ -7,54 +9,41 @@ import { CONTACT_EMAIL } from '@/lib/contact';
 export const metadata: Metadata = {
   // The one indexable page, so it carries the brand itself rather than
   // relying on the layout's '%s - Akada' template.
-  title: 'Akada: a calm study planner for university',
+  title: 'Akada: every deadline this term, on one page',
   description:
-    'Akada keeps your courses, deadlines and study hours on one quiet page. '
-    + 'Pick your sections from the course catalog, set a weekly goal, and log the time you actually study.',
+    'A study planner for LUMS. Pick your courses from the Fall 2026 list, hand Claude your '
+    + 'course outlines and every deadline goes in, then Akada tells you what to do next.',
   alternates: { canonical: '/' },
   openGraph: {
-    title: 'Akada: a calm study planner for university',
+    title: 'Akada: every deadline this term, on one page',
     description:
-      'Your courses, deadlines and study hours on one quiet page.',
+      'Your courses, deadlines and study hours on one quiet page. Claude can fill it in for you.',
     url: '/',
   },
 };
 
-// The three sample courses on the landing page, coloured from the real
-// palette and drawn with the app's own hour strokes, so the shot and the
-// screen it is selling cannot drift apart.
-const [SAGE, ROSE, LAVENDER] = PASTEL_PALETTE;
+const [SAGE] = PASTEL_PALETTE;
 
-const sampleCourses = [
+// Setup, in the order it happens. Each one is a thing the reader does, so the
+// page answers "what would I actually do" before "what can it do".
+const steps = [
   {
-    code: 'POL 227',
-    name: 'Comparative Politics',
-    color: SAGE.value,
-    tint: SAGE.token,
-    hours: '3.5',
-    goal: '6h',
+    title: 'Pick your courses',
+    text: 'Search the LUMS Fall 2026 list and choose your section. Instructor and class times come with it.',
   },
   {
-    code: 'ENG 305',
-    name: 'Modernist Literature',
-    color: ROSE.value,
-    tint: ROSE.token,
-    hours: '2.0',
-    goal: '5h',
+    title: 'Get your deadlines in',
+    text: 'Hand Claude your course outlines and it writes in every quiz, assignment and exam with its weight. Or add them yourself.',
   },
   {
-    code: 'PSY 110',
-    name: 'Cognition & Memory',
-    color: LAVENDER.value,
-    tint: LAVENDER.token,
-    hours: '4.0',
-    goal: '4h',
+    title: 'Open Today and start',
+    text: 'It shows what to do next with a Start button beside it. The timer runs while you study and the week fills in.',
   },
 ];
 
 // The parts a first-time reader would never find by poking around, said in
 // the plainest words that are still true. Each links to its section of the
-// guide, which says how to use it.
+// guide. Claude has its own section above, so it is not repeated here.
 const features = [
   {
     title: 'Reading, in hours',
@@ -72,18 +61,13 @@ const features = [
     href: '/guide#recall',
   },
   {
-    title: 'Claude does the typing',
-    text: 'Connect Claude once, hand it your course outlines, and every deadline and weighting goes in for you.',
-    href: '/guide#claude',
-  },
-  {
     title: 'A run in weeks',
-    text: 'Your streak is counted by the week, so one day off costs nothing. Course pages fill in and get bound as you log hours.',
+    text: 'Your streak is counted by the week, so one day off costs nothing. Every hour you log shows up somewhere.',
     href: '/guide#stats',
   },
   {
     title: 'A timer worth watching',
-    text: 'Start it from any task or course. Everything Akada tells you is worked out from the time you log.',
+    text: 'Start it from any task or course. A drawing grows in the course colour while you study, instead of a clock ticking down.',
     href: '/guide#timer',
   },
 ];
@@ -105,49 +89,42 @@ export default function LandingPage() {
           }}
         />
 
-        <div className="relative mx-auto flex max-w-5xl flex-col px-6 pb-10 pt-6 sm:px-8 lg:px-10">
-          <header className="flex items-center justify-between gap-4">
-            <Link href="/" className="flex items-center gap-3">
-              <Mark size={34} />
-              <div>
-                <p className="m-0 font-serif text-[22px] font-medium leading-none tracking-[-0.02em]">
-                  Akada
-                </p>
-                <p className="eyebrow mt-1 mb-0 text-muted">
-                  Study Planner
-                </p>
-              </div>
+        <div className="relative mx-auto flex max-w-5xl flex-col px-5 pb-10 pt-6 sm:px-8 lg:px-10">
+          <header className="flex items-center justify-between gap-3">
+            <Link href="/" className="flex items-center gap-2.5">
+              <Mark size={30} />
+              <p className="m-0 font-serif text-[21px] font-medium leading-none tracking-[-0.02em]">
+                Akada
+              </p>
             </Link>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <Link
                 href="/auth"
-                className="rounded-full border border-line bg-paper px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-line-strong"
+                className="whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink"
               >
                 Sign in
               </Link>
               <Link
                 href="/auth?mode=signup"
-                className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-contrast"
+                className="whitespace-nowrap rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-contrast"
               >
                 Create account
               </Link>
             </div>
           </header>
 
-          {/* The page's own two columns. The claim on the left, the thing
-              itself on the right: a screenshot argues better than a
-              paragraph about what the screenshot would contain. */}
-          <div className="mt-12 grid items-center gap-12 sm:mt-16 lg:grid-cols-[minmax(0,1fr)_430px]">
+          <div className="mt-12 grid items-center gap-12 sm:mt-16 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0">
-              <p className="eyebrow m-0">Study planner</p>
-              <h1 className="m-0 mt-4 font-serif text-[36px] font-medium leading-[1.05] tracking-[-0.03em] sm:text-[44px]">
-                Courses, tasks, hours.
+              <p className="eyebrow m-0">A study planner for LUMS</p>
+              <h1 className="m-0 mt-4 font-serif text-[38px] font-medium leading-[1.05] tracking-[-0.03em] sm:text-[48px]">
+                Every deadline this term,
                 <br />
-                One term at a time.
+                <span className="italic font-normal">on one page.</span>
               </h1>
-              <p className="mt-5 mb-0 max-w-xl text-[16px] leading-[1.65] text-ink-soft">
-                Keep readings in order, start a timer on any of them in one click, and
-                watch the week fill in against a goal you set.
+              <p className="mt-5 mb-0 max-w-xl font-serif text-[17px] leading-[1.6] text-ink-soft">
+                Pick your courses off the Fall 2026 list, hand Claude your course outlines,
+                and every quiz, reading and midterm goes in with its date and weight. Then
+                Akada tells you what to do next and times you while you do it.
               </p>
 
               <div className="mt-8 flex flex-col gap-2.5 sm:flex-row">
@@ -158,27 +135,75 @@ export default function LandingPage() {
                   Create account
                 </Link>
                 <Link
-                  href="/auth"
+                  href="/claude"
                   className="rounded-[10px] border border-line-strong bg-paper px-6 py-3.5 text-center text-[15px] font-medium text-ink-soft no-underline"
                 >
-                  Sign in
+                  See how Claude fills it in
                 </Link>
               </div>
 
-              <p className="mt-5 mb-0 text-[13px] text-muted">
-                Free. Works offline. Your data stays yours.{' '}
-                <Link className="hand-underline text-ink-soft" href="/guide">
-                  See how it works
-                </Link>
+              <p className="mt-5 mb-0 font-serif text-[13.5px] italic text-muted">
+                Akada is free. Delete your account and everything in it goes with it.
               </p>
             </div>
 
-            <ProductPreview />
+            <Shot
+              src="/landing/today-phone.png"
+              alt="Akada's Today screen on a phone: the reading due today with a Start button, and today's hours."
+              width={390}
+              height={780}
+              className="mx-auto w-full max-w-[300px] rounded-[34px] lg:max-w-[340px]"
+            />
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-5xl px-6 pb-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-5xl px-5 pb-16 sm:px-8 lg:px-10">
+        <p className="eyebrow m-0">How it goes</p>
+        <ol className="m-0 mt-4 grid list-none gap-6 p-0 sm:grid-cols-3">
+          {steps.map((step, i) => (
+            <li key={step.title} className="border-t border-line-strong pt-4">
+              <p className="m-0 font-mono text-[12px] text-muted">{i + 1}</p>
+              <h2 className="m-0 mt-1.5 font-serif text-[20px] font-medium tracking-[-0.01em]">
+                {step.title}
+              </h2>
+              <p className="mt-2 mb-0 text-[14px] leading-[1.6] text-ink-soft">{step.text}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {/* Claude, shown rather than described. Most people have never heard of a
+          connector, and "hand it your outline, the deadlines appear" needs no
+          word for one. */}
+      <section className="mx-auto max-w-5xl px-5 pb-16 sm:px-8 lg:px-10">
+        <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:gap-12">
+          <div className="min-w-0 md:pt-8">
+            <p className="eyebrow m-0">Works inside Claude</p>
+            <h2 className="m-0 mt-3 font-serif text-[30px] font-medium leading-[1.12] tracking-[-0.02em]">
+              Hand it your outline. <span className="italic font-normal">Never type a deadline.</span>
+            </h2>
+            <p className="mt-4 mb-0 font-serif text-[16px] leading-[1.65] text-ink-soft">
+              Connect Akada to Claude once. Then attach a course outline and say
+              &ldquo;put everything into Akada&rdquo;, or ask what to start first, what you
+              need on the final, or to be quizzed on last week&apos;s readings. It reads
+              your planner and writes into it for you.
+            </p>
+            <p className="mt-4 mb-0 font-serif text-[14.5px] leading-[1.6] text-muted">
+              Akada never sees your chats. It only gets what Claude asks it for, and
+              Claude can only touch your own planner.
+            </p>
+            <Link href="/claude" className="hand-underline mt-5 inline-block font-serif text-[15px] text-ink">
+              How to connect it, and what happens to your data
+            </Link>
+          </div>
+          <div className="min-w-0">
+            <ChatSketch />
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-5xl px-5 pb-16 sm:px-8 lg:px-10">
         <p className="eyebrow m-0">What it does that a to-do list doesn&apos;t</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
@@ -205,9 +230,22 @@ export default function LandingPage() {
         </p>
       </section>
 
+      {/* The real screen at laptop width, taken by scripts/landing-shots.mjs
+          off the app itself so it cannot drift from what signing up gets. */}
+      <section className="mx-auto hidden max-w-5xl px-5 pb-16 sm:block sm:px-8 lg:px-10">
+        <p className="eyebrow m-0">On a laptop</p>
+        <Shot
+          src="/landing/today-desktop.png"
+          alt="Akada's Today screen on a laptop: up next, recall, what is coming and the reading ahead in hours."
+          width={1280}
+          height={800}
+          className="mt-4 w-full rounded-[14px]"
+        />
+      </section>
+
       {/* The timer, shown rather than described. The fan is the one part of
           the app that has to be watched to be understood. */}
-      <section className="mx-auto max-w-5xl px-6 pb-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-5xl px-5 pb-16 sm:px-8 lg:px-10">
         <div className="grid items-center gap-8 overflow-hidden rounded-[14px] border border-line bg-paper md:grid-cols-2">
           <div className="px-7 py-8 md:px-10">
             <p className="eyebrow m-0">The timer</p>
@@ -241,12 +279,12 @@ export default function LandingPage() {
 
       {/* The page used to end on the feature grid, so anyone who read to the
           bottom had to scroll back up to act. */}
-      <section className="mx-auto max-w-5xl px-6 pb-16 text-center sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-5xl px-5 pb-16 text-center sm:px-8 lg:px-10">
         <h2 className="m-0 font-serif text-[26px] font-medium tracking-[-0.02em]">
           Start the term <span className="italic">on one page</span>.
         </h2>
         <p className="mx-auto mt-2.5 mb-0 max-w-[360px] text-[14px] leading-[1.6] text-ink-soft">
-          Free, and it takes a minute to set up.
+          Two minutes to set up. Your courses are already on the list.
         </p>
         <Link
           href="/auth?mode=signup"
@@ -257,13 +295,16 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-line">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-7 sm:px-8 lg:px-10">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-7 sm:px-8 lg:px-10">
           <p className="m-0 font-serif text-[13px] italic text-muted">
-            Akada, made with quiet hands.
+            Akada, made at LUMS with quiet hands.
           </p>
-          <nav className="flex items-center gap-5 font-serif text-[13px] text-muted">
+          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 font-serif text-[13px] text-muted">
             <Link className="hand-underline" href="/guide">
               How it works
+            </Link>
+            <Link className="hand-underline" href="/claude">
+              Akada in Claude
             </Link>
             <Link className="hand-underline" href="/privacy">
               Privacy
@@ -281,114 +322,29 @@ export default function LandingPage() {
   );
 }
 
-function ProductPreview() {
+/** A photograph of the real app, laid on the page like a print. */
+function Shot({
+  src,
+  alt,
+  width,
+  height,
+  className,
+}: {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  className?: string;
+}) {
   return (
-    <div className="mx-auto mt-12 w-full max-w-[430px] rounded-[28px] border border-line-strong bg-paper p-3 shadow-[0_24px_70px_rgba(26,25,21,0.12)]">
-      <div className="overflow-hidden rounded-[22px] border border-line bg-bg">
-        <div className="flex items-start justify-between gap-3 px-5 pt-5">
-          <div>
-            <p className="eyebrow m-0 text-muted">
-              Wk 17
-            </p>
-            <h2 className="mt-1 mb-0 font-serif text-[30px] font-normal leading-none tracking-[-0.02em]">
-              April <span className="italic">27</span>
-            </h2>
-            <p className="mt-2 mb-0 max-w-[230px] text-[12px] leading-[1.5] text-ink-soft">
-              2 tasks due today. 3h 25m logged this week.
-            </p>
-          </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-line bg-peach font-serif text-[17px] font-medium">
-            A
-          </div>
-        </div>
-
-        <div className="px-5 pt-5">
-          <div className="relative overflow-hidden rounded-[14px] border border-line bg-paper px-5 py-4">
-            <div
-              aria-hidden
-              className="absolute right-0 top-0 h-[22px] w-[22px]"
-              style={{
-                background:
-                  'linear-gradient(225deg, var(--bg-tint) 50%, transparent 50%)',
-              }}
-            />
-            <div className="flex items-baseline gap-2.5">
-              <span className="font-mono text-[32px] font-semibold leading-none tracking-[-0.02em]">
-                1h 35m
-              </span>
-              <span className="text-[12px] text-muted">today</span>
-            </div>
-            <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-bg-tint">
-              <span className="w-[54%] bg-sage" />
-              <span className="w-[28%] bg-rose" />
-              <span className="w-[18%] bg-lav" />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 px-5 py-5">
-          {sampleCourses.map((course) => (
-            <div
-              key={course.code}
-              className="relative overflow-hidden rounded-[14px] border border-line bg-paper"
-            >
-              <div
-                className="absolute left-0 top-0 bottom-0 w-1"
-                style={{ background: course.color }}
-              />
-              <div className="py-4 pl-5 pr-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p
-                      className="eyebrow m-0"
-                      style={{ color: course.color }}
-                    >
-                      {course.code}
-                    </p>
-                    <h3 className="mt-1 mb-0 truncate font-serif text-[17px] font-medium tracking-[-0.01em]">
-                      {course.name}
-                    </h3>
-                  </div>
-                  <span
-                    className="hl-swipe shrink-0 font-mono text-[11px] font-semibold text-ink"
-                    style={{ '--hl': course.tint } as React.CSSProperties}
-                  >
-                    {course.goal}
-                  </span>
-                </div>
-                {/* Strokes, the same as the app draws. A percentage bar in
-                    the shot would be advertising a screen that no longer
-                    exists. */}
-                <div className="mt-3">
-                  <span className="font-mono text-[13px] font-semibold">{course.hours}</span>
-                  <span className="ml-1 font-mono text-[11px] text-muted">/ {course.goal}</span>
-                  <div className="mt-1.5 flex h-3 items-end gap-1">
-                    {Array.from({ length: Number(course.goal.replace('h', '')) }, (_, i) => {
-                      const filled = Math.min(1, Math.max(0, Number(course.hours) - i));
-                      return (
-                        <span
-                          key={i}
-                          className="block h-3 w-[7px] rounded-[2px]"
-                          style={{
-                            border: filled < 1 ? '1px solid var(--line)' : undefined,
-                            background:
-                              filled >= 1
-                                ? course.color
-                                : filled > 0
-                                  ? `linear-gradient(180deg, transparent ${(1 - filled) * 100}%, ${course.color} ${(1 - filled) * 100}%)`
-                                  : undefined,
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <Image
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      sizes="(min-width: 1024px) 960px, 100vw"
+      className={`block h-auto border border-line-strong shadow-[0_24px_70px_rgba(26,25,21,0.12)] ${className ?? ''}`}
+    />
   );
 }
 
