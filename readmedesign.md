@@ -171,7 +171,12 @@ is the whole screen, as it always was.
   the two never offer different tasks. It used to be a dashed box with a
   `00:00` in it that linked to `/timer`, which sends anyone without a running
   sitting straight back to Today: a start button that started nothing.
-- **Settings** at the very foot, set like the screens.
+- **Settings** at the very foot, set like the screens. On the strip its icon
+  becomes the reader's own face once there is one to show — the photo or
+  initials-on-peach circle from the Settings profile card, a small gear badge
+  at its corner so the row still reads as Settings — and falls back to the
+  plain gear with neither a name nor a photo set (`SettingsGlyph`). The
+  mobile header's own way into Settings uses the same glyph.
 
 It collapses to a **64px strip**: the AkadaMark is the handle, the screens are
 their icons, and each course is a spine label, the letters of its code over

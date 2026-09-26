@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useCourses, useTasks } from '@/lib/data-hooks';
+import { useCourses, useTasks, useUserSettings } from '@/lib/data-hooks';
 import { useTimer } from '@/lib/timer-context';
 import { useUpNext } from '@/lib/use-up-next';
 import { isoDate, resolveTint } from '@/lib/utils';
@@ -14,6 +14,7 @@ import { useRecordEarned } from '@/lib/record-earned';
 import { RAIL_COLLAPSED_KEY as COLLAPSE_KEY, writeRailAttribute } from '@/lib/rail';
 import type { Course } from '@/lib/data/types';
 import AkadaMark from './notebook/AkadaMark';
+import SettingsGlyph, { SETTINGS_GEAR } from './SettingsGlyph';
 import StartTimerPopover, { type StartTarget } from './StartTimerPopover';
 
 /**
@@ -108,13 +109,7 @@ const NAV: NavItem[] = [
 const SETTINGS: NavItem = {
   href: '/settings',
   label: 'Settings',
-  icon: (
-    <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <path d="M4 7h9M19 7h1M4 17h3M13 17h7" />
-      <circle cx="16" cy="7" r="2.2" />
-      <circle cx="10" cy="17" r="2.2" />
-    </svg>
-  ),
+  icon: SETTINGS_GEAR,
 };
 
 /** A page with its margin ruled: the handle that folds the margin away. */
@@ -209,6 +204,7 @@ export default function DesktopRail() {
   const { tasks } = useTasks();
   const { active } = useTimer();
   const upNext = useUpNext();
+  const { settings } = useUserSettings();
 
   const navRef = useRef<HTMLElement | null>(null);
   const stripHandleRef = useRef<HTMLButtonElement | null>(null);
@@ -561,7 +557,17 @@ export default function DesktopRail() {
           </div>
         )}
 
-        <div className="mt-1">{screenRow(SETTINGS)}</div>
+        <div className="mt-1">
+          {screenRow({
+            ...SETTINGS,
+            icon: (
+              <SettingsGlyph
+                avatarUrl={settings?.avatarUrl ?? ''}
+                displayName={settings?.displayName ?? ''}
+              />
+            ),
+          })}
+        </div>
       </nav>
 
       {mounted &&

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { Course, Session } from '@/lib/data';
 import { useActiveSemester } from '@/lib/data-hooks';
 import SemesterManager from './SemesterManager';
-import { totalSeconds } from '@/lib/utils';
+import { initialsFor, totalSeconds } from '@/lib/utils';
 import { isLoggableDuration } from '@/lib/session-safety';
 import { downloadSessionsCsv } from '@/lib/sessions-csv';
 import {
@@ -95,14 +95,7 @@ export default function SettingsSheet({
   const dayCount = new Set(safeSessions.map((session) => session.date)).size;
   const shownAvatar = settingsAvatar || avatarUrl;
   const shownName = settingsName || displayName || 'Akada';
-  const initials =
-    shownName
-      .trim()
-      .split(/\s+/)
-      .map((part) => part.charAt(0))
-      .slice(0, 2)
-      .join('')
-      .toUpperCase() || 'A';
+  const initials = initialsFor(shownName) || 'A';
 
   function handleAvatar(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

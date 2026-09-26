@@ -25,6 +25,7 @@ import {
 } from '@/components/today/TodayPanels';
 import ReorderList from '@/components/ReorderList';
 import DatePicker from '@/components/DatePicker';
+import SettingsGlyph from '@/components/SettingsGlyph';
 import SettingsSheet from '@/components/SettingsSheet';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
@@ -787,11 +788,7 @@ function DashboardPageContent() {
             aria-label="Settings"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] border border-line bg-paper text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink md:hidden"
           >
-            <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M4 7h9M19 7h1M4 17h3M13 17h7" />
-              <circle cx="16" cy="7" r="2.2" />
-              <circle cx="10" cy="17" r="2.2" />
-            </svg>
+            <SettingsGlyph avatarUrl={avatarUrl} displayName={displayName} />
           </button>
         </div>
       </header>
