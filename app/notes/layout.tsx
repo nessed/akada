@@ -3,7 +3,7 @@ import 'katex/dist/katex.min.css';
 import './notes.css';
 
 export const metadata: Metadata = {
-  title: 'Notes',
+  title: 'Study',
   description: 'Study notes, read quietly.',
   robots: { index: false, follow: false },
 };

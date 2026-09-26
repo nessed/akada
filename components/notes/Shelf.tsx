@@ -334,7 +334,7 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
             {stats.revisit > 0 && <> · {stats.revisit} {stats.revisit === 1 ? 'check' : 'checks'} to revisit</>}
             {quizzes.length > 0 && <> · {quizzes.length} {quizzes.length === 1 ? 'quiz' : 'quizzes'}{quizLine && <>, {quizLine}</>}</>}
           </p>
-          <h1 className="screen-title">Notes</h1>
+          <h1 className="screen-title">Study</h1>
         </div>
         <div className="actions">
           <button type="button" className="btn btn-ghost" onClick={onPrompt} title="A prompt for your AI">
