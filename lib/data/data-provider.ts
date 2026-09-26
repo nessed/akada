@@ -11,6 +11,8 @@ import type {
   NoteRead,
   QuizAttempt,
   Quizzes,
+  WeakPoints,
+  WeakPointStatus,
   Task,
   Semester,
   NewSemesterInput,
@@ -111,6 +113,11 @@ export interface DataProvider {
    */
   addQuizAttempt(id: string, attempt: QuizAttempt): Promise<QuizAttempt[]>;
   deleteQuiz(id: string): Promise<void>;
+
+  // Weak points. Written by an assistant over MCP; the app reads them and
+  // ticks them fixed or open again.
+  getWeakPoints(): Promise<WeakPoints>;
+  setWeakPointStatus(id: string, status: WeakPointStatus): Promise<void>;
 
   // Semesters
   /** The semester Dashboard/Tasks/Timer currently write into, or null before onboarding finishes it. */

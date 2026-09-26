@@ -16,6 +16,9 @@ import type {
   Quiz,
   QuizAttempt,
   Quizzes,
+  WeakPoint,
+  WeakPoints,
+  WeakPointStatus,
   Task,
   TaskSubtask,
   Semester,
@@ -197,6 +200,45 @@ function rowToQuiz(r: QuizRow): Quiz {
     updatedAt: r.updated_at,
   };
 }
+
+interface WeakPointRow {
+  id: string;
+  course_id: string;
+  task_id: string | null;
+  quiz_id: string | null;
+  section: string | null;
+  page_ref: string | null;
+  summary: string;
+  confusion: string | null;
+  error_type: WeakPoint['errorType'];
+  times_missed: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  status: WeakPointStatus;
+  fixed_at: string | null;
+}
+
+function rowToWeakPoint(r: WeakPointRow): WeakPoint {
+  return {
+    id: r.id,
+    courseId: r.course_id,
+    taskId: r.task_id,
+    quizId: r.quiz_id,
+    section: r.section ?? '',
+    pageRef: r.page_ref ?? '',
+    summary: r.summary,
+    confusion: r.confusion ?? '',
+    errorType: r.error_type,
+    timesMissed: r.times_missed,
+    firstSeenAt: r.first_seen_at,
+    lastSeenAt: r.last_seen_at,
+    status: r.status === 'fixed' ? 'fixed' : 'open',
+    fixedAt: r.fixed_at,
+  };
+}
+
+const WEAK_POINTS_UNAVAILABLE =
+  'Weak points could not be saved. Run the latest supabase/schema.sql once and try again.';
 
 const QUIZZES_UNAVAILABLE =
   'Quizzes could not be saved. Run the latest supabase/schema.sql once and try again.';
@@ -1414,6 +1456,34 @@ export class SupabaseAdapter implements DataProvider {
     if (error) throw error;
   }
 
+  // ---- Weak points ----
+  // Written by the connector; the app reads them and ticks them fixed.
+
+  async getWeakPoints(): Promise<WeakPoints> {
+    const uid = await this.userId();
+    const { data, error } = await this.supabase
+      .from('weak_points')
+      .select('*')
+      .eq('user_id', uid)
+      .order('times_missed', { ascending: false })
+      .order('last_seen_at', { ascending: false });
+    if (error) {
+      if (isMissingRecall(error)) return { weakPoints: [], available: false };
+      throw error;
+    }
+    return { weakPoints: (data as WeakPointRow[]).map(rowToWeakPoint), available: true };
+  }
+
+  async setWeakPointStatus(id: string, status: WeakPointStatus): Promise<void> {
+    const uid = await this.userId();
+    const { error } = await this.supabase
+      .from('weak_points')
+      .update({ status, fixed_at: status === 'fixed' ? new Date().toISOString() : null })
+      .eq('id', id)
+      .eq('user_id', uid);
+    if (error) throw isMissingRecall(error) ? new Error(WEAK_POINTS_UNAVAILABLE) : error;
+  }
+
   // ---- Dev / debugging ----
 
   async resetAll(): Promise<void> {
@@ -1421,6 +1491,7 @@ export class SupabaseAdapter implements DataProvider {
     // Delete in FK-safe order. recall_items would go with its courses anyway;
     // it is named so a project without the table simply skips it.
     await this.supabase.from('recall_items').delete().eq('user_id', uid);
+    await this.supabase.from('weak_points').delete().eq('user_id', uid);
     await this.supabase.from('quizzes').delete().eq('user_id', uid);
     await this.supabase.from('notes').delete().eq('user_id', uid);
     await this.supabase.from('sessions').delete().eq('user_id', uid);

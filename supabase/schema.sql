@@ -321,6 +321,40 @@ create table if not exists quizzes (
 alter table quizzes enable row level security;
 
 -- ============================================================
+-- 3d. WEAK POINTS  (FK -> courses, tasks, quizzes)
+--
+-- What a student keeps getting wrong in a course, one row per distinct
+-- confusion, written by an assistant over MCP after it marks a quiz and read
+-- back before exams. The same confusion found again bumps times_missed on
+-- the row it already has (the rule is in lib/weak-points.ts). Deleting the
+-- course takes them; deleting the quiz or task only unlinks them.
+-- ============================================================
+create table if not exists weak_points (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  course_id     uuid not null references courses(id) on delete cascade,
+  task_id       uuid references tasks(id) on delete set null,
+  quiz_id       uuid references quizzes(id) on delete set null,
+  section       text not null default '',
+  page_ref      text not null default '',
+  summary       text not null,
+  confusion     text,
+  error_type    text not null check (error_type in ('concept', 'assumption', 'algebra', 'graph', 'evidence', 'command_word', 'careless')),
+  times_missed  integer not null default 1 check (times_missed >= 1),
+  first_seen_at timestamptz not null default now(),
+  last_seen_at  timestamptz not null default now(),
+  status        text not null default 'open' check (status in ('open', 'fixed')),
+  fixed_at      timestamptz,
+  constraint weak_points_summary_length check (char_length(summary) between 1 and 300),
+  constraint weak_points_confusion_length check (confusion is null or char_length(confusion) <= 200),
+  constraint weak_points_section_length check (char_length(section) <= 40),
+  constraint weak_points_page_ref_length check (char_length(page_ref) <= 40),
+  constraint weak_points_fixed_at check ((status = 'fixed') = (fixed_at is not null))
+);
+
+alter table weak_points enable row level security;
+
+-- ============================================================
 -- 4. SEMESTERS
 --
 -- A user now has many semesters, not one. The table used to be keyed
@@ -573,6 +607,7 @@ drop policy if exists "Users manage own trust pulse" on trust_pulse;
 drop policy if exists "Users manage own recall" on recall_items;
 drop policy if exists "Users manage own notes" on notes;
 drop policy if exists "Users manage own quizzes" on quizzes;
+drop policy if exists "Users manage own weak points" on weak_points;
 
 create policy "Users manage own courses"
   on courses for all
@@ -640,6 +675,12 @@ create policy "Users manage own quizzes"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
+create policy "Users manage own weak points"
+  on weak_points for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
 -- ============================================================
 -- 8. INDEXES
 --
@@ -675,6 +716,10 @@ create index if not exists quizzes_user_created_idx       on quizzes (user_id, c
 create index if not exists quizzes_course_idx             on quizzes (course_id);
 create index if not exists quizzes_task_idx               on quizzes (task_id);
 create index if not exists quizzes_note_idx               on quizzes (note_id);
+create index if not exists weak_points_user_course_idx    on weak_points (user_id, course_id, status);
+create index if not exists weak_points_course_idx         on weak_points (course_id);
+create index if not exists weak_points_task_idx           on weak_points (task_id);
+create index if not exists weak_points_quiz_idx           on weak_points (quiz_id);
 
 -- ============================================================
 -- 9. DATA INTEGRITY CONSTRAINTS

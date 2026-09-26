@@ -42,6 +42,7 @@ import { checkResource, MCP_SCOPES, mcpSupabase, mcpUrl, siteUrl } from './_shar
 import { limitToGrantedScopes } from './scopes';
 import { registerNoteTools } from './notes-tools';
 import { registerQuizTools } from './quiz-tools';
+import { registerWeakPointTools } from './weak-point-tools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -3182,6 +3183,7 @@ export function createServer(token: AuthenticatedToken) {
 
   registerNoteTools(server, token);
   registerQuizTools(server, token);
+  registerWeakPointTools(server, token);
 
   return server;
 }
