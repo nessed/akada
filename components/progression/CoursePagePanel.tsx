@@ -48,13 +48,13 @@ export default function CoursePagePanel({
           color={course.color}
         />
         <span className="font-mono text-[12px] text-muted">
-          {record.onPage} of {MARKS_PER_PAGE} marks
+          {record.onPage} of {MARKS_PER_PAGE} tallies
         </span>
       </div>
 
       <p className="m-0 mt-4 font-serif text-[13px] italic leading-[1.6] text-muted">
         <Figure>{formatHM(record.toNextMark)}</Figure> of study to the{' '}
-        {record.marks === 0 ? 'first' : 'next'} mark
+        {record.marks === 0 ? 'first' : 'next'} tally
         {' · '}
         <Figure>{formatHM(record.toBindSeconds)}</Figure> to bind this page
       </p>

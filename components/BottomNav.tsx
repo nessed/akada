@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRecordHasNews } from '@/lib/progression/visits';
+import { useRecordEarned } from '@/lib/record-earned';
 import { usePathname } from 'next/navigation';
 
 const tabs = [
@@ -106,14 +107,37 @@ const tabs = [
   },
 ];
 
+// Until the first session is logged the Record has nothing on it, so its
+// slot goes to Courses, which a phone otherwise only reaches through Today.
+const COURSES_TAB = {
+  href: '/courses',
+  label: 'Courses',
+  icon: (
+    <svg aria-hidden
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 4.5h9a2 2 0 0 1 2 2V20H7a2 2 0 0 1-2-2z" />
+      <path d="M16 6.5h1.5a1.5 1.5 0 0 1 1.5 1.5V20h-3" />
+      <path d="M8.5 9h4.5" />
+    </svg>
+  ),
+};
+
 // A course page is reached from the course cards on Today, and its back
 // button returns there, so it keeps that tab lit rather than leaving the bar
 // with nothing marked.
 const OWNED_BY: Record<string, string> = { '/courses': '/dashboard' };
 
-function isActive(pathname: string | null, href: string) {
+function isActive(pathname: string | null, href: string, owned = true) {
   if (!pathname) return false;
   if (pathname === href || pathname.startsWith(href + '/')) return true;
+  if (!owned) return false;
   return Object.entries(OWNED_BY).some(
     ([prefix, owner]) =>
       owner === href && (pathname === prefix || pathname.startsWith(prefix + '/')),
@@ -123,6 +147,10 @@ function isActive(pathname: string | null, href: string) {
 export default function BottomNav() {
   const pathname = usePathname();
   const recordNews = useRecordHasNews();
+  const recordEarned = useRecordEarned();
+  const shown = recordEarned
+    ? tabs
+    : tabs.map((tab) => (tab.href === '/stamps' ? COURSES_TAB : tab));
   return (
     /* The fade has to finish before the icons start, otherwise a card
        scrolling underneath stays legible behind the tab labels. The taller
@@ -137,8 +165,8 @@ export default function BottomNav() {
       }}
     >
       <div className="pointer-events-auto mx-auto max-w-2xl md:max-w-3xl w-full flex justify-around items-center">
-        {tabs.map((tab) => {
-          const active = isActive(pathname, tab.href);
+        {shown.map((tab) => {
+          const active = isActive(pathname, tab.href, recordEarned);
           const news = tab.href === '/stamps' && recordNews && !active;
           return (
             <Link

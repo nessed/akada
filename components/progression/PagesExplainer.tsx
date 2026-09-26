@@ -35,12 +35,12 @@ export default function PagesExplainer({
       </summary>
       <div className="mt-2 flex flex-col gap-2 text-[12px] leading-[1.6] text-muted">
         <p className="m-0">
-          Every {markMinutes} minutes you study a course inks one mark on its
-          page. The very first mark on a new course only takes {firstMinutes}.
+          Every {markMinutes} minutes you study a course inks one tally on its
+          page. The very first tally on a new course only takes {firstMinutes}.
           Ticking off a task for that course adds a few minutes too.
         </p>
         <p className="m-0">
-          Fill all {MARKS_PER_PAGE} marks, about {pageHours} hours on that one
+          Fill all {MARKS_PER_PAGE} tallies, about {pageHours} hours on that one
           course, and the page binds. It goes onto the stack beside the course
           for good and a fresh page opens. Bound pages never come off, even if
           you drop the course for a month.

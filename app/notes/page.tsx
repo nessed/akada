@@ -783,12 +783,12 @@ function NotesContent() {
         <p className="standfirst">Nothing on the shelf yet</p>
         <h1 className="screen-title">Notes</h1>
         <p className="lede">
-          A quiet place to read what you’re studying. Open a <span className="hl-swipe">.md</span> file, drop one anywhere on the page, or have your AI write one.
+          A quiet place to read what you’re studying. Write a note, paste one in, drop a text file on the page, or <a className="link" href="/claude">have Claude write one</a> straight onto this shelf.
         </p>
         <div className="row">
           <button type="button" className="btn btn-primary" onClick={() => go('new=1')}><Icon name="write" size={16} />New note</button>
-          <button type="button" className="btn btn-dashed" onClick={() => fileRef.current?.click()}><Icon name="upload" size={16} />Open .md</button>
-          <button type="button" className="btn btn-ghost" onClick={() => setPromptOpen(true)}><Icon name="copy" size={16} />AI prompt</button>
+          <button type="button" className="btn btn-dashed" onClick={() => fileRef.current?.click()}><Icon name="upload" size={16} />Open a file</button>
+          <button type="button" className="btn btn-ghost" onClick={() => setPromptOpen(true)}><Icon name="copy" size={16} />Prompt for an AI</button>
         </div>
         <div style={{ marginTop: 18 }}>
           <button type="button" className="link" onClick={() => void addNotes([sampleNote()], 'Here’s a sample to read.', 'app')}>or read a sample note first</button>
@@ -797,7 +797,7 @@ function NotesContent() {
         <div className="keys" aria-label="Keyboard shortcuts">
           <div><span className="kbd">N</span> new note</div>
           <div><span className="kbd">O</span> open a file</div>
-          <div><span className="kbd">Ctrl V</span> paste markdown as a note</div>
+          <div><span className="kbd">Ctrl V</span> paste text as a note</div>
         </div>
       </div>
     );

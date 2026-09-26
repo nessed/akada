@@ -15,6 +15,8 @@ import TrustPulse from '@/components/progression/TrustPulse';
 import { useActiveSemester, useCourses } from '@/lib/data-hooks';
 import { sortCourses } from '@/lib/data/course-order';
 import { MARKS_PER_PAGE, MARK_SECONDS } from '@/lib/progression';
+import { FIRST_MARK_SECONDS } from '@/lib/progression/constants';
+import FirstNote from '@/components/FirstNote';
 import { useProgression } from '@/lib/progression/use-progression';
 import {
   diffRecord,
@@ -160,7 +162,7 @@ export default function RecordPage() {
       >
         <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1.5 font-serif text-[13px] italic text-muted">
           <span>
-            <Figure>{marks}</Figure> {marks === 1 ? 'mark' : 'marks'} inked
+            <Figure>{marks}</Figure> {marks === 1 ? 'tally' : 'tallies'} inked
           </span>
           <span>
             <Figure>{bound}</Figure> {bound === 1 ? 'page' : 'pages'} bound
@@ -176,6 +178,18 @@ export default function RecordPage() {
         </p>
       </div>
 
+      {/* Said until the first page binds anywhere, which is the moment the
+          reader has watched the whole loop happen once. */}
+      {!empty && bound === 0 && (
+        <FirstNote className="mb-[var(--density-gap)]">
+          This is the Record, the fun half of your hours. Every{' '}
+          {Math.round(MARK_SECONDS / 60)} minutes on a course inks a tally on its page (the
+          first one takes {Math.round(FIRST_MARK_SECONDS / 60)}), and {MARKS_PER_PAGE} tallies
+          bind the page. Your run counts weeks, so a day off costs nothing. Stamps are struck
+          as the term adds up. All of it is worked out from the sessions you log.
+        </FirstNote>
+      )}
+
       {news?.any && <SinceLastLooked news={news} courses={courses} ladders={progression.ladders} />}
 
       {empty && (
@@ -184,10 +198,10 @@ export default function RecordPage() {
             The record starts with the first sitting you log.
           </p>
           <Link
-            href="/timer"
+            href="/dashboard"
             className="hand-underline mt-2 inline-block font-serif text-[14px] text-ink no-underline"
           >
-            Open the timer
+            Start a timer from Today
           </Link>
         </div>
       )}
@@ -198,7 +212,7 @@ export default function RecordPage() {
             <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="m-0 font-serif text-[20px] font-medium">Course pages</h2>
               <span className="font-serif text-[12.5px] italic text-muted">
-                {MARKS_PER_PAGE} marks, about{' '}
+                {MARKS_PER_PAGE} tallies, about{' '}
                 {Math.round((MARKS_PER_PAGE * MARK_SECONDS) / 3600)} hours, binds a page
               </span>
             </div>
@@ -321,7 +335,7 @@ function SinceLastLooked({
       figure: `+${totalMarks}`,
       text: (
         <>
-          {totalMarks === 1 ? 'mark inked' : 'marks inked'}
+          {totalMarks === 1 ? 'tally inked' : 'tallies inked'}
           {news.marks.length > 0 && (
             <span className="text-muted">
               {' · '}

@@ -218,8 +218,8 @@ export function readNextMark(input: NextMarkInput): NextMarkReading {
         courseId: course.id,
         line:
           record.marks === 0
-            ? `${minutesLabel(record.toNextMark)} to the first mark on ${course.code}`
-            : `${minutesLabel(record.toNextMark)} to the next mark on ${course.code}`,
+            ? `${minutesLabel(record.toNextMark)} to the first tally on ${course.code}`
+            : `${minutesLabel(record.toNextMark)} to the next tally on ${course.code}`,
         remaining: record.toNextMark,
       });
     }

@@ -50,7 +50,11 @@ export default function CourseCard({
 
   const last = lastSeenByCourse(sessions)[course.id];
   const since = last ? daysBetween(last, isoDate()) : Infinity;
-  const neglected = since >= neglectedCutoffDays;
+  // A course added this week with no sessions is new, not neglected. Calling
+  // it "untouched" on the first day read as a telling-off before anything had
+  // been asked of anyone.
+  const isNew = since === Infinity && daysBetween(course.createdAt.slice(0, 10), isoDate()) < 7;
+  const neglected = since >= neglectedCutoffDays && !isNew;
 
   const openTaskCount = tasks.filter((t) => !t.completed).length;
 

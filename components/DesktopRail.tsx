@@ -10,6 +10,7 @@ import { useUpNext } from '@/lib/use-up-next';
 import { isoDate, resolveTint } from '@/lib/utils';
 import { sortCourses } from '@/lib/data/course-order';
 import { useRecordHasNews } from '@/lib/progression/visits';
+import { useRecordEarned } from '@/lib/record-earned';
 import { RAIL_COLLAPSED_KEY as COLLAPSE_KEY, writeRailAttribute } from '@/lib/rail';
 import type { Course } from '@/lib/data/types';
 import AkadaMark from './notebook/AkadaMark';
@@ -202,6 +203,7 @@ interface Tip {
 export default function DesktopRail() {
   const pathname = usePathname();
   const recordNews = useRecordHasNews();
+  const recordEarned = useRecordEarned();
   const [collapsed, setCollapsed] = useRailCollapsed();
   const { courses } = useCourses();
   const { tasks } = useTasks();
@@ -413,7 +415,7 @@ export default function DesktopRail() {
           </button>
         </div>
 
-        {NAV.map((item) =>
+        {NAV.filter((item) => recordEarned || item.href !== '/stamps').map((item) =>
           screenRow(
             item,
             item.href === '/tasks' && openCounts.total > 0 ? (

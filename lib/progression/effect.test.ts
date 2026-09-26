@@ -58,10 +58,10 @@ function readings(
 
 test('the first mark on a new course is named, and the distance moves with the clock', () => {
   const still = readings([MATH], [], [], null, THU);
-  assert.equal(still.before.nextMark.shown?.line, '15 minutes to the first mark on MATH');
+  assert.equal(still.before.nextMark.shown?.line, '15 minutes to the first tally on MATH');
 
   const tenIn = readings([MATH], [], [], { courseId: 'math', date: THU, minutes: 10 }, THU);
-  assert.equal(tenIn.after.nextMark.shown?.line, '5 minutes to the first mark on MATH');
+  assert.equal(tenIn.after.nextMark.shown?.line, '5 minutes to the first tally on MATH');
 });
 
 test('a sitting that crosses a mark says so and names the next one', () => {
@@ -73,12 +73,12 @@ test('a sitting that crosses a mark says so and names the next one', () => {
     THU,
   );
   const effect = readSittingEffect(before, after, [MATH], 'math', THU);
-  assert.deepEqual(effect.lines.slice(0, 2), ['a mark inked on MATH', 'today counts']);
+  assert.deepEqual(effect.lines.slice(0, 2), ['a tally inked on MATH', 'today counts']);
   assert.equal(effect.marks, 1);
   assert.equal(effect.tally.fresh, 1);
   // Marks land at 15, 55, 95 and 135 credited minutes. 60 before, 100 after:
   // the third mark landed and the fourth is 35 away.
-  assert.equal(effect.next?.line, '35 minutes to the next mark on MATH');
+  assert.equal(effect.next?.line, '35 minutes to the next tally on MATH');
 });
 
 test('the day that would make the week count is named as the week, not the day', () => {

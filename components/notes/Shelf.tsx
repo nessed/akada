@@ -214,9 +214,9 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
         </div>
         <div className="actions">
           <button type="button" className="btn btn-ghost" onClick={onPrompt} title="A prompt for your AI">
-            <Icon name="copy" size={16} />AI prompt
+            <Icon name="copy" size={16} />Prompt for an AI
           </button>
-          <button type="button" className="btn btn-ghost" onClick={onOpenFile} title="Open .md (O)">
+          <button type="button" className="btn btn-ghost" onClick={onOpenFile} title="Open a file (O)">
             <Icon name="upload" size={16} />Open
           </button>
           <button type="button" className="btn btn-primary" onClick={onNew} title="New note (N)">

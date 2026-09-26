@@ -33,7 +33,7 @@ import { formatHM } from '@/lib/utils';
  */
 
 const KIND_LABEL: Record<MarkKind, string> = {
-  'course-mark': 'a mark on a course',
+  'course-mark': 'a tally on a course',
   'course-page': 'a page binding',
   'week-goal': "a course's week",
   'week-counts': 'the week itself',
@@ -73,7 +73,7 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
     {
       key: 'good',
       figure: settled(habits.sittings) ? formatHM(habits.sittings.upper) : null,
-      text: 'a good one, and how far Next Mark reaches',
+      text: 'a good one, and how far the next-tally line reaches',
       needs: after(sittingsLeft, 'sitting'),
     },
     {
@@ -211,7 +211,7 @@ export default function HabitsPanel({ habits, courses }: { habits: Habits; cours
           )}
 
           <div>
-            <p className="eyebrow m-0 mb-1.5">What Next Mark has learned</p>
+            <p className="eyebrow m-0 mb-1.5">What the next-tally line has learned</p>
             <p className="m-0 font-serif text-[13px] leading-[1.6] text-muted">
               {learned.length >= 2 ? (
                 <>
