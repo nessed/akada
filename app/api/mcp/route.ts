@@ -2158,10 +2158,34 @@ export async function getReadingBacklog(
   }
 }
 
+/**
+ * Who the connector says it is on initialize. The icons are the app's own
+ * (public/icon.svg and the PNGs scripts/build-icons.mjs makes from it), so
+ * Claude shows the same bookmark the home screen does. Icon URLs have to be
+ * absolute; without a site URL there is nothing to point at, so the server
+ * introduces itself by name alone rather than failing to start.
+ */
+function serverInfo() {
+  const site = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
+  if (!site) return { name: 'Akada', version: '1.1.0' };
+  return {
+    name: 'Akada',
+    title: 'Akada',
+    version: '1.1.0',
+    description: 'Study planner: courses, tasks, study sessions, recall, notes and quizzes.',
+    websiteUrl: site,
+    icons: [
+      { src: `${site}/icon.svg`, mimeType: 'image/svg+xml', sizes: ['any'] },
+      { src: `${site}/icon-192.png`, mimeType: 'image/png', sizes: ['192x192'] },
+      { src: `${site}/icon-512.png`, mimeType: 'image/png', sizes: ['512x512'] },
+    ],
+  };
+}
+
 export function createServer(token: AuthenticatedToken) {
   const scopes = token.scope.split(/\s+/).filter(Boolean);
   const server = limitToGrantedScopes(
-    new McpServer({ name: 'Akada', version: '1.1.0' }, { instructions: SERVER_INSTRUCTIONS }),
+    new McpServer(serverInfo(), { instructions: SERVER_INSTRUCTIONS }),
     scopes,
   );
 

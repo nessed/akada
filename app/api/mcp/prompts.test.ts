@@ -51,6 +51,25 @@ test('the server introduces itself with a map, and get_briefing is the first too
   assert.equal(tools[0].name, 'get_briefing');
 });
 
+test('the server carries the app icon, as absolute URLs off the site', async () => {
+  const previous = process.env.NEXT_PUBLIC_SITE_URL;
+  process.env.NEXT_PUBLIC_SITE_URL = 'https://akada.test/';
+  try {
+    const { init } = await connect(READ_SCOPE);
+    const info = init.result?.serverInfo as { name: string; websiteUrl?: string; icons?: { src: string }[] };
+    assert.equal(info.name, 'Akada');
+    assert.equal(info.websiteUrl, 'https://akada.test');
+    assert.deepEqual(info.icons?.map((i) => i.src), [
+      'https://akada.test/icon.svg',
+      'https://akada.test/icon-192.png',
+      'https://akada.test/icon-512.png',
+    ]);
+  } finally {
+    if (previous === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = previous;
+  }
+});
+
 test('every prompt is offered on a full grant, and the writing ones are held back on a read-only one', async () => {
   const full = await connect(`${READ_SCOPE} ${WRITE_SCOPE}`);
   const listed = (await full.call('prompts/list')).result?.prompts as { name: string; title: string }[];
