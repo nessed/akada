@@ -138,3 +138,13 @@ export function finishedUndo(task: Task): UndoEntry {
     },
   };
 }
+
+/** The slip a skip leaves: the task back on the list, not finished any way. */
+export function skippedUndo(task: Task): UndoEntry {
+  return {
+    label: `Skipped: ${task.title}`,
+    restore: async () => {
+      await updateTaskOptimistic(task.id, { completed: false, completedAt: null, completedVia: null });
+    },
+  };
+}

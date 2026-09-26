@@ -20,7 +20,7 @@ import HourStrokes from '@/components/HourStrokes';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import Stamp from '@/components/notebook/Stamp';
 import { useNotice } from '@/components/Notice';
-import { finishedUndo, useUndo } from '@/components/Undo';
+import { finishedUndo, skippedUndo, useUndo } from '@/components/Undo';
 import CourseSessionLog from '@/components/course/CourseSessionLog';
 import CourseWeekCard from '@/components/course/CourseWeekCard';
 import GradeStanding from '@/components/course/GradeStanding';
@@ -210,6 +210,7 @@ export default function CoursePage() {
   async function skipTask(task: Task) {
     try {
       await skipTaskOptimistic(task);
+      offer(skippedUndo(task));
     } catch (error) {
       console.error('Failed to skip task:', error);
       notify(error instanceof Error && error.message.startsWith('Skip') ? error.message : 'That task did not skip.');

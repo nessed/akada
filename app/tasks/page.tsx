@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import Leaving from '@/components/Leaving';
 import { useNotice } from '@/components/Notice';
-import { finishedUndo, useUndo } from '@/components/Undo';
+import { finishedUndo, skippedUndo, useUndo } from '@/components/Undo';
 import SelectField from '@/components/SelectField';
 import HandCheck from '@/components/notebook/HandCheck';
 import HandNote from '@/components/notebook/HandNote';
@@ -629,12 +629,7 @@ function TasksPageContent() {
   async function skipTask(task: Task) {
     try {
       await skipTaskOptimistic(task);
-      setUndo({
-        label: `Skipped ${task.title}`,
-        restore: async () => {
-          await updateTaskOptimistic(task.id, { completed: false, completedAt: null, completedVia: null });
-        },
-      });
+      offerUndo(skippedUndo(task));
     } catch (error) {
       console.error('Failed to skip task:', error);
       notify(error instanceof Error && error.message.startsWith('Skip') ? error.message : 'That task did not skip.');
