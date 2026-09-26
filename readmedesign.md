@@ -1243,11 +1243,40 @@ photo and not for the name signup already took; the daily goal keeps its
 default and lives in Settings. Adding a new term's courses
 (`?newSemester=1`) is the courses step and the deadlines step.
 
+### The document shell
+Every document (the guide, `/claude`, `/docs`, `/privacy`, `/terms`) sits in
+one shell, `LegalPage`, drawn the way the app is on a laptop:
+
+- **The rail** (`components/docs/DocRail.tsx`) sits on the desk
+  (`--desk`), like the app's rail: the Akada mark, **Reading** (the five
+  documents in `DOC_PAGES`, the open one on a `bg-tint` wash), the open
+  page's sections under it (read off the sheet, any `section[id]` with an
+  h2, so a page never restates its headings; the one being read follows the
+  scroll), and at the foot "new here?" in the hand face over Create account
+  and Open Akada. Laptop only (`lg`).
+- **The sheet**: the page itself, `ruled-paper` with the margin rule, lying
+  over the desk with the curved left edge and `--sheet-shadow`, exactly like
+  `.page-sheet` in the app. On a phone there is no desk: a bar with the mark
+  and Open Akada, then the page.
+- **Type**: a 60px serif title (`Updated …` eyebrow above it on the legal
+  pages), a 21px standfirst, section headings at 32px on a `line-strong`
+  rule, prose at 17px/1.7 (`.legal-prose`). Steps a reader follows in order
+  are `<ol class="doc-steps">`, numbered in mono in the margin.
+- **Margin notes**: `Section` takes an `aside`, a few words in the hand face,
+  out in the right margin at `xl` and under the heading below that. One or
+  two a page, never a sentence of their own content that the page needs.
+- **The pager** at the foot: previous and next in the reading order.
+- A document's own "On this page" list (the guide and `/docs` have one)
+  hides at `lg`, where the rail already lists the sections.
+
+The shell changes how `/docs` and `/privacy` look without touching what they
+say; their words belong to the connector's own work.
+
 ### The guide
 `/guide` is the one place the app is allowed to explain itself at length,
 which is why a screen explains a thing only once (see Explained once): the screens
 stay quiet and the guide does the talking. It is public, set in the same
-serif document shell as the privacy page and the terms (`LegalPage`, with a
+document shell as the privacy page and the terms (`LegalPage`, above, with a
 standfirst instead of an "Updated" date), and written for someone who has
 never used a planner. It opens on **Your first week**, the three habits everything
 else is worked out from (deadlines in, the timer running, recall answered),
