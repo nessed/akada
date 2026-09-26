@@ -626,7 +626,7 @@
 /* The answer is written on ruled lines, the way the page is. */
 .notes .quiz-answer,
 .notes .quiz-answer-read { display: block; width: calc(100% - 34px); margin-left: 34px; padding: 2px 2px 6px; border: 0; background-color: transparent; background-image: repeating-linear-gradient(to bottom, transparent 0 29px, var(--line) 29px 30px); background-attachment: local; font: 16px/30px var(--font-serif); color: var(--ink); resize: vertical; outline: none; white-space: pre-wrap; }
-.notes .quiz-answer { min-height: 122px; }
+.notes .quiz-answer { min-height: 122px; overflow: hidden; resize: none; }
 .notes .quiz-answer::placeholder { color: var(--muted-soft); font-style: italic; }
 .notes .quiz-answer:focus { background-image: repeating-linear-gradient(to bottom, transparent 0 29px, var(--line-strong) 29px 30px); }
 .notes .quiz-answer-read em { color: var(--muted); }
