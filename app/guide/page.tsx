@@ -24,7 +24,7 @@ const CONTENTS = [
   { id: 'timer', title: 'The timer' },
   { id: 'marks', title: 'Your marks' },
   { id: 'recall', title: 'Recall' },
-  { id: 'notes', title: 'Notes' },
+  { id: 'notes', title: 'Study' },
   { id: 'stats', title: 'Stats and the Record' },
   { id: 'claude', title: 'Letting Claude fill it in' },
   { id: 'small', title: 'Small things worth knowing' },
@@ -169,7 +169,7 @@ export default function GuidePage() {
         </p>
       </Section>
 
-      <Section id="notes" title="Notes">
+      <Section id="notes" title="Study">
         <p>
           A shelf for study notes. Write one, paste one in, drop a text file on the page, or
           have Claude write one straight onto the shelf. The reader remembers where you

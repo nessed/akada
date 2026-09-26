@@ -48,7 +48,7 @@ const tabs = [
   },
   {
     href: '/notes',
-    label: 'Notes',
+    label: 'Study',
     icon: (
       <svg aria-hidden
         width="20"

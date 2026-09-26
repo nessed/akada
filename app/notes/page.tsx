@@ -596,7 +596,7 @@ function NotesContent() {
   }, [slip]);
 
   useEffect(() => {
-    document.title = mode === 'edit' ? 'Writing - Akada' : active ? `${focusing ? 'Focus · ' : ''}${active.title} - Akada` : 'Notes - Akada';
+    document.title = mode === 'edit' ? 'Writing - Akada' : active ? `${focusing ? 'Focus · ' : ''}${active.title} - Akada` : 'Study - Akada';
   }, [mode, active, focusing]);
 
   /* ── Render ───────────────────────────────────────────────────────── */
@@ -607,7 +607,7 @@ function NotesContent() {
   else if (mode === 'edit') {
     body = (
       <>
-        <button type="button" className="back" onClick={cancelEdit}>← {active && !writingNew ? active.title : 'Notes'}</button>
+        <button type="button" className="back" onClick={cancelEdit}>← {active && !writingNew ? active.title : 'Study'}</button>
         <Editor
           draft={draft}
           onChange={setDraft}
@@ -654,7 +654,7 @@ function NotesContent() {
     body = (
       <div className={`reader ${showToc ? 'has-toc' : ''}`} data-measure={reader.measure}>
         <div className="reader-main">
-          <button type="button" className="back" onClick={() => go('')}>← Notes</button>
+          <button type="button" className="back" onClick={() => go('')}>← Study</button>
           <header className="page-head">
             <p className="standfirst">
               {activeCourse && (
@@ -781,7 +781,7 @@ function NotesContent() {
     body = (
       <div className="empty">
         <p className="standfirst">Nothing on the shelf yet</p>
-        <h1 className="screen-title">Notes</h1>
+        <h1 className="screen-title">Study</h1>
         <p className="lede">
           A quiet place to read what you’re studying. Write a note, paste one in, drop a text file on the page, or <a className="link" href="/claude">have Claude write one</a> straight onto this shelf.
         </p>

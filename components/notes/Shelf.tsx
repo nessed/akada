@@ -210,7 +210,7 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
             {notes.length} {notes.length === 1 ? 'note' : 'notes'} · {hoursLabel(stats.minutes)} of reading{pace.personal ? ' at your pace' : ''}
             {stats.revisit > 0 && <> · {stats.revisit} {stats.revisit === 1 ? 'check' : 'checks'} to revisit</>}
           </p>
-          <h1 className="screen-title">Notes</h1>
+          <h1 className="screen-title">Study</h1>
         </div>
         <div className="actions">
           <button type="button" className="btn btn-ghost" onClick={onPrompt} title="A prompt for your AI">

@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useCourses, useTasks } from '@/lib/data-hooks';
+import { useCourses, useTasks, reorderCoursesOptimistic } from '@/lib/data-hooks';
 import { useTimer } from '@/lib/timer-context';
 import { useUpNext } from '@/lib/use-up-next';
 import { isoDate, resolveTint } from '@/lib/utils';
 import { sortCourses } from '@/lib/data/course-order';
+import ReorderList from '@/components/ReorderList';
 import { useRecordHasNews } from '@/lib/progression/visits';
 import { useRecordEarned } from '@/lib/record-earned';
 import { RAIL_COLLAPSED_KEY as COLLAPSE_KEY, writeRailAttribute } from '@/lib/rail';
@@ -76,7 +77,7 @@ const NAV: NavItem[] = [
   },
   {
     href: '/notes',
-    label: 'Notes',
+    label: 'Study',
     icon: (
       <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M6 3h9l4 4v14H6z" />
@@ -335,8 +336,90 @@ export default function DesktopRail() {
     setStartTarget({ task: start.task, course: start.course, anchor: startRef.current });
   };
 
+  /**
+   * The order dragged in the rail. The write is optimistic and shared with
+   * the dashboard's own drag list, so a spine pulled to a new shelf spot
+   * stays there everywhere; a failure puts the old order back.
+   */
+  async function handleReorderCourses(orderedIds: string[]) {
+    try {
+      await reorderCoursesOptimistic(orderedIds);
+    } catch (error) {
+      console.error('Failed to reorder courses:', error);
+      throw error;
+    }
+  }
+
   const rowBase =
     'rail-link rail-row relative flex h-10 items-center gap-3 rounded-[10px] px-3.5 no-underline transition-colors';
+
+  /**
+   * One course's spine. Given to `ReorderList` as `renderItem`, whose `<li>`
+   * reserves 18px to its left for the drag grip (see the list below) — the
+   * `-ml-[18px]` here gives that gutter back without moving the row's own
+   * edges, the same trick the Settings course list uses on its panels.
+   */
+  function courseRow(course: Course) {
+    const on = pathname === `/courses/${course.id}`;
+    const count = openCounts.per.get(course.id) ?? 0;
+    const running = active?.courseId === course.id;
+    const [letters, number] = spineLabel(course.code);
+    const tint = resolveTint(course.color, course.tint);
+    const tipText = `${course.code} · ${course.name}${count > 0 ? ` · ${count} open` : ''}`;
+    return (
+      <Link
+        key={course.id}
+        href={`/courses/${course.id}`}
+        aria-current={on ? 'page' : undefined}
+        className={`${rowBase} scroll-my-7 -ml-[18px] ${on ? 'text-ink' : 'text-ink-soft hover:text-ink'}`}
+        data-tip={tipText}
+      >
+        <span
+          aria-hidden
+          className="block w-[3px] shrink-0 rounded-[1px]"
+          style={{ height: 16, background: course.color }}
+        />
+        {/* On the strip, the code as a spine label: letters over the number. */}
+        <span aria-hidden className="rail-narrow flex min-w-0 flex-col items-start leading-none">
+          <span
+            className="text-[9.5px] font-semibold uppercase tracking-[0.08em]"
+            style={on ? { background: tint, boxShadow: `0 0 0 2px ${tint}` } : undefined}
+          >
+            {letters}
+          </span>
+          {number && <span className="mt-[3px] font-mono text-[10px] tabular-nums text-muted">{number}</span>}
+        </span>
+        <span
+          className={`rail-label truncate text-[13px] ${on ? 'hl-swipe hl-draw-quick' : ''}`}
+          style={on ? ({ ['--hl' as string]: tint } as React.CSSProperties) : undefined}
+        >
+          {course.code}
+        </span>
+        {running && (
+          <>
+            <span
+              aria-hidden
+              className="rail-wide ml-auto h-[6px] w-[6px] shrink-0 animate-tick rounded-full"
+              style={{ background: course.color }}
+            />
+            <span
+              aria-hidden
+              className="rail-narrow absolute right-2 top-2 h-[6px] w-[6px] animate-tick rounded-full"
+              style={{ background: course.color }}
+            />
+            <span className="sr-only">, on the clock</span>
+          </>
+        )}
+        {count > 0 && (
+          <span
+            className={`rail-wide shrink-0 font-mono text-[11px] tabular-nums text-muted ${running ? '' : 'ml-auto'}`}
+          >
+            {count}
+          </span>
+        )}
+      </Link>
+    );
+  }
 
   function screenRow(item: NavItem, extra?: React.ReactNode) {
     const mark = markFor(pathname, item.href);
@@ -429,8 +512,10 @@ export default function DesktopRail() {
         <div className="mx-3.5 mb-2 mt-4 border-t border-line" />
         <p className="eyebrow rail-wide mb-1.5 px-3.5">Courses</p>
 
-        {/* The courses, in the order the reader dragged their dashboard into,
-            each a spine in its colour, so the rail reads as the term's own. */}
+        {/* The courses, in the order the reader dragged them into, each a
+            spine in its colour, so the rail reads as the term's own. A press
+            and hold on a spine lifts it here too, writing the same order the
+            dashboard's own drag list reads. */}
         <div
           ref={listRef}
           onScroll={measure}
@@ -438,67 +523,20 @@ export default function DesktopRail() {
             fade.bottom ? 'rail-fade-bottom' : ''
           }`}
         >
-          {ordered.map((course) => {
-            const on = pathname === `/courses/${course.id}`;
-            const count = openCounts.per.get(course.id) ?? 0;
-            const running = active?.courseId === course.id;
-            const [letters, number] = spineLabel(course.code);
-            const tint = resolveTint(course.color, course.tint);
-            const tipText = `${course.code} · ${course.name}${count > 0 ? ` · ${count} open` : ''}`;
-            return (
-              <Link
-                key={course.id}
-                href={`/courses/${course.id}`}
-                aria-current={on ? 'page' : undefined}
-                className={`${rowBase} scroll-my-7 ${on ? 'text-ink' : 'text-ink-soft hover:text-ink'}`}
-                data-tip={tipText}
-              >
-                <span
-                  aria-hidden
-                  className="block w-[3px] shrink-0 rounded-[1px]"
-                  style={{ height: 16, background: course.color }}
-                />
-                {/* On the strip, the code as a spine label: letters over the number. */}
-                <span aria-hidden className="rail-narrow flex min-w-0 flex-col items-start leading-none">
-                  <span
-                    className="text-[9.5px] font-semibold uppercase tracking-[0.08em]"
-                    style={on ? { background: tint, boxShadow: `0 0 0 2px ${tint}` } : undefined}
-                  >
-                    {letters}
-                  </span>
-                  {number && <span className="mt-[3px] font-mono text-[10px] tabular-nums text-muted">{number}</span>}
-                </span>
-                <span
-                  className={`rail-label truncate text-[13px] ${on ? 'hl-swipe hl-draw-quick' : ''}`}
-                  style={on ? ({ ['--hl' as string]: tint } as React.CSSProperties) : undefined}
-                >
-                  {course.code}
-                </span>
-                {running && (
-                  <>
-                    <span
-                      aria-hidden
-                      className="rail-wide ml-auto h-[6px] w-[6px] shrink-0 animate-tick rounded-full"
-                      style={{ background: course.color }}
-                    />
-                    <span
-                      aria-hidden
-                      className="rail-narrow absolute right-2 top-2 h-[6px] w-[6px] animate-tick rounded-full"
-                      style={{ background: course.color }}
-                    />
-                    <span className="sr-only">, on the clock</span>
-                  </>
-                )}
-                {count > 0 && (
-                  <span
-                    className={`rail-wide shrink-0 font-mono text-[11px] tabular-nums text-muted ${running ? '' : 'ml-auto'}`}
-                  >
-                    {count}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+          {ordered.length > 1 ? (
+            <ReorderList
+              items={ordered}
+              getId={(course) => course.id}
+              getLabel={(course) => course.code}
+              label="Courses, in the order you arranged them"
+              shape="row"
+              className="gap-0 pl-[18px]"
+              onReorder={handleReorderCourses}
+              renderItem={(course) => courseRow(course)}
+            />
+          ) : (
+            ordered.map((course) => courseRow(course))
+          )}
 
           {/* There is more you could add here: the dashed line, as on the
               Tasks bands and the shelf. Quiet until the list is pointed at,

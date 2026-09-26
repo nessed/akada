@@ -125,7 +125,7 @@ sheets). Hit targets are 40px and a task row is 48px.
 The app is one design read at two widths.
 
 Below `md` it is the sheet it has always been: a centred column, `BottomNav`
-along the bottom (Today, Tasks, Notes, Stats, Record), and the timer dock
+along the bottom (Today, Tasks, Study, Stats, Record), and the timer dock
 floating at the top while a session runs. **The Record waits for the first
 session.** Before one is logged it is empty pages and a vocabulary nobody has
 met, so the bar puts **Courses** in its slot and the rail leaves it out
@@ -157,7 +157,12 @@ is the whole screen, as it always was.
   course and leaves Courses in ink, so a page has one mark. Tasks carries the
   open count in mono; Record carries the news dot.
 - **The courses**, in the order they were dragged into, each a 3px spine in
-  its colour with its code and open count. The one you are on is swiped in its
+  its colour with its code and open count. A press and hold on a spine lifts
+  it, through the same `ReorderList` the dashboard's own course cards use,
+  writing the order both read (`reorderCoursesOptimistic`); the shared
+  `<ol>` reserves 18px on the left for the grip, and each row is pulled back
+  by that much with a negative margin so nothing shifts against the icons
+  above it. The one you are on is swiped in its
   own tint, as on the Tasks filter. A sitting on the clock puts a 6px dot in
   the course colour pulsing on `tick` on its row; the rail never draws a
   second clock. A long list fades at whichever end has more behind it and
@@ -210,7 +215,7 @@ Things a phone reader meets that a desktop one does not:
   `min(their width, 100vw - 24px)`.
 - **No keyboard lines on touch.** A line naming shortcuts ("Space pause · Esc
   back", "Enter starts…") carries `.key-hint`, which hides under
-  `(hover: none) and (pointer: coarse)`. Notes does the same with its own
+  `(hover: none) and (pointer: coarse)`. Study does the same with its own
   `.keys` rules.
 - **Fields are 16px on touch.** iOS zooms into any field under 16px on focus
   and stays zoomed. Pinch-zoom is allowed, so the viewport is not the fix:
@@ -861,7 +866,7 @@ Both paths have a keyboard twin: the grip is a real button, and up and down
 arrows move the item one place, with every move said out loud through a
 polite live region.
 
-### Notes: the reader
+### Study: the reader
 
 `/notes` is Markd folded into the app, a reader for long study notes written
 in markdown. It sits in the rail and the bottom bar between Courses and Stats.
@@ -970,7 +975,7 @@ the focus foot say "timing this read" and nothing else.
 **The pace is the reader's own.** `readingPace` in `lib/notes/reads.ts` takes
 the median words a minute over every timed read once there are two, per
 course once a course has two, and every "min left", "min read" and
-"of reading" in Notes goes through `minutesForNote`: a note's own last read
+"of reading" in Study goes through `minutesForNote`: a note's own last read
 scaled to its current length, then the course pace, then the reader's, then
 200. The reader's standfirst says which it is ("read in 14 min last time",
 "~12 min at your pace", "12 min read"). Under the shelf, **Your reading** says
@@ -989,9 +994,9 @@ the browser. Notes written before this, when they lived in localStorage, are
 carried up into the account the first time the shelf loads. Everything the
 reader draws lives in `app/notes/notes.css`, scoped under `.notes`.
 
-### Notes: quizzes
+### Study: quizzes
 
-A quiz is sent by an assistant over MCP and lands on the Notes shelf under
+A quiz is sent by an assistant over MCP and lands on the Study shelf under
 its own `.eyebrow` label, **Quizzes**, above the notes, straight after the
 note last read, so a new one is the first thing on the shelf. Each is a shelf row
 like a note's: the course stripe, the title, a serif sub-line (course, task,
@@ -1301,7 +1306,7 @@ backs. It never says "MCP", says "connector" only where Claude's own screens
 do, and names no Claude plan. `/docs` stays the reference for every tool, and
 `/privacy#assistants` the policy; both belong to the connector's own work and
 are linked, never restated. Everything in the app that hands work to Claude
-(Say how it is marked, ask Claude, the Notes prompt and the quiz shelf) says
+(Say how it is marked, ask Claude, the Study prompt and the quiz shelf) says
 "a Claude chat with Akada switched on" in the same words and leads to
 `/claude` for anyone not connected yet, through `CLAUDE_PAGE` in
 `lib/claude-page.ts`. Settings has a Claude section for the same three links.
