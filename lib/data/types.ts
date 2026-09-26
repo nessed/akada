@@ -408,7 +408,10 @@ export interface QuizAttempt {
 /**
  * A multiple-choice quiz an assistant sent over MCP, filed under a course and
  * optionally the task (a chapter, a reading) or the note it tests. Attempts
- * are kept oldest first, so the latest mark is the last one.
+ * are kept oldest first, so the latest mark is the last one. `timerMinutes`
+ * is how long the assistant judged the paper should take, null when it sent
+ * none; the student's own choice to run it timed or not for a given sitting
+ * is kept only on the device, in the quiz draft, not here.
  */
 export interface Quiz {
   id: string;
@@ -419,6 +422,7 @@ export interface Quiz {
   context: string;
   questions: QuizQuestion[];
   attempts: QuizAttempt[];
+  timerMinutes: number | null;
   createdAt: string;
   updatedAt: string;
 }

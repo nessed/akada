@@ -1027,6 +1027,19 @@ back where it was; the count beside **Hand it in** adds *kept on this
 device* once anything is answered. It is cleared when the sitting is filed
 or started again.
 
+When the assistant judged the paper should run against a clock, it says so
+sending it, and Akada shows the time it set as a running countdown, mono
+digits at 21px, directly under the title, from the moment the paper opens.
+Turning it off is a quiet italic serif link beside the face, in the same
+hand as *unclear?* below — never a switch, since this is a one-off choice
+for the sitting rather than a setting. Off, the face freezes where it was
+rather than disappearing, so the time already spent is still there to see;
+tapping the link again picks the clock back up from that point. Time running
+low is a warm shift on the digits themselves (the paper tone's peach), never
+a flashing or shaking indicator: the app has no alarmist ones. Running out
+hands the paper in exactly as **Hand it in** would, whatever is filled in.
+A quiz the assistant sent with no time on it shows no timer at all, and nothing changes.
+
 A written question has no options. It carries its marks in italic after the
 prompt and takes its answer on ruled lines (a borderless textarea over the
 page's own rule), not in a box. The lines grow with the answer, a line at a

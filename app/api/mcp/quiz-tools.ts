@@ -27,6 +27,7 @@ interface QuizRow {
   context: string | null;
   questions: unknown;
   attempts: unknown;
+  timer_minutes?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -97,6 +98,7 @@ function summary(row: QuizRow, refs: { courses: Map<string, Ref>; tasks: Map<str
     questions: questions.length,
     multiple_choice: mcqCount,
     written,
+    timer_minutes: row.timer_minutes ?? null,
     attempts: attempts.length,
     last_score: last && mcqCount ? `${last.score}/${last.total}` : null,
     best_score: best && mcqCount ? `${best.score}/${best.total}` : null,
@@ -123,6 +125,7 @@ export const SendQuizInput = z.object({
   course_id: z.string().uuid().optional(),
   task_id: z.string().uuid().optional(),
   note_id: z.string().uuid().optional(),
+  timer_minutes: z.number().int().min(1).max(180).optional(),
 });
 
 export const ListQuizzesInput = z.object({
@@ -154,7 +157,7 @@ export function getQuizFormatTool() {
 
 export async function sendQuizTool(
   token: AuthenticatedToken,
-  { quiz, course_id, task_id, note_id }: z.infer<typeof SendQuizInput>,
+  { quiz, course_id, task_id, note_id, timer_minutes }: z.infer<typeof SendQuizInput>,
   supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
 ) {
   try {
@@ -195,6 +198,7 @@ export async function sendQuizTool(
         title: parsed.quiz.title,
         context: parsed.quiz.context || null,
         questions: parsed.quiz.questions,
+        timer_minutes: timer_minutes ?? null,
       })
       .select('*')
       .single();
@@ -203,7 +207,7 @@ export async function sendQuizTool(
     const out = summary(row, await refsFor(supabase, token.userId, [row]));
     return result({
       quiz: out,
-      message: `Sent “${out.title}”, ${out.questions} questions, to the student’s Notes${out.course?.code ? ` under ${out.course.code}` : ''}. They take it in Akada${out.url ? ` at ${out.url}` : ''}; call get_quiz afterwards to see how they did.`,
+      message: `Sent “${out.title}”, ${out.questions} questions, to the student’s Notes${out.course?.code ? ` under ${out.course.code}` : ''}${out.timer_minutes ? `, timed at ${out.timer_minutes} min` : ''}. They take it in Akada${out.url ? ` at ${out.url}` : ''}; call get_quiz afterwards to see how they did.`,
     });
   } catch (cause) {
     return toolCrashed('send_quiz', cause);
@@ -358,7 +362,9 @@ const SEND_QUIZ_DESCRIPTION = `Send a quiz, multiple-choice questions with their
 
 ${QUIZ_FORMAT_RULES}
 
-File it: course_id from find_course, task_id from get_tasks when it tests one chapter or reading task, note_id from list_notes when it tests a note. A task or note fills in its course. If the text does not parse, the reply lists what to fix; fix it and send again. The reply includes a url the student opens.`;
+File it: course_id from find_course, task_id from get_tasks when it tests one chapter or reading task, note_id from list_notes when it tests a note. A task or note fills in its course. If the text does not parse, the reply lists what to fix; fix it and send again. The reply includes a url the student opens.
+
+Pass \`timer_minutes\` (1 to 180) when the quiz should run against a clock: a mock exam, past-paper conditions, or the student asking to be timed. Judge it from the paper itself, roughly a minute per multiple-choice question and three to four per written one, rounded to something sensible. Leave it out for an untimed quiz, which is the right default for ordinary revision. The student can still turn a timer off in Akada before or during the sitting; it runs out the clock and hands the paper in on their behalf if they let it.`;
 
 const LIST_QUIZZES_DESCRIPTION = 'List the quizzes in the student’s Akada, newest first, with what each is filed under, the last and best multiple-choice marks, and `awaiting_marking` when their latest sitting has written answers for you to mark. When the student says they have finished a quiz or asks you to check or grade it, start here. Optionally narrow to a course or task. This tool never changes Akada data.';
 

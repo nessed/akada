@@ -5,14 +5,23 @@
  * closed tab doesn't throw away half an hour of answers. It is written on
  * every change and cleared once the paper is filed or started again. Under
  * the 'akada.' prefix, so signing out clears it with everything else.
+ *
+ * `timerEndsAt` is set while a quiz's own timer is running, the wall-clock
+ * time it runs out at, so the countdown survives a refresh without a tick
+ * needing to be saved every second. `timerPausedRemaining` is the seconds
+ * left at the moment the student turned the timer off; the two are never
+ * both set at once.
  */
 export interface QuizDraft {
   picks: number[];
   written: Record<string, string>;
   unclear: number[];
+  timerEndsAt?: string | null;
+  timerPausedRemaining?: number | null;
 }
 
 const key = (quizId: string) => `akada.quiz.draft.v1.${quizId}`;
+const TIMER_SECONDS_MAX = 180 * 60;
 
 export function loadQuizDraft(quizId: string, questionCount: number): QuizDraft | null {
   if (typeof window === 'undefined') return null;
@@ -25,7 +34,12 @@ export function loadQuizDraft(quizId: string, questionCount: number): QuizDraft 
       for (const [k, v] of Object.entries(raw.written)) if (typeof v === 'string' && Number(k) < questionCount) written[k] = v;
     }
     const unclear = Array.isArray(raw.unclear) ? raw.unclear.filter((n): n is number => Number.isInteger(n) && n >= 0 && n < questionCount) : [];
-    return isEmpty({ picks, written, unclear }) ? null : { picks, written, unclear };
+    const timerEndsAt = typeof raw.timerEndsAt === 'string' && Number.isFinite(Date.parse(raw.timerEndsAt)) ? raw.timerEndsAt : null;
+    const timerPausedRemaining = Number.isFinite(raw.timerPausedRemaining) && (raw.timerPausedRemaining as number) >= 0 && (raw.timerPausedRemaining as number) <= TIMER_SECONDS_MAX
+      ? Math.floor(raw.timerPausedRemaining as number)
+      : null;
+    const draft = { picks, written, unclear, timerEndsAt, timerPausedRemaining };
+    return isEmpty(draft) ? null : draft;
   } catch {
     return null;
   }
@@ -51,5 +65,5 @@ export function clearQuizDraft(quizId: string): void {
 }
 
 function isEmpty(d: QuizDraft) {
-  return d.picks.every((p) => p < 0) && !Object.values(d.written).some((t) => t.trim()) && !d.unclear.length;
+  return d.picks.every((p) => p < 0) && !Object.values(d.written).some((t) => t.trim()) && !d.unclear.length && !d.timerEndsAt && d.timerPausedRemaining == null;
 }

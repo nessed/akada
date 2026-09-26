@@ -13,6 +13,21 @@ import { clearQuizDraft, loadQuizDraft, saveQuizDraft } from '@/lib/quiz/draft';
 import { relativeLabel } from '@/lib/notes/store';
 import type { Quiz, QuizAttempt, QuizQuestion } from '@/lib/data';
 
+function clockFace(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+function spokenRemaining(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m} ${m === 1 ? 'minute' : 'minutes'} ${sec} ${sec === 1 ? 'second' : 'seconds'}`;
+}
+
 export default function QuizPage() {
   return (
     <Suspense fallback={<PageShell wide>{null}</PageShell>}>
@@ -76,11 +91,35 @@ function Sitting({ quiz }: { quiz: Quiz }) {
   const [pending, setPending] = useState<QuizAttempt | null>(null);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  // The assistant's suggested timer, if it sent one. Running by default; the
+  // student can turn it off, on this device, before or during the sitting.
+  const hasTimer = quiz.timerMinutes != null;
+  const [timerOn, setTimerOn] = useState(() => hasTimer && draft?.timerPausedRemaining == null);
+  const [timerEndsAt, setTimerEndsAt] = useState<number | null>(() => {
+    if (!hasTimer) return null;
+    if (draft?.timerEndsAt) return Date.parse(draft.timerEndsAt);
+    if (draft?.timerPausedRemaining != null) return null;
+    return Date.now() + quiz.timerMinutes! * 60_000;
+  });
+  const [pausedRemaining, setPausedRemaining] = useState<number | null>(() => (hasTimer ? draft?.timerPausedRemaining ?? null : null));
+  const [tick, setTick] = useState(() => Date.now());
+  const autoSubmitted = useRef(false);
   // The stored copy, so marks the assistant writes show up here when they land.
   const marked = viewing ? quiz.attempts.find((a) => a.at === viewing) ?? (pending?.at === viewing ? pending : null) : null;
   const answered = quiz.questions.filter((q, i) => (isWritten(q) ? !!written[String(i)]?.trim() : picks[i] >= 0 || unclear.includes(i))).length;
   const total = quiz.questions.length;
   const mcqCount = total - quiz.questions.filter(isWritten).length;
+
+  // Ticking toward `timerEndsAt` rather than counting seconds down in state
+  // means nothing needs saving every second: the deadline itself is what's
+  // kept, so a refresh mid-quiz just reads the clock again.
+  const remaining = hasTimer
+    ? timerOn && timerEndsAt != null
+      ? Math.max(0, Math.round((timerEndsAt - tick) / 1000))
+      : pausedRemaining ?? quiz.timerMinutes! * 60
+    : 0;
+  const showTimer = hasTimer && !marked;
 
   useEffect(() => {
     if (viewing) window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -88,8 +127,45 @@ function Sitting({ quiz }: { quiz: Quiz }) {
 
   // Every pick and keystroke is kept as it happens, until the paper is filed.
   useEffect(() => {
-    if (!viewing) saveQuizDraft(quiz.id, { picks, written, unclear });
-  }, [quiz.id, viewing, picks, written, unclear]);
+    if (!viewing) {
+      saveQuizDraft(quiz.id, {
+        picks,
+        written,
+        unclear,
+        timerEndsAt: timerEndsAt != null ? new Date(timerEndsAt).toISOString() : null,
+        timerPausedRemaining: pausedRemaining,
+      });
+    }
+  }, [quiz.id, viewing, picks, written, unclear, timerEndsAt, pausedRemaining]);
+
+  useEffect(() => {
+    if (!showTimer || !timerOn || timerEndsAt == null) return;
+    const id = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [showTimer, timerOn, timerEndsAt]);
+
+  useEffect(() => {
+    if (showTimer && timerOn && timerEndsAt != null && remaining <= 0 && !autoSubmitted.current) {
+      autoSubmitted.current = true;
+      handIn();
+    }
+    // handIn closes over the latest picks/written/unclear; it's rebound every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTimer, timerOn, timerEndsAt, remaining]);
+
+  const toggleTimer = () => {
+    if (timerOn) {
+      setPausedRemaining(timerEndsAt != null ? Math.max(0, Math.round((timerEndsAt - Date.now()) / 1000)) : 0);
+      setTimerEndsAt(null);
+      setTimerOn(false);
+    } else {
+      const rem = pausedRemaining ?? quiz.timerMinutes! * 60;
+      setTick(Date.now());
+      setTimerEndsAt(Date.now() + rem * 1000);
+      setPausedRemaining(null);
+      setTimerOn(true);
+    }
+  };
 
   const file = async (attempt: QuizAttempt) => {
     setSaving(true);
@@ -118,6 +194,13 @@ function Sitting({ quiz }: { quiz: Quiz }) {
     clearQuizDraft(quiz.id);
     setViewing(null);
     setPending(null);
+    autoSubmitted.current = false;
+    if (hasTimer) {
+      setTick(Date.now());
+      setTimerEndsAt(Date.now() + quiz.timerMinutes! * 60_000);
+      setPausedRemaining(null);
+      setTimerOn(true);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -151,6 +234,17 @@ function Sitting({ quiz }: { quiz: Quiz }) {
           )}
         </div>
       </header>
+
+      {showTimer && (
+        <div className="quiz-timer" data-urgent={timerOn && remaining <= 60 ? '' : undefined}>
+          <span className="quiz-timer-face" aria-label={`${spokenRemaining(remaining)} left${timerOn ? '' : ', timer off'}`}>
+            {clockFace(remaining)}
+          </span>
+          <button type="button" className="quiz-timer-toggle" role="switch" aria-checked={timerOn} onClick={toggleTimer}>
+            {timerOn ? 'timer running · turn off' : 'timer off · turn back on'}
+          </button>
+        </div>
+      )}
 
       {marked && tally ? (
         <section className="quiz-mark" aria-live="polite">
