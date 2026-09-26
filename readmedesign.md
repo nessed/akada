@@ -1209,10 +1209,20 @@ are linked, never restated. Everything in the app that hands work to Claude
 `/claude` for anyone not connected yet, through `CLAUDE_PAGE` in
 `lib/claude-page.ts`. Settings has a Claude section for the same three links.
 
-The landing feature cards lead with what a to-do list can't do (reading in
-hours, the grade out of what has come back, recall, Claude, the weekly run,
-the timer) rather than naming screens. If a card's claim stops being true,
-change the card.
+**The landing page** is written for a LUMS student arriving from a group
+chat link on a phone. The hero says the outcome (every deadline this term on
+one page, filled in from the course outlines) and names the LUMS catalog,
+since that is the hook nobody else has. Beside it is a photograph of the real
+Today, not a drawing of one: the drawing it replaced showed boxed course cards
+the app had stopped drawing months earlier. The photographs are taken by
+`scripts/landing-shots.mjs`, which runs the app on local data with a made-up
+LUMS term, and live in `public/landing/`. Re-run it when Today changes. Under
+the hero, "How it goes" is the setup in three steps; then Claude gets a
+section of its own with the same drawn exchange as `/claude`; then the
+feature cards, which lead with what a to-do list can't do rather than naming
+screens. If a card's claim stops being true, change the card. The page makes
+no claim it cannot back: it said "works offline" for a while, with no service
+worker behind it.
 
 ### The connector docs
 `/docs` is the guide's sibling for the Claude connector, in the same
