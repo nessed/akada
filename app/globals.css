@@ -4,9 +4,10 @@
 
 :root {
   color-scheme: light;
-  /* The shipped default: the "Paper" tone from Appearance. Kept in step with
-     PAPER_TONES.paper in lib/preferences.ts so the first paint already looks
-     the way the app settles, with no flash before preferences apply. */
+  /* The "Paper" tone from Appearance, kept in step with PAPER_TONES.paper in
+     lib/preferences.ts. It is the no-script fallback only: the app ships on
+     the night paper, and PREFERENCE_BOOTSTRAP_SCRIPT writes that (or the
+     reader's own tone) over these before the first paint. */
   --bg: #F5F1E8;
   --bg-tint: #EDE7D8;
   --paper: #FBF8EF;

@@ -127,8 +127,9 @@ schedule is worked out from the answers on every read and never stored.
 
 **Settings** covers the daily goal, when your day ends (anywhere up to 8am, so
 a 2am session counts toward the right day), whether weekends count, CSV export,
-and appearance. Appearance is five paper tones including a night one, four
-heading serifs, three densities and two accents.
+and appearance. Akada opens on the night paper; Appearance swaps it for one of
+four daylight tones, and also has four heading serifs, three densities and two
+accents.
 
 `/guide` walks through all of the above in plain words for someone who has
 never used a planner, opening on what to do in the first week, and is the

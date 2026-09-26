@@ -19,10 +19,15 @@ The color system is heavily curated to resemble premium paper, ink, and mild hig
 
 ### Core Foundation (Paper & Ink)
 The foundation is not one palette but four, the **paper tone** a reader picks
-in Appearance. `Paper` is what the app ships with; `Warm`, `Stone` and `White`
-are the alternatives. Every value below is the shipped `Paper` tone, and the
-authority for all of them is `PAPER_TONES` in `lib/preferences.ts`, mirrored
-into `:root` in `globals.css` so the first paint needs no correction.
+in Appearance, plus the `Night` paper. **The app ships on `Night`**: a new
+reader, or anyone whose stored record names no tone, lands on the dark page,
+and the manifest's `theme_color` is its ground. `Paper`, `Warm`, `Stone` and
+`White` are the daylight alternatives, one tap away in Appearance. Every value
+below is the `Paper` tone, the reference the others are described against. The
+authority for all of them is `PAPER_TONES` in `lib/preferences.ts`; `Paper` is
+mirrored into `:root` in `globals.css` only as the no-script fallback, since
+the bootstrap script writes the chosen tone (night by default) before first
+paint.
 
 - **Backgrounds (`bg`, `bg-tint`, `paper`, `paper-2`, `desk`)**: `#F5F1E8`,
   `#EDE7D8`, `#FBF8EF`, `#F7F3E6`, `#E8E2D5`. `desk` is what the page lies on
