@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import {
+  ACCESS_TOKEN_LIFETIME,
   issueAccessToken,
   issueRefreshToken,
   pkceChallenge,
@@ -7,31 +8,46 @@ import {
   readRefreshToken,
   secureEqual,
 } from '@/lib/mcp-auth';
-import { mcpSupabase, oauthError } from '../_shared';
+import { checkResource, mcpSupabase, mcpUrl, oauthError } from '../_shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// The access token wraps a Supabase JWT, so it is only good for as long as
+// that JWT is. Claude refreshes a few minutes before the expiry it is given;
+// claiming a full hour over a shorter Supabase session would hand it a dead
+// token in the meantime.
+function accessLifetime(supabaseExpiresAt: number | undefined) {
+  if (!supabaseExpiresAt) return ACCESS_TOKEN_LIFETIME;
+  const remaining = supabaseExpiresAt - Math.floor(Date.now() / 1000);
+  return Math.max(60, Math.min(ACCESS_TOKEN_LIFETIME, remaining));
+}
+
 function tokens(payload: {
   clientId: string;
   scope: string;
+  resource: string;
   userId: string;
   supabaseAccessToken: string;
   supabaseRefreshToken: string;
+  supabaseExpiresAt?: number;
 }) {
+  const lifetime = accessLifetime(payload.supabaseExpiresAt);
   return Response.json(
     {
       access_token: issueAccessToken({
         clientId: payload.clientId,
         scope: payload.scope,
+        resource: payload.resource,
         userId: payload.userId,
         supabaseAccessToken: payload.supabaseAccessToken,
-      }),
+      }, lifetime),
       token_type: 'Bearer',
-      expires_in: 60 * 60,
+      expires_in: lifetime,
       refresh_token: issueRefreshToken({
         clientId: payload.clientId,
         scope: payload.scope,
+        resource: payload.resource,
         userId: payload.userId,
         supabaseRefreshToken: payload.supabaseRefreshToken,
       }),
@@ -50,6 +66,10 @@ export async function POST(request: NextRequest) {
   const grantType = form.get('grant_type');
   const clientId = form.get('client_id');
   if (typeof clientId !== 'string') return oauthError('invalid_request', 'client_id is required.');
+  const resource = form.get('resource');
+  if (resource !== null && (typeof resource !== 'string' || !checkResource(resource))) {
+    return oauthError('invalid_target', `This authorization server only issues tokens for ${mcpUrl()}.`);
+  }
 
   if (grantType === 'authorization_code') {
     const code = form.get('code');
@@ -63,7 +83,8 @@ export async function POST(request: NextRequest) {
       if (
         !secureEqual(payload.clientId, clientId) ||
         !secureEqual(payload.redirectUri, redirectUri) ||
-        !secureEqual(payload.codeChallenge, pkceChallenge(verifier))
+        !secureEqual(payload.codeChallenge, pkceChallenge(verifier)) ||
+        !checkResource(payload.resource)
       ) {
         return oauthError('invalid_grant', 'The authorization code does not match this connector.');
       }
@@ -78,7 +99,7 @@ export async function POST(request: NextRequest) {
     if (typeof refreshToken !== 'string') return oauthError('invalid_request', 'refresh_token is required.');
     try {
       const payload = readRefreshToken(refreshToken);
-      if (!secureEqual(payload.clientId, clientId)) {
+      if (!secureEqual(payload.clientId, clientId) || !checkResource(payload.resource)) {
         return oauthError('invalid_grant', 'The refresh token does not match this connector.');
       }
       const { data, error } = await mcpSupabase('').auth.refreshSession({ refresh_token: payload.supabaseRefreshToken });
@@ -87,8 +108,10 @@ export async function POST(request: NextRequest) {
       }
       return tokens({
         ...payload,
+        resource: payload.resource ?? mcpUrl(),
         supabaseAccessToken: data.session.access_token,
         supabaseRefreshToken: data.session.refresh_token,
+        supabaseExpiresAt: data.session.expires_at,
       });
     } catch {
       return oauthError('invalid_grant', 'The refresh token is invalid or expired.');

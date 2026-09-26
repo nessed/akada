@@ -1170,6 +1170,17 @@ hours, the grade out of what has come back, recall, Claude, the weekly run,
 the timer) rather than naming screens. If a card's claim stops being true,
 change the card.
 
+### The connector docs
+`/docs` is the guide's sibling for the Claude connector, in the same
+`LegalPage` shell with a standfirst: how to connect, what connecting allows,
+and every tool. It is public, since the directory listing links to it. Each
+tool is a row of its name, set like the guide's server URL (sans `code` on
+`bg-tint`, never mono, since a tool name is a word and not a figure), and an
+`.eyebrow` saying **Reads**, **Changes** or **Deletes**, which is the tool's
+MCP annotation in words. Deletes is tinted `prioritySoft` rather than red.
+The list lives in `app/docs/tools.ts`, and `app/api/mcp/scopes.test.ts`
+fails when it drifts from the tools the server registers.
+
 ### Buttons
 Two shapes, not four:
 - **Page CTA**, full width, `min-h-[56px]`, `rounded-2xl`, `text-[15px]`.

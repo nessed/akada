@@ -20,14 +20,19 @@ export type McpAuthorizationCode = {
   redirectUri: string;
   codeChallenge: string;
   scope: string;
+  resource: string;
   userId: string;
   supabaseAccessToken: string;
   supabaseRefreshToken: string;
+  supabaseExpiresAt?: number;
 };
 
+// `resource` is optional on the two long-lived kinds only because tokens
+// issued before it existed are still in use; every new one carries it.
 export type McpAccessToken = {
   clientId: string;
   scope: string;
+  resource?: string;
   userId: string;
   supabaseAccessToken: string;
 };
@@ -35,6 +40,7 @@ export type McpAccessToken = {
 export type McpRefreshToken = {
   clientId: string;
   scope: string;
+  resource?: string;
   userId: string;
   supabaseRefreshToken: string;
 };
@@ -99,8 +105,10 @@ export function readAuthorizationCode(token: string) {
   return open<McpAuthorizationCode>(token, 'code');
 }
 
-export function issueAccessToken(payload: McpAccessToken) {
-  return seal('access', payload, 60 * 60);
+export const ACCESS_TOKEN_LIFETIME = 60 * 60;
+
+export function issueAccessToken(payload: McpAccessToken, lifetimeSeconds = ACCESS_TOKEN_LIFETIME) {
+  return seal('access', payload, lifetimeSeconds);
 }
 
 export function readAccessToken(token: string) {
