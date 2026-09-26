@@ -636,6 +636,13 @@ made before the list is read leaves the list unread and reads it fresh.
   three questions the reading answers, a one-line guess at each first, and
   the questions kept for recall: being asked before reading makes those
   points stick even when the guesses were wrong.
+- **The log sheet, under "What did you do?"**: lines read off what the
+  record says happened while the clock ran (a quiz handed in, with its mark;
+  a quiz half done on this device; a note read through or written; a task
+  ticked off; the task the sitting was against), each a serif italic line
+  with a `+` that drops it into the note on its own line and takes the
+  course's highlighter swipe once taken. Offered, never pre-filled: the note
+  stays the reader's to write.
 - **The log sheet**: "Worth keeping?", a line to write on under the tags,
   like the break's own question. One thing from the sitting to be asked about
   later. Most sittings leave it empty and that is the expected case.

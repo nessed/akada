@@ -40,6 +40,11 @@ interface Props {
    * to beat.
    */
   usualSeconds?: number | null;
+  /**
+   * Lines read off what happened while the clock ran (a quiz handed in, a
+   * note read through), offered under the note to be taken with a tap.
+   */
+  suggestions?: string[];
   saving?: boolean;
   errorMessage?: string;
   contextMessage?: string;
@@ -67,6 +72,7 @@ export default function SessionLogModal({
   segments = [],
   effect = null,
   usualSeconds = null,
+  suggestions = [],
   saving = false,
   errorMessage = '',
   contextMessage = '',
@@ -142,6 +148,26 @@ export default function SessionLogModal({
   const bothIn = scored.trim() !== '' && outOf.trim() !== '';
   const anyIn = scored.trim() !== '' || outOf.trim() !== '';
   const scoreProblem = !practice && (bothIn || (scoreLeft && anyIn));
+
+  // A suggestion taken sits on its own line in the note, so taking two reads
+  // as two things done rather than one run-on sentence. Tapped again, it goes.
+  function hasLine(line: string) {
+    return note.split('\n').some((row) => row.trim() === line);
+  }
+
+  function toggleSuggestion(line: string) {
+    if (hasLine(line)) {
+      setNote((current) =>
+        current
+          .split('\n')
+          .filter((row) => row.trim() !== line)
+          .join('\n')
+          .trim(),
+      );
+    } else {
+      setNote((current) => (current.trim() ? `${current.trimEnd()}\n${line}` : line));
+    }
+  }
 
   function toggleTag(tag: string) {
     const token = `#${tag}`;
@@ -321,6 +347,37 @@ export default function SessionLogModal({
             className="w-full resize-none bg-paper border border-line rounded-[10px] p-3.5 text-[14px] font-serif italic text-ink leading-[1.5] outline-none focus:border-line-strong"
           />
         </div>
+
+        {/* What the record already knows this sitting held, offered as lines
+            to take rather than typed out again. Marked the way the tags
+            below are: a swipe of the course's highlighter once taken. */}
+        {suggestions.length > 0 && (
+          <ul aria-label="From this sitting" className="mt-2 m-0 list-none space-y-0.5 p-0">
+            {suggestions.map((line) => {
+              const taken = hasLine(line);
+              return (
+                <li key={line}>
+                  <button
+                    type="button"
+                    aria-pressed={taken}
+                    onClick={() => toggleSuggestion(line)}
+                    className={`inline-flex min-h-[28px] items-baseline gap-1.5 bg-transparent px-0.5 text-left font-serif text-[13px] italic leading-[1.4] transition-colors ${
+                      taken ? 'hl-swipe text-ink' : 'text-muted hover:text-ink'
+                    }`}
+                    style={
+                      taken
+                        ? ({ '--hl': resolveTint(course.color, course.tint) } as React.CSSProperties)
+                        : undefined
+                    }
+                  >
+                    <span aria-hidden className="not-italic text-muted-soft">{taken ? '✓' : '+'}</span>
+                    {line}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {REFLECTION_TAGS.map((tag) => {
