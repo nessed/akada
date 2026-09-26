@@ -13,6 +13,48 @@ Deploy the current `main` branch to Vercel and set these Production environment 
 
 Redeploy after adding or changing an environment variable.
 
+The user-facing version of this page is `/docs` on the site.
+
+## How the connector signs in
+
+Akada is its own OAuth 2.1 authorization server for `/api/mcp`. Nothing is
+stored in the database: every client id, code and token is sealed with
+AES-256-GCM under `AKADA_MCP_TOKEN_SECRET` (`lib/mcp-auth.ts`).
+
+| Piece | Where |
+| --- | --- |
+| Protected resource metadata (RFC 9728) | `/.well-known/oauth-protected-resource/mcp`, also `/.well-known/oauth-protected-resource/api/mcp` and `/.well-known/oauth-protected-resource` for clients that probe |
+| Authorization server metadata (RFC 8414) | `/.well-known/oauth-authorization-server`, issuer = `NEXT_PUBLIC_SITE_URL` |
+| Dynamic client registration (RFC 7591) | `POST /api/mcp/register`. Only known callbacks: `https://claude.ai/api/mcp/auth_callback`, ChatGPT's, Gemini's, and `http://localhost` / `127.0.0.1` `/callback` or `/oauth/callback` on any port (Claude Code, Gemini CLI) |
+| Authorization + consent | `GET/POST /api/mcp/authorize`. PKCE S256 required. The user must be signed in to Akada, then confirms their password, which starts a Supabase session that only the connector refreshes |
+| Token | `POST /api/mcp/token`, form-encoded, public client (`none`). `authorization_code` and `refresh_token` grants |
+
+- **Unauthenticated calls** to `/api/mcp` get `401` with
+  `WWW-Authenticate: Bearer resource_metadata="…/mcp", scope="akada.tasks.read akada.tasks.write"`.
+- **Audience (RFC 8707).** `resource` is optional, but if sent to authorize or
+  token it must be the `/api/mcp` URL, or the answer is `invalid_target`. The
+  code and both tokens carry it and `/api/mcp` rejects a token minted for
+  anything else. Tokens from before this change carry none and are accepted.
+- **Per-user data.** The access token wraps the user's own Supabase JWT, so
+  every query runs as that user under RLS and also filters on `user_id`. Each
+  call re-checks the JWT with `auth.getUser()` and that it belongs to the
+  token's user. The service-role key is never used.
+- **Expiry and refresh.** Access tokens live for the shorter of an hour and
+  the Supabase session they wrap. Refresh tokens last 30 days and rotate on
+  every use, since Supabase rotates the refresh token inside them. A dead
+  Supabase session answers `invalid_grant`, which makes Claude reconnect.
+- **Scopes.** `akada.tasks.read` alone gets only the tools annotated
+  `readOnlyHint`; everything else is switched off for that token
+  (`app/api/mcp/scopes.ts`). Claude asks for both.
+- **Annotations.** Every tool has a `title`. `get_`/`find_`/`list_` tools are
+  `readOnlyHint`, `delete_` tools and `update_note` (it can replace a whole
+  note) are `destructiveHint: true`, the rest are `destructiveHint: false`.
+  `app/api/mcp/scopes.test.ts` enforces this, and that `/docs` lists the same
+  tools with the same hints.
+- **Revoking.** Removing the connector in Claude drops its tokens. Deleting
+  the Akada account, or ending the user's sessions in the Supabase dashboard,
+  kills it server side on the next call.
+
 ## Add the connector in Claude
 
 1. In Claude, open **Customize -> Connectors -> Add custom connector**.
@@ -61,7 +103,7 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `save_note`: Write a study note straight onto the Notes shelf, in Markd format, optionally linked to a course.
 - `list_notes`: List study notes with their course, length and how the self-checks have gone.
 - `get_note`: Read one note, with its self-check questions, answers and results.
-- `update_note`: Replace a note, append a section to it, retitle it, or link it to a course.
+- `update_note`: Replace a note, append a section to it, retitle it, or link it to a course. Marked destructive, since a replace loses the old text.
 - `record_note_checks`: Record how the student did on a note's self-checks after a quiz in chat.
 - `delete_note`: Permanently delete a note.
 - `get_quiz_format`: The text format Akada parses multiple-choice quizzes from.
