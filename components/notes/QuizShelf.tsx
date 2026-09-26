@@ -56,7 +56,7 @@ export default function QuizShelf({ onDelete }: { onDelete: (id: string, title: 
                 {last && (
                   <span className="mini" aria-hidden>
                     {quiz.questions.map((q, k) => {
-                      if (!isWritten(q)) return <span key={k} data-r={last.picks[k] === q.answer ? 'got' : 'miss'} />;
+                      if (!isWritten(q)) return <span key={k} data-r={last.unclear?.includes(k) ? 'unclear' : last.picks[k] === q.answer ? 'got' : 'miss'} />;
                       const m = last.marks?.[String(k)];
                       return <span key={k} data-r={!m ? 'wait' : m.score >= m.outOf ? 'got' : m.score > 0 ? 'part' : 'miss'} />;
                     })}

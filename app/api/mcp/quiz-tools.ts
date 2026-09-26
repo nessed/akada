@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { readAccessToken } from '@/lib/mcp-auth';
-import { FEEDBACK_MAX, LETTERS, QUIZ_FORMAT_RULES, QUIZ_TEXT_MAX, cleanAttempts, cleanQuestions, isWritten, parseQuiz, writtenTally } from '@/lib/quiz/format';
+import { FEEDBACK_MAX, LETTERS, bestSitting, QUIZ_FORMAT_RULES, QUIZ_TEXT_MAX, cleanAttempts, cleanQuestions, isWritten, parseQuiz, writtenTally } from '@/lib/quiz/format';
 import type { QuizWrittenMark } from '@/lib/data/types';
 import { mcpSupabase, siteUrl } from './_shared';
 
@@ -83,7 +83,7 @@ function summary(row: QuizRow, refs: { courses: Map<string, Ref>; tasks: Map<str
   const questions = cleanQuestions(row.questions);
   const attempts = cleanAttempts(row.attempts);
   const last = attempts[attempts.length - 1];
-  const best = attempts.reduce((b, a) => Math.max(b, a.score), 0);
+  const best = bestSitting(attempts);
   const mcqCount = questions.filter((q) => !isWritten(q)).length;
   const written = questions.length - mcqCount;
   const tally = last ? writtenTally(questions, last) : null;
@@ -99,7 +99,7 @@ function summary(row: QuizRow, refs: { courses: Map<string, Ref>; tasks: Map<str
     written,
     attempts: attempts.length,
     last_score: last && mcqCount ? `${last.score}/${last.total}` : null,
-    best_score: attempts.length && mcqCount ? `${best}/${mcqCount}` : null,
+    best_score: best && mcqCount ? `${best.score}/${best.total}` : null,
     last_written: tally && written ? { marked: `${tally.score}/${tally.outOf}`, awaiting_marking: tally.pending, possible: tally.possible } : null,
     awaiting_marking: !!tally && tally.pending > 0,
     created_at: row.created_at,
@@ -269,12 +269,13 @@ export async function getQuizTool(
             why: q.explain ?? null,
             last_pick: last ? (pick !== undefined && pick >= 0 ? LETTERS[pick] : 'blank') : null,
             last_correct: last ? pick === q.answer : null,
+            last_unclear: last ? !!last.unclear?.includes(i) : null,
           };
         }),
         latest_attempt_at: last?.at ?? null,
         history: attempts.map((a) => {
           const t = writtenTally(questions, a);
-          return { at: a.at, multiple_choice: a.total ? `${a.score}/${a.total}` : null, written: t.count ? { marked: `${t.score}/${t.outOf}`, awaiting_marking: t.pending } : null };
+          return { at: a.at, multiple_choice: a.total ? `${a.score}/${a.total}` : null, unclear: a.unclear?.map((i) => i + 1) ?? [], written: t.count ? { marked: `${t.score}/${t.outOf}`, awaiting_marking: t.pending } : null };
         }),
       },
     });
@@ -363,7 +364,7 @@ const LIST_QUIZZES_DESCRIPTION = 'List the quizzes in the student’s Akada, new
 
 const GRADE_QUIZ_DESCRIPTION = 'Mark the written answers on a quiz the student has handed in. Read them first with get_quiz (each written question has `student_answer`, `model_answer` and `marks`). Give every written question a `score` from 0 to its marks and `feedback`: what they got right, what was missing against the model answer, one line on how to get full marks. A blank answer scores 0. Marks the latest sitting unless `attempt_at` names another. Multiple-choice questions are already marked by Akada and cannot be marked here. After marking, go over the whole sitting with the student in one place: the multiple-choice mark, which ones they missed and why, and the written marks.';
 
-const GET_QUIZ_DESCRIPTION = 'Read one quiz from Akada with its answer key and the student’s latest sitting: for multiple choice, what they picked and whether it was right; for written questions, what they wrote, the model answer, the marks available and any mark already given. Also every past mark. Use it after they have taken it, before grade_quiz, and to go over what they missed. This tool never changes Akada data.';
+const GET_QUIZ_DESCRIPTION = 'Read one quiz from Akada with its answer key and the student’s latest sitting: for multiple choice, what they picked and whether it was right; for written questions, what they wrote, the model answer, the marks available and any mark already given. Also every past mark. A multiple-choice question the student flagged as unclear (`last_unclear`, and `unclear` numbers in history) is left out of their mark: treat it as a sign the question was badly worded, say what it was getting at, and reword it if you send another quiz. Use it after they have taken it, before grade_quiz, and to go over what they missed. This tool never changes Akada data.';
 
 const DELETE_QUIZ_DESCRIPTION = 'Permanently delete a quiz and its marks from Akada. Only when the student clearly asks for that quiz to be deleted.';
 

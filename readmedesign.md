@@ -1006,6 +1006,16 @@ takes a sage circle and a sage wash, a wrong pick a peach circle and a peach
 wash (never a strikethrough), the rest fade, and the *why* sits under each
 question in muted italic serif.
 
+Under each multiple-choice question sits a quiet italic serif *unclear?* in
+the faintest muted tone. Tapping it flags the question as badly worded: it
+reads *unclear · won't count* with a wavy pencil underline, and the prompt
+eases to a softer ink. A flagged question is still answered and still shows
+the key when handed in, but it is left out of the mark both ways (`6 / 9`
+rather than `7 / 10`), its stroke is a faint grey one, its *why* opens with
+*marked unclear, not counted*, and the margin line says how many were set
+aside. The flag lives on the sitting (`unclear` on the attempt), and
+`get_quiz` hands it to the assistant so it can explain or reword them.
+
 A written question has no options. It carries its marks in italic after the
 prompt and takes its answer on ruled lines (a borderless textarea over the
 page's own rule), not in a box. Handed in, the answer stays on its lines and

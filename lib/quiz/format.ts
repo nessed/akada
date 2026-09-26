@@ -228,6 +228,8 @@ export function cleanAttempts(value: unknown): QuizAttempt[] {
     const marks = cleanMarks(a.marks);
     if (Object.keys(marks).length) attempt.marks = marks;
     if (typeof a.markedAt === 'string') attempt.markedAt = a.markedAt;
+    const unclear = Array.isArray(a.unclear) ? [...new Set(a.unclear.filter((n): n is number => Number.isInteger(n) && n >= 0 && n < 100))].sort((x, y) => x - y) : [];
+    if (unclear.length) attempt.unclear = unclear;
     out.push(attempt);
   }
   return out.slice(-QUIZ_ATTEMPTS_MAX);
@@ -264,13 +266,18 @@ export const isWritten = (q: QuizQuestion) => q.kind === 'open';
 /**
  * Marks a sitting. Multiple-choice questions are marked against the key on
  * the spot, a blank (-1) counting wrong; `score` and `total` are that part
- * alone. Written answers are kept, unmarked, for the assistant.
+ * alone. A question flagged unclear is taken out of both, right or wrong, so
+ * a badly worded question can't cost or earn a mark. Written answers are
+ * kept, unmarked, for the assistant.
  */
-export function markQuiz(questions: QuizQuestion[], picks: number[], written: Record<string, string> = {}): QuizAttempt {
+export function markQuiz(questions: QuizQuestion[], picks: number[], written: Record<string, string> = {}, unclear: number[] = []): QuizAttempt {
   const clean = questions.map((q, i) => (!isWritten(q) && Number.isInteger(picks[i]) ? picks[i] : -1));
-  const mcq = questions.filter((q) => !isWritten(q));
-  const score = questions.reduce((n, q, i) => n + (!isWritten(q) && clean[i] === q.answer ? 1 : 0), 0);
-  const attempt: QuizAttempt = { at: new Date().toISOString(), picks: clean, score, total: mcq.length };
+  const flagged = [...new Set(unclear)].filter((i) => questions[i] && !isWritten(questions[i])).sort((a, b) => a - b);
+  const counts = (q: QuizQuestion, i: number) => !isWritten(q) && !flagged.includes(i);
+  const total = questions.filter(counts).length;
+  const score = questions.reduce((n, q, i) => n + (counts(q, i) && clean[i] === q.answer ? 1 : 0), 0);
+  const attempt: QuizAttempt = { at: new Date().toISOString(), picks: clean, score, total };
+  if (flagged.length) attempt.unclear = flagged;
   const kept = cleanWritten(Object.fromEntries(Object.entries(written).filter(([k]) => questions[Number(k)] && isWritten(questions[Number(k)]))));
   if (Object.keys(kept).length) attempt.written = kept;
   return attempt;
@@ -296,6 +303,15 @@ export function writtenTally(questions: QuizQuestion[], attempt: QuizAttempt) {
     } else pending++;
   });
   return { count, pending, score, outOf, possible: questions.reduce((n, q) => n + (isWritten(q) ? q.marks ?? 1 : 0), 0) };
+}
+
+/** The best multiple-choice sitting by share right, so sittings with different questions set aside compare fairly. */
+export function bestSitting(attempts: QuizAttempt[]): QuizAttempt | undefined {
+  return attempts.reduce<QuizAttempt | undefined>((b, a) => {
+    if (!a.total) return b;
+    if (!b || a.score / a.total > b.score / b.total) return a;
+    return b;
+  }, undefined);
 }
 
 export const LETTERS = 'ABCDEF';
