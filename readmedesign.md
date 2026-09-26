@@ -1016,6 +1016,12 @@ rather than `7 / 10`), its stroke is a faint grey one, its *why* opens with
 aside. The flag lives on the sitting (`unclear` on the attempt), and
 `get_quiz` hands it to the assistant so it can explain or reword them.
 
+A paper being sat is kept on the device as it is filled in (every pick,
+every keystroke, every *unclear* flag), so a refresh or a closed tab opens it
+back where it was; the count beside **Hand it in** adds *kept on this
+device* once anything is answered. It is cleared when the sitting is filed
+or started again.
+
 A written question has no options. It carries its marks in italic after the
 prompt and takes its answer on ruled lines (a borderless textarea over the
 page's own rule), not in a box. Handed in, the answer stays on its lines and

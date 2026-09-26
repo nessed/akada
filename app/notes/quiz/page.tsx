@@ -9,6 +9,7 @@ import Icon from '@/components/notes/Icon';
 import QuizText from '@/components/notes/QuizText';
 import { addQuizAttemptOptimistic, useCourses, useNotes, useQuizzes, useTasks } from '@/lib/data-hooks';
 import { LETTERS, bestSitting, isWritten, markQuiz, writtenTally } from '@/lib/quiz/format';
+import { clearQuizDraft, loadQuizDraft, saveQuizDraft } from '@/lib/quiz/draft';
 import { relativeLabel } from '@/lib/notes/store';
 import type { Quiz, QuizAttempt, QuizQuestion } from '@/lib/data';
 
@@ -64,12 +65,14 @@ function Sitting({ quiz }: { quiz: Quiz }) {
 
   const hasWritten = quiz.questions.some(isWritten);
   const latest = quiz.attempts[quiz.attempts.length - 1];
-  const [picks, setPicks] = useState<number[]>(() => quiz.questions.map(() => -1));
-  const [written, setWritten] = useState<Record<string, string>>({});
+  // A paper left half done on this device picks up where it was.
+  const [draft] = useState(() => loadQuizDraft(quiz.id, quiz.questions.length));
+  const [picks, setPicks] = useState<number[]>(() => draft?.picks ?? quiz.questions.map(() => -1));
+  const [written, setWritten] = useState<Record<string, string>>(() => draft?.written ?? {});
   // Questions flagged as unclear on this paper; they're marked but don't count.
-  const [unclear, setUnclear] = useState<number[]>([]);
+  const [unclear, setUnclear] = useState<number[]>(() => draft?.unclear ?? []);
   // The sitting on show, by when it was handed in; null is a fresh paper.
-  const [viewing, setViewing] = useState<string | null>(() => (hasWritten && latest ? latest.at : null));
+  const [viewing, setViewing] = useState<string | null>(() => (!draft && hasWritten && latest ? latest.at : null));
   const [pending, setPending] = useState<QuizAttempt | null>(null);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -83,11 +86,17 @@ function Sitting({ quiz }: { quiz: Quiz }) {
     if (viewing) window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [viewing]);
 
+  // Every pick and keystroke is kept as it happens, until the paper is filed.
+  useEffect(() => {
+    if (!viewing) saveQuizDraft(quiz.id, { picks, written, unclear });
+  }, [quiz.id, viewing, picks, written, unclear]);
+
   const file = async (attempt: QuizAttempt) => {
     setSaving(true);
     setFailed(false);
     try {
       await addQuizAttemptOptimistic(quiz, attempt);
+      clearQuizDraft(quiz.id);
     } catch {
       setFailed(true);
     } finally {
@@ -106,6 +115,7 @@ function Sitting({ quiz }: { quiz: Quiz }) {
     setPicks(quiz.questions.map(() => -1));
     setWritten({});
     setUnclear([]);
+    clearQuizDraft(quiz.id);
     setViewing(null);
     setPending(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -299,7 +309,7 @@ function Sitting({ quiz }: { quiz: Quiz }) {
             <button type="button" className="btn btn-primary" onClick={handIn} disabled={!answered}>
               <Icon name="check" size={16} />Hand it in
             </button>
-            <span className="standfirst">{answered === total ? 'all answered' : `${answered} of ${total} answered`}</span>
+            <span className="standfirst">{answered === total ? 'all answered' : `${answered} of ${total} answered`}{answered ? ' · kept on this device' : ''}</span>
           </>
         )}
       </footer>
