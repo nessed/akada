@@ -423,7 +423,7 @@ export function registerNoteTools(server: McpServer, token: AuthenticatedToken) 
       title: 'Change an Akada study note',
       description: UPDATE_NOTE_DESCRIPTION,
       inputSchema: UpdateNoteInput,
-      annotations: { destructiveHint: false, idempotentHint: false },
+      annotations: { destructiveHint: true, idempotentHint: false },
     },
     async (input) => updateNoteTool(token, input),
   );

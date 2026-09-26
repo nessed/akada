@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { READ_SCOPE, WRITE_SCOPE } from './scopes';
 
-export const MCP_SCOPES = ['akada.tasks.read', 'akada.tasks.write'] as const;
+export const MCP_SCOPES = [READ_SCOPE, WRITE_SCOPE] as const;
 
 type KnownCallback = { name: string; test: (uri: string) => boolean };
 

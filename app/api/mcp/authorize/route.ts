@@ -8,6 +8,7 @@ import {
   siteUrl,
 } from '../_shared';
 import { issueAuthorizationCode, readMcpClient } from '@/lib/mcp-auth';
+import { WRITE_SCOPE } from '../scopes';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -93,7 +94,7 @@ function isLoopback(host: string) {
 // reads this screen against the tool list, and a user decides on it.
 function accessSummary(params: AuthorizationParams) {
   const name = htmlEscape(params.clientName);
-  const canWrite = params.scope.split(/\s+/).includes('akada.tasks.write');
+  const canWrite = params.scope.split(/\s+/).includes(WRITE_SCOPE);
   return canWrite
     ? `${name} will be able to read your Akada courses, tasks, study sessions, notes, quizzes, recall and grades, and add, change and permanently delete them. In ${name}’s connector settings you can make any change wait for your approval first.`
     : `${name} will be able to read your Akada courses, tasks, study sessions, notes, quizzes, recall and grades. It will not be able to change or delete anything.`;

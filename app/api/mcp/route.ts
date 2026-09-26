@@ -38,7 +38,8 @@ import { readCredit } from '@/lib/progression/credit';
 import { readRuns } from '@/lib/progression/runs';
 import { compareCourseOrder } from '@/lib/data/course-order';
 import { compareTaskOrder } from '@/lib/data/task-order';
-import { mcpSupabase, mcpUrl, siteUrl } from './_shared';
+import { MCP_SCOPES, mcpSupabase, mcpUrl, siteUrl } from './_shared';
+import { limitToGrantedScopes } from './scopes';
 import { registerNoteTools } from './notes-tools';
 import { registerQuizTools } from './quiz-tools';
 
@@ -2152,8 +2153,11 @@ export async function getReadingBacklog(
   }
 }
 
-function createServer(token: AuthenticatedToken) {
-  const server = new McpServer({ name: 'Akada', version: '1.0.0' });
+export function createServer(token: AuthenticatedToken) {
+  const server = limitToGrantedScopes(
+    new McpServer({ name: 'Akada', version: '1.0.0' }),
+    token.scope.split(/\s+/).filter(Boolean),
+  );
 
   server.registerTool(
     'find_course',
@@ -3222,7 +3226,7 @@ function unauthorized() {
       status: 401,
       headers: {
         'Cache-Control': 'no-store',
-        'WWW-Authenticate': `Bearer resource_metadata="${siteUrl()}/.well-known/oauth-protected-resource/mcp"`,
+        'WWW-Authenticate': `Bearer resource_metadata="${siteUrl()}/.well-known/oauth-protected-resource/mcp", scope="${MCP_SCOPES.join(' ')}"`,
       },
     },
   );
