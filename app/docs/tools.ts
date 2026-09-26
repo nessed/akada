@@ -78,4 +78,14 @@ export const GROUPS: { id: string; title: string; tools: Tool[] }[] = [
       { name: 'delete_quiz', access: 'Deletes', does: 'Permanently deletes a quiz and its marks.' },
     ],
   },
+  {
+    id: 'weak-points',
+    title: 'Weak points',
+    tools: [
+      { name: 'get_weak_points', access: 'Reads', does: 'What you keep getting wrong in a course, most often missed first, with the section and pages to reread.' },
+      { name: 'record_weak_points', access: 'Changes', does: 'Writes down each confusion found when marking a quiz; one already there counts again instead of doubling up.' },
+      { name: 'resolve_weak_point', access: 'Changes', does: 'Marks a weak point fixed after you get it right on a retest.' },
+      { name: 'reopen_weak_point', access: 'Changes', does: 'Puts a fixed weak point back on the list.' },
+    ],
+  },
 ];

@@ -31,6 +31,8 @@ import type {
   Quiz,
   QuizAttempt,
   Quizzes,
+  WeakPoints,
+  WeakPointStatus,
   Task,
   UserSettings,
 } from './data';
@@ -50,6 +52,7 @@ const KEY = {
   recall: 'recall',
   notes: 'notes',
   quizzes: 'quizzes',
+  weakPoints: 'weak-points',
 } as const;
 
 /* ───────── Reads ───────── */
@@ -146,6 +149,17 @@ export function useQuizzes() {
     error,
     isLoading,
     revalidate,
+  };
+}
+
+export function useWeakPoints() {
+  const { data, error, isLoading } = useSWR(KEY.weakPoints, () => db.getWeakPoints());
+  return {
+    weakPoints: data?.weakPoints ?? [],
+    loaded: data !== undefined,
+    available: data?.available ?? true,
+    error,
+    isLoading,
   };
 }
 
@@ -706,6 +720,7 @@ export async function resetAllData() {
     mutate(KEY.recall, { records: [], available: true }, { revalidate: false }),
     mutate(KEY.notes, { notes: [], available: true }, { revalidate: false }),
     mutate(KEY.quizzes, { quizzes: [], available: true }, { revalidate: false }),
+    mutate(KEY.weakPoints, { weakPoints: [], available: true }, { revalidate: false }),
   ]);
 }
 
@@ -728,6 +743,7 @@ export async function deleteAccountAndData() {
     mutate(KEY.recall, { records: [], available: true }, { revalidate: false }),
     mutate(KEY.notes, { notes: [], available: true }, { revalidate: false }),
     mutate(KEY.quizzes, { quizzes: [], available: true }, { revalidate: false }),
+    mutate(KEY.weakPoints, { weakPoints: [], available: true }, { revalidate: false }),
   ]);
 }
 
@@ -879,5 +895,22 @@ export async function deleteQuizOptimistic(id: string) {
       populateCache: true,
       revalidate: false,
     },
+  );
+}
+
+/** Ticks a weak point fixed, or open again, on the spot. */
+export async function setWeakPointStatusOptimistic(id: string, status: WeakPointStatus) {
+  const fixedAt = status === 'fixed' ? new Date().toISOString() : null;
+  const patch = (current: WeakPoints | undefined): WeakPoints => ({
+    weakPoints: (current?.weakPoints ?? []).map((w) => (w.id === id ? { ...w, status, fixedAt } : w)),
+    available: current?.available ?? true,
+  });
+  await mutate(
+    KEY.weakPoints,
+    async (current: WeakPoints | undefined) => {
+      await db.setWeakPointStatus(id, status);
+      return patch(current);
+    },
+    { optimisticData: patch, rollbackOnError: true, populateCache: true, revalidate: false },
   );
 }

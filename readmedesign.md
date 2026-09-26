@@ -1042,6 +1042,30 @@ that task's sheet under the note line, as an `.eyebrow` *Quiz*, its title and
 the last mark. Everything is in
 `app/notes/notes.css` under `.notes`.
 
+### Weak points
+
+What a course keeps going wrong, written by the assistant after it marks a
+quiz. On the course page it is the last panel in the left column, under
+Recall: the `.eyebrow` **Weak points** with the open count in mono, then the
+open ones grouped under their section, each section an `.eyebrow` (`§ 1.3`,
+*No section* last). A row is the times missed in mono (`×3`, a digit), the
+summary in the serif, and under it one muted italic line: the confusion, the
+pages, and the quiz it came from as a hand-underlined link (or the note on
+its task). *fixed* sits at the right in the faintest italic, on hover at
+desktop widths and always on a phone, like *let go* on Recall. Ticked, a row
+moves to a folded **Fixed** list, opened the way done tasks are (`Fixed 3`
+beside the eyebrow), where the rows fade and read *reopen*. Never a
+strikethrough. Before anything has been recorded the panel says once, in
+muted italic, what will appear there.
+
+When a course has an exam within seven days and anything open, Today's right
+column carries **Before the exam** under Coming: per course, the course rule,
+code and exam title on the eyebrow with the days in mono, then the top five,
+most missed first, each `×n` in mono and the summary in the serif with the
+section and pages trailing in muted italic, and a quiet link to the rest on
+the course page. Nothing at all otherwise. `components/course/WeakPointsPanel.tsx`
+and `components/today/BeforeExamPanel.tsx`.
+
 ### Courses: the shelf
 
 `/courses` is the term as a bookshelf, laid out as a grid of books standing

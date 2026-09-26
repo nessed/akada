@@ -9,6 +9,7 @@ import NextMarkLine from '@/components/progression/NextMarkLine';
 import Marginalia from '@/components/progression/Marginalia';
 import { useProgression } from '@/lib/progression/use-progression';
 import RecallDeck from '@/components/recall/RecallDeck';
+import BeforeExamPanel from '@/components/today/BeforeExamPanel';
 import { useRecall } from '@/lib/recall/use-recall';
 import type { RecallState } from '@/lib/recall';
 import { useLiveSession } from '@/lib/use-live-session';
@@ -1020,6 +1021,7 @@ function DashboardPageContent() {
               recall={recall}
               onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
             />
+            <BeforeExamPanel tasks={tasks} courses={courses} />
             <WeekPanel sessions={shownSessions} courses={courses} goalHours={weeklyGoalHours} />
             </div>
             <div className="mt-7 flex items-baseline justify-between font-serif text-[12.5px] italic text-muted">

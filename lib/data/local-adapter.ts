@@ -14,6 +14,9 @@ import type {
   Quiz,
   QuizAttempt,
   Quizzes,
+  WeakPoint,
+  WeakPoints,
+  WeakPointStatus,
   Task,
   Semester,
   NewSemesterInput,
@@ -72,6 +75,7 @@ const KEYS = {
   recall: 'lums.recall',
   notes: 'lums.notes',
   quizzes: 'lums.quizzes',
+  weakPoints: 'lums.weakPoints',
 } as const;
 
 /**
@@ -687,6 +691,16 @@ export class LocalAdapter implements DataProvider {
 
   async deleteQuiz(id: string): Promise<void> {
     write(KEYS.quizzes, read<Quiz[]>(KEYS.quizzes, []).filter((q) => q.id !== id));
+  }
+
+  // ---- Weak points. Like quizzes, only an assistant over MCP writes them.
+  async getWeakPoints(): Promise<WeakPoints> {
+    return { weakPoints: read<WeakPoint[]>(KEYS.weakPoints, []), available: true };
+  }
+
+  async setWeakPointStatus(id: string, status: WeakPointStatus): Promise<void> {
+    const fixedAt = status === 'fixed' ? new Date().toISOString() : null;
+    write(KEYS.weakPoints, read<WeakPoint[]>(KEYS.weakPoints, []).map((w) => (w.id === id ? { ...w, status, fixedAt } : w)));
   }
 
   async resetAll(): Promise<void> {

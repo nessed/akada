@@ -423,6 +423,44 @@ export interface Quiz {
   updatedAt: string;
 }
 
+export const WEAK_POINT_ERROR_TYPES = ['concept', 'assumption', 'algebra', 'graph', 'evidence', 'command_word', 'careless'] as const;
+export type WeakPointErrorType = (typeof WEAK_POINT_ERROR_TYPES)[number];
+export type WeakPointStatus = 'open' | 'fixed';
+
+/**
+ * One thing a student keeps getting wrong in a course, written by an
+ * assistant after it marks a quiz. The same confusion found again bumps
+ * `timesMissed` on the row it already has rather than adding another, so the
+ * list reads as what keeps going wrong, most often first. See
+ * lib/weak-points.ts.
+ */
+export interface WeakPoint {
+  id: string;
+  courseId: string;
+  taskId: string | null;
+  quizId: string | null;
+  /** Where it is in the material: "1.3". Empty when the assistant didn't know. */
+  section: string;
+  /** "p.22-24", or empty. */
+  pageRef: string;
+  /** One line on what goes wrong. */
+  summary: string;
+  /** The two things being mixed up, "core values vs objectives", or empty. */
+  confusion: string;
+  errorType: WeakPointErrorType;
+  timesMissed: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  status: WeakPointStatus;
+  fixedAt: string | null;
+}
+
+/** `available` is false against a database without the weak_points table yet. */
+export interface WeakPoints {
+  weakPoints: WeakPoint[];
+  available: boolean;
+}
+
 /** `available` is false against a database without the quizzes table yet. */
 export interface Quizzes {
   quizzes: Quiz[];

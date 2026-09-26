@@ -24,6 +24,7 @@ import CourseSessionLog from '@/components/course/CourseSessionLog';
 import CourseWeekCard from '@/components/course/CourseWeekCard';
 import GradeStanding from '@/components/course/GradeStanding';
 import PracticeScores from '@/components/course/PracticeScores';
+import WeakPointsPanel from '@/components/course/WeakPointsPanel';
 import { useArchivedCourse } from '@/components/course/useArchivedCourse';
 import type { Course, Session, Task } from '@/lib/data';
 import { compareTaskOrder } from '@/lib/data/task-order';
@@ -611,6 +612,9 @@ export default function CoursePage() {
             available={recallAvailable}
             onStudy={(state, el) => setStartTarget({ task: state.task, course, anchor: el })}
           />
+
+          {/* What keeps going wrong, as Claude found it marking quizzes. */}
+          <WeakPointsPanel course={course} />
         </div>
 
         {/* The right column, as stories under a pencil column rule. */}
