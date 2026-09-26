@@ -38,7 +38,7 @@ import { readCredit } from '@/lib/progression/credit';
 import { readRuns } from '@/lib/progression/runs';
 import { compareCourseOrder } from '@/lib/data/course-order';
 import { compareTaskOrder } from '@/lib/data/task-order';
-import { MCP_SCOPES, mcpSupabase, mcpUrl, siteUrl } from './_shared';
+import { checkResource, MCP_SCOPES, mcpSupabase, mcpUrl, siteUrl } from './_shared';
 import { limitToGrantedScopes } from './scopes';
 import { registerNoteTools } from './notes-tools';
 import { registerQuizTools } from './quiz-tools';
@@ -3210,6 +3210,12 @@ async function authenticate(request: NextRequest) {
     }
     if (data.user?.id !== token.userId) {
       console.error('[mcp:auth] token subject does not match the supabase session');
+      return null;
+    }
+    // Tokens issued before audience binding carry no resource; accept those
+    // until they age out, and refuse any token minted for another server.
+    if (token.resource !== undefined && !checkResource(token.resource)) {
+      console.error('[mcp:auth] token was issued for a different resource');
       return null;
     }
     return { token: match[1], payload: token };

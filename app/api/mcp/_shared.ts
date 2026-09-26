@@ -44,6 +44,20 @@ export function mcpUrl() {
   return `${siteUrl()}/api/mcp`;
 }
 
+// RFC 8707: a client names the server it wants a token for. Akada has one
+// MCP server, so the only acceptable answer is its URL (a trailing slash is
+// tolerated). No `resource` at all is allowed for clients that predate it.
+export function checkResource(value: string | null | undefined) {
+  if (value === null || value === undefined) return true;
+  try {
+    const url = new URL(value);
+    if (url.hash) return false;
+    return url.href.replace(/\/$/, '') === mcpUrl();
+  } catch {
+    return false;
+  }
+}
+
 export function oauthError(error: string, description: string, status = 400) {
   return Response.json(
     { error, error_description: description },

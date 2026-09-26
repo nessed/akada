@@ -7,7 +7,7 @@ import {
   readRefreshToken,
   secureEqual,
 } from '@/lib/mcp-auth';
-import { mcpSupabase, oauthError } from '../_shared';
+import { checkResource, mcpSupabase, mcpUrl, oauthError } from '../_shared';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic';
 function tokens(payload: {
   clientId: string;
   scope: string;
+  resource: string;
   userId: string;
   supabaseAccessToken: string;
   supabaseRefreshToken: string;
@@ -24,6 +25,7 @@ function tokens(payload: {
       access_token: issueAccessToken({
         clientId: payload.clientId,
         scope: payload.scope,
+        resource: payload.resource,
         userId: payload.userId,
         supabaseAccessToken: payload.supabaseAccessToken,
       }),
@@ -32,6 +34,7 @@ function tokens(payload: {
       refresh_token: issueRefreshToken({
         clientId: payload.clientId,
         scope: payload.scope,
+        resource: payload.resource,
         userId: payload.userId,
         supabaseRefreshToken: payload.supabaseRefreshToken,
       }),
@@ -50,6 +53,10 @@ export async function POST(request: NextRequest) {
   const grantType = form.get('grant_type');
   const clientId = form.get('client_id');
   if (typeof clientId !== 'string') return oauthError('invalid_request', 'client_id is required.');
+  const resource = form.get('resource');
+  if (resource !== null && (typeof resource !== 'string' || !checkResource(resource))) {
+    return oauthError('invalid_target', `This authorization server only issues tokens for ${mcpUrl()}.`);
+  }
 
   if (grantType === 'authorization_code') {
     const code = form.get('code');
@@ -63,7 +70,8 @@ export async function POST(request: NextRequest) {
       if (
         !secureEqual(payload.clientId, clientId) ||
         !secureEqual(payload.redirectUri, redirectUri) ||
-        !secureEqual(payload.codeChallenge, pkceChallenge(verifier))
+        !secureEqual(payload.codeChallenge, pkceChallenge(verifier)) ||
+        !checkResource(payload.resource)
       ) {
         return oauthError('invalid_grant', 'The authorization code does not match this connector.');
       }
@@ -78,7 +86,7 @@ export async function POST(request: NextRequest) {
     if (typeof refreshToken !== 'string') return oauthError('invalid_request', 'refresh_token is required.');
     try {
       const payload = readRefreshToken(refreshToken);
-      if (!secureEqual(payload.clientId, clientId)) {
+      if (!secureEqual(payload.clientId, clientId) || !checkResource(payload.resource)) {
         return oauthError('invalid_grant', 'The refresh token does not match this connector.');
       }
       const { data, error } = await mcpSupabase('').auth.refreshSession({ refresh_token: payload.supabaseRefreshToken });
@@ -87,6 +95,7 @@ export async function POST(request: NextRequest) {
       }
       return tokens({
         ...payload,
+        resource: payload.resource ?? mcpUrl(),
         supabaseAccessToken: data.session.access_token,
         supabaseRefreshToken: data.session.refresh_token,
       });
