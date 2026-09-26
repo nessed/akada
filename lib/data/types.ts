@@ -105,6 +105,9 @@ export interface Session {
 
 export type TaskPriority = 'high' | 'normal';
 
+/** See Task.completedVia. */
+export type TaskCompletedVia = 'session' | 'skip';
+
 /**
  * What a row on the list actually is.
  *
@@ -207,6 +210,15 @@ export interface Task {
   priority: TaskPriority;
   completed: boolean;
   completedAt: string | null;
+  /**
+   * How a finished task was finished, when anything said. `session` is the
+   * log sheet's "Mark the task done", at the end of time spent on it; `skip`
+   * is the reader saying it is off the list without being done, so it never
+   * feeds recall, pages, a study day or Finished early. A plain tick says
+   * nothing and leaves this null. Whether a task was actually worked is read
+   * off the logged time, not off this: see workedTaskIds in lib/derive.ts.
+   */
+  completedVia?: TaskCompletedVia | null;
   createdAt: string;
   /** Plain task unless said otherwise, and `'task'` when absent. See TaskKind. */
   kind?: TaskKind;

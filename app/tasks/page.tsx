@@ -36,6 +36,7 @@ import {
   useTasks,
   addTaskOptimistic,
   toggleTaskOptimistic,
+  skipTaskOptimistic,
   updateTaskOptimistic,
   deleteTaskOptimistic,
 } from '@/lib/data-hooks';
@@ -565,6 +566,7 @@ function TasksPageContent() {
                 await updateTaskOptimistic(written.id, {
                   completed: true,
                   completedAt: t.completedAt,
+                  completedVia: t.completedVia ?? null,
                 });
               }
             }),
@@ -617,6 +619,25 @@ function TasksPageContent() {
     } catch (error) {
       console.error('Failed to update task:', error);
       notify('That task did not update.');
+    }
+  }
+
+  /**
+   * Off the list without being done. Undoable like every other move here,
+   * since a skip on the wrong row takes it out of sight.
+   */
+  async function skipTask(task: Task) {
+    try {
+      await skipTaskOptimistic(task);
+      setUndo({
+        label: `Skipped ${task.title}`,
+        restore: async () => {
+          await updateTaskOptimistic(task.id, { completed: false, completedAt: null, completedVia: null });
+        },
+      });
+    } catch (error) {
+      console.error('Failed to skip task:', error);
+      notify(error instanceof Error && error.message.startsWith('Skip') ? error.message : 'That task did not skip.');
     }
   }
 
@@ -1104,6 +1125,7 @@ function TasksPageContent() {
                       onSelect={toggleSelected}
                       onReschedule={snoozeTask}
                       onOpenEnded={openEndTask}
+                      onSkip={skipTask}
                       onDelete={(t) => deleteTask(t.id)}
                     />
                   ))}
@@ -1499,7 +1521,11 @@ function TasksPageContent() {
                   for, and a task with no date says that. */}
               <div className="mt-3.5 flex flex-wrap items-center gap-3">
                 {viewingTask.completed ? (
-                  <Stamp style={course ? { color: course.color } : undefined}>Done</Stamp>
+                  viewingTask.completedVia === 'skip' ? (
+                    <Stamp style={{ color: 'var(--muted)' }}>Skipped</Stamp>
+                  ) : (
+                    <Stamp style={course ? { color: course.color } : undefined}>Done</Stamp>
+                  )
                 ) : (
                   <>
                     {viewingTask.priority === 'high' && (
@@ -1671,11 +1697,55 @@ function TasksPageContent() {
                 <HandNote color="var(--muted-soft)" size={16} rotate={-1.5}>
                   added {formatRelativeDate(isoDate(new Date(viewingTask.createdAt)))}
                   {viewingTask.completedAt
-                    ? ` · finished ${formatRelativeDate(
+                    ? ` · ${viewingTask.completedVia === 'skip' ? 'skipped' : 'finished'} ${formatRelativeDate(
                         isoDate(new Date(viewingTask.completedAt)),
                       )}`
                     : ''}
                 </HandNote>
+              </p>
+
+              {/* The three things a task can become. Done is the work done;
+                  Skip takes it off the list without claiming it was, so
+                  nothing that counts finished work ever counts it; a finished
+                  or skipped task can be put back. */}
+              <p className="m-0 mt-4 flex flex-wrap items-baseline gap-x-5 gap-y-2 font-serif text-[13.5px]">
+                {viewingTask.completed ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const reopened = { ...viewingTask, completed: false, completedAt: null, completedVia: null };
+                      void toggleTask(viewingTask);
+                      setViewingTask(reopened);
+                    }}
+                    className="hand-underline bg-transparent px-0.5 text-ink"
+                  >
+                    Put it back on the list
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void toggleTask(viewingTask);
+                        setViewingTask(null);
+                      }}
+                      className="hand-underline bg-transparent px-0.5 text-ink"
+                    >
+                      Mark done
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void skipTask(viewingTask);
+                        setViewingTask(null);
+                      }}
+                      title="Off the list without being done. It never counts as work read or studied."
+                      className="hand-underline bg-transparent px-0.5 text-ink-soft"
+                    >
+                      Skip it
+                    </button>
+                  </>
+                )}
               </p>
 
               <div className="mt-5 flex gap-2.5">

@@ -199,6 +199,49 @@ export function countdowns(
 }
 
 /**
+ * Whether a finished task was taken off the list without being done. Nothing
+ * that reads a tick as evidence of work (recall, pages, a study day, Finished
+ * early) ever counts one.
+ */
+export function isSkipped(task: Pick<Task, 'completed' | 'completedVia'>): boolean {
+  return task.completed && task.completedVia === 'skip';
+}
+
+/**
+ * The finished tasks that were worked, as against ticked.
+ *
+ * A tick is one tap and says nothing about whether the thing was read,
+ * studied or learned. A finished task is **worked** when time was logged
+ * against it: a session on it, or a kept timed read-through of a note studied
+ * under it. Everything the app derives about the reader from finished work
+ * (pages an hour, study days, Finished early, what recall asks about) reads
+ * this set rather than the tick, so every one of them makes the same call.
+ * A skipped task is never worked, whatever time went on it: the reader said
+ * it was not done.
+ *
+ * Read at derive time from rows that already exist, so no history has to be
+ * migrated for it to hold.
+ */
+export function workedTaskIds(
+  tasks: Pick<Task, 'id' | 'completed' | 'completedVia'>[],
+  sessions: { taskId: string | null; durationSeconds: number }[],
+  notes: { taskId: string | null; reads?: unknown[] | null }[] = [],
+): Set<string> {
+  const timed = new Set<string>();
+  for (const session of sessions) {
+    if (session.taskId && session.durationSeconds > 0) timed.add(session.taskId);
+  }
+  for (const note of notes) {
+    if (note.taskId && (note.reads?.length ?? 0) > 0) timed.add(note.taskId);
+  }
+  const worked = new Set<string>();
+  for (const task of tasks) {
+    if (task.completed && !isSkipped(task) && timed.has(task.id)) worked.add(task.id);
+  }
+  return worked;
+}
+
+/**
  * The reading you are behind on, longest overdue first, with the page counts
  * that turn it from vague guilt into a number of hours.
  */

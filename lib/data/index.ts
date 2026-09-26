@@ -64,6 +64,7 @@ export type {
   WeakPointStatus,
   WeakPoints,
   Task,
+  TaskCompletedVia,
   TaskKind,
   TaskSubtask,
   Semester,

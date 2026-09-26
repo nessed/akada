@@ -528,7 +528,8 @@ author and a year, or names a chapter), comes into recall the day after it was
 ticked. Nothing is stored for it until it is first answered, so a term that
 started before recall existed arrives with its readings already in it. The
 same reading written down twice, once off the syllabus and once when it was
-done, is one thing to remember. Anything else is kept by hand: a finished task
+done, is one thing to remember. A reading skipped rather than done (see
+"Worked, not ticked, and Skip") is never asked about. Anything else is kept by hand: a finished task
 from its sheet ("Keep this for recall"), the ticked steps of a concept list
 ("keep 5 ticked for recall", in the Subtasks header), a line on a course page,
 a line on the log sheet, or through the connector.
@@ -760,6 +761,27 @@ holds it and lets it go again. That control draws **only when it is given a
 handler**, which is the rule that matters — it used to draw whenever a timer
 ran and call nothing, so it was a live-looking button that did nothing when
 pressed.
+
+### Worked, not ticked, and Skip
+A tick is one tap and says nothing about whether a thing was read, studied or
+learned. So the app keeps one rule for every figure it derives about the
+reader from finished work: a finished task is **worked** when time was logged
+against it (a session on it, or a kept timed read-through of a note studied
+under it), and otherwise only **ticked**. `workedTaskIds` in `lib/derive.ts`
+is the one place that decides it, read at derive time off rows that already
+exist; nothing else re-derives it.
+
+A task can also be **skipped**: taken off the list without being done, from
+the row menu ("Skip") or the task sheet ("Skip it"). It leaves the list the
+way a finished one does, but it is never worked, never enters recall, and
+never counts as pages, a study day or Finished early. It is drawn apart from
+done: the box left unfilled with the hand check struck through in `muted`
+(`HandCheck struck`), "skipped" where the date column says "done", and a
+muted "Skipped" stamp on its sheet. Never a cross and never red. It is stored
+as `tasks.completed_via = 'skip'`; the log sheet's "Mark the task done" writes
+`'session'`, a plain tick writes nothing, and putting a task back clears it.
+A database without the column still takes ticks, and refuses a skip in words
+rather than saving it as a tick.
 
 ### Keys on the task list
 The list is walkable without a pointer: `↑ ↓` move a cursor, which the row

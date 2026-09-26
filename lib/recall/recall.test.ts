@@ -562,3 +562,16 @@ test('a reading is asked about without the class session it was set for', () => 
     'Mackinder (1904), The Geographical Pivot of History, Geographical Journal 23(4): 421-437',
   );
 });
+
+test('a reading skipped rather than done is never asked about', () => {
+  const read = task('read', 'Read Mankiw Ch 2');
+  const skipped = task('skipped', 'Read Mankiw Ch 3', { completedVia: 'skip' });
+  const kept = task('kept', 'Read Mankiw Ch 4', { completedVia: 'skip' });
+  const state = readRecall({
+    courses: [course('pol')],
+    tasks: [read, skipped, kept],
+    records: [record('task:kept', { source: 'reading', ref: 'kept' })],
+    today: TODAY,
+  });
+  assert.deepEqual(state.states.map((s) => s.key), ['task:read']);
+});

@@ -394,8 +394,24 @@ export async function toggleTaskOptimistic(task: Task) {
   const next: Partial<Task> = {
     completed: !task.completed,
     completedAt: !task.completed ? nowIso() : null,
+    // Reopened, a task is not finished any way at all, skipped included. A
+    // plain tick says nothing about how, so it writes nothing there.
+    ...(task.completed ? { completedVia: null } : {}),
   };
   return updateTaskOptimistic(task.id, next);
+}
+
+/**
+ * Takes a task off the list without it being done: it leaves the list the
+ * way a finished one does, and nothing that reads finished work as work
+ * (recall, pages, a study day, Finished early) ever counts it.
+ */
+export async function skipTaskOptimistic(task: Task) {
+  return updateTaskOptimistic(task.id, {
+    completed: true,
+    completedAt: nowIso(),
+    completedVia: 'skip',
+  });
 }
 
 export async function deleteTaskOptimistic(id: string) {

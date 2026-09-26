@@ -7,6 +7,7 @@ import type {
   RecallAnswer,
   RecallSource,
   RecallVerdict,
+  TaskCompletedVia,
   TaskKind,
 } from './data/types';
 import { RECALL_HISTORY_MAX, RECALL_PROMPT_MAX } from './recall/constants';
@@ -90,6 +91,16 @@ export const TASK_PAGES_MAX = 10000;
 /** A row's kind. Anything unrecognised is a plain task, which is the default. */
 export function cleanKind(value: unknown): TaskKind {
   return (TASK_KINDS as readonly unknown[]).includes(value) ? (value as TaskKind) : 'task';
+}
+
+/**
+ * How a task was finished, or null. Only means anything on a finished task,
+ * so an open one always reads null whatever was stored. Matches the check on
+ * `tasks.completed_via`.
+ */
+export function cleanCompletedVia(value: unknown, completed = true): TaskCompletedVia | null {
+  if (!completed) return null;
+  return value === 'session' || value === 'skip' ? value : null;
 }
 
 /**

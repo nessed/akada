@@ -9,6 +9,11 @@ interface Props {
   strokeWidth?: number;
   /** Write the check in, as a pen would, rather than drawing it already there. */
   drawn?: boolean;
+  /**
+   * Struck through: a task taken off the list without being done. The same
+   * check with a pen line across it, never a cross and never red.
+   */
+  struck?: boolean;
 }
 
 export default function HandCheck({
@@ -16,6 +21,7 @@ export default function HandCheck({
   color = 'currentColor',
   strokeWidth = 1.6,
   drawn = false,
+  struck = false,
 }: Props) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
@@ -29,6 +35,15 @@ export default function HandCheck({
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      {struck && (
+        <path
+          d="M1.5 10.5 Q8 8.2 14.5 6.5"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeLinecap="round"
+        />
+      )}
     </svg>
   );
 }

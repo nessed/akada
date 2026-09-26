@@ -77,6 +77,7 @@ import {
   deleteCourseOptimistic,
   reorderCoursesOptimistic,
   toggleTaskOptimistic,
+  skipTaskOptimistic,
   updateTaskOptimistic,
   updateCourseOptimistic,
   updateUserSettingsOptimistic,
@@ -316,6 +317,15 @@ function DashboardPageContent() {
       return;
     }
     beginTimer(courseId, taskId);
+  }
+
+  async function handleSkipTask(task: Task) {
+    try {
+      await skipTaskOptimistic(task);
+    } catch (error) {
+      console.error('Failed to skip task:', error);
+      notify(error instanceof Error && error.message.startsWith('Skip') ? error.message : 'That task did not skip.');
+    }
   }
 
   async function handleToggleTask(task: Task) {
@@ -912,6 +922,7 @@ function DashboardPageContent() {
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
                     onReschedule={handleSnoozeTask}
                     onOpenEnded={handleOpenEndTask}
+                    onSkip={handleSkipTask}
                     ground="page"
                   />
                 ))}
@@ -939,6 +950,7 @@ function DashboardPageContent() {
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
                     onReschedule={handleSnoozeTask}
                     onOpenEnded={handleOpenEndTask}
+                    onSkip={handleSkipTask}
                     ground="page"
                   />
                 ))}

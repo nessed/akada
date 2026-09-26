@@ -112,6 +112,21 @@ alter table tasks add column if not exists pages integer
 -- backfill, because that fallback already is the order every list showed.
 alter table tasks add column if not exists sort_order integer;
 
+-- How a finished task was finished (supabase/migrations/…_add_task_completed_via).
+-- `session` is the log sheet's "Mark the task done"; `skip` is a task taken off
+-- the list without being done, which never feeds recall, pages, a study day or
+-- Finished early. A plain tick, and every row written before this, is null.
+alter table tasks add column if not exists completed_via text;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'tasks_completed_via_check'
+  ) then
+    alter table tasks add constraint tasks_completed_via_check
+      check (completed_via is null or completed_via in ('session', 'skip'));
+  end if;
+end $$;
+
 -- The same three columns went onto production through the MCP as the
 -- migration add_task_kind_weight_pages (supabase/migrations/), with a page
 -- count of at least 1. An earlier version of this file allowed 0. A zero
