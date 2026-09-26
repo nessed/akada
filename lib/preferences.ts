@@ -301,6 +301,7 @@ const NIGHT_TOKENS: Record<string, string> = {
   // the night desk, so there the edge is carried by a lit hairline and a
   // deeper shadow, and the second sheet under the curve is left out.
   '--sheet-shadow': '-1px 0 0 rgba(255, 240, 220, 0.06), -12px 0 30px rgba(0, 0, 0, 0.55)',
+  '--lift-shadow': '0 0 0 1px rgba(255, 240, 220, 0.05), 0 30px 60px -10px rgba(0, 0, 0, 0.6)',
   '--noise-blend': 'screen',
   '--noise-opacity': '0.14',
 };
