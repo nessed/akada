@@ -1203,7 +1203,11 @@ which is why a screen explains a thing only once (see Explained once): the scree
 stay quiet and the guide does the talking. It is public, set in the same
 serif document shell as the privacy page and the terms (`LegalPage`, with a
 standfirst instead of an "Updated" date), and written for someone who has
-never used a planner. Bold words in it are the labels on the screen, so a
+never used a planner. It opens on **Your first week**, the three habits everything
+else is worked out from (deadlines in, the timer running, recall answered),
+because that is the question a new reader actually arrives with; the
+screens come after. Every sentence in it has to stay true of the app, so a
+screen that changes changes its sentence here too. Bold words in it are the labels on the screen, so a
 reader can go and find them.
 
 It is reached from the landing page (the hero line, the feature cards, which

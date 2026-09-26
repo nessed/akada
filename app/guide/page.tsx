@@ -12,11 +12,13 @@ export const metadata: Metadata = {
 };
 
 // Written for someone who has never opened a planner more complicated than a
-// notes app. Every section says what the thing is, then the one move that
-// makes it worth having. Labels in bold are the words on the screen, so a
-// reader can go and find them.
+// notes app. It opens on what to do in the first week, because that is the
+// question a new reader actually has, then says what each screen is for.
+// Labels in bold are the words on the screen, so a reader can go and find
+// them. Everything here has to stay true of the app: if a screen changes,
+// change the sentence.
 const CONTENTS = [
-  { id: 'first', title: 'The first ten minutes' },
+  { id: 'first', title: 'Your first week' },
   { id: 'today', title: 'Today' },
   { id: 'tasks', title: 'Tasks, and why the kind matters' },
   { id: 'timer', title: 'The timer' },
@@ -34,10 +36,9 @@ export default function GuidePage() {
       title="How Akada works"
       standfirst={
         <>
-          Akada holds your courses, what is due in them, and the hours you actually
-          put in. Most of it works on its own once three things are in: your courses,
-          your deadlines, and a timer running while you study. This page walks through
-          the rest.
+          Akada holds what is due in each of your courses and the hours you put in, and
+          tells you what to do next. It needs three habits from you. Everything else fills
+          in on its own.
         </>
       }
     >
@@ -54,38 +55,47 @@ export default function GuidePage() {
         </ol>
       </nav>
 
-      <Section id="first" title="The first ten minutes">
+      <Section id="first" title="Your first week">
         <p>
-          Sign up and it asks for your courses and your term dates. Search the catalog
-          for each course and pick your section, and the instructor and class time come
-          with it. If a course isn&apos;t there, type its name and add it anyway.
+          Setup asks for your courses and your term. Search for each course, pick your
+          section, and the instructor and class time come with it. Then do these three
+          things and leave the rest alone for now.
         </p>
+        <ul>
+          <li>
+            <strong>Get your deadlines in.</strong>{' '}The quickest way is to hand Claude
+            your course outlines (<a className="hand-underline text-ink" href="#claude">how</a>).
+            Otherwise add them on <strong>Tasks</strong>. Put the page count on readings
+            and the weight on exams, because that is what the app works from.
+          </li>
+          <li>
+            <strong>Start the timer when you study.</strong>{' '}Press <strong>Start</strong>{' '}
+            on Today. If the timer never runs, the app knows nothing about your hours.
+          </li>
+          <li>
+            <strong>Answer recall when it shows up.</strong>{' '}A day after you finish a
+            reading it comes back on Today as a question. A few a day, a couple of
+            minutes.
+          </li>
+        </ul>
         <p>
-          Each course gets a <strong>weekly goal</strong> in hours. It is suggested off
-          the credit hours, so a 4 credit course asks for more than a 2. Leave it or
-          change it, it only decides how full the week looks.
-        </p>
-        <p>
-          Then put in what is due. You can add tasks one at a time on{' '}
-          <strong>Tasks</strong>, but the quicker way is to give Claude your course
-          outlines and let it write every deadline in for you. That is{' '}
-          <a className="hand-underline text-ink" href="#claude">further down</a>, and
-          it is the single biggest time saver in the app.
+          Everything else, the countdowns, your reading in hours, Stats and the Record,
+          works itself out from those three.
         </p>
       </Section>
 
       <Section id="today" title="Today">
         <p>
-          The home screen. Open it and it tells you what is due, what is next, and how
-          many hours you have in today and this week. Your courses sit underneath with
-          their weekly goal drawn as little strokes, one per hour, so you can see which
-          course you have been ignoring without reading a number.
+          The home screen. <strong>Up next</strong>{' '}is the one thing to do now, with{' '}
+          <strong>Start</strong>{' '}beside it. Under it are recall, anything overdue or due
+          today, and your courses with their weekly goal drawn as small strokes, one per
+          hour, so you can see which course you have been ignoring.
         </p>
         <p>
-          <strong>Coming</strong>{' '}counts down to anything that carries marks, and shows
-          your unread pages as hours of reading, worked out at your own speed. It turns
-          &ldquo;I have four readings&rdquo; into &ldquo;I have about six hours of
-          reading before Thursday&rdquo;, which is the thing you actually need to know.
+          <strong>Coming</strong>{' '}counts down to anything that carries marks, and turns
+          your unread pages into hours at your own reading speed. &ldquo;Four
+          readings&rdquo; becomes &ldquo;about six hours of reading before Thursday&rdquo;,
+          which is the thing you actually need to know.
         </p>
       </Section>
 
@@ -101,48 +111,43 @@ export default function GuidePage() {
           </li>
           <li>
             <strong>Exam</strong>{' '}takes a weight, like 30%. It gets counted down to on
-            Today, and it pulls your recall forward so you are tested before it.
+            Today, and it pulls your recall forward so you are asked again before it.
           </li>
           <li>Everything else is a plain task.</li>
         </ul>
         <p>
-          Finished tasks fade out rather than disappearing, so the list still shows what
-          the week looked like.
+          Finished tasks fade rather than disappearing, so the list still shows what the
+          week looked like.
         </p>
       </Section>
 
       <Section id="timer" title="The timer">
         <p>
-          Press <strong>Start timer</strong> on Today, or start one straight from a task
-          or a course. Pick a <strong>block</strong> of 25, 45 or 60 minutes, or{' '}
-          <strong>open</strong>{' '}if you just want it to run. While it runs a small branching
-          drawing grows in the course&apos;s colour, so there is something to look at that
-          isn&apos;t a clock ticking down.
+          Press <strong>Start</strong>{' '}on Up next, or the play mark beside any task or
+          course. Pick a <strong>block</strong>{' '}of 25, 45 or 60 minutes, or{' '}
+          <strong>Untimed</strong>{' '}if you just want it to run. While it runs a small
+          branching drawing grows in the course&apos;s colour, so there is something to
+          look at that isn&apos;t a clock ticking down. Take a break from the timer screen
+          and it picks up where you left off.
         </p>
         <p>
-          When you stop, it asks for a line about what you did. Write one. Those lines
-          are what your Stats journal is made of, and they can be kept for recall later.
-        </p>
-        <p>
-          This is the habit that makes everything else work. Every screen that tells you
-          how you are doing is worked out from the sessions you log, so if the timer
-          doesn&apos;t run, the app knows nothing.
+          When you stop, it asks for a line about what you did. Write one. Those lines are
+          your Stats journal, and you can keep one for recall.
         </p>
       </Section>
 
       <Section id="marks" title="Your marks">
         <p>
-          Open a course and tell it how the course is marked: the quizzes, the midterm,
-          the final and what each is worth. Tap <strong>Say how it is marked</strong>{' '}
-          and it copies a message you paste into Claude along with the course outline,
-          and Claude reads the weights off it. Nothing counts until you accept what it
-          found.
+          Open a course and tell it how the course is marked: the quizzes, the midterm, the
+          final and what each is worth. <strong>Say how it is marked</strong>{' '}copies a
+          message for Claude to read the weights off the outline, and nothing counts until
+          you accept what it found. Or type them in yourself.
         </p>
         <p>
-          As marks come back, write them in. The number at the top is your grade out of
-          what has been marked so far, not out of 100. If you got 80% on a quiz worth
-          10, you are on 80%, not 8%. It also knows about the rules where not everything
-          counts, like best six out of seven quizzes.
+          As marks come back, write them in. The number at the top is your grade out of what
+          has been marked so far, not out of 100. If you got 80% on a quiz worth 10, you are
+          on 80%, not 8%. It also knows the rules where not everything counts, like best six
+          of seven quizzes.
         </p>
       </Section>
 
@@ -151,56 +156,52 @@ export default function GuidePage() {
           The hours say how long you sat there. Recall asks whether any of it stuck.
         </p>
         <p>
-          When you tick off a reading, it comes back the next day on Today as a question:
-          what was that about? Answer it from memory, book shut, then say how it went:{' '}
-          <strong>clear</strong>, <strong>hazy</strong> or <strong>gone</strong>. Clear
+          When you tick off a reading, it comes back the next day on Today as a question.
+          Answer it from memory with the book shut, then say how it went:{' '}
+          <strong>clear</strong>, <strong>hazy</strong>{' '}or <strong>gone</strong>. Clear
           pushes it further away (a day, then 3, 7, 16, 35). Hazy or gone brings it back
-          soon.
+          soon. You can keep anything else too, like a formula or a line from the end of a
+          session.
         </p>
         <p>
-          You can keep anything else too: a concept, a formula, the line you wrote after
-          a session. Each card has <strong>ask Claude</strong>, which copies a message
-          so Claude can quiz you on it properly instead of you marking your own homework.
-        </p>
-        <p>
-          A few a day is enough. It is the part of the app that actually changes your
-          grade, and it takes five minutes.
+          <strong>ask Claude</strong>{' '}on a card copies a message so Claude can quiz you
+          on it properly instead of you marking your own homework.
         </p>
       </Section>
 
       <Section id="notes" title="Notes">
         <p>
-          A shelf for study notes. Drop a text or Markdown file on it, or paste one in,
-          or have Claude write a note straight onto it. Notes can end with self-check
-          questions, and the reader remembers where you stopped and how fast you read.
-          Link a note to a task and you can study it with the timer running.
+          A shelf for study notes. Write one, paste one in, drop a text file on the page, or
+          have Claude write one straight onto the shelf. The reader remembers where you
+          stopped, and a note linked to a task can be studied with the timer running.
+          Claude can also send you a quiz on your notes, which you take on the same shelf.
         </p>
       </Section>
 
       <Section id="stats" title="Stats and the Record">
         <p>
           <strong>Stats</strong>{' '}is the honest one: a heatmap of every day you studied,
-          the week against your goal, and a journal of every session in order.
+          you against last week, the records to beat, and a journal of every session.
         </p>
         <p>
-          <strong>Record</strong>{' '}is the fun one. Your run is counted in weeks, not
-          days, so missing a Saturday doesn&apos;t wipe it. Each course has a page that
-          fills in as you log hours and gets bound when it is full, and there are
-          stamps to earn as you go. It is all worked out from the same sessions, so
-          there is nothing to keep up and nothing to game.
+          <strong>Record</strong>{' '}is the fun one, and it shows up after your first
+          session. Every 40 minutes on a course inks a <strong>tally</strong>{' '}on that
+          course&apos;s page, and 15 tallies bind the page. Your run is counted in weeks,
+          not days, so missing a Saturday costs nothing. Stamps are struck as the term adds
+          up. It is all worked out from your sessions, so there is nothing to keep up.
         </p>
       </Section>
 
       <Section id="claude" title="Letting Claude fill it in">
         <p>
-          If you use Claude, connect Akada to it once and from then on just talk to it.
-          It can read your planner and write into it. In Claude, open{' '}
+          If you use Claude, connect Akada to it once and from then on just talk to it. It
+          can read your planner and write into it. In Claude, open{' '}
           <strong>Customize</strong>, then <strong>Connectors</strong>, search for{' '}
-          <strong>Akada</strong>, press <strong>Connect</strong> and sign in.
+          <strong>Akada</strong>, press <strong>Connect</strong>{' '}and sign in.
         </p>
         <p>
-          Then attach a course outline and ask it to put everything into Akada. Every
-          quiz, assignment, reading and exam goes in with its date and weight.{' '}
+          Then attach a course outline and ask it to put everything into Akada. Every quiz,
+          assignment, reading and exam goes in with its date and weight.{' '}
           <Link className="hand-underline text-ink" href="/claude">
             Akada in Claude
           </Link>{' '}
@@ -211,13 +212,13 @@ export default function GuidePage() {
       <Section id="small" title="Small things worth knowing">
         <ul>
           <li>
-            <strong>Put it on your phone.</strong>{' '}Open Akada in your phone&apos;s
-            browser and use <strong>Add to Home Screen</strong>. It opens like an app.
+            <strong>Put it on your phone.</strong>{' '}Open Akada in your phone&apos;s browser
+            and use <strong>Add to Home Screen</strong>. It opens like an app.
           </li>
           <li>
-            <strong>Late nights count for the right day.</strong>{' '}In Settings you can
-            say your day ends as late as 8am, so a 2am session goes on the day you were
-            still living in.
+            <strong>Late nights count for the right day.</strong>{' '}In Settings you can say
+            your day ends as late as 8am, so a 2am session goes on the day you were still
+            living in.
           </li>
           <li>
             <strong>Make it look how you like.</strong>{' '}Settings has five paper colours,
@@ -225,7 +226,11 @@ export default function GuidePage() {
           </li>
           <li>
             <strong>Your data is yours.</strong>{' '}Settings exports every session as a
-            spreadsheet, and deleting your account deletes everything.
+            spreadsheet, and deleting your account deletes everything. The{' '}
+            <Link className="hand-underline text-ink" href="/privacy">
+              privacy page
+            </Link>{' '}
+            has the detail.
           </li>
         </ul>
         <p>
