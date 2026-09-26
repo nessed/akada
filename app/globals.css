@@ -623,42 +623,85 @@ input[type='date']::-webkit-calendar-picker-indicator {
   background-image: linear-gradient(180deg, var(--highlight-mint) 0 100%);
 }
 
-/* The privacy policy and the terms: read as documents, not as screens. */
+/* The documents (guide, Claude, connector reference, privacy, terms): read
+   as documents, not as screens, at a reading size. */
 .legal-prose p,
 .legal-prose li {
   font-family: var(--font-serif), Georgia, serif;
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: 17px;
+  line-height: 1.7;
   color: var(--ink-soft);
 }
 .legal-prose p {
-  margin: 0 0 0.9em;
+  margin: 0 0 1em;
 }
 .legal-prose p:last-child,
-.legal-prose ul:last-child {
+.legal-prose ul:last-child,
+.legal-prose ol:last-child {
   margin-bottom: 0;
 }
 .legal-prose ul {
-  margin: 0 0 0.9em;
-  padding-left: 1.1em;
+  margin: 0 0 1em;
+  padding-left: 1.2em;
   list-style: none;
 }
 .legal-prose li {
   position: relative;
-  margin-bottom: 0.45em;
+  margin-bottom: 0.6em;
 }
-.legal-prose li::before {
+.legal-prose ul > li::before {
   content: '';
   position: absolute;
-  left: -0.9em;
-  top: 0.72em;
-  width: 5px;
+  left: -1em;
+  top: 0.8em;
+  width: 7px;
   height: 1px;
   background: var(--line-strong);
 }
 .legal-prose strong {
   font-weight: 600;
   color: var(--ink);
+}
+
+/* Steps a reader follows in order, numbered in the margin in mono, since
+   the numbers are digits. <ol class="doc-steps"> inside a document. */
+.legal-prose ol.doc-steps {
+  margin: 0 0 1.4em;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.legal-prose ol.doc-steps > li {
+  counter-increment: step;
+  position: relative;
+  margin: 0;
+  padding: 14px 0 14px 52px;
+  border-top: 1px solid var(--line);
+}
+.legal-prose ol.doc-steps > li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.legal-prose ol.doc-steps > li:first-child::before {
+  top: -2px;
+}
+.legal-prose ol.doc-steps > li::before {
+  position: absolute;
+  left: 0;
+  top: 12px;
+  content: counter(step);
+  font-family: var(--font-mono), 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 28px;
+  line-height: 1;
+  color: var(--muted-soft);
+}
+
+/* A document's own "On this page" list repeats the rail on a laptop, where
+   the rail already lists the sections and follows the one being read. */
+@media (min-width: 1024px) {
+  .doc-sheet nav[aria-label='On this page'] {
+    display: none;
+  }
 }
 
 /* Highlighter swipe in any colour, set --hl on the element. Same geometry

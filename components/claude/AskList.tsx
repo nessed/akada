@@ -24,18 +24,18 @@ export default function AskList({ asks }: { asks: { say: string; note?: string }
       {asks.map((ask, i) => (
         <li
           key={ask.say}
-          className="flex items-start gap-3 border-t border-line-soft py-3 first:border-t-0"
+          className="!m-0 flex items-start gap-4 border-t border-line py-4 first:border-t-0 first:pt-1"
         >
           <div className="min-w-0 flex-1">
-            <p className="m-0 font-serif text-[15px] leading-[1.55] text-ink">&ldquo;{ask.say}&rdquo;</p>
+            <p className="!m-0 font-serif !text-[18px] !leading-[1.55] !text-ink">&ldquo;{ask.say}&rdquo;</p>
             {ask.note && (
-              <p className="m-0 mt-0.5 font-serif text-[13px] italic text-muted">{ask.note}</p>
+              <p className="!m-0 !mt-1 font-serif !text-[14px] italic !text-muted">{ask.note}</p>
             )}
           </div>
           <button
             type="button"
             onClick={() => copy(i, ask.say)}
-            className="-mr-2 h-9 shrink-0 rounded-[10px] px-2.5 font-serif text-[13px] italic text-muted transition-colors hover:bg-bg-tint hover:text-ink"
+            className="eyebrow mt-0.5 h-9 font-sans min-w-[64px] shrink-0 rounded-[9px] border border-line-strong px-3 transition-colors hover:bg-bg-tint hover:text-ink"
           >
             {copied === i ? 'copied' : 'copy'}
           </button>

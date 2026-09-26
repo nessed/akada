@@ -3,6 +3,9 @@ import Link from 'next/link';
 import LegalPage, { Section } from '@/components/LegalPage';
 import AskList from '@/components/claude/AskList';
 import ChatSketch from '@/components/claude/ChatSketch';
+import { PASTEL_PALETTE } from '@/lib/utils';
+
+const [SAGE, ROSE] = PASTEL_PALETTE;
 
 export const metadata: Metadata = {
   title: 'Akada in Claude',
@@ -21,7 +24,6 @@ export const metadata: Metadata = {
 const ASKS = [
   {
     say: "Here's my outline for ECON 100. Put every assignment, reading and exam into Akada with the right dates and weights.",
-    note: 'Attach the PDF. Do one course at a time.',
   },
   { say: 'What do I have due this week, and what should I start first?' },
   { say: 'Quiz me on what is due for recall today in Akada.' },
@@ -45,8 +47,8 @@ export default function ClaudePage() {
     >
       <ChatSketch />
 
-      <Section id="setup" title="Set it up, once">
-        <ul>
+      <Section id="setup" title="Set it up, once" aside="you only ever do this once">
+        <ol className="doc-steps">
           <li>
             In Claude, open <strong>Customize</strong>, then <strong>Connectors</strong>.
             Search for <strong>Akada</strong> and press <strong>Connect</strong>.
@@ -58,7 +60,7 @@ export default function ClaudePage() {
           <li>
             In a chat, open the connectors menu and check Akada is switched on.
           </li>
-        </ul>
+        </ol>
         <p>
           That&apos;s it. Stuck, or using Claude Code? The{' '}
           <Link className="hand-underline text-ink" href="/docs#connect">
@@ -68,7 +70,7 @@ export default function ClaudePage() {
         </p>
       </Section>
 
-      <Section id="ask" title="Things to say">
+      <Section id="ask" title="Things to say" aside="attach the PDF. one course at a time">
         <p>
           Talk to it the way you would to a friend who can see your planner. A few to
           start with:
@@ -82,6 +84,22 @@ export default function ClaudePage() {
       </Section>
 
       <Section id="data" title="What happens to your data">
+        <div className="mb-8 grid gap-6 sm:grid-cols-2 sm:gap-10">
+          <GetsList
+            color={SAGE.value}
+            label="Akada gets"
+            items={[
+              'What Claude asks for, like \u201clist the tasks due this week\u201d',
+              'The changes it sends, like \u201cadd these deadlines\u201d',
+              'The deadlines it found in an outline, not the file',
+            ]}
+          />
+          <GetsList
+            color={ROSE.value}
+            label="Akada never gets"
+            items={['Your chats', 'Your other conversations', 'Your Claude account']}
+          />
+        </div>
         <ul>
           <li>
             <strong>Akada only gets Claude&apos;s requests.</strong>{' '}When you ask
@@ -121,7 +139,7 @@ export default function ClaudePage() {
         </p>
       </Section>
 
-      <Section title="Without Claude">
+      <Section id="without" title="Without Claude">
         <p>
           Everything still works. Add deadlines on <strong>Tasks</strong>, start a timer
           from any of them, and{' '}
@@ -132,5 +150,24 @@ export default function ClaudePage() {
         </p>
       </Section>
     </LegalPage>
+  );
+}
+
+/** One side of what crosses between Claude and Akada, as a ruled list. */
+function GetsList({ color, label, items }: { color: string; label: string; items: string[] }) {
+  return (
+    <div>
+      <p className="!m-0 flex items-center gap-2">
+        <span aria-hidden className="course-rule" style={{ ['--c' as string]: color }} />
+        <span className="eyebrow text-ink-soft">{label}</span>
+      </p>
+      <ul className="!m-0 !mt-3 !pl-0 [&>li]:before:hidden">
+        {items.map((item) => (
+          <li key={item} className="!m-0 border-t border-line py-2.5 font-sans !text-[15px] !leading-[1.5]">
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

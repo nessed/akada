@@ -55,7 +55,7 @@ export default function GuidePage() {
         </ol>
       </nav>
 
-      <Section id="first" title="Your first week">
+      <Section id="first" title="Your first week" aside="three habits, that is all it asks">
         <p>
           Setup asks for your courses and your term. Search for each course, pick your
           section, and the instructor and class time come with it. Then do these three
@@ -151,7 +151,7 @@ export default function GuidePage() {
         </p>
       </Section>
 
-      <Section id="recall" title="Recall">
+      <Section id="recall" title="Recall" aside="a few a day, a couple of minutes">
         <p>
           The hours say how long you sat there. Recall asks whether any of it stuck.
         </p>
