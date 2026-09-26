@@ -25,10 +25,26 @@ something. Hours are drawn as strokes, one per hour, because an hour is a
 countable thing. A grade is one of the few genuine percentages in the app, so
 it is the one place a bar gets drawn.
 
+Quiet is for the thirtieth visit, though, and a screen written only for
+that reader is a wall on the first. So a thing explains itself once, in
+place, the first time someone meets it, and goes quiet after: the first
+recall card says what recall is until one has been answered, the Record says
+what a tally and a page are until one binds. When each note leaves is worked
+out from the reader's own data, never a dismissed flag.
+
 `readmedesign.md` has the full palette, typography and component reasoning if
 you want the whole argument.
 
 ## What's in it
+
+**Setup** is four steps and ends on the thing the rest of the app runs on.
+What Akada is; the courses, searched in the LUMS catalog with the section,
+instructor and time filled in and a weekly goal of two hours a credit; the
+term, with the one under way already picked; and **what's due**, which offers
+the two ways to get deadlines in: hand Claude the course outlines, or add
+them by hand. A term with nothing in it yet doesn't greet anyone with
+"nothing due", which reads as caught up. Up next says what it is for and
+offers the same two ways, plus a timer on a course.
 
 **Today** is the home screen. What is due, what is next, the hours on the day
 and the week, your courses with their weekly goals, and a countdown panel for
@@ -72,15 +88,20 @@ paper as a pen mark at the height of its score, with the last few written out
 under it. It is the one figure in the app that measures what came out rather
 than what went in, so it is only ever what you wrote down.
 
-**Stats** is the heatmap, the weekly chart, a journal of everything that
-happened in order, and a term-wide view of how much of your grade is still
-undecided.
+**Stats** is the heatmap, you against last week, the records to beat, a
+journal of everything that happened in order, and a term-wide view of how much
+of your grade is still undecided. It counts the run the same way the Record
+does, in weeks; nothing in the app counts days in a row.
 
 **Record** is the progression reading of the same sessions. A run measured in
 weeks rather than days, because university work moves a week at a time and a
-daily streak punishes a wedding. A page per course, inked a mark at a time and
-bound when it fills. Impressions, which are ladders rather than badges, so
-there is always a next rung and never a wall of grey.
+daily streak punishes a wedding. A page per course, inked a **tally** at a
+time (forty minutes of study, fifteen for a course's first) and bound when
+fifteen fill it. Impressions, which are ladders rather than badges, so there
+is always a next rung and never a wall of grey. The unit used to be called a
+mark, which is also what a LUMS student calls a grade, so on every screen
+"marks" now means grades and nothing else. The tab itself waits for the first
+logged session; until then a phone has Courses in its place.
 
 All of it is derived from your sessions on read. There is no stored record of
 achievement, which means nothing to backfill for an account that has been
@@ -110,7 +131,14 @@ and appearance. Appearance is five paper tones including a night one, four
 heading serifs, three densities and two accents.
 
 `/guide` walks through all of the above in plain words for someone who has
-never used a planner, and is the link to send a friend before they sign up.
+never used a planner, opening on what to do in the first week, and is the
+link to send a friend before they sign up. `/claude` is the same for the
+Claude side, and the one to send a friend who already uses Claude.
+
+The landing page is written for a LUMS student arriving from a group chat on
+a phone. Its pictures of Today are real screenshots, taken by
+`scripts/landing-shots.mjs` off the app running on a made-up LUMS term; retake
+them when Today changes rather than drawing them by hand.
 
 Semesters sit under all of it. One is active and everything writes into it;
 past terms are archived and readable, with their courses and sessions intact.
@@ -132,18 +160,22 @@ Course Memo.xlsx"`, with `--refresh-planner` to re-pull the meeting times.
 
 ## Claude can write into it
 
-Akada exposes a remote MCP endpoint at `/api/mcp` with its own OAuth flow, so
-you can connect it to Claude as a custom connector and hand it a syllabus.
-Sixteen tools: `find_course`, `get_tasks`, `get_overview`, `create_tasks`,
-`update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`,
-`get_weekly_stats`, `get_focus_pattern`, `get_grading_scheme`,
-`set_grading_scheme`, `delete_course`, and the recall three, `get_recall`, `record_recall` and
-`keep_for_recall`, which let a model quiz the student on what is due, record
-how each attempt went, and keep a concept list straight off a problem set.
-Every recall card has an "ask Claude" that copies a prompt for exactly that.
-The connector
-authenticates as you and gets a session of its own, so signing out of the app
-in a browser doesn't disconnect it.
+Akada is a connector for Claude: a remote MCP endpoint at `/api/mcp` with its
+own OAuth flow. A student finds it in Claude's connector directory, presses
+Connect, signs in, and from then on can attach a course outline and say "put
+everything into Akada". It covers the whole planner, about thirty-six tools
+across tasks, sessions, grading, recall, notes and quizzes, and every one of
+them is listed with what it reads, changes or deletes on `/docs`.
+
+The connector signs in as the student with a session of its own, so the
+database's row security is what keeps it inside their planner. Akada only
+receives what Claude asks it for; it never sees the conversation. `/claude`
+says this to students in plain words, and `/privacy` has the policy.
+
+Inside the app, everything that hands work to Claude (**Say how it is
+marked**, **ask Claude** on a recall card, the Notes prompt, the quiz shelf)
+says "a Claude chat with Akada switched on" in the same words and leads to
+`/claude` for anyone not connected yet.
 
 The grading pair is the one place the app asks a model to read a document and
 believes the answer, so it is built not to. **Say how it is marked** on a
@@ -159,7 +191,8 @@ Discard, and nothing projects a grade until you accept it. That last part is
 not a rule the panel remembers to follow: `gradeStanding` only ever reads the
 accepted scheme, so a proposal has no way to move a number.
 
-`MCP_SETUP.md` walks through connecting it.
+`MCP_SETUP.md` covers running and debugging the connector; `/docs` is the
+public reference.
 
 ## How it's built
 
@@ -198,7 +231,10 @@ SQL editor (it's idempotent), then `npm install && npm run dev`.
 
 Never add a `service_role` key.
 
-Before shipping: `npm run typecheck`, `npm run lint`, `npm run build`.
+Before shipping: `npm run typecheck`, `npm run lint` and `npm test`, which is
+what CI runs (the first two) plus the unit tests. `npm run build` fails locally
+without Supabase configured, on purpose; the Vercel preview on each PR is the
+build that counts.
 Deployment details are in `LAUNCH_CHECKLIST.md`.
 
 ## License
