@@ -5,8 +5,12 @@ import {
   addSessionOptimistic,
   updateTaskOptimistic,
   useCourses,
+  useNotes,
+  useQuizzes,
   useTasks,
 } from '@/lib/data-hooks';
+import { loadQuizDraft } from '@/lib/quiz/draft';
+import { sittingSuggestions, sittingWindow } from '@/lib/session-suggestions';
 import { settled } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useTimer } from '@/lib/timer-context';
@@ -39,6 +43,8 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
   const { notify } = useNotice();
   const { courses, isLoading: coursesLoading } = useCourses();
   const { tasks } = useTasks();
+  const { quizzes } = useQuizzes();
+  const { notes } = useNotes();
   // The pending sitting is folded into this reading, so `sitting` is what
   // saving it will do to the record, read before the reader decides.
   const { sitting, logged } = useProgression();
@@ -63,6 +69,26 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       pendingLog?.taskId ? tasks.find((item) => item.id === pendingLog.taskId) ?? null : null,
     [pendingLog, tasks],
   );
+
+  // What the record says happened while the clock ran, offered under "What
+  // did you do?" so a quiz sat mid-sitting doesn't have to be typed back in.
+  const suggestions = useMemo(() => {
+    if (!pendingLog) return [];
+    const startedQuizIds = new Set(
+      quizzes
+        .filter((quiz) => loadQuizDraft(quiz.id, quiz.questions.length))
+        .map((quiz) => quiz.id),
+    );
+    return sittingSuggestions({
+      window: sittingWindow(pendingLog.segments),
+      courseId: pendingLog.courseId,
+      task,
+      quizzes,
+      notes,
+      tasks,
+      startedQuizIds,
+    });
+  }, [notes, pendingLog, quizzes, task, tasks]);
 
   useEffect(() => {
     mountedSheets += 1;
@@ -183,6 +209,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       durationSeconds={pendingLog?.durationSeconds ?? 0}
       breakSeconds={pendingLog?.breakSeconds ?? 0}
       segments={pendingLog?.segments ?? []}
+      suggestions={suggestions}
       effect={pendingLog && sitting?.courseId === pendingLog.courseId ? sitting : null}
       usualSeconds={usual && settled(usual) ? usual.median : null}
       saving={saving}
