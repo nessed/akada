@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { readAccessToken } from '@/lib/mcp-auth';
 import { READ_SCOPE, WRITE_SCOPE } from './scopes';
 
 export const MCP_SCOPES = [READ_SCOPE, WRITE_SCOPE] as const;
@@ -97,4 +98,37 @@ export function htmlEscape(value: string) {
     "'": '&#39;',
     '"': '&quot;',
   })[character] ?? character);
+}
+
+type McpToken = Pick<ReturnType<typeof readAccessToken>, 'userId' | 'supabaseAccessToken'>;
+
+/**
+ * The student's settings row: the semester everything is scoped to, their
+ * daily goal, and the clock the app writes (lib/student-day.ts), which is how
+ * the connector knows the student's day instead of assuming UTC. `*` because
+ * the clock columns are an additive migration.
+ *
+ * `supabase` is injectable (defaulting to a real client) so a test can drive
+ * this against an in-memory double instead of a live project.
+ */
+export async function readStudentSettings(token: McpToken, supabase: ReturnType<typeof mcpSupabase> = mcpSupabase(token.supabaseAccessToken)) {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', token.userId)
+    .maybeSingle();
+  // Carry the cause up rather than flattening it: the outer catch logs it.
+  // Codes, messages and hints only: PostgREST puts row values in `details`.
+  if (error) {
+    const reason = [error.code, error.message, error.hint].filter(Boolean).join(' | ');
+    throw new Error(`Akada could not load your active semester. ${reason}`);
+  }
+  const row = (data ?? {}) as Record<string, unknown>;
+  const goal = Number(row.daily_goal_hours);
+  return {
+    semesterId: (row.active_semester_id as string | null | undefined) ?? null,
+    dailyGoalHours: Number.isFinite(goal) && goal > 0 ? goal : null,
+    timeZone: typeof row.time_zone === 'string' ? row.time_zone : '',
+    dayEndingHour: Number(row.day_ending_hour ?? 0),
+  };
 }

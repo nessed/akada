@@ -36,6 +36,7 @@ import {
   totalBreakSeconds,
 } from '@/lib/session-safety';
 import { seasonLabel } from '@/lib/utils';
+import { cleanDayEndingHour, cleanTimeZone } from '@/lib/student-day';
 import { cleanChecks } from '@/lib/notes/checks';
 import { cleanReads } from '@/lib/notes/reads';
 import { cleanNoteMarkdown, cleanNoteTitle } from '@/lib/notes/limits';
@@ -366,6 +367,10 @@ function courseWriteError(error: { code?: string }, code: string): Error {
  * chains are left off, and those sittings read as the stretches they were
  * before continuous mode.
  */
+// Where recordClock remembers the clock it last wrote, so it writes once per
+// change rather than once per load.
+const CLOCK_KEY = 'akada.clock.v1';
+
 const SEGMENT_PAGE = 1000;
 const SEGMENT_PAGES = 10;
 
@@ -1323,6 +1328,39 @@ export class SupabaseAdapter implements DataProvider {
       { onConflict: 'user_id' },
     );
     if (error) throw error;
+  }
+
+  async recordClock(clock: { timeZone: string; dayEndingHour: number }): Promise<void> {
+    // The session only, never getUser: this runs on every signed-in load and
+    // a signed-out visitor should cost nothing at all.
+    const { data: { session } } = await this.supabase.auth.getSession();
+    const uid = session?.user?.id;
+    if (!uid) return;
+    const timeZone = cleanTimeZone(clock.timeZone);
+    if (!timeZone) return;
+    const dayEndingHour = cleanDayEndingHour(clock.dayEndingHour);
+    // Written when it changes, not on every load. Keyed by account too, so a
+    // second account signing in on the same device still gets its own row.
+    const key = `${uid}|${timeZone}|${dayEndingHour}`;
+    try {
+      if (window.localStorage.getItem(CLOCK_KEY) === key) return;
+    } catch { /* private mode: write it, it is one small row */ }
+    const { error } = await this.supabase.from('user_settings').upsert(
+      {
+        user_id: uid,
+        time_zone: timeZone,
+        day_ending_hour: dayEndingHour,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    );
+    // A project that has not re-run schema.sql has no columns for it. The
+    // connector falls back to UTC there, exactly as before, so say nothing.
+    if (error && !['PGRST204', '42703'].includes(error.code ?? '')) throw error;
+    if (error) return;
+    try {
+      window.localStorage.setItem(CLOCK_KEY, key);
+    } catch { /* nothing to remember it in; the next load writes it again */ }
   }
 
   // ---- Notes ----

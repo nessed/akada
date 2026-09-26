@@ -743,4 +743,7 @@ export class LocalAdapter implements DataProvider {
           : cleanAvatarUrl(current.avatarUrl),
     });
   }
+
+  // No server to tell: the device already knows its own day.
+  async recordClock(): Promise<void> {}
 }

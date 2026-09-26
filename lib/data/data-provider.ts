@@ -139,6 +139,13 @@ export interface DataProvider {
   // User settings
   getUserSettings(): Promise<UserSettings | null>;
   updateUserSettings(settings: Partial<UserSettings>): Promise<void>;
+  /**
+   * Tell the server what day it is for this student: the device's time zone
+   * and the late night cutoff. Only the connector reads it back (see
+   * lib/student-day.ts). Quietly does nothing when nobody is signed in or the
+   * project has not added the columns yet; it is never worth an error.
+   */
+  recordClock(clock: { timeZone: string; dayEndingHour: number }): Promise<void>;
 
   // Dev / debugging
   resetAll(): Promise<void>;

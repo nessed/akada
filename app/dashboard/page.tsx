@@ -31,7 +31,7 @@ import ConfirmSheet from '@/components/ConfirmSheet';
 import HandCheck from '@/components/notebook/HandCheck';
 import { useNotice } from '@/components/Notice';
 import CourseSearchInput from '@/components/CourseSearchInput';
-import type { Course, Session, Task } from '@/lib/data';
+import type { Course, Task } from '@/lib/data';
 import { upNextFrom } from '@/lib/use-up-next';
 import { CLAUDE_PAGE } from '@/lib/claude-page';
 import { usePreferences } from '@/lib/preferences';
@@ -44,10 +44,8 @@ import {
   formatHM,
   daysBetween,
   isoDate,
-  sessionsForDate,
   PASTEL_PALETTE,
   resolveTint,
-  totalSeconds,
 } from '@/lib/utils';
 import { isLoggableDuration } from '@/lib/session-safety';
 import {
@@ -693,14 +691,10 @@ function DashboardPageContent() {
   }
 
   const today = isoDate();
-  const todaysSessions = sessionsForDate(sessions, today);
-  const totalToday = totalSeconds(todaysSessions);
   const todayTasks = tasks.filter((t) => !t.completed && t.dueDate === today);
   const overdueTasks = tasks.filter(
     (t) => !t.completed && t.dueDate && t.dueDate < today,
   );
-  const overdueCount = overdueTasks.length;
-  const urgentTasks = [...overdueTasks, ...todayTasks].slice(0, 5);
   const now = new Date();
   /* "Sat, Sep 19, 2026" is how a receipt writes a date. The app writes it
      the way a diary does, so the parts are assembled rather than handed to
@@ -711,7 +705,6 @@ function DashboardPageContent() {
     now.toLocaleDateString(undefined, { month: 'short' }),
     now.getFullYear(),
   ].join(' ');
-  const openTasks = tasks.filter((t) => !t.completed);
   /* The one task the screen asks for. Which one depends on the reader's rule,
      see pickUpNext: by default whatever a timer last ran on and is still
      open, else the course that has gone longest without a session, or the
@@ -726,28 +719,12 @@ function DashboardPageContent() {
      panel is already measured against; a separate number would let the two
      disagree. */
   const weeklyGoalHours = courses.reduce((a, c) => a + (c.weeklyGoalHours || 0), 0) || 20;
-  const weekdayLabel = now.toLocaleDateString(undefined, { weekday: 'long' });
-  const monthLabel = now.toLocaleDateString(undefined, { month: 'long' });
-  const dayNum = now.getDate();
-  const yearLabel = String(now.getFullYear()).slice(-2);
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowIso = isoDate(tomorrow);
-  const tomorrowCount = openTasks.filter((t) => t.dueDate === tomorrowIso).length;
   // Dates are optional on a semester now (Settings → Semester lets you start
   // one with just a label). No dates just means no progress ribbon to show.
   const semesterInfo =
     semester?.startDate && semester?.endDate
       ? getSemesterInfo(semester.startDate, semester.endDate, today)
       : null;
-  const smartPrompts = getSmartPrompts({
-    courses,
-    sessions,
-    tasks,
-    today,
-    overdueCount,
-    tomorrowCount,
-  });
 
   return (
     <PageShell wide>
@@ -1485,51 +1462,6 @@ function getSemesterInfo(startDate: string, endDate: string, today: string) {
     daysRemaining,
     percent: Math.round((elapsedDays / totalDays) * 100),
   };
-}
-
-function getSmartPrompts({
-  courses,
-  sessions,
-  tasks,
-  today,
-  overdueCount,
-  tomorrowCount,
-}: {
-  courses: Course[];
-  sessions: Session[];
-  tasks: Task[];
-  today: string;
-  overdueCount: number;
-  tomorrowCount: number;
-}) {
-  const prompts: string[] = [];
-  const openTasks = tasks.filter((t) => !t.completed);
-
-  if (tomorrowCount > 0) {
-    prompts.push(`${tomorrowCount} ${tomorrowCount === 1 ? 'task is' : 'tasks are'} due tomorrow.`);
-  }
-
-  for (const course of courses) {
-    const courseSessions = sessions.filter((s) => s.courseId === course.id);
-    const last = courseSessions[0]?.date;
-    const lastDate = courseSessions.reduce<string | null>(
-      (latest, session) => (!latest || session.date > latest ? session.date : latest),
-      last || null,
-    );
-    const quietDays = lastDate ? daysBetween(lastDate, today) : Infinity;
-    if (quietDays >= 5) {
-      prompts.push(
-        `${course.code} has been quiet ${quietDays === Infinity ? 'all term' : `for ${quietDays} days`}.`,
-      );
-      break;
-    }
-  }
-
-  if (prompts.length === 0 && openTasks.length === 0 && courses.length > 0) {
-    prompts.push('No open tasks. This is a good time to start a focused session.');
-  }
-
-  return prompts.slice(0, 2);
 }
 
 /**

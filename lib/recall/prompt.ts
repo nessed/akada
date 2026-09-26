@@ -26,7 +26,8 @@ import { dayEndingHour } from '../utils';
  * lands in the same schedule as a card answered on Today.
  */
 
-const PROTOCOL = `Wait for my answer before you say anything about whether it is right. Do not show me the answer, a solution, a worked example or a hint first; if I ask for a hint, give the smallest one that gets me moving.
+/** How a recall is asked and judged, wherever a model is asked to run one. */
+export const RECALL_PROTOCOL = `Wait for my answer before you say anything about whether it is right. Do not show me the answer, a solution, a worked example or a hint first; if I ask for a hint, give the smallest one that gets me moving.
 
 Once I have answered, show me the correct answer or the key points I should have hit, so I can compare mine against it. Then tell me plainly how it went: clear if I got it right without help, hazy if I only got part of it or needed a hint, gone if I could not. Do not round up; a hazy recorded as clear pushes it weeks out of sight.`;
 
@@ -81,7 +82,7 @@ What to recall: ${prompt}${detail ? `\nNotes from the task: ${detail}` : ''}
 
 ${askFor(source)}
 
-${PROTOCOL}
+${RECALL_PROTOCOL}
 
 Then record that verdict with the record_recall tool, using the key "${key}" exactly as written and utc_offset_minutes ${utcOffset()}, so Akada schedules the next time it asks me.`;
 }
@@ -107,7 +108,7 @@ export function coursePrompt({
 
 Call get_recall with course_id ${courseId} and utc_offset_minutes ${utcOffset()}, and use the items it returns, most urgent first. Mix them up rather than taking them in order, so I have to work out what each one needs before I start. One at a time: for a reading, ask me for its main argument in my own words; for a concept or a step, give me one fresh problem of that type that I have not seen.
 
-${PROTOCOL}
+${RECALL_PROTOCOL}
 
 Record each verdict with record_recall as we go, using each item's key exactly as get_recall gave it and utc_offset_minutes ${utcOffset()}. When we are done, tell me which ones went, so I know what to go back over.`;
 }

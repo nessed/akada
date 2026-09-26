@@ -3,7 +3,7 @@ import Link from 'next/link';
 import LegalPage, { Section } from '@/components/LegalPage';
 import { SITE_URL } from '@/lib/site-url';
 import { CONTACT_EMAIL } from '@/lib/contact';
-import { GROUPS } from './tools';
+import { GROUPS, PROMPTS } from './tools';
 
 export const metadata: Metadata = {
   title: 'Akada for Claude',
@@ -16,6 +16,7 @@ export const metadata: Metadata = {
 const CONTENTS = [
   { id: 'connect', title: 'Connect it' },
   { id: 'try', title: 'Things to ask' },
+  { id: 'prompts', title: 'Starting points' },
   { id: 'access', title: 'What connecting allows' },
   ...GROUPS.map(({ id, title }) => ({ id, title })),
   { id: 'trouble', title: 'If it stops working' },
@@ -100,6 +101,29 @@ export default function DocsPage() {
           <li>&ldquo;Quiz me on what&apos;s due for recall today.&rdquo;</li>
           <li>&ldquo;Make a ten-question quiz from my notes on chapter 4 and send it to Akada.&rdquo;</li>
         </ul>
+        <p>
+          A good first thing to say in any chat is &ldquo;brief me&rdquo;. Claude reads where
+          you stand in one go, the same reading Today makes, and starts from there rather
+          than asking you.
+        </p>
+      </Section>
+
+      <Section id="prompts" title="Starting points">
+        <p>
+          Akada also puts a few ready-made starts in Claude&apos;s prompt menu, under Akada
+          in the <strong>+</strong> menu (in Claude Code, type <Code>/</Code>). The ones
+          that ask for a course fill in from your own courses.
+        </p>
+        <dl className="m-0">
+          {PROMPTS.map((prompt) => (
+            <div key={prompt.name} className="border-b border-line-soft py-3 first:pt-0 last:border-b-0 last:pb-0">
+              <dt className="font-serif text-[16px] text-ink">{prompt.title}</dt>
+              <dd className="m-0 mt-1.5 font-serif text-[15px] leading-[1.6] text-ink-soft">
+                {prompt.does}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </Section>
 
       <Section id="access" title="What connecting allows">

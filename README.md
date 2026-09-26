@@ -165,9 +165,20 @@ Course Memo.xlsx"`, with `--refresh-planner` to re-pull the meeting times.
 Akada is a connector for Claude: a remote MCP endpoint at `/api/mcp` with its
 own OAuth flow. A student finds it in Claude's connector directory, presses
 Connect, signs in, and from then on can attach a course outline and say "put
-everything into Akada". It covers the whole planner, about thirty-six tools
-across tasks, sessions, grading, recall, notes and quizzes, and every one of
-them is listed with what it reads, changes or deletes on `/docs`.
+everything into Akada". It covers the whole planner, forty-one tools across
+tasks, sessions, grading, recall, notes, quizzes and weak points, and every
+one of them is listed with what it reads, changes or deletes on `/docs`.
+
+It is built so Claude does not have to work the planner out from scratch
+each chat. The server hands over a short playbook on connecting (where to
+start, which tool closes which loop, the rules that are never optional), and
+the first tool is `get_briefing`: one read of everything Today knows, joined
+the way the app never joins it in one place, with the loose ends ranked and
+what Akada has learnt about how the student actually works. Six prompts sit in
+Claude's **+** menu for the usual starts (plan the week, what now, an outline,
+a recall round, exam prep, logging a sitting). And the app writes the
+student's time zone and day end onto their settings, so everything the
+connector dates lands on the student's day rather than the server's UTC one.
 
 The connector signs in as the student with a session of its own, so the
 database's row security is what keeps it inside their planner. Akada only

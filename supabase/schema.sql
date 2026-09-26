@@ -451,6 +451,17 @@ alter table user_settings add column if not exists avatar_url       text    not 
 -- Settings → Semester.
 alter table user_settings add column if not exists active_semester_id uuid;
 
+-- The student's clock, written by the app from their own device: the IANA
+-- time zone the browser reports, and the hour (0 to 8) their day ends at from
+-- Appearance > "when your day ends". Both otherwise live only in the browser,
+-- which left the connector's server working out "today" in UTC: a sitting
+-- logged at 1am in Lahore was dated the day before, and Monday morning read
+-- as last week. The connector reads these to date what it writes on the day
+-- the app would. Empty and 0 mean nothing has been written yet, and the
+-- connector falls back to UTC as it always did.
+alter table user_settings add column if not exists time_zone       text     not null default '';
+alter table user_settings add column if not exists day_ending_hour smallint not null default 0;
+
 -- ============================================================
 -- 5b. PROGRESSION INSTRUMENTATION
 --
@@ -813,6 +824,24 @@ begin
   ) then
     alter table user_settings add constraint user_settings_avatar_url_length
       check (length(avatar_url) <= 64000);
+  end if;
+end $$;
+
+-- The clock is a zone name and an hour, never anything longer
+-- (lib/student-day.ts cleans both before they are written).
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'user_settings_time_zone_length'
+  ) then
+    alter table user_settings add constraint user_settings_time_zone_length
+      check (length(time_zone) <= 64);
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'user_settings_day_ending_hour_range'
+  ) then
+    alter table user_settings add constraint user_settings_day_ending_hour_range
+      check (day_ending_hour between 0 and 8);
   end if;
 end $$;
 

@@ -22,6 +22,7 @@ export const metadata: Metadata = {
 // plans can connect until that has been checked.
 
 const ASKS = [
+  { say: 'Brief me.', note: 'Claude reads where you stand in one go, the same reading Today makes, and starts from there.' },
   {
     say: "Here's my outline for ECON 100. Put every assignment, reading and exam into Akada with the right dates and weights.",
   },
@@ -80,6 +81,15 @@ export default function ClaudePage() {
           Inside Akada, anything marked <strong>ask Claude</strong> or{' '}
           <strong>Say how it is marked</strong> copies a message made for exactly that.
           Paste it into a chat with Akada switched on.
+        </p>
+        <p>
+          Claude&apos;s <strong>+</strong> menu has a few more under Akada: plan my week,
+          what to study now, put an outline in, a recall round, exam prep, and logging a
+          sitting. The{' '}
+          <Link className="hand-underline text-ink" href="/docs#prompts">
+            connector page
+          </Link>{' '}
+          says what each one does.
         </p>
       </Section>
 
