@@ -1,17 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Course, WeakPoint } from '@/lib/data';
 import { useNotice } from '@/components/Notice';
-import { setWeakPointStatusOptimistic, useNotes, useQuizzes, useTasks, useWeakPoints } from '@/lib/data-hooks';
+import { deleteWeakPointOptimistic, setWeakPointStatusOptimistic, useNotes, useQuizzes, useTasks, useWeakPoints } from '@/lib/data-hooks';
 import { groupBySection, rankWeakPoints } from '@/lib/weak-points';
 
 /**
  * What this course keeps going wrong, as the assistant found it marking
  * quizzes: open ones grouped by section, most often missed first, each with
  * the pages to go back to and the quiz it came from. Ticking one fixed moves
- * it to a folded list underneath, where it can be put back.
+ * it to a folded list underneath, where it can be put back. One that should
+ * never have been logged can be deleted outright, which takes two taps.
  */
 export default function WeakPointsPanel({ course }: { course: Course }) {
   const { weakPoints, loaded, available } = useWeakPoints();
@@ -76,7 +77,32 @@ function WeakPointRow({ point }: { point: WeakPoint }) {
   const { notify } = useNotice();
   const [busy, setBusy] = useState(false);
   const source = useSource(point);
+  const [confirming, setConfirming] = useState(false);
   const isFixed = point.status === 'fixed';
+
+  // The second tap has to come soon after the first, or it stands down.
+  useEffect(() => {
+    if (!confirming) return;
+    const timer = window.setTimeout(() => setConfirming(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [confirming]);
+
+  async function remove() {
+    if (busy) return;
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      await deleteWeakPointOptimistic(point.id);
+    } catch (error) {
+      console.error('Failed to delete the weak point:', error);
+      notify(error instanceof Error ? error.message : 'That did not delete.');
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
 
   async function toggle() {
     if (busy) return;
@@ -122,7 +148,18 @@ function WeakPointRow({ point }: { point: WeakPoint }) {
           </span>
         )}
       </span>
-      {/* No hover on a phone, so it stays in view there. */}
+      {/* No hover on a phone, so they stay in view there. */}
+      <button
+        type="button"
+        onClick={remove}
+        disabled={busy}
+        title={confirming ? 'Tap again to delete it for good' : 'Delete it, it should not be here'}
+        className={`h-8 shrink-0 rounded-[8px] px-1.5 touch:h-10 font-serif text-[12px] italic transition-opacity hover:text-ink focus-visible:opacity-100 disabled:opacity-40 ${
+          confirming ? 'text-prioritySoft' : 'text-muted-soft md:mouse:opacity-0 md:group-hover:opacity-100'
+        }`}
+      >
+        {confirming ? 'delete it?' : 'delete'}
+      </button>
       <button
         type="button"
         onClick={toggle}

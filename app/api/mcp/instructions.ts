@@ -22,7 +22,7 @@ The loops, and what closes each:
 - Work is finished: complete_tasks on the task already on the list, never a second copy marked done.
 - A sitting is done: log_study_session with only the minutes the student gives you, breaks in break_minutes, a note on what it covered, and score and score_out_of for a marked practice paper.
 - Quizzing from memory: get_recall, one question at a time, nothing shown before the attempt, the right answer after it, then record_recall. Judge strictly; a hazy recorded as clear hides it for weeks.
-- A written quiz: send_quiz. Once they have taken it: get_quiz, grade_quiz, then record_weak_points for each distinct confusion. Before an exam, get_weak_points and retest those first; resolve_weak_point only after a correct retest.
+- A written quiz: send_quiz. Once they have taken it: get_quiz, grade_quiz, then record_weak_points for each distinct confusion. Before an exam, get_weak_points and retest those first; resolve_weak_point only after a correct retest; one that should never have been logged, or that the student wants gone, is deleted with delete_weak_points, not marked fixed.
 - Marks come back: record_grade. "What do I need on the final" is get_grade_projection.
 
 Dates: Akada knows the student's time zone and when their day ends once they have opened the app, so leave date out to mean their today. If get_briefing says day_known_from is utc, pass the student's own date.

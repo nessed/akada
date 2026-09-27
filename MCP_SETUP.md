@@ -115,8 +115,9 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `get_weak_points`: What the student keeps getting wrong in a course, most often missed first.
 - `record_weak_points`: Write down each confusion found when marking a quiz; a repeat counts on the row already there.
 - `resolve_weak_point` / `reopen_weak_point`: Mark one fixed after a retest, or put it back.
+- `delete_weak_points`: Permanently delete ones that should never have been logged.
 
-In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `record_grade`, `reorder_courses`, `reorder_tasks`, `delete_course`, `delete_tasks`, `delete_study_session`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks`, `delete_note`, `send_quiz`, `grade_quiz`, `delete_quiz`, `record_weak_points`, `resolve_weak_point` and `reopen_weak_point` to **Needs approval** if you want to review each change before it is executed.
+In Claude's connector permissions, you can set `create_tasks`, `update_tasks`, `complete_tasks`, `log_study_session`, `update_study_session`, `set_grading_scheme`, `record_grade`, `reorder_courses`, `reorder_tasks`, `delete_course`, `delete_tasks`, `delete_study_session`, `record_recall`, `keep_for_recall`, `save_note`, `update_note`, `record_note_checks`, `delete_note`, `send_quiz`, `grade_quiz`, `delete_quiz`, `record_weak_points`, `resolve_weak_point`, `reopen_weak_point` and `delete_weak_points` to **Needs approval** if you want to review each change before it is executed.
 
 ---
 
@@ -353,15 +354,16 @@ Things to ask Claude once it's connected:
 - "I finished the quiz, grade it." (list_quizzes → get_quiz → grade_quiz, then goes over the MCQ and written marks together)
 - "How did I do on that quiz? Go over the ones I missed."
 
-### Weak points: `record_weak_points`, `get_weak_points`, `resolve_weak_point`, `reopen_weak_point`
+### Weak points: `record_weak_points`, `get_weak_points`, `resolve_weak_point`, `reopen_weak_point`, `delete_weak_points`
 
 Weak points live in the `weak_points` table (see `supabase/schema.sql`, section 3d, and `supabase/migrations/20260926220000_add_weak_points.sql`). After marking a quiz the assistant writes one item per distinct confusion it found; the rule for "the same confusion" is in `lib/weak-points.ts`: the same `confusion` (either side first, "a vs b" is "b vs a") or a near-identical `summary` in the same course counts again on the existing row (`times_missed + 1`, `last_seen_at` now, reopened if it was fixed) instead of adding another.
 
 - **`record_weak_points`**: `course_id`, optional `quiz_id` and `task_id`, `items` of `{ section, page_ref, summary, confusion?, error_type }`, `error_type` one of concept, assumption, algebra, graph, evidence, command_word, careless. Two items in one call that are the same confusion count once.
 - **`get_weak_points`** (`readOnlyHint: true`): `course_id`, `status` (`open` by default, `fixed`, `all`), optional `section` (takes sub-sections: `1` includes `1.3`), `limit`. Ranked by `times_missed` then `last_seen_at`, each with the quiz and task it came from.
 - **`resolve_weak_point`** / **`reopen_weak_point`** (`idempotentHint: true`): `id`. Resolve only after the student gets it right on a retest.
+- **`delete_weak_points`** (`destructiveHint: true`): `ids`, open or fixed. Removes the rows outright, for ones logged by mistake; they don't count as fixed and a later repeat starts a fresh row. All or nothing: an id that isn't the student's deletes none of them.
 
-The student sees them on the course page, grouped by section with a fixed toggle, and on Today, the top five per course, when that course has an exam within 7 days.
+The student sees them on the course page, grouped by section with a fixed toggle and a two-tap delete, and on Today, the top five per course, when that course has an exam within 7 days.
 
 - "I'm doing the MGMT midterm on Friday, what do I keep getting wrong?"
 - "Quiz me on my open weak points for chapter 1."

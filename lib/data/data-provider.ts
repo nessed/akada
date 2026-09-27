@@ -115,9 +115,10 @@ export interface DataProvider {
   deleteQuiz(id: string): Promise<void>;
 
   // Weak points. Written by an assistant over MCP; the app reads them and
-  // ticks them fixed or open again.
+  // ticks them fixed or open again, or deletes one that should not be there.
   getWeakPoints(): Promise<WeakPoints>;
   setWeakPointStatus(id: string, status: WeakPointStatus): Promise<void>;
+  deleteWeakPoint(id: string): Promise<void>;
 
   // Semesters
   /** The semester Dashboard/Tasks/Timer currently write into, or null before onboarding finishes it. */
