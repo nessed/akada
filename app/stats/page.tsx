@@ -47,11 +47,15 @@ import {
   deleteSessionOptimistic,
 } from '@/lib/data-hooks';
 
-/** One line in the log: a session studied, a task written down, a task finished. */
+/** One line in the log: a session studied, a task added, a task finished. */
 type JournalEntry =
   | { kind: 'session'; id: string; at: string; session: Session; course?: Course }
   | { kind: 'task-added'; id: string; at: string; task: Task; course?: Course }
-  | { kind: 'task-done'; id: string; at: string; task: Task; course?: Course };
+  | { kind: 'task-done'; id: string; at: string; task: Task; course?: Course }
+  | { kind: 'tasks-added'; id: string; at: string; count: number };
+
+/** More tasks added on one day than this read as one line, not a list. */
+const ADDED_ROWS_MAX = 3;
 
 export default function StatsPage() {
   const { notify } = useNotice();
@@ -142,7 +146,7 @@ export default function StatsPage() {
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([date, entries]) => ({
         date,
-        entries: entries.slice().sort((a, b) => b.at.localeCompare(a.at)),
+        entries: foldAdded(date, entries).sort((a, b) => b.at.localeCompare(a.at)),
         seconds: entries.reduce(
           (sum, entry) =>
             entry.kind === 'session'
@@ -413,7 +417,7 @@ export default function StatsPage() {
         <ChaseCard title="You vs last week" delay={0}>
           <PaceRace pace={pace} />
         </ChaseCard>
-        <ChaseCard title="The next line" delay={120}>
+        <ChaseCard title="Next milestone" delay={120}>
           <NextMilestone milestone={milestone} totalSeconds={totalSec} />
         </ChaseCard>
         <ChaseCard title="Your day, as a clock" delay={240} className="md:col-span-2 xl:col-span-1">
@@ -624,6 +628,8 @@ export default function StatsPage() {
                       course={entry.course}
                       onDelete={deleteSession}
                     />
+                  ) : entry.kind === 'tasks-added' ? (
+                    <AddedLine key={entry.id} count={entry.count} />
                   ) : (
                     <TaskEntry key={entry.id} entry={entry} />
                   ),
@@ -835,6 +841,34 @@ function SessionEntry({
   );
 }
 
+/**
+ * A day's added tasks, folded into one line past a few. An outline read in
+ * by Claude adds forty in a minute, and a log of forty "added" rows buries
+ * the day's actual study under it.
+ */
+function foldAdded(date: string, entries: JournalEntry[]): JournalEntry[] {
+  const added = entries.filter((entry) => entry.kind === 'task-added');
+  if (added.length <= ADDED_ROWS_MAX) return entries.slice();
+  const latest = added.reduce((max, entry) => (entry.at > max ? entry.at : max), added[0].at);
+  return [
+    ...entries.filter((entry) => entry.kind !== 'task-added'),
+    { kind: 'tasks-added', id: `added-${date}`, at: latest, count: added.length },
+  ];
+}
+
+function AddedLine({ count }: { count: number }) {
+  return (
+    <div className="flex items-start gap-3 border-b border-dashed border-line py-3 last:border-0">
+      <EntryMargin>
+        <span className="mt-[3px] block h-[6px] w-[6px] rounded-full border border-muted-soft" />
+      </EntryMargin>
+      <p className="m-0 min-w-0 flex-1 font-serif text-[15px] text-ink-soft">
+        <span className="font-mono text-[13px] text-ink">{count}</span> tasks added
+      </p>
+    </div>
+  );
+}
+
 function TaskEntry({
   entry,
 }: {
@@ -863,7 +897,7 @@ function TaskEntry({
         </p>
       </div>
       <span className="shrink-0 pt-[3px] font-serif text-[11.5px] italic text-muted-soft">
-        {finished ? 'finished' : 'written down'}
+        {finished ? (entry.task.completedVia === 'skip' ? 'skipped' : 'finished') : 'added'}
       </span>
     </div>
   );

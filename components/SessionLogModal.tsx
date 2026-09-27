@@ -312,7 +312,7 @@ export default function SessionLogModal({
 
         {usualSeconds != null && (
           <p className="m-0 mt-2 font-mono text-[11px] text-muted">
-            your {course.code} sittings usually{' '}
+            your {course.code} sessions usually{' '}
             <span className="text-ink">{formatHM(usualSeconds)}</span>
             {' · '}this one <span className="text-ink">{formatHM(safeSeconds)}</span>
           </p>
@@ -381,7 +381,7 @@ export default function SessionLogModal({
               to take rather than typed out again. Marked the way the tags
               below are: a swipe of the course's highlighter once taken. */}
           {suggestions.length > 0 && (
-            <ul aria-label="From this sitting" className="mt-2 m-0 list-none space-y-0.5 p-0">
+            <ul aria-label="From this session" className="mt-2 m-0 list-none space-y-0.5 p-0">
               {suggestions.map((line) => {
                 const taken = hasLine(line);
                 return (
@@ -470,7 +470,7 @@ export default function SessionLogModal({
                 onBlur={() => setScoreLeft(true)}
                 aria-describedby="session-log-score-problem"
                 placeholder="–"
-                aria-label="What a practice paper in this sitting scored"
+                aria-label="What a practice paper in this session scored"
                 className="hand-underline w-12 bg-transparent text-center font-mono text-[14px] tabular-nums text-ink outline-none placeholder:text-muted-soft"
               />
               <span aria-hidden className="font-mono text-[13px] text-muted">/</span>

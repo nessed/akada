@@ -270,14 +270,14 @@ function Sitting({ quiz }: { quiz: Quiz }) {
           </div>
         </section>
       ) : history.length > 0 ? (
-        <section className="quiz-history" aria-label="Past sittings">
+        <section className="quiz-history" aria-label="Past attempts">
           <span className="eyebrow">Before</span>
           <ul>
             {history.slice(-5).reverse().map((a) => {
               const t = writtenTally(quiz.questions, a);
               return (
                 <li key={a.at}>
-                  <button type="button" className="quiz-past" onClick={() => setViewing(a.at)} title="See this sitting">
+                  <button type="button" className="quiz-past" onClick={() => setViewing(a.at)} title="See this attempt">
                     <span className="quiz-score">{mcqCount ? `${a.score}/${a.total}` : `${t.score}/${t.pending ? t.outOf : t.possible}`}</span>
                     <span className="strokes" aria-hidden>
                       {quiz.questions.map((q, i) => <span key={i} data-r={strokeFor(a, q, i)} />)}

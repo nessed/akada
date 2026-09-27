@@ -167,7 +167,7 @@ test('a term recorded before continuous mode still reads as blocks, and says so'
 
   // The margin says stretches rather than blocks, because that is what was read.
   const notes = readObservations({ habits, courses: [MATH], now: new Date('2026-09-21T12:00:00'), loggedToday: true });
-  assert.equal(notes.find((o) => o.id === 'blocks:math')?.text, 'MATH sittings run about 50 minutes');
+  assert.equal(notes.find((o) => o.id === 'blocks:math')?.text, 'MATH sessions run about 50 minutes');
 });
 
 test('once there are enough timed blocks, the chainless history stops standing in', () => {

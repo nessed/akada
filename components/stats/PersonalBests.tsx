@@ -14,7 +14,7 @@ export default function PersonalBests({ records }: { records: Records }) {
   const rows = [
     {
       key: 'sitting',
-      label: 'Longest sitting',
+      label: 'Longest session',
       best: records.sitting,
       figure: formatHM(records.sitting.best),
       sub: chase(records.sitting, 'today', 'your longest today'),
@@ -89,7 +89,7 @@ export default function PersonalBests({ records }: { records: Records }) {
 }
 
 function chase(b: Best, span: 'today' | 'week', currentLabel: string): string {
-  if (b.best === 0) return 'the first sitting sets it';
+  if (b.best === 0) return 'the first session sets it';
   const holdsIt = span === 'week' ? b.fresh : b.current >= b.best;
   if (holdsIt) return span === 'week' ? 'this week is the one. keep adding to it' : 'today holds it. still going?';
   const set = b.at ? whenSet(b.at, span) : '';

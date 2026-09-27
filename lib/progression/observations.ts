@@ -61,7 +61,7 @@ export function readObservations({ habits, courses, now, loggedToday }: Observat
     const inWindow = [0, 1, 2].some((i) => (habits.peak!.start + i) % 24 === hour);
     out.push({
       id: 'peak',
-      text: `your sittings mostly land ${windowLabel(habits.peak.start)}`,
+      text: `your sessions mostly land ${windowLabel(habits.peak.start)}`,
       courseId: null,
       weight: habits.days,
       now: false,
@@ -91,7 +91,7 @@ export function readObservations({ habits, courses, now, loggedToday }: Observat
   if (settled(habits.sittings)) {
     out.push({
       id: 'sitting',
-      text: `a sitting of yours usually runs ${roughMinutes(habits.sittings.median)} minutes`,
+      text: `a session of yours usually runs ${roughMinutes(habits.sittings.median)} minutes`,
       courseId: null,
       weight: habits.sittings.n,
       now: false,
@@ -157,7 +157,7 @@ export function readObservations({ habits, courses, now, loggedToday }: Observat
         text:
           habit.blocksFrom === 'timed'
             ? `${name} blocks run about ${roughMinutes(habit.blocks.median)} minutes`
-            : `${name} sittings run about ${roughMinutes(habit.blocks.median)} minutes`,
+            : `${name} sessions run about ${roughMinutes(habit.blocks.median)} minutes`,
         courseId: habit.courseId,
         weight: habit.blocks.n,
         now: false,
@@ -190,7 +190,7 @@ export function readObservations({ habits, courses, now, loggedToday }: Observat
     if (habit.distracted.n >= HABIT_MIN_TAGGED && habit.distracted.count / habit.distracted.n >= 0.5) {
       out.push({
         id: `distracted:${habit.courseId}`,
-        text: `${habit.distracted.count} of ${habit.distracted.n} tagged ${name} sittings were #distracted`,
+        text: `${habit.distracted.count} of ${habit.distracted.n} tagged ${name} sessions were #distracted`,
         courseId: habit.courseId,
         weight: habit.distracted.n,
         now: false,

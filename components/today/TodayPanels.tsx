@@ -341,7 +341,7 @@ export function ComingPanel({
               {course?.code ?? '—'}
               {task.kind === 'exam' && <span className="ml-1.5 text-warn">exam</span>}
               {(task.weight ?? 0) > 0 && (
-                <span className="ml-1.5 text-muted">{Math.round(task.weight as number)}%</span>
+                <span className="ml-1.5 text-muted">worth {Math.round(task.weight as number)}%</span>
               )}
             </span>
             <span className="mt-0.5 block truncate text-[13px] text-ink">{task.title}</span>

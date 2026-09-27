@@ -1841,7 +1841,7 @@ function TasksPageContent() {
                   ...(active
                     ? [
                         { k: 'P', l: 'Hold the running clock, or let it go' },
-                        { k: 'K', l: 'Finish the sitting and log it' },
+                        { k: 'K', l: 'Finish the session and log it' },
                       ]
                     : []),
                   { k: 'Z', l: 'Undo the last change, a tick included' },

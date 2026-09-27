@@ -295,7 +295,7 @@ export default function Shelf({ notes, courses, onOpen, onFocus, onDelete, onNew
               {Array.from({ length: total }, (_, k) => <span key={k} data-r={note.checks[String(k)] ?? ''} />)}
             </span>
           )}
-          <span className="mins" title={note.reads.length ? `Read through in ${minutes} min last time, on the clock` : read >= 0.98 ? 'Read through' : read > 0.03 ? `${minutes} min in all` : undefined}>
+          <span className="mins" title={note.reads.length ? `About ${minutes} min, from ${note.reads.length === 1 ? 'the one timed read' : `the ${note.reads.length} timed reads`}` : read >= 0.98 ? 'Read through' : read > 0.03 ? `${minutes} min in all` : undefined}>
             {read >= 0.98 ? <span className="read-through"><HandCheck size={14} /></span>
               : read > 0.03 ? <>{Math.max(1, Math.round(minutes * (1 - read)))}m <em>left</em></>
                 : <>{minutes}m</>}

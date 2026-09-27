@@ -666,7 +666,7 @@ function NotesContent() {
                 </span>
               )}
               {active.source === 'mcp' ? 'From your assistant' : 'Edited'} {dateLabel(active.updatedAt)} · {words.toLocaleString()} words ·{' '}
-              {active.reads.length ? `read in ${Math.max(1, Math.round(active.reads[active.reads.length - 1].seconds / 60))} min last time` : pace.personal ? `~${minutes} min at your pace` : `${minutes} min read`}
+              {active.reads.length ? (active.reads.length === 1 ? `read in ${minutes} min last time` : `usually ${minutes} min, from ${active.reads.length} reads`) : pace.personal ? `~${minutes} min at your pace` : `${minutes} min read`}
               {timing && <span className="timing"> · timing this read</span>}
             </p>
             <div className="actions">

@@ -69,7 +69,7 @@ export function QuizRow({ quiz, course, task, index, cursor, onDelete }: {
           })}
         </span>
       )}
-      <span className="mins" title={last ? `Last mark, ${quiz.attempts.length} ${quiz.attempts.length === 1 ? 'sitting' : 'sittings'}` : undefined}>
+      <span className="mins" title={last ? `Last mark, ${quiz.attempts.length} ${quiz.attempts.length === 1 ? 'attempt' : 'attempts'}` : undefined}>
         {!last ? <em>new</em>
           : tally && tally.pending ? <em>to mark</em>
             : mcq ? <>{last.score}/{last.total}</> : <>{tally?.score}/{tally?.possible}</>}
