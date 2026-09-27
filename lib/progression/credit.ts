@@ -34,8 +34,15 @@ export interface DayCredit {
   rawByCourse: Map<string, number>;
   /** Tasks ticked that day, by course id. */
   ticksByCourse: Map<string, number>;
-  /** Pages recorded on tasks finished that day. */
+  /** Pages recorded on tasks finished that day. Skipped tasks carry none. */
   pages: number;
+  /**
+   * Pages that day that time actually stands behind: each finished task's
+   * pages credited up to the time logged on that very task (`min(claimed,
+   * covered)`), in pages. What lets a day spent on paper count without a
+   * typed page count being enough on its own. See qualifies in runs.ts.
+   */
+  creditedPages: number;
   /** Whether either taper actually bit, so the copy can say so plainly. */
   tapered: boolean;
 }
@@ -73,6 +80,7 @@ export function readCredit(courses: Course[], sessions: Session[], tasks: Task[]
         rawByCourse: new Map(),
         ticksByCourse: new Map(),
         pages: 0,
+        creditedPages: 0,
         tapered: false,
       };
       days.set(iso, entry);
@@ -100,6 +108,8 @@ export function readCredit(courses: Course[], sessions: Session[], tasks: Task[]
   for (const task of tasks) {
     if (!task.completed || !task.completedAt) continue;
     if (!known.has(task.courseId)) continue;
+    // Skipped is off the list without being done: no tick, no pages.
+    if (task.completedVia === 'skip') continue;
     const iso = task.completedAt.slice(0, 10);
     const entry = day(iso);
     add(entry.ticksByCourse, task.courseId, 1);
@@ -125,6 +135,9 @@ export function readCredit(courses: Course[], sessions: Session[], tasks: Task[]
       if (!task.pages) continue;
       const claimed = task.pages * PAGE_SECONDS;
       const covered = secondsByTask.get(task.id) ?? 0;
+      // What time stands behind, before the day's ceiling: that ceiling is
+      // about how much credit a day earns, not about whether it was studied.
+      entry.creditedPages += Math.min(claimed, covered) / PAGE_SECONDS;
       const credited = Math.min(claimed, covered, pageBudget);
       if (credited <= 0) continue;
       pageBudget -= credited;

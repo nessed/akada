@@ -185,7 +185,7 @@ export default function RecordPage() {
           This is the Record, the fun half of your hours. Every{' '}
           {Math.round(MARK_SECONDS / 60)} minutes on a course inks a tally on its page (the
           first one takes {Math.round(FIRST_MARK_SECONDS / 60)}), and {MARKS_PER_PAGE} tallies
-          bind the page. Your run counts weeks, so a day off costs nothing. Stamps are struck
+          bind the page. Your run counts weeks, so a day off costs nothing, and a day counts on time logged, never on a tick. Stamps are struck
           as the term adds up. All of it is worked out from the sessions you log.
         </FirstNote>
       )}

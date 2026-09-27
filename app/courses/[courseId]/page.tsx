@@ -22,6 +22,7 @@ import Stamp from '@/components/notebook/Stamp';
 import { useNotice } from '@/components/Notice';
 import { finishedUndo, skippedUndo, useUndo } from '@/components/Undo';
 import CourseSessionLog from '@/components/course/CourseSessionLog';
+import LogTimeSheet from '@/components/LogTimeSheet';
 import CourseWeekCard from '@/components/course/CourseWeekCard';
 import GradeStanding from '@/components/course/GradeStanding';
 import PracticeScores from '@/components/course/PracticeScores';
@@ -92,6 +93,7 @@ export default function CoursePage() {
   const [showDone, setShowDone] = useState(false);
   const [confirmSwitch, setConfirmSwitch] = useState(false);
   const [startTarget, setStartTarget] = useState<StartTarget | null>(null);
+  const [loggingTime, setLoggingTime] = useState(false);
 
   useEffect(() => {
     if (onboardingError) {
@@ -646,11 +648,22 @@ export default function CoursePage() {
           <section>
             <div className="flex items-baseline justify-between">
               <p className="eyebrow m-0">Sessions</p>
-              {log.length > 0 && (
-                <span className="tnum font-mono text-[11px] text-muted">
-                  {formatHM(totalSeconds(log))}
-                </span>
-              )}
+              <span className="flex items-baseline gap-3">
+                {/* Time spent without the timer, a chapter on paper, gets in
+                    here, and counts like any session. */}
+                <button
+                  type="button"
+                  onClick={() => setLoggingTime(true)}
+                  className="hand-underline bg-transparent px-0.5 font-serif text-[12.5px] italic text-ink-soft"
+                >
+                  Log time
+                </button>
+                {log.length > 0 && (
+                  <span className="tnum font-mono text-[11px] text-muted">
+                    {formatHM(totalSeconds(log))}
+                  </span>
+                )}
+              </span>
             </div>
             <div className="pt-1.5">
               <CourseSessionLog
@@ -672,6 +685,13 @@ export default function CoursePage() {
       </div>
 
       <StartTimerPopover target={startTarget} onClose={() => setStartTarget(null)} />
+      <LogTimeSheet
+        open={loggingTime}
+        course={course}
+        tasks={courseTasks}
+        onClose={() => setLoggingTime(false)}
+        onSaved={(minutes) => notify(`${formatHM(minutes * 60)} logged on ${course.code}.`)}
+      />
       <ConfirmSheet
         open={confirmSwitch}
         title="Start this one instead?"
