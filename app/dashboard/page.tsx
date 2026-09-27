@@ -32,6 +32,7 @@ import ConfirmSheet from '@/components/ConfirmSheet';
 import HandCheck from '@/components/notebook/HandCheck';
 import { useNotice } from '@/components/Notice';
 import { finishedUndo, skippedUndo, useUndo } from '@/components/Undo';
+import KindFields, { useKindDraft } from '@/components/tasks/KindFields';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Task } from '@/lib/data';
 import { upNextFrom } from '@/lib/use-up-next';
@@ -190,6 +191,7 @@ function DashboardPageContent() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDue, setNewTaskDue] = useState('');
   const [newTaskHigh, setNewTaskHigh] = useState(false);
+  const newTaskKind = useKindDraft();
 
   // Set while a running timer stands between a tap and the timer screen.
   /** The play mark that opened the start popover, and what it points at. */
@@ -417,11 +419,13 @@ function DashboardPageContent() {
         title,
         dueDate: newTaskDue || null,
         priority: newTaskHigh ? 'high' : 'normal',
+        ...newTaskKind.fields(title),
       });
       setAddingTaskFor(null);
       setNewTaskTitle('');
       setNewTaskDue('');
       setNewTaskHigh(false);
+      newTaskKind.reset();
     } catch (error) {
       console.error('Failed to add task:', error);
       notify('That task was not added.');
@@ -783,7 +787,10 @@ function DashboardPageContent() {
             type="button"
             onClick={() => {
               if (courses.length === 0) openAddCourse();
-              else setAddingTaskFor(courses[0].id);
+              else {
+                newTaskKind.reset();
+                setAddingTaskFor(courses[0].id);
+              }
             }}
             className="h-10 rounded-[10px] border border-line-strong px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
           >
@@ -852,7 +859,10 @@ function DashboardPageContent() {
               <GettingStarted
                 course={courses[0]}
                 hasSessions={rawSessions.length > 0}
-                onAddTask={() => setAddingTaskFor(courses[0].id)}
+                onAddTask={() => {
+                  newTaskKind.reset();
+                  setAddingTaskFor(courses[0].id);
+                }}
                 onStart={(el) => openStartFor(null, el, false, courses[0])}
               />
             ) : (
@@ -1111,6 +1121,12 @@ function DashboardPageContent() {
                 if (e.key === 'Enter') handleAddTask();
               }}
             />
+            {/* Task, Reading or Exam, picked from the title until picked by
+                hand: a reading is what gets turned into hours and asked
+                about later, so the form says it knows the difference. */}
+            <div className="mt-2.5">
+              <KindFields draft={newTaskKind} title={newTaskTitle} />
+            </div>
             <div className="mt-2.5 flex items-center gap-2">
               <DatePicker
                 value={newTaskDue}
