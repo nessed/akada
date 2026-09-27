@@ -83,19 +83,21 @@ function shift(iso: string, days: number): string {
 /**
  * Whether a day counts at all.
  *
- * Deliberately three routes, not one. A day spent reading a printed book,
- * logged as pages against a task, is a study day; an app that only counts its
- * own timer is an app that quietly tells you paper does not count.
+ * Two routes. Twenty minutes logged, by the timer or by hand; or pages that
+ * logged time stands behind (`creditedPages`, each finished reading's pages
+ * held to the time on that very task). A tick never counts a day on its own:
+ * ticking "buy the textbook" is one tap, and four of those used to bank a
+ * margin day. Paper still counts, through time logged by hand on the course
+ * page, which is a session like any other.
  *
  * This reads *true* logged seconds, not credited ones. The tapers exist to
  * keep the pages from rewarding a walked-away timer twice, not to take a day
  * away from somebody who studied.
  */
-function qualifies(entry: DayCredit | undefined): boolean {
+export function qualifies(entry: DayCredit | undefined): boolean {
   if (!entry) return false;
   if (entry.rawTotal >= DAY_QUALIFY_SECONDS) return true;
-  for (const ticks of entry.ticksByCourse.values()) if (ticks > 0) return true;
-  return entry.pages >= DAY_QUALIFY_PAGES;
+  return entry.creditedPages >= DAY_QUALIFY_PAGES;
 }
 
 export function readRuns(

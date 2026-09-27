@@ -1151,6 +1151,17 @@ section and pages trailing in muted italic, and a quiet link to the rest on
 the course page. Nothing at all otherwise. `components/course/WeakPointsPanel.tsx`
 and `components/today/BeforeExamPanel.tsx`.
 
+### Log time
+Time spent away from the timer, a chapter on paper or a problem set at the
+library, gets in through **Log time**, a serif link in the header of a course
+page's Sessions section. It opens a sheet (`LogTimeSheet`): the course rule
+and code, "Log time" in the serif, one italic line on what it is for, the
+length as mono marks (15m to 2h) or typed minutes, the day (today by default,
+never a future one), and optionally the task it went on. It writes an
+ordinary session with no chain, which everything that reads sessions already
+takes as one unbroken stretch, so it counts for study days, tallies and hours
+the way a timed one does.
+
 ### Courses: the shelf
 
 `/courses` is the term as a bookshelf, laid out as a grid of books standing
@@ -1244,7 +1255,8 @@ headers, the one screen that still looked like a settings panel.
   bound, best run, margin days banked.
 - **Explained once.** Until the first page binds anywhere, a `FirstNote`
   under the ledger line says what a tally is in minutes, that fifteen bind a
-  page, that the run counts weeks, and that stamps come with the hours.
+  page, that the run counts weeks and a day counts on time logged rather than
+  on a tick, and that stamps come with the hours.
 - **Course pages** (deckle card, serif heading). Each row is a link to the
   course: course rule and code, the name in the serif, the page's
   `TallyMarks` drawing themselves in on open, the distance to the next mark
@@ -1261,7 +1273,13 @@ headers, the one screen that still looked like a settings panel.
   outlined, a `HandCheck` in the margin for a week that counted, and a legend
   for studied / margin / blank. The rules for what counts sit behind a
   "what makes a week count" disclosure, since they are looked up once and the
-  grid is read daily.
+  grid is read daily. **A day counts on time, never on a tick**: twenty
+  minutes logged, or pages that logged time stands behind (`creditedPages` on
+  the day's `DayCredit`, each finished reading's pages held to the time on
+  that very task, `min(claimed, covered)`). Ticking "buy the textbook" used to
+  make a study day, and four of those banked a margin day. A skipped task
+  contributes nothing. Paper still counts, through **Log time** on a course
+  page (see Courses below).
 - **Within reach** (aside). The first four Next Mark candidates. Today and the
   timer say one line and go quiet; this is where the rest of the board is.
 - **How you study**, full width, figures on the left, by-course and what the

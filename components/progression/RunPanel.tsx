@@ -116,7 +116,7 @@ export default function RunPanel({ runs, shape }: { runs: RunReading; shape: Wee
           what makes a week count
         </summary>
         <p className="m-0 mt-2 text-[12px] leading-[1.6] text-muted">
-          A day counts on {minutes} minutes logged, a task finished, or pages read. A week counts on{' '}
+          A day counts on {minutes} minutes logged, by the timer or by hand on a course page, or on pages read with time logged against them. Ticking a task off does not count a day. A week counts on{' '}
           {WEEK_CONSISTENT_DAYS} such days, or on {WEEK_BREADTH_DAYS} spread across{' '}
           {WEEK_BREADTH_COURSES} courses. A blank day can be covered by a margin day you banked,
           drawn hollow and never counted as studied.
