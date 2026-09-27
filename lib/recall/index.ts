@@ -336,7 +336,13 @@ const MAJOR_EXAM = /\b(mid-?terms?|finals?|exams?|examinations?)\b/i;
  * midterm, a final or an exam, which is what an unweighted midterm looks
  * like on a list.
  */
-function preparesFor(task: Task): boolean {
+/**
+ * Whether a piece is one recall prepares for: worth a fifth of the course,
+ * or an unweighted exam that calls itself a midterm, a final or an exam.
+ * Weekly work is not, whatever it is marked as. Shared with the Coming list,
+ * which shows a course's recall standing under these and nothing else.
+ */
+export function preparesFor(task: Pick<Task, 'weight' | 'kind' | 'title'>): boolean {
   if (task.weight != null) return task.weight >= RECALL_EXAM_MIN_WEIGHT;
   return task.kind === 'exam' && MAJOR_EXAM.test(task.title);
 }

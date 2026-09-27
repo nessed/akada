@@ -206,3 +206,12 @@ test('finished through the log sheet and timed is worked like any other', () => 
   const sessions = [{ ...session('course-a', 1), taskId: 'done' }];
   assert.deepEqual([...workedTaskIds([done], sessions)], ['done']);
 });
+
+test('a timer started and dropped inside ten minutes is not work to carry on', () => {
+  const dropped = task('dropped', { courseId: 'course-a', dueDate: day(3) });
+  const due = task('due', { courseId: 'course-b', dueDate: day(1) });
+  const blip = { ...session('course-a', 0), taskId: 'dropped', durationSeconds: 5 * 60 };
+  assert.equal(pickUpNext('in-progress', [], [], [blip], [dropped, due])?.id, 'due');
+  const real = { ...blip, durationSeconds: 25 * 60 };
+  assert.equal(pickUpNext('in-progress', [], [], [real], [dropped, due])?.id, 'dropped');
+});

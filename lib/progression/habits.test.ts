@@ -285,3 +285,33 @@ test('a course pace is the median of its readings, not one pooled ratio', () => 
   );
   assert.equal(habits.byCourse.get('math')?.pagesPerHour, 30);
 });
+
+test('a sitting logged after the fact is never put on the clock', () => {
+  // Nine chainless sittings all saved at 11pm: nothing is placed, so no peak.
+  const late = DATES.slice(0, 7).map((date, i) => ({
+    ...timed('math', date, 23, [{ minutes: 60 }]),
+    id: `late-${i}`,
+    segments: [],
+    breakSeconds: 0,
+  }));
+  const habits = readHabits([MATH], late, []);
+  assert.equal(habits.placedSittings, 0);
+  assert.equal(habits.peak, null);
+  assert.equal(habits.hours.reduce((a, b) => a + b, 0), 0);
+});
+
+test('a peak needs five timed sittings across three days', () => {
+  const twoDays = [0, 1, 2, 3, 4].map((i) => timed('math', DATES[i % 2], 20, [{ minutes: 40 }]));
+  assert.equal(readHabits([MATH], twoDays, []).peak, null);
+  const threeDays = [0, 1, 2, 3, 4].map((i) => timed('math', DATES[i % 3], 20, [{ minutes: 40 }]));
+  assert.ok(readHabits([MATH], threeDays, []).peak);
+});
+
+test('a sitting over four hours or closed for the reader moves no median', () => {
+  const usual = [0, 1, 2, 3, 4].map((i) => timed('math', DATES[i], 18, [{ minutes: 45 }]));
+  const forgotten = timed('math', DATES[5], 18, [{ minutes: 300 }]);
+  const held = { ...timed('math', DATES[6], 18, [{ minutes: 180 }]), recovery: 'idle' as const };
+  const habits = readHabits([MATH], [...usual, forgotten, held], []);
+  assert.equal(habits.sittings.n, 5);
+  assert.equal(habits.sittings.median, 45 * 60);
+});

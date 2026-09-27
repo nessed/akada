@@ -20,3 +20,15 @@ test('a sitting closed for the reader sets no record', () => {
   assert.equal(records.sitting.best, 3600);
   assert.equal(records.day.best, 3600);
 });
+
+test('no record is stamped before two weeks and ten sessions', () => {
+  const week = ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18'];
+  const early = readRecords(week.map((d, i) => sat(`e${i}`, d, 1 + i / 10)), '2026-09-18');
+  assert.equal(early.settled, false);
+  assert.equal(early.sitting.fresh, false);
+  const later = readRecords(
+    [...week, '2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11'].map((d, i) => sat(`l${i}`, d, 1 + i / 10)),
+    '2026-09-18',
+  );
+  assert.equal(later.settled, true);
+});

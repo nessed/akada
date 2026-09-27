@@ -20,7 +20,7 @@ import { backlogPages, countdowns, readingBacklog, readingRateDetail } from '@/l
 import HourStrokes from '@/components/HourStrokes';
 import HandNote from '@/components/notebook/HandNote';
 import { RecallStrokes } from '@/components/recall/RecallMarks';
-import type { RecallReading } from '@/lib/recall';
+import { preparesFor, type RecallReading } from '@/lib/recall';
 
 /**
  * The panels Today is made of.
@@ -306,9 +306,18 @@ export function ComingPanel({
       {coming.map(({ task, course, days }, index) => {
         // Once per course, on its nearest row: two midterms in one course
         // draw on the same material, and saying so twice is saying it twice.
+        // Only under something recall is preparing for (an exam, or a piece
+        // worth a fifth of the course), on the course's nearest such row,
+        // and only once something in the course has actually been asked:
+        // "0 of 1 clear" under a problem set said nothing true.
+        const mine = course ? (recall?.byCourse.get(course.id) ?? null) : null;
         const standing =
-          course && coming.findIndex((c) => c.course?.id === course.id) === index
-            ? (recall?.byCourse.get(course.id) ?? null)
+          course &&
+          mine &&
+          preparesFor(task) &&
+          mine.states.some((state) => state.history.length > 0) &&
+          coming.findIndex((c) => c.course?.id === course.id && preparesFor(c.task)) === index
+            ? mine
             : null;
         return (
         <button

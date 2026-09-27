@@ -42,8 +42,17 @@ export default function PersonalBests({ records }: { records: Records }) {
     },
   ];
 
+  // Before two weeks and ten sessions every card would be a new best every
+  // day. The figures stand as they are, and nothing is stamped.
+  const early = !records.settled;
+
   return (
     <div>
+      {early && (
+        <p className="m-0 pb-1 font-serif text-[12.5px] italic text-muted">
+          your first weeks set the marks
+        </p>
+      )}
       {rows.map((row, i) => (
         <div
           key={row.key}
@@ -56,9 +65,11 @@ export default function PersonalBests({ records }: { records: Records }) {
               {row.best.best > 0 ? row.figure : '—'}
             </span>
           </div>
-          <p className="m-0 mt-1.5 pr-16 font-serif text-[12.5px] italic leading-snug text-muted">
-            {row.sub}
-          </p>
+          {!early && (
+            <p className="m-0 mt-1.5 pr-16 font-serif text-[12.5px] italic leading-snug text-muted">
+              {row.sub}
+            </p>
+          )}
           {row.best.fresh && (
             <span
               className="stamp stamp-down absolute bottom-2.5 right-0"
