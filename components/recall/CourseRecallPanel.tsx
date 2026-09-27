@@ -204,7 +204,7 @@ export default function CourseRecallPanel({
               disabled={busy}
               title="Stop asking about this one"
               aria-label={`Stop asking about ${state.prompt}`}
-              className="h-8 shrink-0 rounded-[8px] px-1.5 font-serif text-[12px] italic text-muted-soft transition-opacity hover:text-ink focus-visible:opacity-100 disabled:opacity-40 md:opacity-0 md:group-hover:opacity-100"
+              className="h-8 shrink-0 rounded-[8px] px-1.5 touch:h-10 font-serif text-[12px] italic text-muted-soft transition-opacity hover:text-ink focus-visible:opacity-100 disabled:opacity-40 md:mouse:opacity-0 md:group-hover:opacity-100"
             >
               stop asking
             </button>

@@ -732,7 +732,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
    ring is on it, then the same pencil underline the rest of the app draws —
    as a background rather than .hand-underline's padding, so the row does not
    shift 6px the moment you point at it. */
-.task-open:hover,
+:where(:root:not([data-input='touch'])) .task-open:hover,
 .task-open:focus-visible {
   background-image: var(
     --underline-svg,
@@ -825,7 +825,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 /* Pointing at a rail item draws the pencil underline a task title draws;
    the page you are on already carries a highlighter swipe instead. */
-.rail-link:hover .rail-label:not(.hl):not(.hl-swipe) {
+:where(:root:not([data-input='touch'])) .rail-link:hover .rail-label:not(.hl):not(.hl-swipe) {
   background-image: var(
     --underline-svg,
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%231A1714' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.6'/></svg>")
@@ -1040,6 +1040,27 @@ input[type='date']::-webkit-calendar-picker-indicator {
     display: none;
   }
 }
+/* The same for a laptop folded into a tablet, which still reports a fine
+   pointer because its touchpad is still there (see lib/input.ts). */
+:root[data-input='touch'] .key-hint {
+  display: none;
+}
+
+/* A sheet stands on the on-screen keyboard rather than under it. Every
+   sheet is a scrim and a panel inside a bottom-aligned fixed layer; the layer
+   takes the keyboard's height as padding, and while a keyboard is up the
+   panel is held to what is still visible and scrolls inside that, so the field
+   being typed in and the button under it both stay on screen. --keyboard and
+   data-keyboard come from KEYBOARD_BOOTSTRAP_SCRIPT in lib/input.ts. */
+.sheet-lift {
+  padding-bottom: var(--keyboard, 0px);
+  transition: padding-bottom 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+:root[data-keyboard] .sheet-lift > .relative {
+  max-height: calc(var(--visible, 100dvh) - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 
 /* iOS zooms the page into any field set under 16px the moment it takes focus,
    and leaves it zoomed. Pinch-zoom stays allowed (see the viewport in
@@ -1056,6 +1077,15 @@ input[type='date']::-webkit-calendar-picker-indicator {
     ) {
     font-size: 16px;
   }
+}
+:root[data-input='touch'] :is(input, textarea):is(
+    [class~='text-xs'],
+    [class~='text-sm'],
+    [class~='text-[13px]'],
+    [class~='text-[14px]'],
+    [class~='text-[15px]']
+  ) {
+  font-size: 16px;
 }
 
 /* ───────── the public pages ─────────

@@ -13,6 +13,7 @@ import ReorderList from '@/components/ReorderList';
 import { useRecordHasNews } from '@/lib/progression/visits';
 import { useRecordEarned } from '@/lib/record-earned';
 import { RAIL_COLLAPSED_KEY as COLLAPSE_KEY, writeRailAttribute } from '@/lib/rail';
+import { isTouchInput } from '@/lib/input';
 import type { Course } from '@/lib/data/types';
 import AkadaMark from './notebook/AkadaMark';
 import SettingsGlyph, { SETTINGS_GEAR } from './SettingsGlyph';
@@ -289,6 +290,27 @@ export default function DesktopRail() {
     };
   }, [overlay, closeOverlay]);
 
+  /* On a tablet the strip answers a thumb the way a side panel does: a swipe
+     right across it lays the full rail over the page, a swipe left puts it
+     away. Only between 768 and 1024, where the overlay is what the handle
+     opens, and only a swipe that is plainly sideways, so scrolling the
+     course list or carrying a course is left alone. */
+  const swipeRef = useRef<{ id: number; x: number; y: number } | null>(null);
+  const onSwipeStart = (e: React.PointerEvent) => {
+    swipeRef.current = e.pointerType === 'mouse' ? null : { id: e.pointerId, x: e.clientX, y: e.clientY };
+  };
+  const onSwipeEnd = (e: React.PointerEvent) => {
+    const s = swipeRef.current;
+    swipeRef.current = null;
+    if (!s || s.id !== e.pointerId || !window.matchMedia(OVERLAY_QUERY).matches) return;
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    setTip(null);
+    if (dx > 0) setOverlay(true);
+    else setOverlay(false);
+  };
+
   /* The course list fades at whichever end has more behind it. */
   const measure = useCallback(() => {
     const el = listRef.current;
@@ -347,7 +369,7 @@ export default function DesktopRail() {
   }
 
   const rowBase =
-    'rail-link rail-row relative flex h-10 items-center gap-3 rounded-[10px] px-3.5 no-underline transition-colors';
+    'rail-link rail-row relative flex h-10 touch:h-11 items-center gap-3 rounded-[10px] px-3.5 no-underline transition-colors';
 
   /**
    * One course's spine. Given to `ReorderList` as `renderItem`, whose `<li>`
@@ -455,11 +477,19 @@ export default function DesktopRail() {
         ref={navRef}
         aria-label="Main"
         data-open={overlay ? '' : undefined}
-        onPointerOver={(e) => tipFrom(e.target)}
+        // A finger's tap is the press itself, so no tip: it would only flash
+        // up as the page changed underneath it.
+        onPointerOver={(e) => e.pointerType === 'mouse' && tipFrom(e.target)}
         onPointerLeave={() => setTip(null)}
-        onFocus={(e) => tipFrom(e.target)}
+        onPointerDown={onSwipeStart}
+        onPointerUp={onSwipeEnd}
+        onPointerCancel={() => {
+          swipeRef.current = null;
+        }}
+        // A tap focuses the link it lands on, and that is not a Tab.
+        onFocus={(e) => !isTouchInput() && tipFrom(e.target)}
         onBlur={() => setTip(null)}
-        className={`rail fixed inset-y-0 left-0 hidden shrink-0 flex-col gap-0.5 px-2 pb-4 pt-5 md:flex ${
+        className={`rail fixed inset-y-0 left-0 hidden shrink-0 touch-pan-y flex-col gap-0.5 px-2 pb-[max(env(safe-area-inset-bottom),16px)] pt-[max(env(safe-area-inset-top),20px)] md:flex ${
           overlay ? 'z-50' : 'z-40'
         }`}
       >
@@ -515,7 +545,7 @@ export default function DesktopRail() {
         <div
           ref={listRef}
           onScroll={measure}
-          className={`group/courses app-scroll min-h-0 flex-1 overflow-y-auto ${fade.top ? 'rail-fade-top' : ''} ${
+          className={`group/courses app-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto ${fade.top ? 'rail-fade-top' : ''} ${
             fade.bottom ? 'rail-fade-bottom' : ''
           }`}
         >
@@ -539,8 +569,8 @@ export default function DesktopRail() {
               and always there when the term has no courses yet. */}
           <Link
             href="/dashboard?add=course"
-            className={`rail-link rail-wide mt-1 flex h-9 items-center gap-2 rounded-[10px] border border-dashed border-line-strong px-3.5 font-serif text-[13px] italic text-muted no-underline transition-opacity hover:text-ink focus-visible:opacity-100 ${
-              ordered.length > 0 ? 'opacity-0 group-hover/courses:opacity-100' : ''
+            className={`rail-link rail-wide mt-1 flex h-9 touch:h-10 items-center gap-2 rounded-[10px] border border-dashed border-line-strong px-3.5 font-serif text-[13px] italic text-muted no-underline transition-opacity hover:text-ink focus-visible:opacity-100 ${
+              ordered.length > 0 ? 'mouse:opacity-0 group-hover/courses:opacity-100' : ''
             }`}
           >
             <span aria-hidden className="not-italic">+</span>

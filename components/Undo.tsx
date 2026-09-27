@@ -105,7 +105,7 @@ export default function UndoProvider({ children }: { children: React.ReactNode }
       {entry && (
         <div
           // Clear of the bottom nav and the Tasks bulk bar on a phone.
-          className="pointer-events-none fixed inset-x-0 bottom-[calc(160px+env(safe-area-inset-bottom))] z-40 flex animate-fade-in justify-center px-4 md:bottom-24"
+          className="pointer-events-none fixed inset-x-0 bottom-[calc(160px+env(safe-area-inset-bottom))] z-40 flex animate-fade-in justify-center px-4 md:bottom-[calc(6rem+env(safe-area-inset-bottom))]"
           role="status"
           aria-live="polite"
         >
@@ -115,7 +115,7 @@ export default function UndoProvider({ children }: { children: React.ReactNode }
               type="button"
               onClick={() => void run()}
               aria-keyshortcuts="Z"
-              className="h-9 shrink-0 rounded-[8px] px-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+              className="h-9 touch:h-11 shrink-0 rounded-[8px] px-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
             >
               Undo
             </button>

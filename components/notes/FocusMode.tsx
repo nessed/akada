@@ -262,9 +262,30 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
         if ((scrollerRef.current?.scrollTop ?? 0) > 80 && event.clientY > 110) setChromeHidden(true);
       }, 2400);
     };
+    // A finger has no cursor to move, so a tap on the page does it: the way a
+    // reader app brings its bar back. Only a tap, one that stayed put and did
+    // not land on a link or a control, and only while the bar is away.
+    let down: { id: number; x: number; y: number } | null = null;
+    const onDown = (event: PointerEvent) => {
+      down = event.pointerType === 'mouse' ? null : { id: event.pointerId, x: event.clientX, y: event.clientY };
+    };
+    const onUp = (event: PointerEvent) => {
+      const start = down;
+      down = null;
+      if (!start || start.id !== event.pointerId) return;
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) return;
+      const target = event.target as HTMLElement | null;
+      if (!target || !scrollerRef.current?.contains(target)) return;
+      if (target.closest('a, button, input, textarea, select, summary, [role="button"]')) return;
+      setChromeHidden(false);
+    };
     window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointerup', onUp);
     return () => {
       window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerup', onUp);
       window.clearTimeout(idle);
     };
   }, []);

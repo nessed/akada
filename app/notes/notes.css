@@ -12,12 +12,12 @@
 .notes .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 .notes .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink-soft); font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
-.notes .btn:hover { background: var(--bg-tint); border-color: var(--line-strong); color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .btn:hover { background: var(--bg-tint); border-color: var(--line-strong); color: var(--ink); }
 .notes .btn:disabled { opacity: .45; cursor: not-allowed; }
 .notes .btn-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-contrast); }
-.notes .btn-primary:hover { background: var(--ink-soft); border-color: var(--ink-soft); color: var(--primary-contrast); }
+:where(:root:not([data-input='touch'])) .notes .btn-primary:hover { background: var(--ink-soft); border-color: var(--ink-soft); color: var(--primary-contrast); }
 .notes .btn-ghost { border-color: transparent; background: transparent; }
-.notes .btn-ghost:hover { background: var(--bg-tint); border-color: transparent; }
+:where(:root:not([data-input='touch'])) .notes .btn-ghost:hover { background: var(--bg-tint); border-color: transparent; }
 .notes .btn-icon { width: 40px; padding: 0; }
 .notes .btn-dashed { border-style: dashed; border-color: var(--line-strong); background: transparent; }
 .notes .kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; line-height: 16px; }
@@ -27,7 +27,7 @@
 .notes .page-head .standfirst { margin: 0; }
 @media (max-width: 767px) { .notes .page-head { flex-direction: column; align-items: stretch; gap: 10px; } .notes .page-head .actions { margin-left: -10px; } }
 .notes .back { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 18px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 13px; cursor: pointer; }
-.notes .back:hover { color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .back:hover { color: var(--ink); }
 
 /* The library: the note last read leads the page, then rows written on the
    page with a hairline between them. */
@@ -37,7 +37,7 @@
 .notes .lead-title { display: block; max-width: 100%; margin: 10px 0 0; padding: 0; border: 0; background: none; text-align: left; font: 500 28px/1.12 var(--font-serif); letter-spacing: -.022em; color: var(--ink); cursor: pointer; }
 @media (min-width: 768px) { .notes .lead-title { font-size: 32px; } }
 .notes .lead-title { background-image: linear-gradient(180deg, color-mix(in srgb, var(--c) 42%, transparent) 0 100%); background-repeat: no-repeat; background-size: 0% .42em; background-position: 0 92%; transition: background-size .5s cubic-bezier(.2, .7, .2, 1); }
-.notes .lead-title:hover,
+:where(:root:not([data-input='touch'])) .notes .lead-title:hover,
 .notes .lead-title:focus-visible { background-size: 100% .42em; outline: none; }
 .notes .lead-meta { margin: 10px 0 0; font: italic 13.5px/1.5 var(--font-serif); color: var(--muted); }
 .notes .lead-meta em { color: var(--ink-soft); }
@@ -58,7 +58,7 @@
 .notes .marks { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-left: -8px; }
 .notes .shelf-tools-end .marks { margin-left: 0; }
 .notes .mark { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 13px; cursor: pointer; transition: color .15s, background .15s; }
-.notes .mark:hover { color: var(--ink); background: var(--bg-tint); }
+:where(:root:not([data-input='touch'])) .notes .mark:hover { color: var(--ink); background: var(--bg-tint); }
 .notes .mark .course-rule { width: 12px; }
 .notes .mark[aria-pressed='true'] { color: var(--ink); font-weight: 500; }
 .notes .mark[aria-pressed='true'] span:last-child { background-image: linear-gradient(180deg, var(--hl, var(--highlight-yellow)) 0 100%); background-repeat: no-repeat; background-size: 100% 7px; background-position: 0 calc(100% - 1px); padding: 0 2px; }
@@ -78,11 +78,11 @@
 .notes .shelf-group { padding: 26px 0 8px; }
 .notes .shelf-group + li { border-top: 0 !important; }
 .notes .shelf-row { position: relative; display: flex; align-items: center; gap: 14px; min-height: 64px; margin: 0 -15px; padding: 10px 15px; border-radius: 10px; cursor: pointer; outline: none; transition: background .15s, box-shadow .15s; }
-.notes .shelf-row:hover { background: var(--bg-tint); }
+:where(:root:not([data-input='touch'])) .notes .shelf-row:hover { background: var(--bg-tint); }
 .notes .shelf-row:focus-visible,
 .notes .shelf-row[data-cursor] { box-shadow: inset 0 0 0 1.5px var(--ink); }
 .notes .shelf-row .stripe { display: block; width: 3px; height: 24px; flex: none; border-radius: 1px; background: var(--c); transition: height .2s cubic-bezier(.2, .7, .2, 1); }
-.notes .shelf-row:hover .stripe,
+:where(:root:not([data-input='touch'])) .notes .shelf-row:hover .stripe,
 .notes .shelf-row[data-cursor] .stripe { height: 34px; }
 .notes .shelf-row .body { min-width: 0; flex: 1; }
 .notes .shelf-row .title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 17px/1.3 var(--font-serif); color: var(--ink); letter-spacing: -.01em; }
@@ -97,25 +97,30 @@
 .notes .shelf-row .mini span[data-r='got'] { background: var(--sage); }
 .notes .shelf-row .mini span[data-r='miss'] { background: var(--peach); }
 .notes .shelf-row .row-tools { display: flex; gap: 2px; flex: none; margin-right: -6px; opacity: 0; transition: opacity .15s; }
-.notes .shelf-row:hover .row-tools,
+:where(:root:not([data-input='touch'])) .notes .shelf-row:hover .row-tools,
 .notes .shelf-row:focus-within .row-tools,
 .notes .shelf-row[data-cursor] .row-tools { opacity: 1; }
 .notes .shelf-row .row-tool { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
-.notes .shelf-row .row-tool:hover { color: var(--ink); background: var(--paper); }
-.notes .shelf-row .row-tool.del:hover { color: var(--priority-soft); }
+:where(:root:not([data-input='touch'])) .notes .shelf-row .row-tool:hover { color: var(--ink); background: var(--paper); }
+:where(:root:not([data-input='touch'])) .notes .shelf-row .row-tool.del:hover { color: var(--priority-soft); }
 @media (hover: none) { .notes .shelf-row .row-tools { opacity: 1; } }
+:root[data-input='touch'] .notes .shelf-row .row-tools { opacity: 1; }
+:root[data-input='touch'] .notes .shelf-row .row-tool { width: 40px; height: 40px; }
 @media (max-width: 640px) { .notes .shelf-row .mini { display: none; } .notes .shelf-row .row-tool:not(.del) { display: none; } }
 .notes .keys-foot { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--muted); }
 .notes .keys-foot > span { display: inline-flex; align-items: center; gap: 6px; }
 .notes .keys-foot .kbd + .kbd { margin-left: -3px; }
 @media (hover: none) { .notes .keys-foot { display: none; } }
+:root[data-input='touch'] .notes .keys-foot { display: none; }
+/* Every other key named on a Notes screen, the search field's ⌘K, the editor's save hint, Esc on Focus's leave. */
+:root[data-input='touch'] .notes :is(.search-kbd, .editor-foot .hint, .nf-leave .kbd) { display: none; }
 .notes .empty { padding: 8vh 0 0; }
 .notes .empty .lede { max-width: 44ch; margin: 16px 0 26px; font: 17px/1.6 var(--font-serif); color: var(--ink-soft); }
 .notes .empty .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .notes .empty .keys { margin-top: 40px; display: grid; gap: 10px; font-size: 12.5px; color: var(--muted); }
 .notes .empty .keys div { display: flex; gap: 10px; align-items: center; }
 .notes .link { border: 0; background: none; padding: 0; font: italic 13.5px/1.5 var(--font-serif); color: var(--muted); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; cursor: pointer; }
-.notes .link:hover { color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .link:hover { color: var(--ink); }
 
 /* Reader */
 .notes .reader { --measure: 680px; }
@@ -130,7 +135,7 @@
 .notes .toc-sticky { position: sticky; top: 40px; max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding-top: 6px; }
 .notes .toc-list { display: grid; margin: 12px 0 0; padding: 0; list-style: none; }
 .notes .toc-link { display: block; width: 100%; padding: 6px 0; border: 0; background: none; color: var(--ink-soft); font-size: 13px; line-height: 1.45; text-align: left; cursor: pointer; transition: color .15s; }
-.notes .toc-link:hover { color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .toc-link:hover { color: var(--ink); }
 .notes .toc-link.is-past { color: var(--muted); }
 .notes .toc-link.is-on { color: var(--ink); font-weight: 500; }
 .notes .toc-link.level-3 { padding-left: 14px; font-size: 12.5px; }
@@ -139,7 +144,7 @@
 .notes .toc-block:first-child { padding-top: 0; border-top: 0; }
 .notes .toc-tools { display: flex; gap: 4px; margin: 10px 0 0 -10px; }
 .notes .toc-tools button { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 12px; cursor: pointer; }
-.notes .toc-tools button:hover { background: var(--bg-tint); color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .toc-tools button:hover { background: var(--bg-tint); color: var(--ink); }
 .notes .left-note { display: block; margin-top: 12px; }
 .notes .strokes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
 .notes .strokes span { width: 5px; height: 20px; border-radius: 2px; border: 1px solid var(--line-strong); background: transparent; }
@@ -155,7 +160,7 @@
 .notes .set-group .eyebrow { display: block; margin-bottom: 8px; }
 .notes .choice-row { display: flex; flex-wrap: wrap; gap: 2px 4px; margin-left: -8px; }
 .notes .choice { height: 32px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--ink-soft); font-size: 13px; cursor: pointer; }
-.notes .choice:hover { color: var(--ink); background: var(--bg-tint); }
+:where(:root:not([data-input='touch'])) .notes .choice:hover { color: var(--ink); background: var(--bg-tint); }
 .notes .choice[aria-pressed='true'] { color: var(--ink); font-weight: 500; }
 .notes .choice[aria-pressed='true'] span { background-image: linear-gradient(180deg, var(--highlight-yellow) 0 100%); background-repeat: no-repeat; background-size: 100% 7px; background-position: 0 calc(100% - 1px); padding: 0 2px; }
 .notes .set-note { margin: 12px 0 0; font: italic 12.5px/1.45 var(--font-serif); color: var(--muted); }
@@ -164,12 +169,12 @@
 .notes .editor-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 12px; flex-wrap: wrap; }
 .notes .tabs { display: flex; gap: 2px; margin-left: -10px; }
 .notes .tab { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 13px; cursor: pointer; }
-.notes .tab:hover { color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .tab:hover { color: var(--ink); }
 .notes .tab[aria-pressed='true'] { color: var(--ink); font-weight: 500; }
 .notes .tab[aria-pressed='true'] span { background-image: linear-gradient(180deg, var(--highlight-yellow) 0 100%); background-repeat: no-repeat; background-size: 100% 7px; background-position: 0 calc(100% - 1px); padding: 0 2px; }
 .notes .inserts { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
 .notes .insert { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px; border: 1px solid var(--line-soft); border-radius: 8px; background: transparent; color: var(--ink-soft); font-size: 12px; cursor: pointer; transition: background .15s, border-color .15s; }
-.notes .insert:hover { background: var(--bg-tint); border-color: var(--line); }
+:where(:root:not([data-input='touch'])) .notes .insert:hover { background: var(--bg-tint); border-color: var(--line); }
 .notes .insert .course-rule { width: 10px; }
 .notes .editor-grid { display: grid; gap: 24px; }
 .notes .editor-grid[data-view='split'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -236,7 +241,7 @@
 .notes .markdown-body h4 { font-family: var(--font-sans); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .16em; color: var(--muted); margin: 2em 0 .6em; }
 .notes .markdown-body strong { font-weight: 600; }
 .notes .markdown-body a { color: var(--ink); text-decoration: none; background-image: var(--underline-svg); background-repeat: no-repeat; background-size: 100% 5px; background-position: 0 100%; padding-bottom: 2px; }
-.notes .markdown-body a:hover { background-image: linear-gradient(180deg, var(--highlight-yellow) 0 100%); background-size: 100% .45em; background-position: 0 calc(100% - .12em); }
+:where(:root:not([data-input='touch'])) .notes .markdown-body a:hover { background-image: linear-gradient(180deg, var(--highlight-yellow) 0 100%); background-size: 100% .45em; background-position: 0 calc(100% - .12em); }
 .notes .markdown-body mark { --hl-nib: clamp(6px, .5em, 12px); background: linear-gradient(180deg, var(--highlight-yellow) 0 100%) no-repeat 0 calc(100% - .06em) / 100% var(--hl-nib); color: inherit; padding: 0 .08em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .notes .markdown-body ul,
 .notes .markdown-body ol { margin: .2em 0 1.2em; padding-left: 1.5em; }
@@ -264,7 +269,7 @@
 .notes .markdown-body section[data-reader-section] > h2 { margin-top: 0; }
 .notes .markdown-body .md-section-toggle { position: relative; display: flex; align-items: baseline; width: 100%; gap: .4em; padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-align: left; cursor: pointer; }
 .notes .markdown-body .md-section-chevron { flex: none; width: .62em; height: .62em; color: var(--muted-soft); transform: translateY(-.02em); transition: transform .18s ease, color .15s; }
-.notes .markdown-body .md-section-toggle:hover .md-section-chevron { color: var(--ink-soft); }
+:where(:root:not([data-input='touch'])) .notes .markdown-body .md-section-toggle:hover .md-section-chevron { color: var(--ink-soft); }
 @media (min-width: 1024px) {
   .notes .markdown-body .md-section-chevron { position: absolute; left: -1.05em; top: .3em; }
 }
@@ -285,7 +290,7 @@
 .notes .md-check-prompt { margin: 0 !important; font-style: italic; color: var(--muted); }
 .notes .md-check-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: .9em 0 0 -8px; }
 .notes .md-ghost { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--ink-soft); font: 500 13px/1 var(--font-sans); }
-.notes .md-ghost:hover { background: var(--bg-tint); color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .md-ghost:hover { background: var(--bg-tint); color: var(--ink); }
 .notes .md-ghost.is-picked { color: var(--ink); }
 .notes .md-ghost.is-picked::after { content: ''; display: block; height: 6px; margin: -8px -2px 0; background: var(--highlight-mint); border-radius: 1px; }
 .notes .md-ghost.is-picked.is-miss::after { background: var(--highlight-pink); }
@@ -303,13 +308,13 @@
 .notes .markdown-body td { padding: .7em 1em .7em 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line-soft); }
 .notes .markdown-body th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); border-bottom-color: var(--line); padding-top: .9em; }
 .notes .markdown-body tr:last-child td { border-bottom: 0; }
-.notes .markdown-body tbody tr:hover td { background: color-mix(in srgb, var(--bg-tint) 55%, transparent); }
+:where(:root:not([data-input='touch'])) .notes .markdown-body tbody tr:hover td { background: color-mix(in srgb, var(--bg-tint) 55%, transparent); }
 
 /* Code. */
 .notes .md-code-block { margin: 1.6em 0; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); overflow: hidden; }
 .notes .md-code-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 16px; border-bottom: 1px solid var(--line-soft); }
 .notes .md-code-copy { height: 26px; padding: 0 8px; border: 0; border-radius: 7px; background: none; color: var(--muted); font: 500 11.5px/1 var(--font-sans); }
-.notes .md-code-copy:hover { background: var(--bg-tint); color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .md-code-copy:hover { background: var(--bg-tint); color: var(--ink); }
 .notes .md-code-block pre { margin: 0; padding: 1em 1.2em 1.1em; overflow-x: auto; font-size: .76em; line-height: 1.7; }
 .notes .md-code-block code { font-family: var(--font-mono); }
 .notes .md-code-block .token.comment,
@@ -349,6 +354,7 @@
 .notes .markdown-body ol { list-style: decimal; }
 .notes .prompt-steps { list-style: decimal; }
 @media (hover: none) { .notes .empty .keys { display: none; } }
+:root[data-input='touch'] .notes .empty .keys { display: none; }
 
 /* ── Focus ─────────────────────────────────────────────────────────────
    One sheet on the desk and nothing else. It is portalled to the body, so
@@ -414,7 +420,7 @@
    lets it down, and comes back up under a pointer. */
 .notes .nf .markdown-body > * { transition: opacity .7s cubic-bezier(.2, .7, .2, 1); }
 .notes .nf[data-spot] .markdown-body > :not([data-lit]) { opacity: .2; }
-.notes .nf[data-spot] .markdown-body > :not([data-lit]):hover { opacity: .62; transition-duration: .25s; }
+:where(:root:not([data-input='touch'])) .notes .nf[data-spot] .markdown-body > :not([data-lit]):hover { opacity: .62; transition-duration: .25s; }
 
 /* The bar. Leaves while the reader reads, comes back for a scroll up, a
    pointer or a Tab into it. */
@@ -435,14 +441,14 @@
 .notes .nf-bar-side { display: flex; align-items: center; min-width: 0; }
 .notes .nf-tools { justify-content: flex-end; gap: 2px; }
 .notes .nf-leave { display: inline-flex; align-items: center; gap: 8px; height: 36px; margin-left: -8px; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--muted); font-size: 13px; cursor: pointer; transition: color .15s, background .15s; }
-.notes .nf-leave:hover { color: var(--ink); background: var(--bg-tint); }
+:where(:root:not([data-input='touch'])) .notes .nf-leave:hover { color: var(--ink); background: var(--bg-tint); }
 .notes .nf-leave .kbd { margin-left: 2px; }
 .notes .nf-where { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; max-width: min(46vw, 520px); }
 .notes .nf-course { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .notes .nf-course .eyebrow { color: var(--ink-soft); }
 .notes .nf-section { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: italic 14px/1.4 var(--font-serif); color: var(--ink-soft); animation: nf-settle .34s cubic-bezier(.2, .7, .2, 1); }
 .notes .nf-tool { display: inline-grid; place-items: center; min-width: 36px; height: 36px; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--muted); cursor: pointer; transition: color .15s, background .15s; }
-.notes .nf-tool:hover:not(:disabled) { color: var(--ink); background: var(--bg-tint); }
+:where(:root:not([data-input='touch'])) .notes .nf-tool:hover:not(:disabled) { color: var(--ink); background: var(--bg-tint); }
 .notes .nf-tool:disabled { opacity: .35; cursor: default; }
 .notes .nf-tool[aria-pressed='true'] { color: var(--ink); }
 .notes .nf-tool[aria-pressed='true'] { background-image: linear-gradient(180deg, var(--highlight-yellow) 0 100%); background-repeat: no-repeat; background-size: 18px 5px; background-position: center calc(100% - 5px); }
@@ -472,10 +478,10 @@
 .notes .nf-mark-stroke { display: block; width: 14px; height: 2px; border-radius: 1px; background: var(--line-strong); transition: width .35s cubic-bezier(.2, .7, .2, 1), background .35s; }
 .notes .nf-mark[data-state='past'] .nf-mark-stroke { background: var(--muted); }
 .notes .nf-mark[data-state='on'] .nf-mark-stroke { width: 30px; background: var(--ink); }
-.notes .nf-mark:hover .nf-mark-stroke { width: 24px; background: var(--ink-soft); }
+:where(:root:not([data-input='touch'])) .notes .nf-mark:hover .nf-mark-stroke { width: 24px; background: var(--ink-soft); }
 .notes .nf-mark-label { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; border-radius: 4px; background: var(--bg); font: italic 13px/1.3 var(--font-serif); color: var(--muted); opacity: 0; transform: translateX(-4px); transition: opacity .2s, transform .2s, color .15s; pointer-events: none; }
-.notes .nf-margin:hover .nf-mark-label { opacity: .7; transform: none; }
-.notes .nf-mark:hover .nf-mark-label,
+:where(:root:not([data-input='touch'])) .notes .nf-margin:hover .nf-mark-label { opacity: .7; transform: none; }
+:where(:root:not([data-input='touch'])) .notes .nf-mark:hover .nf-mark-label,
 .notes .nf-mark:focus-visible .nf-mark-label { opacity: 1; transform: none; color: var(--ink); }
 .notes .nf-mark:focus-visible { outline: none; }
 .notes .nf-mark:focus-visible .nf-mark-stroke { width: 24px; background: var(--ink); }
@@ -510,7 +516,7 @@
 .notes .study-pop > .eyebrow { display: block; margin-bottom: 8px; }
 .notes .study-pop .choice-row { margin-bottom: 10px; }
 .notes .study-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: calc(100% + 16px); min-height: 38px; margin: 0 -8px; padding: 6px 8px; box-sizing: border-box; border: 0; border-radius: 8px; background: none; color: var(--ink); text-align: left; font: 14px/1.35 var(--font-serif); cursor: pointer; transition: background .15s; }
-.notes .study-row:hover:not(:disabled) { background: var(--bg-tint); }
+:where(:root:not([data-input='touch'])) .notes .study-row:hover:not(:disabled) { background: var(--bg-tint); }
 .notes .study-row:disabled { opacity: .5; cursor: default; }
 .notes .study-new { justify-content: flex-start; gap: 8px; font-family: var(--font-sans); font-size: 13px; color: var(--ink-soft); }
 .notes .study-new em { font: italic 14px var(--font-serif); color: var(--ink); }
@@ -572,7 +578,7 @@
 .notes .quiz-timer-face { font-family: var(--font-mono); font-size: 21px; font-weight: 500; letter-spacing: -0.01em; color: var(--ink); font-variant-numeric: tabular-nums; transition: color .3s; }
 .notes .quiz-timer[data-urgent] .quiz-timer-face { color: var(--peach); }
 .notes .quiz-timer-toggle { padding: 0; border: 0; background: none; font: italic 13px var(--font-serif); color: var(--muted-soft); cursor: pointer; transition: color .15s; }
-.notes .quiz-timer-toggle:hover { color: var(--ink-soft); }
+:where(:root:not([data-input='touch'])) .notes .quiz-timer-toggle:hover { color: var(--ink-soft); }
 .notes .quiz-timer-toggle[aria-checked='false'] { color: var(--ink-soft); text-decoration: underline wavy var(--line-strong); text-underline-offset: 4px; }
 .notes .quiz-mark { display: flex; align-items: center; gap: 28px; margin: -4px 0 28px; animation: notes-fade-up .35s cubic-bezier(.2, .7, .2, 1) both; }
 .notes .quiz-mark .strokes { margin-top: 0; }
@@ -593,7 +599,7 @@
 .notes .quiz-q[data-state='miss'] .quiz-n { color: var(--peach); }
 .notes .quiz-options { display: grid; gap: 2px; margin-left: 34px; }
 .notes .quiz-option { display: flex; align-items: baseline; gap: 12px; width: 100%; margin: 0 -10px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; text-align: left; font: 15.5px/1.5 var(--font-serif); color: var(--ink-soft); cursor: pointer; transition: background .15s, color .15s; }
-.notes .quiz-option:hover:not(:disabled) { background: var(--bg-tint); color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .quiz-option:hover:not(:disabled) { background: var(--bg-tint); color: var(--ink); }
 .notes .quiz-option:disabled { cursor: default; }
 .notes .quiz-letter { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--line-strong); border-radius: 50%; font-size: 11px; font-weight: 500; color: var(--muted); transition: background .15s, border-color .15s, color .15s; }
 .notes .quiz-option-text { background-image: linear-gradient(180deg, var(--highlight-yellow) 0 100%); background-repeat: no-repeat; background-size: 0% .5em; background-position: 0 88%; transition: background-size .35s cubic-bezier(.2, .7, .2, 1); }
@@ -609,7 +615,7 @@
 .notes .quiz-why { margin: 12px 0 0 34px; max-width: 58ch; font: italic 14px/1.55 var(--font-serif); color: var(--muted); animation: notes-fade-up .3s cubic-bezier(.2, .7, .2, 1) both; }
 .notes .quiz-why b { font-style: normal; font-weight: 500; color: var(--ink-soft); }
 .notes .quiz-flag { display: block; margin: 8px 0 0 34px; padding: 0; border: 0; background: none; font: italic 13px var(--font-serif); color: var(--muted-soft); cursor: pointer; transition: color .15s; }
-.notes .quiz-flag:hover { color: var(--ink-soft); }
+:where(:root:not([data-input='touch'])) .notes .quiz-flag:hover { color: var(--ink-soft); }
 .notes .quiz-flag[aria-pressed='true'] { color: var(--ink-soft); text-decoration: underline wavy var(--line-strong); text-underline-offset: 4px; }
 .notes .quiz-q[data-unclear] .quiz-prompt { color: var(--ink-soft); }
 .notes .quiz-q[data-state='unclear'] .quiz-n { color: var(--muted-soft); }
@@ -630,7 +636,7 @@
 .notes .shelf-row .mini span[data-r='part'] { background: linear-gradient(to top, var(--sage) 50%, var(--line) 50%); }
 .notes .quiz-mark-hand { display: grid; gap: 2px; justify-items: start; }
 .notes .quiz-past { display: flex; align-items: center; gap: 14px; margin: 0 -8px; padding: 4px 8px; border: 0; border-radius: 8px; background: none; cursor: pointer; }
-.notes .quiz-past:hover { background: var(--bg-tint); }
+:where(:root:not([data-input='touch'])) .notes .quiz-past:hover { background: var(--bg-tint); }
 .notes .quiz-marks { margin-left: 10px; font: italic 13px var(--font-serif); color: var(--muted); white-space: nowrap; }
 .notes .quiz-q[data-state='part'] .quiz-n { color: var(--sage); }
 .notes .quiz-q[data-state='wait'] .quiz-n { color: var(--muted); }
@@ -645,7 +651,7 @@
 .notes .quiz-feedback p { margin: 4px 0 0; font: 14.5px/1.6 var(--font-serif); color: var(--ink-soft); }
 .notes .quiz-feedback details { margin-top: 10px; }
 .notes .quiz-feedback summary { cursor: pointer; font: italic 13px var(--font-serif); color: var(--muted); }
-.notes .quiz-feedback summary:hover { color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .quiz-feedback summary:hover { color: var(--ink); }
 .notes .quiz-feedback details p { padding-left: 12px; border-left: 2px solid var(--sage-tint); white-space: pre-wrap; }
 @media (max-width: 640px) {
   .notes .quiz-answer, .notes .quiz-answer-read { width: 100%; margin-left: 0; }
@@ -659,10 +665,10 @@
 .notes .marks.kinds + .marks::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; border-left: 1px solid var(--line); }
 .notes .shelf-done { padding-top: 30px; }
 .notes .done-fold { display: inline-flex; align-items: center; gap: 8px; margin: 0 -8px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
-.notes .done-fold:hover { background: var(--bg-tint); color: var(--ink); }
+:where(:root:not([data-input='touch'])) .notes .done-fold:hover { background: var(--bg-tint); color: var(--ink); }
 .notes .done-fold .n { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
 .notes .shelf-done ~ li .shelf-row { opacity: .72; }
-.notes .shelf-done ~ li .shelf-row:hover { opacity: 1; }
+:where(:root:not([data-input='touch'])) .notes .shelf-done ~ li .shelf-row:hover { opacity: 1; }
 .notes .quiz-row { color: inherit; text-decoration: none; }
 .notes .quiz-row .mins em { font: italic 12.5px var(--font-serif); color: var(--muted); }
 .notes .quiz-hint { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 28px 0 0; }

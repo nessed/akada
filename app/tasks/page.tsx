@@ -1096,9 +1096,9 @@ function TasksPageContent() {
           {groups.map((group) => (
               <section
                 key={group.key}
-                className="group/band py-5 first:pt-1 md:grid md:grid-cols-[168px_minmax(0,1fr)] md:gap-x-8"
+                className="group/band py-5 first:pt-1 lg:grid lg:grid-cols-[168px_minmax(0,1fr)] lg:gap-x-8"
               >
-                <header className="mb-2 flex items-baseline gap-2.5 md:sticky md:top-6 md:mb-0 md:block md:self-start md:pt-2.5">
+                <header className="mb-2 flex items-baseline gap-2.5 lg:sticky lg:top-6 lg:mb-0 lg:block lg:self-start lg:pt-2.5">
                   <h2
                     className={`m-0 flex items-center gap-2 font-serif text-[20px] font-medium leading-tight tracking-[-0.01em] ${
                       group.tone === 'late' ? 'text-warn' : group.tone === 'done' ? 'text-muted' : 'text-ink'
@@ -1113,7 +1113,7 @@ function TasksPageContent() {
                     {group.sub}
                   </p>
                   {group.tone === 'late' && (
-                    <p className="m-0 ml-auto shrink-0 md:ml-0 md:mt-2">
+                    <p className="m-0 ml-auto shrink-0 lg:ml-0 lg:mt-2">
                       <HandNote color="var(--warnSoft)" size={16} rotate={-3}>
                         {group.tasks.length} to catch up
                       </HandNote>
@@ -1166,7 +1166,7 @@ function TasksPageContent() {
                             group.key,
                           )
                         }
-                        className="flex h-10 w-full items-center gap-3 bg-transparent pl-[11px] text-left font-serif text-[13.5px] italic text-muted-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover/band:opacity-100"
+                        className="flex h-10 w-full items-center gap-3 bg-transparent pl-[11px] text-left font-serif text-[13.5px] italic text-muted-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:mouse:opacity-0 md:group-hover/band:opacity-100"
                       >
                         <span
                           aria-hidden
@@ -1232,7 +1232,7 @@ function TasksPageContent() {
       <StartTimerPopover target={startTarget} onClose={() => setStartTarget(null)} />
 
       <Leaving value={editingTask}>{(editingTask, leaving) => (
-        <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+        <div className={`sheet-lift fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Cancel editing"
@@ -1458,7 +1458,7 @@ function TasksPageContent() {
         );
 
         return (
-          <div className={`fixed inset-0 z-[75] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+          <div className={`sheet-lift fixed inset-0 z-[75] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
             <button
               type="button"
               aria-label="Close task details"
@@ -1760,7 +1760,7 @@ function TasksPageContent() {
       {/* Group and sort, in plain names, and on a phone the two filters the
           hidden chips carried. */}
       <Leaving value={sortOpen}>{(_open, leaving) => (
-        <div className={`fixed inset-0 z-[85] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+        <div className={`sheet-lift fixed inset-0 z-[85] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Close"
@@ -1813,7 +1813,7 @@ function TasksPageContent() {
       {/* The keyboard, asked for rather than announced. Same chrome as every
           other sheet in the app, and the keys are postmarks. */}
       <Leaving value={shortcutHelpOpen}>{(_open, leaving) => (
-        <div className={`fixed inset-0 z-[85] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+        <div className={`sheet-lift fixed inset-0 z-[85] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Close shortcuts"

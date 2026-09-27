@@ -783,7 +783,7 @@ function DashboardPageContent() {
 
       {/* Quick task modal */}
       <Leaving value={addingTaskFor}>{(addingTaskFor, leaving) => (
-        <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+        <div className={`sheet-lift fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Cancel"
@@ -913,7 +913,7 @@ function DashboardPageContent() {
 
       {/* Add course sheet */}
       <Leaving value={addingCourse}>{(_open, leaving) => (
-        <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+        <div className={`sheet-lift fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"
             aria-label="Cancel"
@@ -975,7 +975,7 @@ function DashboardPageContent() {
                       type="button"
                       aria-label={p.name}
                       onClick={() => { setNewCourseColor(p.value); setNewCourseTint(p.tint); }}
-                      className="w-8 h-8 rounded-full border-0 transition-transform"
+                      className="w-8 h-8 touch:h-10 touch:w-10 rounded-full border-0 transition-transform"
                       style={{
                         background: p.value,
                         boxShadow: newCourseColor === p.value

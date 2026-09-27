@@ -230,8 +230,8 @@ Things a phone reader meets that a desktop one does not:
   `min(their width, 100vw - 24px)`.
 - **No keyboard lines on touch.** A line naming shortcuts ("Space pause · Esc
   back", "Enter starts…") carries `.key-hint`, which hides under
-  `(hover: none) and (pointer: coarse)`. Study does the same with its own
-  `.keys` rules.
+  `(hover: none) and (pointer: coarse)` and under `data-input="touch"` (see
+  the tablet section below). Study does the same with its own `.keys` rules.
 - **Fields are 16px on touch.** iOS zooms into any field under 16px on focus
   and stays zoomed. Pinch-zoom is allowed, so the viewport is not the fix:
   `globals.css` lifts inputs and textareas set at `text-xs`, `text-sm` or
@@ -250,6 +250,53 @@ Things a phone reader meets that a desktop one does not:
   chosen by hand always wins. Without it a new reader never learns the app
   knows what a reading is, which is what turns pages into hours, brings a
   reading back in recall, and lets a weight count toward the grade.
+
+
+### On a tablet, or a laptop folded into one
+An iPad, an Android tablet and a 2-in-1 flipped over all get the desktop
+layout by width, so what they need is not a different page but a page that
+knows a finger is on it.
+- **The page tracks the hand, not the device.** A folded 2-in-1 keeps its
+  touchpad, so Windows goes on reporting `pointer: fine` and `hover: hover`
+  while the reader taps the glass, and media queries cannot tell. The
+  bootstrap script (`lib/input.ts`) writes `data-input="touch"` on `<html>`
+  the moment a finger or a pen goes down, and `mouse` once a mouse has moved
+  a few pixels; the first guess comes from the primary pointer, then from
+  what was last used on this device. Style for it with `touch:` and `mouse:`
+  in Tailwind, or `:root[data-input='touch']` in CSS.
+- **Nothing waits for a hover a finger cannot give.** A control drawn only
+  under the pointer (a row's timer and `···`, "add a course" on the rail, a
+  band's "add for Friday", a card's action) hides with `md:mouse:opacity-0`,
+  never a bare `md:opacity-0`, so under a finger it is simply there. The
+  notes shelf's row tools do the same.
+- **Hover stands down under a finger.** `hover:` in Tailwind, and every
+  `:hover` rule in `globals.css` and `notes.css`, is scoped to
+  `:where(:root:not([data-input='touch']))`, so a tapped quiz option or row
+  does not keep a hover tint that reads as picked. A new `:hover` rule in
+  plain CSS takes the same prefix. Hover done in script checks
+  `pointerType === 'mouse'`; the rail's name tips do too.
+- **Targets grow to a finger.** Under touch, rail rows go from 40px to 44px,
+  and the handful of 28 to 36px buttons (date picker arrows, a session's
+  delete, the grade dash, Undo, recall and weak-point actions, the notes row
+  tools) come up to 40px with `touch:h-10` and its kin.
+- **The strip swipes.** From 768 to 1024 a swipe right across the rail lays
+  the full rail over the page, a swipe left puts it away; the rail and its
+  course list are `touch-pan-y` so the browser leaves a sideways swipe to
+  them. A plainly sideways swipe only, so scrolling the list and carrying a
+  course still work.
+- **Sheets stand on the keyboard.** An on-screen keyboard on a tablet is
+  half the screen and slides over the page. `lib/input.ts` reads the gap
+  from the visual viewport into `--keyboard`, and every bottom sheet carries
+  `.sheet-lift`, which takes that as padding and holds the panel to what is
+  still visible, so the field and the button under it stay on screen.
+- **Focus mode comes back on a tap.** A cursor brings the bar back by
+  moving; a finger does it with a tap on the page that lands on nothing
+  else.
+- **Upright gets the phone's bands.** Tasks keeps each band's name in its
+  168px margin only from 1024px; below that it sits over the rows, since the
+  margin beside a row's fixed columns left a title about 86px wide.
+- **Either way up.** The manifest's orientation is `any`, and the rail, the
+  dock, Undo and the page's foot all keep clear of the safe-area insets.
 
 ### Rules, not panels
 Today and a course page draw no boxes. Every section used to be its own
@@ -979,8 +1026,11 @@ the one screen that looked like a spreadsheet. It is now a planner spread.
   seven days by name (Tomorrow, then Friday, Saturday...), then Later and
   Open ended. By course, one band per course. Each band holds its name in a
   168px left margin, serif 20px with the date or course name under it in
-  italic, and on desktop that margin is **sticky** while the band's rows go
-  past, the way a diary keeps the date at the head of the page. Bands are
+  italic, and from 1024px that margin is **sticky** while the band's rows go
+  past, the way a diary keeps the date at the head of the page. Below 1024,
+  a tablet upright included, the name sits over its rows as on a phone: the
+  margin and the row's fixed columns together left a title about 86px wide
+  on an iPad held upright. Bands are
   ended by the page's `line` cutoff; nothing is boxed. Overdue sets its name
   in `warn` and carries "n to catch up" in Caveat. Today stays on the page
   when nothing is due, reading "Nothing due. A clear day.", but only when the

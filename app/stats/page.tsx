@@ -823,7 +823,7 @@ function SessionEntry({
             type="button"
             onClick={() => onDelete(session.id)}
             aria-label="Delete session"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-priority"
+            className="flex h-7 w-7 touch:h-10 touch:w-10 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-priority"
           >
             <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none">
               <path

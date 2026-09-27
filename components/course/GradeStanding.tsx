@@ -200,7 +200,7 @@ export default function GradeStanding({
         type="button"
         onClick={() => setRows((current) => current.filter((r) => r.id !== row.id))}
         aria-label={`Remove ${row.label || 'this piece'}`}
-        className="ml-0.5 grid h-7 w-6 shrink-0 place-items-center bg-transparent font-mono text-[14px] text-muted-soft transition-colors hover:text-warn"
+        className="ml-0.5 grid h-7 w-6 touch:h-10 touch:w-9 shrink-0 place-items-center bg-transparent font-mono text-[14px] text-muted-soft transition-colors hover:text-warn"
       >
         ×
       </button>

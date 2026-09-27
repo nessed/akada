@@ -381,7 +381,7 @@ export default function TaskRow({
               type="button"
               onClick={() => playRef.current && onStartTimer(task, playRef.current)}
               aria-label={`Start timer on ${task.title}`}
-              className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-ink-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+              className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-ink-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:mouse:opacity-0 md:group-hover:opacity-100"
             >
               <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 5l12 7-12 7V5z" />
@@ -395,7 +395,7 @@ export default function TaskRow({
             onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
             aria-label="More actions"
             aria-expanded={menuOpen}
-            className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-muted transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+            className="grid h-10 w-10 place-items-center rounded-[10px] bg-transparent text-muted transition-opacity hover:text-ink focus-visible:opacity-100 md:mouse:opacity-0 md:group-hover:opacity-100"
           >
             <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="5" cy="12" r="1.6" />

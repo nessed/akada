@@ -11,7 +11,10 @@ export default function manifest(): MetadataRoute.Manifest {
     // The night paper's ground, since that is the tone the app opens on.
     background_color: '#1A1815',
     theme_color: '#1A1815',
-    orientation: 'portrait',
+    // Not locked. A phone reads it upright anyway, but a tablet or a laptop
+    // folded back lies on its side as often as not, and the rail and the
+    // two-column pages are laid out for exactly that.
+    orientation: 'any',
     // The PNGs are generated from icon.svg by scripts/build-icons.mjs. The
     // SVG stays first for anything that prefers it; the raster sizes are what
     // Android checks before offering to install.

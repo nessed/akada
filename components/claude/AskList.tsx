@@ -35,7 +35,7 @@ export default function AskList({ asks }: { asks: { say: string; note?: string }
           <button
             type="button"
             onClick={() => copy(i, ask.say)}
-            className="eyebrow mt-0.5 h-9 font-sans min-w-[64px] shrink-0 rounded-[9px] border border-line-strong px-3 transition-colors hover:bg-bg-tint hover:text-ink"
+            className="eyebrow mt-0.5 h-9 touch:h-10 font-sans min-w-[64px] shrink-0 rounded-[9px] border border-line-strong px-3 transition-colors hover:bg-bg-tint hover:text-ink"
           >
             {copied === i ? 'copied' : 'copy'}
           </button>
