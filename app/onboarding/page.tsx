@@ -33,7 +33,8 @@ import {
   weeklyGoalForCredits,
   type CatalogCourse,
 } from '@/lib/catalog';
-import { CLAUDE_PAGE } from '@/lib/claude-page';
+import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
+import { outlinePrompt } from '@/lib/claude-asks';
 import { isoDate, PASTEL_PALETTE, resolveTint, seasonLabel } from '@/lib/utils';
 
 type Step = 'welcome' | 'courses' | 'term' | 'deadlines';
@@ -75,6 +76,7 @@ export default function OnboardingPage() {
 
 function OnboardingContent() {
   const router = useRouter();
+  const claude = useClaudeSheet();
   const { notify } = useNotice();
   const searchParams = useSearchParams();
   const newSemesterMode = searchParams.get('newSemester') === '1';
@@ -262,7 +264,15 @@ function OnboardingContent() {
         )}
         {step === 'deadlines' && (
           <DeadlinesStep
-            onClaude={() => router.replace(CLAUDE_PAGE)}
+            onClaude={() => {
+              // The same sheet every Claude button opens, carried over to
+              // Today: what Claude will do, the exact words, how to connect.
+              claude.ask({
+                does: 'Claude reads your course outlines and puts every deadline into Akada, with its date and weight.',
+                prompt: outlinePrompt(courses.map((c) => c.code)),
+              });
+              router.replace('/dashboard');
+            }}
             onManual={() => router.replace('/tasks?newTask=1')}
             onLater={() => router.replace('/dashboard')}
           />

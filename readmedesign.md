@@ -764,8 +764,8 @@ on, see "Hours, not percentages".
 
 **Ask Claude.** A card can only ask; it cannot check, and for a concept
 "could you do one fresh?" is best answered by doing one. "ask Claude", on
-every card and in a course's Recall header, copies a prompt for a chat that
-has the connector on. The prompt is built on three rules: nothing is shown
+every card and in a course's Recall header, opens the Claude sheet (see
+The guide) with a prompt for a chat that has the connector on. The prompt is built on three rules: nothing is shown
 before the attempt (no answer, no worked example, a hint only when asked for,
 and the smallest one); everything is shown after it, so the reader grades
 against the right answer rather than against their own sense of it; and the
@@ -1539,10 +1539,25 @@ backs. It never says "MCP", says "connector" only where Claude's own screens
 do, and names no Claude plan. `/docs` stays the reference for every tool, and
 `/privacy#assistants` the policy; both belong to the connector's own work and
 are linked, never restated. Everything in the app that hands work to Claude
-(Say how it is marked, ask Claude, the Study prompt and the quiz shelf) says
-"a Claude chat with Akada switched on" in the same words and leads to
-`/claude` for anyone not connected yet, through `CLAUDE_PAGE` in
-`lib/claude-page.ts`. Settings has a Claude section for the same three links.
+goes through **one sheet** (`components/claude/ClaudeSheet.tsx`, opened with
+`useClaudeSheet().ask`, mounted once in the root layout): "Get them in with
+Claude" on Today and in setup, "Ask Claude to read the outline" on a course,
+"ask Claude" on a recall card and a course's Recall, "Questions before you
+read" on a task, and "have Claude write one" and "ask Claude for one" on the
+Study shelf. It used to be six behaviours: links to this page, toasts saying
+something was copied, a button that copied without a word. The sheet says
+what this one will do in one serif line ("Claude reads the ECON 100 outline
+and proposes how it is marked. Nothing counts until you accept it here."),
+shows the exact prompt it is about to copy in a scrollable serif block, has
+Copy beside Close, and carries the same footer under every prompt: "Akada is
+a connector in Claude. Connect it once (Claude › Customize › Connectors ›
+Akada), then paste this into a chat with Akada switched on. **How to
+connect**", which leads here through `CLAUDE_PAGE`. The app cannot see
+whether an account is connected, so the footer is always there. After the
+first one a reader knows what every Claude button does. The prompts live
+beside what they are for (`lib/grading-prompt.ts`, `lib/recall/prompt.ts`,
+`lib/notes/prompt.ts`, and `lib/claude-asks.ts` for the outline, note and
+quiz asks). Settings has a Claude section for the same links.
 
 **The landing page** is written for a LUMS student arriving from a group
 chat link on a phone. The hero says the outcome (every deadline this term on

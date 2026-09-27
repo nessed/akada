@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
+import { quizPrompt } from '@/lib/claude-asks';
 import { useMemo } from 'react';
 import Icon from './Icon';
 import { noteColor, relativeLabel } from '@/lib/notes/store';
@@ -89,8 +91,23 @@ export function QuizRow({ quiz, course, task, index, cursor, onDelete }: {
 
 /** Before any quiz has arrived, how one does. There is nothing in the app to make one with. */
 export function NoQuizzesYet() {
+  const claude = useClaudeSheet();
   return (
-    <span className="standfirst">none yet · tell Claude “quiz me on this in Akada” and it lands here · <a className="link" href="/claude">connect Claude</a></span>
+    <span className="standfirst">
+      none yet · Claude makes them and they land here ·{' '}
+      <button
+        type="button"
+        className="link"
+        onClick={() =>
+          claude.ask({
+            does: 'Claude makes a quiz on what you choose and sends it here, to take on this shelf.',
+            prompt: quizPrompt(null),
+          })
+        }
+      >
+        ask Claude for one
+      </button>
+    </span>
   );
 }
 

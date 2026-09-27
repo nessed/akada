@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { Assessment, Course, DropRule, Task } from '@/lib/data';
 import { gradeStanding } from '@/lib/derive';
 import { updateCourseOptimistic } from '@/lib/data-hooks';
+import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
 import { gradingPrompt } from '@/lib/grading-prompt';
 import { useNotice } from '@/components/Notice';
 import { ButtonSpinner } from '@/components/LoadingIndicator';
@@ -40,6 +41,7 @@ export default function GradeStanding({
   today: string;
 }) {
   const { notify } = useNotice();
+  const claude = useClaudeSheet();
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<Assessment[]>(course.assessments ?? []);
   const [saving, setSaving] = useState(false);
@@ -100,21 +102,12 @@ export default function GradeStanding({
     }
   }
 
-  /**
-   * Copy the prompt that fills this in from an outline.
-   *
-   * The clipboard write has to happen in the click's own task or Safari
-   * treats it as untrusted, so this does not await anything before it.
-   */
-  async function askClaude() {
-    const prompt = gradingPrompt({ courseId: course.id, courseCode: course.code });
-    try {
-      await navigator.clipboard.writeText(prompt);
-      notify(`Prompt copied. Paste it into a Claude chat with Akada switched on, and attach the ${course.code} outline.`);
-    } catch (error) {
-      console.error('Failed to copy the grading prompt:', error);
-      notify('Akada could not reach the clipboard. Type it in instead.');
-    }
+  /** Hand the outline to Claude, through the one sheet every Claude button uses. */
+  function askClaude() {
+    claude.ask({
+      does: `Claude reads the ${course.code} outline and proposes how it is marked. Nothing counts until you accept it here.`,
+      prompt: gradingPrompt({ courseId: course.id, courseCode: course.code }),
+    });
   }
 
   /** Take the proposal as the real scheme, and clear it. */

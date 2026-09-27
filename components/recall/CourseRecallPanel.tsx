@@ -7,6 +7,7 @@ import type { RecallReading, RecallState } from '@/lib/recall';
 import { keepTask, letGoRecall, undoRecall, type RecallChange } from '@/lib/recall/actions';
 import { readingPrompt } from '@/lib/recall';
 import { coursePrompt } from '@/lib/recall/prompt';
+import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
 import { whenWords } from '@/lib/recall/words';
 import KeepLine from './KeepLine';
 import RecallDeck from './RecallDeck';
@@ -42,6 +43,7 @@ export default function CourseRecallPanel({
   className?: string;
 }) {
   const { notify } = useNotice();
+  const claude = useClaudeSheet();
   const [walking, setWalking] = useState(false);
   const [unfolded, setUnfolded] = useState(false);
   // The last thing let go from the list, with the way to take it back. A line
@@ -57,20 +59,11 @@ export default function CourseRecallPanel({
   const shown = unfolded ? states : states.slice(0, FOLDED);
   const today = reading?.today ?? '';
 
-  /* The clipboard write has to happen in the click's own task or Safari
-     treats it as untrusted, so nothing is awaited before it. */
-  async function askClaude() {
-    try {
-      await navigator.clipboard.writeText(
-        coursePrompt({ courseId: course.id, courseCode: course.code, courseName: course.name }),
-      );
-      notify(
-        `Copied. Paste it into a Claude chat with Akada switched on, and it will quiz you on what is due for ${course.code}, mixed.`,
-      );
-    } catch (error) {
-      console.error('Failed to copy the recall prompt:', error);
-      notify('Akada could not reach the clipboard.');
-    }
+  function askClaude() {
+    claude.ask({
+      does: `Claude asks you what is due for ${course.code}, mixed rather than in order, and records how each went here.`,
+      prompt: coursePrompt({ courseId: course.id, courseCode: course.code, courseName: course.name }),
+    });
   }
 
   async function letGo(state: RecallState) {
