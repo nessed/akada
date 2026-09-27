@@ -471,6 +471,35 @@ so it extends and branches the longer the reader sits. A ring says what
 fraction is gone, which is the one thing a reader in the middle of a chapter
 has no use for; the fan only ever grows.
 
+It is drawn, not ruled. Every branch is a shallow curve, bowed to one side by
+its own seed (`bow`, from a second generator so adding it moved no branch and
+old sessions still grow the shape they always grew), and the thick ones taper
+from the width they leave their parent at to the width their own branches
+leave them at, so the joins are seamless. The colour runs smoothly from the
+dark stem to the pale tips rather than in three bands.
+
+- **Leaves** sit on the growing edge, one per tip, turned off the branch to
+  alternate sides, coming in small and opening as the branch lengthens. They
+  are the course colour mixed toward the paper, edged in a darker shade.
+- **Flowers.** When a block is done, one in three of the outermost tips
+  flowers instead. That is the moment the fan touches the top, and it is the
+  only thing on the screen that says so.
+- **The pencil sketch.** In the block frame the part of the shape still to
+  come is dotted in `line-strong` pencil, and the ink fills it as the reader
+  sits. It is an underdrawing, not a gauge: faint, no number, and it shows
+  the shape rather than a fraction. Open mode has no top, so nothing to
+  sketch; it is off there.
+- **The ground.** The block frame's stem stands on a drawn pencil line with a
+  few strokes of grass, and the stem's foot is flat on it.
+
+All four are options on `StudyFan` (`leaves`, on by default; `sketch` and
+`ground`, off), drawn by `drawFan` in `lib/fan.ts`.
+
+The block frame is a page from the notebook: `line-soft` rules every 32px, a
+`line` margin 64px in, a folded corner, and one warm shadow under the sheet.
+The course code at its head is a short course-colour rule with the code in
+`ink-soft` beside it; a pastel is never the text itself.
+
 The geometry is in `lib/fan.ts` and is deterministic per seed, so a session
 that is paused, reloaded or restored comes back as the same shape.
 `StudyFan` eases toward its target rather than snapping, and parks the
