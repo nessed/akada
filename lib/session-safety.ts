@@ -1,4 +1,4 @@
-import type { Session, SessionSegment } from './data';
+import type { Session, SessionRecovery, SessionSegment } from './data';
 
 export const MAX_SESSION_SECONDS = 18 * 60 * 60;
 
@@ -9,10 +9,19 @@ export function clampSessionSeconds(value: unknown): number {
 }
 
 export function sanitizeSession<T extends Pick<Session, 'durationSeconds'>>(session: T): T {
+  const recovery = cleanRecovery((session as Partial<Session>).recovery);
+  const { recovery: _drop, ...rest } = session as T & { recovery?: unknown };
+  void _drop;
   return {
-    ...session,
+    ...(rest as T),
     durationSeconds: clampSessionSeconds(session.durationSeconds),
+    ...(recovery ? { recovery } : {}),
   };
+}
+
+/** A session's recovery reason, or null. Matches the check on `sessions.recovery`. */
+export function cleanRecovery(value: unknown): SessionRecovery | null {
+  return value === 'idle' || value === 'away' || value === 'break' || value === 'max' ? value : null;
 }
 
 export function isLoggableDuration(value: unknown): boolean {

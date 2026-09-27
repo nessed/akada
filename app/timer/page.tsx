@@ -45,8 +45,6 @@ import { useCourses, useTasks } from '@/lib/data-hooks';
  * is growing, and nothing has been lost either.
  */
 
-const BLOCK_LENGTHS = [25, 45, 60] as const;
-
 /* The hand-drawn rule, in the open screen's ink. That screen inverts with
    literal values rather than the paper tokens, and `--underline-svg` carries
    its colour inside a data URI where a token cannot reach it, so the whole
@@ -360,18 +358,6 @@ export default function TimerPage() {
     </span>
   ) : null;
 
-  function setMode(next: 'block' | 'open') {
-    if (!liveActive || !active) return;
-    if (next === 'open') {
-      start(active.courseId, active.taskId, null);
-      return;
-    }
-    // Coming back to a block picks the shortest length that is still ahead of
-    // where the clock already is, so switching never lands already expired.
-    const mins = BLOCK_LENGTHS.find((n) => n * 60 > elapsed) ?? 60;
-    start(active.courseId, active.taskId, Math.max(mins * 60, Math.ceil(elapsed / 60) * 60 + 300));
-  }
-
   /* Open mode is the one screen in the app that inverts, so the chrome takes
      its ink as a value rather than a token: on the night paper `text-ink` is
      still the daylight ink and the switch read as dark on dark. */
@@ -409,13 +395,6 @@ export default function TimerPage() {
     </button>
   );
 
-  const modeSwitch = (
-    <div className="flex gap-1">
-      {modeButton('Block', isBlock, () => setMode('block'))}
-      {modeButton('Open', !isBlock, () => setMode('open'))}
-    </div>
-  );
-
   /* The same slot, while resting. Switching the shape of the sitting in the
      middle of a break is meaningless; the length of the break is the one
      thing worth reaching for, so it takes the place rather than joining it. */
@@ -441,7 +420,7 @@ export default function TimerPage() {
     </button>
   );
 
-  const finishButton = secondary('Finish and log', handleStop);
+  const finishButton = secondary('Finish', handleStop);
 
   const discardButton = (
     <button
@@ -590,10 +569,15 @@ export default function TimerPage() {
         Today
       </button>
 
-      {active && (
-        <div key={resting ? 'switch-rest' : 'switch-focus'} className={`animate-settle ${live ? '' : 'pointer-events-none'}`}>
-          {resting ? breakSwitch : modeSwitch}
+      {/* A block or an open session is chosen once, in the start popover
+          (25 / 45 / 60 / Untimed), so the header no longer offers to switch
+          it mid-sitting. It carries the break's lengths while one runs. */}
+      {active && resting ? (
+        <div key="switch-rest" className={`animate-settle ${live ? '' : 'pointer-events-none'}`}>
+          {breakSwitch}
         </div>
+      ) : (
+        <span aria-hidden />
       )}
 
       <div className="flex items-center gap-1">

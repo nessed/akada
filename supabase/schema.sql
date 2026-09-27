@@ -182,6 +182,23 @@ alter table sessions add column if not exists break_seconds integer not null def
 alter table sessions add column if not exists score numeric;
 alter table sessions add column if not exists score_out_of numeric;
 
+-- Why a sitting was closed for the student rather than by them, when it was
+-- and they kept it anyway (supabase/migrations/…_add_session_recovery):
+-- `idle` held after no input, `away` recovered after the page went unseen,
+-- `break` a break past its ceiling, `max` the 18h limit. The hours still
+-- count; records and habit medians leave these out. Null for every sitting
+-- ended by hand, and for every row written before this.
+alter table sessions add column if not exists recovery text;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'sessions_recovery_check'
+  ) then
+    alter table sessions add constraint sessions_recovery_check
+      check (recovery is null or recovery in ('idle', 'away', 'break', 'max'));
+  end if;
+end $$;
+
 -- ============================================================
 -- 3a. SESSION SEGMENTS  (FK -> sessions)
 --

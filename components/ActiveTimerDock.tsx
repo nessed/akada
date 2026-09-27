@@ -147,7 +147,7 @@ export default function ActiveTimerDock() {
               type="button"
               onClick={stopAndLog}
               aria-label="Stop the timer and log the session"
-              title="Finish and log (K)"
+              title="Finish (K)"
               className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-transparent"
               style={{ color }}
             >

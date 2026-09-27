@@ -73,7 +73,9 @@ export function readLadders(
   // True hours, not credited ones. An impression is part of the record, and
   // the record always reports what actually happened.
   const termHours = ledger.reduce((acc, d) => acc + d.rawTotal, 0) / 3600;
-  const longestHours = logged.reduce((acc, s) => Math.max(acc, s.durationSeconds), 0) / 3600;
+  // A sitting closed for the reader is not one they sat through by choice.
+  const longestHours =
+    logged.filter((s) => !s.recovery).reduce((acc, s) => Math.max(acc, s.durationSeconds), 0) / 3600;
   const bound = [...pages.values()].reduce((acc, p) => acc + p.bound, 0);
   const activeDays = runs.weeks.reduce(
     (acc, w) => acc + w.days.filter((d) => d.state === 'qualified').length,

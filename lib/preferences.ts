@@ -64,6 +64,12 @@ export interface Preferences {
   darkMode: boolean;
   /** Hour (0-6) at which "today" rolls over into tomorrow. */
   dayEndingHour: number;
+  /**
+   * Whether the log sheet opens with "Add a note" folded open. A layout
+   * choice, remembered from the last time the reader opened or closed it;
+   * not an explanation, so not a dismissed flag.
+   */
+  logNotesOpen: boolean;
 }
 
 const DEFAULTS: Preferences = {
@@ -81,6 +87,7 @@ const DEFAULTS: Preferences = {
   hideWeekends: false,
   darkMode: true,
   dayEndingHour: 0,
+  logNotesOpen: false,
 };
 
 const STORAGE_KEY = 'akada.preferences.v1';
@@ -124,6 +131,8 @@ function sanitizePreferences(value: unknown): Preferences {
       typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 8
         ? Math.round(parsed.dayEndingHour)
         : DEFAULTS.dayEndingHour,
+    logNotesOpen:
+      typeof parsed.logNotesOpen === 'boolean' ? parsed.logNotesOpen : DEFAULTS.logNotesOpen,
   };
 }
 

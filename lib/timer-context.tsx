@@ -21,6 +21,7 @@ import type { SessionSegment } from './data';
 import { plannerDate, readPreferences } from './preferences';
 import { cancelChime, flushChime, primeChime, ringChime, scheduleChime } from './chime';
 import { logSessionFollowed } from './progression/log';
+import { idleTripped, quietPoint } from './timer-idle';
 
 interface TimerState {
   courseId: string;
@@ -29,7 +30,14 @@ interface TimerState {
   startedDate: string;
   accumulatedMs: number; // ms accumulated across previous paused segments
   isPaused: boolean;
+  /** The heartbeat: the page was open. Says nothing about anybody being at it. */
   lastSeenAt: number;
+  /**
+   * The last sign of a person: a pointer, a key, a scroll, a touch, the page
+   * coming back into view, or any timer action. What the idle rule reads (see
+   * lib/timer-idle.ts), kept apart from the heartbeat for exactly that reason.
+   */
+  lastInputAt: number;
   /**
    * Block mode's target, in seconds, or null for an untimed session. The
    * timer counts the same either way; the target is what the screen counts
@@ -75,7 +83,23 @@ interface PendingTimerLog {
   durationSeconds: number;
   breakSeconds: number;
   segments: SessionSegment[];
-  recoveryReason?: 'away' | 'max' | 'break';
+  /**
+   * Why the sitting was closed for the reader rather than by them: `idle`
+   * held after no input (see lib/timer-idle.ts), `away` recovered after the
+   * page went unseen, `break` a break past its ceiling, `max` the 18h limit.
+   */
+  recoveryReason?: 'idle' | 'away' | 'max' | 'break';
+  /**
+   * The same sitting cut at the moment it went quiet, when that was a while
+   * before it stopped: offered on the log sheet as the length to log, and
+   * the default when the idle rule is what closed it.
+   */
+  quiet?: {
+    at: number;
+    durationSeconds: number;
+    breakSeconds: number;
+    segments: SessionSegment[];
+  };
 }
 
 interface TimerContextValue {
@@ -327,6 +351,13 @@ function sanitizeActive(value: unknown): TimerState | null {
     accumulatedMs: Math.min(MAX_TIMER_MS, Math.max(0, accumulatedMs)),
     isPaused: Boolean(state.isPaused),
     lastSeenAt: Number.isFinite(lastSeenAt) ? lastSeenAt : startedAt,
+    // A state written before input was tracked reads its heartbeat as the
+    // last input, which is what the rule used to assume anyway.
+    lastInputAt: Number.isFinite(Number(state.lastInputAt))
+      ? Number(state.lastInputAt)
+      : Number.isFinite(lastSeenAt)
+        ? lastSeenAt
+        : startedAt,
     targetSeconds: sanitizeTarget(state.targetSeconds),
     // A state written before blocks existed has no id. Deriving one from the
     // start time keeps it stable across reloads, which is all the fan needs.
@@ -406,9 +437,28 @@ function sanitizePendingLog(value: unknown): PendingTimerLog | null {
       : clampSessionSeconds(log.breakSeconds),
     segments,
     recoveryReason:
-      log.recoveryReason === 'away' || log.recoveryReason === 'max' || log.recoveryReason === 'break'
+      log.recoveryReason === 'idle' ||
+      log.recoveryReason === 'away' ||
+      log.recoveryReason === 'max' ||
+      log.recoveryReason === 'break'
         ? log.recoveryReason
         : undefined,
+    quiet: sanitizeQuiet(log.quiet, durationSeconds),
+  };
+}
+
+function sanitizeQuiet(value: unknown, fullSeconds: number): PendingTimerLog['quiet'] {
+  if (!value || typeof value !== 'object') return undefined;
+  const quiet = value as NonNullable<PendingTimerLog['quiet']>;
+  const at = Number(quiet.at);
+  const durationSeconds = clampSessionSeconds(quiet.durationSeconds);
+  if (!Number.isFinite(at) || durationSeconds <= 0 || durationSeconds >= fullSeconds) return undefined;
+  const segments = sanitizeSegments(quiet.segments);
+  return {
+    at,
+    durationSeconds,
+    breakSeconds: segments.length ? totalBreakSeconds(segments) : clampSessionSeconds(quiet.breakSeconds),
+    segments,
   };
 }
 
@@ -555,6 +605,7 @@ function toBreakState(state: TimerState, atMs: number, breakSeconds: number): Ti
     // not one frozen behind a pause the reader has forgotten about.
     isPaused: false,
     lastSeenAt: atMs,
+    lastInputAt: atMs,
   };
 }
 
@@ -569,6 +620,7 @@ function toFocusState(state: TimerState, atMs: number): TimerState {
     accumulatedMs: 0,
     isPaused: false,
     lastSeenAt: atMs,
+    lastInputAt: atMs,
   };
 }
 
@@ -599,6 +651,18 @@ function buildPendingLog(
   // A sitting that was nothing but a break has no hours to log and nothing
   // worth keeping the shape of.
   if (durationSeconds <= 0) return null;
+  // The same sitting cut where it went quiet, when that was a while ago.
+  const at = quietPoint(safeState, stoppedAt);
+  let quiet: PendingTimerLog['quiet'];
+  if (at != null) {
+    const cut = sanitizeSegments(closeStretch(safeState, at));
+    const cutFocus = clampSessionSeconds(
+      cut.reduce((sum, segment) => (segment.kind === 'focus' ? sum + segment.seconds : sum), 0),
+    );
+    if (cutFocus > 0 && cutFocus < durationSeconds) {
+      quiet = { at, durationSeconds: cutFocus, breakSeconds: totalBreakSeconds(cut), segments: cut };
+    }
+  }
   return {
     courseId: safeState.courseId,
     taskId: safeState.taskId,
@@ -607,6 +671,7 @@ function buildPendingLog(
     breakSeconds: totalBreakSeconds(segments),
     segments,
     recoveryReason,
+    ...(quiet ? { quiet } : {}),
   };
 }
 
@@ -635,6 +700,14 @@ function loadActiveSnapshot(): { active: TimerState | null; pendingLog: PendingT
     const breakOverrun =
       parsed.phase === 'break' && stretchSecondsAt(parsed, now) >= MAX_BREAK_SECONDS;
     const maxReached = focusSecondsAt(parsed, now) >= MAX_SESSION_SECONDS;
+    // Gone quiet while this page was closed or asleep: held, not stopped.
+    const idle = !staleRunning && !breakOverrun && !maxReached && idleTripped(parsed, now);
+    if (idle) {
+      const pendingLog = buildPendingLog(parsed, now, 'idle');
+      saveActive(null);
+      savePendingLog(pendingLog);
+      return { active: null, pendingLog };
+    }
     if (staleRunning || breakOverrun || maxReached) {
       const stoppedAt = staleRunning
         ? parsed.lastSeenAt
@@ -756,7 +829,30 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       // will. Ringing it a minute late still tells the reader what happened.
       flushChime();
       syncFromStorage();
+      // Coming back to the page is a person at it.
+      markInput();
     };
+
+    // The last sign of a person, for the idle rule. Written to the state on
+    // every event, but to storage at most every fifteen seconds, since a
+    // scroll fires sixty times a second.
+    let lastWrite = 0;
+    const markInput = () => {
+      const current = activeRef.current;
+      if (!current) return;
+      const now = Date.now();
+      if (now - current.lastInputAt < 2000) return;
+      const next = { ...current, lastInputAt: now };
+      activeRef.current = next;
+      if (now - lastWrite >= 15000) {
+        lastWrite = now;
+        saveActiveIfCurrent(next);
+      }
+    };
+    const inputEvents = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'] as const;
+    for (const name of inputEvents) {
+      window.addEventListener(name, markInput, { capture: true, passive: true });
+    }
 
     window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('pageshow', handlePageShow);
@@ -767,6 +863,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('storage', handleStorage);
       document.removeEventListener('visibilitychange', handleVisibility);
+      for (const name of inputEvents) {
+        window.removeEventListener(name, markInput, { capture: true });
+      }
     };
   }, []);
 
@@ -811,6 +910,12 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       const current = activeRef.current ?? active;
       if (!current.isPaused && now - current.lastSeenAt >= STALE_RUNNING_MS) {
         closeOut(current, current.lastSeenAt, 'away');
+        return;
+      }
+      // No sign of anybody for too long: held for the reader to decide, the
+      // log sheet opening already trimmed to where it went quiet.
+      if (idleTripped(current, now)) {
+        closeOut(current, now, 'idle');
         return;
       }
 
@@ -904,7 +1009,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     if (running && running.courseId === courseId && running.taskId === taskId) {
       // Same sitting, possibly re-armed with a different block length. The
       // clock carries on; only the target it is measured against moves.
-      const next = { ...running, targetSeconds: sanitizeTarget(targetSeconds) };
+      const next = { ...running, targetSeconds: sanitizeTarget(targetSeconds), lastInputAt: Date.now() };
       activeRef.current = next;
       setActive(next);
       saveActive(next);
@@ -926,6 +1031,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       accumulatedMs: 0,
       isPaused: false,
       lastSeenAt: now,
+      lastInputAt: now,
       targetSeconds: sanitizeTarget(targetSeconds),
       sessionId: `s${now}-${Math.random().toString(36).slice(2, 8)}`,
       phase: 'focus',
@@ -956,7 +1062,10 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const applyActive = useCallback((next: TimerState) => {
+  // Everything that goes through here is the reader doing something to the
+  // clock, which is the plainest input there is.
+  const applyActive = useCallback((input: TimerState) => {
+    const next = { ...input, lastInputAt: Date.now() };
     activeRef.current = next;
     setActive(next);
     saveActive(next);
@@ -1117,6 +1226,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         ),
         isPaused: true,
         lastSeenAt: now,
+        lastInputAt: now,
       };
       activeRef.current = next;
       saveActive(next);
@@ -1134,6 +1244,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         startedAt: now,
         isPaused: false,
         lastSeenAt: now,
+        lastInputAt: now,
       };
       activeRef.current = next;
       saveActive(next);

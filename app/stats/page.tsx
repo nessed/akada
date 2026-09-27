@@ -206,6 +206,7 @@ export default function StatsPage() {
         segments: session.segments,
         score: session.score,
         scoreOutOf: session.scoreOutOf,
+        recovery: session.recovery,
       });
     } catch (error) {
       console.error('Failed to restore session:', error);

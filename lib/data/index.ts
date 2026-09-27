@@ -47,6 +47,7 @@ export type {
   RecallSource,
   RecallVerdict,
   Session,
+  SessionRecovery,
   SessionSegment,
   NoteCheckResult,
   NoteRead,

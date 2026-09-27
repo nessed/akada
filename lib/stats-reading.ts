@@ -57,7 +57,10 @@ export interface Records {
 }
 
 export function readRecords(sessions: Session[], today = isoDate()): Records {
-  const rows = logged(sessions);
+  // A sitting closed for the reader (held after no input, recovered, cut at
+  // a ceiling) still counts as hours, but it is not a length they chose, so
+  // it sets no record.
+  const rows = logged(sessions).filter((s) => !s.recovery);
   const weekAgo = shiftIso(today, -6);
 
   // Longest sitting, against the longest one today.

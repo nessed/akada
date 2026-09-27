@@ -205,8 +205,11 @@ function tagged(note: string, tag: string): boolean {
 
 export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]): Habits {
   const known = new Set(courses.map((c) => c.id));
+  // A sitting closed for the reader (held after no input, recovered, cut at
+  // a ceiling) is not a length they chose, and one of them would move every
+  // median here: "your ECON sittings run about 180 minutes".
   const logged = sessions.filter(
-    (s) => isLoggableDuration(s.durationSeconds) && known.has(s.courseId),
+    (s) => isLoggableDuration(s.durationSeconds) && known.has(s.courseId) && !s.recovery,
   );
 
   const hours = new Array<number>(24).fill(0);
