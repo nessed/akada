@@ -10,6 +10,7 @@ import SelectField from '@/components/SelectField';
 import HandCheck from '@/components/notebook/HandCheck';
 import KindFields, { useKindDraft } from '@/components/tasks/KindFields';
 import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
+import { outlinePrompt } from '@/lib/claude-asks';
 import HandNote from '@/components/notebook/HandNote';
 import Stamp from '@/components/notebook/Stamp';
 import DueDateBadge from '@/components/DueDateBadge';
@@ -48,7 +49,9 @@ type Filter = 'all' | 'overdue' | 'today' | 'week' | 'done';
 // course page, course by course in their own course order.
 type SortMode = 'smart' | 'due' | 'newest' | 'mine';
 const NEXT_SORT: Record<SortMode, SortMode> = { smart: 'due', due: 'newest', newest: 'mine', mine: 'smart' };
-const SORT_WORDS: Record<SortMode, string> = { smart: 'what matters', due: 'by date', newest: 'newest', mine: 'your order' };
+const SORT_WORDS: Record<SortMode, string> = { smart: "what's urgent", due: 'due date', newest: 'newest', mine: 'my order' };
+const SORT_MODES: SortMode[] = ['smart', 'due', 'newest', 'mine'];
+const GROUP_WORDS: Record<Grouping, string> = { due: 'day', course: 'course' };
 type Grouping = 'due' | 'course';
 
 const FILTERS: { v: Filter; l: string }[] = [
@@ -105,6 +108,7 @@ function TasksPageContent() {
   const [filter, setFilter] = useState<Filter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('smart');
   const [grouping, setGrouping] = useState<Grouping>('due');
+  const [sortOpen, setSortOpen] = useState(false);
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
   // A day picked on the fortnight strip: an ISO date, or 'overdue' for the
   // pile of late ones at its left edge.
@@ -184,6 +188,7 @@ function TasksPageContent() {
         setEditingTask(null);
         setViewingTask(null);
         setShortcutHelpOpen(false);
+        setSortOpen(false);
       }
       // Everything below walks the list, so it belongs to the list: with a
       // sheet in front of it, the arrows are the sheet's to answer.
@@ -898,7 +903,7 @@ function TasksPageContent() {
             type="button"
             onClick={() => setShortcutHelpOpen(true)}
             aria-label="Keyboard shortcuts"
-            className="grid h-10 w-10 place-items-center rounded-[10px] text-muted transition-colors hover:bg-bg-tint hover:text-ink"
+            className="key-hint grid h-10 w-10 place-items-center rounded-[10px] text-muted transition-colors hover:bg-bg-tint hover:text-ink"
           >
             <HandNote color="currentColor" size={19} rotate={-8}>
               ?
@@ -934,8 +939,12 @@ function TasksPageContent() {
           course is its own colour rule, and how the list is cut is two words
           with the chosen one underlined. */}
       <div className="mb-2 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <div className="app-scroll -mx-[var(--density-gutter)] flex w-[calc(100%+2*var(--density-gutter))] gap-1 overflow-x-auto px-[var(--density-gutter)] sm:mx-0 sm:w-auto sm:flex-wrap sm:px-0">
-          {FILTERS.map((f) => (
+        {/* The band filters, on a wide screen. A chip with nothing behind it
+            ("Overdue 0") is not drawn, except All. On a phone the row goes:
+            the fortnight already filters by day, and the Sort sheet carries
+            Overdue and Done. */}
+        <div className="hidden flex-wrap gap-1 md:flex">
+          {FILTERS.filter((f) => f.v === 'all' || counts[f.v] > 0 || filter === f.v).map((f) => (
             <button
               key={f.v}
               type="button"
@@ -958,39 +967,20 @@ function TasksPageContent() {
           ))}
         </div>
 
-        <div className="flex items-center gap-1 text-[13px] sm:ml-auto">
-          <span className="eyebrow mr-1">By</span>
-          {(
-            [
-              { v: 'due', l: 'day' },
-              { v: 'course', l: 'course' },
-            ] as { v: Grouping; l: string }[]
-          ).map((g) => (
-            <button
-              key={g.v}
-              type="button"
-              aria-pressed={grouping === g.v}
-              onClick={() => setGrouping(g.v)}
-              className={`h-10 bg-transparent px-1.5 font-serif italic transition-colors ${
-                grouping === g.v ? 'text-ink' : 'text-muted hover:text-ink'
-              }`}
-            >
-              <span className={grouping === g.v ? 'hand-underline' : ''}>{g.l}</span>
-            </button>
-          ))}
-          <span aria-hidden className="mx-1.5 h-4 w-px bg-line" />
-          <button
-            type="button"
-            onClick={() => setSortMode((m) => NEXT_SORT[m])}
-            title="Change the order inside each band (S)"
-            className="h-10 bg-transparent px-1.5 text-muted transition-colors hover:text-ink"
-          >
-            <span className="eyebrow mr-1.5">Order</span>
-            <span className="font-serif italic text-ink-soft">
-              {SORT_WORDS[sortMode]}
-            </span>
-          </button>
-        </div>
+        {/* How the list is cut and ordered, as one control. It was two, "BY
+            day course" and "ORDER what matters", in the app's own words. */}
+        <button
+          type="button"
+          onClick={() => setSortOpen(true)}
+          title="Group and sort (S changes the order)"
+          className="flex h-10 items-center gap-2 bg-transparent px-1.5 text-muted transition-colors hover:text-ink md:ml-auto"
+        >
+          <span className="eyebrow">Sort</span>
+          <span className="font-serif text-[13px] italic text-ink-soft">
+            by {GROUP_WORDS[grouping]}, {SORT_WORDS[sortMode]}
+            {filter !== 'all' && !dayFilter && <span className="md:hidden"> · {filterLabel}</span>}
+          </span>
+        </button>
       </div>
 
       {courses.length > 0 && (
@@ -1061,6 +1051,40 @@ function TasksPageContent() {
 
       {courses.length === 0 ? (
         <EmptyState title="No courses yet" />
+      ) : tasks.length === 0 && !addingFor ? (
+        /* A term with nothing in it. "Nothing due. A clear day." read as
+           caught up; this says what fills the page, the same two ways Up
+           next on Today offers. */
+        <section className="py-6">
+          <p className="m-0 max-w-[560px] font-serif text-[22px] leading-[1.3] tracking-[-0.01em] text-ink">
+            Nothing is written down for this term yet.
+          </p>
+          <p className="m-0 mt-2 max-w-[520px] font-serif text-[14px] italic leading-[1.55] text-muted">
+            Quickest is to hand Claude your course outlines and let it write every deadline in.
+            Or add them one at a time.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                claude.ask({
+                  does: 'Claude reads your course outlines and puts every deadline into Akada, with its date and weight.',
+                  prompt: outlinePrompt(courses.map((c) => c.code)),
+                })
+              }
+              className="inline-flex h-11 items-center rounded-[10px] bg-primary px-4 text-[13px] font-medium text-primary-contrast"
+            >
+              Get them in with Claude
+            </button>
+            <button
+              type="button"
+              onClick={() => openDraft(courseFilter ?? courses[0].id)}
+              className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+            >
+              Add a deadline
+            </button>
+          </div>
+        </section>
       ) : groups.length === 0 ? (
         <EmptyState title={filter === 'all' ? 'Nothing on the list' : `No ${filterLabel} tasks`} />
       ) : (
@@ -1733,6 +1757,59 @@ function TasksPageContent() {
         );
       }}</Leaving>
 
+      {/* Group and sort, in plain names, and on a phone the two filters the
+          hidden chips carried. */}
+      <Leaving value={sortOpen}>{(_open, leaving) => (
+        <div className={`fixed inset-0 z-[85] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => setSortOpen(false)}
+            className="absolute inset-0 scrim backdrop-blur-sm"
+          />
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Group and sort"
+            className="relative w-full rounded-t-3xl bg-bg px-6 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] animate-slide-up md:mx-auto md:max-w-md"
+          >
+            <div className="mx-auto mb-6 h-1 w-9 rounded-full bg-line-strong" />
+            <SortChoice
+              label="Group by"
+              options={(['due', 'course'] as Grouping[]).map((v) => ({ v, l: GROUP_WORDS[v] }))}
+              value={grouping}
+              onPick={(v) => setGrouping(v)}
+            />
+            <SortChoice
+              label="Sort by"
+              options={SORT_MODES.map((v) => ({ v, l: SORT_WORDS[v] }))}
+              value={sortMode}
+              onPick={(v) => setSortMode(v)}
+            />
+            <div className="md:hidden">
+              <SortChoice
+                label="Show"
+                options={(['all', 'overdue', 'done'] as Filter[])
+                  .filter((v) => v === 'all' || counts[v] > 0 || filter === v)
+                  .map((v) => ({ v, l: `${FILTERS.find((f) => f.v === v)?.l ?? v} ${counts[v]}` }))}
+                value={dayFilter ? null : filter}
+                onPick={(v) => {
+                  setFilter(v);
+                  setDayFilter(null);
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setSortOpen(false)}
+              className="mt-6 w-full rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast"
+            >
+              Done
+            </button>
+          </section>
+        </div>
+      )}</Leaving>
+
       {/* The keyboard, asked for rather than announced. Same chrome as every
           other sheet in the app, and the keys are postmarks. */}
       <Leaving value={shortcutHelpOpen}>{(_open, leaving) => (
@@ -1797,6 +1874,40 @@ function TasksPageContent() {
 }
 
 /** An empty numeric field means "not set", which is not the same as zero. */
+/** One row of the Sort sheet: an eyebrow and plain words, the chosen one underlined. */
+function SortChoice<T extends string>({
+  label,
+  options,
+  value,
+  onPick,
+}: {
+  label: string;
+  options: { v: T; l: string }[];
+  value: T | null;
+  onPick: (v: T) => void;
+}) {
+  return (
+    <div className="mb-5">
+      <p className="eyebrow m-0">{label}</p>
+      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+        {options.map((option) => (
+          <button
+            key={option.v}
+            type="button"
+            aria-pressed={value === option.v}
+            onClick={() => onPick(option.v)}
+            className={`h-10 bg-transparent px-0.5 font-serif text-[15px] transition-colors ${
+              value === option.v ? 'text-ink' : 'text-muted hover:text-ink'
+            }`}
+          >
+            <span className={value === option.v ? 'hand-underline' : ''}>{option.l}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TasksPageFallback() {
   return (
     <PageShell>

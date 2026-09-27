@@ -910,7 +910,8 @@ order, `Z` (or `⌘Z`) undoes the last change, `Esc` closes whatever is in
 front. The hint under the list names exactly these and nothing else. It used
 to offer `X select` and `⌘Z undo` with neither bound to anything, which is a
 worse lie than saying nothing, and the help sheet behind `?` listed a third,
-different set.
+different set. The hint line and the `?` that opens that sheet both carry `.key-hint`,
+so neither is drawn on a touch screen, where there are no keys to name.
 
 ### Undo
 One slip, app wide (`components/Undo.tsx`, mounted in the root layout). A
@@ -941,15 +942,21 @@ the one screen that looked like a spreadsheet. It is now a planner spread.
   list to that day, a line under the controls says so and lets it go, and
   pressing the day again does the same. The fold closes the strip. On a phone
   it scrolls sideways as an `.app-scroll` strip.
-- **The controls** are marks, not dropdowns. The band filter is the
-  highlighter swipe it always was; each course is its `.course-rule` and
-  code, the chosen one swiped in its own tint; how the list is cut is two
-  serif words, "day" and "course", with the chosen one hand-underlined; and
-  the order says what it is ("what matters", "by date", "newest", "your
-  order") and changes on a press or `S`. "Your order" is the order each
+- **The controls** are marks, not dropdowns, and fewer of them. The band
+  filter (All, Overdue, Today, This week, Done) is the highlighter swipe it
+  always was, on a wide screen only, and a filter with nothing in it is not
+  drawn ("Overdue 0" went), All aside. Each course is its `.course-rule` and
+  code, the chosen one swiped in its own tint. How the list is cut and
+  ordered is **one** control, "Sort · by day, what's urgent", which opens a
+  small sheet of plain words, the chosen one hand-underlined: **Group by** day
+  / course, **Sort by** what's urgent / due date / newest / my order, and on a
+  phone **Show** All / Overdue / Done, since the band filters leave a phone
+  (the fortnight already filters it by day). It used to be two controls in
+  the app's own dialect, "BY day course" and "ORDER what matters". `S` still
+  steps through the orders. "My order" is the order each
   course's tasks were dragged into on its course page, course by course in the
-  reader's own course order; tasks nobody has placed follow in "what
-  matters". There is no dragging on Tasks itself: a hand-made order across
+  reader's own course order; tasks nobody has placed follow in "what's
+  urgent". There is no dragging on Tasks itself: a hand-made order across
   date bands would fight the dates, so it is made where it means something,
   inside one course.
 - **The bands.** By day, the list reads Overdue, Today, then each of the next
@@ -960,7 +967,10 @@ the one screen that looked like a spreadsheet. It is now a planner spread.
   past, the way a diary keeps the date at the head of the page. Bands are
   ended by the page's `line` cutoff; nothing is boxed. Overdue sets its name
   in `warn` and carries "n to catch up" in Caveat. Today stays on the page
-  when nothing is due, reading "Nothing due. A clear day." Rows are
+  when nothing is due, reading "Nothing due. A clear day.", but only when the
+  term has tasks. A term with none shows the same two ways in as Today's Up
+  next ("Get them in with Claude", "Add a deadline") in place of the bands,
+  since "a clear day" on an empty term reads as caught up. Rows are
   `TaskRow` on `ground="page"`.
 - **No date repeated.** Under a heading that already names the day, a row
   passes `hideDue`: on a phone the date column goes and the title gets its
