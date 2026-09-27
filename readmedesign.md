@@ -180,8 +180,12 @@ is the whole screen, as it always was.
   becomes the reader's own face once there is one to show — the photo or
   initials-on-peach circle from the Settings profile card, a small gear badge
   at its corner so the row still reads as Settings — and falls back to the
-  plain gear with neither a name nor a photo set (`SettingsGlyph`). The
-  mobile header's own way into Settings uses the same glyph.
+  plain gear with neither a name nor a photo set (`SettingsGlyph`). On a
+  phone, Today's header carries the reader's own face at 32px
+  (`ReaderAvatar`: photo, initials on peach, or an outline of a person) as a
+  link to the same `/settings` page. It used to be a sliders icon, which read
+  as a filter, opening a second and older Settings sheet of its own; that
+  sheet is gone.
 
 It collapses to a **64px strip**: the AkadaMark is the handle, the screens are
 their icons, and each course is a spine label, the letters of its code over
@@ -203,9 +207,10 @@ recentres the content in whatever the rail leaves rather than staying pinned
 to a phone column in the middle of a 1440px screen. Pages that lay themselves
 out in two columns pass `wide` to opt out of the phone measure.
 
-Two things follow from the rail. Settings is a **page** on desktop, because a
-modal reached from a permanent nav item is a screen pretending to be an
-interruption; the sheet is still what phone gets. And the
+Two things follow from the rail. Settings is a **page**, on desktop and on a
+phone alike, because a modal reached from a permanent nav item is a screen
+pretending to be an interruption; the bar is on it, so a phone has a way back.
+And the
 `FloatingActionButton` is gone: "New task" lives in the page header, and a
 timer starts from the row it belongs to, through a popover that takes a
 length without a trip to `/timer` first.
@@ -248,9 +253,21 @@ at the same weight, and a box that everything has stops meaning anything.
 The page is separated by its own ruling instead, the way a ruled pad is:
 
 - **The head band.** On Today, Up next is the one thing that spans the page,
-  with today's hours beside it (from `xl`), since Start is what fills them. On
-  a course page the band is the strip of four figures. Nothing frames it: it
-  leads by position and size.
+  with today's hours beside it (from `xl`), since Start is what fills them,
+  and the Next Mark line under the hours: it is a reward line read off them,
+  not a to-do, so it never sits over Up next. On a course page the band is
+  the strip of four figures. Nothing frames it: it leads by position and size.
+- **Today is three things.** Up next, the hours, and Coming. Everything else
+  it carries is conditional: the recall card when something is due, Overdue
+  when something is, **Due today** only for what Up next is not already
+  showing (a section whose one row is the Up next task said it twice), and
+  **Before the exam** in the week before one. The course cards that used to
+  stand under the day, the week's bar chart and the "New here?" link to the
+  guide are gone: in place of the cards, one line (`CourseLine`), "This week"
+  then each course's rule and code with its hours this week in mono, the whole
+  line a link to `/courses`. Up next's row is **Start · Done · Tomorrow**; the
+  Untimed button beside Start went, since Start's popover already offers
+  25/45/60/Untimed.
 - **The fold.** `.fold`, two `line-strong` rules 2px apart, the full content
   width. It closes the head band and is the one heavier line on the screen.
 - **The column rule.** From `xl` the page below the fold is two columns, the
@@ -427,8 +444,8 @@ else:
   is guaranteed to look at the sitting, and it used to show a duration and a
   question and not a word about why the duration mattered.
 
-The Today sections (hours, the week's bars, the course list under the day)
-read the same augmented list, so the hour strokes fill and "2h
+The Today sections (the hours, the course line under the day) read the same
+augmented list, so the hour strokes fill and "2h
 to go" counts down while the clock runs. Anything that *decides* something,
 which task is up next, which course has gone quiet, still reads the record.
 
@@ -906,9 +923,8 @@ while a sitting is running, for the same reason it lists nothing else that
 is not bound.
 
 ### Rearranging by hand
-Six lists let the reader set their own order, and all six are the same
-component, `ReorderList`: the **course list on Today** (carried as a `row`,
-since its entries are lines on the page), the **course spines in the rail**
+Five lists let the reader set their own order, and all five are the same
+component, `ReorderList`: the **course spines in the rail**
 (a `row` carried on press too, since each is a whole link), the
 **course panels in Settings**, the **subtasks inside a task**, the
 **pieces of a marking scheme** on a course page, and the **open tasks on a
@@ -1407,11 +1423,10 @@ screen that changes changes its sentence here too. Bold words in it are the labe
 reader can go and find them.
 
 It is reached from the landing page (the hero line, the feature rows, which
-each link to their section, and the footer), from the onboarding welcome,
-from Settings, and from one serif line on Today, "New here? How Akada works",
-which shows only while the account has fewer than three sessions. That line
-is derived from the sessions like everything else, so there is no dismissed
-flag and it leaves on its own.
+each link to their section, and the footer), from the onboarding welcome
+and from Settings. Today used to carry a "New here? How Akada works" line
+too; nobody leaves the app to read a guide on day one, and the empty states
+do that job in place, so it went.
 
 **Akada in Claude** (`/claude`) is the guide's sibling for the connector,
 in the same shell and public for the same reason: it is the page to send a
@@ -1446,7 +1461,7 @@ rules rather than in panels:
   words; the drawing goes stale the same way if nobody minds it, so **when
   Today's parts or their names change, change the sketch in the same PR**.
   It shows only what Today really shows: the date line, Up next with its
-  course rule and mint swipe, Start/Untimed/Done, today's hours with the goal
+  course rule and mint swipe, Start/Done/Tomorrow, today's hours with the goal
   strokes, and Coming.
 - **Margin notes** in the hand face (`font-hand`, muted ink), a few words
   each, with a drawn arrow where one points at something. Only where there is
