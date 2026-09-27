@@ -308,6 +308,18 @@ knows a finger is on it.
 - **Focus mode comes back on a tap.** A cursor brings the bar back by
   moving; a finger does it with a tap on the page that lands on nothing
   else.
+- **Focus mode pinches.** Two fingers, a trackpad pinch (ctrl + wheel in
+  Chrome and Firefox, Safari's gesture events) or ctrl/⌘ `+` `−` `0` zoom the
+  note from 75% to 250%. It reflows rather than magnifies: the type and the
+  measure grow together until the measure meets the screen, then the lines
+  rewrap, so nothing runs off the side, and the block under the fingers holds
+  still. Off 100%, the bar shows the figure in mono; a tap on it goes back.
+  The zoom is kept with the spotlight and the lamp.
+- **A pen can trace a line.** A stylus run left to right along the text is a
+  sideways drag, and the browser used to take it for its back swipe. On a
+  note the page pans up and down only (`touch-action: pan-y`, a wide table or
+  code block still scrolls on its own) and the root drops its sideways
+  overscroll while a note is open.
 - **Upright gets the phone's bands.** Tasks keeps each band's name in its
   168px margin only from 1024px; below that it sits over the rows, since the
   margin beside a row's fixed columns left a title about 86px wide.
