@@ -783,6 +783,18 @@ as `tasks.completed_via = 'skip'`; the log sheet's "Mark the task done" writes
 A database without the column still takes ticks, and refuses a skip in words
 rather than saving it as a tick.
 
+**Pages an hour** is the first thing read through that rule. It stands only
+on pairs: a finished reading that was worked, its own pages over its own
+logged time (`readingPairs` in `lib/derive.ts`). Each pair is held between 2
+and 120 pages an hour, and the pace is the **median** of them, never one
+pooled ratio, so a 200-page tick with five minutes on it cannot speak for the
+term. It is the reader's own only from three pairs; before that Today says
+"at the usual 20 pages an hour", and after it "at your 34 pages an hour". A
+reading with no page count is named ("and 1 without a page count") rather
+than quietly left out of the sum. A course's pace on the Record and in the
+start popover is the same median over that course's pairs (from two), and
+**Finished early** counts only worked tasks finished three days out.
+
 ### Keys on the task list
 The list is walkable without a pointer: `↑ ↓` move a cursor, which the row
 draws as an ink ring rather than a fill; `X` selects the row under it and

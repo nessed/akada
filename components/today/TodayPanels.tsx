@@ -14,7 +14,8 @@ import {
 } from '@/lib/utils';
 import { isLoggableDuration } from '@/lib/session-safety';
 import { LIVE_SESSION_PREFIX } from '@/lib/live-session';
-import { backlogPages, countdowns, readingBacklog, readingRate } from '@/lib/derive';
+import { useNotes } from '@/lib/data-hooks';
+import { backlogPages, countdowns, readingBacklog, readingRateDetail } from '@/lib/derive';
 import HourStrokes from '@/components/HourStrokes';
 import HandNote from '@/components/notebook/HandNote';
 import { RecallStrokes } from '@/components/recall/RecallMarks';
@@ -287,7 +288,13 @@ export function ComingPanel({
   const coming = useMemo(() => countdowns(tasks, courses, today), [tasks, courses, today]);
   const backlog = useMemo(() => readingBacklog(tasks), [tasks]);
   const pages = useMemo(() => backlogPages(tasks), [tasks]);
-  const rate = useMemo(() => readingRate(tasks, sessions), [tasks, sessions]);
+  const { notes } = useNotes();
+  const pace = useMemo(() => readingRateDetail(tasks, sessions, notes), [tasks, sessions, notes]);
+  const rate = pace.pagesPerHour;
+  // A reading with no page count cannot be turned into hours, so it is named
+  // rather than quietly left out of the sum.
+  const unpaged = backlog.filter((t) => !t.pages).length;
+  const paged = backlog.length - unpaged;
 
   if (coming.length === 0 && pages === 0) return null;
 
@@ -364,9 +371,11 @@ export function ComingPanel({
             coming.length > 0 ? 'mt-3.5 border-t border-line-soft pt-3.5' : 'mt-3'
           }`}
         >
-          {pages} pages of reading still open across {backlog.length}{' '}
-          {backlog.length === 1 ? 'reading' : 'readings'}, about{' '}
-          {formatHM(Math.round((pages / rate) * 3600))} at {rate} pages an hour.
+          {pages} pages of reading still open across {paged}{' '}
+          {paged === 1 ? 'reading' : 'readings'}
+          {unpaged > 0 && <>, and {unpaged} without a page count</>}, about{' '}
+          {formatHM(Math.round((pages / rate) * 3600))} at{' '}
+          {pace.measured ? 'your' : 'the usual'} {rate} pages an hour.
         </p>
       )}
     </section>

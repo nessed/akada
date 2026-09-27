@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Assessment, Session, Task } from './data';
-import { gradeProjection, isSkipped, pickUpNext, readingRateDetail, workedTaskIds } from './derive';
+import { gradeProjection, isSkipped, medianPace, pickUpNext, readingPairs, readingRateDetail, workedTaskIds } from './derive';
 import { isoDate } from './utils';
 
 /** A calendar date `n` days from today, the way a due date is written. */
@@ -127,9 +127,45 @@ test('a drop rule trims an outstanding piece before anything is solved', () => {
 });
 
 test('the reading rate says when it is only the default', () => {
-  assert.deepEqual(readingRateDetail([], []), { pagesPerHour: 20, measured: false, pagesRead: 0, hoursRead: 0 });
-  const done = { id: 'r', kind: 'reading' as const, completed: true, pages: 50 };
-  assert.equal(readingRateDetail([done], [{ taskId: 'r', durationSeconds: 7200 }]).pagesPerHour, 25);
+  assert.deepEqual(readingRateDetail([], []), { pagesPerHour: 20, measured: false, pagesRead: 0, hoursRead: 0, readings: 0 });
+});
+
+const reading = (id: string, pages: number, patch: Partial<Task> = {}): Task =>
+  task(id, { kind: 'reading', pages, completed: true, completedAt: `${day(-1)}T10:00:00.000Z`, ...patch });
+const on = (taskId: string, seconds: number) => ({ taskId, durationSeconds: seconds });
+
+test('one timed reading is not a pace; three are', () => {
+  const one = readingRateDetail([reading('a', 50)], [on('a', 7200)]);
+  assert.equal(one.measured, false);
+  assert.equal(one.pagesPerHour, 20);
+  const three = readingRateDetail(
+    [reading('a', 50), reading('b', 30), reading('c', 40)],
+    [on('a', 7200), on('b', 3600), on('c', 3600)],
+  );
+  assert.equal(three.measured, true);
+  // 25, 30 and 40 pages an hour: the median, not the pooled 120 over 4h.
+  assert.equal(three.pagesPerHour, 30);
+});
+
+test('pages ticked without time on them never feed the pace', () => {
+  const pairs = readingPairs(
+    [reading('timed', 30), reading('ticked', 400), reading('skipped', 30, { completedVia: 'skip' })],
+    [on('timed', 3600), on('skipped', 3600), on('elsewhere', 3600)],
+  );
+  assert.deepEqual(pairs.map((p) => p.taskId), ['timed']);
+});
+
+test('a reading timed on its note counts when no session names it', () => {
+  const pairs = readingPairs([reading('noted', 20)], [], [{ taskId: 'noted', reads: [{ seconds: 1800 }] }]);
+  assert.equal(pairs[0]?.pagesPerHour, 40);
+});
+
+test('each reading is held between 2 and 120 pages an hour', () => {
+  const pairs = readingPairs([reading('skim', 200), reading('slow', 1)], [on('skim', 300), on('slow', 36000)]);
+  assert.deepEqual(pairs.map((p) => p.pagesPerHour), [120, 2]);
+  assert.equal(medianPace([]), null);
+  // One 200-page skim beside two honest readings does not move the median off them.
+  assert.equal(medianPace([{ pagesPerHour: 120 }, { pagesPerHour: 25 }, { pagesPerHour: 30 }]), 30);
 });
 
 test('a finished task is worked only when time was logged against it', () => {
