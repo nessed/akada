@@ -489,16 +489,6 @@ export default function CoursePage() {
 
       <div className="mt-9 grid items-start xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
         <div className="settle-in flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
-          {/* This course's page, with its marks in the margin. Faded when the
-              course has been left alone, and never a word about the fading. */}
-          {pageRecord && (
-            <CoursePagePanel
-              course={course}
-              record={pageRecord}
-              ink={progression?.ink.get(course.id) ?? null}
-            />
-          )}
-
           {/* Tasks. This course's list, and only this course's, so the rows
               drop the course column they would otherwise all repeat. */}
           <section>
@@ -621,6 +611,12 @@ export default function CoursePage() {
             </Link>
           </section>
 
+          {/* The week against its goal, then the grade: what the tasks are
+              for, read straight after them. */}
+          <CourseWeekCard course={course} sessions={courseSessions} onGoalChange={saveGoal} />
+
+          <GradeStanding course={course} tasks={courseTasks} today={today} />
+
           {/* What this course is keeping, and how much of it came back clear.
               See lib/recall. */}
           <CourseRecallPanel
@@ -630,16 +626,25 @@ export default function CoursePage() {
             onStudy={(state, el) => setStartTarget({ task: state.task, course, anchor: el })}
           />
 
-          {/* What keeps going wrong, as Claude found it marking quizzes. */}
+          {/* The tally ledger comes last on the page: it is the game layer,
+              the Record's own vocabulary, not the course's work. */}
+          {/* This course's page, with its marks in the margin. Faded when the
+              course has been left alone, and never a word about the fading. */}
+          {pageRecord && (
+            <CoursePagePanel
+              course={course}
+              record={pageRecord}
+              ink={progression?.ink.get(course.id) ?? null}
+            />
+          )}
+
+          {/* What keeps going wrong, as Claude found it marking quizzes.
+              Drawn only once there is something. */}
           <WeakPointsPanel course={course} />
         </div>
 
         {/* The right column, as stories under a pencil column rule. */}
         <aside className="settle-in relative mt-7 flex flex-col divide-y divide-line border-t border-line pt-7 [&>*]:py-7 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0 xl:sticky xl:top-10 xl:mt-0 xl:border-t-0 xl:pt-0 xl:before:absolute xl:before:-left-[41px] xl:before:inset-y-0 xl:before:w-px xl:before:bg-line xl:before:content-['']">
-          <CourseWeekCard course={course} sessions={courseSessions} onGoalChange={saveGoal} />
-
-          <GradeStanding course={course} tasks={courseTasks} today={today} />
-
           {/* What the practice papers scored, once there are any: the one
               panel here that reads what came out rather than what went in. */}
           <PracticeScores sessions={courseSessions} tasks={courseTasks} color={course.color} />

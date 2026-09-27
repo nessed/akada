@@ -799,8 +799,8 @@ nowhere to put a score yet saves the sitting without it and says so once. The
 sheet scrolls when it is taller than the screen, which with a task and the
 marks above it it can be on a small phone.
 
-**On the course page** a **Practice** panel sits under the grade, once there
-is a paper to show. Each paper is one short pen mark, a little uphill the way
+**On the course page** a **Practice** panel heads the right column, over the
+sessions, once there is a paper to show. Each paper is one short pen mark, a little uphill the way
 a hand plots one, at the height of what it scored against what it was out of,
 oldest on the left, between a dashed line for full marks and a ruled baseline.
 It is deliberately not a bar that fills, which is the percentage bar this app
@@ -1237,7 +1237,7 @@ the last mark. Everything is in
 
 What a course keeps going wrong, written by the assistant after it marks a
 quiz. On the course page it is the last panel in the left column, under
-Recall: the `.eyebrow` **Weak points** with the open count in mono, then the
+the tally page: the `.eyebrow` **Weak points** with the open count in mono, then the
 open ones grouped under their section, each section an `.eyebrow` (`§ 1.3`,
 *No section* last). A row is the times missed in mono (`×3`, a digit), the
 summary in the serif, and under it one muted italic line: the confusion, the
@@ -1246,8 +1246,9 @@ its task). *fixed* sits at the right in the faintest italic, on hover at
 desktop widths and always on a phone, like *stop asking* on Recall. Ticked, a row
 moves to a folded **Fixed** list, opened the way done tasks are (`Fixed 3`
 beside the eyebrow), where the rows fade and read *reopen*. Never a
-strikethrough. Before anything has been recorded the panel says once, in
-muted italic, what will appear there.
+strikethrough. Before anything has been recorded for the course the panel
+is not drawn at all: an empty section explaining a feature was one more
+thing on a page already too deep.
 
 When a course has an exam within seven days and anything open, Today's right
 column carries **Before the exam** under Coming: per course, the course rule,
@@ -1256,6 +1257,24 @@ most missed first, each `×n` in mono and the summary in the serif with the
 section and pages trailing in muted italic, and a quiet link to the rest on
 the course page. Nothing at all otherwise. `components/course/WeakPointsPanel.tsx`
 and `components/today/BeforeExamPanel.tsx`.
+
+### The course page
+Work first, the ledger last. Under the strip of four figures and the fold
+the page reads, in one column on a phone and down the left column from `xl`:
+**Tasks**, **This week** with the weekly goal, **Where the grade stands**,
+**Recall**, the course's **page** (the tally ledger, the Record's
+vocabulary, which used to open the page), then **Weak points** once Claude
+has recorded any. The right column carries **Practice** (once there is a
+paper) and **Sessions** with Log time; below `xl` they follow in that order.
+
+**Where the grade stands**, on a course with no scheme, says "Akada does not
+know how ECON 100 is marked yet." over two equal buttons. **Type it in**
+opens the scheme editor already holding the usual pieces (Quizzes,
+Assignments, Midterm, Final, Participation) with the weights blank, so it is
+thirty seconds with the outline open. **Ask Claude to read the outline**
+hands the outline to Claude. The primary button used to copy a prompt to the
+clipboard without a word of what it had done, with typing it in as an
+italic afterthought under it.
 
 ### Log time
 Time spent away from the timer, a chapter on paper or a problem set at the

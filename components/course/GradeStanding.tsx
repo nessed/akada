@@ -1,7 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-import { CLAUDE_PAGE } from '@/lib/claude-page';
 import { useMemo, useState } from 'react';
 import type { Assessment, Course, DropRule, Task } from '@/lib/data';
 import { gradeStanding } from '@/lib/derive';
@@ -52,7 +50,13 @@ export default function GradeStanding({
   const pending = course.grading?.pending ?? null;
 
   function open() {
-    setRows(course.assessments?.length ? course.assessments : [blankRow(0)]);
+    // Nothing yet: the usual pieces of a course, weights left blank, so
+    // typing a scheme in is filling five numbers rather than building rows.
+    setRows(
+      course.assessments?.length
+        ? course.assessments
+        : USUAL_PIECES.map((label, index) => ({ ...blankRow(index), label })),
+    );
     setEditing(true);
   }
 
@@ -102,7 +106,7 @@ export default function GradeStanding({
    * The clipboard write has to happen in the click's own task or Safari
    * treats it as untrusted, so this does not await anything before it.
    */
-  async function copyPrompt() {
+  async function askClaude() {
     const prompt = gradingPrompt({ courseId: course.id, courseCode: course.code });
     try {
       await navigator.clipboard.writeText(prompt);
@@ -388,29 +392,25 @@ export default function GradeStanding({
         <p className="m-0 mt-2.5 font-serif text-[15px] leading-[1.45] text-ink-soft">
           Akada does not know how {course.code} is marked yet.
         </p>
-        <button
-          type="button"
-          onClick={copyPrompt}
-          className="mt-3.5 h-10 w-full rounded-[10px] border border-dashed border-line-strong text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
-        >
-          Say how it is marked
-        </button>
-        <p className="m-0 mt-2 text-center font-serif text-[12px] italic leading-[1.4] text-muted">
-          Copies a message. Paste it into a Claude chat with Akada switched on and
-          attach the outline.{' '}
-          <Link href={CLAUDE_PAGE} className="hand-underline not-italic text-ink-soft">
-            Not connected yet?
-          </Link>
-        </p>
-        {/* The manual path is unchanged, and this is the only door left to it
-            on a course with no pieces yet. */}
-        <button
-          type="button"
-          onClick={open}
-          className="mt-2.5 w-full bg-transparent p-0 font-serif text-[13px] italic text-muted transition-colors hover:text-ink"
-        >
-          or type it in yourself
-        </button>
+        {/* Two equal ways in. Typing it opens the editor on the usual pieces
+            with the weights blank, which is thirty seconds with the outline
+            open; the other hands the outline to Claude. */}
+        <div className="mt-3.5 flex gap-2">
+          <button
+            type="button"
+            onClick={open}
+            className="h-10 flex-1 rounded-[10px] border border-line-strong text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+          >
+            Type it in
+          </button>
+          <button
+            type="button"
+            onClick={askClaude}
+            className="h-10 flex-1 rounded-[10px] border border-line-strong text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
+          >
+            Ask Claude to read the outline
+          </button>
+        </div>
       </section>
     );
   }
@@ -534,6 +534,9 @@ function dropSentence(rule: DropRule, rows: Assessment[]): string {
   const size = rows.filter((row) => row.group === rule.group).length;
   return `Of the ${size} in ${rule.group}, the best ${rule.keep} count.`;
 }
+
+/** What most courses are marked on, offered with the weights blank. */
+const USUAL_PIECES = ['Quizzes', 'Assignments', 'Midterm', 'Final', 'Participation'];
 
 function blankRow(index: number): Assessment {
   return {
