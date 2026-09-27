@@ -1,15 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Course, RecallVerdict } from '@/lib/data';
 import { useNotice } from '@/components/Notice';
-import { applyVerdict, recallCue, scheduleRecall, type RecallState } from '@/lib/recall';
+import { applyVerdict, scheduleRecall, type RecallState } from '@/lib/recall';
 import { answerRecall, letGoRecall, undoRecall, type RecallChange } from '@/lib/recall/actions';
 import { recallPrompt } from '@/lib/recall/prompt';
-import { daysAgoWords, originVerb, studyWords, whenWords } from '@/lib/recall/words';
+import {
+  daysAgoWords,
+  recallQuestion,
+  studyWords,
+  VERDICT_MEANING,
+  VERDICT_WORDS,
+  whenWords,
+} from '@/lib/recall/words';
 import { isoDate } from '@/lib/utils';
 import { VerdictMark } from './RecallMarks';
-import FirstNote from '@/components/FirstNote';
 
 /**
  * The recall card, one thing at a time.
@@ -31,11 +37,7 @@ import FirstNote from '@/components/FirstNote';
  * course's due ones, asked for.
  */
 
-const VERDICTS: { verdict: RecallVerdict; label: string }[] = [
-  { verdict: 'clear', label: 'Clear: had it, without looking' },
-  { verdict: 'hazy', label: 'Hazy: only part of it, or with a nudge' },
-  { verdict: 'gone', label: 'Gone: could not' },
-];
+const VERDICTS: RecallVerdict[] = ['clear', 'hazy', 'gone'];
 
 interface Props {
   states: RecallState[];
@@ -56,8 +58,6 @@ interface Props {
    * nowhere to go, and the deck says so once rather than failing each tap.
    */
   available?: boolean;
-  /** The first card anyone meets says what recall is; see FirstNote. */
-  explain?: boolean;
   className?: string;
 }
 
@@ -77,13 +77,29 @@ export default function RecallDeck({
   onStudy,
   onClose,
   available = true,
-  explain = false,
   className = '',
 }: Props) {
   const { notify } = useNotice();
   const [busy, setBusy] = useState(false);
   const [walked, setWalked] = useState(0);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const away = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [menuOpen]);
 
   const card = states[0] ?? null;
   const today = isoDate();
@@ -172,11 +188,11 @@ export default function RecallDeck({
     }
   }
 
-  const meta = card
-    ? card.last
-      ? `${card.last.verdict} ${daysAgoWords(card.last.on, today)}`
-      : `${originVerb(card.source)} ${daysAgoWords(card.origin, today)}`
-    : '';
+  const question = card ? recallQuestion(card, today) : null;
+  // Once it has been asked, how it went last time, in the answer's own word.
+  const last = card?.last
+    ? `last time: ${VERDICT_WORDS[card.last.verdict].toLowerCase()}, ${daysAgoWords(card.last.on, today)}`
+    : null;
 
   return (
     <section className={className} aria-label={title}>
@@ -192,20 +208,7 @@ export default function RecallDeck({
             </span>
           )}
         </p>
-        {card && (
-          <span className="hidden font-serif text-[12.5px] italic text-muted-soft sm:inline">
-            from memory first, then say how it went
-          </span>
-        )}
       </div>
-
-      {explain && card && (
-        <FirstNote className="mb-4">
-          This is recall. What you finish comes back a day later as a question. Answer it
-          with the book shut, then say how it went. Clear sends it further away, hazy or
-          gone brings it back sooner. A few a day is enough.
-        </FirstNote>
-      )}
 
       {card ? (
         // Written on the page like everything else under the double rule. It
@@ -218,37 +221,69 @@ export default function RecallDeck({
               <span className="eyebrow shrink-0 text-ink-soft">
                 {course?.code ?? 'Course'}
               </span>
-              <span className="truncate font-serif text-[12.5px] italic text-muted">{meta}</span>
+              {last && <span className="truncate font-serif text-[12.5px] italic text-muted">{last}</span>}
             </p>
-            <button
-              type="button"
-              onClick={letGo}
-              disabled={busy}
-              title="Stop asking about this one"
-              className="-my-2 -mr-2 h-10 shrink-0 rounded-[10px] px-2 font-serif text-[12.5px] italic text-muted-soft transition-colors hover:bg-bg-tint hover:text-ink disabled:opacity-40"
-            >
-              let go
-            </button>
+            {/* Stopping is rare and final-sounding, so it sits behind the
+                overflow rather than beside the answers. */}
+            <span ref={menuRef} className="relative -my-2 -mr-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((open) => !open)}
+                aria-label="More"
+                aria-expanded={menuOpen}
+                className="grid h-10 w-10 place-items-center rounded-[10px] text-muted-soft transition-colors hover:bg-bg-tint hover:text-ink"
+              >
+                <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="5" cy="12" r="1.6" />
+                  <circle cx="12" cy="12" r="1.6" />
+                  <circle cx="19" cy="12" r="1.6" />
+                </svg>
+              </button>
+              {menuOpen && (
+                <span
+                  role="menu"
+                  className="absolute right-0 top-10 z-20 w-[210px] animate-fade-in rounded-[10px] border border-line bg-paper p-1 shadow-[0_8px_20px_rgba(57,48,36,.12)]"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={busy}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      void letGo();
+                    }}
+                    className="flex h-10 w-full items-center rounded-[8px] px-3 text-left text-[13px] text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink disabled:opacity-40"
+                  >
+                    Stop asking about this
+                  </button>
+                </span>
+              )}
+            </span>
           </div>
 
-          <h3 className="m-0 mt-1.5 font-serif text-[20px] font-medium leading-[1.25] tracking-[-0.01em] text-ink">
-            {card.prompt}
-          </h3>
-          <p className="m-0 mt-1.5 font-serif text-[13.5px] italic text-muted">{recallCue(card)}</p>
+          {/* The question is the explanation: when it was finished, and what
+              to give back without looking. */}
+          {question && (
+            <h3 className="m-0 mt-2 font-serif text-[19px] font-normal leading-[1.35] tracking-[-0.005em] text-ink-soft">
+              {question.lead}
+              <span className="font-medium text-ink">{question.thing}</span>
+              {question.tail}
+            </h3>
+          )}
 
           <div className="-ml-2.5 mt-3 flex flex-wrap items-center gap-1">
-            {VERDICTS.map(({ verdict, label }) => (
+            {VERDICTS.map((verdict) => (
               <button
                 key={verdict}
                 type="button"
                 onClick={() => answer(verdict)}
                 disabled={busy}
-                aria-label={label}
-                title={label}
-                className="flex h-10 items-center gap-2 rounded-[10px] px-2.5 font-serif text-[15px] italic text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink disabled:opacity-40"
+                aria-label={VERDICT_MEANING[verdict]}
+                title={VERDICT_MEANING[verdict]}
+                className="flex h-10 items-center gap-2 rounded-[10px] px-2.5 font-serif text-[15px] text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink disabled:opacity-40"
               >
                 <VerdictMark verdict={verdict} color={verdict === 'gone' ? 'var(--muted)' : color} />
-                {verdict}
+                {VERDICT_WORDS[verdict]}
               </button>
             ))}
             <button
@@ -296,7 +331,7 @@ export default function RecallDeck({
             )}
             <span className="max-w-[220px] truncate text-ink-soft">{outcome.change.state.prompt}</span>
             <span>
-              · {outcome.verdict}
+              · {outcome.verdict === 'let go' ? 'no longer asked' : VERDICT_WORDS[outcome.verdict].toLowerCase()}
               {outcome.nextOn ? ` · back ${whenWords(outcome.nextOn, today)}` : ''}
               {outcome.change.unticked ? ` · unticked on ${outcome.change.state.task?.title ?? 'its task'}` : ''}
             </span>
