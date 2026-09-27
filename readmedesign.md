@@ -97,6 +97,22 @@ tracking set alongside it still wins, that is how the badges and the timer's
 display caption keep their own letterspacing. Nothing sets it in mono: the one
 element that did was put back on the sans.
 
+### The icon
+
+The brand glyph is the ribbon bookmark with Fraunces' italic A in it, the
+same mark `AkadaMark` draws in the app. The icon files draw it solid: a ribbon
+of ink with the A cut out of it, because a 1px outline and a thin letter turn
+to mush at the 16px a browser tab gives it. The A is the real Fraunces glyph
+as an outline, never `<text>`, so the tab does not fall back to Georgia.
+
+- `public/icon.svg` is the **tab favicon**. Transparent, and it follows the
+  browser's own scheme through `prefers-color-scheme`: an ink ribbon on a
+  light tab strip, the night paper's cream ribbon on a dark one.
+- `public/app-icon.svg` is the **installed-app tile**, full bleed on the night
+  ground (the tone the app ships on), with the mark inside the maskable safe
+  zone. The PNGs are rendered from it by `scripts/build-icons.mjs`; rerun
+  that after changing it.
+
 ### Type scale
 Two title tiers, so a screen title is recognisable as one:
 - **Screen title**, `text-[36px]` at `tracking-[-0.025em]`, serif, dropping
