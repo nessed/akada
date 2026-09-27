@@ -1538,7 +1538,7 @@ export class SupabaseAdapter implements DataProvider {
   }
 
   // ---- Weak points ----
-  // Written by the connector; the app reads them and ticks them fixed.
+  // Written by the connector; the app reads them, ticks them fixed, and deletes them.
 
   async getWeakPoints(): Promise<WeakPoints> {
     const uid = await this.userId();
@@ -1562,6 +1562,12 @@ export class SupabaseAdapter implements DataProvider {
       .update({ status, fixed_at: status === 'fixed' ? new Date().toISOString() : null })
       .eq('id', id)
       .eq('user_id', uid);
+    if (error) throw isMissingRecall(error) ? new Error(WEAK_POINTS_UNAVAILABLE) : error;
+  }
+
+  async deleteWeakPoint(id: string): Promise<void> {
+    const uid = await this.userId();
+    const { error } = await this.supabase.from('weak_points').delete().eq('id', id).eq('user_id', uid);
     if (error) throw isMissingRecall(error) ? new Error(WEAK_POINTS_UNAVAILABLE) : error;
   }
 

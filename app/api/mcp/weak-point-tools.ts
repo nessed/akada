@@ -18,7 +18,8 @@ import { mcpSupabase, siteUrl } from './_shared';
  * pages it comes from; the same confusion found again counts against the row
  * already there (lib/weak-points.ts has the rule). The student sees them on
  * the course page and, with an exam a week out, on Today; an assistant reads
- * them back with get_weak_points to know what to drill before the exam.
+ * them back with get_weak_points to know what to drill before the exam, and
+ * delete_weak_points removes ones that should never have been logged.
  */
 
 type AuthenticatedToken = ReturnType<typeof readAccessToken>;
@@ -130,6 +131,8 @@ export const GetWeakPointsInput = z.object({
 });
 
 export const WeakPointIdInput = z.object({ id: z.string().uuid() });
+
+export const DeleteWeakPointsInput = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
 
 /* ── Tools ──────────────────────────────────────────────────────────── */
 
@@ -284,6 +287,34 @@ export function reopenWeakPointTool(token: AuthenticatedToken, { id }: z.infer<t
   return setStatus('reopen_weak_point', token, id, 'open', supabase);
 }
 
+export async function deleteWeakPointsTool(
+  token: AuthenticatedToken,
+  { ids }: z.infer<typeof DeleteWeakPointsInput>,
+  supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
+) {
+  try {
+    const wanted = [...new Set(ids)];
+    // Every id has to be the student's before any of them goes, so a stale id
+    // in the list deletes nothing rather than half the list.
+    const owned = await supabase.from('weak_points').select('*').eq('user_id', token.userId).in('id', wanted);
+    if (owned.error) return queryFailed('delete_weak_points', 'weak points read', owned.error, 'Akada could not read those weak points.');
+    const rows = (owned.data ?? []) as WeakPointRow[];
+    if (rows.length !== wanted.length) {
+      const found = new Set(rows.map((row) => row.id));
+      const missing = wanted.filter((id) => !found.has(id));
+      return toolError(`Nothing was deleted: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not in the student’s Akada. Find them with get_weak_points (status "all").`);
+    }
+    const { error } = await supabase.from('weak_points').delete().eq('user_id', token.userId).in('id', wanted);
+    if (error) return queryFailed('delete_weak_points', 'weak points delete', error, 'Akada could not delete those weak points.');
+    return result({
+      deleted: rows.map((row) => ({ id: row.id, summary: row.summary, status: row.status })),
+      message: `Deleted ${rows.length} weak point${rows.length === 1 ? '' : 's'}. They are gone from Akada, not marked fixed.`,
+    });
+  } catch (cause) {
+    return toolCrashed('delete_weak_points', cause);
+  }
+}
+
 /* ── Registration ───────────────────────────────────────────────────── */
 
 const RECORD_DESCRIPTION = `Write down what the student keeps getting wrong in a course, after you have marked a quiz (grade_quiz, or going over a multiple-choice sitting from get_quiz). One item per distinct confusion across the multiple-choice misses and the written answers, not one per question: three questions missed for the same mix-up is one item. Give each its \`section\` and \`page_ref\` from the material the quiz tested, a one-line \`summary\` of what goes wrong, the \`confusion\` as "X vs Y" when two things are being mixed up, and an \`error_type\`: concept (doesn't understand the idea), assumption (applies it where it doesn't hold), algebra (the working goes wrong), graph (reads or draws a graph wrong), evidence (claim without support, or the wrong support), command_word (answers a different question than asked, "describe" for "evaluate"), careless (knew it, slipped). A confusion already recorded for the course counts again on its row instead of adding another, and one marked fixed opens again, so name the same confusion the same way each time. Pass quiz_id, and task_id when the quiz tests one task.`;
@@ -293,6 +324,8 @@ const GET_DESCRIPTION = 'Read the student’s weak points in a course, most ofte
 const RESOLVE_DESCRIPTION = 'Mark a weak point fixed. Only after the student has got that confusion right on a retest (a quiz or a question you asked them), not because they say they understand it now. It opens again on its own if record_weak_points finds it again.';
 
 const REOPEN_DESCRIPTION = 'Open a weak point marked fixed again, when the student gets it wrong again or asks for it back on the list.';
+
+const DELETE_DESCRIPTION = 'Permanently delete weak points from Akada, open or fixed. For ones that should never have been logged: recorded by mistake, a duplicate, the wrong course, or anything the student asks to have removed. This is different from resolve_weak_point: a deleted weak point is gone, it does not count as fixed and does not come back as a repeat. Read them with get_weak_points (status "all") and pass the ids. If any id is not the student’s, nothing is deleted.';
 
 export function registerWeakPointTools(server: McpServer, token: AuthenticatedToken) {
   server.registerTool(
@@ -314,5 +347,10 @@ export function registerWeakPointTools(server: McpServer, token: AuthenticatedTo
     'reopen_weak_point',
     { title: 'Open a weak point again', description: REOPEN_DESCRIPTION, inputSchema: WeakPointIdInput, annotations: { destructiveHint: false, idempotentHint: true } },
     async (input) => reopenWeakPointTool(token, input),
+  );
+  server.registerTool(
+    'delete_weak_points',
+    { title: 'Delete weak points', description: DELETE_DESCRIPTION, inputSchema: DeleteWeakPointsInput, annotations: { destructiveHint: true } },
+    async (input) => deleteWeakPointsTool(token, input),
   );
 }

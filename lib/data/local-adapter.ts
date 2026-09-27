@@ -705,6 +705,10 @@ export class LocalAdapter implements DataProvider {
     write(KEYS.weakPoints, read<WeakPoint[]>(KEYS.weakPoints, []).map((w) => (w.id === id ? { ...w, status, fixedAt } : w)));
   }
 
+  async deleteWeakPoint(id: string): Promise<void> {
+    write(KEYS.weakPoints, read<WeakPoint[]>(KEYS.weakPoints, []).filter((w) => w.id !== id));
+  }
+
   async resetAll(): Promise<void> {
     Object.values(KEYS).forEach(remove);
   }

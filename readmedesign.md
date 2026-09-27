@@ -1337,7 +1337,10 @@ open ones grouped under their section, each section an `.eyebrow` (`§ 1.3`,
 summary in the serif, and under it one muted italic line: the confusion, the
 pages, and the quiz it came from as a hand-underlined link (or the note on
 its task). *fixed* sits at the right in the faintest italic, on hover at
-desktop widths and always on a phone, like *stop asking* on Recall. Ticked, a row
+desktop widths and always on a phone, like *stop asking* on Recall, with
+*delete* beside it the same way. Delete takes two taps: the first turns it
+into *delete it?* in `prioritySoft`, held in view, and it stands down after
+four seconds; the second removes the row for good. Ticked, a row
 moves to a folded **Fixed** list, opened the way done tasks are (`Fixed 3`
 beside the eyebrow), where the rows fade and read *reopen*. Never a
 strikethrough. Before anything has been recorded for the course the panel

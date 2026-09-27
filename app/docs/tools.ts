@@ -87,6 +87,7 @@ export const GROUPS: { id: string; title: string; tools: Tool[] }[] = [
       { name: 'record_weak_points', access: 'Changes', does: 'Writes down each confusion found when marking a quiz; one already there counts again instead of doubling up.' },
       { name: 'resolve_weak_point', access: 'Changes', does: 'Marks a weak point fixed after you get it right on a retest.' },
       { name: 'reopen_weak_point', access: 'Changes', does: 'Puts a fixed weak point back on the list.' },
+      { name: 'delete_weak_points', access: 'Deletes', does: 'Permanently deletes weak points that should never have been logged, rather than marking them fixed.' },
     ],
   },
 ];

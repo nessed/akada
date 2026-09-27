@@ -930,3 +930,19 @@ export async function setWeakPointStatusOptimistic(id: string, status: WeakPoint
     { optimisticData: patch, rollbackOnError: true, populateCache: true, revalidate: false },
   );
 }
+
+/** Takes a weak point off the books entirely, not just off the open list. */
+export async function deleteWeakPointOptimistic(id: string) {
+  const without = (current: WeakPoints | undefined): WeakPoints => ({
+    weakPoints: (current?.weakPoints ?? []).filter((w) => w.id !== id),
+    available: current?.available ?? true,
+  });
+  await mutate(
+    KEY.weakPoints,
+    async (current: WeakPoints | undefined) => {
+      await db.deleteWeakPoint(id);
+      return without(current);
+    },
+    { optimisticData: without, rollbackOnError: true, populateCache: true, revalidate: false },
+  );
+}

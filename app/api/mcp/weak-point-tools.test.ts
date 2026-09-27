@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { getWeakPointsTool, recordWeakPointsTool, reopenWeakPointTool, resolveWeakPointTool } from './weak-point-tools';
+import { deleteWeakPointsTool, getWeakPointsTool, recordWeakPointsTool, reopenWeakPointTool, resolveWeakPointTool } from './weak-point-tools';
 
 type Row = Record<string, unknown>;
 
@@ -114,4 +114,24 @@ test('record_weak_points refuses a course that is not the student’s', async ()
 test('reopen_weak_point on an unknown id says so', async () => {
   const reply = await reopenWeakPointTool(token, { id: '33333333-3333-4333-8333-333333333333' }, fakeSupabase(base()) as never);
   assert.equal((reply as { isError?: boolean }).isError, true);
+});
+
+test('delete_weak_points removes the rows outright, open or fixed', async () => {
+  const db = base();
+  const supabase = fakeSupabase(db) as never;
+  await recordWeakPointsTool(token, { course_id: COURSE, items: [item('A', 'p vs q'), item('B', 'r vs s'), item('C', 't vs u')] }, supabase);
+  const [a, b] = db.weak_points.map((w) => w.id as string);
+  await resolveWeakPointTool(token, { id: b }, supabase);
+  const reply = read(await deleteWeakPointsTool(token, { ids: [a, b] }, supabase));
+  assert.equal((reply.deleted as unknown[]).length, 2);
+  assert.deepEqual(db.weak_points.map((w) => w.summary), ['C']);
+});
+
+test('delete_weak_points deletes nothing when any id is not the student’s', async () => {
+  const db = base();
+  const supabase = fakeSupabase(db) as never;
+  await recordWeakPointsTool(token, { course_id: COURSE, items: [item('A', 'p vs q')] }, supabase);
+  const reply = await deleteWeakPointsTool(token, { ids: [db.weak_points[0].id as string, '33333333-3333-4333-8333-333333333333'] }, supabase);
+  assert.equal((reply as { isError?: boolean }).isError, true);
+  assert.equal(db.weak_points.length, 1);
 });
