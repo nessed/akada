@@ -319,6 +319,54 @@ mono and the block notes follow it in order. **Rest is reported and never added 
 with are the hours that were worked, and every goal, count and run in the app
 reads that one figure.
 
+### The log sheet
+The sheet that ends a session used to ask seven things at once: mark done,
+what did you do, the hashtags, worth keeping, scored, discard and save. Now
+the sheet is **the time, the Mark the task done tick (when a task is
+attached), and Save**, with what the session did (the tally, the Next Mark
+lines, "your ECON sittings usually…") read back above them. Everything else,
+the note with its suggestions and tags, "Worth keeping?" and the practice
+score, folds under one serif line, **› Add a note**, which says "· written"
+beside it when something is in there while folded. Whether the fold opens is
+remembered (`logNotesOpen` in `lib/preferences.ts`): it is a layout choice,
+not an explanation, so it is a preference rather than a dismissed flag. Save
+says **Save** (it said "Save to journal").
+
+The sheet follows the reader to every screen until it is answered, so it
+says why it is there, in the serif italic under the heading: "You stopped a
+1h 10m session on ECON 100 and haven't saved it", or why the clock was
+stopped for them (left running while the page was closed, a break past 45
+minutes, the 18 hour limit).
+
+### The forgotten timer
+The timer's heartbeat keeps a tab alive while it is open, so an open page
+says nothing about anybody being at it: a laptop left on the timer through
+dinner logged an eight-hour sitting, which then set the longest-sitting
+record, struck "One sitting 3h", made its reader a night owl and pushed
+Next Mark's reach to its cap. The timer now keeps **`lastInputAt`** apart
+from `lastSeenAt`: a pointer, a key, a scroll, a touch, the page coming back
+into view, and every timer action. The rules are in `lib/timer-idle.ts`:
+
+- **A block** past its target with no input for **20 minutes** is held. The
+  block itself is its own evidence (a chapter on paper touches nothing), so
+  only the overrun is in doubt, and the cut is at the later of the last input
+  and the moment the target was reached.
+- **An untimed session** with no input for **60 minutes** is held, cut at the
+  last input.
+- Held is never discarded. The log sheet opens pre-trimmed: "You went quiet
+  at 9:42. Logging up to there, 1h 10m." with **Keep the full 2h 30m** beside
+  it, and the reverse link once the full time is chosen.
+- **Any session over four hours**, however it ended, is asked "Is it right?"
+  on the sheet, with "Log up to 9:42 instead" when there was a quiet stretch
+  to cut.
+
+A session saved after a hold, a trim or a recovery carries **`recovery`**
+(`idle`, `away`, `break` or `max`; `sessions.recovery`). Its hours still count
+everywhere hours count, on Stats, the ledger and the run, since the reader
+chose to keep them. Records to beat, the One sitting stamp and every habit
+median leave it out, because a length the reader did not end is not a fact
+about how they study.
+
 ### The study fan
 The timer draws a fan rather than a ring. One stem from the bottom edge
 splitting two or three ways at each step, in the course colour, round tips.
@@ -374,10 +422,12 @@ nothing else does.
   a replay of the first and a completed block is still a completed block.
 - **The eyebrow says so.** `CODE · Break`, in the same 10px uppercase the
   open-mode screen uses for `CODE · Open`. That line is the whole announcement.
-- **The two swap slots take the break's version.** The header's `Block / Open`
-  marks become the break's `5m / 10m / 15m`, and `NextMarkLine` under the
-  controls becomes the sitting's chain. Neither is added to; both are
-  exchanged, so the break screen is exactly as dense as the block screen.
+- **The two swap slots take the break's version.** The header, empty while a
+  block runs, carries the break's `5m / 10m / 15m`, and `NextMarkLine` under
+  the controls becomes the sitting's chain. The header used to carry a
+  `Block / Open` switch as well; that choice is made once, in the start
+  popover (25 / 45 / 60 / Untimed), and the controls under the clock are
+  Pause, +5 min, Break and **Finish** (it said "Finish and log").
 
 The break also asks the one question worth asking there. A sitting's own note
 is written at the end, by which point the first block is two hours and two
@@ -693,7 +743,7 @@ made before the list is read leaves the list unread and reads it fresh.
   with a `+` that drops it into the note on its own line and takes the
   course's highlighter swipe once taken. Offered, never pre-filled: the note
   stays the reader's to write.
-- **The log sheet**: "Worth keeping?", a line to write on under the tags,
+- **The log sheet**: "Worth keeping?", under Add a note, a line to write on under the tags,
   like the break's own question. One thing from the sitting to be asked about
   later. Most sittings leave it empty and that is the expected case.
 
@@ -729,8 +779,8 @@ one number in the record that is an outcome rather than time put in, so it is
 only ever what the reader wrote down, never inferred from anything, and most
 sittings have none.
 
-**On the log sheet** it is a line under "Worth keeping?", written the same
-way: "Scored" as an eyebrow, two short hand-underlined blanks for the score
+**On the log sheet** it is a line under "Worth keeping?", inside the **Add a
+note** fold (see The log sheet), written the same way: "Scored" as an eyebrow, two short hand-underlined blanks for the score
 and what it was out of in mono, and "on a practice paper, if this was one" in
 the serif. Nothing is required. Something written there that is not a score
 out of something (half of one, more than it was out of) gets one quiet line
@@ -1561,4 +1611,4 @@ Movement in the app is soft and deliberate:
 - **A tick is written in.** Ticking a task on a row fills the box with a small press (`.check-press`) and writes the `HandCheck` in a beat later (`drawn`, `.check-draw`), and the row fades to its done opacity over `300ms`. The toggle itself lands `420ms` after the tap, because Today's lists drop finished work and took the row away in the same frame it was ticked, so the check was never seen. Leaving the screen in that moment still saves it. A task that loads already done is drawn done, with no animation.
 - **Hour strokes fill up.** `HourStrokes` fills each stroke from the bottom when it is first drawn, one hour after another (`.stroke-fill`, `45ms` apart), and a part hour rises in place while the clock runs. `HourTicks` in the rail does not, since the rail is redrawn with every screen.
 - **The tab mark draws.** The rule under the current tab in `BottomNav` is drawn out from the middle as the screen changes (`.nav-mark`), a tab gives a `0.94` press, and the Record news dot pops on (`.pop-in`) in the bar and the rail.
-- **Finish and log** holds the last frame of the sitting still behind the log sheet as it rises. Stopping empties the timer, and a block screen with no target left used to flip to open mode's night paper at 00:00 under the sheet.
+- **Finish** holds the last frame of the sitting still behind the log sheet as it rises. Stopping empties the timer, and a block screen with no target left used to flip to open mode's night paper at 00:00 under the sheet.

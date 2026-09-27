@@ -15,7 +15,8 @@ import { settled } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useTimer } from '@/lib/timer-context';
 import { keepLine } from '@/lib/recall/actions';
-import { isoDate } from '@/lib/utils';
+import { formatHM, isoDate } from '@/lib/utils';
+import { LONG_SITTING_SECONDS } from '@/lib/timer-idle';
 import { useNotice } from './Notice';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from './SessionLogModal';
@@ -55,6 +56,19 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [online, setOnline] = useState(true);
+  // Whether to log the sitting cut where it went quiet rather than in full.
+  // Held after no input, it opens cut; anything else opens in full and
+  // offers the cut when there is one worth offering.
+  const [useQuiet, setUseQuiet] = useState(false);
+  useEffect(() => {
+    setUseQuiet(Boolean(pendingLog?.quiet) && pendingLog?.recoveryReason === 'idle');
+  }, [pendingLog]);
+  const chosen =
+    pendingLog && useQuiet && pendingLog.quiet
+      ? pendingLog.quiet
+      : pendingLog
+        ? { durationSeconds: pendingLog.durationSeconds, breakSeconds: pendingLog.breakSeconds, segments: pendingLog.segments }
+        : null;
 
   const course = useMemo(
     () =>
@@ -137,7 +151,11 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       setSaveError('Offline. Kept on this device.');
       return;
     }
-    const durationSeconds = clampSessionSeconds(pendingLog.durationSeconds);
+    const durationSeconds = clampSessionSeconds(chosen?.durationSeconds ?? pendingLog.durationSeconds);
+    // A sitting the reader did not end, or cut back by hand from a very long
+    // one: kept, but not a length records and habits should learn from.
+    const recovery =
+      pendingLog.recoveryReason ?? (useQuiet || durationSeconds > LONG_SITTING_SECONDS ? 'idle' : null);
     if (!isLoggableDuration(durationSeconds)) {
       handleDiscard();
       return;
@@ -150,8 +168,9 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
         date: pendingLog.date || isoDate(),
         durationSeconds,
         note,
-        breakSeconds: pendingLog.breakSeconds,
-        segments: pendingLog.segments,
+        breakSeconds: chosen?.breakSeconds ?? pendingLog.breakSeconds,
+        segments: chosen?.segments ?? pendingLog.segments,
+        ...(recovery ? { recovery } : {}),
         ...(practice ? { score: practice.score, scoreOutOf: practice.outOf } : {}),
       });
       // A score the database had nowhere to put: the sitting is saved and the
@@ -207,21 +226,22 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       open={open}
       course={course}
       task={task}
-      durationSeconds={pendingLog?.durationSeconds ?? 0}
-      breakSeconds={pendingLog?.breakSeconds ?? 0}
-      segments={pendingLog?.segments ?? []}
+      durationSeconds={chosen?.durationSeconds ?? 0}
+      breakSeconds={chosen?.breakSeconds ?? 0}
+      segments={chosen?.segments ?? []}
       suggestions={suggestions}
       effect={pendingLog && sitting?.courseId === pendingLog.courseId ? sitting : null}
       usualSeconds={usual && settled(usual) ? usual.median : null}
       saving={saving}
-      contextMessage={
-        pendingLog?.recoveryReason === 'away'
-          ? 'Recovered while you were away.'
-          : pendingLog?.recoveryReason === 'max'
-            ? 'Reached the session limit.'
-            : pendingLog?.recoveryReason === 'break'
-              ? 'The break ran long, so the sitting was closed at that point.'
-              : ''
+      notice={
+        pendingLog && course ? (
+          <LogNotice
+            log={pendingLog}
+            courseCode={course.code}
+            useQuiet={useQuiet}
+            onUseQuiet={setUseQuiet}
+          />
+        ) : null
       }
       errorMessage={
         saveError ||
@@ -232,5 +252,80 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       onCancel={handleDiscard}
       onSave={handleSave}
     />
+  );
+}
+
+type PendingLog = NonNullable<ReturnType<typeof useTimer>['pendingLog']>;
+
+function clockOf(ms: number): string {
+  return new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+/**
+ * Why the sheet is on the screen, which it is on every screen until it is
+ * answered, and anything to decide about the length. It used to say nothing
+ * and simply follow the reader from tab to tab.
+ */
+function LogNotice({
+  log,
+  courseCode,
+  useQuiet,
+  onUseQuiet,
+}: {
+  log: PendingLog;
+  courseCode: string;
+  useQuiet: boolean;
+  onUseQuiet: (value: boolean) => void;
+}) {
+  const full = formatHM(log.durationSeconds);
+  const quiet = log.quiet;
+  const link = 'hand-underline ml-1 bg-transparent px-0.5 not-italic text-[13px] text-ink';
+
+  if (log.recoveryReason === 'idle' && quiet) {
+    return useQuiet ? (
+      <p className="m-0">
+        You went quiet at {clockOf(quiet.at)}. Logging up to there,{' '}
+        <span className="font-mono not-italic text-[12.5px]">{formatHM(quiet.durationSeconds)}</span>.
+        <button type="button" onClick={() => onUseQuiet(false)} className={link}>
+          Keep the full {full}
+        </button>
+      </p>
+    ) : (
+      <p className="m-0">
+        Keeping the full <span className="font-mono not-italic text-[12.5px]">{full}</span>.
+        <button type="button" onClick={() => onUseQuiet(true)} className={link}>
+          Log up to {clockOf(quiet.at)} instead
+        </button>
+      </p>
+    );
+  }
+
+  const why =
+    log.recoveryReason === 'away'
+      ? `The timer on ${courseCode} was left running while the page was closed, so it stopped where it was last open.`
+      : log.recoveryReason === 'break'
+        ? `The break ran past 45 minutes, so the ${courseCode} session was closed where it began.`
+        : log.recoveryReason === 'max'
+          ? `The ${courseCode} session reached the 18 hour limit and stopped there.`
+          : `You stopped a ${full} session on ${courseCode} and haven't saved it.`;
+
+  // Anything over four hours is asked about, however it ended.
+  const long = log.durationSeconds > LONG_SITTING_SECONDS;
+  return (
+    <>
+      <p className="m-0">{why}</p>
+      {long && (
+        <p className="m-0 mt-1">
+          {full} is a long session. Is it right?
+          {quiet && (
+            <button type="button" onClick={() => onUseQuiet(!useQuiet)} className={link}>
+              {useQuiet
+                ? `Keep the full ${full}`
+                : `Log up to ${clockOf(quiet.at)} instead, ${formatHM(quiet.durationSeconds)}`}
+            </button>
+          )}
+        </p>
+      )}
+    </>
   );
 }

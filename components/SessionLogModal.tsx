@@ -10,6 +10,7 @@ import SessionChain from '@/components/SessionChain';
 import TallyMarks from '@/components/progression/TallyMarks';
 import { ButtonSpinner } from './LoadingIndicator';
 import { useLeaving } from './Leaving';
+import { usePreferences } from '@/lib/preferences';
 
 // Quick-reflection tag chips. Tapping appends `#tag` into the note so the
 // data shape stays the same, no schema migration needed for this flourish.
@@ -47,7 +48,12 @@ interface Props {
   suggestions?: string[];
   saving?: boolean;
   errorMessage?: string;
-  contextMessage?: string;
+  /**
+   * Why the sheet is here and anything to decide about the length: "You
+   * stopped a 1h session on ECON 100 and haven't saved it", or why a timer
+   * was cut and the way to keep the full time. Under the heading.
+   */
+  notice?: React.ReactNode;
   onCancel: () => void;
   /**
    * `keep` is one thing from the sitting the reader wants to be asked about
@@ -75,7 +81,7 @@ export default function SessionLogModal({
   suggestions = [],
   saving = false,
   errorMessage = '',
-  contextMessage = '',
+  notice = null,
   onCancel,
   onSave,
 }: Props) {
@@ -88,6 +94,9 @@ export default function SessionLogModal({
   const [scoreLeft, setScoreLeft] = useState(false);
   const [markDone, setMarkDone] = useState(false);
   const sheetRef = useRef<HTMLDivElement | null>(null);
+  // Whether "Add a note" is folded open, remembered as a layout choice.
+  const [prefs, updatePrefs] = usePreferences();
+  const notesOpen = prefs.logNotesOpen;
 
   useEffect(() => {
     if (open) {
@@ -216,6 +225,9 @@ export default function SessionLogModal({
         >
           Log this <span className="italic">session</span>?
         </h3>
+        {notice && (
+          <div className="mt-1.5 font-serif text-[13.5px] italic leading-[1.5] text-ink-soft">{notice}</div>
+        )}
 
         <div className="mt-3.5 flex items-baseline gap-3">
           <span className="font-mono font-semibold tabular-nums text-[52px] leading-[0.95] tracking-[-0.03em] text-ink">
@@ -306,10 +318,6 @@ export default function SessionLogModal({
           </p>
         )}
 
-        {contextMessage && (
-          <p className="mt-2 text-[12px] leading-[1.45] text-muted">{contextMessage}</p>
-        )}
-
         {/* What the session was against, and the one thing worth asking at
             the end of it. */}
         {task && (
@@ -334,142 +342,165 @@ export default function SessionLogModal({
           </button>
         )}
 
-        <div className="mt-4">
-          <label htmlFor="session-log-note" className="eyebrow m-0 mb-2 block">
-            What did you do?
-          </label>
-          <textarea
-            id="session-log-note"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={3}
-            placeholder="Optional reflection…"
-            className="w-full resize-none bg-paper border border-line rounded-[10px] p-3.5 text-[14px] font-serif italic text-ink leading-[1.5] outline-none focus:border-line-strong"
-          />
-        </div>
+        {/* Everything past the time and the tick folds away under one line.
+            A sheet that asked seven things at once got none of them
+            answered; most sessions are saved as they are. Whether it opens
+            folded is remembered from last time. */}
+        <button
+          type="button"
+          onClick={() => updatePrefs({ logNotesOpen: !notesOpen })}
+          aria-expanded={notesOpen}
+          className="mt-4 flex items-center gap-1.5 bg-transparent px-0.5 font-serif text-[13.5px] text-ink-soft transition-colors hover:text-ink"
+        >
+          <span aria-hidden className={`inline-block transition-transform ${notesOpen ? 'rotate-90' : ''}`}>
+            &rsaquo;
+          </span>
+          <span className="hand-underline">Add a note</span>
+          {!notesOpen && (note.trim() || keep.trim() || anyIn) && (
+            <span className="text-[12.5px] italic text-muted">· written</span>
+          )}
+        </button>
 
-        {/* What the record already knows this sitting held, offered as lines
-            to take rather than typed out again. Marked the way the tags
-            below are: a swipe of the course's highlighter once taken. */}
-        {suggestions.length > 0 && (
-          <ul aria-label="From this sitting" className="mt-2 m-0 list-none space-y-0.5 p-0">
-            {suggestions.map((line) => {
-              const taken = hasLine(line);
+        {notesOpen && (
+          <div className="animate-fade-in">
+          <div className="mt-4">
+            <label htmlFor="session-log-note" className="eyebrow m-0 mb-2 block">
+              What did you do?
+            </label>
+            <textarea
+              id="session-log-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              placeholder="Optional reflection…"
+              className="w-full resize-none bg-paper border border-line rounded-[10px] p-3.5 text-[14px] font-serif italic text-ink leading-[1.5] outline-none focus:border-line-strong"
+            />
+          </div>
+
+          {/* What the record already knows this sitting held, offered as lines
+              to take rather than typed out again. Marked the way the tags
+              below are: a swipe of the course's highlighter once taken. */}
+          {suggestions.length > 0 && (
+            <ul aria-label="From this sitting" className="mt-2 m-0 list-none space-y-0.5 p-0">
+              {suggestions.map((line) => {
+                const taken = hasLine(line);
+                return (
+                  <li key={line}>
+                    <button
+                      type="button"
+                      aria-pressed={taken}
+                      onClick={() => toggleSuggestion(line)}
+                      className={`inline-flex min-h-[28px] items-baseline gap-1.5 bg-transparent px-0.5 text-left font-serif text-[13px] italic leading-[1.4] transition-colors ${
+                        taken ? 'hl-swipe text-ink' : 'text-muted hover:text-ink'
+                      }`}
+                      style={
+                        taken
+                          ? ({ '--hl': resolveTint(course.color, course.tint) } as React.CSSProperties)
+                          : undefined
+                      }
+                    >
+                      <span aria-hidden className="not-italic text-muted-soft">{taken ? '✓' : '+'}</span>
+                      {line}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {REFLECTION_TAGS.map((tag) => {
+              const active = new RegExp(`(^|\\s)#${tag}(\\s|$)`).test(note);
               return (
-                <li key={line}>
-                  <button
-                    type="button"
-                    aria-pressed={taken}
-                    onClick={() => toggleSuggestion(line)}
-                    className={`inline-flex min-h-[28px] items-baseline gap-1.5 bg-transparent px-0.5 text-left font-serif text-[13px] italic leading-[1.4] transition-colors ${
-                      taken ? 'hl-swipe text-ink' : 'text-muted hover:text-ink'
-                    }`}
-                    style={
-                      taken
-                        ? ({ '--hl': resolveTint(course.color, course.tint) } as React.CSSProperties)
-                        : undefined
-                    }
-                  >
-                    <span aria-hidden className="not-italic text-muted-soft">{taken ? '✓' : '+'}</span>
-                    {line}
-                  </button>
-                </li>
+                <button
+                  key={tag}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleTag(tag)}
+                  className={`inline-flex min-h-[30px] items-center bg-transparent px-0.5 font-serif text-[13px] transition-colors ${
+                    active ? 'hl-swipe text-ink' : 'text-muted-soft'
+                  }`}
+                  style={
+                    active
+                      ? ({ '--hl': resolveTint(course.color, course.tint) } as React.CSSProperties)
+                      : undefined
+                  }
+                >
+                  #{tag}
+                </button>
               );
             })}
-          </ul>
-        )}
+          </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {REFLECTION_TAGS.map((tag) => {
-            const active = new RegExp(`(^|\\s)#${tag}(\\s|$)`).test(note);
-            return (
-              <button
-                key={tag}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleTag(tag)}
-                className={`inline-flex min-h-[30px] items-center bg-transparent px-0.5 font-serif text-[13px] transition-colors ${
-                  active ? 'hl-swipe text-ink' : 'text-muted-soft'
-                }`}
-                style={
-                  active
-                    ? ({ '--hl': resolveTint(course.color, course.tint) } as React.CSSProperties)
-                    : undefined
-                }
-              >
-                #{tag}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* One thing from the sitting to be asked about later. The end of a
-            sitting is the one moment the reader knows exactly what was in it,
-            and writing it as something to be asked is itself a small recall.
-            A line to write on, like the break's own question, rather than a
-            second box: most sittings leave it empty and that is fine. */}
-        <div className="mt-4">
-          <label htmlFor="session-log-keep" className="eyebrow m-0 mb-1.5 block">
-            Worth keeping?
-          </label>
-          <input
-            id="session-log-keep"
-            type="text"
-            value={keep}
-            onChange={(e) => setKeep(e.target.value)}
-            maxLength={300}
-            placeholder="one thing from this, to be asked about from memory later"
-            className="hand-underline w-full bg-transparent font-serif text-[14px] italic leading-[1.5] text-ink outline-none placeholder:text-muted-soft"
-          />
-        </div>
-
-        {/* A practice paper, marked. The one number in the app that is an
-            outcome rather than time put in, so it is asked for on a line
-            like the one above and never required: most sittings pass it by.
-            Digits in mono, the words around them in the serif. */}
-        <div className="mt-4">
-          <p className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <label htmlFor="session-log-score" className="eyebrow m-0">
-              Scored
+          {/* One thing from the sitting to be asked about later. The end of a
+              sitting is the one moment the reader knows exactly what was in it,
+              and writing it as something to be asked is itself a small recall.
+              A line to write on, like the break's own question, rather than a
+              second box: most sittings leave it empty and that is fine. */}
+          <div className="mt-4">
+            <label htmlFor="session-log-keep" className="eyebrow m-0 mb-1.5 block">
+              Worth keeping?
             </label>
             <input
-              id="session-log-score"
+              id="session-log-keep"
               type="text"
-              inputMode="decimal"
-              value={scored}
-              onChange={(e) => setScored(e.target.value.slice(0, 9))}
-              onBlur={() => setScoreLeft(true)}
-              aria-describedby="session-log-score-problem"
-              placeholder="–"
-              aria-label="What a practice paper in this sitting scored"
-              className="hand-underline w-12 bg-transparent text-center font-mono text-[14px] tabular-nums text-ink outline-none placeholder:text-muted-soft"
+              value={keep}
+              onChange={(e) => setKeep(e.target.value)}
+              maxLength={300}
+              placeholder="one thing from this, to be asked about from memory later"
+              className="hand-underline w-full bg-transparent font-serif text-[14px] italic leading-[1.5] text-ink outline-none placeholder:text-muted-soft"
             />
-            <span aria-hidden className="font-mono text-[13px] text-muted">/</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={outOf}
-              onChange={(e) => setOutOf(e.target.value.slice(0, 9))}
-              onBlur={() => setScoreLeft(true)}
-              aria-describedby="session-log-score-problem"
-              placeholder="–"
-              aria-label="Out of"
-              className="hand-underline w-12 bg-transparent text-center font-mono text-[14px] tabular-nums text-ink outline-none placeholder:text-muted-soft"
-            />
-            <span className="font-serif text-[13px] italic text-muted-soft">
-              on a practice paper, if this was one
-            </span>
-          </p>
-          {/* Always there and usually empty, so a screen reader hears the
-              line the moment it has something to say. */}
-          <p
-            id="session-log-score-problem"
-            aria-live="polite"
-            className={`m-0 font-serif text-[12.5px] italic text-muted ${scoreProblem ? 'mt-1.5' : ''}`}
-          >
-            {scoreProblem ? 'That does not read as a score out of something, so it will not be kept.' : ''}
-          </p>
-        </div>
+          </div>
+
+          {/* A practice paper, marked. The one number in the app that is an
+              outcome rather than time put in, so it is asked for on a line
+              like the one above and never required: most sittings pass it by.
+              Digits in mono, the words around them in the serif. */}
+          <div className="mt-4">
+            <p className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <label htmlFor="session-log-score" className="eyebrow m-0">
+                Scored
+              </label>
+              <input
+                id="session-log-score"
+                type="text"
+                inputMode="decimal"
+                value={scored}
+                onChange={(e) => setScored(e.target.value.slice(0, 9))}
+                onBlur={() => setScoreLeft(true)}
+                aria-describedby="session-log-score-problem"
+                placeholder="–"
+                aria-label="What a practice paper in this sitting scored"
+                className="hand-underline w-12 bg-transparent text-center font-mono text-[14px] tabular-nums text-ink outline-none placeholder:text-muted-soft"
+              />
+              <span aria-hidden className="font-mono text-[13px] text-muted">/</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={outOf}
+                onChange={(e) => setOutOf(e.target.value.slice(0, 9))}
+                onBlur={() => setScoreLeft(true)}
+                aria-describedby="session-log-score-problem"
+                placeholder="–"
+                aria-label="Out of"
+                className="hand-underline w-12 bg-transparent text-center font-mono text-[14px] tabular-nums text-ink outline-none placeholder:text-muted-soft"
+              />
+              <span className="font-serif text-[13px] italic text-muted-soft">
+                on a practice paper, if this was one
+              </span>
+            </p>
+            {/* Always there and usually empty, so a screen reader hears the
+                line the moment it has something to say. */}
+            <p
+              id="session-log-score-problem"
+              aria-live="polite"
+              className={`m-0 font-serif text-[12.5px] italic text-muted ${scoreProblem ? 'mt-1.5' : ''}`}
+            >
+              {scoreProblem ? 'That does not read as a score out of something, so it will not be kept.' : ''}
+            </p>
+          </div>
+          </div>
+        )}
 
         {errorMessage && (
           <p role="alert" className="mt-3 mb-0 text-[12px] leading-[1.45] text-priority font-serif italic">
@@ -494,7 +525,7 @@ export default function SessionLogModal({
             className="flex-1 min-h-[50px] py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-35"
           >
             <HandCheck size={14} color="currentColor" />
-            {saving ? <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving session…</span> : 'Save to journal'}
+            {saving ? <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving…</span> : 'Save'}
           </button>
         </div>
       </div>

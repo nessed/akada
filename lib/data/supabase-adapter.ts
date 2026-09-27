@@ -29,6 +29,7 @@ import type {
 } from './types';
 import {
   clampSessionSeconds,
+  cleanRecovery,
   cleanScore,
   isLoggableDuration,
   sanitizeSegments,
@@ -113,6 +114,8 @@ interface SessionRow {
       arrive as a string. */
   score?: number | string | null;
   score_out_of?: number | string | null;
+  /** Added with the idle rule; absent on an older schema. */
+  recovery?: string | null;
 }
 
 interface TaskRow {
@@ -299,6 +302,7 @@ function rowToSession(r: SessionRow): Session {
     createdAt: r.created_at,
     breakSeconds: Number.isFinite(rest) ? clampSessionSeconds(rest) : 0,
     ...(practice ? { score: practice.score, scoreOutOf: practice.outOf } : {}),
+    recovery: cleanRecovery(r.recovery),
   });
 }
 
@@ -829,6 +833,8 @@ export class SupabaseAdapter implements DataProvider {
       // insert it always did against a database that has not re-run
       // supabase/schema.sql.
       ...(breakSeconds > 0 ? { break_seconds: breakSeconds } : {}),
+      // Named only on a sitting closed for the reader, for the same reason.
+      ...(cleanRecovery(input.recovery) ? { recovery: cleanRecovery(input.recovery) } : {}),
     };
     const insert = (values: Record<string, unknown>) =>
       this.supabase.from('sessions').insert(values).select().single();
@@ -844,6 +850,14 @@ export class SupabaseAdapter implements DataProvider {
     if (error && practice && (isMissingColumn(error) || error.code === '23514')) {
       console.warn('The practice score was not kept. Run the latest supabase/schema.sql once.');
       ({ data, error } = await insert(row));
+    }
+    // A database without sessions.recovery keeps the hours without the
+    // reason: the sitting is the record, the reason commentary on it.
+    if (error && 'recovery' in row && isMissingColumn(error)) {
+      const { recovery: _dropped, ...plain } = row as typeof row & { recovery?: string };
+      void _dropped;
+      ({ data, error } = await insert(practice ? { ...plain, score: practice.score, score_out_of: practice.outOf } : plain));
+      if (error && practice && (isMissingColumn(error) || error.code === '23514')) ({ data, error } = await insert(plain));
     }
     if (error) throw error;
     const session = rowToSession(data as SessionRow);

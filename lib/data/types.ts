@@ -101,7 +101,20 @@ export interface Session {
    */
   score?: number;
   scoreOutOf?: number;
+  /**
+   * Set when the sitting was closed for the reader rather than by them, and
+   * kept anyway: `idle` held after no input (or trimmed by hand from a very
+   * long one), `away` recovered after the page went unseen, `break` a break
+   * past its ceiling, `max` the 18h limit. The hours still count everywhere
+   * hours count, since the reader chose to keep them; records, the One
+   * sitting ladder and the habit medians leave these out, because a length
+   * the reader did not end is not a fact about how they study.
+   */
+  recovery?: SessionRecovery | null;
 }
+
+/** See Session.recovery. */
+export type SessionRecovery = 'idle' | 'away' | 'break' | 'max';
 
 export type TaskPriority = 'high' | 'normal';
 

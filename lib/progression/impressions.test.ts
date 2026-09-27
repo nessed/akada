@@ -30,3 +30,12 @@ test('Finished early counts only work that was worked, and never a skip', () => 
   const ladders = readLadders([MATH], [on('worked'), on('skipped')], tasks, [], new Map(), RUNS);
   assert.equal(ladders.find((l) => l.id === 'early')?.value, 1);
 });
+
+test('One sitting ignores a sitting closed for the reader', () => {
+  const long = { ...on('x'), durationSeconds: 8 * 3600, recovery: 'idle' as const };
+  const real = { ...on('y'), durationSeconds: 3600 };
+  const ladders = readLadders([MATH], [long, real], [], [], new Map(), RUNS);
+  const sitting = ladders.find((l) => l.name.toLowerCase().includes('sitting'));
+  assert.ok(sitting, 'there is a sitting ladder');
+  assert.ok(sitting.value < 2, `longest counted is the hour, got ${sitting.value}`);
+});
