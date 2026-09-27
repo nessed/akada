@@ -20,6 +20,7 @@ import {
   ComingPanel,
   TodayHours,
   UpNext,
+  WeekHours,
   CourseLine,
 } from '@/components/today/TodayPanels';
 import DatePicker from '@/components/DatePicker';
@@ -638,6 +639,11 @@ function DashboardPageContent() {
               courses={courses}
               goalHours={settings?.dailyGoalHours ?? 4}
             />
+            {/* The week against its goal, at the same size as the day: it is
+                one of the two numbers Today is read for. */}
+            <div className="mt-7 border-t border-line pt-7">
+              <WeekHours courses={courses} sessions={shownSessions} />
+            </div>
             {/* Next Mark. One quiet line naming the nearest true thing, and
                 nothing when nothing is close. A reward line rather than a
                 to-do, so it sits under the hours it comes from, not over Up

@@ -450,6 +450,82 @@ export function TodayHours({
   );
 }
 
+/* ── The week against its goal ─────────────────────────────────────────── */
+
+/**
+ * The week's hours against the week's goal, which is the course goals added
+ * up (there is no separate one to set). It sits in the head band under the
+ * day's hours at the same size: the week is what the day is for, and when it
+ * lived down the page as a bar chart it read as a footnote. One stroke per
+ * hour of the goal, narrower than the day's since a week runs to twenty or
+ * more; the line under it carries what is left and how many days it has.
+ */
+export function WeekHours({ courses, sessions }: { courses: Course[]; sessions: Session[] }) {
+  const today = isoDate();
+  const monday = isoDate(startOfWeek());
+  const total = useMemo(
+    () =>
+      sessions.reduce(
+        (a, s) =>
+          s.date >= monday && isLoggableDuration(s.durationSeconds) ? a + s.durationSeconds : a,
+        0,
+      ),
+    [sessions, monday],
+  );
+  const goalHours = courses.reduce((a, c) => a + (c.weeklyGoalHours || 0), 0);
+  const left = Math.max(0, goalHours * 3600 - total);
+  // Today counts as one of the days left, so Sunday is "1 day".
+  const daysLeft = 7 - ((new Date(today + 'T12:00:00').getDay() + 6) % 7);
+
+  return (
+    <section>
+      <div className="flex items-baseline justify-between">
+        <p className="eyebrow m-0">This week</p>
+        {goalHours > 0 && (
+          <span className="font-serif text-[12.5px] italic text-muted">
+            of <span className="font-mono text-[11px] not-italic tabular-nums">{goalHours}h</span>
+          </span>
+        )}
+      </div>
+
+      <p className="m-0 mt-4 font-mono text-[32px] font-semibold leading-none tracking-[-0.02em] tabular-nums">
+        {total > 0 ? formatHM(total) : '0m'}
+      </p>
+
+      {goalHours > 0 ? (
+        <>
+          <HourStrokes
+            seconds={total}
+            goalHours={goalHours}
+            color="var(--ink)"
+            width={goalHours > 12 ? 6 : 10}
+            max={24}
+            className="mt-4"
+            label={`${formatHM(total)} of ${goalHours} hours this week`}
+          />
+          <p className="m-0 mt-3 font-serif text-[12.5px] italic text-muted">
+            {left > 0 ? (
+              <>
+                <span className="font-mono text-[11px] not-italic tabular-nums">{formatHM(left)}</span>{' '}
+                to go · {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
+              </>
+            ) : (
+              'Goal met for the week.'
+            )}
+          </p>
+        </>
+      ) : (
+        <Link
+          href="/settings"
+          className="mt-3 inline-block font-serif text-[12.5px] italic text-muted no-underline transition-colors hover:text-ink"
+        >
+          Give your courses a weekly goal →
+        </Link>
+      )}
+    </section>
+  );
+}
+
 /* ── The courses, in one line ──────────────────────────────────────────── */
 
 /**
