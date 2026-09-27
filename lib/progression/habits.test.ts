@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Course, Session, SessionSegment } from '../data/types';
 import { readHabits } from './habits';
-import { ledgerEntriesFromRows, mergeLedgers, rankingBias } from './log';
+import { followsLine, ledgerEntriesFromRows, mergeLedgers, rankingBias } from './log';
 import { readObservations, pickMarginNote } from './observations';
 
 /**
@@ -314,4 +314,16 @@ test('a sitting over four hours or closed for the reader moves no median', () =>
   const habits = readHabits([MATH], [...usual, forgotten, held], []);
   assert.equal(habits.sittings.n, 5);
   assert.equal(habits.sittings.median, 45 * 60);
+});
+
+test('a course line is followed only by a session on that course', () => {
+  assert.equal(followsLine({ kind: 'course-mark', courseId: 'math' }, 'math'), true);
+  assert.equal(followsLine({ kind: 'course-mark', courseId: 'math' }, 'cs'), false);
+  assert.equal(followsLine({ kind: 'untouched-course', courseId: 'econ' }, 'cs'), false);
+  assert.equal(followsLine({ kind: 'course-mark' }, 'math'), false);
+  // Lines about the week or the day are answered by any course.
+  assert.equal(followsLine({ kind: 'week-counts', courseId: null }, 'cs'), true);
+  assert.equal(followsLine({ kind: 'day-threshold', courseId: null }, 'cs'), true);
+  assert.equal(followsLine({ kind: 'week-goal', courseId: 'econ' }, 'econ'), true);
+  assert.equal(followsLine({ kind: 'week-goal', courseId: 'econ' }, 'cs'), false);
 });

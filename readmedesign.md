@@ -550,8 +550,13 @@ The app uses it in four places, and says it back in three.
   sittings are in it is the upper quartile of your own, bounded between
   thirty minutes and two hours.
 - **The ranking learns.** Every line shown is logged on the device with
-  whether a sitting followed within the hour (`log.ts`, which used to write
-  this only to a table nobody read). Once a kind of line has been shown six
+  whether a session followed within the hour (`log.ts`, which used to write
+  this only to a table nobody read). **Followed means on that course**: a
+  line naming ECON is answered by an ECON session and nothing else, and only
+  the lines about the whole week or the day ("20 minutes makes this week
+  count", "until today counts") are answered by any course (`followsLine`).
+  It used to count any session at all, so a CS session after an ECON line
+  taught the ranking that ECON lines work. Once a kind of line has been shown six
   times, its follow rate against the others moves it up or down the ranking
   by at most half a tier: enough to prefer the lines you act on, never enough
   to jump a course with an exam over one without.

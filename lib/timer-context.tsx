@@ -1050,7 +1050,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     breakNoticeRef.current = null;
     // A new sitting is what "did the line work?" means. Fails silently and
     // does nothing at all if no Next Mark was shown recently.
-    void logSessionFollowed();
+    void logSessionFollowed(courseId);
     activeRef.current = next;
     setActive(next);
     saveActive(next);
