@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildFan, drawFan, fanShades, seedFrom, type FanTree } from '@/lib/fan';
+import { buildFan, drawFan, fanShades, mixHex, seedFrom, type FanTree } from '@/lib/fan';
 
 interface Props {
   /** 0 to 1. At 1 the fan fills its frame; in block mode that is the target. */
@@ -23,6 +23,14 @@ interface Props {
   light?: boolean;
   /** Whether the fan can be taken hold of and pulled. On by default. */
   interactive?: boolean;
+  /** Leaves on the growing tips, and flowers once the fan is full. */
+  leaves?: boolean;
+  /** The pencil underdrawing of the shape still to come. For a block, which
+      has a top to reach; an open session has no shape to sketch ahead. */
+  sketch?: boolean;
+  /** A drawn line for the stem to stand on. Pair it with a `baseOffset` of
+      about 20 so the line has room under the foot. */
+  ground?: boolean;
   className?: string;
 }
 
@@ -116,6 +124,9 @@ export default function StudyFan({
   baseOffset = -2,
   light = false,
   interactive = true,
+  leaves = true,
+  sketch = false,
+  ground = false,
   className = '',
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -187,6 +198,20 @@ export default function StudyFan({
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
     const colors = fanShades(color, light);
+    /* The pencil and the paper the leaves are mixed toward. Read off the page
+       so a block frame on the night paper gets night pencil; the open screen
+       inverts with literal values, so `light` names them outright. */
+    const page = getComputedStyle(canvas);
+    const pencil = light ? '#4A4438' : page.getPropertyValue('--line-strong').trim() || '#C9C0A8';
+    const paper = light ? '#1A1815' : page.getPropertyValue('--paper').trim() || '#FBF8EF';
+    const leaf = leaves
+      ? {
+          fill: mixHex(color, paper, light ? 0.35 : 0.45),
+          edge: light ? mixHex(color, '#FFFFFF', 0.25) : mixHex(color, '#000000', 0.22),
+          bloom: light ? mixHex(color, '#FFFFFF', 0.55) : mixHex(color, paper, 0.2),
+          eye: light ? paper : mixHex(color, '#000000', 0.45),
+        }
+      : undefined;
     const bends = new Array<number>(depth + 1).fill(0);
     const slack = new Array<number>(depth + 1).fill(0);
     const lagMax = Math.round(depth * LAG_PER_DEPTH);
@@ -222,6 +247,10 @@ export default function StudyFan({
         baseOffset: baseOffset * dpr,
         bends: physics ? bends : undefined,
         slack: physics ? slack : undefined,
+        px: dpr,
+        leaf,
+        sketch: sketch ? pencil : undefined,
+        ground: ground ? pencil : undefined,
       });
     };
 
@@ -291,7 +320,7 @@ export default function StudyFan({
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics]);
+  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground]);
 
   /* Taking hold. The pull is read off the distance travelled rather than the
      point grabbed, through a curve that gives most of its bend early and then
