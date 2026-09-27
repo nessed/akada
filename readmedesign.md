@@ -305,18 +305,40 @@ at the same weight, and a box that everything has stops meaning anything.
 The page is separated by its own ruling instead, the way a ruled pad is:
 
 - **The head band.** On Today, Up next is the one thing that spans the page,
-  with the hours beside it (from `xl`), since Start is what fills them: the
-  day's hours, then under a cutoff **This week** (`WeekHours`) at the same
-  32px mono, the week's hours against the week's goal, which is the course
-  goals added up (there is no separate one to set). Its strokes are 6px wide
-  once the goal passes twelve hours and cap at 24, and a serif line under
-  them says what is left and how many days the week has ("4h 20m to go · 3
-  days left"). With no course goals it links to Settings instead. The week
-  is one of the two numbers Today is read for; the bar chart it replaces sat
-  below the fold and read as a footnote. The Next Mark line comes under
-  both: it is a reward line read off them, not a to-do, so it never sits
-  over Up next. On a course page the band is
-  the strip of four figures. Nothing frames it: it leads by position and size.
+  with the hours beside it (from `xl`), since Start is what fills them.
+  **Up next** is the course rule and code with the course name in the serif
+  italic, the title at 40px (30 on a phone) with no swipe behind it, then a
+  row of labelled figures (`UpNextFact`): **Due** (Today, "2d overdue" in
+  `warn`, or the date, with a small `High` tag on `priority-tint`), **Spent**
+  in mono (**On the clock**, with the pulsing dot, while a timer runs on it)
+  and **Steps** done over total when the task has any. The steps themselves
+  follow as a line of stops joined by a `line-strong` rule: a filled dot with
+  a tick for a done one, a ring in the course colour and "Now" for the first
+  open one, an empty circle for the rest; a tap ticks one. It used to be one
+  italic sentence with the figures dropped into it, under a highlighter swipe
+  that went muddy on the night paper. Under the buttons, **After this** names
+  what Up next would offer next. The sort rule sits top right as a serif
+  italic line with a cycle mark, not in the hand face.
+  Beside it the day's hours, then under a cutoff **This week** (`WeekHours`)
+  at the same size, 40px mono. Under the day's figure is the **day ledger**
+  (`DayLedger`): a strip from 7am to midnight (stretched for an early start
+  or a late night) with each timed block laid where it happened in its course
+  colour and a thin ink mark for now. Only a sitting the timer ran knows when
+  it happened, from its segments; one logged by hand counts in the figure and
+  is not placed. The week is the week's hours against its goal, which is the
+  course goals added up (there is no separate one to set), drawn as **a bar
+  a day**, Monday to Sunday, each bar stacked in the colours of the courses it
+  went to with its hours written over it in mono, and a dashed line at the
+  day's share of the goal labelled "goal 2h 51m a day". Today's label is
+  "Today" on the yellow highlighter; days still to come are left blank. A key
+  names the colours when more than one course had time. It replaced one
+  stroke per goal hour, twenty-odd thin marks that read as a barcode: a week
+  is read by its days. A serif line under it says what is left and how many
+  days the week has ("4h 20m to go · 3 days left"). With no course goals it
+  links to Settings instead. The Next Mark line comes under both: it is a
+  reward line read off them, not a to-do, so it never sits over Up next. On a
+  course page the band is the strip of four figures. Nothing frames it: it
+  leads by position and size.
 - **Today is three things.** Up next, the hours (the day's and the week's),
   and Coming. Everything else
   it carries is conditional: the recall card when something is due, Overdue
@@ -324,12 +346,20 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   showing (a section whose one row is the Up next task said it twice), and
   **Before the exam** in the week before one. The course cards that used to
   stand under the day, the week's bar chart and the "New here?" link to the
-  guide are gone (the week came back as `WeekHours` in the head band): in
-  place of the cards, one line (`CourseLine`), "This week"
-  then each course's rule and code with its hours this week in mono, the whole
-  line a link to `/courses`. Up next's row is **Start · Done · Tomorrow**; the
-  Untimed button beside Start went, since Start's popover already offers
-  25/45/60/Untimed.
+  guide are gone (the week came back as `WeekHours` in the head band). Under
+  the day's work, **Your courses this week** (`CourseLine`) is a row of four
+  (two on a phone): each course's rule and code, its name in the serif, its
+  hours this week in mono over its goal, its `HourStrokes` in the course
+  colour and how many tasks it has open, each a link to its page. It was a
+  single line of codes and hours that read as a footnote. **Coming** sets
+  each row's date like a diary's margin, the weekday as an eyebrow over the
+  day of the month in mono (`warn` within two days), with the course, "exam"
+  on `warn-tint` and the weight on the eyebrow line over the title. Under the
+  run and the day of the term, the term is a row of one mark per week: the
+  ones behind in `ink-soft`, this one on the highlighter, the rest in
+  `bg-tint`. Up next's row is **Start · Done · Tomorrow**, Start filled and
+  the other two outlined in `line`; the Untimed button beside Start went,
+  since Start's popover already offers 25/45/60/Untimed.
 - **The fold.** `.fold`, two `line-strong` rules 2px apart, the full content
   width. It closes the head band and is the one heavier line on the screen.
 - **The column rule.** From `xl` the page below the fold is two columns, the
@@ -359,7 +389,10 @@ Nothing in the app draws a percentage bar. A week against a goal is **one
 stroke per hour**, filled in the course colour, with a part hour filling its
 own stroke from the bottom: `HourStrokes`. "Four of six" is the shape of an
 afternoon; "68%" is a number nobody asked for and cannot act on. The label
-beside the strokes carries the exact figure, and what is left to go.
+beside the strokes carries the exact figure, and what is left to go. A goal
+past a dozen hours is the exception: Today's week is a bar a day against a
+dashed daily share, since two dozen strokes stop being countable and read as
+a barcode.
 
 ### The sitting as a chain
 A finished sitting is drawn as a row of marks, `SessionChain`: the blocks as
@@ -1686,8 +1719,8 @@ rules rather than in panels:
   words; the drawing goes stale the same way if nobody minds it, so **when
   Today's parts or their names change, change the sketch in the same PR**.
   It shows only what Today really shows: the date line, Up next with its
-  course rule and mint swipe, Start/Done/Tomorrow, today's hours with the goal
-  strokes, and Coming.
+  course rule and its row of figures, Start/Done/Tomorrow, today's hours with
+  the day ledger, and Coming with its dates.
 - **Margin notes** in the hand face (`font-hand`, muted ink), a few words
   each, with a drawn arrow where one points at something. Only where there is
   a margin: the ones beside the sketch appear at `xl`.

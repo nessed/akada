@@ -257,6 +257,17 @@ function DashboardPageContent() {
   }
 
   /** "Tomorrow": the same move the row menu calls Reschedule. */
+  async function handleToggleStep(task: Task, stepId: string) {
+    const subtasks = (task.subtasks ?? []).map((step) =>
+      step.id === stepId ? { ...step, completed: !step.completed } : step,
+    );
+    try {
+      await updateTaskOptimistic(task.id, { subtasks });
+    } catch {
+      notify('That step did not save.');
+    }
+  }
+
   async function handleSnoozeTask(task: Task) {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -518,6 +529,10 @@ function DashboardPageContent() {
      The rail's start reads the same function, so the two never disagree. */
   const upNext = upNextFrom(tasks, sessions, prefs.upNextSort, today);
   const dueTodayRest = todayTasks.filter((t) => t.id !== upNext?.id);
+  // What Up next would offer once this one is off the list, named under it.
+  const thenTask = upNext
+    ? upNextFrom(tasks.filter((t) => t.id !== upNext.id), sessions, prefs.upNextSort, today)
+    : null;
   // Dates are optional on a semester now (Settings → Semester lets you start
   // one with just a label). No dates just means no progress ribbon to show.
   const semesterInfo =
@@ -610,6 +625,12 @@ function DashboardPageContent() {
                 sort={prefs.upNextSort}
                 onSortChange={(upNextSort) => updatePrefs({ upNextSort })}
                 sessions={shownSessions}
+                onToggleStep={handleToggleStep}
+                then={
+                  thenTask
+                    ? { task: thenTask, course: courses.find((c) => c.id === thenTask.courseId) }
+                    : null
+                }
               />
             ) : !tasksLoading && tasks.length === 0 ? (
               <GettingStarted
@@ -745,7 +766,7 @@ function DashboardPageContent() {
                 hours this week, the whole line a way to /courses. The cards
                 that stood here repeated the shelf and the rail, and made Today
                 seven sections deep. */}
-            <CourseLine courses={courses} sessions={shownSessions} />
+            <CourseLine courses={courses} sessions={shownSessions} tasks={tasks} />
           </div>
 
           {/* The readings: what is coming, the week, and the two numbers that
@@ -780,6 +801,21 @@ function DashboardPageContent() {
                 </span>
               )}
             </div>
+            {/* The term as a row of weeks: the ones behind, the one this is,
+                and what is left. A count of weeks, never a percentage. */}
+            {semesterInfo && semesterInfo.totalWeeks > 0 && (
+              <div aria-hidden className="mt-2.5 flex gap-1">
+                {Array.from({ length: semesterInfo.totalWeeks }, (_, i) => (
+                  <span
+                    key={i}
+                    className={`h-2.5 flex-1 rounded-[2px] ${
+                      i + 1 < semesterInfo.currentWeek ? 'bg-ink-soft' : i + 1 === semesterInfo.currentWeek ? '' : 'bg-bg-tint'
+                    }`}
+                    style={i + 1 === semesterInfo.currentWeek ? { background: 'var(--highlight-yellow)' } : undefined}
+                  />
+                ))}
+              </div>
+            )}
           </aside>
         </div>
         </>

@@ -18,7 +18,6 @@ import { LIVE_SESSION_PREFIX } from '@/lib/live-session';
 import { useNotes } from '@/lib/data-hooks';
 import { backlogPages, countdowns, readingBacklog, readingRateDetail } from '@/lib/derive';
 import HourStrokes from '@/components/HourStrokes';
-import HandNote from '@/components/notebook/HandNote';
 import { RecallStrokes } from '@/components/recall/RecallMarks';
 import { preparesFor, type RecallReading } from '@/lib/recall';
 
@@ -47,6 +46,10 @@ interface UpNextProps {
    * into this task counts up while a timer runs on it.
    */
   sessions?: Session[];
+  /** Ticks one of the task's steps on or off. */
+  onToggleStep?: (task: Task, stepId: string) => void;
+  /** What Up next would offer once this one is done. */
+  then?: { task: Task; course: Course | undefined } | null;
 }
 
 // How long Done and Tomorrow wait for the task to lift off before handing
@@ -89,6 +92,8 @@ export function UpNext({
   sort = 'in-progress',
   onSortChange,
   sessions = [],
+  onToggleStep,
+  then = null,
 }: UpNextProps) {
   const due = dueLabel(task.dueDate);
   const color = course?.color ?? 'var(--ink)';
@@ -124,15 +129,15 @@ export function UpNext({
     window.setTimeout(() => then(task), LIFT_MS);
   };
 
-  // The swipe under the title is the course's own pastel, lifted off the
-  // line the way the highlighter tokens are.
-  const swipe = course?.color
-    ? `color-mix(in srgb, ${course.color} 42%, transparent)`
-    : 'var(--highlight-yellow)';
+  // The parts of the task, as a line of stops: what is done, the one the
+  // reader is on, and what is left. The first open one is "now".
+  const steps = task.subtasks ?? [];
+  const stepsDone = steps.filter((s) => s.completed).length;
+  const current = steps.find((s) => !s.completed)?.id ?? null;
 
-  // No card. Up next leads by where it sits, across the top of the page
-  // over the double rule, and the course colour is the short rule before
-  // the code rather than a stripe down a box's edge.
+  // No card, no swipe. Up next leads by where it sits and by the size of its
+  // title; the facts under it are a row of labelled figures rather than one
+  // italic sentence with numbers dropped into it.
   return (
     <section className="relative">
       <div className="flex items-baseline justify-between gap-4">
@@ -141,85 +146,139 @@ export function UpNext({
           <button
             type="button"
             onClick={() => onSortChange(nextSort(sort))}
-            // The note is already the label, so it says what it is rather
+            // The line is already the label, so it says what it is rather
             // than "sort by", and the title carries what a click will do.
             title={`Showing ${SORT_NOTE[sort]}. Switch to ${SORT_NOTE[nextSort(sort)]}.`}
-            className="-my-3 flex min-h-10 shrink-0 items-center bg-transparent p-0 text-right transition-opacity hover:opacity-70"
+            className="-my-3 flex min-h-10 shrink-0 items-center gap-1.5 bg-transparent p-0 text-right font-serif text-[12.5px] italic text-muted transition-colors hover:text-ink"
           >
-            {/* Wrapped, because HandNote's tilt is a transform and settle
-                would hold its own over it. */}
             <span key={sort} className="inline-block animate-settle">
-              <HandNote color="var(--ink-soft)" size={17}>
-                {SORT_NOTE[sort]}
-              </HandNote>
+              {SORT_NOTE[sort]}
             </span>
+            <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3" />
+              <path d="M18 3v4h-4M6 21v-4h4" />
+            </svg>
           </button>
         ) : (
-          <HandNote color="var(--ink-soft)" size={17}>
-            {SORT_NOTE[sort]}
-          </HandNote>
+          <span className="font-serif text-[12.5px] italic text-muted">{SORT_NOTE[sort]}</span>
         )}
       </div>
 
       {/* Everything about the task itself, keyed on it, so a new one settles
-          in and draws its rule and its swipe fresh. */}
+          in and draws its rule fresh. */}
       <div key={task.id} className={leaving === task.id ? 'lift-away' : 'animate-settle'}>
       {course && (
-        <div className="mt-2.5 flex items-center gap-2.5">
+        <div className="mt-4 flex items-center gap-2.5">
           <span aria-hidden className="course-rule rule-draw" style={{ ['--c' as string]: color }} />
           <span className="eyebrow text-ink-soft">{course.code}</span>
-          <span className="text-[12px] text-muted">{course.name}</span>
+          <span className="font-serif text-[13.5px] italic text-muted">{course.name}</span>
         </div>
       )}
 
-      <h2 className="m-0 mt-1.5 font-serif text-[24px] font-medium leading-[1.15] tracking-[-0.02em] md:text-[28px]">
+      <h2 className="m-0 mt-2.5 font-serif text-[30px] font-medium leading-[1.1] tracking-[-0.025em] md:text-[40px]">
         {onOpen ? (
-          <button type="button" onClick={() => onOpen(task)} className="bg-transparent text-left">
-            <span className="hl-swipe hl-draw -mx-[3px]" style={{ ['--hl' as string]: swipe }}>
-              {task.title}
-            </span>
+          <button
+            type="button"
+            onClick={() => onOpen(task)}
+            className="bg-transparent text-left transition-opacity hover:opacity-80"
+          >
+            {task.title}
           </button>
         ) : (
-          <span className="hl-swipe hl-draw -mx-[3px]" style={{ ['--hl' as string]: swipe }}>
-            {task.title}
-          </span>
+          task.title
         )}
       </h2>
 
-      <p className="m-0 mt-2 font-serif italic text-[15px] text-muted">
-        {/* No date is a state the task is in, and since Up next now reaches
-            open-ended work on a day with nothing due, it is said rather than
-            left as a gap with " · high" hanging off the front of it. */}
-        {due ? (
-          <span className={due.category === 'overdue' ? 'text-warn' : 'text-ink'}>
-            Due {due.formattedDate}
-            {due.category === 'overdue' ? ` · ${-due.days} days overdue` : ''}
-          </span>
-        ) : (
-          <span>open ended</span>
+      {/* The facts, each a caption over a figure. */}
+      <dl className="m-0 mt-5 flex flex-wrap gap-x-10 gap-y-4">
+        <UpNextFact label="Due">
+          {due ? (
+            <span className={`font-serif text-[16px] ${due.category === 'overdue' ? 'text-warn' : 'text-ink'}`}>
+              {due.category === 'today'
+                ? 'Today'
+                : due.category === 'overdue'
+                  ? `${-due.days}d overdue`
+                  : due.formattedDate}
+            </span>
+          ) : (
+            <span className="font-serif text-[16px] italic text-ink-soft">Open ended</span>
+          )}
+          {task.priority === 'high' && (
+            <span className="eyebrow ml-2 rounded-[4px] bg-priorityTint px-1.5 py-[3px] !tracking-[0.12em] text-priority">
+              High
+            </span>
+          )}
+        </UpNextFact>
+        <UpNextFact label={onClock ? 'On the clock' : 'Spent'}>
+          {onClock && (
+            <span aria-hidden className="mr-2 inline-block h-[6px] w-[6px] animate-tick rounded-full" style={{ background: color }} />
+          )}
+          <span className="tnum font-mono text-[16px] font-medium">{spent >= 60 ? formatHM(spent) : '—'}</span>
+          {!onClock && lastSat && spent >= 60 && (
+            <span className="ml-2 font-serif text-[12.5px] italic text-muted">
+              last {formatRelativeDate(lastSat).toLowerCase()}
+            </span>
+          )}
+        </UpNextFact>
+        {steps.length > 0 && (
+          <UpNextFact label="Steps">
+            <span className="tnum font-mono text-[16px] font-medium">
+              {stepsDone} / {steps.length}
+            </span>
+          </UpNextFact>
         )}
-        {task.priority === 'high' && <span className="text-priority"> · high</span>}
-        {onClock ? (
-          <span className="text-ink">
-            {' · '}
-            <span aria-hidden className="inline-block h-[6px] w-[6px] -translate-y-[2px] animate-tick rounded-full" style={{ background: color }} />{' '}
-            on the clock, <span className="font-mono not-italic tnum text-[13.5px]">{formatHM(spent)}</span> in
-          </span>
-        ) : spent >= 60 ? (
-          <span>
-            {' · '}
-            <span className="font-mono not-italic tnum text-[13.5px]">{formatHM(spent)}</span> in
-            {lastSat && `, last sat ${formatRelativeDate(lastSat).toLowerCase()}`}
-          </span>
-        ) : null}
-      </p>
+      </dl>
+
+      {steps.length > 0 && (
+        <ol aria-label="Steps" className="relative m-0 mt-6 max-w-[560px] list-none p-0">
+          <span aria-hidden className="absolute bottom-[21px] left-[7px] top-[21px] w-px bg-line-strong" />
+          {steps.map((step) => {
+            const now = step.id === current;
+            return (
+              <li key={step.id} className="relative">
+                <button
+                  type="button"
+                  disabled={!onToggleStep}
+                  onClick={() => onToggleStep?.(task, step.id)}
+                  aria-pressed={step.completed}
+                  className="flex min-h-[42px] w-full items-center gap-4 bg-transparent py-1.5 text-left disabled:cursor-default"
+                >
+                  {step.completed ? (
+                    <span aria-hidden className="grid h-[15px] w-[15px] shrink-0 place-items-center rounded-full bg-muted text-bg">
+                      <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 6.5l2.6 2.6L10 2.8" />
+                      </svg>
+                    </span>
+                  ) : now ? (
+                    <span
+                      aria-hidden
+                      className="h-[15px] w-[15px] shrink-0 rounded-full border-4 bg-bg shadow-[0_0_0_4px_var(--bg)]"
+                      style={{ borderColor: color }}
+                    />
+                  ) : (
+                    <span aria-hidden className="h-[15px] w-[15px] shrink-0 rounded-full border-[1.5px] border-line-strong bg-bg" />
+                  )}
+                  <span
+                    className={`min-w-0 flex-1 font-serif text-[15px] ${
+                      step.completed ? 'text-muted' : now ? 'font-medium text-ink' : 'text-ink-soft'
+                    }`}
+                  >
+                    {step.title}
+                  </span>
+                  {now && <span className="eyebrow shrink-0 text-ink-soft">Now</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={(e) => onStart(task, e.currentTarget, false)}
-          className="group flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.97]"
+          className="group flex h-12 items-center gap-2.5 rounded-[12px] bg-primary px-5 text-[14px] font-semibold text-primary-contrast transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.97]"
         >
           <svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="currentColor" className="transition-transform duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)] group-hover:translate-x-[2px]">
             <path d="M7 5l12 7-12 7V5z" />
@@ -229,19 +288,46 @@ export function UpNext({
         <button
           type="button"
           onClick={() => letGo(onDone)}
-          className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
+          className="h-12 rounded-[12px] border border-line px-[18px] text-[14px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
         >
           Done
         </button>
         <button
           type="button"
           onClick={() => letGo(onSnooze)}
-          className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
+          className="h-12 rounded-[12px] border border-line px-[18px] text-[14px] font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink"
         >
           Tomorrow
         </button>
       </div>
+
+      {/* What comes after it, so finishing this one has somewhere to go. */}
+      {then && (
+        <button
+          type="button"
+          onClick={() => onOpen?.(then.task)}
+          className="mt-7 flex min-h-11 w-full max-w-[560px] items-center gap-3 border-t border-line-soft bg-transparent pt-1 text-left text-ink-soft transition-colors hover:text-ink"
+        >
+          <span className="eyebrow w-[76px] shrink-0 text-muted">After this</span>
+          {then.course && (
+            <span aria-hidden className="course-rule !w-3.5" style={{ ['--c' as string]: then.course.color }} />
+          )}
+          <span className="min-w-0 flex-1 truncate text-[14px]">
+            {then.task.title}
+            {then.course && <span className="text-[12.5px] text-muted"> · {then.course.code}</span>}
+          </span>
+        </button>
+      )}
     </section>
+  );
+}
+
+function UpNextFact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <dt className="eyebrow text-muted">{label}</dt>
+      <dd className="m-0 flex h-[22px] items-center">{children}</dd>
+    </div>
   );
 }
 
@@ -295,7 +381,7 @@ export function ComingPanel({
   return (
     <section>
       <div className="flex items-baseline justify-between pb-1.5">
-        <p className="eyebrow m-0">Coming</p>
+        <p className="eyebrow m-0 text-ink-soft">Coming</p>
         {coming.length > 0 && (
           <span className="font-serif text-[12.5px] italic text-muted">
             next {coming.length === 1 ? 'one' : coming.length}
@@ -324,8 +410,20 @@ export function ComingPanel({
           key={task.id}
           type="button"
           onClick={() => onOpen?.(task)}
-          className="-mx-2 flex w-[calc(100%+1rem)] items-baseline gap-2.5 rounded-[8px] border-b border-line-soft px-2 py-2.5 text-left transition-colors last:border-b-0 hover:bg-bg-tint"
+          title={days === 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Due in ${days} days`}
+          className="-mx-2 flex w-[calc(100%+1rem)] items-start gap-3.5 rounded-[8px] border-b border-line-soft px-2 py-3 text-left transition-colors last:border-b-0 hover:bg-bg-tint"
         >
+          {/* The date, set like a diary's margin: the weekday over the day. */}
+          <span className="flex w-10 shrink-0 flex-col">
+            <span className="eyebrow text-muted">{weekday(task.dueDate)}</span>
+            <span
+              className={`tnum font-mono text-[18px] font-medium leading-[1.2] ${
+                days <= 2 ? 'text-warn' : 'text-ink'
+              }`}
+            >
+              {task.dueDate ? Number(task.dueDate.slice(8, 10)) : '—'}
+            </span>
+          </span>
           <span className="min-w-0 flex-1">
             {/* Course, what it is and what it is worth all ride the eyebrow,
                 so the countdown is the only thing on the right and the title
@@ -339,12 +437,14 @@ export function ComingPanel({
                 />
               )}
               {course?.code ?? '—'}
-              {task.kind === 'exam' && <span className="ml-1.5 text-warn">exam</span>}
+              {task.kind === 'exam' && (
+                <span className="ml-2 rounded-[4px] bg-warnTint px-1.5 py-[3px] text-warn">exam</span>
+              )}
               {(task.weight ?? 0) > 0 && (
                 <span className="ml-1.5 text-muted">worth {Math.round(task.weight as number)}%</span>
               )}
             </span>
-            <span className="mt-0.5 block truncate text-[13px] text-ink">{task.title}</span>
+            <span className="mt-1 block truncate text-[14px] text-ink">{task.title}</span>
             {standing && course && (
               <span
                 className="mt-1.5 flex items-center gap-2"
@@ -356,13 +456,6 @@ export function ComingPanel({
                 </span>
               </span>
             )}
-          </span>
-          <span
-            className={`tnum shrink-0 font-mono text-[13px] font-semibold ${
-              days <= 2 ? 'text-warn' : 'text-ink'
-            }`}
-          >
-            {days === 0 ? 'today' : days === 1 ? '1 day' : `${days} days`}
           </span>
         </button>
         );
@@ -385,6 +478,11 @@ export function ComingPanel({
   );
 }
 
+function weekday(date: string | null): string {
+  if (!date) return '';
+  return new Date(`${date}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short' });
+}
+
 /* ── Today's hours ─────────────────────────────────────────────────────── */
 
 export function TodayHours({
@@ -401,7 +499,7 @@ export function TodayHours({
   const total = totalSeconds(todays);
 
   // Which courses the day was actually spent on, biggest first. Only the top
-  // few are named; the rest are in the strokes either way.
+  // few are named; the rest are on the ledger either way.
   const byCourse = useMemo(() => {
     const map = new Map<string, number>();
     for (const s of todays) map.set(s.courseId, (map.get(s.courseId) ?? 0) + s.durationSeconds);
@@ -414,34 +512,28 @@ export function TodayHours({
   return (
     <section>
       <div className="flex items-baseline justify-between">
-        <p className="eyebrow m-0">Today</p>
+        <p className="eyebrow m-0 text-ink-soft">Today</p>
         <span className="font-serif text-[12.5px] italic text-muted">
           of <span className="font-mono text-[11px] not-italic tabular-nums">{goalHours}h</span>
         </span>
       </div>
 
-      <p className="m-0 mt-4 font-mono text-[32px] font-semibold leading-none tracking-[-0.02em] tabular-nums xl:mt-6">
+      <p className="m-0 mt-3 font-mono text-[34px] font-medium leading-none tracking-[-0.03em] tabular-nums xl:text-[40px]">
         {total > 0 ? formatHM(total) : '0m'}
       </p>
 
-      <HourStrokes
-        seconds={total}
-        goalHours={goalHours}
-        color="var(--ink)"
-        className="mt-4"
-        label={`${formatHM(total)} of ${goalHours} hours today`}
-      />
+      <DayLedger sessions={todays} courses={courses} today={today} />
 
       {byCourse.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-x-3.5 gap-y-1.5 text-[11px] text-muted">
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-ink-soft">
           {byCourse.slice(0, 3).map(({ course, secs }) => (
             <span key={course!.id} className="flex items-center gap-1.5">
               <span
                 aria-hidden
-                className="block h-1.5 w-1.5 rounded-[1px]"
+                className="block h-2 w-2 rounded-[2px]"
                 style={{ background: course!.color }}
               />
-              {course!.code} <span className="font-mono">{formatHM(secs)}</span>
+              {course!.code} <span className="font-mono text-muted">{formatHM(secs)}</span>
             </span>
           ))}
         </div>
@@ -450,37 +542,157 @@ export function TodayHours({
   );
 }
 
+/**
+ * The day as a strip from morning to midnight, each sitting laid on it where
+ * it happened, in its course colour, with a mark for now. Only a sitting the
+ * timer ran knows when it happened (its blocks carry their start); one logged
+ * by hand counts in the figure above and is simply not placed.
+ */
+function DayLedger({
+  sessions,
+  courses,
+  today,
+}: {
+  sessions: Session[];
+  courses: Course[];
+  today: string;
+}) {
+  // Read after mount, so the server and the first paint agree.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const dayStart = new Date(`${today}T00:00:00`).getTime();
+  const blocks = useMemo(() => {
+    const out: { key: string; from: number; to: number; color: string; live: boolean }[] = [];
+    for (const s of sessions) {
+      const color = courses.find((c) => c.id === s.courseId)?.color ?? 'var(--ink-soft)';
+      if (s.id.startsWith(LIVE_SESSION_PREFIX)) {
+        if (now === null) continue;
+        out.push({ key: s.id, from: now - s.durationSeconds * 1000, to: now, color, live: true });
+        continue;
+      }
+      for (const g of s.segments ?? []) {
+        if (g.kind !== 'focus') continue;
+        const from = Date.parse(g.startedAt);
+        if (!Number.isFinite(from)) continue;
+        out.push({ key: `${s.id}:${g.ordinal}`, from, to: from + g.seconds * 1000, color, live: false });
+      }
+    }
+    return out
+      .map((b) => ({ ...b, from: (b.from - dayStart) / 3_600_000, to: (b.to - dayStart) / 3_600_000 }))
+      .filter((b) => b.to > 0 && b.from < 30);
+  }, [sessions, courses, now, dayStart]);
+
+  // Seven in the morning to midnight, stretched for an early start or a late
+  // night past the day boundary.
+  const earliest = Math.min(7, ...blocks.map((b) => Math.floor(b.from)));
+  const first = Math.max(0, earliest);
+  const nowH = now === null ? null : (now - dayStart) / 3_600_000;
+  const last = Math.max(24, Math.ceil(Math.max(0, ...blocks.map((b) => b.to), nowH ?? 0)));
+  const span = last - first;
+  const at = (h: number) => `${((Math.min(last, Math.max(first, h)) - first) / span) * 100}%`;
+  const ticks: number[] = [];
+  for (let h = first; h <= last; h += 3) ticks.push(h);
+  const tickLabel = (h: number) => {
+    const hh = h % 24;
+    if (hh === 0) return '12a';
+    if (hh === 12) return '12p';
+    return hh < 12 ? `${hh}a` : `${hh - 12}p`;
+  };
+
+  return (
+    <div className="mt-5">
+      <div
+        role="img"
+        aria-label={`${blocks.length} ${blocks.length === 1 ? 'block' : 'blocks'} timed today`}
+        className="relative h-[26px]"
+      >
+        <span aria-hidden className="absolute inset-x-0 top-[8px] h-[10px] rounded-[3px] bg-bg-tint" />
+        {blocks.map((b) => (
+          <span
+            key={b.key}
+            aria-hidden
+            className={`absolute top-[8px] h-[10px] min-w-[3px] rounded-[2px] ${b.live ? 'animate-tick' : ''}`}
+            style={{
+              left: at(b.from),
+              width: `calc(${at(b.to)} - ${at(b.from)})`,
+              background: b.color,
+            }}
+          />
+        ))}
+        {nowH !== null && nowH >= first && nowH <= last && (
+          <span aria-hidden className="absolute bottom-0.5 top-0.5 w-[1.5px] rounded-full bg-ink" style={{ left: at(nowH) }} />
+        )}
+      </div>
+      <div aria-hidden className="relative mt-1 h-3.5">
+        {ticks.map((h, i) => (
+          <span
+            key={h}
+            className={`absolute font-mono text-[10px] text-muted ${
+              i === 0 ? '' : i === ticks.length - 1 && h === last ? '-translate-x-full' : '-translate-x-1/2'
+            }`}
+            style={{ left: at(h) }}
+          >
+            {tickLabel(h)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── The week against its goal ─────────────────────────────────────────── */
+
+const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 /**
  * The week's hours against the week's goal, which is the course goals added
- * up (there is no separate one to set). It sits in the head band under the
- * day's hours at the same size: the week is what the day is for, and when it
- * lived down the page as a bar chart it read as a footnote. One stroke per
- * hour of the goal, narrower than the day's since a week runs to twenty or
- * more; the line under it carries what is left and how many days it has.
+ * up (there is no separate one to set). The figure, then the week as a bar a
+ * day, each bar its hours written over it and stacked in the colours of the
+ * courses it went to, with a dashed line at the day's share of the goal. It
+ * replaced a row of one stroke per goal hour, twenty-odd thin marks that read
+ * as a barcode: a week is read by its days.
  */
 export function WeekHours({ courses, sessions }: { courses: Course[]; sessions: Session[] }) {
   const today = isoDate();
   const monday = isoDate(startOfWeek());
-  const total = useMemo(
-    () =>
-      sessions.reduce(
-        (a, s) =>
-          s.date >= monday && isLoggableDuration(s.durationSeconds) ? a + s.durationSeconds : a,
-        0,
-      ),
-    [sessions, monday],
-  );
+  const { days, total } = useMemo(() => {
+    const days = WEEKDAYS.map((label, i) => {
+      const d = new Date(`${monday}T12:00:00`);
+      d.setDate(d.getDate() + i);
+      return { label, date: isoDate(d), byCourse: new Map<string, number>(), total: 0 };
+    });
+    let total = 0;
+    for (const s of sessions) {
+      if (s.date < monday || !isLoggableDuration(s.durationSeconds)) continue;
+      const day = days.find((d) => d.date === s.date);
+      if (!day) continue;
+      day.byCourse.set(s.courseId, (day.byCourse.get(s.courseId) ?? 0) + s.durationSeconds);
+      day.total += s.durationSeconds;
+      total += s.durationSeconds;
+    }
+    return { days, total };
+  }, [sessions, monday]);
+
   const goalHours = courses.reduce((a, c) => a + (c.weeklyGoalHours || 0), 0);
   const left = Math.max(0, goalHours * 3600 - total);
   // Today counts as one of the days left, so Sunday is "1 day".
   const daysLeft = 7 - ((new Date(today + 'T12:00:00').getDay() + 6) % 7);
 
+  // The tallest thing on the chart, a day or the goal line, stands 80px.
+  const pace = goalHours / 7;
+  const top = Math.max(pace * 1.1, ...days.map((d) => d.total / 3600), 1);
+  const px = (hours: number) => Math.round((hours / top) * 80);
+  const worked = courses.filter((c) => days.some((d) => d.byCourse.has(c.id)));
+
   return (
     <section>
       <div className="flex items-baseline justify-between">
-        <p className="eyebrow m-0">This week</p>
+        <p className="eyebrow m-0 text-ink-soft">This week</p>
         {goalHours > 0 && (
           <span className="font-serif text-[12.5px] italic text-muted">
             of <span className="font-mono text-[11px] not-italic tabular-nums">{goalHours}h</span>
@@ -488,32 +700,83 @@ export function WeekHours({ courses, sessions }: { courses: Course[]; sessions: 
         )}
       </div>
 
-      <p className="m-0 mt-4 font-mono text-[32px] font-semibold leading-none tracking-[-0.02em] tabular-nums">
+      <p className="m-0 mt-3 font-mono text-[34px] font-medium leading-none tracking-[-0.03em] tabular-nums xl:text-[40px]">
         {total > 0 ? formatHM(total) : '0m'}
       </p>
 
+      <div
+        role="img"
+        aria-label={days.map((d) => `${d.label} ${formatHM(d.total)}`).join(', ')}
+        className="relative mt-5 grid h-[108px] grid-cols-7 items-end border-b border-line"
+      >
+        {goalHours > 0 && (
+          <>
+            <span aria-hidden className="absolute inset-x-0 border-t border-dashed border-line-strong" style={{ bottom: px(pace) }} />
+            <span
+              aria-hidden
+              className="absolute right-0 font-mono text-[10px] text-muted"
+              style={{ bottom: px(pace) + 3 }}
+            >
+              goal {formatHM(Math.round(pace * 3600))} a day
+            </span>
+          </>
+        )}
+        {days.map((d) => {
+          const future = d.date > today;
+          return (
+            <div key={d.date} aria-hidden className="relative flex flex-col items-center justify-end gap-1">
+              {!future && (
+                <span className={`whitespace-nowrap font-mono text-[10px] tabular-nums ${d.total > 0 ? 'text-ink' : 'text-muted'}`}>
+                  {d.total > 0 ? formatHM(d.total) : '·'}
+                </span>
+              )}
+              <span className="flex w-[22px] flex-col-reverse overflow-hidden rounded-t-[3px] sm:w-[26px]">
+                {courses
+                  .filter((c) => d.byCourse.has(c.id))
+                  .map((c) => (
+                    <span key={c.id} style={{ height: px((d.byCourse.get(c.id) ?? 0) / 3600), background: c.color }} />
+                  ))}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div aria-hidden className="mt-2 grid grid-cols-7 justify-items-center">
+        {days.map((d) => (
+          <span
+            key={d.date}
+            className={`eyebrow rounded-[3px] px-1 py-0.5 ${
+              d.date === today ? 'text-ink' : d.date > today ? 'text-muted-soft' : 'text-muted'
+            }`}
+            style={d.date === today ? { background: 'var(--highlight-yellow)' } : undefined}
+          >
+            {d.date === today ? 'Today' : d.label}
+          </span>
+        ))}
+      </div>
+
+      {worked.length > 1 && (
+        <div className="mt-3.5 flex flex-wrap gap-x-3.5 gap-y-1.5 text-[11.5px] text-ink-soft">
+          {worked.map((c) => (
+            <span key={c.id} className="flex items-center gap-1.5">
+              <span aria-hidden className="block h-2 w-2 rounded-[2px]" style={{ background: c.color }} />
+              {c.code}
+            </span>
+          ))}
+        </div>
+      )}
+
       {goalHours > 0 ? (
-        <>
-          <HourStrokes
-            seconds={total}
-            goalHours={goalHours}
-            color="var(--ink)"
-            width={goalHours > 12 ? 6 : 10}
-            max={24}
-            className="mt-4"
-            label={`${formatHM(total)} of ${goalHours} hours this week`}
-          />
-          <p className="m-0 mt-3 font-serif text-[12.5px] italic text-muted">
-            {left > 0 ? (
-              <>
-                <span className="font-mono text-[11px] not-italic tabular-nums">{formatHM(left)}</span>{' '}
-                to go · {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
-              </>
-            ) : (
-              'Goal met for the week.'
-            )}
-          </p>
-        </>
+        <p className="m-0 mt-3 font-serif text-[13px] italic text-ink-soft">
+          {left > 0 ? (
+            <>
+              <span className="font-mono text-[12px] not-italic tabular-nums text-ink">{formatHM(left)}</span>{' '}
+              to go · {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
+            </>
+          ) : (
+            'Goal met for the week.'
+          )}
+        </p>
       ) : (
         <Link
           href="/settings"
@@ -526,15 +789,23 @@ export function WeekHours({ courses, sessions }: { courses: Course[]; sessions: 
   );
 }
 
-/* ── The courses, in one line ──────────────────────────────────────────── */
+/* ── The courses this week ─────────────────────────────────────────────── */
 
 /**
- * Each course's rule and code with its hours this week, in one line that is a
- * way to /courses. It stands where three full course cards used to, which
- * repeated the shelf and the rail and made Today seven sections deep; the
- * week's hours are what those cards were read for.
+ * Each course with its hours this week against its goal, a row of four under
+ * the day's work. It stands where one line of codes and hours did, which read
+ * as a footnote; the hours against the goal are what a course is looked at
+ * for on Today, and the strokes say "two of six" at a glance.
  */
-export function CourseLine({ courses, sessions }: { courses: Course[]; sessions: Session[] }) {
+export function CourseLine({
+  courses,
+  sessions,
+  tasks = [],
+}: {
+  courses: Course[];
+  sessions: Session[];
+  tasks?: Task[];
+}) {
   const byCourse = useMemo(() => {
     const monday = isoDate(startOfWeek());
     const map = new Map<string, number>();
@@ -544,34 +815,65 @@ export function CourseLine({ courses, sessions }: { courses: Course[]; sessions:
     }
     return map;
   }, [sessions]);
+  const open = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of tasks) if (!t.completed) map.set(t.courseId, (map.get(t.courseId) ?? 0) + 1);
+    return map;
+  }, [tasks]);
 
   if (courses.length === 0) return null;
 
   return (
     <section>
-      <Link
-        href="/courses"
-        aria-label="Courses, with this week's hours"
-        className="-mx-2 flex flex-wrap items-baseline gap-x-5 gap-y-2 rounded-[8px] px-2 py-1.5 text-ink no-underline transition-colors hover:bg-bg-tint"
-      >
-        <span className="eyebrow">This week</span>
-        {courses.map((course) => (
-          <span key={course.id} className="flex items-baseline gap-2 whitespace-nowrap">
-            <span
-              aria-hidden
-              className="course-rule relative -top-[3px]"
-              style={{ ['--c' as string]: course.color }}
-            />
-            <span className="text-[12.5px] text-ink-soft">{course.code}</span>
-            <span className="tnum font-mono text-[12px] text-ink">
-              {formatHM(byCourse.get(course.id) ?? 0)}
-            </span>
-          </span>
-        ))}
-        <span aria-hidden className="font-serif text-[12.5px] italic text-muted">
-          courses →
-        </span>
-      </Link>
+      <div className="flex items-baseline justify-between">
+        <p className="eyebrow m-0 text-ink-soft">Your courses this week</p>
+        <Link
+          href="/courses"
+          className="font-serif text-[12.5px] italic text-muted no-underline transition-colors hover:text-ink"
+        >
+          all courses →
+        </Link>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
+        {courses.map((course) => {
+          const secs = byCourse.get(course.id) ?? 0;
+          const count = open.get(course.id) ?? 0;
+          return (
+            <Link
+              key={course.id}
+              href={`/courses/${encodeURIComponent(course.id)}`}
+              className="-mx-2 flex min-w-0 flex-col rounded-[8px] px-2 py-1.5 text-ink no-underline transition-colors hover:bg-bg-tint"
+            >
+              <span className="flex items-center gap-2">
+                <span aria-hidden className="course-rule" style={{ ['--c' as string]: course.color }} />
+                <span className="eyebrow truncate text-ink-soft">{course.code}</span>
+              </span>
+              <span className="mt-1.5 line-clamp-2 font-serif text-[15px] leading-[1.25]">{course.name}</span>
+              <span className="mt-2.5 flex items-baseline gap-1.5">
+                <span className="font-mono text-[20px] font-medium tracking-[-0.02em] tabular-nums">{formatHM(secs)}</span>
+                {course.weeklyGoalHours > 0 && (
+                  <span className="font-mono text-[11px] text-muted">/ {course.weeklyGoalHours}h</span>
+                )}
+              </span>
+              {course.weeklyGoalHours > 0 && (
+                <HourStrokes
+                  seconds={secs}
+                  goalHours={course.weeklyGoalHours}
+                  color={course.color}
+                  width={9}
+                  height={18}
+                  max={12}
+                  className="mt-2.5"
+                  label={`${formatHM(secs)} of ${course.weeklyGoalHours} hours this week`}
+                />
+              )}
+              <span className="mt-2 font-serif text-[12.5px] italic text-muted">
+                {count === 0 ? 'nothing open' : `${count} open`}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
     </section>
   );
 }

@@ -26,19 +26,30 @@ export default function TodaySketch() {
 
         <div className="mt-6 flex items-baseline justify-between gap-3">
           <span className="eyebrow">Up next</span>
-          <span className="hidden font-hand text-[18px] text-muted sm:inline">carry on where you left off</span>
+          <span className="hidden font-serif text-[12.5px] italic text-muted sm:inline">carry on where you left off</span>
         </div>
         <p className="m-0 mt-2.5 flex items-center gap-2.5">
           <span className="course-rule" style={{ ['--c' as string]: SAGE.value }} />
           <span className="eyebrow text-ink-soft">ECON 100</span>
-          <span className="text-[12.5px] text-muted">Principles of Economics</span>
+          <span className="font-serif text-[12.5px] italic text-muted">Principles of Economics</span>
         </p>
-        <p className="m-0 mt-1.5 font-serif text-[22px] font-medium leading-[1.25] tracking-[-0.01em] text-ink sm:text-[26px]">
-          <span className="hl-mint">Read Mankiw Ch 4: Supply and Demand</span>
+        <p className="m-0 mt-2 font-serif text-[24px] font-medium leading-[1.15] tracking-[-0.02em] text-ink sm:text-[28px]">
+          Read Mankiw Ch 4: Supply and Demand
         </p>
-        <p className="m-0 mt-1 font-serif text-[13.5px] italic text-ink-soft sm:text-[15px]">
-          Due tomorrow · 32 pages, about 1h 36m
-        </p>
+        <div className="mt-4 flex gap-8">
+          <div>
+            <span className="eyebrow block text-muted">Due</span>
+            <span className="mt-1 block font-serif text-[15px] text-ink">Tomorrow</span>
+          </div>
+          <div>
+            <span className="eyebrow block text-muted">Spent</span>
+            <span className="mt-1 block font-mono text-[15px] tabular-nums text-ink">40m</span>
+          </div>
+          <div>
+            <span className="eyebrow block text-muted">Steps</span>
+            <span className="mt-1 block font-mono text-[15px] tabular-nums text-ink">1 / 2</span>
+          </div>
+        </div>
         <div className="mt-4 flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2.5 text-[13.5px] font-medium text-primary-contrast">
             <svg width="9" height="10" viewBox="0 0 9 10" fill="currentColor">
@@ -46,8 +57,8 @@ export default function TodaySketch() {
             </svg>
             Start
           </span>
-          <span className="px-2 py-2.5 text-[13.5px] text-ink-soft">Done</span>
-          <span className="px-2 py-2.5 text-[13.5px] text-ink-soft">Tomorrow</span>
+          <span className="rounded-[10px] border border-line px-3.5 py-2.5 text-[13.5px] text-ink-soft">Done</span>
+          <span className="rounded-[10px] border border-line px-3.5 py-2.5 text-[13.5px] text-ink-soft">Tomorrow</span>
         </div>
 
         <div className="mt-6 grid gap-6 border-t border-line pt-5 sm:grid-cols-2">
@@ -59,28 +70,35 @@ export default function TodaySketch() {
             <p className="m-0 mt-1.5 font-mono text-[28px] font-medium tabular-nums text-ink sm:text-[34px]">
               2h 10m
             </p>
-            <div className="mt-2 flex gap-1">
-              <span className="h-7 w-4 rounded-[4px]" style={{ background: SAGE.value }} />
-              <span className="h-7 w-4 rounded-[4px]" style={{ background: ROSE.value }} />
-              <span className="h-7 w-4 rounded-[4px] border border-line-strong" />
-              <span className="h-7 w-4 rounded-[4px] border border-line-strong" />
+            {/* The day's ledger: the sittings where they happened, and now. */}
+            <div className="relative mt-3 h-[10px] rounded-[3px] bg-bg-tint">
+              <span className="absolute inset-y-0 left-[18%] w-[8%] rounded-[2px]" style={{ background: SAGE.value }} />
+              <span className="absolute inset-y-0 left-[44%] w-[5%] rounded-[2px]" style={{ background: ROSE.value }} />
+              <span className="absolute -inset-y-1 left-[58%] w-[1.5px] rounded-full bg-ink" />
+            </div>
+            <div className="mt-1 flex justify-between font-mono text-[10px] text-muted">
+              <span>7a</span>
+              <span>1p</span>
+              <span>7p</span>
+              <span>12a</span>
             </div>
           </div>
           <div>
             <span className="eyebrow">Coming</span>
-            <ul className="m-0 mt-2 list-none space-y-2 p-0 text-[13.5px] text-ink">
-              <li className="flex items-baseline justify-between gap-2">
-                <span className="truncate">Lab 3: loops</span>
-                <span className="font-mono text-[12.5px] tabular-nums text-warn">1 day</span>
-              </li>
-              <li className="flex items-baseline justify-between gap-2">
-                <span className="truncate">Problem Set 2</span>
-                <span className="font-mono text-[12.5px] tabular-nums text-warnSoft">2 days</span>
-              </li>
-              <li className="flex items-baseline justify-between gap-2">
-                <span className="truncate">Essay 1 draft</span>
-                <span className="font-mono text-[12.5px] tabular-nums text-ink-soft">4 days</span>
-              </li>
+            <ul className="m-0 mt-2 list-none space-y-2.5 p-0 text-[13.5px] text-ink">
+              {[
+                ['Mon', '28', 'Lab 3: loops', 'text-warn'],
+                ['Tue', '29', 'Problem Set 2', 'text-ink'],
+                ['Thu', '1', 'Essay 1 draft', 'text-ink'],
+              ].map(([dow, day, title, tone]) => (
+                <li key={title} className="flex items-center gap-3">
+                  <span className="flex w-8 shrink-0 flex-col">
+                    <span className="eyebrow text-muted">{dow}</span>
+                    <span className={`font-mono text-[15px] font-medium leading-[1.2] tabular-nums ${tone}`}>{day}</span>
+                  </span>
+                  <span className="truncate">{title}</span>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
