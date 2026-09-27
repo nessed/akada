@@ -653,39 +653,12 @@ function DashboardPageContent() {
                 </p>
               </section>
             )}
-          </div>
-          <div className="mt-8 xl:mt-0">
-            <TodayHours
-              sessions={shownSessions}
-              courses={courses}
-              goalHours={settings?.dailyGoalHours ?? 4}
-            />
-            {/* The week against its goal, at the same size as the day: it is
-                one of the two numbers Today is read for. */}
-            <div className="mt-7 border-t border-line pt-7">
-              <WeekHours courses={courses} sessions={shownSessions} />
-            </div>
-            {/* Next Mark. One quiet line naming the nearest true thing, and
-                nothing when nothing is close. A reward line rather than a
-                to-do, so it sits under the hours it comes from, not over Up
-                next; and it waits for the first session, since before that
-                it is a distance to a tally nobody has met. */}
-            {!sessionsLoading && rawSessions.length > 0 && (
-              <div className="mt-4">
-                <NextMarkLine surface="today" href="/stamps" />
-              </div>
-            )}
-          </div>
-        </div>
-        <div aria-hidden className="fold my-8 md:mb-9" />
 
-        {/* Below the fold, two columns and a pencil rule between them: the
-            day's work on the left, the readings on the right. Each story
-            ends on a cutoff rule rather than inside a box. Below xl it is one
-            column in reading order. */}
-        <div className="grid grid-cols-[minmax(0,1fr)] items-start xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
-          <div className="settle-in flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
-
+            {/* The rest of the day's work sits under Up next, in the same
+                column: the recall card, Overdue and Due today are what Start
+                is for after this one. Below the fold they left the band's
+                left half empty for as long as the hours ran beside it. */}
+            <div className="settle-in mt-8 flex flex-col divide-y divide-line border-t border-line empty:hidden [&>*:last-child]:pb-0 [&>*]:py-7">
             {/* Recall. A few things from the term to bring back with the book
                 shut, and nothing at all on a day with none due. Under Up next
                 rather than over it: it is a few minutes, and the day's work
@@ -762,10 +735,42 @@ function DashboardPageContent() {
               </TaskSection>
             )}
 
-            {/* The courses, as one line: each course's rule and code with its
-                hours this week, the whole line a way to /courses. The cards
-                that stood here repeated the shelf and the rail, and made Today
-                seven sections deep. */}
+            </div>
+          </div>
+          <div className="mt-8 xl:mt-0">
+            <TodayHours
+              sessions={shownSessions}
+              courses={courses}
+              goalHours={settings?.dailyGoalHours ?? 4}
+            />
+            {/* The week against its goal, at the same size as the day: it is
+                one of the two numbers Today is read for. */}
+            <div className="mt-7 border-t border-line pt-7">
+              <WeekHours courses={courses} sessions={shownSessions} />
+            </div>
+            {/* Next Mark. One quiet line naming the nearest true thing, and
+                nothing when nothing is close. A reward line rather than a
+                to-do, so it sits under the hours it comes from, not over Up
+                next; and it waits for the first session, since before that
+                it is a distance to a tally nobody has met. */}
+            {!sessionsLoading && rawSessions.length > 0 && (
+              <div className="mt-4">
+                <NextMarkLine surface="today" href="/stamps" />
+              </div>
+            )}
+          </div>
+        </div>
+        <div aria-hidden className="fold my-8 md:mb-9" />
+
+        {/* Below the fold, two columns and a pencil rule between them: the
+            day's work on the left, the readings on the right. Each story
+            ends on a cutoff rule rather than inside a box. Below xl it is one
+            column in reading order. */}
+        <div className="grid grid-cols-[minmax(0,1fr)] items-start xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
+          <div className="settle-in flex min-w-0 flex-col divide-y divide-line [&>*]:py-7 [&>*:first-child]:pt-0">
+
+            {/* The courses: each one's hours this week against its goal and
+                what it has open, a row of four under the fold. */}
             <CourseLine courses={courses} sessions={shownSessions} tasks={tasks} />
           </div>
 

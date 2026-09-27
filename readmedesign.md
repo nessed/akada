@@ -317,7 +317,10 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   open one, an empty circle for the rest; a tap ticks one. It used to be one
   italic sentence with the figures dropped into it, under a highlighter swipe
   that went muddy on the night paper. Under the buttons, **After this** names
-  what Up next would offer next. The sort rule sits top right as a serif
+  what Up next would offer next. The rest of the day's work (the recall card,
+  Overdue, Due today) follows in the same column, under a cutoff: below the
+  fold it left the band's left half empty for as long as the hours ran beside
+  it, whenever Up next had no steps. The sort rule sits top right as a serif
   italic line with a cycle mark, not in the hand face.
   Beside it the day's hours, then under a cutoff **This week** (`WeekHours`)
   at the same size, 40px mono. Under the day's figure is the **day ledger**
@@ -328,10 +331,13 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   is not placed. The week is the week's hours against its goal, which is the
   course goals added up (there is no separate one to set), drawn as **a bar
   a day**, Monday to Sunday, each bar stacked in the colours of the courses it
-  went to with its hours written over it in mono, and a dashed line at the
-  day's share of the goal labelled "goal 2h 51m a day". Today's label is
-  "Today" on the yellow highlighter; days still to come are left blank. A key
-  names the colours when more than one course had time. It replaced one
+  went to with its hours written over it in mono (on a scrap of paper, so the
+  goal line never runs through a figure), and a dashed line at the day's share
+  of the goal. Today's label is "Today" on the yellow highlighter; days still
+  to come are left blank. The key under it says what the dashed line is
+  ("goal 2h 51m a day") and names the colours when more than one course had
+  time; the goal's label used to sit on the line itself, where a tall day ran
+  straight through it. It replaced one
   stroke per goal hour, twenty-odd thin marks that read as a barcode: a week
   is read by its days. A serif line under it says what is left and how many
   days the week has ("4h 20m to go · 3 days left"). With no course goals it
@@ -347,7 +353,7 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   **Before the exam** in the week before one. The course cards that used to
   stand under the day, the week's bar chart and the "New here?" link to the
   guide are gone (the week came back as `WeekHours` in the head band). Under
-  the day's work, **Your courses this week** (`CourseLine`) is a row of four
+  the fold, **Your courses this week** (`CourseLine`) is a row of four
   (two on a phone): each course's rule and code, its name in the serif, its
   hours this week in mono over its goal, its `HourStrokes` in the course
   colour and how many tasks it has open, each a link to its page. It was a
