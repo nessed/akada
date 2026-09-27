@@ -33,8 +33,11 @@ export default function NextMilestone({
 
   return (
     <div>
+      {/* The figure first, and its name as the aside: "double digits" as a
+          headline read as a riddle. */}
       <p className="m-0 font-serif text-[22px] font-medium leading-tight tracking-[-0.01em] text-ink">
-        {milestone.name}
+        <span className="font-mono tabular-nums">{milestone.to}</span> hours
+        <span className="font-serif text-[14px] font-normal italic text-muted"> · {milestone.name}</span>
       </p>
       <p className="m-0 mt-1 font-serif text-[13px] italic text-muted">
         <span className="font-mono text-[14px] font-semibold not-italic tabular-nums text-ink">

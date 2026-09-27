@@ -98,7 +98,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
   const usualMinutes = usualBlock && settled(usualBlock, HABIT_MIN_BLOCKS) ? roughMinutes(usualBlock.median) : null;
   /* Whole sittings stand in where there are not enough timed blocks to read,
      so the line says which it is rather than calling a sitting a block. */
-  const usualNoun = usualHabit?.blocksFrom === 'timed' ? 'blocks' : 'sittings';
+  const usualNoun = usualHabit?.blocksFrom === 'timed' ? 'blocks' : 'sessions';
 
   useEffect(() => {
     if (!target) return;

@@ -38,7 +38,7 @@ export default function PaceRace({ pace, accent = 'var(--ink)' }: { pace: Pace; 
   let sub: string;
   if (nothingYet) {
     headline = <>a fresh week</>;
-    sub = 'nothing on either side yet. the first sitting takes the lead';
+    sub = 'nothing on either side yet. the first session takes the lead';
   } else if (lead > 59) {
     headline = (
       <>
@@ -55,10 +55,10 @@ export default function PaceRace({ pace, accent = 'var(--ink)' }: { pace: Pace; 
         <Figure>{formatHM(-lead)}</Figure> behind
       </>
     );
-    sub = `last week had ${formatHM(ghostAt)} by ${DAY_NAMES[todayIndex].toLowerCase()}. one sitting closes it`;
+    sub = `last week had ${formatHM(ghostAt)} by ${DAY_NAMES[todayIndex].toLowerCase()}. one session closes it`;
   } else {
     headline = <>neck and neck</>;
-    sub = `${formatHM(now)} each by ${DAY_NAMES[todayIndex].toLowerCase()}. the next sitting breaks the tie`;
+    sub = `${formatHM(now)} each by ${DAY_NAMES[todayIndex].toLowerCase()}. the next session breaks the tie`;
   }
 
   return (

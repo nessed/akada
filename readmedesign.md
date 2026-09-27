@@ -450,6 +450,17 @@ No dialog is raised at the end of a block. A question at the exact moment a
 reader has stopped deciding things is the wrong thing to hand them; "Back to
 it" is one tap, or the space bar.
 
+### One word for each thing
+Outside the Record, the app says **session** (never "sitting" or
+"journal"), **task**, **course**, **reading** and **exam**, one word per
+thing, the same everywhere: the log sheet, Stats, the start popover, the
+marginalia on Today and a course page, the quiz shelf (a quiz is taken in
+**attempts**). The Record keeps its own vocabulary (tallies, pages bound,
+impressions struck, margin days), because it is the one screen that is
+meant to be a game, and Next Mark's lines carry a word of it ("tally") to
+the screens that lead there. Headings in this document that still say
+"sitting" describe the code's names, not what a reader sees.
+
 ### Next Mark, and the sitting on the clock
 **Words first.** The unit this layer inks is called a **tally** on every
 screen: forty credited minutes on a course, fifteen for the first. It was
@@ -809,7 +820,7 @@ papers on four readings are four facts, not a trend. Under the plot, the last
 four written out, what the sitting's note said it was, the day in the serif,
 and "6.5/8" in mono.
 
-**On a session row**, on the course page and in the Stats journal, the score
+**On a session row**, on the course page and in the Stats log, the score
 sits in quiet mono before the hours, since the hours are what those lists are.
 
 ### The chime
@@ -1144,22 +1155,30 @@ and says so in the slip, "Picked up in *section*", with **Start from the top**
 beside it. Focus opened from the shelf or a task does the same, with the
 same offer in a chip at the foot of the desk.
 
-**A read-through is timed only from the top.** With a sitting running on the
+**A read-through is timed only from the top.** With a session running on the
 note's task and the reader at the top of the note, a run begins; reaching
-the end keeps it as `{ seconds, words, at }` in `notes.reads`. The time is the
-sitting's focus time, so a break in the middle is not counted as reading. A
-run started partway down never begins, one whose sitting ends before the
-note does is dropped, and one faster than 600 words a minute or shorter than
-a minute is thrown away as a skim. While a run is going the standfirst and
+the end keeps it as `{ seconds, words, at }` in `notes.reads`. **The time is
+the note's own** (`seenSeconds` on the run): a second counts only while the
+page is visible, the reader is on this note, and the session is in focus,
+not paused or on a break. It used to be the session's focus time from the
+top, so a note left open on another tab was being "read". The run also has
+to be **seen passing** a quarter, a half and three quarters of the way down,
+with at least ten seconds between each and on to the end (`passedThrough`),
+or a jump to the end after a minute would count. A run started partway down
+never begins, one whose session ends before the note does is dropped, a note
+whose task is already finished is never timed (that is a look-up, not a
+read), and one faster than 600 words a minute, slower than 40, or shorter
+than a minute is thrown away. While a run is going the standfirst and
 the focus foot say "timing this read" and nothing else.
 
 **The pace is the reader's own.** `readingPace` in `lib/notes/reads.ts` takes
 the median words a minute over every timed read once there are two, per
 course once a course has two, and every "min left", "min read" and
-"of reading" in Study goes through `minutesForNote`: a note's own last read
-scaled to its current length, then the course pace, then the reader's, then
-200. The reader's standfirst says which it is ("read in 14 min last time",
-"~12 min at your pace", "12 min read"). Under the shelf, **Your reading** says
+"of reading" in Study goes through `minutesForNote`: the median of a note's
+own reads, each scaled to its current length, then the course pace, then the
+reader's, then 200. The reader's standfirst says which it is ("read in 14 min
+last time", "usually 14 min, from 3 reads", "~12 min at your pace", "12 min
+read"). A word count leaves out fenced code and a table's rules. Under the shelf, **Your reading** says
 it back in one line of serif with the figures in mono: words a minute, how
 long a read-through takes, how many are behind it. Before any read is timed
 that line says, once, how the minutes become theirs.
@@ -1316,6 +1335,10 @@ that still looked like an admin panel.
 - **The plank**, `.shelf-plank`, is the fold thickened into a board: two
   `line-strong` rules with a `bg-tint` wash between them, the full content
   width, one under each row.
+- **Start** sits at the top right of a book as a word beside a small play
+  mark, on hover at desktop widths and always on a phone. It was a bare
+  circle, which on a book cover could have meant anything. The rail's rows
+  keep the round mark, since their label is right beside it.
 - **The label on the plank** is what a library would write there: what is
   open (serif italic, overdue in `warn`), then the term's hours in mono and
   when it was last sat.
@@ -1347,8 +1370,10 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
     ahead or behind is a distance before it is a figure. The headline is the
     gap ("29m behind", "1h 10m ahead", "neck and neck") and the line under
     it is what closes it.
-  - **The next line** (`NextMilestone`). The next round number in the
-    term's hours, named in the serif ("half a century", "the century"),
+  - **Next milestone** (`NextMilestone`). The next round number in the
+    term's hours, its figure first and its name as the aside ("10 hours ·
+    double digits"; titled "The next line" and led by the name alone, it read
+    as a riddle),
     counted out as `TallyMarks` from the last line crossed. Never more than
     twenty five strokes, so a long stretch has each stroke stand for more than
     an hour and the margin says how much. Not a bar.
@@ -1366,7 +1391,7 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
     the time in three hours, and says how many timed sessions are left until
     it does.
 - **Records to beat** (`PersonalBests`), at the head of the aside: longest
-  sitting, biggest day, best week, longest run, each with a dotted leader to
+  session, biggest day, best week, longest run, each with a dotted leader to
   the figure and, under it, the one in progress that could take it ("this
   week so far 3h 42m · 7h 13m to beat it"). A record set inside the last week
   gets a `warn` stamp that comes down on the page (`.stamp-down`), the one
@@ -1375,6 +1400,11 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
   new best every day. Until then the figures stand as they are under one
   line, "your first weeks set the marks", with no chase line and no stamp. A
   session closed for the reader (`recovery`) never sets one.
+- **The log** at the foot is one dated list: sessions under the day they
+  were studied, tasks under the day they were added or finished ("added",
+  "finished", "skipped"). More than three tasks added on one day fold into
+  one line, "14 tasks added", since an outline read in by Claude adds forty
+  at once and buried the day's study under them.
 - **The charts arrive.** The heatmap inks in a week at a time from the
   oldest (`.heat-in`) and rings today; the week's bars fill up from the rule
   (`.bar-grow`); the course rules draw (`.rule-draw`) and their hour counts

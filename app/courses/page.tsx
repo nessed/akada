@@ -223,12 +223,15 @@ function Book({ row, onStart }: { row: Row; onStart: (t: StartTarget) => void })
         <button
           type="button"
           onClick={(e) => onStart({ task: null, course, anchor: e.currentTarget })}
-          aria-label={`Start timer on ${course.code}`}
-          className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-paper text-ink-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+          aria-label={`Start a timer on ${course.code}`}
+          className="absolute right-2 top-2 flex h-8 items-center gap-1.5 rounded-[8px] bg-paper px-2.5 text-[12px] font-medium text-ink-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
         >
-          <svg aria-hidden width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+          {/* A word, not a bare circle: on a book cover a play mark with no
+              label read as anything at all. */}
+          <svg aria-hidden width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
             <path d="M7 5l12 7-12 7V5z" />
           </svg>
+          Start
         </button>
       </div>
     </div>
