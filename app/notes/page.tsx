@@ -9,6 +9,8 @@ import { MarkdownReader, countChecks, getMarkdownHeadings, openHeadingSection } 
 import Editor from '@/components/notes/Editor';
 import Sheet from '@/components/notes/Sheet';
 import PromptSheet from '@/components/notes/PromptSheet';
+import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
+import { notePrompt } from '@/lib/claude-asks';
 import Icon from '@/components/notes/Icon';
 import { CheckStrokes, MinutesLeft, TocList } from '@/components/notes/Contents';
 import FocusMode from '@/components/notes/FocusMode';
@@ -70,6 +72,7 @@ export default function NotesPage() {
 
 function NotesContent() {
   const router = useRouter();
+  const claude = useClaudeSheet();
   const params = useSearchParams();
   const openId = params.get('n') ?? '';
   const editing = params.get('edit') === '1';
@@ -782,7 +785,7 @@ function NotesContent() {
         <p className="standfirst">Nothing on the shelf yet</p>
         <h1 className="screen-title">Study</h1>
         <p className="lede">
-          A quiet place to read what you’re studying. Write a note, paste one in, drop a text file on the page, or <a className="link" href="/claude">have Claude write one</a> straight onto this shelf.
+          A quiet place to read what you’re studying. Write a note, paste one in, drop a text file on the page, or <button type="button" className="link" onClick={() => claude.ask({ does: 'Claude writes a study note from what you give it and saves it straight onto this shelf.', prompt: notePrompt(null) })}>have Claude write one</button> straight onto this shelf.
         </p>
         <div className="row">
           <button type="button" className="btn btn-primary" onClick={() => go('new=1')}><Icon name="write" size={16} />New note</button>

@@ -9,6 +9,7 @@ import { finishedUndo, skippedUndo, useUndo } from '@/components/Undo';
 import SelectField from '@/components/SelectField';
 import HandCheck from '@/components/notebook/HandCheck';
 import KindFields, { useKindDraft } from '@/components/tasks/KindFields';
+import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
 import HandNote from '@/components/notebook/HandNote';
 import Stamp from '@/components/notebook/Stamp';
 import DueDateBadge from '@/components/DueDateBadge';
@@ -86,6 +87,7 @@ function TasksPageContent() {
   const searchParams = useSearchParams();
   const { active, start, pause, resume, focusSeconds } = useTimer();
   const { notify } = useNotice();
+  const claude = useClaudeSheet();
   const { offer: offerUndo } = useUndo();
   // Guards the two writes that were previously fire-and-forget from the UI's
   // point of view: nothing changed on the button while they were in flight.
@@ -1363,24 +1365,17 @@ function TasksPageContent() {
           }
         }
 
-        /* The clipboard write has to happen in the click's own task or Safari
-           treats it as untrusted, so nothing is awaited before it. */
-        async function copyBeforeReading(task: Task) {
-          try {
-            await navigator.clipboard.writeText(
-              beforeReadingPrompt({
-                courseId: task.courseId,
-                courseCode: course?.code ?? 'this course',
-                courseName: course?.name ?? '',
-                title: readingPrompt(task.title),
-                detail: task.description || undefined,
-              }),
-            );
-            notify('Copied. Paste it into a Claude chat with Akada switched on before you start reading.');
-          } catch (error) {
-            console.error('Failed to copy the reading prompt:', error);
-            notify('Akada could not reach the clipboard.');
-          }
+        function copyBeforeReading(task: Task) {
+          claude.ask({
+            does: 'Claude asks you three questions this reading answers, has you guess each first, and keeps the questions for recall.',
+            prompt: beforeReadingPrompt({
+              courseId: task.courseId,
+              courseCode: course?.code ?? 'this course',
+              courseName: course?.name ?? '',
+              title: readingPrompt(task.title),
+              detail: task.description || undefined,
+            }),
+          });
         }
 
         async function keepWhole(task: Task, letGo: RecallItem | null) {
@@ -1523,8 +1518,7 @@ function TasksPageContent() {
                 <button
                   type="button"
                   onClick={() => copyBeforeReading(viewingTask)}
-                  title="Copy a prompt that has Claude ask you three questions this reading answers, and keep them for recall"
-                  className="hand-underline mt-3 bg-transparent px-0.5 font-serif text-[13px] text-ink"
+                                    className="hand-underline mt-3 bg-transparent px-0.5 font-serif text-[13px] text-ink"
                 >
                   Questions before you read
                 </button>

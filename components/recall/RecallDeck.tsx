@@ -6,6 +6,7 @@ import { useNotice } from '@/components/Notice';
 import { applyVerdict, scheduleRecall, type RecallState } from '@/lib/recall';
 import { answerRecall, letGoRecall, undoRecall, type RecallChange } from '@/lib/recall/actions';
 import { recallPrompt } from '@/lib/recall/prompt';
+import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
 import {
   daysAgoWords,
   recallQuestion,
@@ -80,6 +81,7 @@ export default function RecallDeck({
   className = '',
 }: Props) {
   const { notify } = useNotice();
+  const claude = useClaudeSheet();
   const [busy, setBusy] = useState(false);
   const [walked, setWalked] = useState(0);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -167,25 +169,19 @@ export default function RecallDeck({
     }
   }
 
-  /* The clipboard write has to happen in the click's own task or Safari
-     treats it as untrusted, so nothing is awaited before it. */
-  async function askClaude() {
+  function askClaude() {
     if (!card) return;
-    const text = recallPrompt({
-      key: card.key,
-      prompt: card.prompt,
-      source: card.source,
-      courseCode: course?.code ?? 'this course',
-      courseName: course?.name ?? '',
-      detail: card.task?.description || undefined,
+    claude.ask({
+      does: 'Claude asks you this one, shows nothing until you have answered, then records how it went here.',
+      prompt: recallPrompt({
+        key: card.key,
+        prompt: card.prompt,
+        source: card.source,
+        courseCode: course?.code ?? 'this course',
+        courseName: course?.name ?? '',
+        detail: card.task?.description || undefined,
+      }),
     });
-    try {
-      await navigator.clipboard.writeText(text);
-      notify('Copied. Paste it into a Claude chat with Akada switched on, and it will quiz you on this one.');
-    } catch (error) {
-      console.error('Failed to copy the recall prompt:', error);
-      notify('Akada could not reach the clipboard.');
-    }
   }
 
   const question = card ? recallQuestion(card, today) : null;

@@ -5,6 +5,7 @@ import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import ClockSync from '@/components/ClockSync';
 import NoticeProvider from '@/components/Notice';
 import UndoProvider from '@/components/Undo';
+import ClaudeSheetProvider from '@/components/claude/ClaudeSheet';
 import SWRRoot from '@/components/SWRRoot';
 import TimerDocumentTitle from '@/components/TimerDocumentTitle';
 import TimerHotkeys from '@/components/TimerHotkeys';
@@ -168,7 +169,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 component: they bind nothing unless a sitting is running. */}
             <TimerHotkeys />
             <NoticeProvider>
-              <UndoProvider>{children}</UndoProvider>
+              <UndoProvider>
+                <ClaudeSheetProvider>{children}</ClaudeSheetProvider>
+              </UndoProvider>
             </NoticeProvider>
           </TimerProvider>
         </SWRRoot>

@@ -4,12 +4,15 @@ import { useState } from 'react';
 import Sheet from './Sheet';
 import Icon from './Icon';
 import { FORMAT_PROMPT } from '@/lib/notes/prompt';
+import { notePrompt } from '@/lib/claude-asks';
+import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
 
 /**
  * The prompt a reader hands their own AI. Copy it, paste it into the chat
  * with a summary or a lecture's notes, then paste the answer back here.
  */
 export default function PromptSheet({ onClose, onPasteAnswer }: { onClose: () => void; onPasteAnswer: () => void }) {
+  const claude = useClaudeSheet();
   const [copied, setCopied] = useState(false);
   const [showing, setShowing] = useState(false);
 
@@ -41,7 +44,21 @@ export default function PromptSheet({ onClose, onPasteAnswer }: { onClose: () =>
         </button>
       </div>
       <p className="set-note" style={{ marginTop: 16 }}>
-        Using Claude with Akada connected? Skip all this and ask it to save the notes to Akada. It writes them straight onto this shelf. <a className="link" href="/claude">How to connect it</a>
+        Using Claude with Akada connected? Skip all this and{' '}
+        <button
+          type="button"
+          className="link"
+          onClick={() => {
+            onClose();
+            claude.ask({
+              does: 'Claude writes a study note from what you give it and saves it straight onto this shelf.',
+              prompt: notePrompt(null),
+            });
+          }}
+        >
+          have Claude save the note
+        </button>
+        , straight onto this shelf.
       </p>
       <button type="button" className="link" style={{ marginTop: 10 }} onClick={() => setShowing((s) => !s)}>
         {showing ? 'hide the prompt' : 'read the prompt first'}

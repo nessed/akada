@@ -30,10 +30,11 @@ import HandCheck from '@/components/notebook/HandCheck';
 import { useNotice } from '@/components/Notice';
 import { finishedUndo, skippedUndo, useUndo } from '@/components/Undo';
 import KindFields, { useKindDraft } from '@/components/tasks/KindFields';
+import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
+import { outlinePrompt } from '@/lib/claude-asks';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Task } from '@/lib/data';
 import { upNextFrom } from '@/lib/use-up-next';
-import { CLAUDE_PAGE } from '@/lib/claude-page';
 import { usePreferences } from '@/lib/preferences';
 import type { CatalogCourse } from '@/lib/catalog';
 import { courseFromCatalog, deriveCourseCode, parseCourseInput, weeklyGoalForCredits } from '@/lib/catalog';
@@ -1101,6 +1102,9 @@ function GettingStarted({
   onAddTask: () => void;
   onStart: (anchor: HTMLElement) => void;
 }) {
+  const claude = useClaudeSheet();
+  const { courses } = useCourses();
+  const courseCodes = courses.map((c) => c.code);
   return (
     <section>
       <p className="eyebrow m-0 text-ink-soft">Up next</p>
@@ -1112,12 +1116,18 @@ function GettingStarted({
         in. Or add them one at a time.
       </p>
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <Link
-          href={CLAUDE_PAGE}
-          className="inline-flex h-11 items-center rounded-[10px] bg-primary px-4 text-[13px] font-medium text-primary-contrast no-underline"
+        <button
+          type="button"
+          onClick={() =>
+            claude.ask({
+              does: 'Claude reads your course outlines and puts every deadline into Akada, with its date and weight.',
+              prompt: outlinePrompt(courseCodes),
+            })
+          }
+          className="inline-flex h-11 items-center rounded-[10px] bg-primary px-4 text-[13px] font-medium text-primary-contrast"
         >
           Get them in with Claude
-        </Link>
+        </button>
         <button
           type="button"
           onClick={onAddTask}
