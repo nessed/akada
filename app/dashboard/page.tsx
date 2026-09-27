@@ -644,7 +644,7 @@ function DashboardPageContent() {
                 it is a distance to a tally nobody has met. */}
             {!sessionsLoading && rawSessions.length > 0 && (
               <div className="mt-4">
-                <NextMarkLine surface="today" />
+                <NextMarkLine surface="today" href="/stamps" />
               </div>
             )}
           </div>

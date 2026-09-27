@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect } from 'react';
 import { useProgression } from '@/lib/progression/use-progression';
 import { logImpression } from '@/lib/progression/log';
@@ -29,8 +30,15 @@ export default function NextMarkLine({
   night = false,
   onlyLanded = false,
   align = 'center',
+  href,
 }: {
   surface: 'today' | 'timer';
+  /**
+   * Where the line leads. On Today it is the way to the Record, which the
+   * bottom bar no longer carries: the line names a tally, and the Record is
+   * where tallies are kept.
+   */
+  href?: string;
   className?: string;
   /** The open-mode timer inverts with literal values; this follows it. */
   night?: boolean;
@@ -78,7 +86,7 @@ export default function NextMarkLine({
           />
         </svg>
       </span>
-      <span>
+      <Wrap href={href}>
         {landed.map((line, i) => (
           <span key={line}>
             {i > 0 && ' · '}
@@ -91,8 +99,17 @@ export default function NextMarkLine({
             {next}
           </>
         )}
-      </span>
+      </Wrap>
     </p>
+  );
+}
+
+function Wrap({ href, children }: { href?: string; children: React.ReactNode }) {
+  if (!href) return <span>{children}</span>;
+  return (
+    <Link href={href} className="text-inherit no-underline decoration-line-strong underline-offset-4 hover:underline">
+      {children}
+    </Link>
   );
 }
 
