@@ -6,9 +6,8 @@ interface Props {
 }
 
 /**
- * The way back out of a nested view inside a sheet. Was written out twice,
- * byte for byte, in SettingsSheet and SemesterManager, which render inside
- * each other, so the two copies could only ever drift apart.
+ * The way back out of a nested view inside a sheet, such as SemesterManager's.
+ * One copy, so the ways back cannot drift apart.
  */
 export default function BackButton({ onClick, label = 'Back' }: Props) {
   return (

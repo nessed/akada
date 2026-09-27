@@ -46,10 +46,8 @@ export default function TodaySketch() {
             </svg>
             Start
           </span>
-          <span className="rounded-[10px] border border-line-strong px-3.5 py-2.5 text-[13.5px] text-ink">
-            Untimed
-          </span>
           <span className="px-2 py-2.5 text-[13.5px] text-ink-soft">Done</span>
+          <span className="px-2 py-2.5 text-[13.5px] text-ink-soft">Tomorrow</span>
         </div>
 
         <div className="mt-6 grid gap-6 border-t border-line pt-5 sm:grid-cols-2">

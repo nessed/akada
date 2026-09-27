@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import type { Course, Session, Task } from '@/lib/data';
 import type { UpNextSort } from '@/lib/preferences';
 import {
@@ -227,13 +228,6 @@ export function UpNext({
         </button>
         <button
           type="button"
-          onClick={(e) => onStart(task, e.currentTarget, true)}
-          className="h-11 rounded-[10px] border border-line-strong px-4 text-[13px] font-medium text-ink transition-colors hover:bg-bg-tint"
-        >
-          Untimed
-        </button>
-        <button
-          type="button"
           onClick={() => letGo(onDone)}
           className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink"
         >
@@ -447,88 +441,52 @@ export function TodayHours({
   );
 }
 
-/* ── This week ─────────────────────────────────────────────────────────── */
+/* ── The courses, in one line ──────────────────────────────────────────── */
 
-export function WeekPanel({
-  sessions,
-  courses,
-  goalHours,
-}: {
-  sessions: Session[];
-  courses: Course[];
-  goalHours: number;
-}) {
-  const days = useMemo(() => {
-    const start = startOfWeek();
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      const iso = isoDate(d);
-      const forDay = sessions.filter(
-        (s) => s.date === iso && isLoggableDuration(s.durationSeconds),
-      );
-      // The day's bar is stacked in the colours it was spent on, which is
-      // the whole reason this is not one flat rectangle per day.
-      const parts = new Map<string, number>();
-      for (const s of forDay) parts.set(s.courseId, (parts.get(s.courseId) ?? 0) + s.durationSeconds);
-      return {
-        iso,
-        label: d.toLocaleDateString(undefined, { weekday: 'short' }),
-        secs: totalSeconds(forDay),
-        parts: [...parts.entries()],
-        isToday: iso === isoDate(),
-      };
-    });
+/**
+ * Each course's rule and code with its hours this week, in one line that is a
+ * way to /courses. It stands where three full course cards used to, which
+ * repeated the shelf and the rail and made Today seven sections deep; the
+ * week's hours are what those cards were read for.
+ */
+export function CourseLine({ courses, sessions }: { courses: Course[]; sessions: Session[] }) {
+  const byCourse = useMemo(() => {
+    const monday = isoDate(startOfWeek());
+    const map = new Map<string, number>();
+    for (const s of sessions) {
+      if (s.date < monday || !isLoggableDuration(s.durationSeconds)) continue;
+      map.set(s.courseId, (map.get(s.courseId) ?? 0) + s.durationSeconds);
+    }
+    return map;
   }, [sessions]);
 
-  const weekTotal = days.reduce((a, d) => a + d.secs, 0);
-  const peak = Math.max(1, ...days.map((d) => d.secs));
+  if (courses.length === 0) return null;
 
   return (
     <section>
-      <div className="flex items-baseline justify-between">
-        <p className="eyebrow m-0">This week</p>
-        <span className="font-mono text-[11px] text-ink">
-          {formatHM(weekTotal)} <span className="text-muted">/ {goalHours}h</span>
-        </span>
-      </div>
-
-      <div className="mt-4 flex h-[52px] items-end gap-1.5">
-        {days.map((day) => (
-          <div key={day.iso} className="flex h-full flex-1 flex-col justify-end gap-[2px]">
-            {day.secs === 0 ? (
-              <span
-                aria-hidden
-                className="block h-[3px] w-full rounded-[1px]"
-                style={{ background: 'var(--line)' }}
-              />
-            ) : (
-              day.parts.map(([courseId, secs]) => {
-                const course = courses.find((c) => c.id === courseId);
-                return (
-                  <span
-                    key={courseId}
-                    aria-hidden
-                    className="block w-full rounded-[1px]"
-                    style={{
-                      height: `${Math.max(4, (secs / peak) * 46)}px`,
-                      background: course?.color ?? 'var(--muted-soft)',
-                    }}
-                  />
-                );
-              })
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-2 flex gap-1.5 text-[10.5px] text-muted-soft">
-        {days.map((day) => (
-          <span key={day.iso} className="flex-1 text-center">
-            <span className={day.isToday ? 'text-ink' : ''}>{day.label}</span>
+      <Link
+        href="/courses"
+        aria-label="Courses, with this week's hours"
+        className="-mx-2 flex flex-wrap items-baseline gap-x-5 gap-y-2 rounded-[8px] px-2 py-1.5 text-ink no-underline transition-colors hover:bg-bg-tint"
+      >
+        <span className="eyebrow">This week</span>
+        {courses.map((course) => (
+          <span key={course.id} className="flex items-baseline gap-2 whitespace-nowrap">
+            <span
+              aria-hidden
+              className="course-rule relative -top-[3px]"
+              style={{ ['--c' as string]: course.color }}
+            />
+            <span className="text-[12.5px] text-ink-soft">{course.code}</span>
+            <span className="tnum font-mono text-[12px] text-ink">
+              {formatHM(byCourse.get(course.id) ?? 0)}
+            </span>
           </span>
         ))}
-      </div>
+        <span aria-hidden className="font-serif text-[12.5px] italic text-muted">
+          courses →
+        </span>
+      </Link>
     </section>
   );
 }

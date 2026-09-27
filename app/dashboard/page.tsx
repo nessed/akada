@@ -14,19 +14,16 @@ import { useRecall } from '@/lib/recall/use-recall';
 import type { RecallState } from '@/lib/recall';
 import { useLiveSession } from '@/lib/use-live-session';
 import { withLiveSession } from '@/lib/live-session';
-import CourseCard from '@/components/CourseCard';
 import TaskRow from '@/components/TaskRow';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import {
   ComingPanel,
   TodayHours,
   UpNext,
-  WeekPanel,
+  CourseLine,
 } from '@/components/today/TodayPanels';
-import ReorderList from '@/components/ReorderList';
 import DatePicker from '@/components/DatePicker';
-import SettingsGlyph from '@/components/SettingsGlyph';
-import SettingsSheet from '@/components/SettingsSheet';
+import { ReaderAvatar } from '@/components/SettingsGlyph';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
 import HandCheck from '@/components/notebook/HandCheck';
@@ -38,9 +35,6 @@ import type { Course, Task } from '@/lib/data';
 import { upNextFrom } from '@/lib/use-up-next';
 import { CLAUDE_PAGE } from '@/lib/claude-page';
 import { usePreferences } from '@/lib/preferences';
-import { createClient } from '@/lib/supabase';
-import { clearClientSessionState } from '@/lib/session-cleanup';
-import { isUploadedImage, resizeAvatar } from '@/lib/avatar';
 import type { CatalogCourse } from '@/lib/catalog';
 import { courseFromCatalog, deriveCourseCode, parseCourseInput, weeklyGoalForCredits } from '@/lib/catalog';
 import {
@@ -53,15 +47,9 @@ import {
 import { isLoggableDuration } from '@/lib/session-safety';
 import {
   clampWeeklyGoalHours,
-  cleanCredits,
   cleanCourseCode,
   cleanCourseName,
-  cleanInstructor,
-  cleanMeetingTime,
-  cleanSection,
   cleanTaskTitle,
-  hasDuplicateCourseCodes,
-  MEETING_TIME_MAX,
 } from '@/lib/planner-safety';
 import { useTimer } from '@/lib/timer-context';
 import HandNote from '@/components/notebook/HandNote';
@@ -75,15 +63,9 @@ import {
   useUserSettings,
   addCourseOptimistic,
   addTaskOptimistic,
-  deleteCourseOptimistic,
-  reorderCoursesOptimistic,
   toggleTaskOptimistic,
   skipTaskOptimistic,
   updateTaskOptimistic,
-  updateCourseOptimistic,
-  updateUserSettingsOptimistic,
-  resetAllData,
-  deleteAccountAndData,
 } from '@/lib/data-hooks';
 
 /** The quiet uppercase caption every other form in the app labels a field with. */
@@ -97,17 +79,6 @@ function SheetField({ label, children }: { label: string; children: React.ReactN
     </div>
   );
 }
-
-type CourseEditDraft = {
-  id: string;
-  code: string;
-  name: string;
-  credits: string;
-  section: string;
-  instructor: string;
-  meetingTime: string;
-  weeklyGoalHours: number;
-};
 
 export default function DashboardPage() {
   return (
@@ -131,14 +102,13 @@ function DashboardFallback() {
 function DashboardPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { active, start, pause, resume, focusSeconds, clearTimerState } = useTimer();
+  const { active, start, pause, resume, focusSeconds } = useTimer();
   const { notify } = useNotice();
   const { offer } = useUndo();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
-  const { courses: rawCourses, isLoading: coursesLoading, revalidate: revalidateCourses } =
-    useCourses();
+  const { courses: rawCourses, isLoading: coursesLoading } = useCourses();
   const { sessions: rawSessions, isLoading: sessionsLoading } = useSessions();
   const { tasks, isLoading: tasksLoading } = useTasks();
   const { semester } = useActiveSemester();
@@ -153,20 +123,6 @@ function DashboardPageContent() {
 
   const displayName = settings?.displayName ?? '';
   const avatarUrl = settings?.avatarUrl ?? '';
-
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsName, setSettingsName] = useState('');
-  const [settingsAvatar, setSettingsAvatar] = useState('');
-  const [updatingSettings, setUpdatingSettings] = useState(false);
-
-  // Keep the in-progress edit fields in sync with persisted settings whenever
-  // the sheet is opened or the underlying settings change while it's closed.
-  useEffect(() => {
-    if (!showSettings) {
-      setSettingsName(displayName);
-      setSettingsAvatar(avatarUrl);
-    }
-  }, [displayName, avatarUrl, showSettings]);
 
   // Onboarding gate / auth redirect, fires once SWR has resolved the flag.
   useEffect(() => {
@@ -204,15 +160,8 @@ function DashboardPageContent() {
 
   // True while a sheet's own write is in flight, so its button can say so
   // and cannot be pressed a second time.
-  // Sign out and reset both navigate away at the end, so the screen stays
-  // covered until they do rather than sitting on a dead dashboard.
-  const [leaving, setLeaving] = useState<string | null>(null);
   const [savingTask, setSavingTask] = useState(false);
   const [savingCourse, setSavingCourse] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<CourseEditDraft | null>(null);
-  const [savingCourseEdit, setSavingCourseEdit] = useState(false);
-  const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
-  const [deletingCourseBusy, setDeletingCourseBusy] = useState(false);
 
   const [addingCourse, setAddingCourse] = useState(false);
   // One search box drives the whole thing. `picked` is set only when a
@@ -227,80 +176,6 @@ function DashboardPageContent() {
   const [newCourseColor, setNewCourseColor] = useState(PASTEL_PALETTE[0].value);
   const [newCourseTint, setNewCourseTint] = useState(PASTEL_PALETTE[0].tint);
   const [newCourseGoal, setNewCourseGoal] = useState(8);
-
-  async function handleUpdateSettings() {
-    setUpdatingSettings(true);
-    try {
-      let finalAvatar = settingsAvatar;
-      if (settingsAvatar && isUploadedImage(settingsAvatar)) {
-        finalAvatar = await resizeAvatar(settingsAvatar);
-      }
-      await updateUserSettingsOptimistic({
-        displayName: settingsName.trim(),
-        avatarUrl: finalAvatar,
-      });
-      setShowSettings(false);
-    } catch (err) {
-      console.error(err);
-      notify('Settings did not save.');
-    } finally {
-      setUpdatingSettings(false);
-    }
-  }
-
-  async function handleSignOut() {
-    setLeaving('Signing out');
-    setShowSettings(false);
-    clearTimerState();
-    try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-    } catch {
-      // ignore, fall through to redirect either way
-    }
-    // The timer, preferences and anything the local adapter cached all
-    // outlive the Supabase session, so wipe them before leaving. Otherwise
-    // the next person on a shared laptop inherits them.
-    clearClientSessionState();
-    // A hard navigation rather than router.replace, so the SWR cache, the
-    // timer context and every other in-memory copy of the previous user's
-    // data goes with the page.
-    window.location.replace('/auth');
-  }
-
-  async function handleDeleteAccount() {
-    setLeaving('Deleting your account');
-    setShowSettings(false);
-    clearTimerState();
-    try {
-      await deleteAccountAndData();
-    } catch (error) {
-      console.error('Failed to delete account:', error);
-      notify(error instanceof Error ? error.message : 'The account was not deleted.');
-      setLeaving(null);
-      return;
-    }
-    // Nothing of this account should outlive it on the device either.
-    clearClientSessionState();
-    window.location.replace('/');
-  }
-
-  async function handleResetData() {
-    setLeaving('Clearing your planner');
-    setShowSettings(false);
-    clearTimerState();
-    try {
-      await resetAllData();
-    } catch (err) {
-      console.error('Failed to reset data:', err);
-      // Navigating on to onboarding after a failed reset tells the user
-      // their data is gone when it is all still there.
-      notify('Nothing was deleted. The reset did not go through.');
-      setLeaving(null);
-      return;
-    }
-    router.replace('/onboarding');
-  }
 
   function beginTimer(courseId: string, taskId: string | null) {
     start(courseId, taskId);
@@ -566,94 +441,6 @@ function DashboardPageContent() {
     };
   }
 
-  /**
-   * The order the cards were dragged into. The write is optimistic, so
-   * letting go feels instant; if it fails, the old order comes back and the
-   * card returns to where it was.
-   */
-  async function handleReorderCourses(orderedIds: string[]) {
-    try {
-      await reorderCoursesOptimistic(orderedIds);
-    } catch (error) {
-      console.error('Failed to reorder courses:', error);
-      // The most useful reason by far is a database that has not run the
-      // latest schema, and reorderCourses says exactly that.
-      notify(error instanceof Error ? error.message : 'That order was not saved.');
-      throw error;
-    }
-  }
-
-  function openEditCourse(course: Course) {
-    setEditingCourse({
-      id: course.id,
-      code: course.code,
-      name: course.name,
-      credits: String(typeof course.credits === 'number' && course.credits > 0 ? course.credits : 4),
-      section: course.section ?? '',
-      instructor: course.instructor ?? '',
-      meetingTime: course.meetingTime ?? '',
-      weeklyGoalHours: clampWeeklyGoalHours(course.weeklyGoalHours),
-    });
-  }
-
-  function updateCourseEdit(patch: Partial<CourseEditDraft>) {
-    setEditingCourse((current) => current ? { ...current, ...patch } : current);
-  }
-
-  async function handleSaveCourseEdit() {
-    if (!editingCourse || savingCourseEdit) return;
-    const code = cleanCourseCode(editingCourse.code);
-    const name = cleanCourseName(editingCourse.name);
-    if (!code || !name) {
-      notify('A course needs both a code and a name.');
-      return;
-    }
-    if (hasDuplicateCourseCodes([
-      ...courses.filter((course) => course.id !== editingCourse.id),
-      { code },
-    ])) {
-      notify(`${code} is already on your list.`);
-      return;
-    }
-    setSavingCourseEdit(true);
-    try {
-      await updateCourseOptimistic(editingCourse.id, {
-        code,
-        name,
-        credits: cleanCredits(editingCourse.credits) ?? 4,
-        section: cleanSection(editingCourse.section),
-        instructor: cleanInstructor(editingCourse.instructor),
-        meetingTime: cleanMeetingTime(editingCourse.meetingTime),
-        weeklyGoalHours: clampWeeklyGoalHours(editingCourse.weeklyGoalHours),
-      });
-      setEditingCourse(null);
-    } catch (error) {
-      console.error('Failed to update course:', error);
-      notify(error instanceof Error ? error.message : 'That course did not save.');
-    } finally {
-      setSavingCourseEdit(false);
-    }
-  }
-
-  async function handleDeleteCourse() {
-    if (!deletingCourse || deletingCourseBusy) return;
-    if (active?.courseId === deletingCourse.id) {
-      notify('Stop or discard the active timer before deleting this course.');
-      setDeletingCourse(null);
-      return;
-    }
-    setDeletingCourseBusy(true);
-    try {
-      await deleteCourseOptimistic(deletingCourse.id);
-      setDeletingCourse(null);
-    } catch (error) {
-      console.error('Failed to delete course:', error);
-      notify(error instanceof Error ? error.message : 'That course was not deleted.');
-    } finally {
-      setDeletingCourseBusy(false);
-    }
-  }
-
   // Reads through the same SWR caches as everything above, so it costs no
   // request. See lib/progression for why none of it is stored.
   const { progression } = useProgression();
@@ -677,13 +464,7 @@ function DashboardPageContent() {
     openStartFor(state.task, anchor, false, course);
   }
 
-  if (leaving) {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center px-8">
-        <LoadingIndicator label={leaving} detail="One moment." />
-      </div>
-    );
-  }
+
 
   if (loading) {
     return (
@@ -734,10 +515,7 @@ function DashboardPageContent() {
      the middle of an hour ago is live whether or not it happens to be due.
      The rail's start reads the same function, so the two never disagree. */
   const upNext = upNextFrom(tasks, sessions, prefs.upNextSort, today);
-  /* The week's goal is the sum of the course goals, which is what the course
-     panel is already measured against; a separate number would let the two
-     disagree. */
-  const weeklyGoalHours = courses.reduce((a, c) => a + (c.weeklyGoalHours || 0), 0) || 20;
+  const dueTodayRest = todayTasks.filter((t) => t.id !== upNext?.id);
   // Dates are optional on a semester now (Settings → Semester lets you start
   // one with just a label). No dates just means no progress ribbon to show.
   const semesterInfo =
@@ -796,43 +574,19 @@ function DashboardPageContent() {
           >
             New task
           </button>
-          {/* The way into Settings on a phone, and for a long time the only
-              thing missing between a phone and Settings at all: the rail that
-              carries it hides itself below md, BottomNav has four tabs and
-              none of them is this, and the sheet below — which exists for
-              exactly this screen — was never opened by anything. A phone
-              could not reach its own name, paper tone, goals or sign-out.
-              Desktop keeps the rail's row and does not draw this. */}
-          <button
-            type="button"
-            onClick={() => setShowSettings(true)}
+          {/* The way into Settings on a phone: the reader's own initials or
+              photo, a link to the same /settings page the rail opens. It was
+              a sliders icon that read as a filter and opened a second, older
+              Settings of its own. Desktop has the rail's row instead. */}
+          <Link
+            href="/settings"
             aria-label="Settings"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] border border-line bg-paper text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink md:hidden"
+            className="grid h-10 w-10 shrink-0 place-items-center md:hidden"
           >
-            <SettingsGlyph avatarUrl={avatarUrl} displayName={displayName} />
-          </button>
+            <ReaderAvatar avatarUrl={avatarUrl} displayName={displayName} />
+          </Link>
         </div>
       </header>
-
-      {/* For an account that has barely started, one line pointing at the
-          guide, since most of what the app does can't be found by poking
-          around. Worked out from the sessions rather than a dismissed flag,
-          so it leaves on its own once the timer has been used a few times. */}
-      {!sessionsLoading && rawSessions.length < 3 && (
-        <p className="m-0 mb-6 font-serif italic text-[14px] text-ink-soft">
-          New here?{' '}
-          <Link className="hand-underline text-ink" href="/guide">
-            How Akada works
-          </Link>
-          , in five minutes.
-        </p>
-      )}
-
-      {/* Next Mark. One quiet line naming the nearest true thing, and
-          nothing at all when nothing is close. See components/progression. */}
-      {/* Hidden until the first session is logged: the first line a new
-          reader met was a distance to a tally they had never heard of. */}
-      {!sessionsLoading && rawSessions.length > 0 && <NextMarkLine surface="today" />}
 
       {courses.length === 0 ? (
         <EmptyPanel action="Add a course" onAction={openAddCourse} />
@@ -883,6 +637,16 @@ function DashboardPageContent() {
               courses={courses}
               goalHours={settings?.dailyGoalHours ?? 4}
             />
+            {/* Next Mark. One quiet line naming the nearest true thing, and
+                nothing when nothing is close. A reward line rather than a
+                to-do, so it sits under the hours it comes from, not over Up
+                next; and it waits for the first session, since before that
+                it is a distance to a tally nobody has met. */}
+            {!sessionsLoading && rawSessions.length > 0 && (
+              <div className="mt-4">
+                <NextMarkLine surface="today" />
+              </div>
+            )}
           </div>
         </div>
         <div aria-hidden className="fold my-8 md:mb-9" />
@@ -948,9 +712,12 @@ function DashboardPageContent() {
               </TaskSection>
             )}
 
-            {todayTasks.length > 0 && (
-              <TaskSection title="Due today" count={todayTasks.length}>
-                {todayTasks.map((task) => (
+            {/* The rest of what is due today. Up next already carries one of
+                them, and a section repeating it as its only row said the same
+                thing twice. */}
+            {dueTodayRest.length > 0 && (
+              <TaskSection title="Due today" count={dueTodayRest.length}>
+                {dueTodayRest.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
@@ -968,45 +735,11 @@ function DashboardPageContent() {
               </TaskSection>
             )}
 
-            {/* Courses keep their drag order on Today, below the day's own
-                work rather than above it, as entries on the page with a rule
-                between them. They carry the week's hours and quiet notes, so
-                the aside no longer repeats them. */}
-            <section>
-            <div className="mb-1 flex items-baseline justify-between">
-              <h2 className="m-0 font-serif text-[20px] font-medium tracking-[-0.01em]">Courses</h2>
-              <button
-                type="button"
-                onClick={openAddCourse}
-                className="flex items-center gap-1.5 font-serif text-xs italic text-muted transition-colors hover:text-ink"
-              >
-                <span className="text-[15px] font-light leading-none">+</span>
-                {courses.length} this term
-              </button>
-            </div>
-            <ReorderList
-              items={courses}
-              getId={(course) => course.id}
-              getLabel={(course) => course.code}
-              label="Courses, in the order you arranged them"
-              shape="row"
-              className="[&>li+li]:border-t [&>li+li]:border-line-soft"
-              onReorder={handleReorderCourses}
-              renderItem={(course) => (
-                <CourseCard
-                  course={course}
-                  sessions={shownSessions.filter((s) => s.courseId === course.id)}
-                  tasks={tasks.filter((t) => t.courseId === course.id)}
-                  onStartTimer={handleStartTimer}
-                  onEdit={openEditCourse}
-                  onDelete={setDeletingCourse}
-                  onAddTask={(courseId) =>
-                    router.push(`/tasks?course=${encodeURIComponent(courseId)}&newTask=1`)
-                  }
-                />
-              )}
-            />
-            </section>
+            {/* The courses, as one line: each course's rule and code with its
+                hours this week, the whole line a way to /courses. The cards
+                that stood here repeated the shelf and the rail, and made Today
+                seven sections deep. */}
+            <CourseLine courses={courses} sessions={shownSessions} />
           </div>
 
           {/* The readings: what is coming, the week, and the two numbers that
@@ -1022,7 +755,6 @@ function DashboardPageContent() {
               onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
             />
             <BeforeExamPanel tasks={tasks} courses={courses} />
-            <WeekPanel sessions={shownSessions} courses={courses} goalHours={weeklyGoalHours} />
             </div>
             <div className="mt-7 flex items-baseline justify-between font-serif text-[12.5px] italic text-muted">
               {/* Continuity is measured in weeks now, not days. A daily
@@ -1322,128 +1054,6 @@ function DashboardPageContent() {
         </div>
       )}</Leaving>
 
-      {/* Course details stay close to the original add-course sheet: a few
-          calm fields, the notebook slider, then one clear save action. */}
-      <Leaving value={editingCourse}>{(editingCourse, leaving) => (
-        <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
-          <button
-            type="button"
-            aria-label="Cancel editing course"
-            onClick={() => !savingCourseEdit && setEditingCourse(null)}
-            className="absolute inset-0 scrim backdrop-blur-sm"
-          />
-          <div className="relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain md:mx-auto md:max-w-xl rounded-t-3xl bg-bg px-6 pt-3.5 pb-[calc(1.75rem+env(safe-area-inset-bottom))] animate-slide-up">
-            <div className="mx-auto mb-[18px] h-1 w-9 rounded-full bg-line-strong" />
-            <h3 className="mt-0 mb-1.5 font-serif font-medium text-[22px] tracking-[-0.01em]">
-              Edit course
-            </h3>
-            <p className="mt-0 mb-4 font-serif text-[13px] italic text-muted">
-              Shape the class around your actual term.
-            </p>
-
-            <div className="flex flex-col gap-[18px]">
-              <div className="grid grid-cols-[100px_1fr] gap-2.5">
-                <SheetField label="Course code">
-                  <input
-                    autoFocus
-                    value={editingCourse.code}
-                    onChange={(event) => updateCourseEdit({ code: event.target.value.toUpperCase() })}
-                    className="w-full rounded-[10px] border border-line bg-paper px-3 py-3 text-sm text-ink outline-none focus:border-line-strong"
-                  />
-                </SheetField>
-                <SheetField label="Course name">
-                  <input
-                    value={editingCourse.name}
-                    onChange={(event) => updateCourseEdit({ name: event.target.value })}
-                    className="w-full rounded-[10px] border border-line bg-paper px-3 py-3 font-serif text-sm italic text-ink outline-none focus:border-line-strong"
-                  />
-                </SheetField>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <SheetField label="Credit hours">
-                  <input
-                    type="number"
-                    min="0.5"
-                    max="12"
-                    step="0.5"
-                    value={editingCourse.credits}
-                    onChange={(event) => updateCourseEdit({ credits: event.target.value })}
-                    className="w-full rounded-[10px] border border-line bg-paper px-3 py-3 font-mono text-sm text-ink outline-none focus:border-line-strong"
-                  />
-                </SheetField>
-                <SheetField label="Section">
-                  <input
-                    value={editingCourse.section}
-                    onChange={(event) => updateCourseEdit({ section: event.target.value })}
-                    placeholder="Optional"
-                    className="w-full rounded-[10px] border border-line bg-paper px-3 py-3 text-sm text-ink outline-none placeholder:text-muted-soft focus:border-line-strong"
-                  />
-                </SheetField>
-              </div>
-
-              <SheetField label="Meeting time">
-                <input
-                  value={editingCourse.meetingTime}
-                  onChange={(event) => updateCourseEdit({ meetingTime: event.target.value })}
-                  placeholder="e.g. Mon & Wed, 9:30 AM – 10:45 AM"
-                  className="w-full rounded-[10px] border border-line bg-paper px-4 py-3 font-serif text-sm italic text-ink outline-none placeholder:text-muted-soft focus:border-line-strong"
-                />
-              </SheetField>
-
-              <SheetField label="Instructor">
-                <input
-                  value={editingCourse.instructor}
-                  onChange={(event) => updateCourseEdit({ instructor: event.target.value })}
-                  placeholder="Optional"
-                  className="w-full rounded-[10px] border border-line bg-paper px-4 py-3 font-serif text-sm italic text-ink outline-none placeholder:text-muted-soft focus:border-line-strong"
-                />
-              </SheetField>
-
-              <SheetField label="Weekly study goal">
-                <WeeklyGoalSlider
-                  value={editingCourse.weeklyGoalHours}
-                  onChange={(weeklyGoalHours) => updateCourseEdit({ weeklyGoalHours })}
-                  credits={Number(editingCourse.credits) || 4}
-                  label={`Weekly study goal for ${editingCourse.name || 'this course'}`}
-                />
-              </SheetField>
-            </div>
-
-            <div className="mt-6 flex gap-2.5">
-              <button
-                type="button"
-                disabled={savingCourseEdit}
-                onClick={() => setEditingCourse(null)}
-                className="flex-1 rounded-[10px] border border-line-strong bg-transparent py-3.5 text-sm font-medium text-ink-soft disabled:opacity-40"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={savingCourseEdit || !editingCourse.code.trim() || !editingCourse.name.trim()}
-                onClick={handleSaveCourseEdit}
-                className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast disabled:opacity-30"
-              >
-                {savingCourseEdit ? (
-                  <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving</span>
-                ) : 'Save changes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}</Leaving>
-      <ConfirmSheet
-        open={deletingCourse !== null}
-        title={`Delete ${deletingCourse?.name ?? 'this course'}?`}
-        body="Its study sessions and tasks will be removed too. Type DELETE to make sure."
-        confirmLabel="Delete course"
-        cancelLabel="Keep course"
-        requirePhrase="DELETE"
-        busy={deletingCourseBusy}
-        onCancel={() => !deletingCourseBusy && setDeletingCourse(null)}
-        onConfirm={handleDeleteCourse}
-      />
       <ConfirmSheet
         open={pendingTimer !== null}
         title="Start this one instead?"
@@ -1457,24 +1067,6 @@ function DashboardPageContent() {
         }}
       />
 
-      <SettingsSheet
-        open={showSettings}
-        updating={updatingSettings}
-        displayName={displayName}
-        avatarUrl={avatarUrl}
-        settingsName={settingsName}
-        settingsAvatar={settingsAvatar}
-        courses={courses}
-        sessions={sessions}
-        onNameChange={setSettingsName}
-        onAvatarChange={setSettingsAvatar}
-        onClose={() => !updatingSettings && setShowSettings(false)}
-        onSave={handleUpdateSettings}
-        onCoursesChanged={() => revalidateCourses()}
-        onSignOut={handleSignOut}
-        onResetData={handleResetData}
-        onDeleteAccount={handleDeleteAccount}
-      />
     </PageShell>
   );
 }
