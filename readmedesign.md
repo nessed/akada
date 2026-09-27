@@ -258,17 +258,27 @@ at the same weight, and a box that everything has stops meaning anything.
 The page is separated by its own ruling instead, the way a ruled pad is:
 
 - **The head band.** On Today, Up next is the one thing that spans the page,
-  with today's hours beside it (from `xl`), since Start is what fills them,
-  and the Next Mark line under the hours: it is a reward line read off them,
-  not a to-do, so it never sits over Up next. On a course page the band is
+  with the hours beside it (from `xl`), since Start is what fills them: the
+  day's hours, then under a cutoff **This week** (`WeekHours`) at the same
+  32px mono, the week's hours against the week's goal, which is the course
+  goals added up (there is no separate one to set). Its strokes are 6px wide
+  once the goal passes twelve hours and cap at 24, and a serif line under
+  them says what is left and how many days the week has ("4h 20m to go · 3
+  days left"). With no course goals it links to Settings instead. The week
+  is one of the two numbers Today is read for; the bar chart it replaces sat
+  below the fold and read as a footnote. The Next Mark line comes under
+  both: it is a reward line read off them, not a to-do, so it never sits
+  over Up next. On a course page the band is
   the strip of four figures. Nothing frames it: it leads by position and size.
-- **Today is three things.** Up next, the hours, and Coming. Everything else
+- **Today is three things.** Up next, the hours (the day's and the week's),
+  and Coming. Everything else
   it carries is conditional: the recall card when something is due, Overdue
   when something is, **Due today** only for what Up next is not already
   showing (a section whose one row is the Up next task said it twice), and
   **Before the exam** in the week before one. The course cards that used to
   stand under the day, the week's bar chart and the "New here?" link to the
-  guide are gone: in place of the cards, one line (`CourseLine`), "This week"
+  guide are gone (the week came back as `WeekHours` in the head band): in
+  place of the cards, one line (`CourseLine`), "This week"
   then each course's rule and code with its hours this week in mono, the whole
   line a link to `/courses`. Up next's row is **Start · Done · Tomorrow**; the
   Untimed button beside Start went, since Start's popover already offers
