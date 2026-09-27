@@ -129,7 +129,7 @@ function WeakPointRow({ point }: { point: WeakPoint }) {
         disabled={busy}
         aria-pressed={isFixed}
         title={isFixed ? 'Put it back on the list' : 'You get this right now'}
-        className="h-8 shrink-0 rounded-[8px] px-1.5 font-serif text-[12px] italic text-muted-soft transition-opacity hover:text-ink focus-visible:opacity-100 disabled:opacity-40 md:opacity-0 md:group-hover:opacity-100"
+        className="h-8 shrink-0 rounded-[8px] px-1.5 touch:h-10 font-serif text-[12px] italic text-muted-soft transition-opacity hover:text-ink focus-visible:opacity-100 disabled:opacity-40 md:mouse:opacity-0 md:group-hover:opacity-100"
       >
         {isFixed ? 'reopen' : 'fixed'}
       </button>

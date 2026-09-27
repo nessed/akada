@@ -45,7 +45,7 @@ export default function PageShell({ children, hideNav, wide }: Props) {
         <main
           className={`page-in mx-auto px-[var(--density-gutter)] md:px-12 ${
             wide ? 'md:max-w-[1136px]' : 'max-w-2xl md:max-w-3xl'
-          } ${hideNav ? 'pb-8' : 'pb-[calc(152px+env(safe-area-inset-bottom))] md:pb-16'} pt-[max(env(safe-area-inset-top),64px)] md:pt-10`}
+          } ${hideNav ? 'pb-8' : 'pb-[calc(152px+env(safe-area-inset-bottom))] md:pb-[calc(64px+env(safe-area-inset-bottom))]'} pt-[max(env(safe-area-inset-top),64px)] md:pt-[max(env(safe-area-inset-top),40px)]`}
         >
           {children}
         </main>

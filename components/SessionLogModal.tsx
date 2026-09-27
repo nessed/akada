@@ -191,7 +191,7 @@ export default function SessionLogModal({
   }
 
   return (
-    <div className={`fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+    <div className={`sheet-lift fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
       {/* The scrim was a real <button> with an aria-label and no onClick: a
           focus stop that announced itself and then did nothing. Dismissing
           here discards a session, which is not something a stray tap on the

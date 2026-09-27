@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import plugin from 'tailwindcss/plugin';
 
 const config: Config = {
   content: [
@@ -88,7 +89,17 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    /* A finger or a cursor, as lib/input.ts writes it on <html>. `touch:` and
+       `mouse:` style for one or the other, and `hover:` stands down under a
+       finger, which would otherwise leave the hover stuck on whatever it last
+       tapped. :where() keeps each at the specificity it had without it. */
+    plugin(({ addVariant }) => {
+      addVariant('touch', ':where(:root[data-input="touch"]) &');
+      addVariant('mouse', ':where(:root:not([data-input="touch"])) &');
+      addVariant('hover', ':where(:root:not([data-input="touch"])) &:hover');
+    }),
+  ],
 };
 
 export default config;

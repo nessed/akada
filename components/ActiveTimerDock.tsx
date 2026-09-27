@@ -60,7 +60,7 @@ export default function ActiveTimerDock() {
          The left padding clears the rail by the same width the content does:
          --rail, set in globals.css from data-rail on <html>. It only applies
          from md, since the rail is never rendered on a phone. */
-      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] md:top-auto md:bottom-8 z-50 px-[var(--density-gutter)] md:pl-[calc(var(--rail,0px)+3rem)] md:pr-12 pointer-events-none animate-fade-in"
+      className="fixed inset-x-0 top-[max(env(safe-area-inset-top),14px)] md:top-auto md:bottom-[calc(2rem+env(safe-area-inset-bottom))] z-50 px-[var(--density-gutter)] md:pl-[calc(var(--rail,0px)+3rem)] md:pr-12 pointer-events-none animate-fade-in"
     >
       {/* pointer-events stay off the full-width row, it would otherwise be an
           invisible click blocker across the top of the page. */}

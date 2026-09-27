@@ -138,7 +138,7 @@ export default function DatePicker({
               type="button"
               onClick={() => setViewMonth((date) => addMonths(date, -1))}
               aria-label="Previous month"
-              className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:bg-bg-tint"
+              className="flex h-8 w-8 touch:h-10 touch:w-10 items-center justify-center rounded-full text-ink-soft hover:bg-bg-tint"
             >
               <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none">
                 <path
@@ -165,7 +165,7 @@ export default function DatePicker({
               type="button"
               onClick={() => setViewMonth((date) => addMonths(date, 1))}
               aria-label="Next month"
-              className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:bg-bg-tint"
+              className="flex h-8 w-8 touch:h-10 touch:w-10 items-center justify-center rounded-full text-ink-soft hover:bg-bg-tint"
             >
               <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none">
                 <path

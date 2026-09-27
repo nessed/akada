@@ -224,7 +224,7 @@ function Book({ row, onStart }: { row: Row; onStart: (t: StartTarget) => void })
           type="button"
           onClick={(e) => onStart({ task: null, course, anchor: e.currentTarget })}
           aria-label={`Start a timer on ${course.code}`}
-          className="absolute right-2 top-2 flex h-8 items-center gap-1.5 rounded-[8px] bg-paper px-2.5 text-[12px] font-medium text-ink-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+          className="absolute right-2 top-2 flex h-8 touch:h-10 items-center gap-1.5 rounded-[8px] bg-paper px-2.5 text-[12px] font-medium text-ink-soft transition-opacity hover:text-ink focus-visible:opacity-100 md:mouse:opacity-0 md:group-hover:opacity-100"
         >
           {/* A word, not a bare circle: on a book cover a play mark with no
               label read as anything at all. */}

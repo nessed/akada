@@ -377,11 +377,14 @@ export default function TimerPage() {
       aria-pressed={on}
       className="h-10 rounded-[10px] px-3 text-[13px] font-medium transition-[color,background-color,transform] duration-200 active:scale-[0.97]"
       style={{ color: on ? ink : inkSoft }}
-      onMouseEnter={(e) => {
+      // A cursor only: a finger fires enter on a tap and never leaves, which
+      // left the tapped length looking pointed at after the finger was gone.
+      onPointerEnter={(e) => {
+        if (e.pointerType !== 'mouse') return;
         e.currentTarget.style.background = hoverBg;
         e.currentTarget.style.color = ink;
       }}
-      onMouseLeave={(e) => {
+      onPointerLeave={(e) => {
         e.currentTarget.style.background = 'transparent';
         e.currentTarget.style.color = on ? ink : inkSoft;
       }}

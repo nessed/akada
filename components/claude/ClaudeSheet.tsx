@@ -96,7 +96,7 @@ function ClaudeSheet({ request, onClose }: { request: ClaudeAsk | null; onClose:
   }
 
   return (
-    <div className={`fixed inset-0 z-[90] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+    <div className={`sheet-lift fixed inset-0 z-[90] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 scrim backdrop-blur-sm" />
       <section
         role="dialog"

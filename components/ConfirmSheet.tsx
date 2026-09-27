@@ -64,7 +64,7 @@ export default function ConfirmSheet({
   const armed = !busy && (!requirePhrase || typed.trim().toLowerCase() === requirePhrase.toLowerCase());
 
   return (
-    <div className={`fixed inset-0 z-[95] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
+    <div className={`sheet-lift fixed inset-0 z-[95] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
       <button
         type="button"
         aria-label={cancelLabel}
