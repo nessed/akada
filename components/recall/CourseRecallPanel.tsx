@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import type { Course } from '@/lib/data';
+import type { Course, Task } from '@/lib/data';
 import { useNotice } from '@/components/Notice';
 import type { RecallReading, RecallState } from '@/lib/recall';
-import { letGoRecall, undoRecall, type RecallChange } from '@/lib/recall/actions';
+import { keepTask, letGoRecall, undoRecall, type RecallChange } from '@/lib/recall/actions';
+import { readingPrompt } from '@/lib/recall';
 import { coursePrompt } from '@/lib/recall/prompt';
 import { whenWords } from '@/lib/recall/words';
 import KeepLine from './KeepLine';
@@ -50,6 +51,7 @@ export default function CourseRecallPanel({
   const [busy, setBusy] = useState(false);
 
   const mine = reading?.byCourse.get(course.id) ?? null;
+  const waiting = (reading?.waiting ?? []).filter((task) => task.courseId === course.id);
   const states = mine?.states ?? [];
   const due = states.filter((state) => state.due);
   const shown = unfolded ? states : states.slice(0, FOLDED);
@@ -78,6 +80,19 @@ export default function CourseRecallPanel({
       setLetGoOf(await letGoRecall(state));
     } catch (error) {
       console.error('Failed to let the recall go:', error);
+      notify(error instanceof Error ? error.message : 'That did not save.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function askAbout(task: Task) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await keepTask(task);
+    } catch (error) {
+      console.error('Failed to keep the reading:', error);
       notify(error instanceof Error ? error.message : 'That did not save.');
     } finally {
       setBusy(false);
@@ -221,6 +236,32 @@ export default function CourseRecallPanel({
           </p>
         )}
 
+        {/* Readings finished with a tick and no time logged on them: not
+            asked about on their own, since a tick does not say they were
+            read. One tap asks. */}
+        {waiting.length > 0 && (
+          <div className="border-t border-line-soft px-4 pb-1 pt-3">
+            <p className="m-0 font-serif text-[12.5px] italic text-muted">
+              not asked yet · ticked off with no time logged on {waiting.length === 1 ? 'it' : 'them'}
+            </p>
+            {waiting.slice(0, unfolded ? undefined : FOLDED).map((task) => (
+              <div key={task.id} className="flex items-center gap-3 py-2">
+                <span className="min-w-0 flex-1 truncate font-serif text-[14px] text-ink-soft">
+                  {readingPrompt(task.title)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => askAbout(task)}
+                  disabled={busy || !available}
+                  className="hand-underline shrink-0 bg-transparent px-0.5 font-serif text-[12.5px] text-ink disabled:opacity-40"
+                >
+                  Ask me about this
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {states.length > FOLDED && (
           <button
             type="button"
@@ -231,7 +272,7 @@ export default function CourseRecallPanel({
           </button>
         )}
 
-        {states.length === 0 && (
+        {states.length === 0 && waiting.length === 0 && (
           <p className="m-0 px-4 pb-1 pt-4 font-serif text-[13.5px] italic leading-[1.55] text-muted">
             Finished readings for {course.code} come here on their own, to be asked about
             from memory a day later, then at widening gaps. Anything else worth keeping can

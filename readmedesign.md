@@ -522,10 +522,18 @@ widen each time they come back clear. Asking is the studying. Pulling a thing
 out of memory does more for keeping it than reading it again, and it tells the
 reader the one thing an hour count cannot, which is what they no longer have.
 
-**What gets asked about.** Finished readings, on their own: a task whose kind
-is `reading`, or whose title reads as one (it starts with "Read", cites an
-author and a year, or names a chapter), comes into recall the day after it was
-ticked. Nothing is stored for it until it is first answered, so a term that
+**What gets asked about.** Finished readings that were read: a task whose
+kind is `reading`, or whose title reads as one (it starts with "Read", cites
+an author and a year, or names a chapter, and does not name itself as work:
+a problem set, pset, "PS 2", homework, HW, an assignment, quiz, lab,
+tutorial or exercise), comes into recall on its own the day after it was
+finished, **when it was worked** (time logged on it, see "Worked, not ticked,
+and Skip") or finished from the log sheet. One only ticked is not asked about
+on its own, since a tick does not say it was read and eight readings
+bulk-ticked from last month would flood the week: it waits on the course
+page's Recall under "not asked yet · ticked off with no time logged on it",
+each with **Ask me about this**, which keeps it (and the task sheet's "Keep
+this for recall" does the same). Nothing is stored for it until it is first answered, so a term that
 started before recall existed arrives with its readings already in it. The
 same reading written down twice, once off the syllabus and once when it was
 done, is one thing to remember. A reading skipped rather than done (see

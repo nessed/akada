@@ -575,3 +575,45 @@ test('a reading skipped rather than done is never asked about', () => {
   });
   assert.deepEqual(state.states.map((s) => s.key), ['task:read']);
 });
+
+test('work named as work is not a reading, whatever chapter it cites', () => {
+  for (const title of [
+    'Ch 3 problem set', 'Chapter 4 pset', 'PS 2: Ch 5', 'Homework on Ch 6', 'HW3 (2024)',
+    'Assignment 1, chapter 2', 'Quiz on Ch 7', 'Lab 4: Ch 3 lists', 'Tutorial 2 ch 1', 'Exercises Ch 9',
+  ]) {
+    assert.equal(looksLikeReading({ kind: 'task', title }), false, title);
+  }
+  assert.equal(looksLikeReading({ kind: 'reading', title: 'Lab manual Ch 1' }), true);
+  assert.equal(looksLikeReading({ kind: 'task', title: 'Read Mankiw Ch 4' }), true);
+});
+
+test('a reading enters recall only when worked or finished from the log sheet', () => {
+  const worked = task('worked', 'Read Mankiw Ch 1');
+  const logged = task('logged', 'Read Mankiw Ch 2', { completedVia: 'session' });
+  const ticked = task('ticked', 'Read Mankiw Ch 3');
+  const asked = task('asked', 'Read Mankiw Ch 4');
+  const skipped = task('skipped', 'Read Mankiw Ch 5', { completedVia: 'skip' });
+  const state = readRecall({
+    courses: [course('pol')],
+    tasks: [worked, logged, ticked, asked, skipped],
+    records: [record('task:asked', { source: 'reading', ref: 'asked' })],
+    today: TODAY,
+    sessions: [{ taskId: 'worked', durationSeconds: 1800 }],
+  });
+  assert.deepEqual(state.states.map((s) => s.key).sort(), ['task:asked', 'task:logged', 'task:worked']);
+  assert.deepEqual(state.waiting.map((t) => t.id), ['ticked']);
+});
+
+test('a reading only ticked waits unless its other copy was worked', () => {
+  const copyA = task('a', 'Read Hobbes (1651)');
+  const copyB = task('b', 'Read Hobbes (1651)');
+  const state = readRecall({
+    courses: [course('pol')],
+    tasks: [copyA, copyB],
+    records: [],
+    today: TODAY,
+    sessions: [{ taskId: 'a', durationSeconds: 1800 }],
+  });
+  assert.equal(state.states.length, 1);
+  assert.equal(state.waiting.length, 0);
+});
