@@ -1,4 +1,5 @@
 import type { Course, Session, Task } from '../data';
+import { workedTaskIds } from '../derive';
 import { isLoggableDuration } from '../session-safety';
 import { PAGES_BOUND_RUNGS } from './constants';
 import type { DayCredit } from './credit';
@@ -84,8 +85,11 @@ export function readLadders(
   const breadthWeeks =
     courses.length === 0 ? 0 : runs.weeks.filter((w) => w.courses >= courses.length).length;
 
+  // Only work that was worked: a tick three days out is one tap, and a skip
+  // is not work at all (workedTaskIds never holds one).
+  const worked = workedTaskIds(tasks, sessions);
   const early = tasks.filter((t) => {
-    if (!t.completed || !t.completedAt || !t.dueDate) return false;
+    if (!t.completed || !t.completedAt || !t.dueDate || !worked.has(t.id)) return false;
     const done = new Date(t.completedAt.slice(0, 10) + 'T12:00:00').getTime();
     const due = new Date(t.dueDate + 'T12:00:00').getTime();
     return (due - done) / 86_400_000 >= 3;

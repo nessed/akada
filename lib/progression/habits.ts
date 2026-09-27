@@ -1,5 +1,6 @@
 import type { Course, Session, SessionSegment, Task } from '../data';
 import { isLoggableDuration } from '../session-safety';
+import { medianPace, readingPairs, type ReadingPair } from '../derive';
 import {
   HABIT_MIN_BLOCKS,
   HABIT_MIN_SITTINGS,
@@ -229,7 +230,6 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
   const courseOverrun = new Map<string, { n: number; over: number }>();
   const courseHours = new Map<string, number[]>();
   const courseTagged = new Map<string, { n: number; count: number }>();
-  const secondsByTask = new Map<string, number>();
   const firstOfDay = new Map<string, { at: number; courseId: string }>();
 
   const bucket = <T,>(map: Map<string, T[]>, key: string): T[] => {
@@ -246,12 +246,6 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
     weeks.add(mondayOf(session.date));
     allSittings.push(session.durationSeconds);
     bucket(courseSittings, session.courseId).push(session.durationSeconds);
-    if (session.taskId) {
-      secondsByTask.set(
-        session.taskId,
-        (secondsByTask.get(session.taskId) ?? 0) + session.durationSeconds,
-      );
-    }
 
     const blocks = focusBlocks(session.segments);
     if (blocks.length === 0) {
@@ -317,18 +311,14 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
     }
   }
 
-  // Reading pace per course: pages on finished readings against the time
-  // logged on those very tasks, the same bound the credit ledger uses.
-  const pagesByCourse = new Map<string, { pages: number; seconds: number; n: number }>();
-  for (const task of tasks) {
-    if (!task.completed || !task.pages || !known.has(task.courseId)) continue;
-    const seconds = secondsByTask.get(task.id) ?? 0;
-    if (seconds <= 0) continue;
-    const row = pagesByCourse.get(task.courseId) ?? { pages: 0, seconds: 0, n: 0 };
-    row.pages += task.pages;
-    row.seconds += seconds;
-    row.n += 1;
-    pagesByCourse.set(task.courseId, row);
+  // Reading pace per course: each worked reading's own pages over its own
+  // logged time, and the median of those, the same pairs and bounds the
+  // Today backlog reads (readingPairs in lib/derive.ts). A pooled ratio let
+  // one 200-page tick with five minutes on it read as 2,400 pages an hour.
+  const pagesByCourse = new Map<string, ReadingPair[]>();
+  for (const pair of readingPairs(tasks, logged)) {
+    if (!known.has(pair.courseId)) continue;
+    bucket(pagesByCourse, pair.courseId).push(pair);
   }
 
   const openedDays = new Map<string, number>();
@@ -380,10 +370,7 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
       overrun: courseOverrun.get(course.id) ?? { n: 0, over: 0 },
       peak: peakOf(courseHours.get(course.id) ?? [], minPeakFocus),
       distracted: courseTagged.get(course.id) ?? { n: 0, count: 0 },
-      pagesPerHour:
-        pace && pace.n >= 2 && pace.seconds > 0
-          ? Math.max(1, Math.round(pace.pages / (pace.seconds / 3600)))
-          : null,
+      pagesPerHour: pace && pace.length >= 2 ? medianPace(pace) : null,
       openedDays: openedDays.get(course.id) ?? 0,
     });
   }

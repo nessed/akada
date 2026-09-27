@@ -260,43 +260,118 @@ export function backlogPages(tasks: Task[]): number {
   return readingBacklog(tasks).reduce((acc, t) => acc + (t.pages || 0), 0);
 }
 
-/**
- * Pages an hour, measured rather than assumed: total pages finished over
- * total hours logged against readings. Falls back to a plain 20 until there
- * is enough history to say anything, and never claims a rate off one session.
- */
-export function readingRate(
-  tasks: Task[],
-  sessions: { taskId: string | null; durationSeconds: number }[],
-): number {
-  return readingRateDetail(tasks, sessions).pagesPerHour;
-}
-
 /** The plain rate a reader is given until their own history says otherwise. */
 export const DEFAULT_PAGES_PER_HOUR = 20;
+/**
+ * The bounds on any one reading's pace. Past 120 pages an hour a book was
+ * skimmed or the clock was not on it; under 2, the clock ran through dinner.
+ * Either way that pair says nothing about how fast this reader reads.
+ */
+export const PACE_MAX_PAGES_PER_HOUR = 120;
+export const PACE_MIN_PAGES_PER_HOUR = 2;
+/** How many worked readings it takes before a pace is called the reader's own. */
+export const PACE_MIN_PAIRS = 3;
+
+/** One finished reading with its own pages over its own logged time. */
+export interface ReadingPair {
+  taskId: string;
+  courseId: string;
+  pages: number;
+  seconds: number;
+  pagesPerHour: number;
+}
+
+/**
+ * The readings a pace can honestly be read off: finished, with a page count,
+ * and worked (see workedTaskIds), each paired with the time logged on that
+ * very task. A tick with a page count on it is not a reading timed; a
+ * session on a different reading is not time on this one.
+ */
+export function readingPairs(
+  tasks: Pick<Task, 'id' | 'courseId' | 'kind' | 'completed' | 'completedVia' | 'pages'>[],
+  sessions: { taskId: string | null; durationSeconds: number }[],
+  notes: { taskId: string | null; reads?: { seconds: number }[] | null }[] = [],
+): ReadingPair[] {
+  const worked = workedTaskIds(tasks, sessions, notes);
+  const sessionSeconds = new Map<string, number>();
+  for (const s of sessions) {
+    if (s.taskId && s.durationSeconds > 0) {
+      sessionSeconds.set(s.taskId, (sessionSeconds.get(s.taskId) ?? 0) + s.durationSeconds);
+    }
+  }
+  const readSeconds = new Map<string, number>();
+  for (const note of notes) {
+    if (!note.taskId) continue;
+    const total = (note.reads ?? []).reduce((acc, r) => acc + (r.seconds || 0), 0);
+    if (total > 0) readSeconds.set(note.taskId, (readSeconds.get(note.taskId) ?? 0) + total);
+  }
+  const pairs: ReadingPair[] = [];
+  for (const task of tasks) {
+    if (task.kind !== 'reading' || !task.pages || !worked.has(task.id)) continue;
+    // The sessions on it where there are any; a read-through kept on its
+    // note otherwise, since that too was timed on the task's clock.
+    const seconds = sessionSeconds.get(task.id) ?? readSeconds.get(task.id) ?? 0;
+    if (seconds <= 0) continue;
+    pairs.push({
+      taskId: task.id,
+      courseId: task.courseId,
+      pages: task.pages,
+      seconds,
+      pagesPerHour: clampPace(task.pages / (seconds / 3600)),
+    });
+  }
+  return pairs;
+}
+
+function clampPace(rate: number): number {
+  return Math.min(PACE_MAX_PAGES_PER_HOUR, Math.max(PACE_MIN_PAGES_PER_HOUR, rate));
+}
+
+/**
+ * The pace a set of readings says, as the median of each one's own rate
+ * rather than one pooled ratio: a pooled ratio lets one 200-page tick with
+ * five minutes on it speak for the whole term. Null with nothing to read.
+ */
+export function medianPace(pairs: Pick<ReadingPair, 'pagesPerHour'>[]): number | null {
+  if (pairs.length === 0) return null;
+  const rates = pairs.map((p) => p.pagesPerHour).sort((a, b) => a - b);
+  const mid = Math.floor(rates.length / 2);
+  const median = rates.length % 2 ? rates[mid] : (rates[mid - 1] + rates[mid]) / 2;
+  return Math.round(clampPace(median));
+}
+
+/**
+ * Pages an hour, measured rather than assumed. Falls back to a plain 20
+ * until there are enough worked readings to say anything.
+ */
+export function readingRate(
+  tasks: Pick<Task, 'id' | 'courseId' | 'kind' | 'completed' | 'completedVia' | 'pages'>[],
+  sessions: { taskId: string | null; durationSeconds: number }[],
+  notes: { taskId: string | null; reads?: { seconds: number }[] | null }[] = [],
+): number {
+  return readingRateDetail(tasks, sessions, notes).pagesPerHour;
+}
 
 /**
  * The same rate with what it stands on, for a caller that has to say whether
  * the number is the reader's own or the default. The connector does: "at
  * your pace" off a default of 20 would be a claim about someone it has never
- * watched read.
+ * watched read. `measured` needs PACE_MIN_PAIRS worked readings, each with
+ * its own pages and its own time; one session on one reading is not a pace.
  */
 export function readingRateDetail(
-  tasks: Pick<Task, 'id' | 'kind' | 'completed' | 'pages'>[],
+  tasks: Pick<Task, 'id' | 'courseId' | 'kind' | 'completed' | 'completedVia' | 'pages'>[],
   sessions: { taskId: string | null; durationSeconds: number }[],
+  notes: { taskId: string | null; reads?: { seconds: number }[] | null }[] = [],
 ) {
-  const readingIds = new Set(tasks.filter((t) => t.kind === 'reading').map((t) => t.id));
-  const done = tasks.filter((t) => t.completed && t.kind === 'reading');
-  const pages = done.reduce((acc, t) => acc + (t.pages || 0), 0);
-  const seconds = sessions
-    .filter((s) => s.taskId && readingIds.has(s.taskId))
-    .reduce((acc, s) => acc + s.durationSeconds, 0);
-  const measured = pages >= 20 && seconds >= 3600;
+  const pairs = readingPairs(tasks, sessions, notes);
+  const measured = pairs.length >= PACE_MIN_PAIRS;
   return {
-    pagesPerHour: measured ? Math.round(pages / (seconds / 3600)) : DEFAULT_PAGES_PER_HOUR,
+    pagesPerHour: measured ? (medianPace(pairs) ?? DEFAULT_PAGES_PER_HOUR) : DEFAULT_PAGES_PER_HOUR,
     measured,
-    pagesRead: pages,
-    hoursRead: seconds / 3600,
+    pagesRead: pairs.reduce((acc, p) => acc + p.pages, 0),
+    hoursRead: pairs.reduce((acc, p) => acc + p.seconds, 0) / 3600,
+    readings: pairs.length,
   };
 }
 

@@ -267,3 +267,21 @@ test('a term of stored impressions can bias the ranking on its own', () => {
   assert.ok((bias['week-counts'] ?? 0) < 0);
   assert.ok((bias['course-mark'] ?? 0) > 0);
 });
+
+test('a course pace is the median of its readings, not one pooled ratio', () => {
+  const reading = (id: string, pages: number) => ({
+    id, courseId: 'math', title: id, dueDate: null, priority: 'normal' as const,
+    completed: true, completedAt: '2026-09-10T10:00:00.000Z', createdAt: '2026-09-01T00:00:00.000Z',
+    kind: 'reading' as const, pages,
+  });
+  const on = (taskId: string, minutes: number): Session => ({
+    ...timed('math', '2026-09-10', 10, [{ minutes }]), taskId,
+  });
+  // A 200-page tick with five minutes on it beside two honest readings.
+  const habits = readHabits(
+    [MATH],
+    [on('skim', 5), on('a', 60), on('b', 60)],
+    [reading('skim', 200), reading('a', 30), reading('b', 20), reading('ticked', 500)],
+  );
+  assert.equal(habits.byCourse.get('math')?.pagesPerHour, 30);
+});
