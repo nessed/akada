@@ -42,6 +42,9 @@ const LEDGER_MAX = 240;
 interface Pending {
   rowId: string;
   at: number;
+  /** The shown line's kind and course, to judge a session against. */
+  kind?: MarkKind | null;
+  courseId?: string | null;
 }
 
 /** One line shown, and whether a sitting followed it. */
@@ -50,6 +53,29 @@ export interface LedgerEntry {
   kind: MarkKind;
   at: number;
   followed: boolean;
+  /** The course the line named, or null for a line about the week or the day. */
+  courseId?: string | null;
+}
+
+/** Lines about the week or the day, which any course's session answers. */
+const ANY_COURSE: ReadonlySet<MarkKind> = new Set<MarkKind>(['week-counts', 'day-threshold']);
+
+/**
+ * Whether a session started on `courseId` answers a line. "15 minutes to
+ * the next tally on MATH" is followed by a MATH session, not by any session
+ * at all, which is what "followed" used to mean: a CS session an hour after
+ * a MATH line taught the ranking that MATH lines work. A line about the week
+ * ("20 minutes makes this week count") or the day is followed by a session on
+ * anything; a week line about one course ("40 minutes to the week on ECON")
+ * is a course line.
+ */
+export function followsLine(
+  line: { kind: MarkKind | null | undefined; courseId?: string | null },
+  courseId: string,
+): boolean {
+  if (!line.kind) return false;
+  if (ANY_COURSE.has(line.kind)) return true;
+  return Boolean(line.courseId) && line.courseId === courseId;
 }
 
 /** The kinds a stored row may claim. Anything else is not read back. */
@@ -115,7 +141,13 @@ export async function logImpression(surface: string, reading: NextMarkReading): 
   if (reading.shown) {
     writeLedger([
       ...readLedger(),
-      { id: reading.shown.id, kind: reading.shown.kind, at: Date.now(), followed: false },
+      {
+        id: reading.shown.id,
+        kind: reading.shown.kind,
+        at: Date.now(),
+        followed: false,
+        courseId: reading.shown.courseId,
+      },
     ]);
   }
 
@@ -132,7 +164,12 @@ export async function logImpression(surface: string, reading: NextMarkReading): 
       .single();
 
     if (data?.id) {
-      const pending: Pending = { rowId: data.id as string, at: Date.now() };
+      const pending: Pending = {
+        rowId: data.id as string,
+        at: Date.now(),
+        kind: reading.shown?.kind ?? null,
+        courseId: reading.shown?.courseId ?? null,
+      };
       window.localStorage.setItem(PENDING_KEY, JSON.stringify(pending));
     }
   } catch {
@@ -141,15 +178,16 @@ export async function logImpression(surface: string, reading: NextMarkReading): 
 }
 
 /**
- * Called when a session starts. Marks the most recent impression as followed,
- * if one was shown inside the window.
+ * Called when a session starts on `courseId`. Marks the most recent
+ * impression as followed, if one was shown inside the window and the session
+ * is on the course it named (or it was a line about the week or the day).
  */
-export async function logSessionFollowed(): Promise<void> {
+export async function logSessionFollowed(courseId: string): Promise<void> {
   if (typeof window === 'undefined') return;
 
   const ledger = readLedger();
   const last = ledger[ledger.length - 1];
-  if (last && !last.followed && Date.now() - last.at <= FOLLOW_WINDOW_MS) {
+  if (last && !last.followed && Date.now() - last.at <= FOLLOW_WINDOW_MS && followsLine(last, courseId)) {
     writeLedger([...ledger.slice(0, -1), { ...last, followed: true }]);
   }
 
@@ -160,6 +198,9 @@ export async function logSessionFollowed(): Promise<void> {
     return;
   }
   if (!pending || Date.now() - pending.at > FOLLOW_WINDOW_MS) return;
+  // A row written before the line's course was kept is judged the old way
+  // only if it names no kind; otherwise it has to be the same course.
+  if (pending.kind !== undefined && !followsLine({ kind: pending.kind, courseId: pending.courseId }, courseId)) return;
   window.localStorage.removeItem(PENDING_KEY);
 
   try {
