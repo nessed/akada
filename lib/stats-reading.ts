@@ -2,6 +2,7 @@ import type { Session } from './data';
 import { clampSessionSeconds, isLoggableDuration } from './session-safety';
 import { isoDate, startOfWeek } from './utils';
 import type { Habits } from './progression';
+import { HABIT_MIN_WEEKS } from './progression/constants';
 
 /**
  * The Stats page's own readings: the things to chase.
@@ -54,7 +55,17 @@ export interface Records {
   week: Best;
   /** Days in a row. */
   run: Best;
+  /**
+   * Whether there is enough behind the records to call them records: two
+   * distinct weeks and ten sessions (RECORDS_MIN_*). Before that every card
+   * would be a new best every day, which says nothing, so none is stamped.
+   */
+  settled: boolean;
 }
+
+/** What it takes before a figure is a record rather than the first of its kind. */
+export const RECORDS_MIN_WEEKS = 2;
+export const RECORDS_MIN_SESSIONS = 10;
 
 export function readRecords(sessions: Session[], today = isoDate()): Records {
   // A sitting closed for the reader (held after no input, recovered, cut at
@@ -116,7 +127,15 @@ export function readRecords(sessions: Session[], today = isoDate()): Records {
   if (prev && (prev === today || prev === shiftIso(today, -1))) run.current = length;
   run.fresh = run.best > 1 && run.current === run.best;
 
-  return { sitting, day, week, run };
+  const weeksSeen = new Set(rows.map((s) => isoDate(startOfWeek(new Date(s.date + 'T12:00:00')))));
+  const settled = weeksSeen.size >= RECORDS_MIN_WEEKS && rows.length >= RECORDS_MIN_SESSIONS;
+  if (!settled) {
+    sitting.fresh = false;
+    day.fresh = false;
+    week.fresh = false;
+    run.fresh = false;
+  }
+  return { sitting, day, week, run, settled };
 }
 
 /* ------------------------------------------------------------------ */
@@ -276,7 +295,8 @@ export function readPersona(habits: Habits): Persona | null {
   const median = habits.sittings.median;
 
   let aside: string | null = null;
-  if (total > 0 && weekend / total >= 0.4) aside = 'and a weekend warrior';
+  // A weekend is only a habit once there have been a few of them.
+  if (total > 0 && weekend / total >= 0.4 && habits.weeks >= HABIT_MIN_WEEKS) aside = 'and a weekend warrior';
   else if (habits.sittings.n >= 5 && median >= 90 * 60) aside = 'who sits for the long haul';
   else if (habits.sittings.n >= 5 && median > 0 && median <= 25 * 60) aside = 'who works in short sprints';
   else if (habits.fullestDay !== null) {

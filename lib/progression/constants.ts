@@ -146,6 +146,8 @@ export const HABIT_MIN_TAGGED = 4;
 
 /** A peak has to actually be one: this share of all focus inside three hours. */
 export const PEAK_MIN_SHARE = 0.4;
+/** Distinct days the placed sittings behind a peak have to fall across. */
+export const PEAK_MIN_DAYS = 3;
 
 /**
  * The ranking learns. Each Next Mark line shown is logged with whether a

@@ -527,6 +527,11 @@ until there is enough behind it to be a habit rather than a coincidence
 (`HABIT_MIN_*` in `constants.ts`). Nothing here is a target and nothing is
 compared to anybody else.
 
+Two kinds of session never teach it anything: one closed for the reader
+(`recovery`, see The forgotten timer) and any over four hours, however it
+ended. Up next's "carry on where you left off" likewise ignores a session
+under ten minutes, which is a timer started and dropped.
+
 The app uses it in four places, and says it back in three.
 
 - **Next Mark reaches as far as your sitting.** The line names only what is
@@ -725,7 +730,10 @@ made before the list is read leaves the list unread and reads it fresh.
   write the next thing on sits at the foot, drawn the way the subtask sheet's
   "one more step…" is.
 - **The Coming section**, under an exam's row, once per course: the same
-  uprights, and "2 of 5 clear" in mono. A countdown on its own says how close
+  uprights, and "2 of 5 clear" in mono. Only under a piece recall prepares
+  for (`preparesFor`: worth a fifth of the course, or an unweighted midterm,
+  final or exam), and only once something in the course has been asked; it
+  used to say "0 of 1 clear" under a problem set. A countdown on its own says how close
   an exam is; this says how close the reader is to it.
 - **The task sheet**: for a finished task, where it stands ("in recall ·
   hazy 3 days ago · next thursday") or the words that keep it ("Bring this
@@ -1319,15 +1327,25 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
     per hour as long as the time that has landed in it, the usual three hours
     inked and the rest pencil, a `warn` hand pointing at now. Under it the
     kind of studier those strokes make ("an evening regular", in the serif
-    italic) with one more thing in Caveat ("and a weekend warrior"). It is
-    read off `habits.peak`, so it is withheld until the habits layer has
-    enough to call it, and says how many sittings are left until it does.
+    italic) with one more thing in Caveat ("and a weekend warrior", only once
+    three weeks are in). Under the clock, "from 12 timed sessions": **only a
+    session the timer watched is put on the clock**, since it is the only kind
+    that knows when it happened. One logged after the fact used to be placed
+    half its length before it was saved, and people log at night, so every
+    one of them leaned the clock toward evening. It is read off `habits.peak`,
+    which now needs five timed sessions across three days as well as 40% of
+    the time in three hours, and says how many timed sessions are left until
+    it does.
 - **Records to beat** (`PersonalBests`), at the head of the aside: longest
   sitting, biggest day, best week, longest run, each with a dotted leader to
   the figure and, under it, the one in progress that could take it ("this
   week so far 3h 42m · 7h 13m to beat it"). A record set inside the last week
   gets a `warn` stamp that comes down on the page (`.stamp-down`), the one
-  moment on Stats allowed to be loud.
+  moment on Stats allowed to be loud. **Nothing is a record before two weeks
+  and ten sessions** (`RECORDS_MIN_*`): in the first week every card was a
+  new best every day. Until then the figures stand as they are under one
+  line, "your first weeks set the marks", with no chase line and no stamp. A
+  session closed for the reader (`recovery`) never sets one.
 - **The charts arrive.** The heatmap inks in a week at a time from the
   oldest (`.heat-in`) and rings today; the week's bars fill up from the rule
   (`.bar-grow`); the course rules draw (`.rule-draw`) and their hour counts

@@ -40,7 +40,9 @@ export default function StudyClock({
     y: C + Math.sin(toRad(h)) * r,
   });
   const handTip = at(hourNow, INNER - 8);
-  const sittingsToGo = Math.max(0, HABIT_MIN_SITTINGS - habits.sittings.n);
+  // Only a timed session knows when in the day it happened, so that is what
+  // the clock is drawn from and what it waits on.
+  const sittingsToGo = Math.max(0, HABIT_MIN_SITTINGS - habits.placedSittings);
 
   return (
     <div className="flex flex-col items-center">
@@ -125,6 +127,11 @@ export default function StudyClock({
         <circle cx={C} cy={C} r={2.5} fill="var(--warn)" />
       </svg>
 
+      <p className="m-0 mt-1 font-serif text-[12px] italic text-muted">
+        from <span className="font-mono not-italic text-[11px]">{habits.placedSittings}</span> timed{' '}
+        {habits.placedSittings === 1 ? 'session' : 'sessions'}
+      </p>
+
       <div className="mt-3 text-center">
         {persona ? (
           <>
@@ -145,8 +152,8 @@ export default function StudyClock({
             </p>
             <p className="m-0 mt-1 font-serif text-[12.5px] italic text-muted">
               {sittingsToGo > 0
-                ? `${sittingsToGo} more sitting${sittingsToGo === 1 ? '' : 's'} and this says what kind of studier you are`
-                : 'a few more hours and your time of day shows itself'}
+                ? `${sittingsToGo} more timed session${sittingsToGo === 1 ? '' : 's'} and this says what kind of studier you are`
+                : 'a few more days of timed sessions and your time of day shows itself'}
             </p>
           </>
         )}

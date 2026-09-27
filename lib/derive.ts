@@ -375,6 +375,9 @@ export function readingRateDetail(
   };
 }
 
+/** How long a session has to have run to be something to carry on with. */
+const RESUME_MIN_SECONDS = 10 * 60;
+
 /** How recently a session has to have happened to count as "just now". */
 const RESUME_WINDOW_DAYS = 1;
 
@@ -532,8 +535,15 @@ function pickResumed(
   openTasks: Task[],
   today: string,
 ): Task | null {
+  // A session under ten minutes is a timer started and dropped, not work
+  // somebody is in the middle of.
   const recent = sessions
-    .filter((s) => s.date <= today && daysBetween(s.date, today) <= RESUME_WINDOW_DAYS)
+    .filter(
+      (s) =>
+        s.date <= today &&
+        daysBetween(s.date, today) <= RESUME_WINDOW_DAYS &&
+        s.durationSeconds >= RESUME_MIN_SECONDS,
+    )
     .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
   if (recent.length === 0) return null;
 

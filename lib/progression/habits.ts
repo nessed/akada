@@ -1,11 +1,13 @@
 import type { Course, Session, SessionSegment, Task } from '../data';
 import { isLoggableDuration } from '../session-safety';
+import { LONG_SITTING_SECONDS } from '../timer-idle';
 import { medianPace, readingPairs, type ReadingPair } from '../derive';
 import {
   HABIT_MIN_BLOCKS,
   HABIT_MIN_SITTINGS,
   HABIT_MIN_TAGGED,
   HABIT_MIN_WEEKS,
+  PEAK_MIN_DAYS,
   PEAK_MIN_SHARE,
   REACHABLE_SECONDS,
   REACH_MAX_SECONDS,
@@ -119,6 +121,11 @@ export interface Habits {
   days: number;
   /** Distinct weeks with something logged. */
   weeks: number;
+  /**
+   * Sittings the timer placed on the clock (the only ones that know when in
+   * the day they happened), which is what the peak and Stats' clock read.
+   */
+  placedSittings: number;
   /** Sittings timed in the app, so they have a chain to read. */
   timedSittings: number;
   /** Sittings with no chain that could still be read as one unbroken stretch. */
@@ -167,21 +174,25 @@ function mondayOf(iso: string): string {
  * only from sittings the app can place.
  */
 function placeSitting(session: Session): Date | null {
+  // Only a sitting the timer watched knows when it happened. One logged
+  // after the fact used to be placed half its length before it was saved,
+  // and people log at night, so every one of them leaned the clock toward
+  // evening and made its reader a night owl.
   const first = session.segments?.find((s) => s.kind === 'focus');
-  if (first) {
-    const at = new Date(first.startedAt);
-    if (!Number.isNaN(at.getTime())) return at;
-  }
-  const logged = new Date(session.createdAt);
-  if (Number.isNaN(logged.getTime())) return null;
-  if (localIso(logged) !== session.date) return null;
-  return new Date(logged.getTime() - (session.durationSeconds * 1000) / 2);
+  if (!first) return null;
+  const at = new Date(first.startedAt);
+  return Number.isNaN(at.getTime()) ? null : at;
 }
 
-/** The three-hour window holding the most focus, if it holds enough to be a peak. */
-function peakOf(hours: number[], minTotal: number): HourWindow | null {
+/**
+ * The three-hour window holding the most focus, if it holds enough to be a
+ * peak: five placed sittings across three days at least, then 40% in the
+ * window. Three evenings of one week are not a time of day yet.
+ */
+function peakOf(hours: number[], placed: { n: number; days: Set<string> }): HourWindow | null {
+  if (placed.n < HABIT_MIN_SITTINGS || placed.days.size < PEAK_MIN_DAYS) return null;
   const total = hours.reduce((a, b) => a + b, 0);
-  if (total < minTotal) return null;
+  if (total <= 0) return null;
   let best = 0;
   let bestStart = 0;
   for (let start = 0; start < 24; start++) {
@@ -208,8 +219,14 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
   // A sitting closed for the reader (held after no input, recovered, cut at
   // a ceiling) is not a length they chose, and one of them would move every
   // median here: "your ECON sittings run about 180 minutes".
+  // Nor is a sitting over four hours, however it ended: one of those is a
+  // forgotten timer more often than a real afternoon.
   const logged = sessions.filter(
-    (s) => isLoggableDuration(s.durationSeconds) && known.has(s.courseId) && !s.recovery,
+    (s) =>
+      isLoggableDuration(s.durationSeconds) &&
+      known.has(s.courseId) &&
+      !s.recovery &&
+      s.durationSeconds <= LONG_SITTING_SECONDS,
   );
 
   const hours = new Array<number>(24).fill(0);
@@ -243,6 +260,10 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
     }
     return list;
   };
+
+  /** Sittings the timer placed on the clock, and the days they fell on. */
+  const placed = { n: 0, days: new Set<string>() };
+  const coursePlaced = new Map<string, { n: number; days: Set<string> }>();
 
   for (const session of logged) {
     days.add(session.date);
@@ -291,6 +312,12 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
 
     const at = placeSitting(session);
     if (at) {
+      placed.n += 1;
+      placed.days.add(session.date);
+      const mineCount = coursePlaced.get(session.courseId) ?? { n: 0, days: new Set<string>() };
+      mineCount.n += 1;
+      mineCount.days.add(session.date);
+      coursePlaced.set(session.courseId, mineCount);
       // Spread the sitting across the hours it ran through, so a two hour
       // evening is an evening and not a spike at the minute it began.
       let remaining = session.durationSeconds;
@@ -330,7 +357,6 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
   }
 
   const sittings = stat(allSittings);
-  const minPeakFocus = HABIT_MIN_SITTINGS * 20 * 60;
 
   /**
    * Measured blocks where there are enough of them, and chainless sittings
@@ -371,7 +397,7 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
       blocksFrom: mine.from,
       sittings: stat(courseSittings.get(course.id) ?? []),
       overrun: courseOverrun.get(course.id) ?? { n: 0, over: 0 },
-      peak: peakOf(courseHours.get(course.id) ?? [], minPeakFocus),
+      peak: peakOf(courseHours.get(course.id) ?? [], coursePlaced.get(course.id) ?? { n: 0, days: new Set() }),
       distracted: courseTagged.get(course.id) ?? { n: 0, count: 0 },
       pagesPerHour: pace && pace.length >= 2 ? medianPace(pace) : null,
       openedDays: openedDays.get(course.id) ?? 0,
@@ -392,7 +418,8 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
     reach,
     reachIsOwn,
     hours,
-    peak: peakOf(hours, minPeakFocus),
+    peak: peakOf(hours, placed),
+    placedSittings: placed.n,
     weekdays,
     fullestDay,
     days: days.size,
