@@ -125,12 +125,17 @@ sheets). Hit targets are 40px and a task row is 48px.
 The app is one design read at two widths.
 
 Below `md` it is the sheet it has always been: a centred column, `BottomNav`
-along the bottom (Today, Tasks, Study, Stats, Record), and the timer dock
-floating at the top while a session runs. **The Record waits for the first
-session.** Before one is logged it is empty pages and a vocabulary nobody has
-met, so the bar puts **Courses** in its slot and the rail leaves it out
+along the bottom, and the timer dock floating at the top while a session runs.
+**The bar never changes on the reader**: Today, Tasks, Courses, Study, Stats,
+always in that order. It used to put Courses in the fifth slot until the
+first session and then swap it for the Record, so the tab a reader had just
+learned moved; it also lit Today on a course page. The Record is reached from
+Stats ("The record →") and from the Next Mark line on Today, which links to
+it, and on `/stamps` the bar lights Stats, the page it hangs off. The rail on
+a wide screen still leaves the Record out until the first session
 (`useRecordEarned`, read off the sessions, true while they load so it never
-blinks for someone who has them). It arrives with the first session.
+blinks for someone who has them), since it has a row to spare and a list that
+grows is not a tab that moves.
 
 At `md` and above a **232px rail** takes over and both of those hide
 themselves. The rail is **the margin of the page**, where the contents and
@@ -1329,8 +1334,9 @@ headers, the one screen that still looked like a settings panel.
   struck since gets the `warn` "New" stamp brought down (`.stamp-down`), the
   same one loud moment Stats allows a new record. The baseline is rewritten
   on every visit, so the news belongs to that visit.
-- **The dot.** While there is news, the Record item in the rail and the
-  bottom bar carries a 6px `ink` dot, never a count and never red. It reads
+- **The dot.** While there is news, the Record item in the rail, and the
+  Stats tab in the bottom bar (the way to the Record on a phone), carry a 6px
+  `ink` dot, never a count and never red. It reads
   the logged record, not the sitting on the clock, and clears the moment the
   page opens. This is the reason to come back to the Record.
 - **Impressions** are rubber stamps on one deckle sheet, drawn in SVG as
