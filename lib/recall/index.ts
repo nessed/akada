@@ -6,7 +6,7 @@ import type {
   RecallVerdict,
   Task,
 } from '../data';
-import { isSkipped } from '../derive';
+import { isSkipped, workedTaskIds } from '../derive';
 import { daysBetween, isoDate, logicalDateOf } from '../utils';
 import {
   RECALL_EXAM_MIN_WEIGHT,
@@ -124,6 +124,13 @@ export interface RecallReading {
   byCourse: Map<string, CourseRecall>;
   /** Everything let go, so keeping one again can bring it back with its answers. */
   letGo: RecallItem[];
+  /**
+   * Finished readings that were only ticked, not worked, and so are not
+   * asked about on their own. The course page lists them under "not asked
+   * yet" with a one-tap way in. Empty when the caller gave no sessions to
+   * judge by. Skipped readings are never here.
+   */
+  waiting: Task[];
 }
 
 export interface RecallInput {
@@ -138,6 +145,16 @@ export interface RecallInput {
    * student's own offset instead.
    */
   dayOf?: (instant: Date) => string;
+  /**
+   * The logged time to judge a finished reading by. With it, a reading
+   * enters recall on its own only when it was worked (time logged against
+   * it, see workedTaskIds) or finished from the log sheet; one only ticked
+   * waits in `waiting` until the reader asks for it. Without it every
+   * finished reading enters, which is what a caller that has no sessions to
+   * hand (the connector, for now) still gets.
+   */
+  sessions?: { taskId: string | null; durationSeconds: number }[];
+  notes?: { taskId: string | null; reads?: unknown[] | null }[];
 }
 
 /* ── What counts as a reading ─────────────────────────────────────────── */
@@ -155,6 +172,11 @@ const MEETING_SUFFIX = /\s*[–—-]+\s*(session|week|class|lecture|seminar|tuto
 // Work that names a chapter without being the reading of it: "Practice
 // response paper: Machiavelli Ch 15 & 18", "Watch the Ch 3 lecture".
 const NOT_READING = /^\s*(practice|watch|write|solve|submit|attempt|draft)\b/i;
+// Work that is named as work anywhere in the title, whatever chapter it
+// cites: "Ch 3 problem set", "Lab 4: lists", "HW 2 (2024)". A task marked a
+// reading by hand is still one; this only reads a title.
+const NAMED_WORK =
+  /\b(problem\s*sets?|p-?sets?|ps\s*\d+|homework|hw\s*\d*|assignments?|quiz(zes)?|labs?|tutorials?|exercises?)\b/i;
 
 /**
  * Whether a finished task is a reading, for the purpose of recalling it.
@@ -170,7 +192,7 @@ export function looksLikeReading(task: Pick<Task, 'kind' | 'title'>): boolean {
   if (task.kind === 'reading') return true;
   if (task.kind === 'exam') return false;
   const title = task.title ?? '';
-  if (NOT_READING.test(title)) return false;
+  if (NOT_READING.test(title) || NAMED_WORK.test(title)) return false;
   return READ_PREFIX.test(title) || CITATION.test(title) || CHAPTER.test(title);
 }
 
@@ -344,6 +366,8 @@ function readItems(
   records: RecallRecord[],
   today: string,
   dayOf: (instant: Date) => string,
+  enters: ((task: Task) => boolean) | null,
+  waiting: Task[],
 ): RecallItem[] {
   const courseIds = new Set(courses.map((c) => c.id));
   const byKey = new Map(records.map((record) => [record.key, record]));
@@ -361,6 +385,14 @@ function readItems(
     if (!task.completed || isSkipped(task) || !courseIds.has(task.courseId) || !looksLikeReading(task)) continue;
     const key = `task:${task.id}`;
     const record = byKey.get(key) ?? null;
+    // A reading only ticked is not asked about on its own: a tick says
+    // nothing about whether it was read, and eight readings bulk-ticked
+    // from last month would flood the next week. It waits for the reader to
+    // ask; once it has a row (asked for, answered, let go) it is kept.
+    if (!record && enters && !enters(task)) {
+      waiting.push(task);
+      continue;
+    }
     const item: RecallItem = {
       key,
       courseId: task.courseId,
@@ -496,9 +528,16 @@ export function readRecall({
   records,
   today = isoDate(),
   dayOf = logicalDateOf,
+  sessions,
+  notes = [],
 }: RecallInput): RecallReading {
   const exams = nearestExams(tasks, today);
-  const items = readItems(courses, tasks, records, today, dayOf);
+  const worked = sessions ? workedTaskIds(tasks, sessions, notes) : null;
+  const enters = worked
+    ? (task: Task) => worked.has(task.id) || task.completedVia === 'session'
+    : null;
+  const waiting: Task[] = [];
+  const items = readItems(courses, tasks, records, today, dayOf, enters, waiting);
 
   const states: RecallState[] = items
     .filter((item) => !item.letGo)
@@ -572,6 +611,13 @@ export function readRecall({
     answeredToday,
     byCourse,
     letGo: items.filter((item) => item.letGo),
+    // A reading written down twice whose other copy was worked is already
+    // being asked about under that copy.
+    waiting: waiting.filter(
+      (task) => !items.some((item) => item.courseId === task.courseId && item.prompt === readingPrompt(task.title)),
+    ).sort(
+      (a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '') || a.id.localeCompare(b.id),
+    ),
   };
 }
 

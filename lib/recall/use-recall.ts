@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useCourses, useRecallRecords, useTasks } from '../data-hooks';
+import { useCourses, useNotes, useRecallRecords, useSessions, useTasks } from '../data-hooks';
 import { sortCourses } from '../data/course-order';
 import { isoDate } from '../utils';
 import { readRecall, type RecallReading } from './index';
@@ -28,15 +28,19 @@ export function useRecall(): {
   const { courses: raw, isLoading: coursesLoading } = useCourses();
   const { tasks, isLoading: tasksLoading } = useTasks();
   const { records, loaded, available, isLoading: recallLoading } = useRecallRecords();
+  // What a finished reading was worked by: without these a reading only
+  // ticked would be read as one read, and drawn then taken back as they land.
+  const { sessions, isLoading: sessionsLoading } = useSessions();
+  const { notes, loaded: notesLoaded, error: notesError } = useNotes();
 
-  const isLoading = coursesLoading || tasksLoading || recallLoading;
-  const ready = !coursesLoading && !tasksLoading && loaded;
+  const isLoading = coursesLoading || tasksLoading || recallLoading || sessionsLoading;
+  const ready = !coursesLoading && !tasksLoading && !sessionsLoading && loaded && (notesLoaded || Boolean(notesError));
   const today = isoDate();
   const courses = useMemo(() => sortCourses(raw), [raw]);
 
   const reading = useMemo(
-    () => (ready ? readRecall({ courses, tasks, records, today }) : null),
-    [ready, courses, tasks, records, today],
+    () => (ready ? readRecall({ courses, tasks, records, today, sessions, notes }) : null),
+    [ready, courses, tasks, records, today, sessions, notes],
   );
 
   return { reading, available, isLoading };
