@@ -216,7 +216,7 @@ export function UpNext({
           <span className="tnum font-mono text-[16px] font-medium">{spent >= 60 ? formatHM(spent) : '—'}</span>
           {!onClock && lastSat && spent >= 60 && (
             <span className="ml-2 font-serif text-[12.5px] italic text-muted">
-              last {formatRelativeDate(lastSat).toLowerCase()}
+              {lastSat === isoDate() ? 'earlier today' : `last ${formatRelativeDate(lastSat).toLowerCase()}`}
             </span>
           )}
         </UpNextFact>
@@ -710,23 +710,14 @@ export function WeekHours({ courses, sessions }: { courses: Course[]; sessions: 
         className="relative mt-5 grid h-[108px] grid-cols-7 items-end border-b border-line"
       >
         {goalHours > 0 && (
-          <>
-            <span aria-hidden className="absolute inset-x-0 border-t border-dashed border-line-strong" style={{ bottom: px(pace) }} />
-            <span
-              aria-hidden
-              className="absolute right-0 font-mono text-[10px] text-muted"
-              style={{ bottom: px(pace) + 3 }}
-            >
-              goal {formatHM(Math.round(pace * 3600))} a day
-            </span>
-          </>
+          <span aria-hidden className="absolute inset-x-0 border-t border-dashed border-line-strong" style={{ bottom: px(pace) }} />
         )}
         {days.map((d) => {
           const future = d.date > today;
           return (
             <div key={d.date} aria-hidden className="relative flex flex-col items-center justify-end gap-1">
               {!future && (
-                <span className={`whitespace-nowrap font-mono text-[10px] tabular-nums ${d.total > 0 ? 'text-ink' : 'text-muted'}`}>
+                <span className={`relative whitespace-nowrap bg-bg px-0.5 font-mono text-[10px] tabular-nums ${d.total > 0 ? 'text-ink' : 'text-muted'}`}>
                   {d.total > 0 ? formatHM(d.total) : '·'}
                 </span>
               )}
@@ -755,9 +746,18 @@ export function WeekHours({ courses, sessions }: { courses: Course[]; sessions: 
         ))}
       </div>
 
-      {worked.length > 1 && (
+      {/* The key: the course colours when more than one had time, and what
+          the dashed line is. Its label used to sit on the line itself, where
+          a tall day ran straight through it. */}
+      {(worked.length > 1 || goalHours > 0) && (
         <div className="mt-3.5 flex flex-wrap gap-x-3.5 gap-y-1.5 text-[11.5px] text-ink-soft">
-          {worked.map((c) => (
+          {goalHours > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span aria-hidden className="block w-3 border-t border-dashed border-line-strong" />
+              goal <span className="font-mono text-muted">{formatHM(Math.round(pace * 3600))}</span> a day
+            </span>
+          )}
+          {(worked.length > 1 ? worked : []).map((c) => (
             <span key={c.id} className="flex items-center gap-1.5">
               <span aria-hidden className="block h-2 w-2 rounded-[2px]" style={{ background: c.color }} />
               {c.code}
