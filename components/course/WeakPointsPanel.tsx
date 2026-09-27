@@ -25,7 +25,10 @@ export default function WeakPointsPanel({ course }: { course: Course }) {
   );
   const openCount = mine.length - fixed.length;
 
-  if (!loaded || !available) return null;
+  // Nothing to show until Claude has recorded something for this course: an
+  // empty panel explaining a feature is one more section on a page already
+  // too deep.
+  if (!loaded || !available || mine.length === 0) return null;
 
   return (
     <section>
@@ -46,11 +49,7 @@ export default function WeakPointsPanel({ course }: { course: Course }) {
         )}
       </div>
 
-      {mine.length === 0 ? (
-        <p className="m-0 font-serif text-[13.5px] italic leading-[1.55] text-muted-soft">
-          When Claude marks a quiz for {course.code}, what you got wrong is written down here, by section, with the pages to go back to.
-        </p>
-      ) : (
+      {(
         <div className="-mx-4">
           {open.map(({ section, items }) => (
             <div key={section || 'none'}>
