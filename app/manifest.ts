@@ -15,11 +15,12 @@ export default function manifest(): MetadataRoute.Manifest {
     // folded back lies on its side as often as not, and the rail and the
     // two-column pages are laid out for exactly that.
     orientation: 'any',
-    // The PNGs are generated from icon.svg by scripts/build-icons.mjs. The
-    // SVG stays first for anything that prefers it; the raster sizes are what
+    // The PNGs are generated from app-icon.svg by scripts/build-icons.mjs,
+    // the full-bleed tile on the night paper (icon.svg is the transparent tab
+    // favicon and would sit on nothing on a home screen). The SVG stays first for anything that prefers it; the raster sizes are what
     // Android checks before offering to install.
     icons: [
-      { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' },
+      { src: '/app-icon.svg', sizes: 'any', type: 'image/svg+xml' },
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
