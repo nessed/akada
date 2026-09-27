@@ -210,10 +210,10 @@ export default function CourseRecallPanel({
               onClick={() => letGo(state)}
               disabled={busy}
               title="Stop asking about this one"
-              aria-label={`Let go of ${state.prompt}`}
+              aria-label={`Stop asking about ${state.prompt}`}
               className="h-8 shrink-0 rounded-[8px] px-1.5 font-serif text-[12px] italic text-muted-soft transition-opacity hover:text-ink focus-visible:opacity-100 disabled:opacity-40 md:opacity-0 md:group-hover:opacity-100"
             >
-              let go
+              stop asking
             </button>
           </div>
         ))}
@@ -224,7 +224,7 @@ export default function CourseRecallPanel({
             className="m-0 flex flex-wrap items-center gap-x-2 border-t border-line-soft px-4 py-2.5 font-serif text-[13px] italic text-muted"
           >
             <span className="max-w-[260px] truncate text-ink-soft">{letGoOf.state.prompt}</span>
-            <span>· let go</span>
+            <span>· no longer asked</span>
             <button
               type="button"
               onClick={undoLetGo}

@@ -668,7 +668,6 @@ function DashboardPageContent() {
               closing="That's today's recall."
               onStudy={studyRecall}
               available={recallAvailable}
-              explain={Boolean(recall) && !recall?.states.some((state) => state.last)}
             />
 
             {overdueTasks.length > 0 && (

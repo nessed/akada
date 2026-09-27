@@ -575,18 +575,27 @@ from its sheet ("Keep this for recall"), the ticked steps of a concept list
 a line on the log sheet, or through the connector.
 
 **The card.** One thing at a time, written on the page under the fold with no
-box around it, the course rule before its code: the course code, when it was learned or how
-it last went ("hazy 3 days ago"), the thing itself in the serif, and one line
-on how to recall it in italic ("the argument, without looking", "do one fresh,
-nothing in front of you"). Three words answer it: **clear**, **hazy**,
-**gone**, each with a hand mark rather than a colour: a tick, a wave, an open
-ring that does not quite meet itself. There is no cross and no red, see "No
+box around it, the course rule before its code, and once it has been asked,
+how it went last time ("last time: roughly, 3 days ago"). **The card is the
+explanation**: it asks a question in the serif, with the thing itself in ink,
+that says when it was finished and what to give back without looking. "You
+finished **Mankiw Ch 2** two days ago. Without opening it, what was the
+argument?" (`recallQuestion` in `lib/recall/words.ts`; a task or step asks
+whether it could be done fresh, a kept line whether it can be said back). The
+paragraph that used to sit over the first card explaining recall is gone.
+Three answers: **Got it**, **Roughly**, **Blank**, each with a hand mark
+rather than a colour: a tick, a wave, an open ring that does not quite meet
+itself. They are only the buttons' words (`VERDICT_WORDS`): the data, and the
+course's standing line ("2 clear · 1 hazy"), keep `clear`, `hazy` and `gone`.
+Stopping, which used to be "let go" beside the answers, is **Stop asking about
+this** behind a `···` overflow on the card, and "stop asking" at the end of a
+row on the course page. There is no cross and no red, see "No
 Alarmist Indicators": a thing that slipped is why recall exists. The card
 never shows an answer, since a recall with the answer in view is a re-read,
 and never scores one; the reader knows whether they had it.
 
 After an answer the next card is already there, and one line under it says
-what the answer did in the Next Mark voice: "Angell (1912)… · hazy · back
+what the answer did in the Next Mark voice: "Angell (1912)… · roughly · back
 tomorrow". That line carries **undo**, because an answer is one tap on a phone
 and a mistaken one moves a thing weeks out of sight, and after a slip it
 carries the way back to the material ("reread it", "work on it"), which opens
@@ -659,7 +668,7 @@ made before the list is read leaves the list unread and reads it fresh.
 - **The course page**, under the tasks: the course's standing as uprights
   and a sentence, then every kept thing in the order it comes up, its last
   three answers as marks in the margin ("new" before it has been asked), and
-  when it next comes up in the serif. Each row has a "let go" at its end,
+  when it next comes up in the serif. Each row has a "stop asking" at its end,
   shown on hover on a wide screen and always on a phone, where there is no
   hover to find it with; letting go leaves a line with undo, since a line
   written by hand has nowhere else it could be brought back from. A line to
@@ -1176,7 +1185,7 @@ open ones grouped under their section, each section an `.eyebrow` (`§ 1.3`,
 summary in the serif, and under it one muted italic line: the confusion, the
 pages, and the quiz it came from as a hand-underlined link (or the note on
 its task). *fixed* sits at the right in the faintest italic, on hover at
-desktop widths and always on a phone, like *let go* on Recall. Ticked, a row
+desktop widths and always on a phone, like *stop asking* on Recall. Ticked, a row
 moves to a folded **Fixed** list, opened the way done tasks are (`Fixed 3`
 beside the eyebrow), where the rows fade and read *reopen*. Never a
 strikethrough. Before anything has been recorded the panel says once, in
@@ -1362,10 +1371,10 @@ thirtieth visit, and a screen written only for them is a wall to someone on
 their first. So a thing explains itself the first time it is met, where it is
 met, and never again:
 
-- **When it goes is read off the data**, never a dismissed flag. The note
-  under the first recall card shows until the reader has answered one; the
+- **When it goes is read off the data**, never a dismissed flag. The
   "Next Mark" line is not drawn at all on Today until the first session is
-  logged. Nothing to close, nothing to reset, and a returning reader who has
+  logged. Better still is a thing that needs no note at all: the recall card
+  explains itself by asking its question in full, so it has none. Nothing to close, nothing to reset, and a returning reader who has
   already done the thing never sees it.
 - **`FirstNote`** (`components/FirstNote.tsx`) is how it is set: the serif in
   italic, 13.5px, `ink-soft`, a 2px `line-strong` rule down its left edge.

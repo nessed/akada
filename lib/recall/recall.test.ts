@@ -11,6 +11,7 @@ import {
   RECALL_PER_DAY,
   scheduleRecall,
 } from './index';
+import { recallQuestion, VERDICT_WORDS } from './words';
 
 const TODAY = '2026-09-22';
 
@@ -616,4 +617,12 @@ test('a reading only ticked waits unless its other copy was worked', () => {
   });
   assert.equal(state.states.length, 1);
   assert.equal(state.waiting.length, 0);
+});
+
+test('the card asks a question that says when and what to give back', () => {
+  const q = recallQuestion({ source: 'reading', prompt: 'Mankiw Ch 2', origin: day(-2) }, TODAY);
+  assert.equal(`${q.lead}${q.thing}${q.tail}`, 'You finished Mankiw Ch 2 two days ago. Without opening it, what was the argument?');
+  const y = recallQuestion({ source: 'step', prompt: 'integrate by parts', origin: day(-1) }, TODAY);
+  assert.match(`${y.lead}${y.thing}${y.tail}`, /^You finished integrate by parts yesterday\. /);
+  assert.deepEqual(VERDICT_WORDS, { clear: 'Got it', hazy: 'Roughly', gone: 'Blank' });
 });
