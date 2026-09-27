@@ -230,6 +230,16 @@ Things a phone reader meets that a desktop one does not:
 - **New task names its course.** The sheet on Today opens on the first course
   and, with more than one, shows the term's courses as a row of chips to move
   it, the same chips as the Tasks filter.
+- **New task says what it is.** Every way to write a task down (the sheet on
+  Today, New task on Tasks, the "add for Friday" lines in its bands, and the
+  Edit sheet) carries the same **Task / Reading / Exam** control
+  (`components/tasks/KindFields.tsx`), so the forms cannot drift. Reading
+  brings up a pages field (`pp`), Task or Exam a weight (`%` of the grade,
+  optional). The kind follows the title until it is picked by hand: a title
+  that reads as a reading (`looksLikeReading`) arrives as one, and a kind
+  chosen by hand always wins. Without it a new reader never learns the app
+  knows what a reading is, which is what turns pages into hours, brings a
+  reading back in recall, and lets a weight count toward the grade.
 
 ### Rules, not panels
 Today and a course page draw no boxes. Every section used to be its own

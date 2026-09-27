@@ -8,6 +8,7 @@ import { useNotice } from '@/components/Notice';
 import { finishedUndo, skippedUndo, useUndo } from '@/components/Undo';
 import SelectField from '@/components/SelectField';
 import HandCheck from '@/components/notebook/HandCheck';
+import KindFields, { useKindDraft } from '@/components/tasks/KindFields';
 import HandNote from '@/components/notebook/HandNote';
 import Stamp from '@/components/notebook/Stamp';
 import DueDateBadge from '@/components/DueDateBadge';
@@ -20,7 +21,7 @@ import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopo
 import TaskNoteLine from '@/components/notes/TaskNoteLine';
 import TaskQuizLine from '@/components/notes/TaskQuizLine';
 import { RecallGlyph, VerdictMark } from '@/components/recall/RecallMarks';
-import type { Course, Task, TaskKind } from '@/lib/data';
+import type { Course, Task } from '@/lib/data';
 import { compareTaskOrder } from '@/lib/data/task-order';
 import { useRecall } from '@/lib/recall/use-recall';
 import { keepTask, keepTickedSteps } from '@/lib/recall/actions';
@@ -55,12 +56,6 @@ const FILTERS: { v: Filter; l: string }[] = [
   { v: 'today', l: 'Today' },
   { v: 'week', l: 'This week' },
   { v: 'done', l: 'Done' },
-];
-
-const KINDS: { v: TaskKind; l: string }[] = [
-  { v: 'task', l: 'Task' },
-  { v: 'reading', l: 'Reading' },
-  { v: 'exam', l: 'Exam' },
 ];
 
 const BULK_BUTTON =
@@ -132,9 +127,9 @@ function TasksPageContent() {
   const [editCourseId, setEditCourseId] = useState('');
   const [editDue, setEditDue] = useState('');
   const [editHigh, setEditHigh] = useState(false);
-  const [editKind, setEditKind] = useState<TaskKind>('task');
-  const [editWeight, setEditWeight] = useState('');
-  const [editPages, setEditPages] = useState('');
+  const editKind = useKindDraft();
+  const draftKind = useKindDraft();
+  const resetDraftKind = draftKind.reset;
   const handledTaskIntent = useRef(false);
 
   /* The keydown listener is bound once, so it reads what it needs through
@@ -172,6 +167,7 @@ function TasksPageContent() {
         setAddingAt(null);
         setAddingFor(courses[0].id);
         setDraftTitle('');
+        resetDraftKind();
       }
       if (event.key.toLowerCase() === 's') {
         event.preventDefault();
@@ -209,7 +205,7 @@ function TasksPageContent() {
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [courses]);
+  }, [courses, resetDraftKind]);
 
   useEffect(() => {
     if (onboardingError) {
@@ -240,6 +236,7 @@ function TasksPageContent() {
       if (searchParams.get('newTask') === '1') {
         setAddingFor(courseId);
         setDraftTitle('');
+        resetDraftKind();
         setDraftDue('');
         setDraftHigh(false);
       }
@@ -248,6 +245,7 @@ function TasksPageContent() {
       // on the first course and the list stays unfiltered.
       setAddingFor(courses[0].id);
       setDraftTitle('');
+      resetDraftKind();
       setDraftDue('');
       setDraftHigh(false);
     }
@@ -260,7 +258,7 @@ function TasksPageContent() {
       const task = tasks.find((t) => t.id === taskId);
       if (task) setViewingTask(task);
     }
-  }, [courses, coursesLoading, searchParams, tasks, tasksLoading]);
+  }, [courses, coursesLoading, resetDraftKind, searchParams, tasks, tasksLoading]);
 
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || tasksLoading;
@@ -652,9 +650,7 @@ function TasksPageContent() {
     setEditCourseId(task.courseId);
     setEditDue(task.dueDate || '');
     setEditHigh(task.priority === 'high');
-    setEditKind(task.kind ?? 'task');
-    setEditWeight(task.weight == null ? '' : String(task.weight));
-    setEditPages(task.pages == null ? '' : String(task.pages));
+    editKind.reset({ kind: task.kind ?? 'task', pages: task.pages, weight: task.weight });
   }
 
   async function saveEditTask() {
@@ -668,12 +664,10 @@ function TasksPageContent() {
         courseId: editCourseId,
         dueDate: editDue || null,
         priority: editHigh ? 'high' : 'normal',
-        kind: editKind,
-        weight: numberOrNull(editWeight),
         // Pages only mean anything on a reading, and leaving a stale count on
         // a row someone has just retyped as an exam would make the backlog
-        // claim hours that are not there.
-        pages: editKind === 'reading' ? numberOrNull(editPages) : null,
+        // claim hours that are not there; fields() drops them.
+        ...editKind.fields(title),
       });
       setEditingTask(null);
     } catch (error) {
@@ -751,7 +745,9 @@ function TasksPageContent() {
         title,
         dueDate: draftDue || null,
         priority: draftHigh ? 'high' : 'normal',
+        ...draftKind.fields(title),
       });
+      draftKind.reset();
       setDraftTitle('');
       setDraftDue('');
       setDraftHigh(false);
@@ -770,6 +766,7 @@ function TasksPageContent() {
     setDraftTitle('');
     setDraftDue(due);
     setDraftHigh(false);
+    draftKind.reset();
   }
 
   /** The inline draft, wherever it was asked for. */
@@ -791,6 +788,10 @@ function TasksPageContent() {
             if (e.key === 'Escape') setAddingFor(null);
           }}
         />
+        {/* What it is, picked from the title until picked by hand. */}
+        <div className="mt-2">
+          <KindFields draft={draftKind} title={draftTitle} compact />
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <SelectField
             className="w-[180px]"
@@ -1287,50 +1288,8 @@ function TasksPageContent() {
                 graded carries a weight, a plain task carries neither — and
                 plain is the default, so nothing already written down changes
                 meaning by this existing. */}
-            <div className="mt-2.5 flex items-center gap-2">
-              <div className="flex h-11 flex-1 items-center rounded-[10px] border border-line bg-paper p-1">
-                {KINDS.map((kind) => (
-                  <button
-                    key={kind.v}
-                    type="button"
-                    onClick={() => setEditKind(kind.v)}
-                    aria-pressed={editKind === kind.v}
-                    className={`h-9 flex-1 rounded-[7px] text-[13px] transition-colors ${
-                      editKind === kind.v
-                        ? 'bg-bg-tint font-medium text-ink'
-                        : 'bg-transparent text-muted hover:text-ink'
-                    }`}
-                  >
-                    {kind.l}
-                  </button>
-                ))}
-              </div>
-
-              {editKind === 'reading' && (
-                <label className="flex h-11 w-[92px] shrink-0 items-center gap-1 rounded-[10px] border border-line bg-paper px-3">
-                  <input
-                    value={editPages}
-                    onChange={(e) => setEditPages(e.target.value.replace(/[^\d]/g, ''))}
-                    inputMode="numeric"
-                    placeholder="—"
-                    aria-label="Pages"
-                    className="w-full min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[14px] text-ink outline-none placeholder:text-muted-soft"
-                  />
-                  <span aria-hidden className="font-mono text-[11px] text-muted">pp</span>
-                </label>
-              )}
-
-              <label className="flex h-11 w-[80px] shrink-0 items-center gap-1 rounded-[10px] border border-line bg-paper px-3">
-                <input
-                  value={editWeight}
-                  onChange={(e) => setEditWeight(e.target.value.replace(/[^\d.]/g, ''))}
-                  inputMode="decimal"
-                  placeholder="—"
-                  aria-label="Worth, as a percentage of the course grade"
-                  className="w-full min-w-0 border-0 bg-transparent p-0 text-right font-mono text-[14px] text-ink outline-none placeholder:text-muted-soft"
-                />
-                <span aria-hidden className="font-mono text-[11px] text-muted">%</span>
-              </label>
+            <div className="mt-2.5">
+              <KindFields draft={editKind} title={editTitle} />
             </div>
 
             <div className="mt-4 flex gap-2.5">
@@ -1844,12 +1803,6 @@ function TasksPageContent() {
 }
 
 /** An empty numeric field means "not set", which is not the same as zero. */
-function numberOrNull(value: string): number | null {
-  if (!value.trim()) return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
 function TasksPageFallback() {
   return (
     <PageShell>
