@@ -443,6 +443,8 @@ html:has(.notes .markdown-body) { overscroll-behavior-x: none; }
 .notes .nf .markdown-body > * { transition: opacity .7s cubic-bezier(.2, .7, .2, 1); }
 .notes .nf[data-spot] .markdown-body > :not([data-lit]) { opacity: .2; }
 :where(:root:not([data-input='touch'])) .notes .nf[data-spot] .markdown-body > :not([data-lit]):hover { opacity: .62; transition-duration: .25s; }
+/* A pen tracing a line lights the section it is in, the way a pointer does. */
+.notes .nf[data-spot] .markdown-body > [data-pen] { opacity: 1; transition-duration: .25s; }
 
 /* The bar. Leaves while the reader reads, comes back for a scroll up, a
    pointer or a Tab into it. */
@@ -695,3 +697,18 @@ html:has(.notes .markdown-body) { overscroll-behavior-x: none; }
 .notes .quiz-row .mins em { font: italic 12.5px var(--font-serif); color: var(--muted); }
 .notes .quiz-hint { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 28px 0 0; }
 .notes .quiz-hint .standfirst { margin: 0; }
+
+/* ── Trace ─────────────────────────────────────────────────────────────
+   A pen run along the lines leaves highlighter behind the nib (PenTrace).
+   The swipe is drawn on a sheet of glass over the page that takes no
+   pointer; PenTrace sets its blend, multiply on daylight paper so the ink
+   stays dark under the yellow, screen on night paper so it glows. While a
+   pen is on the glass the words cannot be selected, so a trace is never
+   taken for a drag. */
+.notes .pen-trace { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+.notes .nf .pen-trace { z-index: 1; }
+.notes [data-pen-down] .markdown-body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.notes .btn-icon[aria-pressed='true'] { color: var(--ink); background-image: linear-gradient(180deg, var(--highlight-yellow) 0 100%); background-repeat: no-repeat; background-size: 18px 5px; background-position: center calc(100% - 6px); }
+/* The highlighter's marks, painted by the browser under the ink. */
+.notes ::highlight(akada-pen),
+.notes ::highlight(akada-pen-live) { background-color: var(--highlight-yellow); color: inherit; }

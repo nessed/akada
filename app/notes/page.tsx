@@ -13,6 +13,7 @@ import { notePrompt } from '@/lib/claude-asks';
 import Icon from '@/components/notes/Icon';
 import { CheckStrokes, MinutesLeft, TocList } from '@/components/notes/Contents';
 import StudyThis from '@/components/notes/StudyThis';
+import PenTrace, { type PenMode } from '@/components/notes/PenTrace';
 import Shelf from '@/components/notes/Shelf';
 import QuizShelf from '@/components/notes/QuizShelf';
 import ConfirmSheet from '@/components/ConfirmSheet';
@@ -79,7 +80,8 @@ type ShelfNote = Note & { courseId: string | null; checks: Record<string, CheckR
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Slip = { id: number; text: string; action?: { label: string; run: () => void } };
-type Reader = { size: 'small' | 'medium' | 'large'; measure: 'narrow' | 'wide' };
+type Reader = { size: 'small' | 'medium' | 'large'; measure: 'narrow' | 'wide'; pen: PenMode };
+const PEN_MODES: PenMode[] = ['off', 'trace', 'highlight'];
 
 const SIZES: { v: Reader['size']; l: string }[] = [
   { v: 'small', l: 'Small' },
@@ -101,9 +103,10 @@ function readReader(): Reader {
     return {
       size: SIZES.some((s) => s.v === raw.size) ? raw.size : 'medium',
       measure: MEASURES.some((m) => m.v === raw.measure) ? raw.measure : 'narrow',
+      pen: PEN_MODES.includes(raw.pen) ? raw.pen : 'off',
     };
   } catch {
-    return { size: 'medium', measure: 'narrow' };
+    return { size: 'medium', measure: 'narrow', pen: 'off' };
   }
 }
 
@@ -150,7 +153,7 @@ function NotesContent() {
   // Only a note or the editor needs the parts; the shelf is ready without them.
   const ready = prefsReady && loaded && (!!parts || !(openId || editing || writingNew));
   const [draft, setDraft] = useState('');
-  const [reader, setReader] = useState<Reader>({ size: 'medium', measure: 'narrow' });
+  const [reader, setReader] = useState<Reader>({ size: 'medium', measure: 'narrow', pen: 'off' });
   const [readerOpen, setReaderOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeHeading, setActiveHeading] = useState('');
@@ -161,6 +164,7 @@ function NotesContent() {
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const readerRef = useRef<HTMLDivElement>(null);
+  const noteRef = useRef<HTMLDivElement>(null);
   const originalDraft = useRef('');
 
   const say = useCallback((text: string, action?: Slip['action']) => setSlip({ id: Date.now(), text, action }), []);
@@ -583,6 +587,15 @@ function NotesContent() {
       if (mod || event.altKey || isTyping(event.target) || contentsOpen || promptOpen || focusing) return;
       if (event.key === 'e' && mode === 'read' && active) { event.preventDefault(); go(`n=${encodeURIComponent(active.id)}&edit=1`); }
       else if (event.key === 'f' && mode === 'read' && active) { event.preventDefault(); enterFocus(active.id); }
+      else if ((event.key === 't' || event.key === 'h') && mode === 'read' && active) {
+        event.preventDefault();
+        const want: PenMode = event.key === 't' ? 'trace' : 'highlight';
+        setReader((current) => {
+          const next: Reader = { ...current, pen: current.pen === want ? 'off' : want };
+          writeStore(READER_KEY, JSON.stringify(next));
+          return next;
+        });
+      }
       else if (event.key === 'n') { event.preventDefault(); go('new=1'); }
       else if (event.key === 'o') { event.preventDefault(); fileRef.current?.click(); }
       else if (event.key === 'Escape' && mode === 'read') { event.preventDefault(); go(''); }
@@ -695,6 +708,8 @@ function NotesContent() {
         size={reader.size}
         onSize={(size) => updateReader({ size })}
         measure={reader.measure}
+        pen={reader.pen}
+        onPen={(pen) => updateReader({ pen })}
         startAt={focusStart || savedStart.id}
         resumedAt={focusResumed || savedStart.text}
         minutes={minutes}
@@ -731,6 +746,12 @@ function NotesContent() {
                 <Icon name="focus" size={16} />Focus
               </button>
               <StudyThis note={active} courses={courses} onSay={say} />
+              <button type="button" className="btn btn-ghost btn-icon" aria-pressed={reader.pen === 'trace'} onClick={() => updateReader({ pen: reader.pen === 'trace' ? 'off' : 'trace' })} aria-label="Trace with a pen" title="Trace: a pen run along the lines lights them as you read (T)">
+                <Icon name="trace" size={16} />
+              </button>
+              <button type="button" className="btn btn-ghost btn-icon" aria-pressed={reader.pen === 'highlight'} onClick={() => updateReader({ pen: reader.pen === 'highlight' ? 'off' : 'highlight' })} aria-label="Highlighter" title="Highlighter: run the pen over words to mark them, tap a mark to take it off (H)">
+                <Icon name="highlight" size={16} />
+              </button>
               {showToc && (
                 <button type="button" className="btn btn-ghost btn-icon toc-toggle" onClick={() => setContentsOpen(true)} aria-label="Contents" title="Contents">
                   <Icon name="contents" size={16} />
@@ -790,7 +811,8 @@ function NotesContent() {
             </div>
           </header>
           {!hasOwnTitle && <h1 className="screen-title" style={{ marginBottom: 28 }}>{active.title}</h1>}
-          <div className={`reading-size-${reader.size}`}>
+          <div className={`reading-size-${reader.size}`} ref={noteRef} data-pen-mode={reader.pen}>
+            <PenTrace within={noteRef} noteId={active.id} mode={reader.pen} />
             <parts.MarkdownReader
               key={active.id}
               markdown={active.markdown}

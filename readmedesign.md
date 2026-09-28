@@ -321,7 +321,10 @@ knows a finger is on it.
   sideways drag, and the browser used to take it for its back swipe. On a
   note the page pans up and down only (`touch-action: pan-y`, a wide table or
   code block still scrolls on its own) and the root drops its sideways
-  overscroll while a note is open.
+  overscroll while a note is open. With **Trace** or the **Highlighter** in
+  hand (see Study: the pen) a pen pressed on the glass marks instead of
+  scrolling at all, and a finger still scrolls: only a pen's moves are held
+  back, never its first touch, so a pen tap on a link still follows it.
 - **Upright gets the phone's bands.** Tasks keeps each band's name in its
   168px margin only from 1024px; below that it sits over the rows, since the
   margin beside a row's fixed columns left a title about 86px wide.
@@ -1419,8 +1422,9 @@ out differently.
   DOM as `data-lit`, never state, so a scroll does not re-render the note.
 - **The bar** goes away as the reader scrolls down and comes back for a
   scroll up, a moving pointer or a Tab into it. It carries the course code
-  and the section being read in the serif, the clock, and four quiet tools:
-  spotlight, lamp, `A A` for text size (`−` / `+`), and full screen. With a
+  and the section being read in the serif, the clock, and six quiet tools:
+  spotlight, lamp, trace and highlighter (see The pen), `A A` for text size
+  (`−` / `+`), and full screen. With a
   sitting running the clock is that sitting in mono, beside a dot in the
   course colour pulsing on `tick`; without one, a note on a course offers
   "Time this", which starts one.
@@ -1434,6 +1438,38 @@ out differently.
 - **The foot.** "3/7" in mono on the left, "~ 6 min left" in Caveat on the
   right. At the end, the hand tick, "that's the lot", how long the reader sat
   with it, and the next note on the pile, which `]` also opens in focus.
+
+#### The pen
+
+Two tools for reading with a stylus, in the reader's head beside Study this
+and in the focus bar beside the lamp, one or the other or neither. The
+choice is kept with the `Aa` choices and follows the reader into focus.
+
+- **Trace** (`T`). A pen run along the lines leaves a stroke of the yellow
+  highlighter behind the nib, the way a finger under the line keeps a place.
+  It snaps to the line of type the nib is on, so a wobbling hand lays a
+  straight stroke, and the ends are cut on a slant like a chisel nib held at
+  an angle. It only goes down while the nib moves the way the words run: the
+  sweep back to the start of the next line paints nothing. Behind the nib it
+  holds for about half a second and then dries off the page over a second
+  and a half, so what is on the paper is only the last few words read, and
+  nothing is kept. It is drawn on a sheet of glass over the page that takes
+  no pointer (`.pen-trace`, `PenTrace`), multiplied on daylight paper so the
+  ink stays dark under it and screened on the night paper so it glows. A pen
+  draws whether it touches the glass or hovers, a mouse does too (some pens
+  report themselves as one), a finger never does. In focus the section under
+  the nib comes up out of the spotlight while it moves (`data-pen`), since a
+  pen gives no hover to lift it.
+- **Highlighter** (`H`). A pen pressed on the glass, or a mouse held down,
+  marks the words it runs across, snapped out to whole words, and the mark
+  stays. A tap on a mark takes it off. Marks are the same yellow as the
+  swipes, painted through the browser's own highlight registry
+  (`::highlight(akada-pen)`) rather than over the page, so they sit under
+  the ink and ride every scroll, fold, pinch and reflow. They are kept per
+  note in this browser as where they sit in the note's rendered text and the
+  words themselves (`lib/notes/highlights.ts`), so a note edited since finds
+  its marks again by their words and drops the ones whose words are gone.
+  They show whichever tool is in hand, and in the reader and focus alike.
 
 #### Studying a note, and the reader's pace
 
@@ -1489,8 +1525,8 @@ its stripe and its code in the standfirst, and one sent by an assistant over
 the connector says "From your assistant" there instead of "Edited". The self-check
 results are stored on the note, so the strokes follow the student between
 devices and fill in when Claude quizzes them through `record_note_checks`.
-Only the reading position, the draft in progress and the `Aa` choices stay in
-the browser. Notes written before this, when they lived in localStorage, are
+Only the reading position, the draft in progress, the `Aa` choices, the pen and
+the highlighter's marks stay in the browser. Notes written before this, when they lived in localStorage, are
 carried up into the account the first time the shelf loads. Everything the
 reader draws lives in `app/notes/notes.css`, scoped under `.notes`.
 

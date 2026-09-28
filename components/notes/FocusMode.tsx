@@ -8,6 +8,7 @@ import { MarkdownReader } from './MarkdownReader';
 import { getMarkdownHeadings } from './markdown-outline';
 import Icon from './Icon';
 import StudyThis from './StudyThis';
+import PenTrace, { type PenMode } from './PenTrace';
 import { useTimer } from '@/lib/timer-context';
 import { paperToneStyle, usePreferences } from '@/lib/preferences';
 import { FOCUS_KEY, readStore, rememberReading, wordCount, writeStore, type CheckResult } from '@/lib/notes/store';
@@ -60,6 +61,9 @@ interface Props {
   size: Size;
   onSize: (size: Size) => void;
   measure: 'narrow' | 'wide';
+  /** What a pen does on the note: trace the lines, highlight them, or nothing. */
+  pen: PenMode;
+  onPen: (pen: PenMode) => void;
   /** Where the reader was on the page behind, so focus opens on the same lines. */
   startAt?: string;
   /** The section it picked up in from the shelf, said once on the way in. */
@@ -94,7 +98,7 @@ export default function FocusMode(props: Props) {
   return createPortal(<FocusSheet {...props} />, document.body);
 }
 
-function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, startAt, resumedAt, minutes, courses, onSay, onRead, nextNote, onNext, onLeave }: Props) {
+function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, pen, onPen, startAt, resumedAt, minutes, courses, onSay, onRead, nextNote, onNext, onLeave }: Props) {
   const [prefs] = usePreferences();
   const [focusPrefs, setFocusPrefs] = useState<FocusPrefs>(readFocusPrefs);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -508,13 +512,15 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
       else if (key === 'ArrowLeft') { event.preventDefault(); stepSection(-1); }
       else if (key === 'd') { event.preventDefault(); updatePrefs({ spot: !focusPrefs.spot }); }
       else if (key === 'l') { event.preventDefault(); updatePrefs({ lamp: !focusPrefs.lamp }); }
+      else if (key === 't') { event.preventDefault(); onPen(pen === 'trace' ? 'off' : 'trace'); }
+      else if (key === 'h') { event.preventDefault(); onPen(pen === 'highlight' ? 'off' : 'highlight'); }
       else if (key === '=' || key === '+') { event.preventDefault(); stepSize(1); }
       else if (key === '-') { event.preventDefault(); stepSize(-1); }
       else if (key === ']' && nextNote) { event.preventDefault(); onNext(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [leave, stepSection, stepSize, applyZoom, focusPrefs, nextNote, onNext]);
+  }, [leave, stepSection, stepSize, applyZoom, focusPrefs, nextNote, onNext, pen, onPen]);
 
   const toggleSection = useCallback((id: string) =>
     setCollapsed((current) => {
@@ -566,6 +572,12 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
             <button type="button" className="nf-tool" aria-pressed={focusPrefs.lamp} onClick={() => updatePrefs({ lamp: !focusPrefs.lamp })} title={onNight ? 'Daylight (L)' : 'Under the lamp (L)'} aria-label={onNight ? 'Daylight' : 'Lamp'}>
               <Icon name={onNight !== focusPrefs.lamp ? 'sun' : 'lamp'} size={16} />
             </button>
+            <button type="button" className="nf-tool" aria-pressed={pen === 'trace'} onClick={() => onPen(pen === 'trace' ? 'off' : 'trace')} title="Trace: a pen run along the lines lights them as you read (T)" aria-label="Trace with a pen">
+              <Icon name="trace" size={16} />
+            </button>
+            <button type="button" className="nf-tool" aria-pressed={pen === 'highlight'} onClick={() => onPen(pen === 'highlight' ? 'off' : 'highlight')} title="Highlighter: run the pen over words to mark them, tap a mark to take it off (H)" aria-label="Highlighter">
+              <Icon name="highlight" size={16} />
+            </button>
             <span className="nf-size" role="group" aria-label="Text size">
               <button type="button" className="nf-tool" onClick={() => stepSize(-1)} disabled={size === 'small'} aria-label="Smaller text" title="Smaller (−)">
                 <span className="nf-a nf-a-sm">A</span>
@@ -589,7 +601,7 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
 
         <div className="nf-scroll" ref={scrollerRef} tabIndex={-1}>
           <div className="nf-desk">
-            <div className={`nf-page reading-size-${size}`} ref={pageRef} style={{ ['--nf-zoom' as string]: zoom }}>
+            <div className={`nf-page reading-size-${size}`} ref={pageRef} data-pen-mode={pen} style={{ ['--nf-zoom' as string]: zoom }}>
               <FocusArticle
                 markdown={note.markdown}
                 title={note.title}
@@ -614,6 +626,8 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
             </div>
           </div>
         </div>
+
+        <PenTrace within={pageRef} noteId={note.id} mode={pen} />
 
         {sections.length > 1 && (
           <nav className="nf-margin" aria-label="Sections">
