@@ -420,7 +420,7 @@ html:has(.notes .markdown-body) { overscroll-behavior-x: none; }
    rather than running off the side. The scroller pans up and down only
    and leaves the pinch to FocusMode, which also keeps a pen's sideways
    trace from reading as the browser's back swipe. */
-.notes .nf-scroll { touch-action: pan-y; }
+.notes .nf-scroll { touch-action: pan-y; overflow-x: hidden; }
 .notes .nf-page { --nf-zoom: 1; max-width: calc(var(--measure) * var(--nf-zoom) + 160px); }
 .notes .nf-page .markdown-body { font-size: calc(var(--reader-font-size) * var(--nf-zoom)); }
 .notes .nf-page .markdown-body h1,

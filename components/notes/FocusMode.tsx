@@ -33,7 +33,7 @@ function readFocusPrefs(): FocusPrefs {
 }
 
 /** Safari's own pinch event, which TypeScript's DOM types leave out. */
-type GestureEvent = Event & { scale: number; clientY: number };
+type GestureEvent = Event & { scale: number; clientX: number; clientY: number };
 
 /** The block a point on the page lands in, so a zoom can hold it still. */
 function blockAt(page: HTMLElement, y: number): HTMLElement | null {
@@ -343,25 +343,42 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
   }, [size, onSize]);
 
   /* ── Zoom ─────────────────────────────────────────────────────────── */
-  // A pinch reflows the note rather than magnifying it: the type and the
-  // measure grow together until the measure meets the screen, then the lines
-  // rewrap, so nothing ever runs off the side. The block under the fingers
-  // (or the reading line, for a key) is held where it was.
+  // A pinch ends as a reflow, not a magnification: the type and the measure
+  // grow together until the measure meets the screen, then the lines rewrap,
+  // so nothing runs off the side. Reflowing a whole note costs a layout, far
+  // too much to pay on every frame of a gesture, which is what made the first
+  // version stutter. So while the fingers move the sheet is only scaled on
+  // the compositor, from the point between them, and the reflow happens once,
+  // when they let go, holding the block under them where it was.
   const saveZoom = useRef<number | undefined>(undefined);
+  const live = useRef<{ from: number; z: number; y: number } | null>(null);
+
   const applyZoom = useCallback((next: number, anchorY?: number) => {
     const z = clampZoom(next);
     const scroller = scrollerRef.current;
     const page = pageRef.current;
-    if (!scroller || !page || Math.abs(z - zoomRef.current) < 0.001) return;
+    if (!scroller || !page) return;
+    const scaled = page.style.scale !== '';
+    if (!scaled && Math.abs(z - zoomRef.current) < 0.001) return;
     const y = anchorY ?? scroller.getBoundingClientRect().top + scroller.clientHeight * READING_LINE;
+    // Measured as it is seen, scale and all: a share of a block's height is
+    // the same under a scale as without one.
     const block = blockAt(page, y);
     const before = block?.getBoundingClientRect();
     const share = before && before.height ? (y - before.top) / before.height : 0;
     zoomRef.current = z;
+    page.style.scale = '';
+    page.style.transformOrigin = '';
+    page.style.willChange = '';
     page.style.setProperty('--nf-zoom', String(z));
     if (block && before) {
       const after = block.getBoundingClientRect();
       scroller.scrollTop += after.top + share * after.height - y;
+    }
+    // The scaled glyphs give way to the reflowed ones under a short fade
+    // rather than a hard swap.
+    if (scaled && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      page.querySelector('.markdown-body')?.animate([{ opacity: 0.55 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
     }
     setZoom(z);
     window.clearTimeout(saveZoom.current);
@@ -378,25 +395,39 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    // Pinches arrive faster than a note can reflow; take the latest a frame.
-    let frame = 0;
-    let pending: { z: number; y: number } | null = null;
-    const queue = (z: number, y: number) => {
-      pending = { z, y };
-      if (!frame) frame = requestAnimationFrame(() => {
-        frame = 0;
-        if (pending) applyZoom(pending.z, pending.y);
-        pending = null;
-      });
+
+    /** A frame of a gesture: a scale on the compositor, no layout. */
+    const preview = (next: number, x: number, y: number) => {
+      const page = pageRef.current;
+      if (!page) return;
+      if (!live.current) {
+        const rect = page.getBoundingClientRect();
+        page.style.transformOrigin = `${x - rect.left}px ${y - rect.top}px`;
+        page.style.willChange = 'scale';
+        live.current = { from: zoomRef.current, z: zoomRef.current, y };
+      }
+      const z = clampZoom(next);
+      live.current.z = z;
+      page.style.scale = String(z / live.current.from);
     };
-    const target = () => pending?.z ?? zoomRef.current;
+    const current = () => live.current?.z ?? zoomRef.current;
+    /** The gesture is over: reflow once, at the zoom it arrived at. */
+    const settle = () => {
+      const gesture = live.current;
+      live.current = null;
+      if (gesture) applyZoom(gesture.z, gesture.y);
+    };
 
     // A trackpad pinch in Chrome, Edge and Firefox, and ctrl with a wheel.
+    // There is no end event, so a short quiet is taken as one.
+    let quiet: number | undefined;
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey) return;
       event.preventDefault();
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-      queue(target() * Math.exp(-Math.max(-25, Math.min(25, delta)) / 100), event.clientY);
+      preview(current() * Math.exp(-Math.max(-25, Math.min(25, delta)) / 100), event.clientX, event.clientY);
+      window.clearTimeout(quiet);
+      quiet = window.setTimeout(settle, 140);
     };
 
     // A trackpad pinch in Safari, and the pinch iOS reports alongside touches.
@@ -408,7 +439,11 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
     const onGestureChange = (event: Event) => {
       event.preventDefault();
       const gesture = event as GestureEvent;
-      queue(gestureFrom * gesture.scale, gesture.clientY);
+      preview(gestureFrom * gesture.scale, gesture.clientX, gesture.clientY);
+    };
+    const onGestureEnd = (event: Event) => {
+      event.preventDefault();
+      settle();
     };
 
     // Two fingers on a touch screen.
@@ -422,15 +457,19 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
       if (!pinch || event.touches.length !== 2) return;
       event.preventDefault();
       const [a, b] = [event.touches[0], event.touches[1]];
-      if (pinch.span > 0) queue(pinch.zoom * (spanOf(event.touches) / pinch.span), (a.clientY + b.clientY) / 2);
+      if (pinch.span > 0) preview(pinch.zoom * (spanOf(event.touches) / pinch.span), (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2);
     };
     const onTouchEnd = (event: TouchEvent) => {
-      if (event.touches.length < 2) pinch = null;
+      if (event.touches.length < 2 && pinch) {
+        pinch = null;
+        settle();
+      }
     };
 
     scroller.addEventListener('wheel', onWheel, { passive: false });
     scroller.addEventListener('gesturestart', onGestureStart);
     scroller.addEventListener('gesturechange', onGestureChange);
+    scroller.addEventListener('gestureend', onGestureEnd);
     scroller.addEventListener('touchstart', onTouchStart, { passive: true });
     scroller.addEventListener('touchmove', onTouchMove, { passive: false });
     scroller.addEventListener('touchend', onTouchEnd);
@@ -439,11 +478,12 @@ function FocusSheet({ note, course, checks, onMarkCheck, size, onSize, measure, 
       scroller.removeEventListener('wheel', onWheel);
       scroller.removeEventListener('gesturestart', onGestureStart);
       scroller.removeEventListener('gesturechange', onGestureChange);
+      scroller.removeEventListener('gestureend', onGestureEnd);
       scroller.removeEventListener('touchstart', onTouchStart);
       scroller.removeEventListener('touchmove', onTouchMove);
       scroller.removeEventListener('touchend', onTouchEnd);
       scroller.removeEventListener('touchcancel', onTouchEnd);
-      cancelAnimationFrame(frame);
+      window.clearTimeout(quiet);
     };
   }, [applyZoom]);
 
