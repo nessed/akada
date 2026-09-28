@@ -612,8 +612,15 @@ Indicators": a reader who is four minutes over a break does not need to be
 shouted at, and the number going quietly warm is enough.
 
 No dialog is raised at the end of a block. A question at the exact moment a
-reader has stopped deciding things is the wrong thing to hand them; "Back to
-it" is one tap, or the space bar.
+reader has stopped deciding things is the wrong thing to hand them.
+
+Nothing starts on its own after a break either. **End break** (one tap, or
+the space bar, or `P`) closes the rest and sets out the next block at the
+same length, held at zero: the clock reads `· ready` instead of `· paused`
+and the solid button says **Start**. The block begins when that is pressed,
+and its stretch in the chain starts there, not when the break ended. A block
+that ran the moment rest stopped was counting the walk back to the desk as
+work.
 
 ### One word for each thing
 Outside the Record, the app says **session** (never "sitting" or
@@ -1174,7 +1181,7 @@ back to their book. The timer's own keys (Space, B, F) only exist on the
 timer screen, which is the one screen a reader mid-chapter is least likely to
 be looking at, so stopping meant finding the dock with a mouse. `P` and `K`
 reach the clock from wherever they are: `P` holds it or lets it go, and means
-**back to it** while a break runs; `K` finishes the sitting and the log sheet
+**end break** while a break runs (the next block then waits for another `P`); `K` finishes the sitting and the log sheet
 opens on the spot, because `PageShell` already carries one on every tab. On
 the few screens that carry neither sheet nor shell, `K` opens the timer
 instead, so the key never ends a sitting with nothing to show for it.

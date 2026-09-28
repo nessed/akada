@@ -120,12 +120,12 @@ export default function ActiveTimerDock() {
               type="button"
               onClick={onBreak ? endBreak : togglePaused}
               aria-label={
-                onBreak ? 'End the break and start the next block' : active.isPaused ? 'Resume timer' : 'Pause timer'
+                onBreak ? 'End the break; the next block waits for you to start it' : active.isPaused ? 'Resume timer' : 'Pause timer'
               }
               /* The same thing the P key does, so the button says so. It is
                  the only place the two keys are named outside the help
                  sheet, and a tooltip is the right weight for it. */
-              title={onBreak ? 'Back to it (P)' : active.isPaused ? 'Resume (P)' : 'Pause (P)'}
+              title={onBreak ? 'End break (P)' : active.isPaused ? 'Resume (P)' : 'Pause (P)'}
               className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-transparent text-ink-soft"
             >
               {active.isPaused || onBreak ? (
