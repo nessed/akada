@@ -309,7 +309,9 @@ function NotesContent() {
       window.clearTimeout(timer);
       cancelAnimationFrame(frame);
     };
-  }, [headings, openId, mode, collapsed, focusing]);
+    // `ready` so the page is measured again once the note is drawn: measured
+    // before, it is a page with nothing on it, which reads as read through.
+  }, [headings, openId, mode, collapsed, focusing, ready]);
 
   useEffect(() => {
     if (!readerOpen) return;
