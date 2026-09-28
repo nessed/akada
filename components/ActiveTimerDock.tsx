@@ -71,6 +71,8 @@ export default function ActiveTimerDock() {
             scrolled the page instead of opening the timer. The label is the
             button now, and the two controls sit beside it. */}
         <div
+          // Where a pause made from the keyboard sends its ring out from.
+          data-timer-dock
           className="pointer-events-auto flex items-center gap-1 rounded-[10px] border border-line bg-paper/90 p-1 backdrop-blur"
           style={{ boxShadow: `inset 0 0 0 1px ${tint}` }}
         >

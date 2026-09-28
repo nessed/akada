@@ -644,6 +644,7 @@ export default function TimerPage() {
           trunkWidth={15}
           padTop={20}
           widthFill={0.94}
+          resting={pausedFocus}
           className={`absolute inset-0 h-full w-full ${quiet}`}
         />
 
@@ -676,7 +677,9 @@ export default function TimerPage() {
                     : spoken(elapsed)
                 }
               >
-                {clockFace(resting ? remaining : elapsed)}
+                <span className={pausedFocus ? 'held-breath' : undefined}>
+                  {clockFace(resting ? remaining : elapsed)}
+                </span>
               </p>
               <p className="m-0 mt-3 font-serif italic text-[13.5px]" style={{ color: '#958D7E' }}>
                 {resting ? (
@@ -801,6 +804,7 @@ export default function TimerPage() {
             baseOffset={24}
             sketch
             ground
+            resting={pausedFocus}
             className={`absolute inset-0 h-full w-full ${quiet}`}
           />
         </div>
@@ -817,7 +821,7 @@ export default function TimerPage() {
                 : `${overrun ? 'Over by' : 'Remaining'} ${spoken(remaining)}`
             }
           >
-            {clockFace(remaining)}
+            <span className={pausedFocus ? 'held-breath' : undefined}>{clockFace(remaining)}</span>
           </p>
           <p className="m-0 mt-3 font-serif italic text-[13.5px] text-muted">
             {resting ? (
