@@ -15,7 +15,7 @@ import {
   VERDICT_WORDS,
   whenWords,
 } from '@/lib/recall/words';
-import { isoDate } from '@/lib/utils';
+import { addDays, isoDate } from '@/lib/utils';
 import { VerdictMark } from './RecallMarks';
 
 /**
@@ -127,7 +127,7 @@ export default function RecallDeck({
     setBusy(true);
     try {
       const change = await answerRecall(card, verdict, today);
-      const examOn = card.examDays != null ? shift(today, card.examDays) : null;
+      const examOn = card.examDays != null ? addDays(today, card.examDays) : null;
       const history = applyVerdict(card.history, verdict, today);
       setOutcome({ change, verdict, nextOn: scheduleRecall(history, card.origin, examOn).dueOn });
       setWalked((n) => n + 1);
@@ -353,10 +353,4 @@ export default function RecallDeck({
       </p>
     </section>
   );
-}
-
-function shift(iso: string, days: number): string {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return isoDate(d);
 }

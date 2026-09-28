@@ -8,6 +8,7 @@ import {
   WEEK_CONSISTENT_DAYS,
 } from './constants';
 import type { DayCredit } from './credit';
+import { addDays, mondayOf } from '../utils';
 
 /**
  * Continuity, measured in weeks.
@@ -61,24 +62,6 @@ export interface RunReading {
   thisWeek: RunWeek | null;
 }
 
-function isoOf(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function mondayOf(iso: string): string {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return isoOf(d);
-}
-
-function shift(iso: string, days: number): string {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return isoOf(d);
-}
 
 /**
  * Whether a day counts at all.
@@ -112,13 +95,13 @@ export function readRuns(
   const breadthTarget = Math.min(WEEK_BREADTH_COURSES, Math.max(1, courses.length));
 
   const weeks: RunWeek[] = [];
-  for (let start = firstMonday; start <= thisMonday; start = shift(start, 7)) {
+  for (let start = firstMonday; start <= thisMonday; start = addDays(start, 7)) {
     const inProgress = start === thisMonday;
     const touched = new Set<string>();
     const days: RunDay[] = [];
 
     for (let i = 0; i < 7; i++) {
-      const iso = shift(start, i);
+      const iso = addDays(start, i);
       const entry = byIso.get(iso);
       for (const courseId of entry?.rawByCourse.keys() ?? []) touched.add(courseId);
       days.push({

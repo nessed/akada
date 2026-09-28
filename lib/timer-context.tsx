@@ -22,6 +22,7 @@ import { plannerDate, readPreferences } from './preferences';
 import { cancelChime, flushChime, primeChime, ringChime, scheduleChime } from './chime';
 import { logSessionFollowed } from './progression/log';
 import { idleTripped, quietPoint } from './timer-idle';
+import { isoDate } from './utils';
 
 interface TimerState {
   courseId: string;
@@ -332,11 +333,7 @@ function notifyBreakOver(): void {
 }
 
 function isoDateFromMs(value: number): string {
-  const date = new Date(Number.isFinite(value) ? value : Date.now());
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return isoDate(new Date(Number.isFinite(value) ? value : Date.now()));
 }
 
 function sanitizeActive(value: unknown): TimerState | null {

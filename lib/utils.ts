@@ -56,6 +56,23 @@ export function isoDate(d?: Date): string {
  * cutoffs supabase/schema.sql uses when guessing a label for a semester
  * migrated from before semesters had names of their own.
  */
+/**
+ * A calendar date moved by whole days. Anchored at noon, so a daylight-saving
+ * change cannot move it onto the day before or after.
+ */
+export function addDays(iso: string, days: number): string {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return isoDate(d);
+}
+
+/** The Monday of the week a calendar date falls in. */
+export function mondayOf(iso: string): string {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return isoDate(d);
+}
+
 export function seasonLabel(d: Date = new Date()): string {
   const month = d.getMonth(); // 0-11
   const season = month <= 4 ? 'Spring' : month <= 7 ? 'Summer' : 'Fall';
