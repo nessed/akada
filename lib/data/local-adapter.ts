@@ -364,29 +364,6 @@ export class LocalAdapter implements DataProvider {
     return session;
   }
 
-  async updateSession(id: string, updates: Partial<Session>): Promise<Session> {
-    const sessions = read<Session[]>(KEYS.sessions, []);
-    const idx = sessions.findIndex((s) => s.id === id);
-    if (idx === -1) throw new Error(`Session ${id} not found`);
-    const safeUpdates = { ...updates };
-    if (updates.durationSeconds !== undefined) {
-      if (!isLoggableDuration(updates.durationSeconds)) {
-        throw new Error('Session duration must be greater than zero');
-      }
-      safeUpdates.durationSeconds = clampSessionSeconds(updates.durationSeconds);
-    }
-    if (updates.courseId !== undefined) {
-      safeUpdates.courseId = cleanText(updates.courseId, 80);
-      if (!safeUpdates.courseId) throw new Error('Course is required');
-    }
-    if (updates.taskId !== undefined) safeUpdates.taskId = updates.taskId ? cleanText(updates.taskId, 80) : null;
-    if (updates.date !== undefined) safeUpdates.date = requireIsoDate(updates.date, 'Session date');
-    if (updates.note !== undefined) safeUpdates.note = cleanSessionNote(updates.note);
-    sessions[idx] = { ...sessions[idx], ...safeUpdates, id, createdAt: sessions[idx].createdAt };
-    write(KEYS.sessions, sessions);
-    return sessions[idx];
-  }
-
   async deleteSession(id: string): Promise<void> {
     const sessions = read<Session[]>(KEYS.sessions, []).filter((s) => s.id !== id);
     write(KEYS.sessions, sessions);
@@ -573,23 +550,6 @@ export class LocalAdapter implements DataProvider {
     const created = createSemesterRecord(input);
     write(KEYS.activeSemesterId, created.id);
     return { ...created, isActive: true };
-  }
-
-  async updateSemester(id: string, updates: NewSemesterInput): Promise<Semester> {
-    const semesters = read<Semester[]>(KEYS.semesters, []);
-    const idx = semesters.findIndex((s) => s.id === id);
-    if (idx === -1) throw new Error(`Semester ${id} not found`);
-    semesters[idx] = {
-      ...semesters[idx],
-      ...sanitizeSemester({
-        label: updates.label ?? semesters[idx].label,
-        startDate: updates.startDate !== undefined ? updates.startDate : semesters[idx].startDate,
-        endDate: updates.endDate !== undefined ? updates.endDate : semesters[idx].endDate,
-      }),
-    };
-    write(KEYS.semesters, semesters);
-    const activeId = read<string | null>(KEYS.activeSemesterId, null);
-    return { ...semesters[idx], isActive: semesters[idx].id === activeId };
   }
 
   async deleteSemester(id: string): Promise<void> {

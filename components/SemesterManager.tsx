@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Course, Semester } from '@/lib/data';
 import { db } from '@/lib/data';
 import { useSemesters, createSemesterOptimistic, deleteSemesterOptimistic } from '@/lib/data-hooks';
-import { formatHM, seasonLabel, totalSeconds } from '@/lib/utils';
+import { formatHM, isoDate, seasonLabel, totalSeconds } from '@/lib/utils';
 import { cleanText, isIsoDate } from '@/lib/planner-safety';
 import LoadingIndicator, { ButtonSpinner } from './LoadingIndicator';
 import ConfirmSheet from './ConfirmSheet';
@@ -432,8 +432,7 @@ interface SemesterPreset {
 function semesterNeedsStartConfirmation(semester: Semester | null, now = new Date()): boolean {
   if (!semester) return false;
   if (!semester.endDate) return true;
-  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
-  return semester.endDate >= today;
+  return semester.endDate >= isoDate(now);
 }
 
 function formatSemesterDate(value: string): string {

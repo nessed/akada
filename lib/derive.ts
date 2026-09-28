@@ -341,18 +341,6 @@ export function medianPace(pairs: Pick<ReadingPair, 'pagesPerHour'>[]): number |
 }
 
 /**
- * Pages an hour, measured rather than assumed. Falls back to a plain 20
- * until there are enough worked readings to say anything.
- */
-export function readingRate(
-  tasks: Pick<Task, 'id' | 'courseId' | 'kind' | 'completed' | 'completedVia' | 'pages'>[],
-  sessions: { taskId: string | null; durationSeconds: number }[],
-  notes: { taskId: string | null; reads?: { seconds: number }[] | null }[] = [],
-): number {
-  return readingRateDetail(tasks, sessions, notes).pagesPerHour;
-}
-
-/**
  * The same rate with what it stands on, for a caller that has to say whether
  * the number is the reader's own or the default. The connector does: "at
  * your pace" off a default of 20 would be a claim about someone it has never

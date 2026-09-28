@@ -1,6 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { readAccessToken } from '@/lib/mcp-auth';
 import { readBriefing, type Briefing, type BriefingQuiz } from '@/lib/briefing';
 import type { Course, RecallRecord, Session, Task, WeakPoint } from '@/lib/data/types';
 import {
@@ -18,7 +17,17 @@ import { cleanAttempts, cleanQuestions, writtenTally } from '@/lib/quiz/format';
 import { readRecall } from '@/lib/recall';
 import { cleanScore } from '@/lib/session-safety';
 import { studentDay, type StudentDay } from '@/lib/student-day';
-import { mcpSupabase, readStudentSettings, siteUrl } from './_shared';
+import { mcpSupabase, readStudentSettings } from './_shared';
+import {
+  isMissingTable,
+  queryFailed as reportFailure,
+  quizUrl,
+  result,
+  toolCrashed,
+  type AuthenticatedToken,
+  type McpSupabaseClient,
+  type QueryFailure,
+} from './_tool-kit';
 
 /**
  * get_briefing: the one read an assistant makes at the start of a
@@ -35,27 +44,8 @@ import { mcpSupabase, readStudentSettings, siteUrl } from './_shared';
  * deals with it.
  */
 
-type AuthenticatedToken = ReturnType<typeof readAccessToken>;
-type McpSupabaseClient = ReturnType<typeof mcpSupabase>;
-type QueryFailure = { message?: string; code?: string; details?: string; hint?: string } | null;
-
-const MISSING_TABLE = ['PGRST205', '42P01', 'PGRST204', '42703'];
-
-function result(value: unknown) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
-    structuredContent: value as Record<string, unknown>,
-  };
-}
-
-function toolError(message: string) {
-  return { content: [{ type: 'text' as const, text: message }], isError: true };
-}
-
 function queryFailed(step: string, error: QueryFailure, message: string) {
-  console.error(`[mcp:get_briefing] ${step} failed`, { code: error?.code, message: error?.message, hint: error?.hint });
-  const reason = [error?.code, error?.message, error?.hint].filter(Boolean).join(' | ');
-  return toolError(reason ? `${message} (${reason})` : message);
+  return reportFailure('get_briefing', step, error, message);
 }
 
 /**
@@ -66,19 +56,12 @@ function queryFailed(step: string, error: QueryFailure, message: string) {
  */
 function optionalRows(step: string, read: { data: unknown; error: QueryFailure }): Record<string, unknown>[] | null {
   if (!read.error) return (read.data ?? []) as Record<string, unknown>[];
-  if (!MISSING_TABLE.includes(read.error.code ?? '')) {
+  if (!isMissingTable(read.error)) {
     console.error(`[mcp:get_briefing] ${step} failed`, { code: read.error.code, message: read.error.message, hint: read.error.hint });
   }
   return null;
 }
 
-function quizUrl(id: string): string | null {
-  try {
-    return `${siteUrl()}/notes/quiz?q=${encodeURIComponent(id)}`;
-  } catch {
-    return null;
-  }
-}
 
 /* ── Rows into the app's model, through the app's own cleaners ─────────── */
 
@@ -426,9 +409,7 @@ export async function getBriefingTool(
     });
     return result(formatBriefing(briefing, day, settings.dailyGoalHours));
   } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : String(cause ?? '');
-    console.error('[mcp:get_briefing] unhandled failure', reason);
-    return toolError(`Akada is not configured or your session has expired. Reconnect the connector and try again.${reason ? ` (${reason})` : ''}`);
+    return toolCrashed('get_briefing', cause);
   }
 }
 

@@ -22,6 +22,7 @@ import { plannerDate, readPreferences } from './preferences';
 import { cancelChime, flushChime, primeChime, ringChime, scheduleChime } from './chime';
 import { logSessionFollowed } from './progression/log';
 import { idleTripped, quietPoint } from './timer-idle';
+import { isoDate } from './utils';
 
 interface TimerState {
   courseId: string;
@@ -131,7 +132,7 @@ interface TimerContextValue {
   extend: (seconds: number) => void;
   /** End the block here and rest. Defaults to the sitting's break length. */
   startBreak: (seconds?: number) => void;
-  /** End the break and open the next block. */
+  /** End the break and set out the next block, held until it is started. */
   endBreak: () => void;
   /** Re-arm the break length mid-sitting. Null means stop taking them. */
   setBreakLength: (seconds: number | null) => void;
@@ -153,7 +154,16 @@ interface TimerContextValue {
   stop: () => PendingTimerLog | null;
 }
 
-const TimerContext = createContext<TimerContextValue | null>(null);
+/** The fields that move every second while a sitting runs. */
+type TimerClock = Pick<TimerContextValue, 'elapsedSeconds' | 'focusSeconds' | 'breakSeconds'>;
+/** Everything else, which holds still between the sitting's real changes. */
+type TimerStateValue = Omit<TimerContextValue, keyof TimerClock>;
+
+/* Two contexts rather than one, so a consumer that only needs to know
+   whether a sitting is running, or to start one, is not re-rendered every
+   second with the clock. useTimer() still reads both. */
+const TimerStateContext = createContext<TimerStateValue | null>(null);
+const TimerClockContext = createContext<TimerClock | null>(null);
 
 const STORAGE_KEY = 'lums.activeTimer';
 const PENDING_STORAGE_KEY = 'lums.pendingTimerLog';
@@ -323,11 +333,7 @@ function notifyBreakOver(): void {
 }
 
 function isoDateFromMs(value: number): string {
-  const date = new Date(Number.isFinite(value) ? value : Date.now());
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return isoDate(new Date(Number.isFinite(value) ? value : Date.now()));
 }
 
 function sanitizeActive(value: unknown): TimerState | null {
@@ -540,12 +546,6 @@ function computeElapsed(state: TimerState): number {
   return stretchSecondsAt(safeState, Date.now());
 }
 
-function computeElapsedAt(state: TimerState, atMs: number): number {
-  const safeState = sanitizeActive(state);
-  if (!safeState) return 0;
-  return stretchSecondsAt(safeState, atMs);
-}
-
 /** Focus and rest across the whole sitting, the stretch in progress included. */
 function sittingTotals(
   state: TimerState,
@@ -572,7 +572,7 @@ function focusSecondsAt(state: TimerState, atMs: number): number {
  * Write the stretch in progress into the chain and hand back the new one.
  *
  * A stretch that rounds to nothing is dropped rather than recorded: tapping
- * "back to it" the instant the chime lands should not leave a zero-second
+ * "end break" the instant the chime lands should not leave a zero-second
  * break in the record, and the database would refuse it anyway.
  */
 function closeStretch(state: TimerState, atMs: number): SessionSegment[] {
@@ -609,7 +609,12 @@ function toBreakState(state: TimerState, atMs: number, breakSeconds: number): Ti
   };
 }
 
-/** End the break and open the next block, at the same length as the last. */
+/**
+ * End the break and set out the next block, at the same length as the last,
+ * held at zero. It starts when the reader starts it, not when the break
+ * ends: a block that began ticking the moment rest stopped was counting the
+ * walk back to the desk as work.
+ */
 function toFocusState(state: TimerState, atMs: number): TimerState {
   return {
     ...state,
@@ -618,7 +623,7 @@ function toFocusState(state: TimerState, atMs: number): TimerState {
     startedAt: atMs,
     stretchStartedAt: atMs,
     accumulatedMs: 0,
-    isPaused: false,
+    isPaused: true,
     lastSeenAt: atMs,
     lastInputAt: atMs,
   };
@@ -898,13 +903,6 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    const commit = (next: TimerState) => {
-      activeRef.current = next;
-      setActive(next);
-      saveActive(next);
-      setElapsed(computeElapsed(next));
-    };
-
     tickRef.current = window.setInterval(() => {
       const now = Date.now();
       const current = activeRef.current ?? active;
@@ -1129,7 +1127,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [applyActive],
   );
 
-  /** End the break, open the next block at the same length as the last. */
+  /** End the break, set out the next block held at the same length as the last. */
   const endBreak = useCallback(() => {
     const running = activeRef.current;
     if (!running || running.phase !== 'break') return;
@@ -1179,7 +1177,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       if (running.phase === 'break') {
         cancelChime();
         breakNoticeRef.current = null;
-        // Switching breaks off while resting is a way of saying "back to it".
+        // Switching breaks off while resting is a way of ending the break.
         if (breakSeconds == null) {
           applyActive(toFocusState(next, Date.now()));
           return;
@@ -1242,6 +1240,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       const next: TimerState = {
         ...prev,
         startedAt: now,
+        // A block set out after a break and not yet started begins now, not
+        // when the break ended, so the chain and the finish time read true.
+        stretchStartedAt: prev.accumulatedMs === 0 ? now : prev.stretchStartedAt,
         isPaused: false,
         lastSeenAt: now,
         lastInputAt: now,
@@ -1319,39 +1320,79 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     return '';
   }, [active]);
 
+  const onBreak = active?.phase === 'break';
+  const breakTarget = active?.breakSeconds ?? null;
+  const state = useMemo<TimerStateValue>(
+    () => ({
+      hydrated,
+      active,
+      pendingLog,
+      onBreak,
+      breakTarget,
+      start,
+      extend,
+      startBreak,
+      endBreak,
+      setBreakLength,
+      noteLastBlock,
+      lastBlockNote,
+      pause,
+      resume,
+      cancel,
+      clearPendingLog,
+      clearTimerState,
+      stop,
+    }),
+    [
+      hydrated,
+      active,
+      pendingLog,
+      onBreak,
+      breakTarget,
+      start,
+      extend,
+      startBreak,
+      endBreak,
+      setBreakLength,
+      noteLastBlock,
+      lastBlockNote,
+      pause,
+      resume,
+      cancel,
+      clearPendingLog,
+      clearTimerState,
+      stop,
+    ],
+  );
+  const clock = useMemo<TimerClock>(
+    () => ({ elapsedSeconds, focusSeconds: totals.focusSeconds, breakSeconds: totals.breakSeconds }),
+    [elapsedSeconds, totals],
+  );
+
   return (
-    <TimerContext.Provider
-      value={{
-        hydrated,
-        active,
-        pendingLog,
-        elapsedSeconds,
-        focusSeconds: totals.focusSeconds,
-        breakSeconds: totals.breakSeconds,
-        onBreak: active?.phase === 'break',
-        breakTarget: active?.breakSeconds ?? null,
-        start,
-        extend,
-        startBreak,
-        endBreak,
-        setBreakLength,
-        noteLastBlock,
-        lastBlockNote,
-        pause,
-        resume,
-        cancel,
-        clearPendingLog,
-        clearTimerState,
-        stop,
-      }}
-    >
-      {children}
-    </TimerContext.Provider>
+    <TimerStateContext.Provider value={state}>
+      <TimerClockContext.Provider value={clock}>{children}</TimerClockContext.Provider>
+    </TimerStateContext.Provider>
   );
 }
 
-export function useTimer(): TimerContextValue {
-  const ctx = useContext(TimerContext);
-  if (!ctx) throw new Error('useTimer must be used within a TimerProvider');
+/** The timer without its clock: whether a sitting runs, and what to do to it. */
+export function useTimerState(): TimerStateValue {
+  const ctx = useContext(TimerStateContext);
+  if (!ctx) throw new Error('useTimerState must be used within a TimerProvider');
   return ctx;
+}
+
+/** Only the running totals, for a leaf that draws them. Re-renders every second. */
+export function useTimerClock(): TimerClock {
+  const ctx = useContext(TimerClockContext);
+  if (!ctx) throw new Error('useTimerClock must be used within a TimerProvider');
+  return ctx;
+}
+
+/** All of it, state and clock. Re-renders every second while a sitting runs. */
+export function useTimer(): TimerContextValue {
+  const state = useTimerState();
+  const clock = useTimerClock();
+  return useMemo(() => ({ ...state, ...clock }), [state, clock]);
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTasks } from '@/lib/data-hooks';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import { AT_END, AT_TOP, CHECKPOINTS, advanceRun, finishRun, startRun, type ReadRun } from './reads';
 import { readStore, removeStore, writeStore } from './store';
 import type { NoteRead, StudyNote } from '@/lib/data/types';
@@ -63,7 +63,7 @@ export function useReadThrough({
   enabled: boolean;
   onRead: (read: NoteRead) => void;
 }) {
-  const { active, hydrated } = useTimer();
+  const { active, hydrated } = useTimerState();
   const { tasks } = useTasks();
   const onReadRef = useRef(onRead);
   useEffect(() => {

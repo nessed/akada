@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDismiss } from '@/lib/use-dismiss';
 import { addDays, isoDate } from '@/lib/utils';
 
 interface Props {
@@ -59,21 +60,7 @@ export default function DatePicker({
     if (open) setViewMonth(monthStart(parseIso(value) || new Date()));
   }, [open, value]);
 
-  useEffect(() => {
-    if (!open) return;
-    function handlePointerDown(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
+  useDismiss(rootRef, open, setOpen);
 
   const days = useMemo(() => {
     const start = monthStart(viewMonth);

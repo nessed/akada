@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { useDismiss } from '@/lib/use-dismiss';
 import type { CatalogSection } from '@/lib/catalog';
 
 interface Props {
@@ -59,21 +60,7 @@ export default function SectionPicker({
 
   const selected = sections.find((section) => section.id === value) ?? null;
 
-  useEffect(() => {
-    if (!open) return;
-    function handlePointerDown(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
+  useDismiss(rootRef, open, setOpen);
 
   // The sheet is anchored to the bottom of the screen, so the list almost
   // always wants to open upwards, but not on a short course list near the

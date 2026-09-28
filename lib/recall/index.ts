@@ -7,7 +7,7 @@ import type {
   Task,
 } from '../data';
 import { isSkipped, workedTaskIds } from '../derive';
-import { daysBetween, isoDate, logicalDateOf } from '../utils';
+import { addDays, daysBetween, isoDate, logicalDateOf } from '../utils';
 import {
   RECALL_EXAM_MIN_WEIGHT,
   RECALL_EXAM_RUNUP_DAYS,
@@ -243,11 +243,6 @@ function readingFile(title: string): { work: string; rest: string } {
 
 /* ── Dates ────────────────────────────────────────────────────────────── */
 
-function addDays(iso: string, days: number): string {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return isoDate(d);
-}
 
 /** A stored timestamp as the reader's day it fell on. */
 function dayFrom(

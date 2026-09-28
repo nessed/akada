@@ -47,10 +47,6 @@ export function liveSession(sitting: LiveSitting | null): Session | null {
   };
 }
 
-export function isLiveSession(session: Pick<Session, 'id'>): boolean {
-  return session.id.startsWith(LIVE_SESSION_PREFIX);
-}
-
 /** The logged sessions with the sitting on the clock added on the end. */
 export function withLiveSession(sessions: Session[], live: Session | null): Session[] {
   return live ? [...sessions, live] : sessions;
