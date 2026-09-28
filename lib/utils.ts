@@ -52,6 +52,33 @@ export function isoDate(d?: Date): string {
 }
 
 /**
+ * The reader's day as a Date, set at noon so calendar arithmetic on it never
+ * slips back across their cutoff. `new Date()` is the wall clock: at 3am for
+ * someone whose day ends at 8, it is already tomorrow, and "tomorrow" worked
+ * out from it is the day after that.
+ */
+export function logicalToday(): Date {
+  return new Date(isoDate() + 'T12:00:00');
+}
+
+/** An ISO day moved by whole days. */
+export function addDays(iso: string, days: number): string {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return isoDate(d);
+}
+
+/**
+ * The instant the reader's day `iso` begins: midnight, or the hour they
+ * moved the end of the day to. A day ending at 8am starts at 8am.
+ */
+export function dayStartsAt(iso: string): number {
+  const d = new Date(iso + 'T00:00:00');
+  d.setHours(dayEndingHour());
+  return d.getTime();
+}
+
+/**
  * "Spring 2026" / "Fall 2026"-style label from a date. Mirrors the season
  * cutoffs supabase/schema.sql uses when guessing a label for a semester
  * migrated from before semesters had names of their own.
@@ -113,7 +140,9 @@ export function formatHM(totalSeconds: number): string {
 
 export function formatRelativeDate(iso: string): string {
   const today = isoDate();
-  const yesterday = isoDate(daysAgo(new Date(), 1));
+  // Yesterday is the reader's yesterday: between midnight and a late cutoff,
+  // the calendar's yesterday is the day that is still today.
+  const yesterday = addDays(today, -1);
   if (iso === today) return 'Today';
   if (iso === yesterday) return 'Yesterday';
   const date = new Date(iso + 'T00:00:00');
@@ -316,7 +345,7 @@ export function lastSeenByCourse(sessions: Session[]): Record<string, string> {
   return map;
 }
 
-export function studyStreakDays(sessions: Session[], today: Date = new Date()): number {
+export function studyStreakDays(sessions: Session[], today: Date = logicalToday()): number {
   const dates = new Set(
     sessions.filter((s) => isLoggableDuration(s.durationSeconds)).map((s) => s.date),
   );

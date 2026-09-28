@@ -358,7 +358,14 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   or a late night) with each timed block laid where it happened in its course
   colour and a thin ink mark for now. Only a sitting the timer ran knows when
   it happened, from its segments; one logged by hand counts in the figure and
-  is not placed. The week is the week's hours against its goal, which is the
+  is not placed. With a day that ends after midnight (Settings, "day ends
+  at"), the strip also carries **the small hours before today began**: the
+  day before's blocks that ran past midnight, at 45% in their course
+  colours, left of a dashed `ink-soft` line where the day started, and a
+  serif line under it ("4h 24m before 8am, counted to Sunday · your day ends
+  at 8am", the last part a link to Settings). They stay out of the day's
+  figure, since they are not today's, but a reader who studied from four to
+  seven used to open Today at nine and find no trace of it. The week is the week's hours against its goal, which is the
   course goals added up (there is no separate one to set), drawn as **a bar
   a day**, Monday to Sunday, each bar stacked in the colours of the courses it
   went to with its hours written over it in mono (on a scrap of paper, so the
@@ -993,6 +1000,16 @@ and "6.5/8" in mono.
 **On a session row**, on the course page and in the Stats log, the score
 sits in quiet mono before the hours, since the hours are what those lists are.
 
+### The reader's day, not the calendar's
+Settings lets a day end as late as 8am. `isoDate()` with no argument is that
+day, and anything that means "today" reads it; `new Date()` is only the wall
+clock. Arithmetic from today goes through `logicalToday()` and `addDays()` in
+`lib/utils.ts`: "tomorrow" worked out from the wall clock at 3am, for a day
+that ends at 8, was the day after tomorrow, so Snooze skipped a day, the date
+picker's Tomorrow was wrong, Today's date line said Monday over Sunday's
+hours, and the log's Yesterday pointed at the day still being lived. Where the
+day starts as an instant, `dayStartsAt(iso)`.
+
 ### The chime
 The one sound the app makes, beyond the ambient noise a reader turns on
 themselves. It is a **struck glass**: three sine partials over a 1.5s
@@ -1623,8 +1640,10 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
     and a hovered or tapped one read out in its place. Only a sitting the
     timer ran is placed, each block spread across the hours it ran through;
     every sitting still counts toward its weekday's total at the row's end.
-    The clock in the chase row says when in the day; this says which
-    evenings.
+    Rows are the reader's days: with a day that ends at 8am, 3am after
+    Sunday sits on Sunday's row, and the hours run from 8am across, so a
+    night reads left to right instead of breaking at midnight. The clock in
+    the chase row says when in the day; this says which evenings.
   - **How long you sit** (`SittingLengths`): sittings sorted into lengths,
     under 15m to 2h+. The bar is how many sittings; the mono figure under
     each is the hours that length carried, since twenty short sittings and

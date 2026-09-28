@@ -19,8 +19,13 @@ export default function WeekRhythm({ rhythm, accent }: { rhythm: Rhythm; accent:
   const [hover, setHover] = useState<{ day: number; hour: number } | null>(null);
   const max = rhythm.peak?.seconds ?? 0;
   const dayMax = Math.max(1, ...rhythm.byWeekday);
+  // Columns start at the hour the reader's day does; readings are wall hours.
   const reading = hover
-    ? { ...hover, seconds: rhythm.grid[hover.day][hover.hour] }
+    ? {
+        day: hover.day,
+        hour: (hover.hour + rhythm.startHour) % 24,
+        seconds: rhythm.grid[hover.day][hover.hour],
+      }
     : rhythm.peak;
 
   return (
@@ -95,7 +100,7 @@ export default function WeekRhythm({ rhythm, accent }: { rhythm: Rhythm; accent:
           >
             {Array.from({ length: 24 }, (_, h) => (
               <span key={h} className="whitespace-nowrap font-mono text-[9px] text-muted-soft">
-                {AXIS[h] ?? ''}
+                {AXIS[(h + rhythm.startHour) % 24] ?? ''}
               </span>
             ))}
           </span>

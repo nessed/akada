@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { isoDate } from '@/lib/utils';
+import { addDays, isoDate } from '@/lib/utils';
 
 interface Props {
   value: string;
@@ -90,9 +90,7 @@ export default function DatePicker({
 
   const todayIso = isoDate();
   const selectedIso = value;
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowIso = isoDate(tomorrow);
+  const tomorrowIso = addDays(todayIso, 1);
 
   function selectDate(next: string) {
     onChange(next);

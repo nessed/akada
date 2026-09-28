@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@/lib/data';
-import { isoDate, formatHM } from '@/lib/utils';
+import { isoDate, formatHM, logicalToday } from '@/lib/utils';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 
 interface Props {
@@ -33,7 +33,9 @@ export default function Heatmap({ sessions, accent, weeks = 13, hideWeekends }: 
   }, [weeks]);
 
   const { cells, max, active } = useMemo(() => {
-    const today = new Date();
+    // The reader's today, so a small-hours session is on the grid's last day
+    // rather than the day after it.
+    const today = logicalToday();
     today.setHours(0, 0, 0, 0);
     const days = weeks * 7;
 
