@@ -462,6 +462,16 @@ says why it is there, in the serif italic under the heading: "You stopped a
 stopped for them (left running while the page was closed, a break past 45
 minutes, the 18 hour limit).
 
+### The blink on P
+
+`P` holds or lets go of the clock from any screen (`TimerHotkeys`), and it is
+pressed with the eyes on the book, not on the dock. So the page answers it:
+the whole screen blinks once, a veil of `ink` that closes in a tenth of a
+second and opens over a quarter, peaking at 16%. It darkens a daylight page
+and lifts the night one, sits over focus mode too, and catches no clicks.
+Only the key does it; a click on the dock already lands where the eye is.
+Reduced motion takes it away with every other animation.
+
 ### The forgotten timer
 The timer's heartbeat keeps a tab alive while it is open, so an open page
 says nothing about anybody being at it: a laptop left on the timer through

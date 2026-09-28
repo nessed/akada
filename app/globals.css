@@ -572,6 +572,24 @@ input[type='date']::-webkit-calendar-picker-indicator {
   animation: nav-mark 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) 0.06s backwards;
 }
 
+/* The blink `P` gives the page (TimerHotkeys): a veil of ink that closes
+   fast and opens a touch slower, the way a lid does. Over everything,
+   focus mode included, and it catches nothing. */
+.page-blink {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  background: var(--ink);
+  opacity: 0;
+  animation: page-blink 0.34s ease-out both;
+}
+@keyframes page-blink {
+  0% { opacity: 0; }
+  30% { opacity: 0.16; }
+  100% { opacity: 0; }
+}
+
 /* Anyone who has asked their system for less movement gets the app without
    it, including the tick, which otherwise pulses for a whole session. */
 @media (prefers-reduced-motion: reduce) {
