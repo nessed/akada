@@ -20,6 +20,7 @@ import {
 import type { SessionSegment } from './data';
 import { plannerDate, readPreferences } from './preferences';
 import { cancelChime, flushChime, primeChime, ringChime, scheduleChime } from './chime';
+import { playSound } from './sounds';
 import { logSessionFollowed } from './progression/log';
 import { idleTripped, quietPoint } from './timer-idle';
 import { isoDate } from './utils';
@@ -1071,6 +1072,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     // and one opened later is born suspended, so the chime arranged half an
     // hour from now would never sound. This click is the gesture.
     primeChime();
+    playSound('start');
     breakNoticeRef.current = null;
     // A new sitting is what "did the line work?" means. Fails silently and
     // does nothing at all if no Next Mark was shown recently.
@@ -1158,6 +1160,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     const running = activeRef.current;
     if (!running || running.phase !== 'break') return;
     cancelChime();
+    playSound('start');
     breakNoticeRef.current = null;
     applyActive(toFocusState(running, Date.now()));
   }, [applyActive]);
@@ -1247,6 +1250,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     // A break's closing note is on the audio clock and does not know the
     // break has stopped counting. Held, it would ring on the old time.
     if (current.phase === 'break') cancelChime();
+    playSound('pause');
     applyActive({
       ...current,
       accumulatedMs: Math.min(MAX_TIMER_MS, stretchMsAt(current, now)),
@@ -1276,6 +1280,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     // The start of a held block is a click, and a click is what the browser
     // wants before it lets the audio context run.
     primeChime();
+    playSound('start');
     applyActive(next);
   }, [applyActive]);
 
@@ -1292,6 +1297,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     const current = activeRef.current;
     if (!current) return null;
     cancelChime();
+    playSound('stop');
     breakNoticeRef.current = null;
     const now = Date.now();
     const staleRecovered = recoverStaleRunningTimer(current, now);

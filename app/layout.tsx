@@ -11,6 +11,7 @@ import TimerDocumentTitle from '@/components/TimerDocumentTitle';
 import TimerHotkeys from '@/components/TimerHotkeys';
 import PaperDoodle from '@/components/notebook/PaperDoodle';
 import SmoothScroll from '@/components/SmoothScroll';
+import TapSounds from '@/components/TapSounds';
 import { SITE_URL } from '@/lib/site-url';
 import './globals.css';
 
@@ -177,6 +178,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </SWRRoot>
         <PaperDoodle />
         <SmoothScroll />
+        <TapSounds />
       </body>
     </html>
   );

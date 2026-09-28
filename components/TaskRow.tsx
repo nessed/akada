@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { Course, Task } from '@/lib/data';
 import { dueLabel, formatHM } from '@/lib/utils';
 import { useTimerClock, useTimerState } from '@/lib/timer-context';
+import { playSound } from '@/lib/sounds';
 import SwipeRow from './SwipeRow';
 import HandCheck from './notebook/HandCheck';
 
@@ -117,6 +118,7 @@ export default function TaskRow({
     [],
   );
   function tick() {
+    playSound(task.completed ? 'untick' : 'tick');
     if (task.completed) {
       onToggle(task);
       return;
@@ -410,8 +412,22 @@ export default function TaskRow({
     <>
       <SwipeRow
         accent={color}
-        onComplete={task.completed ? undefined : () => onToggle(task)}
-        onDelete={onDelete ? () => onDelete(task) : undefined}
+        onComplete={
+          task.completed
+            ? undefined
+            : () => {
+                playSound('tick');
+                onToggle(task);
+              }
+        }
+        onDelete={
+          onDelete
+            ? () => {
+                playSound('paper');
+                onDelete(task);
+              }
+            : undefined
+        }
         surfaceClassName="relative bg-paper"
       >
         {row}
