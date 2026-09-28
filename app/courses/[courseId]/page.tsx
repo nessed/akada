@@ -117,10 +117,6 @@ export default function CoursePage() {
     !loading && !course && courseId !== '',
   );
 
-  // The progression layer reads through the same SWR caches as everything
-  // above, so this costs no request and cannot disagree with the hours.
-  const { progression } = useProgression();
-  const pageRecord = course ? (progression?.pages.get(course.id) ?? null) : null;
   const { reading: recall, available: recallAvailable } = useRecall();
 
   const courseSessions = useMemo(() => {
@@ -604,13 +600,7 @@ export default function CoursePage() {
               the Record's own vocabulary, not the course's work. */}
           {/* This course's page, with its marks in the margin. Faded when the
               course has been left alone, and never a word about the fading. */}
-          {pageRecord && (
-            <CoursePagePanel
-              course={course}
-              record={pageRecord}
-              ink={progression?.ink.get(course.id) ?? null}
-            />
-          )}
+          <CoursePageFromRecord course={course} />
 
           {/* What keeps going wrong, as Claude found it marking quizzes.
               Drawn only once there is something. */}
@@ -761,6 +751,20 @@ function ArchivedCourseView({
       </section>
     </PageShell>
   );
+}
+
+/**
+ * The course's page in the Record, when it has one. The progression layer
+ * reads through the same SWR caches as the rest of the page, so this costs
+ * no request and cannot disagree with the hours. Its own component because
+ * that reading moves every second while a sitting runs, and only the panel
+ * needs to move with it, not the page.
+ */
+function CoursePageFromRecord({ course }: { course: Course }) {
+  const { progression } = useProgression();
+  const record = progression?.pages.get(course.id) ?? null;
+  if (!record) return null;
+  return <CoursePagePanel course={course} record={record} ink={progression?.ink.get(course.id) ?? null} />;
 }
 
 function sortNewestFirst(sessions: Session[]): Session[] {

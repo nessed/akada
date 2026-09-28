@@ -258,12 +258,6 @@ export default function StatsPage() {
   const totalSec = totalSeconds(sessions);
   const dayCount = new Set(sessions.map((s) => s.date)).size;
   const avgPerDay = dayCount ? totalSec / dayCount : 0;
-  // One run in the whole app, counted in weeks. This line used to count
-  // days while Today, the Record and the guide all said a day off costs
-  // nothing, which is two streaks disagreeing on the same screen pair.
-  const { progression } = useProgression();
-  const run = progression?.runs.current ?? 0;
-
   // Editorial computed bits, the Vol./Issue mark, totals, and "best day"
   // headline that the redesigned stats page leans on.
   const semesterLabel = useMemo(() => {
@@ -384,9 +378,7 @@ export default function StatsPage() {
         }}
       >
         <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1.5 font-serif text-[13px] italic text-muted">
-          <span>
-            <Figure>{run}</Figure> {run === 1 ? 'week' : 'weeks'} running
-          </span>
+          <WeeksRunning />
           {avgPerDay > 0 && (
             <span>
               <Figure>{formatHM(avgPerDay)}</Figure> a day
@@ -700,6 +692,23 @@ function ChaseCard({
 function RollingFigure({ value, delay }: { value: number; delay: number }) {
   const shown = useCountUp(value, 900, delay);
   return <>{shown.toFixed(1)}</>;
+}
+
+/**
+ * One run in the whole app, counted in weeks. This line used to count days
+ * while Today, the Record and the guide all said a day off costs nothing,
+ * which is two streaks disagreeing on the same screen pair. Its own
+ * component because the reading moves every second while a sitting runs,
+ * and only this line needs to move with it.
+ */
+function WeeksRunning() {
+  const { progression } = useProgression();
+  const run = progression?.runs.current ?? 0;
+  return (
+    <span>
+      <Figure>{run}</Figure> {run === 1 ? 'week' : 'weeks'} running
+    </span>
+  );
 }
 
 /** A number inside a sentence: mono, upright, the app's ink. */
