@@ -112,7 +112,7 @@ export default function ActiveTimerDock() {
                   breakOver ? 'text-warn' : 'text-ink'
                 }`}
               >
-                {overrun ? '+' : ''}
+                {face.over ? '+' : ''}
                 {formatHHMMSS(shown)}
                 {showTotal ? (
                   <span className="ml-1.5 text-[11px] font-medium text-muted" title="In this session">
