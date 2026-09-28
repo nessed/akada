@@ -2967,7 +2967,7 @@ export function createServer(token: AuthenticatedToken) {
     {
       title: 'Propose how an Akada course is graded',
       description:
-        'Record how one of the signed-in student’s courses is graded, read off a course outline or syllabus the student has given you. Do not call this from the course code alone or from what the course usually looks like: only call it against an outline the student has actually attached. Cover every graded component with what it is worth as a percentage of the course, say whether the course is graded absolutely or relatively, and give a drop rule wherever not every item counts (put those items in a shared `group` and name that group in `drop_rules`). This does NOT take effect on its own: it lands as a proposal on the course page and the student has to accept it before Akada projects anything from it. Tell the student to go and look at it. Calling this again replaces any proposal not yet accepted, and never touches a scheme the student already accepted.',
+        'Record how one of the signed-in student’s courses is graded, read off a course outline or syllabus the student has given you. Do not call this from the course code alone or from what the course usually looks like: only call it against an outline the student has actually attached. Cover every graded component with what it is worth as a percentage of the course, say whether the course is graded absolutely or relatively, and give a drop rule wherever not every item counts (put those items in a shared `group` and name that group in `drop_rules`). An item under a drop rule carries what one counted item is worth: "best 5 of 7 response papers, 30%" is seven papers at 6 each with keep 5, so the weights come to 100 counting only the kept items. When revising a scheme the student already accepted, keep each component’s label as it is, because marks already entered move across by label. This does NOT take effect on its own: it lands as a proposal on the course page and the student has to accept it before Akada projects anything from it. Tell the student to go and look at it. Calling this again replaces any proposal not yet accepted, and never touches a scheme the student already accepted.',
       inputSchema: z.object({
         course_id: z.string().uuid(),
         components: z
@@ -3074,7 +3074,13 @@ export function createServer(token: AuthenticatedToken) {
           .eq('user_id', token.userId);
         if (error) return queryFailed('set_grading_scheme', 'grading write', error, 'Akada could not save that grading scheme.');
 
-        const total = components.reduce((acc, c) => acc + c.weight, 0);
+        // What counts once drop rules apply, the same total the course card
+        // shows: seven 6% papers keeping five are 30, not 42, and summing the
+        // raw rows sent a false "not 100%" back to the student.
+        const total = gradeStanding({
+          assessments: sanitizeAssessments(pending.assessments),
+          grading: { dropRules: pending.dropRules },
+        }).total;
         const rounded = Math.round(total * 100) / 100;
         return result({
           proposed: true,
