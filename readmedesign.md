@@ -591,6 +591,40 @@ the chrome takes the pointer: the empty middle of that screen is left to the
 tree, so a hand that reaches into it lands on a branch rather than on a sheet
 of glass laid over one.
 
+### The jellyfish
+The fan's alternative, picked in Settings › Timer ("The timer draws a tree /
+a jellyfish", `timerDrawing` in `lib/preferences.ts`). Same progress, same
+pull, same pause, same seed; only the drawing changes, so every rule above
+about the fan holds for it too. It is a moon jelly drawn the way an old
+natural-history plate would draw one, in the course colour, never a cartoon.
+
+- **Growth.** The bell comes first and is full size by 40% of the block, then
+  sixteen tentacles and four frilled oral arms hang out of it and lengthen.
+  The longest tentacle touches the frame's floor exactly at the target, the
+  same promise the fan makes about the top edge.
+- **The bell.** A scalloped rim, an inner curve, eight faint canals and the
+  four rings, washed in the course colour mixed toward the paper and edged a
+  shade darker.
+- **The beat.** While the clock runs the bell squeezes and lets go on the
+  same 4.2s cycle the held clock breathes on, quick in and slow out, and the
+  trails dip with it. It is the one drawing in the app that moves on its own,
+  so its loop never parks while it is open; reduced motion gets a still
+  jelly.
+- **Done.** Every other tentacle tip lights with a bead, the jelly's version
+  of the fan's flowers, and the pencil goes.
+- **The pencil sketch** is the whole jelly at full length, dotted, and it
+  beats with the bell so the ink never slides off its own underdrawing. **The
+  floor** is a pencil line with a few grains of sand in place of grass.
+- **The pull** moves the bell and the trails follow a few frames behind it,
+  like a wake. **A held clock** narrows and deepens the bell and draws the
+  trails in under it on the fold spring, and the beat stops.
+- **Open mode** hangs it lower, under the header, and on the night paper the
+  bell gives off a faint glow of its own colour.
+
+Geometry and drawing are in `lib/jelly.ts` (`buildJelly`, `drawJelly`,
+`jellyBeat`); `StudyFan` draws it when `species="jelly"`. The Settings row
+shows both choices as the real drawings, grown most of the way.
+
 ### The break
 A block that runs out keeps running, shown as overrun rather than stopped for
 the reader. A **break** is a stretch taken by hand, from the timer, and the

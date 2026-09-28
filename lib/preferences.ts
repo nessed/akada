@@ -36,6 +36,12 @@ export type HeadingFont = 'cormorant' | 'fraunces' | 'lora' | 'merriweather';
 export type UpNextSort = 'in-progress' | 'last-done' | 'overdue';
 export type Density = 'cozy' | 'comfy' | 'compact';
 export type PrimaryAccent = 'classic' | 'green';
+/**
+ * What the timer draws as a sitting goes on: the fan (lib/fan.ts) or the
+ * jellyfish (lib/jelly.ts). Both grow on the same progress, answer the same
+ * pull and close the same way on a pause; this only picks the drawing.
+ */
+export type TimerDrawing = 'tree' | 'jelly';
 
 export interface Preferences {
   paperTone: PaperTone;
@@ -61,6 +67,8 @@ export interface Preferences {
    * off, so a block that ends just keeps counting the way it always did.
    */
   breakMinutes: number;
+  /** The fan or the jellyfish. See `TimerDrawing`. */
+  timerDrawing: TimerDrawing;
   hideWeekends: boolean;
   /**
    * Derived, never set directly: true exactly when the chosen paper is the
@@ -92,6 +100,7 @@ const DEFAULTS: Preferences = {
   sessionSound: true,
   uiSounds: true,
   breakMinutes: 5,
+  timerDrawing: 'tree',
   hideWeekends: false,
   darkMode: true,
   dayEndingHour: 0,
@@ -107,6 +116,7 @@ const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
 const PRIMARY_ACCENT_VALUES: PrimaryAccent[] = ['classic', 'green'];
 /** Zero is "no break"; the rest are what the timer offers. */
 const BREAK_MINUTE_VALUES = [0, 5, 10, 15];
+const TIMER_DRAWING_VALUES: TimerDrawing[] = ['tree', 'jelly'];
 
 function sanitizePreferences(value: unknown): Preferences {
   const parsed = value && typeof value === 'object' ? (value as Partial<Preferences>) : {};
@@ -135,6 +145,9 @@ function sanitizePreferences(value: unknown): Preferences {
     breakMinutes: BREAK_MINUTE_VALUES.includes(Number(parsed.breakMinutes))
       ? Number(parsed.breakMinutes)
       : DEFAULTS.breakMinutes,
+    timerDrawing: TIMER_DRAWING_VALUES.includes(parsed.timerDrawing as TimerDrawing)
+      ? (parsed.timerDrawing as TimerDrawing)
+      : DEFAULTS.timerDrawing,
     darkMode: paperTone === 'night',
     dayEndingHour:
       typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 8

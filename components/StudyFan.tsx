@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildFan, drawFan, fanShades, mixHex, seedFrom, type FanTree } from '@/lib/fan';
+import { buildJelly, drawJelly, jellyBeat, jellyInk, type JellyShape } from '@/lib/jelly';
+import type { TimerDrawing } from '@/lib/preferences';
 
 interface Props {
   /** 0 to 1. At 1 the fan fills its frame; in block mode that is the target. */
@@ -35,6 +37,9 @@ interface Props {
       little shorter, the stem first and the tips after it, and opens back
       out when this goes false again. Never touches progress. */
   resting?: boolean;
+  /** What grows: the fan, or the jellyfish (lib/jelly.ts). The same
+      progress, pull and pause either way; only the drawing changes. */
+  species?: TimerDrawing;
   className?: string;
 }
 
@@ -63,6 +68,11 @@ const FOLD_REST = 0.34;
 const FOLD_SLACK = -0.05;
 const FOLD_STIFFNESS = 0.012;
 const FOLD_DAMPING = 0.13;
+/* The jelly's trails are sampled at this many points from the bell out to
+   the tips, and each is this many frames behind the one before, so a pull
+   moves the bell first and the tentacles follow it like a wake. */
+const TRAIL_SAMPLES = 13;
+const TRAIL_LAG = 1.4;
 
 /**
  * One axis of the sway: a spring that remembers where it has been.
@@ -142,10 +152,13 @@ export default function StudyFan({
   sketch = false,
   ground = false,
   resting = false,
+  species = 'tree',
   className = '',
 }: Props) {
+  const jelly = species === 'jelly';
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const treeRef = useRef<FanTree | null>(null);
+  const jellyRef = useRef<JellyShape | null>(null);
   const shownRef = useRef(0);
   const targetRef = useRef(progress);
   const rafRef = useRef<number | null>(null);
@@ -209,6 +222,7 @@ export default function StudyFan({
   // the shape itself changes, never on a progress tick.
   useEffect(() => {
     treeRef.current = buildFan(seedFrom(seed), depth, tripleP);
+    jellyRef.current = buildJelly(seedFrom(seed));
     shownRef.current = 0;
   }, [seed, depth, tripleP]);
 
@@ -235,10 +249,14 @@ export default function StudyFan({
           eye: light ? paper : mixHex(color, '#000000', 0.45),
         }
       : undefined;
+    const ink = jellyInk(color, paper, light);
+    const drift = new Array<number>(TRAIL_SAMPLES).fill(0);
+    let stretchNow = 0;
+    let contractNow = 0;
     const bends = new Array<number>(depth + 1).fill(0);
     const slack = new Array<number>(depth + 1).fill(0);
     const fold = new Array<number>(depth + 1).fill(0);
-    const lagMax = Math.round(depth * LAG_PER_DEPTH);
+    const lagMax = Math.max(Math.round(depth * LAG_PER_DEPTH), Math.round(TRAIL_SAMPLES * TRAIL_LAG));
     let disposed = false;
 
     /* The canvas is sized in device pixels so the strokes stay crisp on a
@@ -262,6 +280,28 @@ export default function StudyFan({
       const tree = treeRef.current;
       if (!ctx || !tree) return;
       const dpr = fit();
+      if (jelly) {
+        const shape = jellyRef.current;
+        if (!shape) return;
+        // A held jelly with no hand to settle it (reduced motion, or a
+        // drawing nobody can pull) is simply closed.
+        const closed = physics ? contractNow : restingRef.current ? 1 : 0;
+        drawJelly(ctx, shape, canvas.width, canvas.height, {
+          progress: shownRef.current,
+          ink,
+          padTop: padTop * dpr,
+          widthFill,
+          baseOffset: baseOffset * dpr,
+          px: dpr,
+          contract: closed,
+          pulse: reduced ? 0 : jellyBeat(performance.now()),
+          drift: physics ? drift : undefined,
+          stretch: physics ? stretchNow : 0,
+          sketch: sketch ? pencil : undefined,
+          ground: ground ? pencil : undefined,
+        });
+        return;
+      }
       drawFan(ctx, tree, canvas.width, canvas.height, {
         progress: shownRef.current,
         colors,
@@ -307,6 +347,12 @@ export default function StudyFan({
         // it grows from, so the fold travels up the tree.
         fold[d] = closing.at(lag);
       }
+      // The jelly reads the same springs: the sway as a wake down its
+      // trails, the stretch as their length, and the fold as its bell
+      // closing, where a full fold is a fully held jelly.
+      for (let i = 0; i < TRAIL_SAMPLES; i++) drift[i] = sway.at(Math.round(i * TRAIL_LAG));
+      stretchNow = stretch.at(0);
+      contractNow = Math.min(1, Math.max(0, closing.at(0) / FOLD_REST));
       return hand == null && sway.quiet > lagMax && stretch.quiet > lagMax && closing.quiet > lagMax;
     };
 
@@ -325,7 +371,10 @@ export default function StudyFan({
 
       paint();
 
-      if (grown && rested) {
+      /* A jelly swims for as long as it is open, so its loop never parks
+         while the clock runs. A hidden tab gets no frames anyway. */
+      const swimming = jelly && !reduced && !restingRef.current;
+      if (grown && rested && !swimming) {
         rafRef.current = null;
         return;
       }
@@ -351,7 +400,7 @@ export default function StudyFan({
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground]);
+  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly]);
 
   /* Taking hold. The pull is read off the distance travelled rather than the
      point grabbed, through a curve that gives most of its bend early and then
