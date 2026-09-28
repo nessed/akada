@@ -12,9 +12,8 @@ import RecallDeck from '@/components/recall/RecallDeck';
 import BeforeExamPanel from '@/components/today/BeforeExamPanel';
 import { useRecall } from '@/lib/recall/use-recall';
 import type { RecallState } from '@/lib/recall';
-import { useLiveSession } from '@/lib/use-live-session';
-import { withLiveSession } from '@/lib/live-session';
-import TaskRow from '@/components/TaskRow';
+import WithLiveSessions from '@/components/WithLiveSessions';
+import TaskRow, { useTaskRowTimer } from '@/components/TaskRow';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import {
   ComingPanel,
@@ -40,7 +39,6 @@ import { usePreferences } from '@/lib/preferences';
 import type { CatalogCourse } from '@/lib/catalog';
 import { courseFromCatalog, deriveCourseCode, parseCourseInput, weeklyGoalForCredits } from '@/lib/catalog';
 import {
-  formatHM,
   daysBetween,
   isoDate,
   PASTEL_PALETTE,
@@ -53,8 +51,7 @@ import {
   cleanCourseName,
   cleanTaskTitle,
 } from '@/lib/planner-safety';
-import { useTimer } from '@/lib/timer-context';
-import HandNote from '@/components/notebook/HandNote';
+import { useTimerState } from '@/lib/timer-context';
 import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
 import {
   useOnboardingComplete,
@@ -104,7 +101,7 @@ function DashboardFallback() {
 function DashboardPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { active, start, pause, resume, focusSeconds } = useTimer();
+  const { active, start } = useTimerState();
   const { notify } = useNotice();
   const { offer } = useUndo();
 
@@ -182,20 +179,6 @@ function DashboardPageContent() {
   function beginTimer(courseId: string, taskId: string | null) {
     start(courseId, taskId);
     router.push('/timer');
-  }
-
-  function handleStartTimerForTask(task: Task) {
-    handleStartTimer(task.courseId, task.id);
-  }
-
-  function handleStartTimer(courseId: string, taskId: string | null = null) {
-    // A timer already running on something else would be discarded, which is
-    // the one thing here worth stopping to ask about.
-    if (active && (active.courseId !== courseId || active.taskId !== taskId)) {
-      setPendingTimer({ courseId, taskId });
-      return;
-    }
-    beginTimer(courseId, taskId);
   }
 
   async function handleSkipTask(task: Task) {
@@ -435,37 +418,14 @@ function DashboardPageContent() {
     }
   }
 
-  /**
-   * What a row needs to show, and hold, the timer running on it.
-   *
-   * Passed as one unit because these four belong together: the pause control
-   * on a row used to draw whenever a timer was running and call a handler no
-   * page ever passed, so it was a live-looking button that did nothing. It
-   * now draws only when it is given something to do, and this keeps every
-   * list giving it the same thing.
-   */
-  function timerRowProps(task: Task) {
-    const mine = active?.taskId === task.id;
-    return {
-      running: mine,
-      paused: mine && Boolean(active?.isPaused),
-      runningLabel: mine ? formatHM(focusSeconds) : undefined,
-      onTogglePause: active?.isPaused ? resume : pause,
-    };
-  }
+  const timerRowProps = useTaskRowTimer();
 
-  // Reads through the same SWR caches as everything above, so it costs no
-  // request. See lib/progression for why none of it is stored.
-  const { progression } = useProgression();
-  const run = progression?.runs.current ?? 0;
-  /* The sitting on the clock, folded into what the panels draw. The hour
-     strokes fill, the week's bar grows and "2h to go" counts down while the
-     reader sits, rather than all of it jumping at once when the sitting is
-     logged. Only the drawings read this list; anything that decides
-     something (what is up next, which course has gone quiet) still reads
-     the record. */
-  const live = useLiveSession();
-  const shownSessions = useMemo(() => withLiveSession(sessions, live), [sessions, live]);
+  /* The sitting on the clock is folded into what the panels draw, each
+     under WithLiveSessions: the hour strokes fill, the week's bar grows and
+     "2h to go" counts down while the reader sits, rather than all of it
+     jumping at once when the sitting is logged. Only the drawings read it,
+     so only they re-render with the clock; anything that decides something
+     (what is up next, which course has gone quiet) still reads the record. */
   /* What is due to be recalled, within the day's few. Reads the same caches
      as everything above, plus the recall rows. */
   const { reading: recall, available: recallAvailable } = useRecall();
@@ -615,23 +575,25 @@ function DashboardPageContent() {
         <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
           <div className="min-w-0">
             {upNext ? (
-              <UpNext
-                task={upNext}
-                course={courses.find((c) => c.id === upNext.courseId)}
-                onStart={(task, el, untimed) => openStartFor(task, el, untimed)}
-                onDone={handleToggleTask}
-                onSnooze={handleSnoozeTask}
-                onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
-                sort={prefs.upNextSort}
-                onSortChange={(upNextSort) => updatePrefs({ upNextSort })}
-                sessions={shownSessions}
-                onToggleStep={handleToggleStep}
-                then={
-                  thenTask
-                    ? { task: thenTask, course: courses.find((c) => c.id === thenTask.courseId) }
-                    : null
-                }
-              />
+              <WithLiveSessions sessions={sessions}>{(shown) => (
+                <UpNext
+                  task={upNext}
+                  course={courses.find((c) => c.id === upNext.courseId)}
+                  onStart={(task, el, untimed) => openStartFor(task, el, untimed)}
+                  onDone={handleToggleTask}
+                  onSnooze={handleSnoozeTask}
+                  onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
+                  sort={prefs.upNextSort}
+                  onSortChange={(upNextSort) => updatePrefs({ upNextSort })}
+                  sessions={shown}
+                  onToggleStep={handleToggleStep}
+                  then={
+                    thenTask
+                      ? { task: thenTask, course: courses.find((c) => c.id === thenTask.courseId) }
+                      : null
+                  }
+                />
+              )}</WithLiveSessions>
             ) : !tasksLoading && tasks.length === 0 ? (
               <GettingStarted
                 course={courses[0]}
@@ -738,15 +700,17 @@ function DashboardPageContent() {
             </div>
           </div>
           <div className="mt-8 xl:mt-0">
-            <TodayHours
-              sessions={shownSessions}
-              courses={courses}
-              goalHours={settings?.dailyGoalHours ?? 4}
-            />
+            <WithLiveSessions sessions={sessions}>{(shown) => (
+              <TodayHours
+                sessions={shown}
+                courses={courses}
+                goalHours={settings?.dailyGoalHours ?? 4}
+              />
+            )}</WithLiveSessions>
             {/* The week against its goal, at the same size as the day: it is
                 one of the two numbers Today is read for. */}
             <div className="mt-7 border-t border-line pt-7">
-              <WeekHours courses={courses} sessions={shownSessions} />
+              <WithLiveSessions sessions={sessions}>{(shown) => <WeekHours courses={courses} sessions={shown} />}</WithLiveSessions>
             </div>
             {/* Next Mark. One quiet line naming the nearest true thing, and
                 nothing when nothing is close. A reward line rather than a
@@ -771,7 +735,7 @@ function DashboardPageContent() {
 
             {/* The courses: each one's hours this week against its goal and
                 what it has open, a row of four under the fold. */}
-            <CourseLine courses={courses} sessions={shownSessions} tasks={tasks} />
+            <WithLiveSessions sessions={sessions}>{(shown) => <CourseLine courses={courses} sessions={shown} tasks={tasks} />}</WithLiveSessions>
           </div>
 
           {/* The readings: what is coming, the week, and the two numbers that
@@ -792,10 +756,7 @@ function DashboardPageContent() {
               {/* Continuity is measured in weeks now, not days. A daily
                   streak asks a student to study on the Saturday of a wedding
                   and then punishes them for the wedding. */}
-              <span>
-                <span className="font-mono text-[11px] not-italic tabular-nums text-ink">{run}</span>{' '}
-                {run === 1 ? 'week' : 'weeks'} running
-              </span>
+              <WeeksRunning />
               {semesterInfo && (
                 <span>
                   day{' '}
@@ -1115,6 +1076,22 @@ function DashboardPageContent() {
       />
 
     </PageShell>
+  );
+}
+
+/**
+ * Continuity in weeks. Its own component because the run is read with the
+ * sitting on the clock, which moves every second, and only this line needs
+ * to move with it.
+ */
+function WeeksRunning() {
+  const { progression } = useProgression();
+  const run = progression?.runs.current ?? 0;
+  return (
+    <span>
+      <span className="font-mono text-[11px] not-italic tabular-nums text-ink">{run}</span>{' '}
+      {run === 1 ? 'week' : 'weeks'} running
+    </span>
   );
 }
 

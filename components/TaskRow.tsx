@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Course, Task } from '@/lib/data';
-import { dueLabel } from '@/lib/utils';
+import { dueLabel, formatHM } from '@/lib/utils';
+import { useTimerClock, useTimerState } from '@/lib/timer-context';
 import SwipeRow from './SwipeRow';
 import HandCheck from './notebook/HandCheck';
 
@@ -35,8 +36,6 @@ interface Props {
   running?: boolean;
   /** Whether that running timer is currently held. */
   paused?: boolean;
-  /** Live clock, only passed for the row the timer is on. */
-  runningLabel?: string;
   onToggle: (task: Task) => void;
   onStartTimer: (task: Task, el: HTMLElement) => void;
   /**
@@ -79,7 +78,6 @@ export default function TaskRow({
   focused = false,
   running = false,
   paused = false,
-  runningLabel,
   onToggle,
   onStartTimer,
   onTogglePause,
@@ -306,7 +304,7 @@ export default function TaskRow({
             style={{ color }}
             aria-label={paused ? 'Timer held on this task' : 'Timer running on this task'}
           >
-            {runningLabel ?? (paused ? 'held' : 'running')}
+            <FocusSoFar />
           </span>
         )}
       </span>
@@ -560,4 +558,34 @@ function MenuItem({
       {label}
     </button>
   );
+}
+
+/**
+ * The running row's clock. Its own component so only this span re-renders
+ * every second, not the list the row sits in.
+ */
+function FocusSoFar() {
+  const { focusSeconds } = useTimerClock();
+  return <>{formatHM(focusSeconds)}</>;
+}
+
+/**
+ * What a row needs to show, and hold, the timer running on it.
+ *
+ * Passed as one unit because these belong together: the pause control on a
+ * row used to draw whenever a timer was running and call a handler no page
+ * ever passed, so it was a live-looking button that did nothing. It now
+ * draws only when it is given something to do, and this keeps every list
+ * giving it the same thing.
+ */
+export function useTaskRowTimer() {
+  const { active, pause, resume } = useTimerState();
+  return (task: Task) => {
+    const mine = active?.taskId === task.id;
+    return {
+      running: mine,
+      paused: mine && Boolean(active?.isPaused),
+      onTogglePause: active?.isPaused ? resume : pause,
+    };
+  };
 }

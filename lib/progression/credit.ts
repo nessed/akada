@@ -165,8 +165,3 @@ export function readCredit(courses: Course[], sessions: Session[], tasks: Task[]
 
   return ordered;
 }
-
-/** The day's entry, or an empty one, so callers never branch on absence. */
-export function creditOn(ledger: DayCredit[], iso: string): DayCredit | null {
-  return ledger.find((d) => d.iso === iso) ?? null;
-}

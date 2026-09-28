@@ -268,12 +268,6 @@ export default function StatsPage() {
   const totalSec = totalSeconds(sessions);
   const dayCount = new Set(sessions.map((s) => s.date)).size;
   const avgPerDay = dayCount ? totalSec / dayCount : 0;
-  // One run in the whole app, counted in weeks. This line used to count
-  // days while Today, the Record and the guide all said a day off costs
-  // nothing, which is two streaks disagreeing on the same screen pair.
-  const { progression } = useProgression();
-  const run = progression?.runs.current ?? 0;
-
   // Editorial computed bits, the Vol./Issue mark, totals, and "best day"
   // headline that the redesigned stats page leans on.
   const semesterLabel = useMemo(() => {
@@ -344,12 +338,6 @@ export default function StatsPage() {
   const goalSeconds = lensCourses.reduce((a, c) => a + Math.max(0, c.weeklyGoalHours || 0), 0) * 3600;
   const lensName = filter === 'all' ? null : courses.find((c) => c.id === filter)?.code ?? null;
 
-  // The masthead figure rolls up to the term's hours rather than being
-  // printed there. Held at a tenth, the way it is written.
-  const rolling = useCountUp(loading ? 0 : totalSec / 3600, 1400, 150);
-  const totalWhole = Math.floor(rolling);
-  const totalDecimal = `.${Math.min(9, Math.floor((rolling - totalWhole) * 10))}`;
-
   // Best day of week, name + duration. Read out in the ledger line.
   const bestDay = useMemo(() => {
     const byDow: Record<number, number> = {};
@@ -413,8 +401,7 @@ export default function StatsPage() {
 
         <div className="shrink-0 md:text-right">
           <span className="font-mono text-[44px] font-semibold leading-[0.9] tracking-[-0.04em] tabular-nums text-ink md:text-[56px]">
-            {totalWhole}
-            <span className="text-muted-soft">{totalDecimal}</span>
+            <RollingHours hours={loading ? 0 : totalSec / 3600} />
           </span>
           <p className="m-0 mt-1 text-[12px] text-muted">hours logged</p>
           {lookLike && (
@@ -439,9 +426,7 @@ export default function StatsPage() {
         }}
       >
         <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1.5 font-serif text-[13px] italic text-muted">
-          <span>
-            <Figure>{run}</Figure> {run === 1 ? 'week' : 'weeks'} running
-          </span>
+          <WeeksRunning />
           {avgPerDay > 0 && (
             <span>
               <Figure>{formatHM(avgPerDay)}</Figure> a day
@@ -474,7 +459,6 @@ export default function StatsPage() {
                 active={filter === c.id}
                 onClick={() => setFilter(c.id)}
                 label={c.code}
-                color={c.color}
                 tint={resolveTint(c.color, c.tint)}
               />
             ))}
@@ -733,6 +717,23 @@ function ChaseCard({
   );
 }
 
+/**
+ * One run in the whole app, counted in weeks. This line used to count days
+ * while Today, the Record and the guide all said a day off costs nothing,
+ * which is two streaks disagreeing on the same screen pair. Its own
+ * component because the reading moves every second while a sitting runs,
+ * and only this line needs to move with it.
+ */
+function WeeksRunning() {
+  const { progression } = useProgression();
+  const run = progression?.runs.current ?? 0;
+  return (
+    <span>
+      <Figure>{run}</Figure> {run === 1 ? 'week' : 'weeks'} running
+    </span>
+  );
+}
+
 /** A number inside a sentence: mono, upright, the app's ink. */
 function Figure({ children }: { children: React.ReactNode }) {
   return (
@@ -750,15 +751,31 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
+/**
+ * The masthead figure, which rolls up to the term's hours rather than being
+ * printed there. Held at a tenth, the way it is written. Its own component
+ * so the count-up re-renders this figure each frame, not the whole page.
+ */
+function RollingHours({ hours }: { hours: number }) {
+  const rolling = useCountUp(hours, 1400, 150);
+  const whole = Math.floor(rolling);
+  const decimal = `.${Math.min(9, Math.floor((rolling - whole) * 10))}`;
+  return (
+    <>
+      {whole}
+      <span className="text-muted-soft">{decimal}</span>
+    </>
+  );
+}
+
 interface ChipProps {
   active: boolean;
   onClick: () => void;
   label: string;
-  color?: string;
   tint?: string;
 }
 
-function FilterChip({ active, onClick, label, color, tint }: ChipProps) {
+function FilterChip({ active, onClick, label, tint }: ChipProps) {
   return (
     <button
       type="button"

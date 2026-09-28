@@ -1,6 +1,7 @@
 import type { Course, Session, SessionSegment, Task } from '../data';
 import { isLoggableDuration } from '../session-safety';
 import { LONG_SITTING_SECONDS } from '../timer-idle';
+import { mondayOf } from '../utils';
 import { medianPace, readingPairs, type ReadingPair } from '../derive';
 import {
   HABIT_MIN_BLOCKS,
@@ -150,18 +151,6 @@ function quantile(sorted: number[], q: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
 }
 
-function localIso(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function mondayOf(iso: string): string {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return localIso(d);
-}
 
 /**
  * When a sitting happened, as a moment on the local clock, or null when the

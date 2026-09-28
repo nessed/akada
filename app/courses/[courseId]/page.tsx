@@ -14,7 +14,7 @@ import ConfirmSheet from '@/components/ConfirmSheet';
 import DatePicker from '@/components/DatePicker';
 import DueDateBadge from '@/components/DueDateBadge';
 import LoadingIndicator from '@/components/LoadingIndicator';
-import TaskRow from '@/components/TaskRow';
+import TaskRow, { useTaskRowTimer } from '@/components/TaskRow';
 import ReorderList from '@/components/ReorderList';
 import HourStrokes from '@/components/HourStrokes';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
@@ -32,7 +32,7 @@ import type { Course, Session, Task } from '@/lib/data';
 import { compareTaskOrder } from '@/lib/data/task-order';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { isLoggableDuration } from '@/lib/session-safety';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import {
   formatHM,
   formatRelativeDate,
@@ -78,7 +78,7 @@ export default function CoursePage() {
   const router = useRouter();
   const { notify } = useNotice();
   const { offer } = useUndo();
-  const { active, start, pause, resume, focusSeconds } = useTimer();
+  const { active, start } = useTimerState();
 
   const { onboarded, isLoading: onboardingLoading, error: onboardingError } =
     useOnboardingComplete();
@@ -117,10 +117,6 @@ export default function CoursePage() {
     !loading && !course && courseId !== '',
   );
 
-  // The progression layer reads through the same SWR caches as everything
-  // above, so this costs no request and cannot disagree with the hours.
-  const { progression } = useProgression();
-  const pageRecord = course ? (progression?.pages.get(course.id) ?? null) : null;
   const { reading: recall, available: recallAvailable } = useRecall();
 
   const courseSessions = useMemo(() => {
@@ -200,15 +196,6 @@ export default function CoursePage() {
     beginTimer();
   }
 
-  function handleStartTimerForTask(task: Task) {
-    if (active) {
-      router.push('/timer');
-      return;
-    }
-    start(task.courseId, task.id);
-    router.push('/timer');
-  }
-
   async function skipTask(task: Task) {
     try {
       await skipTaskOptimistic(task);
@@ -229,24 +216,7 @@ export default function CoursePage() {
     }
   }
 
-  /**
-   * What a row needs to show, and hold, the timer running on it.
-   *
-   * Passed as one unit because these four belong together: the pause control
-   * on a row used to draw whenever a timer was running and call a handler no
-   * page ever passed, so it was a live-looking button that did nothing. It
-   * now draws only when it is given something to do, and this keeps every
-   * list giving it the same thing.
-   */
-  function timerRowProps(task: Task) {
-    const mine = active?.taskId === task.id;
-    return {
-      running: mine,
-      paused: mine && Boolean(active?.isPaused),
-      runningLabel: mine ? formatHM(focusSeconds) : undefined,
-      onTogglePause: active?.isPaused ? resume : pause,
-    };
-  }
+  const timerRowProps = useTaskRowTimer();
 
   /**
    * Reading a task, which is where its description and its steps live.
@@ -630,13 +600,7 @@ export default function CoursePage() {
               the Record's own vocabulary, not the course's work. */}
           {/* This course's page, with its marks in the margin. Faded when the
               course has been left alone, and never a word about the fading. */}
-          {pageRecord && (
-            <CoursePagePanel
-              course={course}
-              record={pageRecord}
-              ink={progression?.ink.get(course.id) ?? null}
-            />
-          )}
+          <CoursePageFromRecord course={course} />
 
           {/* What keeps going wrong, as Claude found it marking quizzes.
               Drawn only once there is something. */}
@@ -787,6 +751,20 @@ function ArchivedCourseView({
       </section>
     </PageShell>
   );
+}
+
+/**
+ * The course's page in the Record, when it has one. The progression layer
+ * reads through the same SWR caches as the rest of the page, so this costs
+ * no request and cannot disagree with the hours. Its own component because
+ * that reading moves every second while a sitting runs, and only the panel
+ * needs to move with it, not the page.
+ */
+function CoursePageFromRecord({ course }: { course: Course }) {
+  const { progression } = useProgression();
+  const record = progression?.pages.get(course.id) ?? null;
+  if (!record) return null;
+  return <CoursePagePanel course={course} record={record} ink={progression?.ink.get(course.id) ?? null} />;
 }
 
 function sortNewestFirst(sessions: Session[]): Session[] {

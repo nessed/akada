@@ -312,12 +312,6 @@ export function requireIsoDate(value: unknown, label: string): string {
   return value;
 }
 
-export function requireNonEmpty(value: unknown, label: string, maxLength: number): string {
-  const cleaned = cleanText(value, maxLength);
-  if (!cleaned) throw new Error(`${label} is required`);
-  return cleaned;
-}
-
 export function hasDuplicateCourseCodes(courses: { code: string }[]): boolean {
   const seen = new Set<string>();
   for (const course of courses) {

@@ -13,17 +13,13 @@ import { loadQuizDraft } from '@/lib/quiz/draft';
 import { sittingSuggestions, sittingWindow } from '@/lib/session-suggestions';
 import { settled } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import { keepLine } from '@/lib/recall/actions';
 import { formatHM, isoDate } from '@/lib/utils';
 import { LONG_SITTING_SECONDS } from '@/lib/timer-idle';
 import { useNotice } from './Notice';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from './SessionLogModal';
-
-interface Props {
-  onResolved?: () => void;
-}
 
 /**
  * How many log sheets are on the page.
@@ -39,13 +35,17 @@ export function isLogSheetMounted(): boolean {
   return mountedSheets > 0;
 }
 
-export default function PendingSessionLogSheet({ onResolved }: Props) {
-  const { pendingLog, clearPendingLog } = useTimer();
+export default function PendingSessionLogSheet() {
+  const { active, pendingLog, clearPendingLog } = useTimerState();
   const { notify } = useNotice();
   const { courses, isLoading: coursesLoading } = useCourses();
   const { tasks } = useTasks();
-  const { quizzes } = useQuizzes();
-  const { notes } = useNotes();
+  // Notes and quizzes only feed the suggestions on a sitting's sheet, and
+  // this sheet is on every screen. They load while a sitting runs, so they
+  // are here by the time it ends, and are not read at all otherwise.
+  const sittingLive = Boolean(active || pendingLog);
+  const { quizzes } = useQuizzes(sittingLive);
+  const { notes } = useNotes(sittingLive);
   // The pending sitting is folded into this reading, so `sitting` is what
   // saving it will do to the record, read before the reader decides.
   const { sitting, logged } = useProgression();
@@ -135,9 +135,8 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
   useEffect(() => {
     if (pendingLog && !coursesLoading && courses.length > 0 && !course) {
       clearPendingLog();
-      onResolved?.();
     }
-  }, [clearPendingLog, course, courses.length, coursesLoading, onResolved, pendingLog]);
+  }, [clearPendingLog, course, courses.length, coursesLoading, pendingLog]);
 
   async function handleSave(
     note: string,
@@ -205,7 +204,6 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       }
       setOpen(false);
       clearPendingLog();
-      onResolved?.();
     } catch (error) {
       console.error('Failed to save session:', error);
       setSaveError('Did not save. Kept on this device.');
@@ -218,7 +216,6 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     setOpen(false);
     setSaveError('');
     clearPendingLog();
-    onResolved?.();
   }
 
   return (
@@ -255,7 +252,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
   );
 }
 
-type PendingLog = NonNullable<ReturnType<typeof useTimer>['pendingLog']>;
+type PendingLog = NonNullable<ReturnType<typeof useTimerState>['pendingLog']>;
 
 function clockOf(ms: number): string {
   return new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });

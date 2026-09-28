@@ -564,18 +564,7 @@ export class SupabaseAdapter implements DataProvider {
 
   async getCourses(): Promise<Course[]> {
     const uid = await this.userId();
-    const semesterId = await this.activeSemesterId(uid);
-    const { data, error } = await this.supabase
-      .from('courses')
-      .select('*')
-      .eq('user_id', uid)
-      .eq('semester_id', semesterId)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    // Sorted here rather than in the query: .order('sort_order') would be a
-    // hard error against a database that has not run the latest schema, and
-    // created_at is already the tie-break the ordering falls back to.
-    return sortCourses((data as CourseRow[]).map(rowToCourse));
+    return this.getCoursesForSemester(await this.activeSemesterId(uid));
   }
 
   async getCoursesForSemester(semesterId: string): Promise<Course[]> {
@@ -805,7 +794,7 @@ export class SupabaseAdapter implements DataProvider {
       .eq('semester_id', semesterId)
       .order('date', { ascending: false });
     if (error) throw error;
-    return this.withSegments(uid, (data as SessionRow[]).map(rowToSession));
+    return (data as SessionRow[]).map(rowToSession);
   }
 
   async addSession(input: Omit<Session, 'id' | 'createdAt'>): Promise<Session> {
@@ -893,35 +882,6 @@ export class SupabaseAdapter implements DataProvider {
       }
     }
     return session;
-  }
-
-  async updateSession(id: string, updates: Partial<Session>): Promise<Session> {
-    const uid = await this.userId();
-    const patch: Record<string, unknown> = {};
-    if (updates.courseId !== undefined) {
-      const courseId = cleanText(updates.courseId, 80);
-      if (!courseId) throw new Error('Course is required');
-      patch.course_id = courseId;
-    }
-    if (updates.taskId !== undefined) patch.task_id = updates.taskId ? cleanText(updates.taskId, 80) : null;
-    if (updates.date !== undefined) patch.date = requireIsoDate(updates.date, 'Session date');
-    if (updates.durationSeconds !== undefined) {
-      if (!isLoggableDuration(updates.durationSeconds)) {
-        throw new Error('Session duration must be greater than zero');
-      }
-      patch.duration_seconds = clampSessionSeconds(updates.durationSeconds);
-    }
-    if (updates.note !== undefined) patch.note = cleanSessionNote(updates.note);
-
-    const { data, error } = await this.supabase
-      .from('sessions')
-      .update(patch)
-      .eq('id', id)
-      .eq('user_id', uid)
-      .select()
-      .single();
-    if (error) throw error;
-    return rowToSession(data as SessionRow);
   }
 
   async deleteSession(id: string): Promise<void> {
@@ -1249,27 +1209,6 @@ export class SupabaseAdapter implements DataProvider {
   async createSemester(input: NewSemesterInput): Promise<Semester> {
     const uid = await this.userId();
     return this.createSemesterFor(uid, input);
-  }
-
-  async updateSemester(id: string, updates: NewSemesterInput): Promise<Semester> {
-    const uid = await this.userId();
-    const patch: Record<string, unknown> = {};
-    if (updates.label !== undefined) patch.label = cleanText(updates.label ?? '', 60);
-    if (updates.startDate !== undefined) patch.start_date = cleanOptionalDate(updates.startDate);
-    if (updates.endDate !== undefined) patch.end_date = cleanOptionalDate(updates.endDate);
-
-    const [{ data, error }, activeId] = await Promise.all([
-      this.supabase
-        .from('semesters')
-        .update(patch)
-        .eq('id', id)
-        .eq('user_id', uid)
-        .select()
-        .single(),
-      this.readActiveSemesterId(uid),
-    ]);
-    if (error) throw error;
-    return rowToSemester(data as SemesterRow, activeId);
   }
 
   async deleteSemester(id: string): Promise<void> {

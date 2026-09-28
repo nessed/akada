@@ -1,5 +1,4 @@
 import type { DataProvider } from './data-provider';
-import { LocalAdapter } from './local-adapter';
 import { SupabaseAdapter } from './supabase-adapter';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -28,9 +27,13 @@ if (!hasSupabaseConfig && !localFallbackEnabled) {
   throw new Error(MISSING_SUPABASE_CONFIG_MESSAGE);
 }
 
-export const db: DataProvider = hasSupabaseConfig
-  ? new SupabaseAdapter()
-  : new LocalAdapter();
+// The Supabase variables are inlined at build time, so in a configured build
+// the second branch is dead and the bundler leaves the whole local adapter out
+// of the client JS. A static import would ship it to every production visitor.
+export const db: DataProvider =
+  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ? new SupabaseAdapter()
+    : new (require('./local-adapter') as typeof import('./local-adapter')).LocalAdapter();
 
 export type { DataProvider } from './data-provider';
 export type {

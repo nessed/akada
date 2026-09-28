@@ -43,7 +43,6 @@ export interface DataProvider {
   // Sessions, scoped to the active semester, same rule as courses.
   getSessions(filters?: SessionFilters): Promise<Session[]>;
   addSession(session: Omit<Session, 'id' | 'createdAt'>): Promise<Session>;
-  updateSession(id: string, updates: Partial<Session>): Promise<Session>;
   deleteSession(id: string): Promise<void>;
 
   // Tasks, scoped to the active semester, same rule as courses.
@@ -127,10 +126,14 @@ export interface DataProvider {
   getSemesters(): Promise<Semester[]>;
   /** Creates a new semester and makes it active. Existing courses/tasks/sessions stay exactly where they were, they just stop being the default view. */
   createSemester(input: NewSemesterInput): Promise<Semester>;
-  updateSemester(id: string, updates: NewSemesterInput): Promise<Semester>;
   deleteSemester(id: string): Promise<void>;
   /** Read-only archive lookups for a specific (usually non-active) semester. */
   getCoursesForSemester(semesterId: string): Promise<Course[]>;
+  /**
+   * A closed term's sessions for its totals and its log, without their
+   * segments: nothing that reads the archive draws a sitting's shape, and
+   * the segment read pages through every later term as well.
+   */
   getSessionsForSemester(semesterId: string): Promise<Session[]>;
 
   // Onboarding

@@ -29,18 +29,6 @@ export function whenWords(iso: string, today: string): string {
     .toLowerCase()}`;
 }
 
-/** What the reader did with a thing on the day it entered memory. */
-export function originVerb(source: RecallSource): string {
-  switch (source) {
-    case 'reading':
-      return 'read';
-    case 'task':
-      return 'finished';
-    default:
-      return 'kept';
-  }
-}
-
 /** The button that sends the reader back to the material after it slipped. */
 export function studyWords(source: RecallSource): string {
   switch (source) {

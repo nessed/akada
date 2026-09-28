@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Course, Task } from '@/lib/data';
 import { HABIT_MIN_BLOCKS, roughMinutes, settled } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 
 /**
  * The start popover.
@@ -84,7 +84,7 @@ interface Props {
 
 export default function StartTimerPopover({ target, onClose, onStarted, stayPut, raised }: Props) {
   const router = useRouter();
-  const { start } = useTimer();
+  const { start } = useTimerState();
   const { logged } = useProgression();
   const [minutes, setMinutes] = useState<number | null>(45);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);

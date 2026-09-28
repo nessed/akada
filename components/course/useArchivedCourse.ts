@@ -27,12 +27,16 @@ export function useArchivedCourse(courseId: string | null, enabled: boolean) {
   const { data, isLoading, error } = useSWR(
     enabled && courseId ? ['archived-course', courseId] : null,
     async ([, id]: [string, string]): Promise<ArchivedCourse | null> => {
-      const semesters = await db.getSemesters();
-      for (const semester of semesters) {
-        if (semester.isActive) continue;
-        const courses = await db.getCoursesForSemester(semester.id);
-        const course = courses.find((item) => item.id === id);
+      const closed = (await db.getSemesters()).filter((semester) => !semester.isActive);
+      // Every closed term's courses at once rather than one term after
+      // another. Read in order, so the first term, newest first, that has the
+      // course wins, and a failed read only matters if it comes before it.
+      const courseLists = await Promise.allSettled(closed.map((semester) => db.getCoursesForSemester(semester.id)));
+      for (const [index, read] of courseLists.entries()) {
+        if (read.status === 'rejected') throw read.reason;
+        const course = read.value.find((item) => item.id === id);
         if (!course) continue;
+        const semester = closed[index];
         const sessions = await db.getSessionsForSemester(semester.id);
         return {
           course,

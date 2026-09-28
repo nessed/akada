@@ -1,6 +1,6 @@
 import type { Session } from './data';
 import { clampSessionSeconds, isLoggableDuration } from './session-safety';
-import { isoDate, startOfWeek } from './utils';
+import { addDays, isoDate, startOfWeek } from './utils';
 import type { Habits } from './progression';
 import { HABIT_MIN_WEEKS } from './progression/constants';
 
@@ -28,11 +28,6 @@ function byDay(sessions: Session[]): Map<string, number> {
   return out;
 }
 
-function shiftIso(iso: string, days: number): string {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return isoDate(d);
-}
 
 /* ------------------------------------------------------------------ */
 /* Records                                                              */
@@ -72,7 +67,7 @@ export function readRecords(sessions: Session[], today = isoDate()): Records {
   // a ceiling) still counts as hours, but it is not a length they chose, so
   // it sets no record.
   const rows = logged(sessions).filter((s) => !s.recovery);
-  const weekAgo = shiftIso(today, -6);
+  const weekAgo = addDays(today, -6);
 
   // Longest sitting, against the longest one today.
   let sitting: Best = { best: 0, at: null, current: 0, fresh: false };
@@ -117,14 +112,14 @@ export function readRecords(sessions: Session[], today = isoDate()): Records {
   let length = 0;
   let prev: string | null = null;
   for (const iso of sorted) {
-    length = prev && shiftIso(prev, 1) === iso ? length + 1 : 1;
+    length = prev && addDays(prev, 1) === iso ? length + 1 : 1;
     if (length > run.best) {
       run.best = length;
       run.at = iso;
     }
     prev = iso;
   }
-  if (prev && (prev === today || prev === shiftIso(today, -1))) run.current = length;
+  if (prev && (prev === today || prev === addDays(today, -1))) run.current = length;
   run.fresh = run.best > 1 && run.current === run.best;
 
   const weeksSeen = new Set(rows.map((s) => isoDate(startOfWeek(new Date(s.date + 'T12:00:00')))));
@@ -179,7 +174,7 @@ function runningFrom(days: Map<string, number>, from: string): number[] {
   const out: number[] = [];
   let sum = 0;
   for (let i = 0; i < 7; i++) {
-    sum += days.get(shiftIso(from, i)) ?? 0;
+    sum += days.get(addDays(from, i)) ?? 0;
     out.push(sum);
   }
   return out;
@@ -194,7 +189,7 @@ function priorMondays(days: Map<string, number>, mondayIso: string): string[] {
   for (
     let m = isoDate(startOfWeek(new Date(first + 'T12:00:00')));
     m < mondayIso;
-    m = shiftIso(m, 7)
+    m = addDays(m, 7)
   ) {
     out.push(m);
   }
@@ -218,7 +213,7 @@ export function readPace(
   const days = byDay(sessions);
   const monday = startOfWeek(new Date(today + 'T12:00:00'));
   const mondayIso = isoDate(monday);
-  const lastMondayIso = shiftIso(mondayIso, -7);
+  const lastMondayIso = addDays(mondayIso, -7);
   const todayIndex = Math.round(
     (new Date(today + 'T12:00:00').getTime() - new Date(mondayIso + 'T12:00:00').getTime()) /
       DAY_MS,
