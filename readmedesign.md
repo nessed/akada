@@ -1081,9 +1081,15 @@ A press makes a small sound, the way a pencil makes one on a desk. It is a
   remembered clearly.
 - **Paper** for something put away: a swipe to delete, a recall card let go.
 
-The timer gets a **mallet**, wood left to ring: `start` is two bars a fifth
-apart going up (a sitting begun, resumed, or a break ended early), `pause` one
-low bar, `stop` the fifth coming home. Every strike is detuned a percent or two
+The timer's `start` is a **mallet**, wood left to ring: two bars a fifth
+apart going up (a sitting begun, resumed, or a break ended early). `pause` and
+`stop` are **struck bodies** (`body()`), not tones: a burst of noise rung
+through a few tuned resonators, the way the real thing makes its sound.
+`pause` is a knuckle set down on a wooden desk; `stop` is a hardback closed,
+the air out of the pages and then the covers meeting. They were two more
+mallet notes at first and read as a synth, because a sine held at one pitch
+for half a second is a beep however it is enveloped. Anything new that should
+sound like an object belongs on `body()`. Every strike is detuned a percent or two
 and struck a touch harder or softer, so ten ticks down a list do not sound
 like a machine. All of it sits under the chime.
 
