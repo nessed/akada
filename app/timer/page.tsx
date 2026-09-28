@@ -244,8 +244,9 @@ export default function TimerPage() {
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
       if (e.key === ' ') {
         e.preventDefault();
-        // On a break the one thing Space can mean is "back to it". Pausing a
-        // break is a control nobody reaches for and it reads as stopping.
+        // On a break the one thing Space can mean is ending it. Pausing a
+        // break is a control nobody reaches for and it reads as stopping. The
+        // next block then waits for another Space to start it.
         if (onBreak) endBreak();
         else if (liveActive.isPaused) resume();
         else pause();
@@ -342,6 +343,9 @@ export default function TimerPage() {
      back. The same curve as the sheet's slide-up, so every move on this
      screen is the one hand. */
   const pausedFocus = isPaused && !resting;
+  /* A block set out after a break waits at zero for the reader to start it.
+     Held there, it is ready rather than paused, and the button starts it. */
+  const heldFresh = pausedFocus && (active?.accumulatedMs ?? 0) === 0;
   const clockEase: CSSProperties = {
     transition: 'opacity 480ms cubic-bezier(0.2, 0.7, 0.2, 1), color 480ms cubic-bezier(0.2, 0.7, 0.2, 1)',
   };
@@ -354,7 +358,7 @@ export default function TimerPage() {
     'col-start-1 row-start-1 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)]';
   const pausedMark = pausedFocus ? (
     <span className="inline-block animate-settle" style={{ animationDelay: '120ms' }}>
-      {'\u00a0· paused'}
+      {heldFresh ? '\u00a0· ready' : '\u00a0· paused'}
     </span>
   ) : null;
 
@@ -411,7 +415,7 @@ export default function TimerPage() {
 
   /* The bordered header action from readmedesign.md's button section. The
      solid fill is spent on exactly one control per screen: pause while a
-     block runs, "back to it" while a break does. */
+     block runs, "end break" while a break does. */
   const secondary = (label: string, go: () => void) => (
     <button
       type="button"
@@ -445,12 +449,9 @@ export default function TimerPage() {
         type="button"
         onClick={endBreak}
         style={night ? { background: '#EFE9DC', color: '#1A1815' } : undefined}
-        className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-[opacity,transform] duration-200 ease-out hover:opacity-90 active:scale-[0.97]"
+        className="flex h-11 items-center rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-[opacity,transform] duration-200 ease-out hover:opacity-90 active:scale-[0.97]"
       >
-        <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 5l12 7-12 7V5z" />
-        </svg>
-        Back to it
+        End break
       </button>
       {secondary('+5 min', () => extend(5 * 60))}
       {finishButton}
@@ -466,7 +467,7 @@ export default function TimerPage() {
         style={
           night ? { background: '#EFE9DC', color: '#1A1815' } : undefined
         }
-        aria-label={isPaused ? 'Resume' : 'Pause'}
+        aria-label={isPaused ? (heldFresh ? 'Start' : 'Resume') : 'Pause'}
         className="flex h-11 items-center gap-2.5 rounded-[10px] bg-primary px-5 text-[14px] font-medium text-primary-contrast transition-[opacity,transform] duration-200 ease-out hover:opacity-90 active:scale-[0.97]"
       >
         {/* Both glyphs and both words are always there, stacked in one cell,
@@ -497,7 +498,7 @@ export default function TimerPage() {
           </svg>
         </span>
         <span aria-hidden className="grid text-left">
-          <span className={`${swapWord} ${isPaused ? 'translate-y-0 opacity-100' : 'translate-y-1.5 opacity-0'}`}>Resume</span>
+          <span className={`${swapWord} ${isPaused ? 'translate-y-0 opacity-100' : 'translate-y-1.5 opacity-0'}`}>{heldFresh ? 'Start' : 'Resume'}</span>
           <span className={`${swapWord} ${isPaused ? '-translate-y-1.5 opacity-0' : 'translate-y-0 opacity-100'}`}>Pause</span>
         </span>
       </button>

@@ -15,7 +15,7 @@ import { isLogSheetMounted } from './PendingSessionLogSheet';
  * looking at. `P` and `K` reach the clock from whichever tab is open.
  *
  * `P` is the dock's left button and does exactly what it does: on a break it
- * means back to it, otherwise it holds the clock or lets it go again. `K` is
+ * ends it and sets out the next block held, otherwise it holds the clock or lets it go again. `K` is
  * the dock's right button: it ends the sitting and the log sheet opens on the
  * spot, because every tab already carries one. On the few screens that do not
  * (the legal pages, onboarding, auth) it opens the timer instead, so the key
@@ -45,7 +45,7 @@ export default function TimerHotkeys() {
       const key = event.key.toLowerCase();
       if (key === 'p') {
         event.preventDefault();
-        // The dock's left button, to the letter: resting means back to it.
+        // The dock's left button, to the letter: resting means end the break.
         if (onBreak) endBreak();
         else if (active?.isPaused) resume();
         else pause();

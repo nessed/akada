@@ -131,7 +131,7 @@ interface TimerContextValue {
   extend: (seconds: number) => void;
   /** End the block here and rest. Defaults to the sitting's break length. */
   startBreak: (seconds?: number) => void;
-  /** End the break and open the next block. */
+  /** End the break and set out the next block, held until it is started. */
   endBreak: () => void;
   /** Re-arm the break length mid-sitting. Null means stop taking them. */
   setBreakLength: (seconds: number | null) => void;
@@ -572,7 +572,7 @@ function focusSecondsAt(state: TimerState, atMs: number): number {
  * Write the stretch in progress into the chain and hand back the new one.
  *
  * A stretch that rounds to nothing is dropped rather than recorded: tapping
- * "back to it" the instant the chime lands should not leave a zero-second
+ * "end break" the instant the chime lands should not leave a zero-second
  * break in the record, and the database would refuse it anyway.
  */
 function closeStretch(state: TimerState, atMs: number): SessionSegment[] {
@@ -609,7 +609,12 @@ function toBreakState(state: TimerState, atMs: number, breakSeconds: number): Ti
   };
 }
 
-/** End the break and open the next block, at the same length as the last. */
+/**
+ * End the break and set out the next block, at the same length as the last,
+ * held at zero. It starts when the reader starts it, not when the break
+ * ends: a block that began ticking the moment rest stopped was counting the
+ * walk back to the desk as work.
+ */
 function toFocusState(state: TimerState, atMs: number): TimerState {
   return {
     ...state,
@@ -618,7 +623,7 @@ function toFocusState(state: TimerState, atMs: number): TimerState {
     startedAt: atMs,
     stretchStartedAt: atMs,
     accumulatedMs: 0,
-    isPaused: false,
+    isPaused: true,
     lastSeenAt: atMs,
     lastInputAt: atMs,
   };
@@ -1129,7 +1134,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [applyActive],
   );
 
-  /** End the break, open the next block at the same length as the last. */
+  /** End the break, set out the next block held at the same length as the last. */
   const endBreak = useCallback(() => {
     const running = activeRef.current;
     if (!running || running.phase !== 'break') return;
@@ -1179,7 +1184,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       if (running.phase === 'break') {
         cancelChime();
         breakNoticeRef.current = null;
-        // Switching breaks off while resting is a way of saying "back to it".
+        // Switching breaks off while resting is a way of ending the break.
         if (breakSeconds == null) {
           applyActive(toFocusState(next, Date.now()));
           return;
@@ -1242,6 +1247,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       const next: TimerState = {
         ...prev,
         startedAt: now,
+        // A block set out after a break and not yet started begins now, not
+        // when the break ended, so the chain and the finish time read true.
+        stretchStartedAt: prev.accumulatedMs === 0 ? now : prev.stretchStartedAt,
         isPaused: false,
         lastSeenAt: now,
         lastInputAt: now,
