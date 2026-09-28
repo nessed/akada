@@ -296,12 +296,6 @@ export default function StatsPage() {
   const persona = readPersona(habits);
   const lookLike = hoursLookLike(totalSec, today);
 
-  // The masthead figure rolls up to the term's hours rather than being
-  // printed there. Held at a tenth, the way it is written.
-  const rolling = useCountUp(loading ? 0 : totalSec / 3600, 1400, 150);
-  const totalWhole = Math.floor(rolling);
-  const totalDecimal = `.${Math.min(9, Math.floor((rolling - totalWhole) * 10))}`;
-
   // Best day of week, name + duration. Read out in the ledger line.
   const bestDay = useMemo(() => {
     const byDow: Record<number, number> = {};
@@ -365,8 +359,7 @@ export default function StatsPage() {
 
         <div className="shrink-0 md:text-right">
           <span className="font-mono text-[44px] font-semibold leading-[0.9] tracking-[-0.04em] tabular-nums text-ink md:text-[56px]">
-            {totalWhole}
-            <span className="text-muted-soft">{totalDecimal}</span>
+            <RollingHours hours={loading ? 0 : totalSec / 3600} />
           </span>
           <p className="m-0 mt-1 text-[12px] text-muted">hours logged</p>
           {lookLike && (
@@ -723,6 +716,23 @@ function EmptyState({ text }: { text: string }) {
     <div className="mb-[var(--density-gap)] py-12 text-center">
       <p className="m-0 font-serif text-[16px] italic text-muted-soft">{text}</p>
     </div>
+  );
+}
+
+/**
+ * The masthead figure, which rolls up to the term's hours rather than being
+ * printed there. Held at a tenth, the way it is written. Its own component
+ * so the count-up re-renders this figure each frame, not the whole page.
+ */
+function RollingHours({ hours }: { hours: number }) {
+  const rolling = useCountUp(hours, 1400, 150);
+  const whole = Math.floor(rolling);
+  const decimal = `.${Math.min(9, Math.floor((rolling - whole) * 10))}`;
+  return (
+    <>
+      {whole}
+      <span className="text-muted-soft">{decimal}</span>
+    </>
   );
 }
 

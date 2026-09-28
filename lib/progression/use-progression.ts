@@ -9,6 +9,40 @@ import { isoDate } from '../utils';
 import { readSittingEffect, type SittingEffect } from './effect';
 import { readProgression, type Progression } from './index';
 import { readRankingBias, seedLedgerFromServer } from './log';
+import type { Course, Session } from '../data';
+
+/**
+ * The last result for the last inputs, compared by identity.
+ *
+ * A screen mounts several readers at once (Today has the page, the margin,
+ * the Next Mark line, the log sheet and two start popovers), and while the
+ * clock runs each of them re-reads the term every second. They all read the
+ * same SWR lists, so the reading is worked out once and handed to the rest.
+ * readProgression is pure, so the shared answer is the one each would have
+ * worked out for itself.
+ */
+function lastResult<R>() {
+  let lastKey: readonly unknown[] | null = null;
+  let last: R;
+  return (key: readonly unknown[], compute: () => R): R => {
+    if (lastKey && key.length === lastKey.length && key.every((part, i) => Object.is(part, lastKey![i]))) {
+      return last;
+    }
+    last = compute();
+    lastKey = key;
+    return last;
+  };
+}
+
+const sharedCourses = lastResult<Course[]>();
+const sharedLogged = lastResult<Progression>();
+const sharedLive = lastResult<Progression>();
+const sharedSitting = lastResult<SittingEffect | null>();
+
+/** Every field of the live row, so two readers holding equal rows match. */
+function liveKey(live: Session): string {
+  return [live.id, live.courseId, live.taskId, live.date, live.durationSeconds].join('\u0000');
+}
 
 /**
  * The progression layer over the three lists every other screen already has,
@@ -39,7 +73,7 @@ export function useProgression(): {
 
   const isLoading = coursesLoading || sessionsLoading || tasksLoading;
   const today = isoDate();
-  const courses = useMemo(() => sortCourses(raw), [raw]);
+  const courses = useMemo(() => sharedCourses([raw], () => sortCourses(raw)), [raw]);
 
   /* The impressions the server already holds, pulled into the device's
      ledger once. Without this the ranking would start its education on the
@@ -67,19 +101,29 @@ export function useProgression(): {
     [sessions, seeded],
   );
 
+  // The bias is read afresh by each reader, so it is compared by what it
+  // says rather than by which object holds it.
+  const biasKey = useMemo(() => JSON.stringify(bias), [bias]);
+
   const logged = useMemo(() => {
     if (isLoading) return null;
-    return readProgression(courses, sessions, tasks, today, { bias });
-  }, [isLoading, courses, sessions, tasks, today, bias]);
+    return sharedLogged([courses, sessions, tasks, today, biasKey], () =>
+      readProgression(courses, sessions, tasks, today, { bias }),
+    );
+  }, [isLoading, courses, sessions, tasks, today, bias, biasKey]);
 
   const progression = useMemo(() => {
     if (!logged || !live) return logged;
-    return readProgression(courses, withLiveSession(sessions, live), tasks, today, { bias });
+    return sharedLive([logged, liveKey(live)], () =>
+      readProgression(courses, withLiveSession(sessions, live), tasks, today, { bias }),
+    );
   }, [logged, live, courses, sessions, tasks, today, bias]);
 
   const sitting = useMemo(() => {
     if (!logged || !progression || !live || progression === logged) return null;
-    return readSittingEffect(logged, progression, courses, live.courseId, live.date);
+    return sharedSitting([logged, progression, courses, live.courseId, live.date], () =>
+      readSittingEffect(logged, progression, courses, live.courseId, live.date),
+    );
   }, [logged, progression, live, courses]);
 
   return { progression, logged, sitting, isLoading };

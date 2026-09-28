@@ -55,11 +55,15 @@ export default function NextMarkLine({
   // The candidates that lost are logged next to the one that won. See
   // lib/progression/log.ts for why this is worth the two lines it costs.
   // logImpression writes once per shown line per day and no more, however
-  // often the reading is re-read underneath it.
+  // often the reading is re-read underneath it. The effect is keyed on that
+  // same line and day, not on the reading, which is a new object every
+  // second while the clock runs and would re-read the seen list each time.
+  const seenKey = reading ? `${reading.shown?.id ?? reading.silence ?? 'none'}:${new Date().toDateString()}` : null;
   useEffect(() => {
     if (!reading || onlyLanded) return;
     void logImpression(surface, reading);
-  }, [surface, reading, onlyLanded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surface, seenKey, onlyLanded]);
 
   const landed = sitting?.lines ?? [];
   const next = onlyLanded ? null : (reading?.shown?.line ?? null);

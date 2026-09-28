@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, memo, useContext, useMemo, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -236,7 +236,16 @@ const readerComponents: Components = {
   table({ children, ...props }) { return <div className="md-table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table {...props}>{children}</table></div>; },
 };
 
-export function MarkdownReader({ markdown, collapsedSections, onToggleSection, checks = {}, onMarkCheck = () => {} }: {
+const REHYPE_PLUGINS = [rehypeKatex];
+const NO_CHECKS: Record<string, CheckResult> = {};
+const IGNORE_CHECK = () => {};
+
+/**
+ * Memoised: parsing runs the whole remark and rehype pipeline, KaTeX and
+ * Prism included, so a parent that re-renders for its own reasons (a scroll
+ * frame, the clock) must not make the note be parsed again.
+ */
+export const MarkdownReader = memo(function MarkdownReader({ markdown, collapsedSections, onToggleSection, checks = NO_CHECKS, onMarkCheck = IGNORE_CHECK }: {
   markdown: string;
   collapsedSections: Set<string>;
   onToggleSection: (id: string) => void;
@@ -245,13 +254,17 @@ export function MarkdownReader({ markdown, collapsedSections, onToggleSection, c
 }) {
   const headings = useMemo(() => getMarkdownHeadings(markdown), [markdown]);
   const plugins = useMemo(() => [remarkGfm, remarkMath, remarkReader(headings)], [headings]);
+  const context = useMemo(
+    () => ({ collapsedSections, onToggleSection, headings, checks, onMarkCheck }),
+    [collapsedSections, onToggleSection, headings, checks, onMarkCheck],
+  );
 
   return (
-    <ReaderContext.Provider value={{ collapsedSections, onToggleSection, headings, checks, onMarkCheck }}>
+    <ReaderContext.Provider value={context}>
     <article className="markdown-body">
       <ReactMarkdown
         remarkPlugins={plugins}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={REHYPE_PLUGINS}
         components={readerComponents}
       >
         {markdown}
@@ -259,4 +272,4 @@ export function MarkdownReader({ markdown, collapsedSections, onToggleSection, c
     </article>
     </ReaderContext.Provider>
   );
-}
+});

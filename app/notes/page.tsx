@@ -328,13 +328,18 @@ function NotesContent() {
     setNoteChecksOptimistic(openId, next).catch(() => say('That result didn’t save. Try again in a moment.'));
   }, [openId, checks, say]);
 
-  const toggleSection = (id: string) =>
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  // Stable, like markCheck, so the memoised reader is not re-rendered, and
+  // the note not parsed again, on every scroll frame and clock tick.
+  const toggleSection = useCallback(
+    (id: string) =>
+      setCollapsed((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+    [],
+  );
   const foldAll = () => setCollapsed(allFolded ? new Set() : new Set(sectionIds));
   const jumpTo = (id: string) => {
     setContentsOpen(false);
