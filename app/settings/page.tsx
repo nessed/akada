@@ -45,16 +45,32 @@ import {
  * pretending to be an interruption, so the same panels get a page instead.
  */
 
-type Section = 'profile' | 'term' | 'goals' | 'courses' | 'appearance' | 'claude' | 'data';
+type Section = 'profile' | 'term' | 'goals' | 'timer' | 'courses' | 'appearance' | 'claude' | 'data';
 
-const SECTIONS: { id: Section; label: string }[] = [
-  { id: 'goals', label: 'Goals' },
-  { id: 'profile', label: 'Profile' },
-  { id: 'term', label: 'Term' },
-  { id: 'courses', label: 'Courses' },
-  { id: 'appearance', label: 'Appearance' },
-  { id: 'claude', label: 'Claude' },
-  { id: 'data', label: 'Data' },
+const SECTION_GROUPS: { label: string; items: { id: Section; label: string }[] }[] = [
+  {
+    label: 'Study',
+    items: [
+      { id: 'goals', label: 'Goals' },
+      { id: 'timer', label: 'Timer' },
+      { id: 'term', label: 'Term' },
+      { id: 'courses', label: 'Courses' },
+    ],
+  },
+  {
+    label: 'You',
+    items: [
+      { id: 'profile', label: 'Profile' },
+      { id: 'appearance', label: 'Appearance' },
+    ],
+  },
+  {
+    label: 'More',
+    items: [
+      { id: 'claude', label: 'Claude' },
+      { id: 'data', label: 'Data' },
+    ],
+  },
 ];
 
 export default function SettingsPage() {
@@ -220,26 +236,33 @@ export default function SettingsPage() {
       <div className="grid items-start gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
         {/* The section list. A row of marks on a page rather than a tab bar:
             the chosen one carries a swipe of highlighter. */}
-        <nav className="flex flex-wrap gap-1 lg:sticky lg:top-10 lg:flex-col">
-          {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setSection(s.id)}
-              aria-current={section === s.id ? 'true' : undefined}
-              className={`flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] transition-colors ${
-                section === s.id
-                  ? 'font-medium text-ink'
-                  : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
-              }`}
-            >
-              <span className={section === s.id ? 'hl-swipe' : ''}>{s.label}</span>
-            </button>
+        <nav className="flex flex-wrap gap-x-1 gap-y-1 lg:sticky lg:top-10 lg:flex-col lg:gap-0">
+          {SECTION_GROUPS.map((g, gi) => (
+            <div key={g.label} className="contents lg:flex lg:flex-col lg:gap-1">
+              <p className={`eyebrow m-0 hidden px-3 pb-1 lg:block ${gi === 0 ? '' : 'pt-5'}`}>
+                {g.label}
+              </p>
+              {g.items.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSection(s.id)}
+                  aria-current={section === s.id ? 'true' : undefined}
+                  className={`flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] transition-colors ${
+                    section === s.id
+                      ? 'font-medium text-ink'
+                      : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
+                  }`}
+                >
+                  <span className={section === s.id ? 'hl-swipe' : ''}>{s.label}</span>
+                </button>
+              ))}
+            </div>
           ))}
           <button
             type="button"
             onClick={() => setConfirming('signOut')}
-            className="mt-2 flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] text-warn transition-colors hover:bg-warnTint"
+            className="mt-2 flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] text-warn transition-colors hover:bg-warnTint lg:mt-5"
           >
             Sign out
           </button>
@@ -285,54 +308,6 @@ export default function SettingsPage() {
 
               </SettingGroup>
 
-              {/* Its own group, because it is not a goal. It sat under Goals
-                  reading "Skip weekends in goals · Streak and weekly pace
-                  ignore Sat and Sun", which is not true of it and never was:
-                  `hideWeekends` is read in exactly one place, the Stats
-                  heatmap, and neither the run nor the weekly pace has ever
-                  looked at it. */}
-              <SettingGroup label="Stats">
-                <SettingToggleRow
-                  label="Hide weekends from the heatmap"
-                  sub="The grid on Stats drops Sat and Sun"
-                  value={prefs.hideWeekends}
-                  onChange={(v) => setPrefs({ hideWeekends: v })}
-                />
-              </SettingGroup>
-
-              {/* Apart from the chime below: that one announces something,
-                  these only answer a press, and a reader can want either
-                  without the other. */}
-              <SettingGroup label="Sound">
-                <SettingToggleRow
-                  label="Sounds under your finger"
-                  sub="Wood for a tap or a tick, paper for something put away"
-                  value={prefs.uiSounds}
-                  onChange={(v) => setPrefs({ uiSounds: v })}
-                />
-                <SoundSampler />
-              </SettingGroup>
-
-              {/* The timer's own two preferences. They lived only on the
-                  phone sheet, which left a desktop reader unable to turn the
-                  chime off or change how long a break runs. */}
-              <SettingGroup label="Timer">
-                <SettingToggleRow
-                  label="Chime on a block and a break"
-                  sub="A soft note when a block ends and when the rest is up"
-                  value={prefs.sessionSound}
-                  onChange={(v) => setPrefs({ sessionSound: v })}
-                />
-                <BreakLengthPicker
-                  value={prefs.breakMinutes}
-                  onChange={(breakMinutes) => setPrefs({ breakMinutes })}
-                />
-                <TimerDrawingPicker
-                  value={prefs.timerDrawing}
-                  onChange={(timerDrawing) => setPrefs({ timerDrawing })}
-                />
-              </SettingGroup>
-
               <SettingGroup label="Day ends at">
                 <div className="px-[18px] py-4">
                   <p className="m-0 mb-3 text-[11px] text-muted">
@@ -353,6 +328,43 @@ export default function SettingsPage() {
                   <StatMark label="Days" value={String(dayCount)} />
                   <StatMark label="Sessions" value={String(safeSessions.length)} />
                 </div>
+              </SettingGroup>
+            </>
+          )}
+
+          {section === 'timer' && (
+            <>
+              {/* The timer's own two preferences. They lived only on the
+                  phone sheet, which left a desktop reader unable to turn the
+                  chime off or change how long a break runs. */}
+              <SettingGroup label="Timer" first>
+                <SettingToggleRow
+                  label="Chime on a block and a break"
+                  sub="A soft note when a block ends and when the rest is up"
+                  value={prefs.sessionSound}
+                  onChange={(v) => setPrefs({ sessionSound: v })}
+                />
+                <BreakLengthPicker
+                  value={prefs.breakMinutes}
+                  onChange={(breakMinutes) => setPrefs({ breakMinutes })}
+                />
+                <TimerDrawingPicker
+                  value={prefs.timerDrawing}
+                  onChange={(timerDrawing) => setPrefs({ timerDrawing })}
+                />
+              </SettingGroup>
+
+              {/* Apart from the chime above: that one announces something,
+                  these only answer a press, and a reader can want either
+                  without the other. */}
+              <SettingGroup label="Sound">
+                <SettingToggleRow
+                  label="Sounds under your finger"
+                  sub="Wood for a tap or a tick, paper for something put away"
+                  value={prefs.uiSounds}
+                  onChange={(v) => setPrefs({ uiSounds: v })}
+                />
+                <SoundSampler />
               </SettingGroup>
             </>
           )}
@@ -380,11 +392,27 @@ export default function SettingsPage() {
           )}
 
           {section === 'appearance' && (
-            <AppearanceEditor
-              prefs={prefs}
-              setPrefs={setPrefs}
-              onBack={() => setSection('goals')}
-            />
+            <>
+              <AppearanceEditor
+                prefs={prefs}
+                setPrefs={setPrefs}
+                onBack={() => setSection('goals')}
+              />
+              {/* Its own group, because it is not a goal. It sat under Goals
+                  reading "Skip weekends in goals · Streak and weekly pace
+                  ignore Sat and Sun", which is not true of it and never was:
+                  `hideWeekends` is read in exactly one place, the Stats
+                  heatmap, and neither the run nor the weekly pace has ever
+                  looked at it. */}
+              <SettingGroup label="Stats">
+                <SettingToggleRow
+                  label="Hide weekends from the heatmap"
+                  sub="The grid on Stats drops Sat and Sun"
+                  value={prefs.hideWeekends}
+                  onChange={(v) => setPrefs({ hideWeekends: v })}
+                />
+              </SettingGroup>
+            </>
           )}
 
           {section === 'claude' && (
