@@ -47,15 +47,30 @@ import {
 
 type Section = 'profile' | 'term' | 'goals' | 'timer' | 'courses' | 'appearance' | 'claude' | 'data';
 
-const SECTIONS: { id: Section; label: string }[] = [
-  { id: 'goals', label: 'Goals' },
-  { id: 'timer', label: 'Timer' },
-  { id: 'profile', label: 'Profile' },
-  { id: 'term', label: 'Term' },
-  { id: 'courses', label: 'Courses' },
-  { id: 'appearance', label: 'Appearance' },
-  { id: 'claude', label: 'Claude' },
-  { id: 'data', label: 'Data' },
+const SECTION_GROUPS: { label: string; items: { id: Section; label: string }[] }[] = [
+  {
+    label: 'Study',
+    items: [
+      { id: 'goals', label: 'Goals' },
+      { id: 'timer', label: 'Timer' },
+      { id: 'term', label: 'Term' },
+      { id: 'courses', label: 'Courses' },
+    ],
+  },
+  {
+    label: 'You',
+    items: [
+      { id: 'profile', label: 'Profile' },
+      { id: 'appearance', label: 'Appearance' },
+    ],
+  },
+  {
+    label: 'More',
+    items: [
+      { id: 'claude', label: 'Claude' },
+      { id: 'data', label: 'Data' },
+    ],
+  },
 ];
 
 export default function SettingsPage() {
@@ -221,26 +236,33 @@ export default function SettingsPage() {
       <div className="grid items-start gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
         {/* The section list. A row of marks on a page rather than a tab bar:
             the chosen one carries a swipe of highlighter. */}
-        <nav className="flex flex-wrap gap-1 lg:sticky lg:top-10 lg:flex-col">
-          {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setSection(s.id)}
-              aria-current={section === s.id ? 'true' : undefined}
-              className={`flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] transition-colors ${
-                section === s.id
-                  ? 'font-medium text-ink'
-                  : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
-              }`}
-            >
-              <span className={section === s.id ? 'hl-swipe' : ''}>{s.label}</span>
-            </button>
+        <nav className="flex flex-wrap gap-x-1 gap-y-1 lg:sticky lg:top-10 lg:flex-col lg:gap-0">
+          {SECTION_GROUPS.map((g, gi) => (
+            <div key={g.label} className="contents lg:flex lg:flex-col lg:gap-1">
+              <p className={`eyebrow m-0 hidden px-3 pb-1 lg:block ${gi === 0 ? '' : 'pt-5'}`}>
+                {g.label}
+              </p>
+              {g.items.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSection(s.id)}
+                  aria-current={section === s.id ? 'true' : undefined}
+                  className={`flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] transition-colors ${
+                    section === s.id
+                      ? 'font-medium text-ink'
+                      : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
+                  }`}
+                >
+                  <span className={section === s.id ? 'hl-swipe' : ''}>{s.label}</span>
+                </button>
+              ))}
+            </div>
           ))}
           <button
             type="button"
             onClick={() => setConfirming('signOut')}
-            className="mt-2 flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] text-warn transition-colors hover:bg-warnTint"
+            className="mt-2 flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] text-warn transition-colors hover:bg-warnTint lg:mt-5"
           >
             Sign out
           </button>

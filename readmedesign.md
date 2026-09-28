@@ -231,6 +231,9 @@ out in two columns pass `wide` to opt out of the phone measure.
 Two things follow from the rail. Settings is a **page**, on desktop and on a
 phone alike, because a modal reached from a permanent nav item is a screen
 pretending to be an interruption; the bar is on it, so a phone has a way back.
+Its section list is grouped **Study** (Goals, Timer, Term, Courses), **You**
+(Profile, Appearance) and **More** (Claude, Data), the group names as
+`.eyebrow` labels on desktop only; on a phone the list is one wrapped row.
 And the
 `FloatingActionButton` is gone: "New task" lives in the page header, and a
 timer starts from the row it belongs to, through a popover that takes a
