@@ -3,17 +3,20 @@
  *
  * Everything here is synthesised on the Web Audio clock, nothing is a file.
  * A sample would be a download on first tap and a decode after it, and the
- * one thing a tap sound cannot be is late. It also means every strike is a
- * little different: each one is detuned by a percent or two and struck a
- * touch harder or softer, the way a pencil never lands on a desk twice the
- * same, so a run of ticks down a list does not sound like a machine gun.
+ * one thing a tap sound cannot be is late.
  *
- * The palette is three materials. **Wood** for things done to the page (a
- * tap, a tick, a knock): a few inharmonic modes that die inside a tenth of a
- * second, over a click of filtered noise for the contact. **Bubble** for
- * things that turn on or come up: a sine that rises as it fades. **Paper** for
- * things that go away: a swish of band-passed noise sweeping down. The timer
- * gets a mallet, which is wood left to ring a little longer.
+ * **There is no oscillator in this file, on purpose.** Every sound is a burst
+ * of noise (the contact) rung through tuned resonators (the object), which is
+ * how a desk, a pencil or a book actually makes its sound. The first palette
+ * built its wood, its bubbles and the timer's marimba out of sine waves, and
+ * every one of them read as a synth, because a pure tone at a steady pitch is
+ * a beep however it is shaped. Noise has no steady pitch to give it away, and
+ * no two hits are the same grain, so ten ticks down a list do not sound like a
+ * machine.
+ *
+ * Two materials. **Wood** for something done to the page: a pencil tip for a
+ * tap, a knuckle for a knock, a pencil stroke for a tick, a book opened, set
+ * down or closed for the timer. **Paper** for something put away.
  *
  * All of it sits well under the chime (lib/chime.ts), which is the one sound
  * that has something to announce. These only answer a finger.
@@ -26,10 +29,7 @@ export type SoundName =
   | 'knock'
   | 'tick'
   | 'untick'
-  | 'bubble'
-  | 'drop'
   | 'paper'
-  | 'bright'
   | 'start'
   | 'pause'
   | 'stop';
@@ -39,7 +39,6 @@ export const SOUNDS: { name: SoundName; word: string }[] = [
   { name: 'tap', word: 'tap' },
   { name: 'knock', word: 'knock' },
   { name: 'tick', word: 'tick' },
-  { name: 'bubble', word: 'bubble' },
   { name: 'paper', word: 'paper' },
   { name: 'start', word: 'start' },
   { name: 'pause', word: 'pause' },
@@ -108,41 +107,32 @@ function noise(ctx: AudioContext): AudioBuffer {
   return noiseBuffer;
 }
 
+let impulseBuffer: AudioBuffer | null = null;
+
+/**
+ * The moment of contact: a click a few samples wide with unit area. A single
+ * sample would do on paper, but a buffer started between two samples is
+ * interpolated, and one sample smeared that way came out anywhere from a
+ * quarter to four times as loud depending on where the hit landed. A smooth
+ * pulse this short is still a click to the ear and survives the smearing.
+ */
+function impulse(ctx: AudioContext): AudioBuffer {
+  if (impulseBuffer) return impulseBuffer;
+  const width = 6;
+  impulseBuffer = ctx.createBuffer(1, 128, ctx.sampleRate);
+  const data = impulseBuffer.getChannelData(0);
+  for (let i = 0; i < width; i += 1) {
+    data[i + 1] = (1 - Math.cos((2 * Math.PI * (i + 1)) / (width + 1))) / (width + 1);
+  }
+  return impulseBuffer;
+}
+
+/** How much surface noise rides on the contact, against the impulse. */
+const GRAIN = 0.02;
+
 /** A percent or two either way. */
 function jitter(amount = 0.02): number {
   return 1 + (Math.random() * 2 - 1) * amount;
-}
-
-interface ToneOptions {
-  at: number;
-  peak: number;
-  decay: number;
-  attack?: number;
-  type?: OscillatorType;
-  /** Where the pitch slides to, and how long it takes. */
-  glideTo?: number;
-  glide?: number;
-}
-
-function tone(ctx: AudioContext, freq: number, o: ToneOptions): void {
-  if (!master) return;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  const attack = o.attack ?? 0.002;
-  osc.type = o.type ?? 'sine';
-  osc.frequency.setValueAtTime(freq, o.at);
-  if (o.glideTo) osc.frequency.exponentialRampToValueAtTime(o.glideTo, o.at + (o.glide ?? o.decay));
-  gain.gain.setValueAtTime(0.0001, o.at);
-  gain.gain.exponentialRampToValueAtTime(o.peak, o.at + attack);
-  gain.gain.exponentialRampToValueAtTime(0.0001, o.at + attack + o.decay);
-  osc.connect(gain);
-  gain.connect(master);
-  osc.start(o.at);
-  osc.stop(o.at + attack + o.decay + 0.02);
-  osc.onended = () => {
-    osc.disconnect();
-    gain.disconnect();
-  };
 }
 
 interface NoiseOptions {
@@ -162,6 +152,7 @@ function hiss(ctx: AudioContext, o: NoiseOptions): void {
   const gain = ctx.createGain();
   const attack = o.attack ?? 0.001;
   src.buffer = noise(ctx);
+  gain.gain.value = 0;
   filter.type = 'bandpass';
   filter.Q.value = o.q;
   filter.frequency.setValueAtTime(o.freq, o.at);
@@ -180,31 +171,6 @@ function hiss(ctx: AudioContext, o: NoiseOptions): void {
     filter.disconnect();
     gain.disconnect();
   };
-}
-
-/**
- * A block of hardwood. The overtones sit at the ratios a struck bar actually
- * has, not at whole multiples, which is most of why it reads as wood rather
- * than as a beep; and the pitch drops a hair on the strike, the way a real
- * one does as it stops flexing.
- */
-function wood(ctx: AudioContext, at: number, freq: number, level: number): void {
-  const f = freq * jitter();
-  const v = level * jitter(0.1);
-  tone(ctx, f * 1.03, { at, peak: v, decay: 0.085, glideTo: f, glide: 0.02 });
-  tone(ctx, f * 2.76, { at, peak: v * 0.32, decay: 0.045 });
-  tone(ctx, f * 5.4, { at, peak: v * 0.1, decay: 0.025 });
-  hiss(ctx, { at, peak: v * 0.5, decay: 0.012, freq: f * 3.2, q: 1.6 });
-}
-
-/** Wood left to ring: a marimba bar under a soft mallet. */
-function mallet(ctx: AudioContext, at: number, freq: number, level: number): void {
-  const f = freq * jitter(0.006);
-  const v = level * jitter(0.08);
-  tone(ctx, f, { at, peak: v, attack: 0.004, decay: 0.42 });
-  tone(ctx, f * 3.93, { at, peak: v * 0.18, decay: 0.09 });
-  tone(ctx, f * 9.2, { at, peak: v * 0.05, decay: 0.03 });
-  hiss(ctx, { at, peak: v * 0.25, decay: 0.01, freq: f * 4, q: 1.2 });
 }
 
 /**
@@ -229,20 +195,39 @@ function body(
   out.gain.value = level * jitter(0.1);
   out.connect(master);
 
-  const src = ctx.createBufferSource();
-  src.buffer = noise(ctx);
+  // The contact is an impulse, so every hit carries the same energy into
+  // the body and a knock is as loud as the last one; a short burst of noise
+  // alone swung by 4x from one hit to the next, on luck. The noise is laid
+  // over it quietly, for the grain of the surface, and kept out of the low
+  // end: a low body rings on whatever lands under a few hundred Hz, and that
+  // is where the luck was.
   const striker = ctx.createBiquadFilter();
   striker.type = 'lowpass';
   striker.frequency.value = soft;
-  const hit = ctx.createGain();
-  hit.gain.setValueAtTime(0.0001, at);
-  hit.gain.exponentialRampToValueAtTime(1, at + 0.0008);
-  hit.gain.exponentialRampToValueAtTime(0.0001, at + contact);
-  src.connect(striker);
-  striker.connect(hit);
+  const click = ctx.createBufferSource();
+  click.buffer = impulse(ctx);
+  click.connect(striker);
+  const src = ctx.createBufferSource();
+  src.buffer = noise(ctx);
+  const grain = ctx.createGain();
+  // Silent until the envelope starts. A gain's resting value is 1, and a
+  // source starting on the same sample as its first automation event can
+  // let a few samples through at that level: a random spike that made one
+  // closing book four times louder than the next.
+  grain.gain.value = 0;
+  grain.gain.setValueAtTime(0.0001, at);
+  grain.gain.exponentialRampToValueAtTime(GRAIN, at + 0.0008);
+  grain.gain.exponentialRampToValueAtTime(0.0001, at + contact);
+  const surface = ctx.createBiquadFilter();
+  surface.type = 'highpass';
+  surface.frequency.value = 1500;
+  src.connect(surface);
+  surface.connect(grain);
+  grain.connect(striker);
+  const hit = striker;
 
   const pitch = jitter(0.025);
-  const nodes: AudioNode[] = [out, striker, hit];
+  const nodes: AudioNode[] = [out, striker, surface, grain, click];
   let ring = 0;
   for (const [freq, q, gain] of modes) {
     const bp = ctx.createBiquadFilter();
@@ -257,6 +242,7 @@ function body(
     nodes.push(bp, g);
     ring = Math.max(ring, (q / (Math.PI * freq)) * 7);
   }
+  click.start(at);
   src.start(at, Math.random() * 0.3);
   src.stop(at + contact + 0.01);
   // The resonators keep ringing after the source stops; let go once they have.
@@ -264,22 +250,6 @@ function body(
     src.disconnect();
     for (const node of nodes) node.disconnect();
   }, (at - ctx.currentTime + contact + ring) * 1000 + 100);
-}
-
-/** A bubble coming up to the surface: a pure tone rising as it goes. */
-function bubble(ctx: AudioContext, at: number, freq: number, level: number, down = false): void {
-  const f = freq * jitter(0.04);
-  const v = level * jitter(0.1);
-  tone(ctx, f, {
-    at,
-    peak: v,
-    attack: 0.004,
-    decay: 0.085,
-    glideTo: down ? f * 0.5 : f * 2.3,
-    glide: 0.07,
-  });
-  // The film breaking, very faint.
-  tone(ctx, f * (down ? 1.4 : 3.1), { at: at + 0.004, peak: v * 0.08, decay: 0.03, type: 'triangle' });
 }
 
 /** A page turned, or a slip pulled off the desk. */
@@ -291,29 +261,84 @@ function paper(ctx: AudioContext, at: number, level: number): void {
 }
 
 const VOICES: Record<SoundName, (ctx: AudioContext, t: number) => void> = {
-  // A pencil set down on the desk. The default for anything pressed.
-  tap: (ctx, t) => wood(ctx, t, 1150, 0.075),
-  // Lower and fuller: a choice made, a place moved to.
-  knock: (ctx, t) => wood(ctx, t, 560, 0.12),
-  // Done. A firm tok, then a small bubble up out of it.
+  // A pencil tip set down on the desk. The default for anything pressed, so
+  // the smallest and quietest thing here.
+  tap: (ctx, t) =>
+    body(
+      ctx,
+      t,
+      [
+        [1850, 28, 1],
+        [3300, 24, 0.45],
+        [5100, 18, 0.2],
+      ],
+      { level: 4.6, soft: 7000, contact: 0.003 },
+    ),
+  // A knuckle on the lid of a small wooden box: a choice made, a place moved
+  // to, "hazy" in recall.
+  knock: (ctx, t) =>
+    body(
+      ctx,
+      t,
+      [
+        [410, 26, 1],
+        [960, 22, 0.5],
+        [1820, 16, 0.22],
+      ],
+      { level: 15.7, soft: 2600, contact: 0.005 },
+    ),
+  // Done: a pencil stroke across paper, landing on the desk.
   tick: (ctx, t) => {
-    wood(ctx, t, 760, 0.12);
-    bubble(ctx, t + 0.055, 620, 0.075);
+    const f = 3200 * jitter(0.1);
+    hiss(ctx, { at: t, peak: 0.035, attack: 0.012, decay: 0.03, freq: f, sweepTo: f * 1.5, q: 1.4 });
+    body(
+      ctx,
+      t + 0.038,
+      [
+        [1250, 26, 1],
+        [2700, 22, 0.45],
+        [4300, 16, 0.2],
+      ],
+      { level: 7, soft: 5000, contact: 0.004 },
+    );
   },
-  // Undone, which is not a failure, so it is only softer and lower.
-  untick: (ctx, t) => wood(ctx, t, 430, 0.09),
-  bubble: (ctx, t) => bubble(ctx, t, 420, 0.1),
-  drop: (ctx, t) => bubble(ctx, t, 900, 0.08, true),
+  // Undone, which is not a failure, so only a softer, duller knock.
+  untick: (ctx, t) =>
+    body(
+      ctx,
+      t,
+      [
+        [290, 20, 1],
+        [680, 16, 0.4],
+      ],
+      { level: 19, soft: 1400, contact: 0.006 },
+    ),
   paper: (ctx, t) => paper(ctx, t, 0.16),
-  // Two bubbles, the second higher. Remembered clearly.
-  bright: (ctx, t) => {
-    bubble(ctx, t, 460, 0.085);
-    bubble(ctx, t + 0.07, 690, 0.075);
-  },
-  // A sitting begins: two bars, a fifth apart, going up.
+  // A sitting begins: a book opened. The cover set back on the desk, then
+  // the pages falling open after it.
   start: (ctx, t) => {
-    mallet(ctx, t, 392, 0.11);
-    mallet(ctx, t + 0.09, 587.33, 0.1);
+    body(
+      ctx,
+      t,
+      [
+        [135, 10, 1],
+        [320, 12, 0.5],
+        [740, 8, 0.25],
+      ],
+      { level: 15.5, soft: 1800, contact: 0.008 },
+    );
+    for (let i = 0; i < 3; i += 1) {
+      const f = 3000 * jitter(0.15);
+      hiss(ctx, {
+        at: t + 0.05 + i * 0.028 * jitter(0.2),
+        peak: 0.03 * (1 - i * 0.2),
+        attack: 0.004,
+        decay: 0.022,
+        freq: f,
+        sweepTo: f * 0.7,
+        q: 1.1,
+      });
+    }
   },
   // Held: a knuckle set down on a wooden desk. Soft, low, over at once.
   pause: (ctx, t) =>
@@ -326,12 +351,12 @@ const VOICES: Record<SoundName, (ctx: AudioContext, t: number) => void> = {
         [690, 16, 0.28],
         [1310, 12, 0.1],
       ],
-      { level: 12, soft: 1100, contact: 0.007 },
+      { level: 27.5, soft: 1100, contact: 0.007 },
     ),
   // Put away: a hardback closed. The air pushed out of the pages, then the
   // covers meeting with the weight of the book behind them.
   stop: (ctx, t) => {
-    hiss(ctx, { at: t, peak: 0.035, attack: 0.07, decay: 0.02, freq: 650, sweepTo: 1100, q: 0.7 });
+    hiss(ctx, { at: t, peak: 0.025, attack: 0.07, decay: 0.02, freq: 650, sweepTo: 1100, q: 0.7 });
     body(
       ctx,
       t + 0.085,
@@ -341,9 +366,9 @@ const VOICES: Record<SoundName, (ctx: AudioContext, t: number) => void> = {
         [480, 7, 0.3],
         [1150, 4, 0.12],
       ],
-      { level: 5.5, soft: 2400, contact: 0.012 },
+      { level: 10.7, soft: 2400, contact: 0.012 },
     );
-    hiss(ctx, { at: t + 0.085, peak: 0.03, decay: 0.035, freq: 1900, q: 1 });
+    hiss(ctx, { at: t + 0.085, peak: 0.022, decay: 0.035, freq: 1900, q: 1 });
   },
 };
 

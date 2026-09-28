@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { isSoundName, playSound, queueSound } from './sounds';
 
-/* A stand-in for Web Audio that only counts what was started, which is all
+/* A stand-in for Web Audio that only counts the noise bursts started, which is all
    these tests need to know: did a sound go out, and which. */
 class FakeParam {
   value = 0;
@@ -15,18 +15,6 @@ class FakeNode {
   connect() {}
   disconnect() {}
 }
-class FakeOscillator extends FakeNode {
-  type = 'sine';
-  frequency = new FakeParam();
-  onended: (() => void) | null = null;
-  constructor(private readonly ctx: FakeContext) {
-    super();
-  }
-  start() {
-    this.ctx.started.push(this.frequency.value);
-  }
-  stop() {}
-}
 class FakeContext {
   state = 'running';
   currentTime = 0;
@@ -36,9 +24,6 @@ class FakeContext {
   resume() {
     return Promise.resolve();
   }
-  createOscillator() {
-    return new FakeOscillator(this);
-  }
   createGain() {
     return Object.assign(new FakeNode(), { gain: new FakeParam() });
   }
@@ -46,7 +31,15 @@ class FakeContext {
     return Object.assign(new FakeNode(), { type: '', Q: new FakeParam(), frequency: new FakeParam() });
   }
   createBufferSource() {
-    return Object.assign(new FakeNode(), { buffer: null, onended: null, start() {}, stop() {} });
+    const started = this.started;
+    return Object.assign(new FakeNode(), {
+      buffer: null,
+      onended: null,
+      start() {
+        started.push(0);
+      },
+      stop() {},
+    });
   }
   createBuffer(_channels: number, length: number) {
     const data = new Float32Array(length);
@@ -81,17 +74,17 @@ beforeEach(() => {
 
 test('a handler that plays its own sound wins over the plain tap', async () => {
   queueSound('tap');
-  playSound('bubble');
+  playSound('knock');
   await settle();
-  const bubbleOnly = ctx.started.length;
-  assert.ok(bubbleOnly > 0);
+  const knockOnly = ctx.started.length;
+  assert.ok(knockOnly > 0);
 
   ctx.started = [];
   wall += 1000;
-  playSound('bubble');
+  playSound('knock');
   playSound('tap');
   await settle();
-  assert.ok(ctx.started.length > bubbleOnly, 'two sounds played outright both go out');
+  assert.ok(ctx.started.length > knockOnly, 'two sounds played outright both go out');
 });
 
 test('a tap with nothing more particular to say still sounds', async () => {
