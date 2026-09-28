@@ -53,6 +53,8 @@ export { pickMarginNote, readObservations } from './observations';
 export { describeWeek } from './runs';
 export { impressionOf, readLadders } from './impressions';
 export { readSittingEffect } from './effect';
+export { readWeekLedger } from './weeks';
+export type { LedgerCourse, LedgerWeek } from './weeks';
 
 export interface Progression {
   ledger: DayCredit[];

@@ -1,6 +1,6 @@
 'use client';
 
-import type { Pace } from '@/lib/stats-reading';
+import type { Pace, PaceAgainst } from '@/lib/stats-reading';
 import { formatHM } from '@/lib/utils';
 import HandNote from '@/components/notebook/HandNote';
 
@@ -12,17 +12,37 @@ const PAD_BOTTOM = 8;
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+const AGAINST: { key: PaceAgainst; label: string }[] = [
+  { key: 'last', label: 'last week' },
+  { key: 'usual', label: 'usual' },
+  { key: 'best', label: 'best' },
+];
+
 /**
- * This week against last week, as two lines drawn on the same page.
+ * This week against another week, as two lines drawn on the same page. The
+ * other week is last week unless the reader picks a usual week (the median
+ * of every whole week before this one) or their best, which is what makes a
+ * quiet last week stop being the only bar there is.
  *
- * Last week is pencilled in first, the whole of it, in the rule's colour.
+ * The other week is pencilled in first, the whole of it, in the rule's colour.
  * This week is inked over it up to today, and today carries a dot. Where the
  * two stand today is joined by a short dashed stroke, so ahead or behind is
  * a distance you can see before it is a figure you read. Both lines are
  * running totals, so the only way either goes is up.
  */
-export default function PaceRace({ pace, accent = 'var(--ink)' }: { pace: Pace; accent?: string }) {
-  const { thisWeek, lastWeek, todayIndex, lead, lastTotal } = pace;
+export default function PaceRace({
+  pace,
+  accent = 'var(--ink)',
+  choices,
+  onAgainst,
+}: {
+  pace: Pace;
+  accent?: string;
+  /** Which other weeks can be raced. Omitted, the choice is not offered. */
+  choices?: Record<PaceAgainst, boolean>;
+  onAgainst?: (against: PaceAgainst) => void;
+}) {
+  const { thisWeek, lastWeek, todayIndex, lead, lastTotal, name } = pace;
   const now = thisWeek[todayIndex];
   const max = Math.max(3600, lastTotal, now) * 1.08;
 
@@ -47,22 +67,42 @@ export default function PaceRace({ pace, accent = 'var(--ink)' }: { pace: Pace; 
     );
     sub =
       now >= lastTotal
-        ? `already past all of last week's ${formatHM(lastTotal)}`
-        : `${formatHM(lastTotal - now)} more and you've beaten all of last week`;
+        ? `already past all of ${name}'s ${formatHM(lastTotal)}`
+        : `${formatHM(lastTotal - now)} more and you've beaten all of ${name}`;
   } else if (lead < -59) {
     headline = (
       <>
         <Figure>{formatHM(-lead)}</Figure> behind
       </>
     );
-    sub = `last week had ${formatHM(ghostAt)} by ${DAY_NAMES[todayIndex].toLowerCase()}. one session closes it`;
+    sub = `${name} had ${formatHM(ghostAt)} by ${DAY_NAMES[todayIndex].toLowerCase()}. one session closes it`;
   } else {
     headline = <>neck and neck</>;
     sub = `${formatHM(now)} each by ${DAY_NAMES[todayIndex].toLowerCase()}. the next session breaks the tie`;
   }
 
+  const offered = choices ? AGAINST.filter((a) => choices[a.key]) : [];
+
   return (
     <div>
+      {onAgainst && offered.length > 1 && (
+        <div className="mb-2.5 flex items-baseline gap-2.5 font-serif text-[12.5px] italic text-muted">
+          <span>against</span>
+          {offered.map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              onClick={() => onAgainst(a.key)}
+              aria-pressed={pace.against === a.key}
+              className={`bg-transparent px-0.5 transition-colors ${
+                pace.against === a.key ? 'hl-swipe not-italic text-ink' : 'hover:text-ink-soft'
+              }`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
       <p className="m-0 font-serif text-[22px] font-medium leading-tight tracking-[-0.01em] text-ink">
         {headline}
       </p>
@@ -72,7 +112,7 @@ export default function PaceRace({ pace, accent = 'var(--ink)' }: { pace: Pace; 
         viewBox={`0 0 ${W} ${H + 16}`}
         className="mt-4 block h-auto w-full overflow-visible"
         role="img"
-        aria-label={`This week ${formatHM(now)} so far, last week ${formatHM(ghostAt)} by the same day and ${formatHM(lastTotal)} in all.`}
+        aria-label={`This week ${formatHM(now)} so far, ${name} ${formatHM(ghostAt)} by the same day and ${formatHM(lastTotal)} in all.`}
       >
         {/* The ruled baseline, and a faint rule for each day. */}
         {DAYS.map((_, i) => (
@@ -186,13 +226,13 @@ export default function PaceRace({ pace, accent = 'var(--ink)' }: { pace: Pace; 
         </span>
         <span className="flex items-center gap-1.5">
           <span aria-hidden className="block h-[2px] w-4 rounded-full bg-muted-soft" />
-          <span className="font-serif italic">last week</span>
+          <span className="font-serif italic">{name}</span>
         </span>
       </div>
 
       {lead > 59 && now >= lastTotal && lastTotal > 0 && (
         <HandNote className="mt-1" rotate={-3}>
-          last week is in the rear view
+          {name} is in the rear view
         </HandNote>
       )}
     </div>

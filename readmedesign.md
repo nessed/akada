@@ -1540,12 +1540,19 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
   offered, and the pick turns over with the date.
 - **The chase row**, three cards dealt onto the page one after the other
   (`.deal-in`), under the ledger line:
-  - **You vs last week** (`PaceRace`). Both weeks as running totals on one
-    ruled plot, last week pencilled in whole, this week inked over it up to
-    today. Where the two stand today is joined by a short dashed stroke, so
-    ahead or behind is a distance before it is a figure. The headline is the
-    gap ("29m behind", "1h 10m ahead", "neck and neck") and the line under
-    it is what closes it.
+  - **You vs another week** (`PaceRace`). Both weeks as running totals on
+    one ruled plot, the other week pencilled in whole, this week inked over
+    it up to today. Where the two stand today is joined by a short dashed
+    stroke, so ahead or behind is a distance before it is a figure. The
+    headline is the gap ("29m behind", "1h 10m ahead", "neck and neck") and
+    the line under it is what closes it. The other week is **last week**
+    unless the serif line over the headline ("against last week · usual ·
+    best", the picked one on the highlighter) says otherwise: **usual** is
+    the median of every whole week before this one, empty ones included, a
+    day at a time and held so it never dips (offered once three whole weeks
+    are in, `USUAL_MIN_WEEKS`); **best** is the best whole week so far. Last
+    week alone was the harshest bar after a good week and no bar at all
+    after a quiet one. The card's title follows the pick.
   - **Next milestone** (`NextMilestone`). The next round number in the
     term's hours, its figure first and its name as the aside ("10 hours ·
     double digits"; titled "The next line" and led by the name alone, it read
@@ -1576,15 +1583,85 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
   new best every day. Until then the figures stand as they are under one
   line, "your first weeks set the marks", with no chase line and no stamp. A
   session closed for the reader (`recovery`) never sets one.
+- **The lens.** Under the ledger line, a serif line "Reading · Every course
+  · CS 101 · …", the picked one on the course's highlighter. It is read
+  through everything under it: the race, the milestone (titled with the
+  course), the clock, the records, Side by side, the weeks, the heatmap, the
+  list, the grade and the log. It used to sit on the heatmap alone, so the
+  rest of the page could only be read for the whole term. The masthead stays
+  the term's hours.
+- **Side by side** (`lib/stats-lens.ts`), under the chase row: a stretch of
+  the term from every side the log can be read from, each figure set beside
+  the same one for the stretch before. The stretch is picked top right,
+  **This week · 4 weeks · Term**, and the standfirst under the heading says
+  what it is set against. A week is this week so far against last week *by
+  the same day* ("last week by now"), since a Wednesday against a whole week
+  is a race nobody could win; four weeks is the last 28 days against the 28
+  before; the term stands alone.
+  - **The figures** (`SpanFigures`), one deckle card of labelled figures, an
+    eyebrow over a 24px mono figure: hours, a day, days studied "of 7",
+    sittings, usual sitting (the median, recovered sittings left out),
+    longest, tasks finished "12 added", courses touched "3 of 4" (or time
+    on a task when one course is being read), and practice papers with
+    their average once one is marked. Under each, the change is **written,
+    never drawn**: a small arrow, sage for more and clay (`warn`) for less,
+    the difference in mono, then "on last week by now" in the serif. Less is
+    a fact about the stretch, never an alarm; the same figure says "same as".
+  - **Course against course** (`CourseBalance`), full width: each course's
+    hours for the stretch as a rule in its colour, with a 1px `ink-soft`
+    tick where its weekly goal, scaled to the stretch, falls ("asks 5h
+    51m"). Every rule is on one scale, so the longest is the course that got
+    the most. Beside it the last eight weeks as small bars with the goal as
+    a dash, whole weeks on goal ("5/7", the week being lived never counted
+    as a miss), sittings and the usual one, and when it was last sat ("last
+    sat 9d ago" in `warn` past a week). The figure, right, carries its own
+    change. Hours against hours: nothing on it is a percentage. Each row is
+    a link to the course.
+  - **When in the week** (`WeekRhythm`): a row per weekday, a column per
+    hour, each cell inked as deep as the time that landed in it, with the
+    fullest cell named over it ("fullest on tuesdays 9pm to 10pm · 55m")
+    and a hovered or tapped one read out in its place. Only a sitting the
+    timer ran is placed, each block spread across the hours it ran through;
+    every sitting still counts toward its weekday's total at the row's end.
+    The clock in the chase row says when in the day; this says which
+    evenings.
+  - **How long you sit** (`SittingLengths`): sittings sorted into lengths,
+    under 15m to 2h+. The bar is how many sittings; the mono figure under
+    each is the hours that length carried, since twenty short sittings and
+    two long ones can hold the same afternoon. The length carrying the most
+    hours is inked, the rest pencil (`line-strong`).
+- **Week by week** (`TermWeeks`), at the head of the main column: one bar a
+  week for the whole term, stacked in the course colours, against the
+  week's goal as a dashed line, with weeks still to come as dashed empty
+  slots so the chart says where in the term today is. This week's number
+  is on the highlighter. Over it, "a usual week 6h 38m · on goal 3 of 5".
+  **A tap opens the week** underneath: its seven days as small stacked bars,
+  each course's hours on a rule against a tick at its goal ("2h 52m / 4h"),
+  and days, sittings, tasks finished and how far over or under a usual week
+  it ran. It opens on this week, and replaced a chart of the last seven days
+  that said less than Today's own week does. **Hours by course** in the
+  aside went with it; Course against course says all of that and more.
+- **Every day so far** (`Heatmap`): the months named in the serif italic
+  over the week they start in, M / W / F down the side, the strip opened
+  scrolled to today, as many weeks as the term has had (13 to 26). A blank
+  day is drawn in the paper's tint at full strength: at 8% it vanished on
+  the night paper and the grid looked half printed. A "less … more" key and
+  a line that reads a tapped day ("Tuesday, Sep 22 · 1h 40m") sit under it.
+- **The list, in and out** (`TaskFlow`), in the aside under the records:
+  added and finished a pair of marks a week for eight weeks, added as a
+  pencil outline and finished in ink, so a week that added more than it
+  finished reads as an outline taller than its ink. Under it, what is open
+  past its date (the figure in `warn`), what is due in the next seven days,
+  and what a finished task with time on it has usually taken.
 - **The log** at the foot is one dated list: sessions under the day they
   were studied, tasks under the day they were added or finished ("added",
   "finished", "skipped"). More than three tasks added on one day fold into
   one line, "14 tasks added", since an outline read in by Claude adds forty
   at once and buried the day's study under them.
 - **The charts arrive.** The heatmap inks in a week at a time from the
-  oldest (`.heat-in`) and rings today; the week's bars fill up from the rule
-  (`.bar-grow`); the course rules draw (`.rule-draw`) and their hour counts
-  roll up.
+  oldest (`.heat-in`) and rings today; the bars fill up from the rule
+  (`.bar-grow`); the rules draw (`.rule-draw`); the figures in Side by side
+  are dealt in (`.deal-in`).
 
 All of it fills backwards only and holds no transform once landed, and
 reduced motion drops the delays with the durations.
@@ -1633,6 +1710,20 @@ headers, the one screen that still looked like a settings panel.
   page (see Courses below).
 - **Within reach** (aside). The first four Next Mark candidates. Today and the
   timer say one line and go quiet; this is where the rest of the board is.
+- **The term, week by week** (`WeekLedger`, from `lib/progression/weeks.ts`),
+  full width under the pages and the run: the term as a ledger, a line a
+  week, newest first. Each line is "Wk 5" over the Monday's date, the week's
+  days as the run draws them, its hours in mono over a thin rule against the
+  best week (which carries "best week" in Caveat), the tallies it inked
+  ("+14", and "1 bound" under it when a page bound), a stroke in each
+  course's colour for every course it touched, and the week's `HandCheck`.
+  Column heads are eyebrows from `md`. A tap opens the line: how the week
+  counted in words ("5 study days, counted on its study days"), its biggest
+  day, the tasks it finished, and each course's hours, tallies and bound
+  pages for the week. Tallies are read off the credited running total per
+  course, so a week's tallies always add up to the marks on the pages
+  above. The run in the aside says which weeks counted; this says what each
+  one held. Eight lines, then "every week, all 14".
 - **How you study**, full width, figures on the left, by-course and what the
   ranking has learned on the right from `lg`.
 - **Since you last looked.** Record remembers, on the device, what it
