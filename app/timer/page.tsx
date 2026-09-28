@@ -23,7 +23,7 @@ import { useProgression } from '@/lib/progression/use-progression';
 import { useCourses, useTasks } from '@/lib/data-hooks';
 import { clockFace } from '@/lib/utils';
 import { hasEarlierBlock, stretchFace } from '@/lib/timer-face';
-import { NIGHT_UNDERLINE } from '@/lib/preferences';
+import { NIGHT_UNDERLINE, usePreferences } from '@/lib/preferences';
 
 /**
  * The timer.
@@ -72,6 +72,7 @@ function hhmm(ms: number): string {
 
 export default function TimerPage() {
   const router = useRouter();
+  const [{ timerDrawing }] = usePreferences();
   const {
     hydrated,
     active: liveActive,
@@ -646,11 +647,14 @@ export default function TimerPage() {
           progress={progress}
           seed={fanSeed}
           color={color}
+          species={timerDrawing}
           light
           depth={10}
           tripleP={0.3}
           trunkWidth={15}
-          padTop={20}
+          // The fan reaches up under the header; the jelly's bell hangs
+          // from the top, so it is given the header's height to hang below.
+          padTop={timerDrawing === 'jelly' ? 96 : 20}
           widthFill={0.94}
           resting={pausedFocus}
           className={`absolute inset-0 h-full w-full ${quiet}`}
@@ -811,6 +815,7 @@ export default function TimerPage() {
           {/* Standing on a drawn ground, with the rest of its shape sketched
               in pencil above it for the ink to fill. */}
           <StudyFan
+            species={timerDrawing}
             progress={progress}
             seed={fanSeed}
             color={color}

@@ -8,6 +8,7 @@ import ConfirmSheet from '@/components/ConfirmSheet';
 import AppearanceEditor from '@/components/settings/AppearanceEditor';
 import CoursesEditor from '@/components/settings/CoursesEditor';
 import BreakLengthPicker from '@/components/settings/BreakLengthPicker';
+import TimerDrawingPicker from '@/components/settings/TimerDrawingPicker';
 import DayEndPicker from '@/components/settings/DayEndPicker';
 import SoundSampler from '@/components/settings/SoundSampler';
 import ProfileEditor from '@/components/settings/ProfileEditor';
@@ -325,6 +326,10 @@ export default function SettingsPage() {
                 <BreakLengthPicker
                   value={prefs.breakMinutes}
                   onChange={(breakMinutes) => setPrefs({ breakMinutes })}
+                />
+                <TimerDrawingPicker
+                  value={prefs.timerDrawing}
+                  onChange={(timerDrawing) => setPrefs({ timerDrawing })}
                 />
               </SettingGroup>
 
