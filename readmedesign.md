@@ -638,7 +638,8 @@ reader has stopped deciding things is the wrong thing to hand them.
 tab all show the same number (`stretchFace` in `lib/timer-face.ts`). A break
 counts down its length and then up past it; a block counts down its target
 and then counts the overrun up (it used to sit at `00:00`); an open stretch
-counts up. So after a break the face starts again on the new block rather
+counts up. Past its length the digits carry a plus, `+16:23`, on the face
+and the dock alike: without it, sixteen minutes over read as sixteen left. So after a break the face starts again on the new block rather
 than carrying the session. The session's running total, blocks added up and
 breaks left out, moves to second place once there is an earlier block to add
 up: a line under the clock on the timer (`1:04:12 in this session`, the

@@ -302,6 +302,9 @@ export default function TimerPage() {
   // target or of a long sitting.
   const remaining = face.seconds;
   const overrun = !resting && face.over;
+  /* Past its length the face counts up what has run over, and says so with
+     a plus: "16:23" under "over 45:00" read as sixteen minutes left. */
+  const faceText = `${face.over ? '+' : ''}${clockFace(remaining)}`;
   const progress = resting
     ? // Held. Rest is not progress, and a fan that shrank back would be
       // telling the reader they had lost the block they just finished.
@@ -683,7 +686,7 @@ export default function TimerPage() {
                 }
               >
                 <span className={pausedFocus ? 'held-breath' : undefined}>
-                  {clockFace(resting ? remaining : elapsed)}
+                  {faceText}
                 </span>
               </p>
               <p className="m-0 mt-3 font-serif italic text-[13.5px]" style={{ color: '#958D7E' }}>
@@ -834,7 +837,7 @@ export default function TimerPage() {
                 : `${overrun ? 'Over by' : 'Remaining'} ${spoken(remaining)}`
             }
           >
-            <span className={pausedFocus ? 'held-breath' : undefined}>{clockFace(remaining)}</span>
+            <span className={pausedFocus ? 'held-breath' : undefined}>{faceText}</span>
           </p>
           <p className="m-0 mt-3 font-serif italic text-[13.5px] text-muted">
             {resting ? (
