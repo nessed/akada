@@ -437,8 +437,17 @@ export async function deleteTaskOptimistic(id: string) {
       revalidate: false,
     },
   );
-  // A note studied under the task is unlinked by the database; read it back.
-  void mutate(KEY.notes);
+  // A note studied under the task is unlinked by the database (and by the
+  // local adapter). The cache is unlinked the same way rather than every
+  // note's markdown being read back to learn it.
+  void mutate(
+    KEY.notes,
+    (current: StudyNotes | undefined) =>
+      current?.notes.some((note) => note.taskId === id)
+        ? { ...current, notes: current.notes.map((note) => (note.taskId === id ? { ...note, taskId: null } : note)) }
+        : current,
+    { revalidate: false },
+  );
 }
 
 /* ───────── Session mutations ───────── */

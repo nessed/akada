@@ -564,18 +564,7 @@ export class SupabaseAdapter implements DataProvider {
 
   async getCourses(): Promise<Course[]> {
     const uid = await this.userId();
-    const semesterId = await this.activeSemesterId(uid);
-    const { data, error } = await this.supabase
-      .from('courses')
-      .select('*')
-      .eq('user_id', uid)
-      .eq('semester_id', semesterId)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    // Sorted here rather than in the query: .order('sort_order') would be a
-    // hard error against a database that has not run the latest schema, and
-    // created_at is already the tie-break the ordering falls back to.
-    return sortCourses((data as CourseRow[]).map(rowToCourse));
+    return this.getCoursesForSemester(await this.activeSemesterId(uid));
   }
 
   async getCoursesForSemester(semesterId: string): Promise<Course[]> {
