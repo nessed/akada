@@ -14,7 +14,7 @@ import { useRecall } from '@/lib/recall/use-recall';
 import type { RecallState } from '@/lib/recall';
 import { useLiveSession } from '@/lib/use-live-session';
 import { withLiveSession } from '@/lib/live-session';
-import TaskRow from '@/components/TaskRow';
+import TaskRow, { useTaskRowTimer } from '@/components/TaskRow';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import {
   ComingPanel,
@@ -40,7 +40,6 @@ import { usePreferences } from '@/lib/preferences';
 import type { CatalogCourse } from '@/lib/catalog';
 import { courseFromCatalog, deriveCourseCode, parseCourseInput, weeklyGoalForCredits } from '@/lib/catalog';
 import {
-  formatHM,
   daysBetween,
   isoDate,
   PASTEL_PALETTE,
@@ -53,8 +52,7 @@ import {
   cleanCourseName,
   cleanTaskTitle,
 } from '@/lib/planner-safety';
-import { useTimer } from '@/lib/timer-context';
-import HandNote from '@/components/notebook/HandNote';
+import { useTimerState } from '@/lib/timer-context';
 import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
 import {
   useOnboardingComplete,
@@ -104,7 +102,7 @@ function DashboardFallback() {
 function DashboardPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { active, start, pause, resume, focusSeconds } = useTimer();
+  const { active, start } = useTimerState();
   const { notify } = useNotice();
   const { offer } = useUndo();
 
@@ -182,20 +180,6 @@ function DashboardPageContent() {
   function beginTimer(courseId: string, taskId: string | null) {
     start(courseId, taskId);
     router.push('/timer');
-  }
-
-  function handleStartTimerForTask(task: Task) {
-    handleStartTimer(task.courseId, task.id);
-  }
-
-  function handleStartTimer(courseId: string, taskId: string | null = null) {
-    // A timer already running on something else would be discarded, which is
-    // the one thing here worth stopping to ask about.
-    if (active && (active.courseId !== courseId || active.taskId !== taskId)) {
-      setPendingTimer({ courseId, taskId });
-      return;
-    }
-    beginTimer(courseId, taskId);
   }
 
   async function handleSkipTask(task: Task) {
@@ -435,24 +419,7 @@ function DashboardPageContent() {
     }
   }
 
-  /**
-   * What a row needs to show, and hold, the timer running on it.
-   *
-   * Passed as one unit because these four belong together: the pause control
-   * on a row used to draw whenever a timer was running and call a handler no
-   * page ever passed, so it was a live-looking button that did nothing. It
-   * now draws only when it is given something to do, and this keeps every
-   * list giving it the same thing.
-   */
-  function timerRowProps(task: Task) {
-    const mine = active?.taskId === task.id;
-    return {
-      running: mine,
-      paused: mine && Boolean(active?.isPaused),
-      runningLabel: mine ? formatHM(focusSeconds) : undefined,
-      onTogglePause: active?.isPaused ? resume : pause,
-    };
-  }
+  const timerRowProps = useTaskRowTimer();
 
   // Reads through the same SWR caches as everything above, so it costs no
   // request. See lib/progression for why none of it is stored.

@@ -16,7 +16,7 @@ import Stamp from '@/components/notebook/Stamp';
 import DueDateBadge from '@/components/DueDateBadge';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
 import DatePicker from '@/components/DatePicker';
-import TaskRow from '@/components/TaskRow';
+import TaskRow, { useTaskRowTimer } from '@/components/TaskRow';
 import Fortnight from '@/components/tasks/Fortnight';
 import ReorderList from '@/components/ReorderList';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
@@ -30,9 +30,9 @@ import { keepTask, keepTickedSteps } from '@/lib/recall/actions';
 import { looksLikeReading, readingPrompt, recallOfTask, type RecallItem } from '@/lib/recall';
 import { beforeReadingPrompt } from '@/lib/recall/prompt';
 import { daysAgoWords, whenWords } from '@/lib/recall/words';
-import { formatHM, formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
+import { formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import {
   useOnboardingComplete,
   useCourses,
@@ -88,7 +88,7 @@ export default function TasksPage() {
 function TasksPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { active, start, pause, resume, focusSeconds } = useTimer();
+  const { active, start } = useTimerState();
   const { notify } = useNotice();
   const claude = useClaudeSheet();
   const { offer: offerUndo } = useUndo();
@@ -145,24 +145,7 @@ function TasksPageContent() {
   const cursorTaskRef = useRef<Task | null>(null);
   const toggleSelectedRef = useRef<(task: Task) => void>(() => {});
 
-  /**
-   * What a row needs to show, and hold, the timer running on it.
-   *
-   * Passed as one unit because these four belong together: the pause control
-   * on a row used to draw whenever a timer was running and call a handler no
-   * page ever passed, so it was a live-looking button that did nothing. It
-   * now draws only when it is given something to do, and this keeps every
-   * list giving it the same thing.
-   */
-  function timerRowProps(task: Task) {
-    const mine = active?.taskId === task.id;
-    return {
-      running: mine,
-      paused: mine && Boolean(active?.isPaused),
-      runningLabel: mine ? formatHM(focusSeconds) : undefined,
-      onTogglePause: active?.isPaused ? resume : pause,
-    };
-  }
+  const timerRowProps = useTaskRowTimer();
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1231,7 +1214,7 @@ function TasksPageContent() {
 
       <StartTimerPopover target={startTarget} onClose={() => setStartTarget(null)} />
 
-      <Leaving value={editingTask}>{(editingTask, leaving) => (
+      <Leaving value={editingTask}>{(_, leaving) => (
         <div className={`sheet-lift fixed inset-0 z-[80] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
           <button
             type="button"

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCourses, useTasks, useUserSettings, reorderCoursesOptimistic } from '@/lib/data-hooks';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import { useUpNext } from '@/lib/use-up-next';
 import { isoDate, resolveTint } from '@/lib/utils';
 import { sortCourses } from '@/lib/data/course-order';
@@ -204,7 +204,7 @@ export default function DesktopRail() {
   const [collapsed, setCollapsed] = useRailCollapsed();
   const { courses } = useCourses();
   const { tasks } = useTasks();
-  const { active } = useTimer();
+  const { active } = useTimerState();
   const upNext = useUpNext();
   const { settings } = useUserSettings();
 

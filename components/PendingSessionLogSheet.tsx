@@ -13,7 +13,7 @@ import { loadQuizDraft } from '@/lib/quiz/draft';
 import { sittingSuggestions, sittingWindow } from '@/lib/session-suggestions';
 import { settled } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import { keepLine } from '@/lib/recall/actions';
 import { formatHM, isoDate } from '@/lib/utils';
 import { LONG_SITTING_SECONDS } from '@/lib/timer-idle';
@@ -40,12 +40,16 @@ export function isLogSheetMounted(): boolean {
 }
 
 export default function PendingSessionLogSheet({ onResolved }: Props) {
-  const { pendingLog, clearPendingLog } = useTimer();
+  const { active, pendingLog, clearPendingLog } = useTimerState();
   const { notify } = useNotice();
   const { courses, isLoading: coursesLoading } = useCourses();
   const { tasks } = useTasks();
-  const { quizzes } = useQuizzes();
-  const { notes } = useNotes();
+  // Notes and quizzes only feed the suggestions on a sitting's sheet, and
+  // this sheet is on every screen. They load while a sitting runs, so they
+  // are here by the time it ends, and are not read at all otherwise.
+  const sittingLive = Boolean(active || pendingLog);
+  const { quizzes } = useQuizzes(sittingLive);
+  const { notes } = useNotes(sittingLive);
   // The pending sitting is folded into this reading, so `sitting` is what
   // saving it will do to the record, read before the reader decides.
   const { sitting, logged } = useProgression();
@@ -255,7 +259,7 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
   );
 }
 
-type PendingLog = NonNullable<ReturnType<typeof useTimer>['pendingLog']>;
+type PendingLog = NonNullable<ReturnType<typeof useTimerState>['pendingLog']>;
 
 function clockOf(ms: number): string {
   return new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });

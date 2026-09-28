@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import { isLogSheetMounted } from './PendingSessionLogSheet';
 
 /**
@@ -44,7 +44,7 @@ function blinkPage() {
 
 export default function TimerHotkeys() {
   const router = useRouter();
-  const { active, onBreak, endBreak, pause, resume, stop } = useTimer();
+  const { active, onBreak, endBreak, pause, resume, stop } = useTimerState();
 
   useEffect(() => {
     if (!active) return;

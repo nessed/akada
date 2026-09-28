@@ -14,7 +14,7 @@ import {
   cleanCourseName,
   hasDuplicateCourseCodes,
 } from '@/lib/planner-safety';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
 import { ButtonSpinner } from '@/components/LoadingIndicator';
 import BackButton from '@/components/BackButton';
@@ -59,7 +59,7 @@ export default function CoursesEditor({
   /** Leaves settings for the dashboard's add-course sheet. */
   onAddCourse: () => void;
 }) {
-  const { active, pendingLog } = useTimer();
+  const { active, pendingLog } = useTimerState();
   const original = useMemo(
     () =>
       courses.map<DraftCourse>((c) => ({

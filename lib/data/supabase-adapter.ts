@@ -805,7 +805,7 @@ export class SupabaseAdapter implements DataProvider {
       .eq('semester_id', semesterId)
       .order('date', { ascending: false });
     if (error) throw error;
-    return this.withSegments(uid, (data as SessionRow[]).map(rowToSession));
+    return (data as SessionRow[]).map(rowToSession);
   }
 
   async addSession(input: Omit<Session, 'id' | 'createdAt'>): Promise<Session> {

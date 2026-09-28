@@ -443,7 +443,6 @@ export default function StatsPage() {
                 active={filter === c.id}
                 onClick={() => setFilter(c.id)}
                 label={c.code}
-                color={c.color}
                 tint={resolveTint(c.color, c.tint)}
               />
             ))}
@@ -731,11 +730,10 @@ interface ChipProps {
   active: boolean;
   onClick: () => void;
   label: string;
-  color?: string;
   tint?: string;
 }
 
-function FilterChip({ active, onClick, label, color, tint }: ChipProps) {
+function FilterChip({ active, onClick, label, tint }: ChipProps) {
   return (
     <button
       type="button"

@@ -57,6 +57,10 @@ const KEY = {
 
 /* ───────── Reads ───────── */
 
+// What a list reads as before it has loaded. One array rather than a fresh
+// `[]` per render, so memos keyed on a list still loading hold still.
+const NONE = Object.freeze([]) as never[];
+
 export function useOnboardingComplete() {
   const { data, error, isLoading } = useSWR(KEY.onboarding, () =>
     db.isOnboardingComplete(),
@@ -68,21 +72,21 @@ export function useCourses() {
   const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.courses, () =>
     db.getCourses(),
   );
-  return { courses: data ?? [], error, isLoading, revalidate };
+  return { courses: data ?? NONE, error, isLoading, revalidate };
 }
 
 export function useSessions() {
   const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.sessions, () =>
     db.getSessions(),
   );
-  return { sessions: data ?? [], error, isLoading, revalidate };
+  return { sessions: data ?? NONE, error, isLoading, revalidate };
 }
 
 export function useTasks() {
   const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.tasks, () =>
     db.getTasks(),
   );
-  return { tasks: data ?? [], error, isLoading, revalidate };
+  return { tasks: data ?? NONE, error, isLoading, revalidate };
 }
 
 /** The semester Dashboard/Tasks/Timer currently write into. */
@@ -96,7 +100,7 @@ export function useSemesters() {
   const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.semesters, () =>
     db.getSemesters(),
   );
-  return { semesters: data ?? [], error, isLoading, revalidate };
+  return { semesters: data ?? NONE, error, isLoading, revalidate };
 }
 
 /**
@@ -109,7 +113,7 @@ export function useRecallRecords() {
     db.getRecall(),
   );
   return {
-    records: data?.records ?? [],
+    records: data?.records ?? NONE,
     /**
      * Whether the rows have actually been read. Not the same as not loading:
      * a first read that failed is not loading either, and its empty list is
@@ -126,11 +130,15 @@ export function useRecallRecords() {
   };
 }
 
-/** Every note the student has, newest first. Not scoped to a semester. */
-export function useNotes() {
-  const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.notes, () => db.getNotes());
+/**
+ * Every note the student has, newest first. Not scoped to a semester.
+ * `enabled: false` leaves the cache alone: for a caller that only needs the
+ * notes some of the time, since every note carries its whole markdown.
+ */
+export function useNotes(enabled = true) {
+  const { data, error, isLoading, mutate: revalidate } = useSWR(enabled ? KEY.notes : null, () => db.getNotes());
   return {
-    notes: data?.notes ?? [],
+    notes: data?.notes ?? NONE,
     loaded: data !== undefined,
     available: data?.available ?? true,
     error,
@@ -139,11 +147,11 @@ export function useNotes() {
   };
 }
 
-/** Every quiz an assistant has sent, newest first. */
-export function useQuizzes() {
-  const { data, error, isLoading, mutate: revalidate } = useSWR(KEY.quizzes, () => db.getQuizzes());
+/** Every quiz an assistant has sent, newest first. `enabled` as for useNotes. */
+export function useQuizzes(enabled = true) {
+  const { data, error, isLoading, mutate: revalidate } = useSWR(enabled ? KEY.quizzes : null, () => db.getQuizzes());
   return {
-    quizzes: data?.quizzes ?? [],
+    quizzes: data?.quizzes ?? NONE,
     loaded: data !== undefined,
     available: data?.available ?? true,
     error,
@@ -155,7 +163,7 @@ export function useQuizzes() {
 export function useWeakPoints() {
   const { data, error, isLoading } = useSWR(KEY.weakPoints, () => db.getWeakPoints());
   return {
-    weakPoints: data?.weakPoints ?? [],
+    weakPoints: data?.weakPoints ?? NONE,
     loaded: data !== undefined,
     available: data?.available ?? true,
     error,
