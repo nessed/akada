@@ -1,7 +1,7 @@
 'use client';
 
 import HandNote from '@/components/notebook/HandNote';
-import type { MarkdownHeading } from './MarkdownReader';
+import type { MarkdownHeading } from './markdown-outline';
 import type { CheckResult } from '@/lib/notes/store';
 
 export function TocList({ headings, activeId, onJump }: { headings: MarkdownHeading[]; activeId: string; onJump: (id: string) => void }) {

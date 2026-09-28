@@ -5,15 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import HandNote from '@/components/notebook/HandNote';
 import HandCheck from '@/components/notebook/HandCheck';
-import { MarkdownReader, countChecks, getMarkdownHeadings, openHeadingSection } from '@/components/notes/MarkdownReader';
-import Editor from '@/components/notes/Editor';
+import { countChecks, getMarkdownHeadings, openHeadingSection } from '@/components/notes/markdown-outline';
 import Sheet from '@/components/notes/Sheet';
 import PromptSheet from '@/components/notes/PromptSheet';
 import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
 import { notePrompt } from '@/lib/claude-asks';
 import Icon from '@/components/notes/Icon';
 import { CheckStrokes, MinutesLeft, TocList } from '@/components/notes/Contents';
-import FocusMode from '@/components/notes/FocusMode';
 import StudyThis from '@/components/notes/StudyThis';
 import Shelf from '@/components/notes/Shelf';
 import QuizShelf from '@/components/notes/QuizShelf';
@@ -27,6 +25,41 @@ import { useCourses, useNotes, saveNote, deleteNoteOptimistic, deleteQuizOptimis
 import type { NoteRead, NoteSource, StudyNote } from '@/lib/data';
 import { minutesForNote, readingPace } from '@/lib/notes/reads';
 import { useReadThrough } from '@/lib/notes/use-read-through';
+
+/* The reader, the editor and focus mode carry react-markdown, KaTeX and Prism
+   between them, several times the weight of the shelf, so the shelf does not
+   wait on them. NotesContent starts loading them as it mounts, and a note or
+   the editor counts as not ready until they are here: the page shows the same
+   empty body it shows while notes load, never a half-drawn note. */
+type NoteParts = {
+  MarkdownReader: typeof import('@/components/notes/MarkdownReader').MarkdownReader;
+  Editor: typeof import('@/components/notes/Editor').default;
+  FocusMode: typeof import('@/components/notes/FocusMode').default;
+};
+let noteParts: NoteParts | null = null;
+let notePartsLoading: Promise<NoteParts> | null = null;
+
+function loadNoteParts() {
+  notePartsLoading ??= Promise.all([
+    import('@/components/notes/MarkdownReader'),
+    import('@/components/notes/Editor'),
+    import('@/components/notes/FocusMode'),
+  ]).then(([reader, editor, focus]) => (noteParts = { MarkdownReader: reader.MarkdownReader, Editor: editor.default, FocusMode: focus.default }));
+  return notePartsLoading;
+}
+
+function useNoteParts() {
+  const [parts, setParts] = useState(noteParts);
+  useEffect(() => {
+    if (parts) return;
+    let live = true;
+    loadNoteParts().then((loaded) => live && setParts(loaded), () => { notePartsLoading = null; });
+    return () => {
+      live = false;
+    };
+  }, [parts]);
+  return parts;
+}
 
 /** The page's view of a stored note: times as numbers, the way it compares them. */
 type ShelfNote = Note & { courseId: string | null; checks: Record<string, CheckResult>; source: NoteSource; taskId: string | null; reads: NoteRead[]; stored: StudyNote };
@@ -101,7 +134,9 @@ function NotesContent() {
     [stored],
   );
   const [prefsReady, setPrefsReady] = useState(false);
-  const ready = prefsReady && loaded;
+  const parts = useNoteParts();
+  // Only a note or the editor needs the parts; the shelf is ready without them.
+  const ready = prefsReady && loaded && (!!parts || !(openId || editing || writingNew));
   const [draft, setDraft] = useState('');
   const [reader, setReader] = useState<Reader>({ size: 'medium', measure: 'narrow' });
   const [readerOpen, setReaderOpen] = useState(false);
@@ -606,11 +641,11 @@ function NotesContent() {
   let body: React.ReactNode = null;
 
   if (!ready) body = null;
-  else if (mode === 'edit') {
+  else if (mode === 'edit' && parts) {
     body = (
       <>
         <button type="button" className="back" onClick={cancelEdit}>← {active && !writingNew ? active.title : 'Study'}</button>
-        <Editor
+        <parts.Editor
           draft={draft}
           onChange={setDraft}
           isNew={writingNew || !active}
@@ -630,9 +665,9 @@ function NotesContent() {
         <button type="button" className="btn" onClick={() => go('')}>Back to notes</button>
       </div>
     );
-  } else if (focusing && active) {
+  } else if (focusing && active && parts) {
     body = (
-      <FocusMode
+      <parts.FocusMode
         key={active.id}
         note={active}
         course={activeCourse}
@@ -652,7 +687,7 @@ function NotesContent() {
         onLeave={leaveFocus}
       />
     );
-  } else if (mode === 'read' && active) {
+  } else if (mode === 'read' && active && parts) {
     body = (
       <div className={`reader ${showToc ? 'has-toc' : ''}`} data-measure={reader.measure}>
         <div className="reader-main">
@@ -737,7 +772,7 @@ function NotesContent() {
           </header>
           {!hasOwnTitle && <h1 className="screen-title" style={{ marginBottom: 28 }}>{active.title}</h1>}
           <div className={`reading-size-${reader.size}`}>
-            <MarkdownReader
+            <parts.MarkdownReader
               key={active.id}
               markdown={active.markdown}
               collapsedSections={collapsed}
