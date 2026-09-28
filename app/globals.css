@@ -553,22 +553,28 @@ input[type='date']::-webkit-calendar-picker-indicator {
   animation: nav-mark 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) 0.06s backwards;
 }
 
-/* The blink `P` gives the page (TimerHotkeys): a veil of ink that closes
-   fast and opens a touch slower, the way a lid does. Over everything,
-   focus mode included, and it catches nothing. */
-.page-blink {
+/* The ring a pause sends across the page (components/PauseRipple). Sized,
+   placed, coloured and animated from script; this is only what every ring
+   shares. Over everything, focus mode included, and it catches nothing. */
+.pause-ripple {
   position: fixed;
-  inset: 0;
   z-index: 1000;
   pointer-events: none;
-  background: var(--ink);
-  opacity: 0;
-  animation: page-blink 0.34s ease-out both;
+  border-style: solid;
+  border-radius: 50%;
+  box-sizing: border-box;
 }
-@keyframes page-blink {
-  0% { opacity: 0; }
-  30% { opacity: 0.16; }
-  100% { opacity: 0; }
+
+/* A held clock breathes. Once its ink has come down to half, the digits go
+   on slowly dimming and coming back, about as slow as a resting breath, so a
+   paused timer across the room reads as waiting rather than frozen or
+   broken. Dim to dimmer, never bright: nothing about it asks to be looked at. */
+.held-breath {
+  animation: held-breath 4.2s ease-in-out 0.6s infinite;
+}
+@keyframes held-breath {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 /* Anyone who has asked their system for less movement gets the app without

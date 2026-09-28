@@ -471,15 +471,26 @@ says why it is there, in the serif italic under the heading: "You stopped a
 stopped for them (left running while the page was closed, a break past 45
 minutes, the 18 hour limit).
 
-### The blink on P
+### The ring on a pause
 
 `P` holds or lets go of the clock from any screen (`TimerHotkeys`), and it is
-pressed with the eyes on the book, not on the dock. So the page answers it:
-the whole screen blinks once, a veil of `ink` that closes in a tenth of a
-second and opens over a quarter, peaking at 16%. It darkens a daylight page
-and lifts the night one, sits over focus mode too, and catches no clicks.
-Only the key does it; a click on the dock already lands where the eye is.
-Reduced motion takes it away with every other animation.
+pressed with the eyes on the book, not on the dock. So the page answers every
+hold and every let-go, from any control (`PauseRipple`, listening for the
+timer context's `akada:timer-hold` event): a ring goes out across the whole
+screen from wherever the pause was made, like a drop landing in ink, with a
+fainter one 130ms behind it. It starts at the press that did it (the pause
+button, the dock, a task row), at the dock for the key, and at the middle of
+the screen if there is no dock. Holding sends it out in the ink the page is
+written in at that point, read off the page around the control rather than
+the control's own label, so the night screen gets a light ring and daylight a
+dark one without either being named; letting go sends it out in the course
+colour. It is a 2px line with a soft wash just inside it and nothing in the
+middle, 900ms on the app's curve, grown by size rather than scaled so the
+line keeps its weight the whole way out: the page is crossed, never covered.
+
+It replaced a blink, a flat 16% veil of `ink` over everything, which read as
+the screen flickering rather than as anything happening. It catches no
+clicks, and reduced motion does not get it at all.
 
 ### The forgotten timer
 The timer's heartbeat keeps a tab alive while it is open, so an open page
@@ -566,6 +577,15 @@ clock, the block and the record are untouched by it. The weights live in
 `StudyFan` (`SWAY_MAX`, `STIFFNESS`, `DAMPING`), the bending itself in
 `drawFan`'s `bends` and `slack`, and a reader who has asked for reduced
 motion gets a fan that does not answer a hand at all.
+
+A held clock closes the fan (`resting` on `StudyFan`). Every split draws in
+toward the branch it grows from by about a third and the whole of it comes a
+few percent shorter, the stem first and the tips a few frames after it, on a
+spring slower and more damped than the hand's (`FOLD_REST`, `FOLD_SLACK`,
+`FOLD_STIFFNESS`, `FOLD_DAMPING`): closing is a settling, not a swing. Letting
+go opens it back out with a small overshoot, the tree waking up rather than
+being switched on. Like the pull, it never touches progress, and reduced
+motion gets a fan that only loses its colour.
 
 Early in a block there is barely any tree to pull, so the lean is shared out
 over the depths that have actually grown. A stem and one split give more than
@@ -1986,7 +2006,7 @@ Movement in the app is soft and deliberate:
 - **`fade-in`**: Subtle opacity transitions for dynamic content.
 - **`tick`**: A slow, `2.4s` pulsing animation used during active study timers to indicate progression without frantic or stressful ticking.
 - **`settle`**: `0.34s` on the same curve, a 4px rise and fade. Whatever swaps in place on the timer screen (focus controls for break controls, the clock face going from block to rest, the "· paused" note) settles in with it rather than cutting.
-- **Pause** is the timer screen going quiet, not a switch: the clock lets its ink down to half over `480ms`, the fan loses colour over `700ms`, and the pause button crosses its glyph and word over (both are always rendered, stacked, so the button never changes width). Resume runs the same way back.
+- **Pause** is the timer screen going quiet, not a switch: a ring goes out across the page from the press (see "The ring on a pause"), the clock lets its ink down to half over `480ms` and then breathes, slowly dimming and coming back on a `4.2s` cycle (`.held-breath`, dim to dimmer, never bright), the fan loses colour over `700ms` and closes its branches in like a flower at dusk, and the pause button crosses its glyph and word over (both are always rendered, stacked, so the button never changes width). Resume runs the same way back, the ring in the course colour and the fan opening out with a small overshoot.
 - **Presses** on the timer's buttons give a `0.97` scale on `:active`. Small enough to feel, never enough to read as a bounce.
 - **Up next arriving.** The task body is keyed on the task, so when it changes (Done, Tomorrow, or the rule switched) the new one settles in and its course rule draws left to right (`.rule-draw`, `0.5s`). Done and Tomorrow first let the old task go with `.lift-away`, a `0.22s` fade and 6px lift, so the next one comes up into a space instead of replacing it in the same frame. The handwritten rule note settles when it is switched.
 - **Up next is live.** Its meta line carries the time already put into the task (mono digits) and when it was last sat. With a timer running on it the line says "on the clock" beside a dot in the course colour pulsing on `tick`, and the figure counts up with the sitting.

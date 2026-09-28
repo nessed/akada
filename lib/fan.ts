@@ -150,6 +150,10 @@ export interface FanDrawOptions {
   /** Length multiplier at each depth, indexed the same way. Small numbers:
       a tenth either side is the whole range the pull uses. */
   slack?: number[];
+  /** How far each split has closed toward its parent, indexed by depth: 0 is
+      open, 1 would lay a branch along the one it grows from. What a paused
+      fan does, like a flower at dusk. Only read alongside `bends`. */
+  fold?: number[];
   /** Device pixels to a CSS pixel, for the hairlines. */
   px?: number;
   /** Leaf fill and edge. Given, the growing tips carry a leaf each and a
@@ -176,7 +180,7 @@ let poseA = new Float64Array(0);
  * always come first in `segs`, so a single forward pass is enough: each
  * branch starts where its parent ended and carries its parent's rotation.
  */
-function poseFan(tree: FanTree, bends: number[], slack?: number[]): void {
+function poseFan(tree: FanTree, bends: number[], slack?: number[], fold?: number[]): void {
   const n = tree.segs.length;
   if (poseX.length < n) {
     poseX = new Float64Array(n);
@@ -186,7 +190,8 @@ function poseFan(tree: FanTree, bends: number[], slack?: number[]): void {
   for (let i = 0; i < n; i++) {
     const s = tree.segs[i];
     const parent = s.p >= 0 ? tree.segs[s.p] : null;
-    const a = (parent ? poseA[s.p] + (s.a - parent.a) : s.a) + (bends[s.d] ?? 0);
+    const open = 1 - (fold?.[s.d] ?? 0);
+    const a = (parent ? poseA[s.p] + (s.a - parent.a) * open : s.a) + (bends[s.d] ?? 0);
     const len = s.len * (1 + (slack?.[s.d] ?? 0));
     poseA[i] = a;
     poseX[i] = (parent ? poseX[s.p] : 0) + Math.cos(a) * len;
@@ -226,6 +231,7 @@ export function drawFan(
     baseOffset = -2,
     bends,
     slack,
+    fold,
     px = 1,
     leaf,
     sketch,
@@ -259,7 +265,7 @@ export function drawFan(
      "the tips reached the top" has to keep meaning the block is done. A
      pulled tree leans past its own margins instead, and the frame clips it. */
   const bent = bends != null;
-  if (bent) poseFan(tree, bends, slack);
+  if (bent) poseFan(tree, bends, slack, fold);
 
   const at = (i: number): [number, number, number, number] => {
     const s = tree.segs[i];

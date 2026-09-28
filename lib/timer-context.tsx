@@ -165,6 +165,22 @@ type TimerStateValue = Omit<TimerContextValue, keyof TimerClock>;
 const TimerStateContext = createContext<TimerStateValue | null>(null);
 const TimerClockContext = createContext<TimerClock | null>(null);
 
+/**
+ * Raised on `window` whenever the clock is held or let go, from any control,
+ * so the page can answer it (components/PauseRipple). A DOM event rather than
+ * context state, because it is a moment, not a state: nothing should re-render
+ * on it, and a remount must not replay it.
+ */
+export const TIMER_HOLD_EVENT = 'akada:timer-hold';
+export interface TimerHoldDetail {
+  held: boolean;
+}
+
+function announceHold(held: boolean): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent<TimerHoldDetail>(TIMER_HOLD_EVENT, { detail: { held } }));
+}
+
 const STORAGE_KEY = 'lums.activeTimer';
 const PENDING_STORAGE_KEY = 'lums.pendingTimerLog';
 const NOTIFICATION_PROMPT_KEY = 'lums.timerNotificationPrompted';
@@ -1253,6 +1269,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       isPaused: true,
       lastSeenAt: now,
     });
+    announceHold(true);
   }, [applyActive, recoverStaleRunningTimer]);
 
   const resume = useCallback(() => {
@@ -1277,6 +1294,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     // wants before it lets the audio context run.
     primeChime();
     applyActive(next);
+    announceHold(false);
   }, [applyActive]);
 
   const cancel = useCallback(() => {

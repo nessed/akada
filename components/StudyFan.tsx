@@ -31,6 +31,10 @@ interface Props {
   /** A drawn line for the stem to stand on. Pair it with a `baseOffset` of
       about 20 so the line has room under the foot. */
   ground?: boolean;
+  /** The clock is held. The fan closes its branches in and draws itself a
+      little shorter, the stem first and the tips after it, and opens back
+      out when this goes false again. Never touches progress. */
+  resting?: boolean;
   className?: string;
 }
 
@@ -50,6 +54,15 @@ const DAMPING = 0.07;
    turning at once. */
 const LAG_PER_DEPTH = 1.6;
 const HISTORY = 64;
+/* A held fan: each split closed by about a third, and the whole of it a few
+   percent shorter, so the crown comes down and in rather than just thinning.
+   The spring that takes it there is slower and more damped than the hand's:
+   closing is a settling, not a swing. Opening again overshoots a touch, which
+   is the tree waking up rather than being switched on. */
+const FOLD_REST = 0.34;
+const FOLD_SLACK = -0.05;
+const FOLD_STIFFNESS = 0.012;
+const FOLD_DAMPING = 0.13;
 
 /**
  * One axis of the sway: a spring that remembers where it has been.
@@ -60,7 +73,7 @@ const HISTORY = 64;
  * `at` reads the position a few frames back, which is what the outer
  * branches are drawn from.
  */
-function strand() {
+function strand(stiffness = STIFFNESS, damping = DAMPING) {
   const past = new Float64Array(HISTORY);
   let i = 0;
   let x = 0;
@@ -68,12 +81,13 @@ function strand() {
   let quiet = 0;
 
   return {
-    step(held: number | null) {
+    /** `rest` is where it springs back to once let go: zero, unless held. */
+    step(held: number | null, rest = 0) {
       if (held == null) {
-        v += -x * STIFFNESS - v * DAMPING;
+        v += -(x - rest) * stiffness - v * damping;
         x += v;
-        if (Math.abs(x) < 0.0004 && Math.abs(v) < 0.0004) {
-          x = 0;
+        if (Math.abs(x - rest) < 0.0004 && Math.abs(v) < 0.0004) {
+          x = rest;
           v = 0;
         }
       } else {
@@ -82,7 +96,7 @@ function strand() {
       }
       i = (i + 1) % HISTORY;
       past[i] = x;
-      quiet = x === 0 && v === 0 ? quiet + 1 : 0;
+      quiet = x === rest && v === 0 ? quiet + 1 : 0;
     },
     at(lag: number) {
       return past[(i - Math.min(lag, HISTORY - 1) + HISTORY) % HISTORY];
@@ -127,6 +141,7 @@ export default function StudyFan({
   leaves = true,
   sketch = false,
   ground = false,
+  resting = false,
   className = '',
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -144,6 +159,8 @@ export default function StudyFan({
   } | null>(null);
   const swayRef = useRef(strand());
   const stretchRef = useRef(strand());
+  const foldRef = useRef(strand(FOLD_STIFFNESS, FOLD_DAMPING));
+  const restingRef = useRef(resting);
 
   /* Whether the fan answers a hand at all. Decided on the client, because it
      turns on the reader's reduced-motion setting: someone who has asked for
@@ -182,6 +199,12 @@ export default function StudyFan({
     targetRef.current = Math.min(1, Math.max(0, progress));
   }, [progress]);
 
+  // Holding the clock sets the fan closing, and letting it go opens it.
+  useEffect(() => {
+    restingRef.current = resting;
+    kickRef.current();
+  }, [resting]);
+
   // Rebuilding the geometry is the expensive half, so it only happens when
   // the shape itself changes, never on a progress tick.
   useEffect(() => {
@@ -214,6 +237,7 @@ export default function StudyFan({
       : undefined;
     const bends = new Array<number>(depth + 1).fill(0);
     const slack = new Array<number>(depth + 1).fill(0);
+    const fold = new Array<number>(depth + 1).fill(0);
     const lagMax = Math.round(depth * LAG_PER_DEPTH);
     let disposed = false;
 
@@ -247,6 +271,7 @@ export default function StudyFan({
         baseOffset: baseOffset * dpr,
         bends: physics ? bends : undefined,
         slack: physics ? slack : undefined,
+        fold: physics ? fold : undefined,
         px: dpr,
         leaf,
         sketch: sketch ? pencil : undefined,
@@ -261,8 +286,11 @@ export default function StudyFan({
       const hand = handRef.current;
       const sway = swayRef.current;
       const stretch = stretchRef.current;
+      const closing = foldRef.current;
+      const held = restingRef.current;
       sway.step(hand ? hand.held.bend : null);
-      stretch.step(hand ? hand.held.slack : null);
+      stretch.step(hand ? hand.held.slack : null, held ? FOLD_SLACK : 0);
+      closing.step(null, held ? FOLD_REST : 0);
       // Only the depths that have actually grown carry the lean, with a floor
       // so that a lone stem leans rather than folding over.
       const grownTo = Math.min(depth, Math.floor(shownRef.current * (depth + 1)));
@@ -275,8 +303,11 @@ export default function StudyFan({
         // lifted back to an average of one. A tenth is a tenth whatever has
         // grown, so this one does not take the sapling's extra give.
         slack[d] = stretch.at(lag) * flex[d] * (depth + 1);
+        // Every split closes by the same share, a few frames after the one
+        // it grows from, so the fold travels up the tree.
+        fold[d] = closing.at(lag);
       }
-      return hand == null && sway.quiet > lagMax && stretch.quiet > lagMax;
+      return hand == null && sway.quiet > lagMax && stretch.quiet > lagMax && closing.quiet > lagMax;
     };
 
     const step = () => {
