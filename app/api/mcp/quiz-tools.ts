@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { FEEDBACK_MAX, LETTERS, bestSitting, QUIZ_FORMAT_RULES, QUIZ_TEXT_MAX, cleanAttempts, cleanQuestions, isWritten, parseQuiz, writtenTally } from '@/lib/quiz/format';
 import type { QuizWrittenMark } from '@/lib/data/types';
-import { mcpSupabase, siteUrl } from './_shared';
+import { mcpSupabase } from './_shared';
 import {
   queryFailed as reportFailure,
   result,

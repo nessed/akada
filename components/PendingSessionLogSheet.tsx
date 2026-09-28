@@ -21,10 +21,6 @@ import { useNotice } from './Notice';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from './SessionLogModal';
 
-interface Props {
-  onResolved?: () => void;
-}
-
 /**
  * How many log sheets are on the page.
  *
@@ -39,7 +35,7 @@ export function isLogSheetMounted(): boolean {
   return mountedSheets > 0;
 }
 
-export default function PendingSessionLogSheet({ onResolved }: Props) {
+export default function PendingSessionLogSheet() {
   const { active, pendingLog, clearPendingLog } = useTimerState();
   const { notify } = useNotice();
   const { courses, isLoading: coursesLoading } = useCourses();
@@ -139,9 +135,8 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
   useEffect(() => {
     if (pendingLog && !coursesLoading && courses.length > 0 && !course) {
       clearPendingLog();
-      onResolved?.();
     }
-  }, [clearPendingLog, course, courses.length, coursesLoading, onResolved, pendingLog]);
+  }, [clearPendingLog, course, courses.length, coursesLoading, pendingLog]);
 
   async function handleSave(
     note: string,
@@ -209,7 +204,6 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
       }
       setOpen(false);
       clearPendingLog();
-      onResolved?.();
     } catch (error) {
       console.error('Failed to save session:', error);
       setSaveError('Did not save. Kept on this device.');
@@ -222,7 +216,6 @@ export default function PendingSessionLogSheet({ onResolved }: Props) {
     setOpen(false);
     setSaveError('');
     clearPendingLog();
-    onResolved?.();
   }
 
   return (

@@ -272,7 +272,7 @@ export function resolveTint(color: string, storedTint?: string | null): string {
 
 // ---- Aggregation helpers
 
-import type { Course, Session } from './data';
+import type { Session } from './data';
 import { clampSessionSeconds, isLoggableDuration } from './session-safety';
 import { isIsoDate } from './planner-safety';
 
@@ -290,10 +290,6 @@ export function sessionsThisWeek(sessions: Session[]): Session[] {
   return sessions.filter(
     (s) => s.date >= start && s.date <= end && isLoggableDuration(s.durationSeconds),
   );
-}
-
-export function findCourse(courses: Course[], id: string): Course | undefined {
-  return courses.find((c) => c.id === id);
 }
 
 /** Up to two initials from a display name, uppercased, or '' with nothing to read. */
@@ -314,29 +310,4 @@ export function lastSeenByCourse(sessions: Session[]): Record<string, string> {
     if (!map[s.courseId] || s.date > map[s.courseId]) map[s.courseId] = s.date;
   }
   return map;
-}
-
-export function studyStreakDays(sessions: Session[], today: Date = new Date()): number {
-  const dates = new Set(
-    sessions.filter((s) => isLoggableDuration(s.durationSeconds)).map((s) => s.date),
-  );
-  let streak = 0;
-  const cursor = new Date(today);
-  cursor.setHours(0, 0, 0, 0);
-  const todayIso = isoDate(cursor);
-
-  while (true) {
-    const currentIso = isoDate(cursor);
-    if (!dates.has(currentIso)) {
-      if (streak === 0 && currentIso === todayIso) {
-        cursor.setDate(cursor.getDate() - 1);
-        continue;
-      }
-      break;
-    }
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-
-  return streak;
 }

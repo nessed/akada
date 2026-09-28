@@ -9,7 +9,7 @@ import {
   inSection,
   rankWeakPoints,
 } from '@/lib/weak-points';
-import { mcpSupabase, siteUrl } from './_shared';
+import { mcpSupabase } from './_shared';
 import {
   queryFailed as reportFailure,
   result,

@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom';
 import { useCourses, useTasks, useUserSettings, reorderCoursesOptimistic } from '@/lib/data-hooks';
 import { useTimerState } from '@/lib/timer-context';
 import { useUpNext } from '@/lib/use-up-next';
-import { isoDate, resolveTint } from '@/lib/utils';
+import { resolveTint } from '@/lib/utils';
 import { sortCourses } from '@/lib/data/course-order';
 import ReorderList from '@/components/ReorderList';
 import { useRecordHasNews } from '@/lib/progression/visits';
@@ -657,15 +657,4 @@ export default function DesktopRail() {
         )}
     </>
   );
-}
-
-/** Today's date line, "Thu 19 Sep 2026", used by every desktop page header. */
-export function todayLine(): string {
-  const d = new Date(isoDate() + 'T12:00:00');
-  return d.toLocaleDateString(undefined, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 }

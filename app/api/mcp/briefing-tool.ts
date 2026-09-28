@@ -24,7 +24,6 @@ import {
   quizUrl,
   result,
   toolCrashed,
-  toolError,
   type AuthenticatedToken,
   type McpSupabaseClient,
   type QueryFailure,

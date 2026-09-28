@@ -690,26 +690,6 @@ export async function createSemesterOptimistic(input: NewSemesterInput): Promise
   return created;
 }
 
-export async function updateSemesterOptimistic(id: string, updates: NewSemesterInput) {
-  await mutate(
-    KEY.semesters,
-    async (current: Semester[] | undefined) => {
-      const updated = await db.updateSemester(id, updates);
-      return (current ?? []).map((s) => (s.id === id ? updated : s));
-    },
-    {
-      optimisticData: (current: Semester[] | undefined) =>
-        (current ?? []).map((s) => (s.id === id ? { ...s, ...updates } : s)),
-      rollbackOnError: true,
-      populateCache: true,
-      revalidate: false,
-    },
-  );
-  // The active semester's own card (Dashboard's progress ribbon, etc.) may
-  // be the one that was just edited.
-  mutate(KEY.activeSemester);
-}
-
 export async function deleteSemesterOptimistic(id: string) {
   await db.deleteSemester(id);
   await Promise.all([
@@ -770,10 +750,6 @@ export async function deleteAccountAndData() {
     mutate(KEY.weakPoints, { weakPoints: [], available: true }, { revalidate: false }),
   ]);
 }
-
-// Public re-exports so consumers can build their own SWR keys / call
-// mutate(KEY.foo) without re-deriving the constant.
-export const PLANNER_KEYS = KEY;
 
 /* ───────── Note mutations ───────── */
 

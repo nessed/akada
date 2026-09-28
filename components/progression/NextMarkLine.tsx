@@ -116,11 +116,3 @@ function Wrap({ href, children }: { href?: string; children: React.ReactNode }) 
     </Link>
   );
 }
-
-/**
- * The same reading, for a page that has already computed the progression and
- * does not want a second pass over the term.
- */
-export function NextMarkText({ line }: { line: string }) {
-  return <span className="text-[13px] leading-[1.5] text-ink-soft">{line}</span>;
-}
