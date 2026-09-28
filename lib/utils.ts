@@ -113,6 +113,16 @@ export function formatHHMMSS(totalSeconds: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
+/** A running clock: "04:07", or "1:04:07" once it passes the hour. */
+export function clockFace(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
 export function formatHours(totalSeconds: number, digits = 1): string {
   const hrs = totalSeconds / 3600;
   return hrs.toFixed(digits);

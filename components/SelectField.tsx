@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import { useDismiss } from '@/lib/use-dismiss';
 
 export interface SelectOption {
   value: string;
@@ -40,21 +41,7 @@ export default function SelectField({
 
   const selected = options.find((option) => option.value === value) ?? null;
 
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  useDismiss(rootRef, open, setOpen);
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>

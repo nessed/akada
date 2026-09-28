@@ -21,6 +21,8 @@ import TallyMarks from '@/components/progression/TallyMarks';
 import { MARKS_PER_PAGE } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useCourses, useTasks } from '@/lib/data-hooks';
+import { clockFace } from '@/lib/utils';
+import { NIGHT_UNDERLINE } from '@/lib/preferences';
 
 /**
  * The timer.
@@ -44,23 +46,6 @@ import { useCourses, useTasks } from '@/lib/data-hooks';
  * block left it, which is the honest drawing of what is happening: nothing
  * is growing, and nothing has been lost either.
  */
-
-/* The hand-drawn rule, in the open screen's ink. That screen inverts with
-   literal values rather than the paper tokens, and `--underline-svg` carries
-   its colour inside a data URI where a token cannot reach it, so the whole
-   url is restated rather than a variable swapped. Mirrors the night tone's
-   own override in lib/preferences.ts. */
-const LIGHT_UNDERLINE =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%23EFE9DC' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.55'/></svg>\")";
-
-function clockFace(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-}
 
 function spoken(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
@@ -549,7 +534,10 @@ export default function TimerPage() {
           night
             ? ({
                 color: '#EFE9DC',
-                '--underline-svg': LIGHT_UNDERLINE,
+                // The open screen inverts with literal values, and the rule's
+                // ink lives inside a data URI, so the night paper's url is
+                // swapped in whole.
+                '--underline-svg': NIGHT_UNDERLINE,
               } as React.CSSProperties)
             : undefined
         }

@@ -278,6 +278,10 @@ export const PAPER_TONES: Record<PaperTone, ToneTokens> = {
  * highlighter alphas, which have to sit under light ink instead of dark; the
  * hand-drawn underline, which was stroked in daylight ink; and the scrim.
  */
+/** The hand-drawn underline in the night paper's light ink. */
+export const NIGHT_UNDERLINE =
+"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%23EFE9DC' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.55'/></svg>\")";
+
 const NIGHT_TOKENS: Record<string, string> = {
   '--sage-tint': '#393B32',
   '--rose-tint': '#433735',
@@ -303,8 +307,7 @@ const NIGHT_TOKENS: Record<string, string> = {
 
   // The whole url, not a colour inside it: a custom property cannot reach
   // into a data URI. globals.css reads this through .hand-underline.
-  '--underline-svg':
-    "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%23EFE9DC' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.55'/></svg>\")",
+  '--underline-svg': NIGHT_UNDERLINE,
   '--scrim': 'rgba(8, 7, 6, 0.55)',
   // The page lying over the margin: a shadow reads on cream and vanishes on
   // the night desk, so there the edge is carried by a lit hairline and a
