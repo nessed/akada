@@ -97,6 +97,22 @@ tracking set alongside it still wins, that is how the badges and the timer's
 display caption keep their own letterspacing. Nothing sets it in mono: the one
 element that did was put back on the sans.
 
+### The icon
+
+The brand glyph is the ribbon bookmark with Fraunces' italic A in it, the
+same mark `AkadaMark` draws in the app. The icon files draw it solid: a ribbon
+of ink with the A cut out of it, because a 1px outline and a thin letter turn
+to mush at the 16px a browser tab gives it. The A is the real Fraunces glyph
+as an outline, never `<text>`, so the tab does not fall back to Georgia.
+
+- `public/icon.svg` is the **tab favicon**. Transparent, and it follows the
+  browser's own scheme through `prefers-color-scheme`: an ink ribbon on a
+  light tab strip, the night paper's cream ribbon on a dark one.
+- `public/app-icon.svg` is the **installed-app tile**, full bleed on the night
+  ground (the tone the app ships on), with the mark inside the maskable safe
+  zone. The PNGs are rendered from it by `scripts/build-icons.mjs`; rerun
+  that after changing it.
+
 ### Type scale
 Two title tiers, so a screen title is recognisable as one:
 - **Screen title**, `text-[36px]` at `tracking-[-0.025em]`, serif, dropping
@@ -292,6 +308,20 @@ knows a finger is on it.
 - **Focus mode comes back on a tap.** A cursor brings the bar back by
   moving; a finger does it with a tap on the page that lands on nothing
   else.
+- **Focus mode pinches.** Two fingers, a trackpad pinch (ctrl + wheel in
+  Chrome and Firefox, Safari's gesture events) or ctrl/⌘ `+` `−` `0` zoom the
+  note from 75% to 250%. It reflows rather than magnifies: the type and the
+  measure grow together until the measure meets the screen, then the lines
+  rewrap, so nothing runs off the side, and the block under the fingers holds
+  still. The reflow happens once, when the fingers let go; while they move
+  the sheet is only scaled on the compositor from the point between them,
+  since laying out a whole note every frame is what made it stutter. Off 100%, the bar shows the figure in mono; a tap on it goes back.
+  The zoom is kept with the spotlight and the lamp.
+- **A pen can trace a line.** A stylus run left to right along the text is a
+  sideways drag, and the browser used to take it for its back swipe. On a
+  note the page pans up and down only (`touch-action: pan-y`, a wide table or
+  code block still scrolls on its own) and the root drops its sideways
+  overscroll while a note is open.
 - **Upright gets the phone's bands.** Tasks keeps each band's name in its
   168px margin only from 1024px; below that it sits over the rows, since the
   margin beside a row's fixed columns left a title about 86px wide.
@@ -305,18 +335,46 @@ at the same weight, and a box that everything has stops meaning anything.
 The page is separated by its own ruling instead, the way a ruled pad is:
 
 - **The head band.** On Today, Up next is the one thing that spans the page,
-  with the hours beside it (from `xl`), since Start is what fills them: the
-  day's hours, then under a cutoff **This week** (`WeekHours`) at the same
-  32px mono, the week's hours against the week's goal, which is the course
-  goals added up (there is no separate one to set). Its strokes are 6px wide
-  once the goal passes twelve hours and cap at 24, and a serif line under
-  them says what is left and how many days the week has ("4h 20m to go · 3
-  days left"). With no course goals it links to Settings instead. The week
-  is one of the two numbers Today is read for; the bar chart it replaces sat
-  below the fold and read as a footnote. The Next Mark line comes under
-  both: it is a reward line read off them, not a to-do, so it never sits
-  over Up next. On a course page the band is
-  the strip of four figures. Nothing frames it: it leads by position and size.
+  with the hours beside it (from `xl`), since Start is what fills them.
+  **Up next** is the course rule and code with the course name in the serif
+  italic, the title at 40px (30 on a phone) with no swipe behind it, then a
+  row of labelled figures (`UpNextFact`): **Due** (Today, "2d overdue" in
+  `warn`, or the date, with a small `High` tag on `priority-tint`), **Spent**
+  in mono (**On the clock**, with the pulsing dot, while a timer runs on it)
+  and **Steps** done over total when the task has any. The steps themselves
+  follow as a line of stops joined by a `line-strong` rule: a filled dot with
+  a tick for a done one, a ring in the course colour and "Now" for the first
+  open one, an empty circle for the rest; a tap ticks one. It used to be one
+  italic sentence with the figures dropped into it, under a highlighter swipe
+  that went muddy on the night paper. Under the buttons, **After this** names
+  what Up next would offer next. The rest of the day's work (the recall card,
+  Overdue, Due today) follows in the same column, under a cutoff: below the
+  fold it left the band's left half empty for as long as the hours ran beside
+  it, whenever Up next had no steps. The sort rule sits top right as a serif
+  italic line with a cycle mark, not in the hand face.
+  Beside it the day's hours, then under a cutoff **This week** (`WeekHours`)
+  at the same size, 40px mono. Under the day's figure is the **day ledger**
+  (`DayLedger`): a strip from 7am to midnight (stretched for an early start
+  or a late night) with each timed block laid where it happened in its course
+  colour and a thin ink mark for now. Only a sitting the timer ran knows when
+  it happened, from its segments; one logged by hand counts in the figure and
+  is not placed. The week is the week's hours against its goal, which is the
+  course goals added up (there is no separate one to set), drawn as **a bar
+  a day**, Monday to Sunday, each bar stacked in the colours of the courses it
+  went to with its hours written over it in mono (on a scrap of paper, so the
+  goal line never runs through a figure), and a dashed line at the day's share
+  of the goal. Today's label is "Today" on the yellow highlighter; days still
+  to come are left blank. The key under it says what the dashed line is
+  ("goal 2h 51m a day") and names the colours when more than one course had
+  time; the goal's label used to sit on the line itself, where a tall day ran
+  straight through it. It replaced one
+  stroke per goal hour, twenty-odd thin marks that read as a barcode: a week
+  is read by its days. A serif line under it says what is left and how many
+  days the week has ("4h 20m to go · 3 days left"). With no course goals it
+  links to Settings instead. The Next Mark line comes under both: it is a
+  reward line read off them, not a to-do, so it never sits over Up next. On a
+  course page the band is the strip of four figures. Nothing frames it: it
+  leads by position and size.
 - **Today is three things.** Up next, the hours (the day's and the week's),
   and Coming. Everything else
   it carries is conditional: the recall card when something is due, Overdue
@@ -324,12 +382,20 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   showing (a section whose one row is the Up next task said it twice), and
   **Before the exam** in the week before one. The course cards that used to
   stand under the day, the week's bar chart and the "New here?" link to the
-  guide are gone (the week came back as `WeekHours` in the head band): in
-  place of the cards, one line (`CourseLine`), "This week"
-  then each course's rule and code with its hours this week in mono, the whole
-  line a link to `/courses`. Up next's row is **Start · Done · Tomorrow**; the
-  Untimed button beside Start went, since Start's popover already offers
-  25/45/60/Untimed.
+  guide are gone (the week came back as `WeekHours` in the head band). Under
+  the fold, **Your courses this week** (`CourseLine`) is a row of four
+  (two on a phone): each course's rule and code, its name in the serif, its
+  hours this week in mono over its goal, its `HourStrokes` in the course
+  colour and how many tasks it has open, each a link to its page. It was a
+  single line of codes and hours that read as a footnote. **Coming** sets
+  each row's date like a diary's margin, the weekday as an eyebrow over the
+  day of the month in mono (`warn` within two days), with the course, "exam"
+  on `warn-tint` and the weight on the eyebrow line over the title. Under the
+  run and the day of the term, the term is a row of one mark per week: the
+  ones behind in `ink-soft`, this one on the highlighter, the rest in
+  `bg-tint`. Up next's row is **Start · Done · Tomorrow**, Start filled and
+  the other two outlined in `line`; the Untimed button beside Start went,
+  since Start's popover already offers 25/45/60/Untimed.
 - **The fold.** `.fold`, two `line-strong` rules 2px apart, the full content
   width. It closes the head band and is the one heavier line on the screen.
 - **The column rule.** From `xl` the page below the fold is two columns, the
@@ -359,7 +425,10 @@ Nothing in the app draws a percentage bar. A week against a goal is **one
 stroke per hour**, filled in the course colour, with a part hour filling its
 own stroke from the bottom: `HourStrokes`. "Four of six" is the shape of an
 afternoon; "68%" is a number nobody asked for and cannot act on. The label
-beside the strokes carries the exact figure, and what is left to go.
+beside the strokes carries the exact figure, and what is left to go. A goal
+past a dozen hours is the exception: Today's week is a bar a day against a
+dashed daily share, since two dozen strokes stop being countable and read as
+a barcode.
 
 ### The sitting as a chain
 A finished sitting is drawn as a row of marks, `SessionChain`: the blocks as
@@ -394,6 +463,16 @@ says why it is there, in the serif italic under the heading: "You stopped a
 1h 10m session on ECON 100 and haven't saved it", or why the clock was
 stopped for them (left running while the page was closed, a break past 45
 minutes, the 18 hour limit).
+
+### The blink on P
+
+`P` holds or lets go of the clock from any screen (`TimerHotkeys`), and it is
+pressed with the eyes on the book, not on the dock. So the page answers it:
+the whole screen blinks once, a veil of `ink` that closes in a tenth of a
+second and opens over a quarter, peaking at 16%. It darkens a daylight page
+and lifts the night one, sits over focus mode too, and catches no clicks.
+Only the key does it; a click on the dock already lands where the eye is.
+Reduced motion takes it away with every other animation.
 
 ### The forgotten timer
 The timer's heartbeat keeps a tab alive while it is open, so an open page
@@ -431,6 +510,35 @@ Every segment is born at a depth and the session's progress unlocks depths,
 so it extends and branches the longer the reader sits. A ring says what
 fraction is gone, which is the one thing a reader in the middle of a chapter
 has no use for; the fan only ever grows.
+
+It is drawn, not ruled. Every branch is a shallow curve, bowed to one side by
+its own seed (`bow`, from a second generator so adding it moved no branch and
+old sessions still grow the shape they always grew), and the thick ones taper
+from the width they leave their parent at to the width their own branches
+leave them at, so the joins are seamless. The colour runs smoothly from the
+dark stem to the pale tips rather than in three bands.
+
+- **Leaves** sit on the growing edge, one per tip, turned off the branch to
+  alternate sides, coming in small and opening as the branch lengthens. They
+  are the course colour mixed toward the paper, edged in a darker shade.
+- **Flowers.** When a block is done, one in three of the outermost tips
+  flowers instead. That is the moment the fan touches the top, and it is the
+  only thing on the screen that says so.
+- **The pencil sketch.** In the block frame the part of the shape still to
+  come is dotted in `line-strong` pencil, and the ink fills it as the reader
+  sits. It is an underdrawing, not a gauge: faint, no number, and it shows
+  the shape rather than a fraction. Open mode has no top, so nothing to
+  sketch; it is off there.
+- **The ground.** The block frame's stem stands on a drawn pencil line with a
+  few strokes of grass, and the stem's foot is flat on it.
+
+All four are options on `StudyFan` (`leaves`, on by default; `sketch` and
+`ground`, off), drawn by `drawFan` in `lib/fan.ts`.
+
+The block frame is a page from the notebook: `line-soft` rules every 32px, a
+`line` margin 64px in, a folded corner, and one warm shadow under the sheet.
+The course code at its head is a short course-colour rule with the code in
+`ink-soft` beside it; a pastel is never the text itself.
 
 The geometry is in `lib/fan.ts` and is deterministic per seed, so a session
 that is paused, reloaded or restored comes back as the same shape.
@@ -1439,12 +1547,19 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
   offered, and the pick turns over with the date.
 - **The chase row**, three cards dealt onto the page one after the other
   (`.deal-in`), under the ledger line:
-  - **You vs last week** (`PaceRace`). Both weeks as running totals on one
-    ruled plot, last week pencilled in whole, this week inked over it up to
-    today. Where the two stand today is joined by a short dashed stroke, so
-    ahead or behind is a distance before it is a figure. The headline is the
-    gap ("29m behind", "1h 10m ahead", "neck and neck") and the line under
-    it is what closes it.
+  - **You vs another week** (`PaceRace`). Both weeks as running totals on
+    one ruled plot, the other week pencilled in whole, this week inked over
+    it up to today. Where the two stand today is joined by a short dashed
+    stroke, so ahead or behind is a distance before it is a figure. The
+    headline is the gap ("29m behind", "1h 10m ahead", "neck and neck") and
+    the line under it is what closes it. The other week is **last week**
+    unless the serif line over the headline ("against last week · usual ·
+    best", the picked one on the highlighter) says otherwise: **usual** is
+    the median of every whole week before this one, empty ones included, a
+    day at a time and held so it never dips (offered once three whole weeks
+    are in, `USUAL_MIN_WEEKS`); **best** is the best whole week so far. Last
+    week alone was the harshest bar after a good week and no bar at all
+    after a quiet one. The card's title follows the pick.
   - **Next milestone** (`NextMilestone`). The next round number in the
     term's hours, its figure first and its name as the aside ("10 hours ·
     double digits"; titled "The next line" and led by the name alone, it read
@@ -1475,15 +1590,85 @@ every render (`lib/stats-reading.ts`) and nothing is stored.
   new best every day. Until then the figures stand as they are under one
   line, "your first weeks set the marks", with no chase line and no stamp. A
   session closed for the reader (`recovery`) never sets one.
+- **The lens.** Under the ledger line, a serif line "Reading · Every course
+  · CS 101 · …", the picked one on the course's highlighter. It is read
+  through everything under it: the race, the milestone (titled with the
+  course), the clock, the records, Side by side, the weeks, the heatmap, the
+  list, the grade and the log. It used to sit on the heatmap alone, so the
+  rest of the page could only be read for the whole term. The masthead stays
+  the term's hours.
+- **Side by side** (`lib/stats-lens.ts`), under the chase row: a stretch of
+  the term from every side the log can be read from, each figure set beside
+  the same one for the stretch before. The stretch is picked top right,
+  **This week · 4 weeks · Term**, and the standfirst under the heading says
+  what it is set against. A week is this week so far against last week *by
+  the same day* ("last week by now"), since a Wednesday against a whole week
+  is a race nobody could win; four weeks is the last 28 days against the 28
+  before; the term stands alone.
+  - **The figures** (`SpanFigures`), one deckle card of labelled figures, an
+    eyebrow over a 24px mono figure: hours, a day, days studied "of 7",
+    sittings, usual sitting (the median, recovered sittings left out),
+    longest, tasks finished "12 added", courses touched "3 of 4" (or time
+    on a task when one course is being read), and practice papers with
+    their average once one is marked. Under each, the change is **written,
+    never drawn**: a small arrow, sage for more and clay (`warn`) for less,
+    the difference in mono, then "on last week by now" in the serif. Less is
+    a fact about the stretch, never an alarm; the same figure says "same as".
+  - **Course against course** (`CourseBalance`), full width: each course's
+    hours for the stretch as a rule in its colour, with a 1px `ink-soft`
+    tick where its weekly goal, scaled to the stretch, falls ("asks 5h
+    51m"). Every rule is on one scale, so the longest is the course that got
+    the most. Beside it the last eight weeks as small bars with the goal as
+    a dash, whole weeks on goal ("5/7", the week being lived never counted
+    as a miss), sittings and the usual one, and when it was last sat ("last
+    sat 9d ago" in `warn` past a week). The figure, right, carries its own
+    change. Hours against hours: nothing on it is a percentage. Each row is
+    a link to the course.
+  - **When in the week** (`WeekRhythm`): a row per weekday, a column per
+    hour, each cell inked as deep as the time that landed in it, with the
+    fullest cell named over it ("fullest on tuesdays 9pm to 10pm · 55m")
+    and a hovered or tapped one read out in its place. Only a sitting the
+    timer ran is placed, each block spread across the hours it ran through;
+    every sitting still counts toward its weekday's total at the row's end.
+    The clock in the chase row says when in the day; this says which
+    evenings.
+  - **How long you sit** (`SittingLengths`): sittings sorted into lengths,
+    under 15m to 2h+. The bar is how many sittings; the mono figure under
+    each is the hours that length carried, since twenty short sittings and
+    two long ones can hold the same afternoon. The length carrying the most
+    hours is inked, the rest pencil (`line-strong`).
+- **Week by week** (`TermWeeks`), at the head of the main column: one bar a
+  week for the whole term, stacked in the course colours, against the
+  week's goal as a dashed line, with weeks still to come as dashed empty
+  slots so the chart says where in the term today is. This week's number
+  is on the highlighter. Over it, "a usual week 6h 38m · on goal 3 of 5".
+  **A tap opens the week** underneath: its seven days as small stacked bars,
+  each course's hours on a rule against a tick at its goal ("2h 52m / 4h"),
+  and days, sittings, tasks finished and how far over or under a usual week
+  it ran. It opens on this week, and replaced a chart of the last seven days
+  that said less than Today's own week does. **Hours by course** in the
+  aside went with it; Course against course says all of that and more.
+- **Every day so far** (`Heatmap`): the months named in the serif italic
+  over the week they start in, M / W / F down the side, the strip opened
+  scrolled to today, as many weeks as the term has had (13 to 26). A blank
+  day is drawn in the paper's tint at full strength: at 8% it vanished on
+  the night paper and the grid looked half printed. A "less … more" key and
+  a line that reads a tapped day ("Tuesday, Sep 22 · 1h 40m") sit under it.
+- **The list, in and out** (`TaskFlow`), in the aside under the records:
+  added and finished a pair of marks a week for eight weeks, added as a
+  pencil outline and finished in ink, so a week that added more than it
+  finished reads as an outline taller than its ink. Under it, what is open
+  past its date (the figure in `warn`), what is due in the next seven days,
+  and what a finished task with time on it has usually taken.
 - **The log** at the foot is one dated list: sessions under the day they
   were studied, tasks under the day they were added or finished ("added",
   "finished", "skipped"). More than three tasks added on one day fold into
   one line, "14 tasks added", since an outline read in by Claude adds forty
   at once and buried the day's study under them.
 - **The charts arrive.** The heatmap inks in a week at a time from the
-  oldest (`.heat-in`) and rings today; the week's bars fill up from the rule
-  (`.bar-grow`); the course rules draw (`.rule-draw`) and their hour counts
-  roll up.
+  oldest (`.heat-in`) and rings today; the bars fill up from the rule
+  (`.bar-grow`); the rules draw (`.rule-draw`); the figures in Side by side
+  are dealt in (`.deal-in`).
 
 All of it fills backwards only and holds no transform once landed, and
 reduced motion drops the delays with the durations.
@@ -1532,6 +1717,20 @@ headers, the one screen that still looked like a settings panel.
   page (see Courses below).
 - **Within reach** (aside). The first four Next Mark candidates. Today and the
   timer say one line and go quiet; this is where the rest of the board is.
+- **The term, week by week** (`WeekLedger`, from `lib/progression/weeks.ts`),
+  full width under the pages and the run: the term as a ledger, a line a
+  week, newest first. Each line is "Wk 5" over the Monday's date, the week's
+  days as the run draws them, its hours in mono over a thin rule against the
+  best week (which carries "best week" in Caveat), the tallies it inked
+  ("+14", and "1 bound" under it when a page bound), a stroke in each
+  course's colour for every course it touched, and the week's `HandCheck`.
+  Column heads are eyebrows from `md`. A tap opens the line: how the week
+  counted in words ("5 study days, counted on its study days"), its biggest
+  day, the tasks it finished, and each course's hours, tallies and bound
+  pages for the week. Tallies are read off the credited running total per
+  course, so a week's tallies always add up to the marks on the pages
+  above. The run in the aside says which weeks counted; this says what each
+  one held. Eight lines, then "every week, all 14".
 - **How you study**, full width, figures on the left, by-course and what the
   ranking has learned on the right from `lg`.
 - **Since you last looked.** Record remembers, on the device, what it
@@ -1693,8 +1892,8 @@ rules rather than in panels:
   words; the drawing goes stale the same way if nobody minds it, so **when
   Today's parts or their names change, change the sketch in the same PR**.
   It shows only what Today really shows: the date line, Up next with its
-  course rule and mint swipe, Start/Done/Tomorrow, today's hours with the goal
-  strokes, and Coming.
+  course rule and its row of figures, Start/Done/Tomorrow, today's hours with
+  the day ledger, and Coming with its dates.
 - **Margin notes** in the hand face (`font-hand`, muted ink), a few words
   each, with a drawn arrow where one points at something. Only where there is
   a margin: the ones beside the sketch appear at `xl`.
@@ -1770,12 +1969,12 @@ Movement in the app is soft and deliberate:
 - **`settle`**: `0.34s` on the same curve, a 4px rise and fade. Whatever swaps in place on the timer screen (focus controls for break controls, the clock face going from block to rest, the "· paused" note) settles in with it rather than cutting.
 - **Pause** is the timer screen going quiet, not a switch: the clock lets its ink down to half over `480ms`, the fan loses colour over `700ms`, and the pause button crosses its glyph and word over (both are always rendered, stacked, so the button never changes width). Resume runs the same way back.
 - **Presses** on the timer's buttons give a `0.97` scale on `:active`. Small enough to feel, never enough to read as a bounce.
-- **Up next arriving.** The task body is keyed on the task, so when it changes (Done, Tomorrow, or the rule switched) the new one settles in, its course rule draws left to right (`.rule-draw`, `0.5s`) and a highlighter swipe in the course's pastel is pulled under the title a beat after (`.hl-draw`, `0.7s`). Done and Tomorrow first let the old task go with `.lift-away`, a `0.22s` fade and 6px lift, so the next one comes up into a space instead of replacing it in the same frame. The handwritten rule note settles when it is switched.
+- **Up next arriving.** The task body is keyed on the task, so when it changes (Done, Tomorrow, or the rule switched) the new one settles in and its course rule draws left to right (`.rule-draw`, `0.5s`). Done and Tomorrow first let the old task go with `.lift-away`, a `0.22s` fade and 6px lift, so the next one comes up into a space instead of replacing it in the same frame. The handwritten rule note settles when it is switched.
 - **Up next is live.** Its meta line carries the time already put into the task (mono digits) and when it was last sat. With a timer running on it the line says "on the clock" beside a dot in the course colour pulsing on `tick`, and the figure counts up with the sitting.
 - **Stats arriving.** Cards dealt in (`.deal-in`, `0.55s`, a 12px rise off a `-1.2deg` tilt), the heatmap inking in (`.heat-in`), bars filling from the rule (`.bar-grow`), lines drawn with a pen (`.ink-draw`, any path with `pathLength=1`), dots popping on (`.pop-in`), and a record stamped down (`.stamp-down`). See "Stats: the chase".
 - **Every screen arrives.** `PageShell` sets `.page-in` on the content column: a `0.34s` 6px rise and fade on the app's curve, so moving between tabs no longer cuts in whole while Stats and the timer each had an entrance of their own. The rail, the bar and the dock hold still around it. Backwards fill only, so `main` carries no transform once it has landed and a sheet inside it is still placed against the viewport.
 - **Sheets leave the way they came.** Every bottom sheet used to slide up and then vanish in a frame. `useLeaving` (and `<Leaving>` for a sheet written inline as `{value && ...}`) holds the last value on screen for `220ms` while `.sheet-leaving` fades the scrim and drops the panel 32px. The panel must be the wrapper's last child. A value that comes back mid-exit cancels it.
 - **A tick is written in.** Ticking a task on a row fills the box with a small press (`.check-press`) and writes the `HandCheck` in a beat later (`drawn`, `.check-draw`), and the row fades to its done opacity over `300ms`. The toggle itself lands `420ms` after the tap, because Today's lists drop finished work and took the row away in the same frame it was ticked, so the check was never seen. Leaving the screen in that moment still saves it. A task that loads already done is drawn done, with no animation.
-- **Hour strokes fill up.** `HourStrokes` fills each stroke from the bottom when it is first drawn, one hour after another (`.stroke-fill`, `45ms` apart), and a part hour rises in place while the clock runs. `HourTicks` in the rail does not, since the rail is redrawn with every screen.
+- **Hour strokes fill up.** `HourStrokes` fills each stroke from the bottom when it is first drawn, one hour after another (`.stroke-fill`, `45ms` apart), and a part hour rises in place while the clock runs.
 - **The tab mark draws.** The rule under the current tab in `BottomNav` is drawn out from the middle as the screen changes (`.nav-mark`), a tab gives a `0.94` press, and the Record news dot pops on (`.pop-in`) in the bar and the rail.
 - **Finish** holds the last frame of the sitting still behind the log sheet as it rises. Stopping empties the timer, and a block screen with no target left used to flip to open mode's night paper at 00:00 under the sheet.

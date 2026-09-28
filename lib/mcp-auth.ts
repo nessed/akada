@@ -53,12 +53,18 @@ function decodeBase64url(value: string) {
   return Buffer.from(value, 'base64url');
 }
 
+// The derived key for the secret it was derived from. Every request opens a
+// token, so the hash is worked out once rather than per seal and open, and
+// is worked out again if the secret changes (tests set it per case).
+let derived: { secret: string; key: Buffer } | null = null;
+
 function key() {
   const secret = process.env.AKADA_MCP_TOKEN_SECRET;
   if (!secret || secret.length < 32) {
     throw new Error('Akada MCP is not configured. Set AKADA_MCP_TOKEN_SECRET to a random value of at least 32 characters.');
   }
-  return createHash('sha256').update(secret).digest();
+  if (derived?.secret !== secret) derived = { secret, key: createHash('sha256').update(secret).digest() };
+  return derived.key;
 }
 
 function seal<T extends object>(kind: TokenKind, payload: T, lifetimeSeconds: number) {

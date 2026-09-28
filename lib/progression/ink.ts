@@ -1,6 +1,7 @@
 import type { Course } from '../data';
 import { INK_DAILY_HOLD, INK_FLOOR } from './constants';
 import type { DayCredit } from './credit';
+import { isoDate } from '../utils';
 
 /**
  * How dark a course's ink sits, from its recent activity alone.
@@ -40,7 +41,7 @@ export function readInk(
     const end = new Date(today + 'T12:00:00');
 
     while (cursor <= end) {
-      const iso = isoOf(cursor);
+      const iso = isoDate(cursor);
       const seconds = byIso.get(iso)?.rawByCourse.get(course.id) ?? 0;
       const target = Math.min(1, seconds / perDay);
       // Up in one step, down over many. Attack and release, not an average.
@@ -54,9 +55,4 @@ export function readInk(
   return out;
 }
 
-function isoOf(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+

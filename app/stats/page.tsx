@@ -9,7 +9,6 @@ import { useNotice } from '@/components/Notice';
 import SwipeRow from '@/components/SwipeRow';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import Heatmap from '@/components/Heatmap';
-import WeeklyChart from '@/components/WeeklyChart';
 import GradeWeighting from '@/components/term/GradeWeighting';
 import type { Course, Session, Task } from '@/lib/data';
 import {
@@ -24,11 +23,31 @@ import { clampSessionSeconds, isLoggableDuration, scoreFace } from '@/lib/sessio
 import { readHabits } from '@/lib/progression';
 import {
   hoursLookLike,
+  paceChoices,
   readMilestone,
   readPace,
   readPersona,
   readRecords,
+  type PaceAgainst,
 } from '@/lib/stats-reading';
+import {
+  daysIn,
+  readLengths,
+  readRhythm,
+  readSpan,
+  readStandings,
+  readTaskFlow,
+  readTermWeeks,
+  spanWindows,
+  termStartOf,
+  type Span,
+} from '@/lib/stats-lens';
+import SpanFigures from '@/components/stats/SpanFigures';
+import CourseBalance from '@/components/stats/CourseBalance';
+import TermWeeks from '@/components/stats/TermWeeks';
+import WeekRhythm from '@/components/stats/WeekRhythm';
+import SittingLengths from '@/components/stats/SittingLengths';
+import TaskFlow from '@/components/stats/TaskFlow';
 import PaceRace from '@/components/stats/PaceRace';
 import PersonalBests from '@/components/stats/PersonalBests';
 import NextMilestone from '@/components/stats/NextMilestone';
@@ -54,6 +73,12 @@ type JournalEntry =
   | { kind: 'task-done'; id: string; at: string; task: Task; course?: Course }
   | { kind: 'tasks-added'; id: string; at: string; count: number };
 
+const SPANS: { key: Span; label: string }[] = [
+  { key: 'week', label: 'This week' },
+  { key: 'month', label: '4 weeks' },
+  { key: 'term', label: 'Term' },
+];
+
 /** More tasks added on one day than this read as one line, not a list. */
 const ADDED_ROWS_MAX = 3;
 
@@ -72,7 +97,11 @@ export default function StatsPage() {
     [rawSessions],
   );
 
+  // The lens: one course or all of them, read through the whole page under
+  // the masthead, and the stretch of time the side-by-side block compares.
   const [filter, setFilter] = useState<string>('all');
+  const [span, setSpan] = useState<Span>('week');
+  const [against, setAgainst] = useState<PaceAgainst>('last');
   const [prefs] = usePreferences();
   const [deletedSession, setDeletedSession] = useState<Session | null>(null);
   const undoTimerRef = useRef<number | null>(null);
@@ -96,6 +125,19 @@ export default function StatsPage() {
   const loading =
     onboardingLoading || onboarded === false || coursesLoading || sessionsLoading || tasksLoading;
 
+  const lensSessions = useMemo(
+    () => (filter === 'all' ? sessions : sessions.filter((s) => s.courseId === filter)),
+    [sessions, filter],
+  );
+  const lensTasks = useMemo(
+    () => (filter === 'all' ? (tasks as Task[]) : (tasks as Task[]).filter((t) => t.courseId === filter)),
+    [tasks, filter],
+  );
+  const lensCourses = useMemo(
+    () => (filter === 'all' ? courses : courses.filter((c) => c.id === filter)),
+    [courses, filter],
+  );
+
   /**
    * One dated log instead of two lists. Sessions used to be printed twice,
    * once as "Session history" and once as "Recent activity", so the two are
@@ -111,7 +153,7 @@ export default function StatsPage() {
       else byDay.set(day, [entry]);
     };
 
-    for (const session of sessions) {
+    for (const session of lensSessions) {
       file(session.date, {
         kind: 'session',
         id: `session-${session.id}`,
@@ -120,7 +162,7 @@ export default function StatsPage() {
         course: courses.find((course) => course.id === session.courseId),
       });
     }
-    for (const task of tasks as Task[]) {
+    for (const task of lensTasks) {
       const course = courses.find((item) => item.id === task.courseId);
       if (task.createdAt) {
         file(task.createdAt.slice(0, 10), {
@@ -165,7 +207,7 @@ export default function StatsPage() {
       printed += day.entries.length;
     }
     return recent;
-  }, [courses, sessions, tasks]);
+  }, [courses, lensSessions, lensTasks]);
 
   async function deleteSession(id: string) {
     const session = rawSessions.find((s) => s.id === id) ?? null;
@@ -218,52 +260,14 @@ export default function StatsPage() {
     }
   }
 
-  const filteredSessions = useMemo(
-    () => (filter === 'all' ? sessions : sessions.filter((s) => s.courseId === filter)),
-    [sessions, filter]
-  );
-
   const accent =
     filter === 'all'
       ? 'var(--primary)'
       : courses.find((c) => c.id === filter)?.color || 'var(--ink)';
 
-  const totals = useMemo(() => {
-    return courses.map((c) => {
-      const cs = sessions.filter((s) => s.courseId === c.id);
-      const sec = totalSeconds(cs);
-      const weeksObserved = semester?.startDate
-        ? Math.max(
-            1,
-            Math.ceil(
-              (Date.now() - new Date(semester.startDate + 'T00:00:00').getTime()) /
-                86400000 /
-                7
-            )
-          )
-        : 5;
-      return {
-        course: c,
-        totalHours: sec / 3600,
-        avg: sec / 3600 / weeksObserved,
-      };
-    });
-  }, [courses, sessions, semester]);
-
-  // The longest-studied course sets the length of the rules beneath the codes,
-  // so each rule reads as a share of the term's attention rather than progress
-  // towards a number nobody set.
-  const heaviestCourseHours = totals.reduce((max, t) => Math.max(max, t.totalHours), 0);
-
   const totalSec = totalSeconds(sessions);
   const dayCount = new Set(sessions.map((s) => s.date)).size;
   const avgPerDay = dayCount ? totalSec / dayCount : 0;
-  // One run in the whole app, counted in weeks. This line used to count
-  // days while Today, the Record and the guide all said a day off costs
-  // nothing, which is two streaks disagreeing on the same screen pair.
-  const { progression } = useProgression();
-  const run = progression?.runs.current ?? 0;
-
   // Editorial computed bits, the Vol./Issue mark, totals, and "best day"
   // headline that the redesigned stats page leans on.
   const semesterLabel = useMemo(() => {
@@ -289,18 +293,50 @@ export default function StatsPage() {
      what the next sitting would change. The CSV export that used to sit in
      the masthead lives in Settings, where a spreadsheet is looked for. */
   const today = isoDate();
-  const records = useMemo(() => readRecords(sessions, today), [sessions, today]);
-  const pace = useMemo(() => readPace(sessions, today), [sessions, today]);
-  const milestone = readMilestone(totalSec);
-  const habits = useMemo(() => readHabits(courses, sessions, tasks), [courses, sessions, tasks]);
+  const lensSec = totalSeconds(lensSessions);
+  const records = useMemo(() => readRecords(lensSessions, today), [lensSessions, today]);
+  const choices = useMemo(() => paceChoices(lensSessions, today), [lensSessions, today]);
+  const racing = choices[against] ? against : 'last';
+  const pace = useMemo(() => readPace(lensSessions, today, racing), [lensSessions, today, racing]);
+  const milestone = readMilestone(lensSec);
+  const habits = useMemo(
+    () => readHabits(courses, lensSessions, lensTasks),
+    [courses, lensSessions, lensTasks],
+  );
   const persona = readPersona(habits);
   const lookLike = hoursLookLike(totalSec, today);
 
-  // The masthead figure rolls up to the term's hours rather than being
-  // printed there. Held at a tenth, the way it is written.
-  const rolling = useCountUp(loading ? 0 : totalSec / 3600, 1400, 150);
-  const totalWhole = Math.floor(rolling);
-  const totalDecimal = `.${Math.min(9, Math.floor((rolling - totalWhole) * 10))}`;
+  /* The side-by-side block: a stretch of the term set beside the one before,
+     from every side the log can be read from. */
+  const termStart = useMemo(
+    () => termStartOf(sessions, semester?.startDate),
+    [sessions, semester?.startDate],
+  );
+  const windows = useMemo(() => spanWindows(span, today, termStart), [span, today, termStart]);
+  const spanNow = useMemo(
+    () => readSpan(lensSessions, lensTasks, windows.now),
+    [lensSessions, lensTasks, windows],
+  );
+  const spanBefore = useMemo(
+    () => (windows.before ? readSpan(lensSessions, lensTasks, windows.before) : null),
+    [lensSessions, lensTasks, windows],
+  );
+  const standings = useMemo(
+    () => readStandings(lensCourses, sessions, windows, today, termStart),
+    [lensCourses, sessions, windows, today, termStart],
+  );
+  const rhythm = useMemo(() => readRhythm(lensSessions, windows.now), [lensSessions, windows]);
+  const lengths = useMemo(() => readLengths(lensSessions, windows.now), [lensSessions, windows]);
+  const termWeeks = useMemo(
+    () => readTermWeeks(lensSessions, lensTasks, termStart, semester?.endDate ?? null, today),
+    [lensSessions, lensTasks, termStart, semester?.endDate, today],
+  );
+  const flow = useMemo(
+    () => readTaskFlow(lensTasks, lensSessions, today),
+    [lensTasks, lensSessions, today],
+  );
+  const goalSeconds = lensCourses.reduce((a, c) => a + Math.max(0, c.weeklyGoalHours || 0), 0) * 3600;
+  const lensName = filter === 'all' ? null : courses.find((c) => c.id === filter)?.code ?? null;
 
   // Best day of week, name + duration. Read out in the ledger line.
   const bestDay = useMemo(() => {
@@ -365,8 +401,7 @@ export default function StatsPage() {
 
         <div className="shrink-0 md:text-right">
           <span className="font-mono text-[44px] font-semibold leading-[0.9] tracking-[-0.04em] tabular-nums text-ink md:text-[56px]">
-            {totalWhole}
-            <span className="text-muted-soft">{totalDecimal}</span>
+            <RollingHours hours={loading ? 0 : totalSec / 3600} />
           </span>
           <p className="m-0 mt-1 text-[12px] text-muted">hours logged</p>
           {lookLike && (
@@ -391,9 +426,7 @@ export default function StatsPage() {
         }}
       >
         <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1.5 font-serif text-[13px] italic text-muted">
-          <span>
-            <Figure>{run}</Figure> {run === 1 ? 'week' : 'weeks'} running
-          </span>
+          <WeeksRunning />
           {avgPerDay > 0 && (
             <span>
               <Figure>{formatHM(avgPerDay)}</Figure> a day
@@ -411,173 +444,153 @@ export default function StatsPage() {
         <EmptyState text="Your history will map itself here..." />
       )}
 
-      {/* The chase: last week, the next round number, and the hours of the
-          day it all lands in. Dealt onto the desk one after another. */}
-      <div className="mb-[var(--density-gap)] grid gap-[var(--density-gap)] md:grid-cols-2 xl:grid-cols-3">
-        <ChaseCard title="You vs last week" delay={0}>
-          <PaceRace pace={pace} />
-        </ChaseCard>
-        <ChaseCard title="Next milestone" delay={120}>
-          <NextMilestone milestone={milestone} totalSeconds={totalSec} />
-        </ChaseCard>
-        <ChaseCard title="Your day, as a clock" delay={240} className="md:col-span-2 xl:col-span-1">
-          <StudyClock habits={habits} persona={persona} />
-        </ChaseCard>
-      </div>
-
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="settle-in min-w-0">
-      {/* Heatmap */}
-      <section className="deckle mb-[var(--density-gap)] border border-line bg-paper py-5 px-[var(--density-gutter)]">
-        <div className="mb-[18px] flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="m-0 font-serif font-medium text-[20px]">Every day so far</h2>
-          <div className="flex gap-1 overflow-x-auto app-scroll">
-            <FilterChip
-              active={filter === 'all'}
-              onClick={() => setFilter('all')}
-              label="All"
-            />
+      {/* The lens. One course, or all of them, read through everything
+          under it: the race, the records, the side by side, the weeks, the
+          heatmap and the log. It used to sit on the heatmap alone, so the
+          rest of the page could only ever be read for the whole term. */}
+      {courses.length > 1 && (
+        <div className="mb-[var(--density-gap)] flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
+          <span className="font-serif text-[13.5px] italic text-muted">Reading</span>
+          <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1">
+            <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} label="Every course" />
             {courses.map((c) => (
               <FilterChip
                 key={c.id}
                 active={filter === c.id}
                 onClick={() => setFilter(c.id)}
                 label={c.code}
-                color={c.color}
                 tint={resolveTint(c.color, c.tint)}
               />
             ))}
           </div>
         </div>
-        <div className="overflow-x-auto app-scroll">
-          <Heatmap
-            sessions={filteredSessions}
-            accent={accent}
-            weeks={13}
-            hideWeekends={prefs.hideWeekends}
+      )}
+
+      {/* The chase: another week, the next round number, and the hours of
+          the day it all lands in. Dealt onto the desk one after another. */}
+      <div className="mb-[var(--density-gap)] grid gap-[var(--density-gap)] md:grid-cols-2 xl:grid-cols-3">
+        <ChaseCard title={`You vs ${pace.name}`} delay={0}>
+          <PaceRace
+            pace={pace}
+            accent={filter === 'all' ? undefined : accent}
+            choices={choices}
+            onAgainst={setAgainst}
           />
-        </div>
-      </section>
+        </ChaseCard>
+        <ChaseCard title={lensName ? `Next milestone · ${lensName}` : 'Next milestone'} delay={120}>
+          <NextMilestone milestone={milestone} totalSeconds={lensSec} />
+        </ChaseCard>
+        <ChaseCard title="Your day, as a clock" delay={240} className="md:col-span-2 xl:col-span-1">
+          <StudyClock habits={habits} persona={persona} />
+        </ChaseCard>
+      </div>
 
-      {/* Weekly bars, deckle card */}
+      {/* Side by side. A stretch of the term, from every side the log can
+          be read from, each figure set beside the same one for the stretch
+          before. The race above is one line of this; this is the rest. */}
+      {sessions.length > 0 && (
+        <section className="mb-[var(--density-gap)]" aria-labelledby="side-by-side">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-2 px-1">
+            <div>
+              <h2 id="side-by-side" className="m-0 font-serif text-[20px] font-medium">
+                Side by side
+              </h2>
+              <p className="m-0 mt-1 font-serif text-[13px] italic text-muted">
+                {windows.againstName
+                  ? `${windows.name}${lensName ? ` on ${lensName}` : ''}, against ${windows.againstName}`
+                  : `${windows.name} so far${lensName ? ` on ${lensName}` : ''}, week ${Math.max(1, Math.ceil(daysIn(windows.now) / 7))}`}
+              </p>
+            </div>
+            <div className="flex gap-x-2" role="group" aria-label="Stretch of time">
+              {SPANS.map((option) => (
+                <FilterChip
+                  key={option.key}
+                  active={span === option.key}
+                  onClick={() => setSpan(option.key)}
+                  label={option.label}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div key={`${span}-${filter}`} className="grid gap-[var(--density-gap)] md:grid-cols-2">
+            <div className="deckle border border-line bg-paper px-[var(--density-gutter)] py-5 md:col-span-2">
+              <SpanFigures
+                now={spanNow}
+                before={spanBefore}
+                againstName={windows.againstName}
+                courseCount={lensCourses.length}
+              />
+            </div>
+
+            <div className="deckle min-w-0 border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2 md:col-span-2">
+              <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="m-0 font-serif text-[17px] font-medium">Course against course</h3>
+                <span className="font-serif text-[12px] italic text-muted">
+                  hours, against what each goal asks over {windows.name}
+                </span>
+              </div>
+              <CourseBalance
+                standings={standings}
+                spanWeeks={daysIn(windows.now) / 7}
+                againstName={windows.againstName}
+              />
+            </div>
+
+            <div className="deckle min-w-0 border border-line bg-paper px-[var(--density-gutter)] py-5">
+              <h3 className="eyebrow m-0 mb-3">When in the week</h3>
+              <WeekRhythm rhythm={rhythm} accent={accent} />
+            </div>
+
+            <div className="deckle min-w-0 border border-line bg-paper px-[var(--density-gutter)] py-5">
+              <h3 className="eyebrow m-0 mb-3">How long you sit</h3>
+              <SittingLengths lengths={lengths} accent={accent} />
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="settle-in min-w-0">
+      {/* The term, a week at a time. It replaced a chart of the last seven
+          days that said less than Today's own week does. */}
+      {sessions.length > 0 && (
       <section className="deckle mb-[var(--density-gap)] border border-line bg-paper py-5 px-[var(--density-gutter)]">
-        <h2 className="m-0 mb-[18px] font-serif font-medium text-[20px]">This week</h2>
-        <WeeklyChart sessions={sessions} courses={courses} />
+        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="m-0 font-serif font-medium text-[20px]">Week by week</h2>
+          <span className="font-serif text-[12px] italic text-muted">tap a week to open it</span>
+        </div>
+        <TermWeeks key={filter} weeks={termWeeks} courses={lensCourses} goalSeconds={goalSeconds} />
+      </section>
+      )}
+
+      {/* Heatmap */}
+      <section className="deckle mb-[var(--density-gap)] border border-line bg-paper py-5 px-[var(--density-gutter)]">
+        <h2 className="m-0 mb-[14px] font-serif font-medium text-[20px]">Every day so far</h2>
+        <Heatmap
+          sessions={lensSessions}
+          accent={accent}
+          weeks={Math.min(26, Math.max(13, termWeeks.filter((w) => !w.future).length))}
+          hideWeekends={prefs.hideWeekends}
+        />
       </section>
 
         </div>
 
-        {/* The aside: what the week came to, per course, and the marks it
-            earned. On a phone it simply follows the charts. */}
+        {/* The aside: the marks to beat, the list in and out, and the grade.
+            On a phone it simply follows the charts. */}
         <aside className="settle-in grid grid-cols-[minmax(0,1fr)] gap-4">
       <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
         <h2 className="m-0 mb-1 font-serif font-medium text-[20px]">Records to beat</h2>
         <PersonalBests records={records} />
       </section>
 
-      {/* Totals, deckle card with hand-drawn trend arrows */}
-      <section className="deckle border border-line bg-paper px-[var(--density-gutter)] pt-5 pb-2">
-        <h2 className="m-0 mb-1.5 font-serif font-medium text-[20px]">Hours by course</h2>
-        <div>
-          {totals.length === 0 && (
-            <p className="mt-0 mb-3 text-[13px] text-muted font-serif italic">
-              Nothing to weigh up yet...
-            </p>
-          )}
-          {totals.map(({ course, totalHours, avg }, index) => {
-            // Quick trend: compare last 7 days vs the 7 before that
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const eightDaysAgo = new Date(today);
-            eightDaysAgo.setDate(today.getDate() - 7);
-            const fifteenDaysAgo = new Date(today);
-            fifteenDaysAgo.setDate(today.getDate() - 14);
-            let recentSec = 0;
-            let priorSec = 0;
-            for (const s of sessions) {
-              if (s.courseId !== course.id) continue;
-              const d = new Date(s.date + 'T00:00:00');
-              if (d >= eightDaysAgo) recentSec += clampSessionSeconds(s.durationSeconds);
-              else if (d >= fifteenDaysAgo) priorSec += clampSessionSeconds(s.durationSeconds);
-            }
-            const trend: 'up' | 'flat' | 'down' =
-              recentSec > priorSec * 1.1
-                ? 'up'
-                : recentSec < priorSec * 0.9
-                  ? 'down'
-                  : 'flat';
-            const trendChar = trend === 'up' ? '↗' : trend === 'down' ? '↘' : '→';
-            const trendColor =
-              trend === 'up'
-                ? 'var(--sage)'
-                : trend === 'down'
-                  ? 'var(--rose)'
-                  : 'var(--muted-soft)';
-            return (
-              <div
-                key={course.id}
-                className="flex items-center justify-between py-3.5 border-b border-dashed border-line last:border-0"
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ background: course.color }}
-                  />
-                  <div className="min-w-0">
-                    <p
-                      className="eyebrow m-0"
-                      style={{ color: course.color }}
-                    >
-                      {course.code}
-                    </p>
-                    <p className="mt-0.5 mb-0 font-serif font-medium text-[15px]">
-                      {course.name}
-                    </p>
-                    {totalHours > 0 && heaviestCourseHours > 0 && (
-                      <span
-                        aria-hidden
-                        className="rule-draw mt-2 block h-[2px] rounded-full"
-                        style={{
-                          animationDelay: `${0.3 + index * 0.1}s`,
-                          width: `${Math.max(
-                            8,
-                            (totalHours / heaviestCourseHours) * 140,
-                          )}px`,
-                          background: course.color,
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
-                <div className="text-right shrink-0 pl-3">
-                  {totalHours > 0 ? (
-                    <>
-                      <p className="m-0 font-mono font-semibold text-[18px] tabular-nums leading-none tracking-[-0.02em]">
-                        <RollingFigure value={totalHours} delay={300 + index * 100} />
-                        <span className="text-muted font-sans font-normal text-[11px] ml-[3px]">
-                          h
-                        </span>
-                      </p>
-                      <p className="mt-1 mb-0 text-[10.5px] text-muted italic font-serif">
-                        {avg.toFixed(1)} h/wk
-                        <span className="ml-1.5" style={{ color: trendColor }}>
-                          {trendChar}
-                        </span>
-                      </p>
-                    </>
-                  ) : (
-                    <p className="m-0 text-[12px] text-muted-soft italic font-serif">
-                      No sessions yet
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <section className="deckle border border-line bg-paper px-[var(--density-gutter)] py-5">
+        <h2 className="m-0 mb-1.5 font-serif font-medium text-[20px]">The list, in and out</h2>
+        <TaskFlow flow={flow} accent={accent} />
       </section>
 
-      <GradeWeighting courses={courses} tasks={tasks} today={isoDate()} />
+      <GradeWeighting courses={lensCourses} tasks={lensTasks} today={isoDate()} />
 
       {/* Progression lives on the Record tab. A second, differently worded
           copy here was two readings of the same sessions with two chances to
@@ -589,7 +602,7 @@ export default function StatsPage() {
         >
           <p className="eyebrow m-0">The record</p>
           <p className="m-0 mt-1.5 font-serif text-[15px] italic text-ink-soft">
-            The run in weeks, your course pages and the impressions &rarr;
+            The run in weeks, the term week by week, your course pages and the impressions &rarr;
           </p>
         </Link>
       )}
@@ -704,10 +717,21 @@ function ChaseCard({
   );
 }
 
-/** An hour count that rolls up to itself, to a tenth. */
-function RollingFigure({ value, delay }: { value: number; delay: number }) {
-  const shown = useCountUp(value, 900, delay);
-  return <>{shown.toFixed(1)}</>;
+/**
+ * One run in the whole app, counted in weeks. This line used to count days
+ * while Today, the Record and the guide all said a day off costs nothing,
+ * which is two streaks disagreeing on the same screen pair. Its own
+ * component because the reading moves every second while a sitting runs,
+ * and only this line needs to move with it.
+ */
+function WeeksRunning() {
+  const { progression } = useProgression();
+  const run = progression?.runs.current ?? 0;
+  return (
+    <span>
+      <Figure>{run}</Figure> {run === 1 ? 'week' : 'weeks'} running
+    </span>
+  );
 }
 
 /** A number inside a sentence: mono, upright, the app's ink. */
@@ -727,15 +751,31 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
+/**
+ * The masthead figure, which rolls up to the term's hours rather than being
+ * printed there. Held at a tenth, the way it is written. Its own component
+ * so the count-up re-renders this figure each frame, not the whole page.
+ */
+function RollingHours({ hours }: { hours: number }) {
+  const rolling = useCountUp(hours, 1400, 150);
+  const whole = Math.floor(rolling);
+  const decimal = `.${Math.min(9, Math.floor((rolling - whole) * 10))}`;
+  return (
+    <>
+      {whole}
+      <span className="text-muted-soft">{decimal}</span>
+    </>
+  );
+}
+
 interface ChipProps {
   active: boolean;
   onClick: () => void;
   label: string;
-  color?: string;
   tint?: string;
 }
 
-function FilterChip({ active, onClick, label, color, tint }: ChipProps) {
+function FilterChip({ active, onClick, label, tint }: ChipProps) {
   return (
     <button
       type="button"

@@ -29,8 +29,6 @@ interface Props {
   className?: string;
   /** Screen-reader text; without one the row is silent to a reader. */
   label?: string;
-  /** Fill the strokes up from the bottom when they are first drawn. */
-  grow?: boolean;
 }
 
 export default function HourStrokes({
@@ -42,7 +40,6 @@ export default function HourStrokes({
   max = 12,
   className = '',
   label,
-  grow = true,
 }: Props) {
   const goal = Math.max(0, goalHours);
   if (goal <= 0) return null;
@@ -78,11 +75,11 @@ export default function HourStrokes({
                 one hour after another, and keep rising while a clock runs. */}
             {filled > 0 && (
               <span
-                className={`absolute inset-x-0 bottom-0 block ${grow ? 'stroke-fill' : ''}`}
+                className="absolute inset-x-0 bottom-0 block stroke-fill"
                 style={{
                   height: `${filled * 100}%`,
                   background: color,
-                  animationDelay: grow ? `${i * 45}ms` : undefined,
+                  animationDelay: `${i * 45}ms`,
                 }}
               />
             )}
@@ -90,30 +87,5 @@ export default function HourStrokes({
         );
       })}
     </div>
-  );
-}
-
-/**
- * The same idea at list scale: short marks beside a course name, for the rail
- * and the week panel where a full stroke column would not fit.
- */
-export function HourTicks({
-  seconds,
-  goalHours,
-  color = 'var(--ink)',
-  max = 8,
-  label,
-}: Pick<Props, 'seconds' | 'goalHours' | 'color' | 'max' | 'label'>) {
-  return (
-    <HourStrokes
-      seconds={seconds}
-      goalHours={goalHours}
-      color={color}
-      height={10}
-      width={7}
-      max={max}
-      label={label}
-      grow={false}
-    />
   );
 }

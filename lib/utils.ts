@@ -56,6 +56,23 @@ export function isoDate(d?: Date): string {
  * cutoffs supabase/schema.sql uses when guessing a label for a semester
  * migrated from before semesters had names of their own.
  */
+/**
+ * A calendar date moved by whole days. Anchored at noon, so a daylight-saving
+ * change cannot move it onto the day before or after.
+ */
+export function addDays(iso: string, days: number): string {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return isoDate(d);
+}
+
+/** The Monday of the week a calendar date falls in. */
+export function mondayOf(iso: string): string {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return isoDate(d);
+}
+
 export function seasonLabel(d: Date = new Date()): string {
   const month = d.getMonth(); // 0-11
   const season = month <= 4 ? 'Spring' : month <= 7 ? 'Summer' : 'Fall';
@@ -94,6 +111,16 @@ export function formatHHMMSS(totalSeconds: number): string {
   const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
   const ss = String(s % 60).padStart(2, '0');
   return `${hh}:${mm}:${ss}`;
+}
+
+/** A running clock: "04:07", or "1:04:07" once it passes the hour. */
+export function clockFace(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
 export function formatHours(totalSeconds: number, digits = 1): string {
@@ -272,7 +299,7 @@ export function resolveTint(color: string, storedTint?: string | null): string {
 
 // ---- Aggregation helpers
 
-import type { Course, Session } from './data';
+import type { Session } from './data';
 import { clampSessionSeconds, isLoggableDuration } from './session-safety';
 import { isIsoDate } from './planner-safety';
 
@@ -290,10 +317,6 @@ export function sessionsThisWeek(sessions: Session[]): Session[] {
   return sessions.filter(
     (s) => s.date >= start && s.date <= end && isLoggableDuration(s.durationSeconds),
   );
-}
-
-export function findCourse(courses: Course[], id: string): Course | undefined {
-  return courses.find((c) => c.id === id);
 }
 
 /** Up to two initials from a display name, uppercased, or '' with nothing to read. */
@@ -314,29 +337,4 @@ export function lastSeenByCourse(sessions: Session[]): Record<string, string> {
     if (!map[s.courseId] || s.date > map[s.courseId]) map[s.courseId] = s.date;
   }
   return map;
-}
-
-export function studyStreakDays(sessions: Session[], today: Date = new Date()): number {
-  const dates = new Set(
-    sessions.filter((s) => isLoggableDuration(s.durationSeconds)).map((s) => s.date),
-  );
-  let streak = 0;
-  const cursor = new Date(today);
-  cursor.setHours(0, 0, 0, 0);
-  const todayIso = isoDate(cursor);
-
-  while (true) {
-    const currentIso = isoDate(cursor);
-    if (!dates.has(currentIso)) {
-      if (streak === 0 && currentIso === todayIso) {
-        cursor.setDate(cursor.getDate() - 1);
-        continue;
-      }
-      break;
-    }
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-
-  return streak;
 }

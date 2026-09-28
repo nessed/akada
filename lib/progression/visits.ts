@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import type { Course } from '../data';
 import { useCourses, useSessions, useTasks } from '../data-hooks';
 import { sortCourses } from '../data/course-order';
 import { isoDate } from '../utils';
@@ -147,9 +146,4 @@ export function useRecordHasNews(): boolean {
     setNews(Boolean(before && logged && diffRecord(before, logged).any));
   }, [raw, logged]);
   return news;
-}
-
-/** Course code for a news line, falling back to nothing for a deleted course. */
-export function codeOf(courses: Course[], id: string): string | null {
-  return courses.find((c) => c.id === id)?.code ?? null;
 }

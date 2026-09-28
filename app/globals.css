@@ -48,10 +48,6 @@
      night tone screens instead, because there the ink is the light value. */
   --doodle-blend: multiply;
 
-  /* Paper grain. Multiplied into a light page, screened onto a dark one. */
-  --noise-blend: multiply;
-  --noise-opacity: 0.32;
-
   /* The hand-drawn underline, stroked in the ink of the current paper. The
      colour lives inside a data URI, which a custom property cannot reach
      into, so the whole url is the token. */
@@ -339,23 +335,11 @@ input[type='date']::-webkit-calendar-picker-indicator {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   Refined notebook utilities, paper noise, deckle cards, highlighter
-   swipes, hand-drawn checkboxes, sticky notes, swipe-affordances, etc.
+   Refined notebook utilities: deckle cards, highlighter swipes,
+   hand-drawn checkboxes, tape, swipe-affordances, etc.
    These mirror the tokens in the Akada Refined design bundle so future
    handoffs stay on-theme.
    ────────────────────────────────────────────────────────────────────── */
-
-/* Subtle paper noise overlay, drop into a relative ancestor as
-   <span aria-hidden className="paper-noise"/> when you want texture
-   without re-rendering the whole bg. */
-.paper-noise {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: var(--noise-opacity, 0.32);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.62  0 0 0 0 0.55  0 0 0 0 0.42  0 0 0 0.10 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  mix-blend-mode: var(--noise-blend, multiply);
-}
 
 /* The uppercase caption used for section headers, field labels and course
    codes. One spec, so the same idea reads the same everywhere; anything set
@@ -478,9 +462,6 @@ input[type='date']::-webkit-calendar-picker-indicator {
     background-size: 100% var(--hl-nib);
   }
 }
-.hl-draw {
-  animation: hl-draw 0.7s cubic-bezier(0.3, 0.6, 0.25, 1) 0.22s both;
-}
 
 /* Up next leaving. Done and Tomorrow let the task go before the next one
    comes up, a fade and a short lift, rather than swapping in the same
@@ -572,6 +553,24 @@ input[type='date']::-webkit-calendar-picker-indicator {
   animation: nav-mark 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) 0.06s backwards;
 }
 
+/* The blink `P` gives the page (TimerHotkeys): a veil of ink that closes
+   fast and opens a touch slower, the way a lid does. Over everything,
+   focus mode included, and it catches nothing. */
+.page-blink {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  background: var(--ink);
+  opacity: 0;
+  animation: page-blink 0.34s ease-out both;
+}
+@keyframes page-blink {
+  0% { opacity: 0; }
+  30% { opacity: 0.16; }
+  100% { opacity: 0; }
+}
+
 /* Anyone who has asked their system for less movement gets the app without
    it, including the tick, which otherwise pulses for a whole session. */
 @media (prefers-reduced-motion: reduce) {
@@ -601,8 +600,6 @@ input[type='date']::-webkit-calendar-picker-indicator {
    stroke over a heading as over a label, so the thickness is capped rather
    than scaled with the type. */
 .hl,
-.hl-pink,
-.hl-mint,
 .hl-swipe {
   --hl-nib: clamp(6px, 0.45em, 12px);
   background-repeat: no-repeat;
@@ -615,12 +612,6 @@ input[type='date']::-webkit-calendar-picker-indicator {
     180deg,
     var(--highlight-yellow) 0 100%
   );
-}
-.hl-pink {
-  background-image: linear-gradient(180deg, var(--highlight-pink) 0 100%);
-}
-.hl-mint {
-  background-image: linear-gradient(180deg, var(--highlight-mint) 0 100%);
 }
 
 /* The documents (guide, Claude, connector reference, privacy, terms): read
@@ -879,23 +870,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   border-radius: 14px 13px 15px 13px / 13px 15px 13px 14px;
 }
 
-/* Tilt utilities for sticky-note / stamp affectations */
-.tilt-l { transform: rotate(-1.4deg); }
-.tilt-r { transform: rotate(1.6deg); }
-.tilt-l2 { transform: rotate(-0.6deg); }
-.tilt-r2 { transform: rotate(0.8deg); }
-
-/* Sticky note, bright butter yellow, asymmetric corners + warm shadow */
-.sticky {
-  background: linear-gradient(180deg, #F4E58A 0%, #EFDC72 100%);
-  box-shadow:
-    1px 2px 0 rgba(0, 0, 0, 0.04),
-    4px 6px 14px rgba(180, 150, 80, 0.18);
-  border-radius: 2px 14px 4px 12px / 12px 4px 14px 2px;
-  position: relative;
-}
-
-/* Tape strip, anchor sticky notes to the page */
+/* Tape strip, anchor a slip to the page */
 .tape {
   position: absolute;
   width: 56px;
@@ -935,12 +910,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   font-variant-numeric: tabular-nums;
 }
 
-/* Soft entrance animations (kept for legacy components) */
-/* Cormorant should default to medium weight when used as headings */
-.font-cormorant {
-  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
-  letter-spacing: -0.01em;
-}
+/* The handwriting face, for marginalia. */
 .font-hand {
   font-family: var(--font-hand), 'Caveat', 'Patrick Hand', cursive;
 }

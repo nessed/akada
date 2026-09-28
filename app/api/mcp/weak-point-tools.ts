@@ -1,6 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { readAccessToken } from '@/lib/mcp-auth';
 import { WEAK_POINT_ERROR_TYPES } from '@/lib/data/types';
 import {
   WEAK_POINT_CONFUSION_MAX,
@@ -10,7 +9,17 @@ import {
   inSection,
   rankWeakPoints,
 } from '@/lib/weak-points';
-import { mcpSupabase, siteUrl } from './_shared';
+import { mcpSupabase } from './_shared';
+import {
+  queryFailed as reportFailure,
+  result,
+  toolCrashed,
+  toolError,
+  quizUrl,
+  type AuthenticatedToken,
+  type McpSupabaseClient,
+  type QueryFailure,
+} from './_tool-kit';
 
 /**
  * The weak point tools. After an assistant marks a quiz it writes down each
@@ -22,9 +31,6 @@ import { mcpSupabase, siteUrl } from './_shared';
  * delete_weak_points removes ones that should never have been logged.
  */
 
-type AuthenticatedToken = ReturnType<typeof readAccessToken>;
-type McpSupabaseClient = ReturnType<typeof mcpSupabase>;
-type QueryFailure = { message?: string; code?: string; details?: string; hint?: string } | null;
 
 interface WeakPointRow {
   id: string;
@@ -43,41 +49,16 @@ interface WeakPointRow {
   fixed_at: string | null;
 }
 
-function result(value: unknown) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
-    structuredContent: value as Record<string, unknown>,
-  };
-}
 
-function toolError(message: string) {
-  return { content: [{ type: 'text' as const, text: message }], isError: true };
-}
 
-const MISSING_TABLE = ['PGRST205', '42P01', 'PGRST204', '42703'];
 const NOT_SET_UP =
   'Weak points are not set up in this Akada database yet. The student needs to run the latest supabase/schema.sql once.';
 
 function queryFailed(tool: string, step: string, error: QueryFailure, message: string) {
-  console.error(`[mcp:${tool}] ${step} failed`, { code: error?.code, message: error?.message, hint: error?.hint });
-  if (error?.code && MISSING_TABLE.includes(error.code)) return toolError(NOT_SET_UP);
-  const reason = [error?.code, error?.message, error?.hint].filter(Boolean).join(' | ');
-  return toolError(reason ? `${message} (${reason})` : message);
+  return reportFailure(tool, step, error, message, NOT_SET_UP);
 }
 
-function toolCrashed(tool: string, cause: unknown) {
-  const reason = cause instanceof Error ? cause.message : String(cause ?? '');
-  console.error(`[mcp:${tool}] unhandled failure`, reason);
-  return toolError(`Akada is not configured or your session has expired. Reconnect the connector and try again.${reason ? ` (${reason})` : ''}`);
-}
 
-function quizUrl(id: string): string | null {
-  try {
-    return `${siteUrl()}/notes/quiz?q=${encodeURIComponent(id)}`;
-  } catch {
-    return null;
-  }
-}
 
 async function titles(supabase: McpSupabaseClient, userId: string, table: 'quizzes' | 'tasks', ids: (string | null)[]) {
   const map = new Map<string, string>();

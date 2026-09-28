@@ -1073,18 +1073,21 @@ function reading(id: string, patch: Row): Row {
 test('get_reading_backlog times the backlog at the pace the student has shown', async () => {
   const db = gradedFixtures();
   db.tasks = [
-    // 60 pages finished over two logged hours: 30 an hour.
-    reading('done', { completed: true, pages: 60 }),
+    // Three readings finished at 30 pages an hour each (PACE_MIN_PAIRS is
+    // three): 90 pages over three logged hours.
+    reading('done', { completed: true, pages: 30 }),
+    reading('done2', { completed: true, pages: 30 }),
+    reading('done3', { completed: true, pages: 30 }),
     reading('soon', { pages: 45, due_date: inDays(2) }),
     reading('later', { pages: 90, due_date: inDays(30) }),
     reading('loose', { pages: 30 }),
     reading('nopages', { due_date: inDays(1) }),
   ];
-  db.sessions = [{ id: 's', user_id: 'user-1', semester_id: 'sem-1', course_id: COURSE_ID, task_id: 'done', date: inDays(-3), duration_seconds: 7200, note: '' }];
+  db.sessions = ['done', 'done2', 'done3'].map((task_id, i) => ({ id: `s${i}`, user_id: 'user-1', semester_id: 'sem-1', course_id: COURSE_ID, task_id, date: inDays(-3 - i), duration_seconds: 3600, note: '' }));
   const output = (await getReadingBacklog(TOKEN, { by_date: inDays(4) }, fakeSupabase(db, GRADED_SCHEMA))) as Reply;
   assert.equal(output.isError, undefined, output.content[0].text);
   const body = output.structuredContent!;
-  assert.deepEqual(body.pace, { pages_per_hour: 30, measured: true, based_on: { pages_read: 60, hours_logged: 2 } });
+  assert.deepEqual(body.pace, { pages_per_hour: 30, measured: true, based_on: { pages_read: 90, hours_logged: 3 } });
   assert.deepEqual(body.totals, { readings: 2, pages: 45, hours: 1.5, without_pages: 1 });
   assert.equal(body.days_left, 5);
   assert.deepEqual(body.undated, { readings: 1, pages: 30, hours: 1, without_pages: 0 });

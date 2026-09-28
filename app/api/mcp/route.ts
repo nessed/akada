@@ -39,7 +39,17 @@ import { readCredit } from '@/lib/progression/credit';
 import { readRuns } from '@/lib/progression/runs';
 import { compareCourseOrder } from '@/lib/data/course-order';
 import { compareTaskOrder } from '@/lib/data/task-order';
-import { checkResource, MCP_SCOPES, mcpSupabase, mcpUrl, readStudentSettings, siteUrl } from './_shared';
+import { checkResource, MCP_SCOPES, mcpSupabase, mcpUrl, readStudentSettings, siteUrl, startRead } from './_shared';
+import {
+  describeFailure,
+  isMissingTable,
+  result,
+  toolCrashed,
+  toolError,
+  type AuthenticatedToken,
+  type McpSupabaseClient,
+  type QueryFailure,
+} from './_tool-kit';
 import { limitToGrantedScopes, WRITE_SCOPE } from './scopes';
 import { registerNoteTools } from './notes-tools';
 import { registerQuizTools } from './quiz-tools';
@@ -118,25 +128,8 @@ const TasksReadResponseSchema = z.object({
 
 type TaskRead = z.infer<typeof TaskReadSchema>;
 
-type AuthenticatedToken = ReturnType<typeof readAccessToken>;
-
-// Shape of a Supabase/PostgREST failure. Not imported from supabase-js
-// because these tools also funnel plain Errors through the same reporting.
-type QueryFailure = { message?: string; code?: string; details?: string; hint?: string } | null;
-
-function result(value: unknown) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
-    structuredContent: value as Record<string, unknown>,
-  };
-}
-
 function normalize(value: string) {
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
-}
-
-function toolError(message: string) {
-  return { content: [{ type: 'text' as const, text: message }], isError: true };
 }
 
 // Every tool used to collapse a database failure into one generic sentence,
@@ -144,10 +137,7 @@ function toolError(message: string) {
 // `queryFailed` puts the real cause in the runtime log and a short, safe
 // reason in the tool's reply. Never include `details` in the reply: PostgREST
 // puts row values in there. Codes, messages and hints are schema-level only.
-function describe(error: QueryFailure) {
-  return [error?.code, error?.message, error?.hint].filter(Boolean).join(' | ');
-}
-
+// The log line here, unlike the tool files', does carry `details`.
 function queryFailed(tool: string, step: string, error: QueryFailure, message: string) {
   console.error(`[mcp:${tool}] ${step} failed`, {
     code: error?.code,
@@ -155,21 +145,9 @@ function queryFailed(tool: string, step: string, error: QueryFailure, message: s
     details: error?.details,
     hint: error?.hint,
   });
-  const reason = describe(error);
+  const reason = describeFailure(error);
   return toolError(reason ? `${message} (${reason})` : message);
 }
-
-// Same idea for the outer catch. A thrown error here is almost always a
-// missing env var or an expired session, but "almost always" is what made
-// the last three guesses expensive.
-function toolCrashed(tool: string, cause: unknown) {
-  const reason = cause instanceof Error ? cause.message : String(cause ?? '');
-  console.error(`[mcp:${tool}] unhandled failure`, reason);
-  const suffix = reason ? ` (${reason})` : '';
-  return toolError(`Akada is not configured or your session has expired. Reconnect the connector and try again.${suffix}`);
-}
-
-type McpSupabaseClient = ReturnType<typeof mcpSupabase>;
 
 async function activeSemesterId(token: AuthenticatedToken, supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken)) {
   return (await readStudentSettings(token, supabase)).semesterId;
@@ -241,6 +219,16 @@ async function loadOwnTasks(
   ids: string[],
   supabase: McpSupabaseClient = mcpSupabase(token.supabaseAccessToken),
 ) {
+  // The tasks do not depend on the semester, so they are read alongside the
+  // settings and courses rather than after them. Failures are still reported
+  // in the order the reads were once made in.
+  const tasksRead = startRead(
+    supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', token.userId)
+      .in('id', ids),
+  );
   const semesterId = await activeSemesterId(token, supabase);
   if (!semesterId) return { ok: false, error: toolError('No active semester is set in Akada.') } as const;
   const { data: courses, error: coursesError } = await supabase
@@ -249,11 +237,7 @@ async function loadOwnTasks(
     .eq('user_id', token.userId)
     .eq('semester_id', semesterId);
   if (coursesError) return { ok: false, error: queryFailed(tool, 'courses read', coursesError, 'Akada could not load courses.') } as const;
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .eq('user_id', token.userId)
-    .in('id', ids);
+  const { data, error } = await tasksRead;
   if (error) return { ok: false, error: queryFailed(tool, 'tasks read', error, 'Akada could not load those tasks.') } as const;
   const allowed = new Map((courses ?? []).map((course) => [course.id, course]));
   const rows = ((data ?? []) as Record<string, unknown>[]).filter((task) => allowed.has(task.course_id as string));
@@ -451,21 +435,12 @@ export async function getWeeklyStats(
     // number read on the Stats screen agree.
     const { from, to } = weekOf(day.today, week_offset);
 
-    const { data: courses, error: coursesError } = await supabase
-      .from('courses')
-      .select('id, code, name, weekly_goal_hours')
-      .eq('user_id', token.userId)
-      .eq('semester_id', semesterId)
-      .order('code');
-    if (coursesError) return queryFailed('get_weekly_stats', 'courses read', coursesError, 'Akada could not load courses.');
-    if (course_id && !(courses ?? []).some((course) => course.id === course_id)) {
-      return toolError('That course is not available in your active Akada semester.');
-    }
-
     // The run needs weeks before this one, so sessions are read over a
-    // wider window than the week being reported and filtered twice.
+    // wider window than the week being reported and filtered twice. Both
+    // reads start alongside the courses, which they do not depend on; a
+    // failed courses read is still the one reported first.
     const runFloor = shiftDate(day.today, -120);
-    const [{ data: sessions, error: sessionsError }, { data: tasks, error: tasksError }] = await Promise.all([
+    const sessionsAndTasks = startRead(Promise.all([
       supabase
         .from('sessions')
         // `*` rather than a column list so a project that has not re-run
@@ -485,7 +460,20 @@ export async function getWeeklyStats(
         .eq('user_id', token.userId)
         .eq('semester_id', semesterId)
         .eq('completed', true),
-    ]);
+    ]));
+
+    const { data: courses, error: coursesError } = await supabase
+      .from('courses')
+      .select('id, code, name, weekly_goal_hours')
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId)
+      .order('code');
+    if (coursesError) return queryFailed('get_weekly_stats', 'courses read', coursesError, 'Akada could not load courses.');
+    if (course_id && !(courses ?? []).some((course) => course.id === course_id)) {
+      return toolError('That course is not available in your active Akada semester.');
+    }
+
+    const [{ data: sessions, error: sessionsError }, { data: tasks, error: tasksError }] = await sessionsAndTasks;
     const readError = sessionsError ?? tasksError;
     if (readError) {
       return queryFailed('get_weekly_stats', sessionsError ? 'sessions read' : 'tasks read', readError, 'Akada could not load that week.');
@@ -723,7 +711,7 @@ export async function createTasks(
  * by running schema.sql.
  */
 function isMissingRecallTable(error: QueryFailure): boolean {
-  return Boolean(error && ['PGRST205', '42P01', 'PGRST204', '42703'].includes(error.code ?? ''));
+  return isMissingTable(error);
 }
 
 /** The student's day, as the recall tools take it. */
@@ -1976,6 +1964,20 @@ export async function listStudySessions(
     const semesterId = await activeSemesterId(token, supabase);
     if (!semesterId) return result({ sessions: [], meta: { total: 0, count: 0 }, message: 'No active semester is set in Akada.' });
 
+    // `*` for the same reason as everywhere else here: an un-migrated project
+    // still answers. Scoped by user and semester like get_overview; ordering
+    // and paging happen below so the total and the cursor come from one read.
+    // Started alongside the courses read, which it does not depend on.
+    let query = supabase
+      .from('sessions')
+      .select('*')
+      .eq('user_id', token.userId)
+      .eq('semester_id', semesterId);
+    if (course_id) query = query.eq('course_id', course_id);
+    if (from) query = query.gte('date', from);
+    if (to) query = query.lte('date', to);
+    const sessionsRead = startRead(query);
+
     const { data: courses, error: coursesError } = await supabase
       .from('courses')
       .select('id, code, name')
@@ -1985,18 +1987,7 @@ export async function listStudySessions(
     const byId = new Map((courses ?? []).map((course) => [course.id as string, course]));
     if (course_id && !byId.has(course_id)) return toolError('That course is not available in your active Akada semester.');
 
-    // `*` for the same reason as everywhere else here: an un-migrated project
-    // still answers. Scoped by user and semester like get_overview; ordering
-    // and paging happen below so the total and the cursor come from one read.
-    let query = supabase
-      .from('sessions')
-      .select('*')
-      .eq('user_id', token.userId)
-      .eq('semester_id', semesterId);
-    if (course_id) query = query.eq('course_id', course_id);
-    if (from) query = query.gte('date', from);
-    if (to) query = query.lte('date', to);
-    const { data, error } = await query;
+    const { data, error } = await sessionsRead;
     if (error) return queryFailed('list_study_sessions', 'sessions read', error, 'Akada could not load study sessions.');
 
     const matched = ((data ?? []) as Record<string, unknown>[])
@@ -2257,6 +2248,22 @@ export function createServer(token: AuthenticatedToken) {
           schema_version: 'akada.tasks.v1', tasks: [], meta: { include_completed, course_id: course_id ?? null, count: 0 }, message: 'No active semester is set in Akada.',
         }));
         const supabase = mcpSupabase(token.supabaseAccessToken);
+        // Deliberately the same request shape the app itself uses
+        // (lib/data/supabase-adapter.ts listTasks): `select('*')` scoped by
+        // user and semester, no PostgREST ordering, no limit. Two earlier
+        // attempts at a cleverer query failed in production and could not be
+        // told apart, because a named column list breaks outright on a
+        // project whose schema.sql predates that column, while `*` simply
+        // returns what exists. Sorting and capping happen below. Started
+        // alongside the courses read, which it does not depend on.
+        let query = supabase
+          .from('tasks')
+          .select('*')
+          .eq('user_id', token.userId)
+          .eq('semester_id', semesterId);
+        if (course_id) query = query.eq('course_id', course_id);
+        if (!include_completed) query = query.eq('completed', false);
+        const tasksRead = startRead(query);
         const { data: courses, error: courseError } = await supabase
           .from('courses')
           // `*` so the course order (sort_order, an additive column) comes
@@ -2267,21 +2274,7 @@ export function createServer(token: AuthenticatedToken) {
         if (courseError) return queryFailed('get_tasks', 'courses read', courseError, 'Akada could not load courses.');
         const allowed = new Map((courses ?? []).map((course) => [course.id, course]));
         if (course_id && !allowed.has(course_id)) return toolError('That course is not available in your active Akada semester.');
-        // Deliberately the same request shape the app itself uses
-        // (lib/data/supabase-adapter.ts listTasks): `select('*')` scoped by
-        // user and semester, no PostgREST ordering, no limit. Two earlier
-        // attempts at a cleverer query failed in production and could not be
-        // told apart, because a named column list breaks outright on a
-        // project whose schema.sql predates that column, while `*` simply
-        // returns what exists. Sorting and capping happen below.
-        let query = supabase
-          .from('tasks')
-          .select('*')
-          .eq('user_id', token.userId)
-          .eq('semester_id', semesterId);
-        if (course_id) query = query.eq('course_id', course_id);
-        if (!include_completed) query = query.eq('completed', false);
-        const { data, error } = await query;
+        const { data, error } = await tasksRead;
         if (error) return queryFailed('get_tasks', 'tasks read', error, 'Akada could not load tasks.');
         const rows = (data ?? []) as Record<string, unknown>[];
         const tasks: TaskRead[] = rows
@@ -2358,7 +2351,8 @@ export function createServer(token: AuthenticatedToken) {
           // `*` so the dashboard order (sort_order, an additive column) is
           // read where it exists and simply absent where it does not.
           supabase.from('courses').select('*').eq('user_id', token.userId).eq('semester_id', semesterId),
-          supabase.from('tasks').select('course_id, completed').eq('user_id', token.userId).eq('semester_id', semesterId),
+          // Only open tasks are counted, so only open tasks are read.
+          supabase.from('tasks').select('course_id, completed').eq('user_id', token.userId).eq('semester_id', semesterId).eq('completed', false),
           // `*` so a practice score comes back where a project has the
           // columns, and nothing breaks where it does not.
           supabase.from('sessions').select('*').eq('user_id', token.userId).eq('semester_id', semesterId).order('date', { ascending: false }).limit(12),
@@ -2967,7 +2961,7 @@ export function createServer(token: AuthenticatedToken) {
     {
       title: 'Propose how an Akada course is graded',
       description:
-        'Record how one of the signed-in student’s courses is graded, read off a course outline or syllabus the student has given you. Do not call this from the course code alone or from what the course usually looks like: only call it against an outline the student has actually attached. Cover every graded component with what it is worth as a percentage of the course, say whether the course is graded absolutely or relatively, and give a drop rule wherever not every item counts (put those items in a shared `group` and name that group in `drop_rules`). This does NOT take effect on its own: it lands as a proposal on the course page and the student has to accept it before Akada projects anything from it. Tell the student to go and look at it. Calling this again replaces any proposal not yet accepted, and never touches a scheme the student already accepted.',
+        'Record how one of the signed-in student’s courses is graded, read off a course outline or syllabus the student has given you. Do not call this from the course code alone or from what the course usually looks like: only call it against an outline the student has actually attached. Cover every graded component with what it is worth as a percentage of the course, say whether the course is graded absolutely or relatively, and give a drop rule wherever not every item counts (put those items in a shared `group` and name that group in `drop_rules`). An item under a drop rule carries what one counted item is worth: "best 5 of 7 response papers, 30%" is seven papers at 6 each with keep 5, so the weights come to 100 counting only the kept items. When revising a scheme the student already accepted, keep each component’s label as it is, because marks already entered move across by label. This does NOT take effect on its own: it lands as a proposal on the course page and the student has to accept it before Akada projects anything from it. Tell the student to go and look at it. Calling this again replaces any proposal not yet accepted, and never touches a scheme the student already accepted.',
       inputSchema: z.object({
         course_id: z.string().uuid(),
         components: z
@@ -3074,7 +3068,13 @@ export function createServer(token: AuthenticatedToken) {
           .eq('user_id', token.userId);
         if (error) return queryFailed('set_grading_scheme', 'grading write', error, 'Akada could not save that grading scheme.');
 
-        const total = components.reduce((acc, c) => acc + c.weight, 0);
+        // What counts once drop rules apply, the same total the course card
+        // shows: seven 6% papers keeping five are 30, not 42, and summing the
+        // raw rows sent a false "not 100%" back to the student.
+        const total = gradeStanding({
+          assessments: sanitizeAssessments(pending.assessments),
+          grading: { dropRules: pending.dropRules },
+        }).total;
         const rounded = Math.round(total * 100) / 100;
         return result({
           proposed: true,
@@ -3227,7 +3227,10 @@ export function createServer(token: AuthenticatedToken) {
 const handler = createMcpHandler(
   ({ authInfo }) => {
     if (!authInfo) throw new Error('Missing MCP authentication.');
-    return createServer(readAccessToken(authInfo.token));
+    // authenticate() already opened the token; it rides along rather than
+    // being decrypted a second time.
+    const payload = authInfo.extra?.payload as ReturnType<typeof readAccessToken> | undefined;
+    return createServer(payload ?? readAccessToken(authInfo.token));
   },
   { responseMode: 'json' },
 );
@@ -3286,6 +3289,7 @@ export async function POST(request: NextRequest) {
       scopes: auth.payload.scope.split(/\s+/).filter(Boolean),
       expiresAt: auth.payload.exp,
       resource: new URL(mcpUrl()),
+      extra: { payload: auth.payload },
     },
   });
 }

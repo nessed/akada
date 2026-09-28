@@ -201,7 +201,11 @@ export async function logSessionFollowed(courseId: string): Promise<void> {
   // A row written before the line's course was kept is judged the old way
   // only if it names no kind; otherwise it has to be the same course.
   if (pending.kind !== undefined && !followsLine({ kind: pending.kind, courseId: pending.courseId }, courseId)) return;
-  window.localStorage.removeItem(PENDING_KEY);
+  try {
+    window.localStorage.removeItem(PENDING_KEY);
+  } catch {
+    // Storage went away between the read and here; the row is still marked.
+  }
 
   try {
     const supabase = createClient();
@@ -215,7 +219,6 @@ export async function logSessionFollowed(courseId: string): Promise<void> {
   }
 }
 
-/** Shown and followed, by kind of line, from the device's own ledger. */
 /**
  * Pull the impressions the server already holds into the device's ledger,
  * once.
@@ -326,6 +329,7 @@ export function mergeLedgers(mine: LedgerEntry[], fromServer: LedgerEntry[]): Le
   return [...merged.values()].sort((a, b) => a.at - b.at).slice(-LEDGER_MAX);
 }
 
+/** Shown and followed, by kind of line, from the device's own ledger. */
 export function readFollowRates(): Map<MarkKind, { shown: number; followed: number }> {
   const out = new Map<MarkKind, { shown: number; followed: number }>();
   for (const entry of readLedger()) {

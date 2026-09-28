@@ -25,7 +25,7 @@ Once you have the outline, read it and call set_grading_scheme with:
 
 - every graded component and what it is worth as a percentage of the course. Include the ones worth nothing on their own if the outline lists them, and make the weights add to 100 unless the outline genuinely does not.
 - whether the course is graded absolutely (fixed scale) or relatively (curved, ranked against the class). Say which the outline states. If it does not say, use absolute and tell me you had to assume it.
-- any rule where not every item counts, such as "best 6 of 7 quizzes" or "lowest assignment dropped". Put those items in a shared group and give the rule for that group.
+- any rule where not every item counts, such as "best 6 of 7 quizzes" or "lowest assignment dropped". Put those items in a shared group and give the rule for that group. Each item in the group carries what one counted item is worth, so "best 6 of 7 quizzes, 30%" is seven quizzes at 5 each keeping 6, and the weights add to 100 counting only the kept items.
 
 Tell me anything the outline was vague or silent about rather than filling it in quietly. Put that in the note.
 

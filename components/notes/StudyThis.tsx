@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './Icon';
 import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopover';
 import { addTaskOptimistic, setNoteStudyOptimistic, useTasks } from '@/lib/data-hooks';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import type { Course, StudyNote, Task } from '@/lib/data';
 
 /**
@@ -31,7 +31,7 @@ export default function StudyThis({
   onSay: (text: string) => void;
 }) {
   const { tasks } = useTasks();
-  const { active } = useTimer();
+  const { active } = useTimerState();
   const [open, setOpen] = useState(false);
   const [courseId, setCourseId] = useState<string>(note.courseId ?? courses[0]?.id ?? '');
   const [target, setTarget] = useState<StartTarget | null>(null);

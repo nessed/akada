@@ -46,13 +46,12 @@ export function gradeStanding(course: Pick<Course, 'assessments' | 'grading'>) {
 /**
  * The pieces that actually count, once "best 6 of 7" has been applied.
  *
- * Two different things get dropped, and they are decided differently. A
- * group's *total* is the `keep` heaviest pieces in it, which is what makes
- * seven 5% quizzes keeping six come to 30% rather than 35%. Which pieces are
- * kept is decided by score, best first — but only among the ones that have
- * come back, because a quiz that has not happened cannot be the one dropped.
- * Until more than `keep` have been marked, nothing is dropped at all, which
- * is the behaviour a student expects in week three.
+ * A group always loses exactly `size - keep` pieces, which is what makes seven
+ * 5% quizzes keeping six come to 30% rather than 35%. Which pieces go is
+ * decided by score, worst first, but only once more than `keep` have come
+ * back, because a quiz that has not happened cannot be ranked. Until then the
+ * pieces still outstanding are the ones set aside, so no mark already held is
+ * thrown away.
  *
  * A group named by no rule, or a piece in no group, is returned untouched.
  */
@@ -65,25 +64,26 @@ function countedAssessments(rows: Assessment[], dropRules: DropRule[]): Assessme
     const members = rows.filter((row) => row.group === group);
     if (members.length === 0 || keep >= members.length) continue;
 
-    // The lightest pieces leave the group's total, so the weight that remains
-    // is the one the outline states.
-    const byWeight = [...members].sort((a, b) => b.weight - a.weight);
-    const surplusWeight = byWeight.slice(keep);
-
+    // Exactly `members.length - keep` pieces leave, whatever has come back,
+    // so the group always totals what the outline states.
     const marked = members.filter((row) => row.score !== null && row.outOf);
+    const outstanding = members.filter((row) => row.score === null || !row.outOf);
     if (marked.length > keep) {
-      // Enough have come back to say which are the worst. Drop those.
+      // Enough have come back to say which are the worst. Drop those, and
+      // every piece still out with them: the best `keep` marks already fill
+      // the group, so nothing outstanding can count until it beats one.
       const byRatio = [...marked].sort(
         (a, b) =>
           (b.score as number) / (b.outOf as number) - (a.score as number) / (a.outOf as number),
       );
       byRatio.slice(keep).forEach((row) => dropped.add(row.id));
+      outstanding.forEach((row) => dropped.add(row.id));
     } else {
-      // Not yet. Trim the group's total instead, taking from the pieces still
-      // outstanding so no mark the student already holds is thrown away.
-      const markedIds = new Set(marked.map((row) => row.id));
-      surplusWeight
-        .filter((row) => !markedIds.has(row.id))
+      // Not yet. Trim the group's total instead, taking the lightest pieces
+      // still outstanding so no mark the student already holds is thrown
+      // away. There are always enough: at most `keep` have come back.
+      [...outstanding]
+        .sort((a, b) => a.weight - b.weight)
         .slice(0, members.length - keep)
         .forEach((row) => dropped.add(row.id));
     }
@@ -338,18 +338,6 @@ export function medianPace(pairs: Pick<ReadingPair, 'pagesPerHour'>[]): number |
   const mid = Math.floor(rates.length / 2);
   const median = rates.length % 2 ? rates[mid] : (rates[mid - 1] + rates[mid]) / 2;
   return Math.round(clampPace(median));
-}
-
-/**
- * Pages an hour, measured rather than assumed. Falls back to a plain 20
- * until there are enough worked readings to say anything.
- */
-export function readingRate(
-  tasks: Pick<Task, 'id' | 'courseId' | 'kind' | 'completed' | 'completedVia' | 'pages'>[],
-  sessions: { taskId: string | null; durationSeconds: number }[],
-  notes: { taskId: string | null; reads?: { seconds: number }[] | null }[] = [],
-): number {
-  return readingRateDetail(tasks, sessions, notes).pagesPerHour;
 }
 
 /**

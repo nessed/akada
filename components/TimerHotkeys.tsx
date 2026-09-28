@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTimer } from '@/lib/timer-context';
+import { useTimerState } from '@/lib/timer-context';
 import { isLogSheetMounted } from './PendingSessionLogSheet';
 
 /**
@@ -26,9 +26,25 @@ import { isLogSheetMounted } from './PendingSessionLogSheet';
  * the same rule the rest of the app follows: a key that does nothing is worse
  * than no key.
  */
+/**
+ * The page blinks once when `P` lands. The key is pressed with the eyes on
+ * the book, not on the dock, so without it there was no telling whether the
+ * clock heard. A veil of ink laid over everything for a quarter of a second
+ * and lifted, like an eyelid: it darkens a daylight page and lifts the night
+ * one, and it catches no clicks. A second press mid-blink starts it over.
+ */
+function blinkPage() {
+  document.querySelector('.page-blink')?.remove();
+  const veil = document.createElement('div');
+  veil.className = 'page-blink';
+  veil.setAttribute('aria-hidden', 'true');
+  veil.addEventListener('animationend', () => veil.remove(), { once: true });
+  document.body.appendChild(veil);
+}
+
 export default function TimerHotkeys() {
   const router = useRouter();
-  const { active, onBreak, endBreak, pause, resume, stop } = useTimer();
+  const { active, onBreak, endBreak, pause, resume, stop } = useTimerState();
 
   useEffect(() => {
     if (!active) return;
@@ -45,6 +61,7 @@ export default function TimerHotkeys() {
       const key = event.key.toLowerCase();
       if (key === 'p') {
         event.preventDefault();
+        blinkPage();
         // The dock's left button, to the letter: resting means end the break.
         if (onBreak) endBreak();
         else if (active?.isPaused) resume();

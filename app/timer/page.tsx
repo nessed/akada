@@ -21,6 +21,8 @@ import TallyMarks from '@/components/progression/TallyMarks';
 import { MARKS_PER_PAGE } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useCourses, useTasks } from '@/lib/data-hooks';
+import { clockFace } from '@/lib/utils';
+import { NIGHT_UNDERLINE } from '@/lib/preferences';
 
 /**
  * The timer.
@@ -44,23 +46,6 @@ import { useCourses, useTasks } from '@/lib/data-hooks';
  * block left it, which is the honest drawing of what is happening: nothing
  * is growing, and nothing has been lost either.
  */
-
-/* The hand-drawn rule, in the open screen's ink. That screen inverts with
-   literal values rather than the paper tokens, and `--underline-svg` carries
-   its colour inside a data URI where a token cannot reach it, so the whole
-   url is restated rather than a variable swapped. Mirrors the night tone's
-   own override in lib/preferences.ts. */
-const LIGHT_UNDERLINE =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'><path d='M2 5 Q40 2 80 4 T160 5 T198 4' stroke='%23EFE9DC' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='0.55'/></svg>\")";
-
-function clockFace(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-}
 
 function spoken(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
@@ -91,11 +76,9 @@ export default function TimerPage() {
     active: liveActive,
     pendingLog,
     elapsedSeconds: liveElapsed,
-    focusSeconds,
     onBreak: liveOnBreak,
     breakTarget: liveBreakTarget,
     lastBlockNote,
-    start,
     extend,
     startBreak,
     endBreak,
@@ -552,7 +535,10 @@ export default function TimerPage() {
           night
             ? ({
                 color: '#EFE9DC',
-                '--underline-svg': LIGHT_UNDERLINE,
+                // The open screen inverts with literal values, and the rule's
+                // ink lives inside a data URI, so the night paper's url is
+                // swapped in whole.
+                '--underline-svg': NIGHT_UNDERLINE,
               } as React.CSSProperties)
             : undefined
         }
@@ -623,7 +609,7 @@ export default function TimerPage() {
         style={{
           background: '#1A1815',
           backgroundImage:
-            'radial-gradient(circle at 18% 12%, rgba(196,168,106,.07), transparent 55%), radial-gradient(circle at 82% 88%, rgba(138,120,92,.05), transparent 60%)',
+            'radial-gradient(ellipse 60% 50% at 50% 100%, rgba(196,168,106,.10), transparent 70%), radial-gradient(circle at 18% 12%, rgba(196,168,106,.07), transparent 55%), radial-gradient(circle at 82% 88%, rgba(138,120,92,.05), transparent 60%)',
           color: '#EFE9DC',
         }}
       >
@@ -734,19 +720,35 @@ export default function TimerPage() {
         {/* The frame. The fan is scaled so it exactly fills this box at the
             target, which is what makes "touched the top" mean "done". */}
         <div
-          className="deckle relative w-full max-w-[720px] overflow-hidden border border-line bg-paper"
-          style={{ height: 'min(46vh, 400px)' }}
+          className="deckle relative w-full max-w-[800px] overflow-hidden border border-line bg-paper"
+          style={{
+            height: 'min(50vh, 450px)',
+            /* A page from the notebook: faint rules, a margin, and the one
+               warm shadow a sheet lying on the desk would throw. */
+            backgroundImage:
+              'repeating-linear-gradient(to bottom, transparent 0, transparent 31px, var(--line-soft) 31px, var(--line-soft) 32px)',
+            boxShadow: '0 1px 0 var(--line-soft), 0 18px 40px -28px rgba(96, 74, 40, 0.35)',
+          }}
         >
+          <span aria-hidden className="absolute bottom-0 left-16 top-0 w-px bg-line" />
           <span
             aria-hidden
-            className="absolute right-0 top-0 h-[22px] w-[22px]"
-            style={{ background: 'linear-gradient(225deg, var(--bg-tint) 50%, transparent 50%)' }}
+            className="absolute right-0 top-0 z-10 h-6 w-6"
+            style={{
+              background: 'linear-gradient(225deg, var(--bg) 50%, var(--bg-tint) 50%)',
+              boxShadow: '-1px 1px 2px rgba(96, 74, 40, 0.12)',
+            }}
           />
-          <span className="eyebrow absolute left-5 top-3.5 z-10" style={{ color }}>
-            {code}
-            {resting ? ' · Break' : ''}
+          {/* The course's colour is a mark, never text: a short rule, with the
+              code beside it in ink-soft. */}
+          <span className="absolute left-5 top-4 z-10 flex items-center gap-2">
+            <span aria-hidden className="block h-[3px] w-4 rounded-sm" style={{ background: color }} />
+            <span className="eyebrow text-ink-soft">
+              {code}
+              {resting ? ' · Break' : ''}
+            </span>
           </span>
-          <span className="absolute right-5 top-3.5 z-10 font-mono text-[10.5px] tracking-[0.06em] text-muted">
+          <span className="absolute right-9 top-4 z-10 font-mono text-[10.5px] tracking-[0.06em] text-muted">
             {hhmm(stretchStartedAt)} to{' '}
             {hhmm(stretchStartedAt + (resting ? breakTarget ?? 0 : target) * 1000)}
           </span>
@@ -767,20 +769,25 @@ export default function TimerPage() {
               </span>
             </span>
           )}
+          {/* Standing on a drawn ground, with the rest of its shape sketched
+              in pencil above it for the ink to fill. */}
           <StudyFan
             progress={progress}
             seed={fanSeed}
             color={color}
             depth={7}
-            trunkWidth={11}
-            padTop={45}
+            trunkWidth={12}
+            padTop={46}
+            baseOffset={24}
+            sketch
+            ground
             className={`absolute inset-0 h-full w-full ${quiet}`}
           />
         </div>
 
         <div key={resting ? 'face-rest' : 'face-focus'} className="animate-settle text-center">
           <p
-            className={`m-0 font-mono text-[56px] font-medium leading-none tracking-[-0.03em] tabular-nums md:text-[72px] ${
+            className={`m-0 font-mono text-[64px] font-medium leading-none tracking-[-0.035em] tabular-nums md:text-[88px] ${
               breakOver ? 'text-warn' : ''
             }`}
             style={{ ...clockEase, opacity: pausedFocus ? 0.5 : 1 }}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Assessment, Session, Task } from './data';
-import { gradeProjection, isSkipped, medianPace, pickUpNext, readingPairs, readingRateDetail, workedTaskIds } from './derive';
+import { gradeProjection, gradeStanding, isSkipped, medianPace, pickUpNext, readingPairs, readingRateDetail, workedTaskIds } from './derive';
 import { isoDate } from './utils';
 
 /** A calendar date `n` days from today, the way a due date is written. */
@@ -124,6 +124,25 @@ test('a drop rule trims an outstanding piece before anything is solved', () => {
   assert.equal(p.outstanding.length, 2);
   // 9 banked from the quiz at 90, plus the 80 still open, out of 90.
   assert.equal(Math.round((p.ceiling ?? 0) * 10) / 10, 98.9);
+});
+
+test('a group always loses exactly size minus keep, whichever pieces are back', () => {
+  const papers = (scores: (number | null)[]) =>
+    scores.map((score, i) => piece(`p${i + 1}`, 6, score, 12, 'rp'));
+  const course = (scores: (number | null)[]) => ({
+    assessments: [...papers(scores), piece('rest', 70, null)],
+    grading: { dropRules: [{ group: 'rp', keep: 5 }] },
+  });
+  // Best 5 of 7 at 6 each is 30, so the course is 100 at every point in term.
+  // The last two back while the first five are not: both marks stay.
+  const late = gradeStanding(course([null, null, null, null, null, 9, 9]));
+  assert.equal(late.total, 100);
+  assert.deepEqual(late.dropped, ['p1', 'p2']);
+  // Six of seven back: the worst mark goes, and so does the one still out.
+  const six = gradeStanding(course([2, 10, 10, 10, 10, 10, null]));
+  assert.equal(six.total, 100);
+  assert.deepEqual(six.dropped.sort(), ['p1', 'p7']);
+  assert.equal(six.percent, 83);
 });
 
 test('the reading rate says when it is only the default', () => {

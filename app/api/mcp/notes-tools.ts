@@ -1,10 +1,18 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { readAccessToken } from '@/lib/mcp-auth';
 import { FORMAT_RULES } from '@/lib/notes/format';
 import { cleanChecks, extractChecks, type CheckResult } from '@/lib/notes/checks';
 import { NOTE_MARKDOWN_MAX, NOTE_TITLE_MAX, cleanNoteMarkdown, cleanNoteTitle } from '@/lib/notes/limits';
 import { mcpSupabase, siteUrl } from './_shared';
+import {
+  queryFailed as reportFailure,
+  result,
+  toolCrashed,
+  toolError,
+  type AuthenticatedToken,
+  type McpSupabaseClient,
+  type QueryFailure,
+} from './_tool-kit';
 
 /**
  * The notes tools. An assistant with the connector writes a study note
@@ -13,9 +21,6 @@ import { mcpSupabase, siteUrl } from './_shared';
  * page fill in. Kept out of route.ts, which only registers them.
  */
 
-type AuthenticatedToken = ReturnType<typeof readAccessToken>;
-type McpSupabaseClient = ReturnType<typeof mcpSupabase>;
-type QueryFailure = { message?: string; code?: string; details?: string; hint?: string } | null;
 
 interface NoteRow {
   id: string;
@@ -28,35 +33,17 @@ interface NoteRow {
   updated_at: string;
 }
 
-function result(value: unknown) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
-    structuredContent: value as Record<string, unknown>,
-  };
-}
 
-function toolError(message: string) {
-  return { content: [{ type: 'text' as const, text: message }], isError: true };
-}
 
-const MISSING_TABLE = ['PGRST205', '42P01', 'PGRST204', '42703'];
 const NOTES_NOT_SET_UP =
   'Notes are not set up in this Akada database yet. The student needs to run the latest supabase/schema.sql once.';
 
 // Same shape as route.ts: the real cause in the log, a short safe reason in
 // the reply, never `details` (PostgREST puts row values there).
 function queryFailed(tool: string, step: string, error: QueryFailure, message: string) {
-  console.error(`[mcp:${tool}] ${step} failed`, { code: error?.code, message: error?.message, hint: error?.hint });
-  if (error?.code && MISSING_TABLE.includes(error.code)) return toolError(NOTES_NOT_SET_UP);
-  const reason = [error?.code, error?.message, error?.hint].filter(Boolean).join(' | ');
-  return toolError(reason ? `${message} (${reason})` : message);
+  return reportFailure(tool, step, error, message, NOTES_NOT_SET_UP);
 }
 
-function toolCrashed(tool: string, cause: unknown) {
-  const reason = cause instanceof Error ? cause.message : String(cause ?? '');
-  console.error(`[mcp:${tool}] unhandled failure`, reason);
-  return toolError(`Akada is not configured or your session has expired. Reconnect the connector and try again.${reason ? ` (${reason})` : ''}`);
-}
 
 function noteUrl(id: string): string | null {
   try {
@@ -216,7 +203,10 @@ export async function listNotesTool(
   try {
     let request = supabase.from('notes').select('*').eq('user_id', token.userId);
     if (course_id) request = request.eq('course_id', course_id);
-    const { data, error } = await request.order('updated_at', { ascending: false }).limit(200);
+    // A search filters in here, so it reads the 200 newest to look through;
+    // a plain listing only ever keeps the first `limit`, so it reads only
+    // those rather than 200 notes' worth of markdown.
+    const { data, error } = await request.order('updated_at', { ascending: false }).limit(query ? 200 : limit);
     if (error) return queryFailed('list_notes', 'notes read', error, 'Akada could not read the notes.');
     let rows = (data ?? []) as NoteRow[];
     if (query) {

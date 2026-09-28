@@ -12,14 +12,7 @@ import { LETTERS, bestSitting, isWritten, markQuiz, writtenTally } from '@/lib/q
 import { clearQuizDraft, loadQuizDraft, saveQuizDraft } from '@/lib/quiz/draft';
 import { relativeLabel } from '@/lib/notes/store';
 import type { Quiz, QuizAttempt, QuizQuestion } from '@/lib/data';
-
-function clockFace(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-}
+import { clockFace } from '@/lib/utils';
 
 function spokenRemaining(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));

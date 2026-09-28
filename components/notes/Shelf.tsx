@@ -6,7 +6,7 @@ import HandNote from '@/components/notebook/HandNote';
 import HandCheck from '@/components/notebook/HandCheck';
 import Icon from './Icon';
 import { NoQuizzesYet, QuizRow, quizDone, quizHref, quizStatus, quizTouched } from './QuizShelf';
-import { countChecks, getMarkdownHeadings } from './MarkdownReader';
+import { countChecks, getMarkdownHeadings } from './markdown-outline';
 import { noteColor, readLastRead, readProgress, readStore, relativeLabel, wordCount, writeStore, type CheckResult } from '@/lib/notes/store';
 import { minutesForNote, readingPace, type ReadingPace } from '@/lib/notes/reads';
 import type { NoteRead } from '@/lib/data';

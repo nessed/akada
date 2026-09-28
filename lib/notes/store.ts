@@ -89,12 +89,6 @@ export function sampleNote(): Note {
   return { id: `sample-${now}`, title: titleFromMarkdown(sampleMarkdown), markdown: sampleMarkdown, updatedAt: now, createdAt: now };
 }
 
-export function newNoteId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `n-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 /** Words in the prose, with code, math and markup stripped. */
 export function wordCount(markdown: string) {
   const prose = markdown

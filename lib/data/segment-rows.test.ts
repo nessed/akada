@@ -82,7 +82,7 @@ test('a read that stopped short drops the one sitting it may have cut through', 
 
 type Row = Record<string, unknown>;
 
-// A PostgREST double for the two reads getSessionsForSemester makes, which
+// A PostgREST double for the two reads getSessions makes, which
 // caps every response at `cap` rows the way max-rows does, whatever the range.
 function fake(sessions: Row[], segments: Row[], cap: number, fail = false) {
   const calls: string[] = [];
@@ -127,7 +127,8 @@ async function adapterWith(client: unknown) {
   const adapter = new SupabaseAdapter() as unknown as Record<string, unknown>;
   adapter.supabase = client;
   adapter.userId = async () => 'u';
-  return adapter as unknown as { getSessionsForSemester(id: string): Promise<Session[]> };
+  adapter.activeSemesterId = async () => 'sem';
+  return adapter as unknown as { getSessions(): Promise<Session[]> };
 }
 
 const sessions: Row[] = [];
@@ -144,7 +145,7 @@ for (let i = 0; i < 12; i += 1) {
 
 test('a server cap below the page size is paged through to the total', async () => {
   const f = fake(sessions, segments, 5);
-  const got = await (await adapterWith(f.client)).getSessionsForSemester('sem');
+  const got = await (await adapterWith(f.client)).getSessions();
   assert.equal(got.length, 12);
   assert.ok(got.every((s) => s.segments?.length === 3), 'every sitting has its whole chain');
   assert.deepEqual(got[0].segments?.map((s) => s.kind), ['focus', 'break', 'focus']);
@@ -153,13 +154,13 @@ test('a server cap below the page size is paged through to the total', async () 
 
 test('one page when the server hands back everything', async () => {
   const f = fake(sessions, segments, 1000);
-  await (await adapterWith(f.client)).getSessionsForSemester('sem');
+  await (await adapterWith(f.client)).getSessions();
   assert.deepEqual(f.calls, ['range 0-999 count']);
 });
 
 test('a missing table leaves the hours alone', async () => {
   const f = fake(sessions, segments, 1000, true);
-  const got = await (await adapterWith(f.client)).getSessionsForSemester('sem');
+  const got = await (await adapterWith(f.client)).getSessions();
   assert.equal(got.length, 12);
   assert.ok(got.every((s) => s.segments === undefined));
 });
@@ -178,7 +179,7 @@ test('a read that hits the ceiling drops the chain it cut through, not half of i
   // Ten pages of five is fifty rows of sixty: sixteen whole chains, then two
   // rows of the seventeenth, newest first.
   const f = fake(many, segs, 5);
-  const got = await (await adapterWith(f.client)).getSessionsForSemester('sem');
+  const got = await (await adapterWith(f.client)).getSessions();
   const withChain = got.filter((s) => s.segments);
   assert.equal(withChain.length, 16);
   assert.ok(withChain.every((s) => s.segments?.length === 3), 'no half chains');
