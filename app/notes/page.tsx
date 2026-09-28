@@ -50,14 +50,26 @@ function loadNoteParts() {
 
 function useNoteParts() {
   const [parts, setParts] = useState(noteParts);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (parts) return;
     let live = true;
-    loadNoteParts().then((loaded) => live && setParts(loaded), () => { notePartsLoading = null; });
+    let retry = 0;
+    loadNoteParts().then(
+      (loaded) => live && setParts(loaded),
+      () => {
+        // A chunk that failed to fetch (a dropped connection, a deploy in
+        // between) must not leave the page blank for good: forget the failed
+        // load and ask again shortly.
+        notePartsLoading = null;
+        if (live && attempt < 5) retry = window.setTimeout(() => setAttempt((n) => n + 1), 800 * (attempt + 1));
+      },
+    );
     return () => {
       live = false;
+      window.clearTimeout(retry);
     };
-  }, [parts]);
+  }, [parts, attempt]);
   return parts;
 }
 
