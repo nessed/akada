@@ -295,6 +295,10 @@ export default function StudyFan({
           px: dpr,
           contract: closed,
           pulse: reduced ? 0 : jellyBeat(performance.now()),
+          // The wave, the bubbles and the snow run on the clock; reduced
+          // motion gets them standing still.
+          time: reduced ? undefined : performance.now(),
+          bubbles: true,
           drift: physics ? drift : undefined,
           stretch: physics ? stretchNow : 0,
           sketch: sketch ? pencil : undefined,
