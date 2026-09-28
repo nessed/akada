@@ -599,20 +599,30 @@ The fan's alternative, picked in Settings › Timer ("The timer draws a tree /
 a jellyfish", `timerDrawing` in `lib/preferences.ts`). Same progress, same
 pull, same pause, same seed; only the drawing changes, so every rule above
 about the fan holds for it too. It is a moon jelly drawn the way an old
-natural-history plate would draw one, in the course colour, never a cartoon.
+natural-history plate draws one, in the course colour, never a cartoon.
 
 - **Growth.** The bell comes first and is full size by 40% of the block, then
-  sixteen tentacles and four frilled oral arms hang out of it and lengthen.
-  The longest tentacle touches the frame's floor exactly at the target, the
-  same promise the fan makes about the top edge.
-- **The bell.** A scalloped rim, an inner curve, eight faint canals and the
-  four rings, washed in the course colour mixed toward the paper and edged a
-  shade darker.
-- **The beat.** While the clock runs the bell squeezes and lets go on the
-  same 4.2s cycle the held clock breathes on, quick in and slow out, and the
-  trails dip with it. It is the one drawing in the app that moves on its own,
-  so its loop never parks while it is open; reduced motion gets a still
-  jelly.
+  the trails hang out of it and lengthen. The longest tentacle touches the
+  frame's floor exactly at the target, the same promise the fan makes about
+  the top edge.
+- **The bell.** Washed from pale at the crown to deeper at the rim, shaded
+  down its right side with engraved hatching that follows the dome, a lick of
+  white on the crown's left where the light catches it. Inside: the inner
+  curve, eight canals that fork on their way to the rim, a fringe of short
+  velum strokes, and the four horseshoes set in a ring like a clover, each
+  open toward the middle. The rim is sixteen shallow scallops with eight dark
+  sense organs along it, and the outline is inked twice, the second pass
+  fainter and just off the first, the way a pen goes over its own line.
+- **The trails.** Sixteen tentacles taper from the rim to hairline tips, a
+  few of them strung with stinging cells; fifteen short fine hairs fill the
+  fringe between them; and four oral arms hang in the middle as ribbons that
+  pinch and swell as they twist, one edge ruffled, a darker rib down each.
+- **Alive.** While the clock runs the bell squeezes and lets go on the same
+  4.2s cycle the held clock breathes on, quick in and slow out, the rim
+  flaring a little on the squeeze. A slow wave travels down every tentacle
+  and arm, and a few ink bubbles rise off the crown. It is the one drawing in
+  the app that moves on its own, so its loop never parks while it is open;
+  reduced motion gets a still jelly with no wave, no beat and no bubbles.
 - **Done.** Every other tentacle tip lights with a bead, the jelly's version
   of the fan's flowers, and the pencil goes.
 - **The pencil sketch** is the whole jelly at full length, dotted, and it
@@ -620,9 +630,12 @@ natural-history plate would draw one, in the course colour, never a cartoon.
   floor** is a pencil line with a few grains of sand in place of grass.
 - **The pull** moves the bell and the trails follow a few frames behind it,
   like a wake. **A held clock** narrows and deepens the bell and draws the
-  trails in under it on the fold spring, and the beat stops.
-- **Open mode** hangs it lower, under the header, and on the night paper the
-  bell gives off a faint glow of its own colour.
+  trails in under it on the fold spring, and the beat, the wave and the
+  bubbles stop.
+- **Open mode** hangs it lower, under the header. On the night paper it is
+  bioluminescent: a glow of its own colour behind the bell, the sense organs
+  on the rim lit, lit tips that glow when a sitting runs its course, and a
+  little marine snow drifting slowly up the whole screen.
 
 Geometry and drawing are in `lib/jelly.ts` (`buildJelly`, `drawJelly`,
 `jellyBeat`); `StudyFan` draws it when `species="jelly"`. The Settings row
