@@ -1,9 +1,18 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import type { readAccessToken } from '@/lib/mcp-auth';
 import { FEEDBACK_MAX, LETTERS, bestSitting, QUIZ_FORMAT_RULES, QUIZ_TEXT_MAX, cleanAttempts, cleanQuestions, isWritten, parseQuiz, writtenTally } from '@/lib/quiz/format';
 import type { QuizWrittenMark } from '@/lib/data/types';
 import { mcpSupabase, siteUrl } from './_shared';
+import {
+  queryFailed as reportFailure,
+  result,
+  toolCrashed,
+  toolError,
+  quizUrl,
+  type AuthenticatedToken,
+  type McpSupabaseClient,
+  type QueryFailure,
+} from './_tool-kit';
 
 /**
  * The quiz tools. An assistant that has the student's book or notes in front
@@ -14,9 +23,6 @@ import { mcpSupabase, siteUrl } from './_shared';
  * registers them.
  */
 
-type AuthenticatedToken = ReturnType<typeof readAccessToken>;
-type McpSupabaseClient = ReturnType<typeof mcpSupabase>;
-type QueryFailure = { message?: string; code?: string; details?: string; hint?: string } | null;
 
 interface QuizRow {
   id: string;
@@ -32,41 +38,16 @@ interface QuizRow {
   updated_at: string;
 }
 
-function result(value: unknown) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
-    structuredContent: value as Record<string, unknown>,
-  };
-}
 
-function toolError(message: string) {
-  return { content: [{ type: 'text' as const, text: message }], isError: true };
-}
 
-const MISSING_TABLE = ['PGRST205', '42P01', 'PGRST204', '42703'];
 const QUIZZES_NOT_SET_UP =
   'Quizzes are not set up in this Akada database yet. The student needs to run the latest supabase/schema.sql once.';
 
 function queryFailed(tool: string, step: string, error: QueryFailure, message: string) {
-  console.error(`[mcp:${tool}] ${step} failed`, { code: error?.code, message: error?.message, hint: error?.hint });
-  if (error?.code && MISSING_TABLE.includes(error.code)) return toolError(QUIZZES_NOT_SET_UP);
-  const reason = [error?.code, error?.message, error?.hint].filter(Boolean).join(' | ');
-  return toolError(reason ? `${message} (${reason})` : message);
+  return reportFailure(tool, step, error, message, QUIZZES_NOT_SET_UP);
 }
 
-function toolCrashed(tool: string, cause: unknown) {
-  const reason = cause instanceof Error ? cause.message : String(cause ?? '');
-  console.error(`[mcp:${tool}] unhandled failure`, reason);
-  return toolError(`Akada is not configured or your session has expired. Reconnect the connector and try again.${reason ? ` (${reason})` : ''}`);
-}
 
-function quizUrl(id: string): string | null {
-  try {
-    return `${siteUrl()}/notes/quiz?q=${encodeURIComponent(id)}`;
-  } catch {
-    return null;
-  }
-}
 
 type Ref = { id: string; label: string };
 

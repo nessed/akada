@@ -72,14 +72,32 @@ export function oauthError(error: string, description: string, status = 400) {
   );
 }
 
-export function mcpSupabase(accessToken?: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) throw new Error('Supabase is not configured.');
+function buildClient(url: string, anonKey: string, accessToken?: string) {
   return createClient(url, anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
     global: accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined,
   });
+}
+
+// The client for the last access token asked for. One MCP message used to
+// build two or three identical clients (authentication, then each tool's
+// default argument, then again inside activeSemesterId), and each one builds
+// its auth, REST and realtime halves up front. A client made for an access
+// token holds nothing but that token in its headers, so the same token gets
+// the same client. Never the tokenless client: the OAuth routes sign in and
+// refresh on that one, which leaves a session in its memory.
+let lastClient: { key: string; client: ReturnType<typeof buildClient> } | null = null;
+
+export function mcpSupabase(accessToken?: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) throw new Error('Supabase is not configured.');
+  if (!accessToken) return buildClient(url, anonKey);
+  const key = `${url}\n${anonKey}\n${accessToken}`;
+  if (lastClient?.key === key) return lastClient.client;
+  const client = buildClient(url, anonKey, accessToken);
+  lastClient = { key, client };
+  return client;
 }
 
 export function hasAllowedScopes(value: string | null) {
@@ -131,4 +149,16 @@ export async function readStudentSettings(token: McpToken, supabase: ReturnType<
     timeZone: typeof row.time_zone === 'string' ? row.time_zone : '',
     dayEndingHour: Number(row.day_ending_hour ?? 0),
   };
+}
+
+/**
+ * Starts a read now so it runs alongside the ones before it, to be awaited
+ * later. A tool that returns early on an earlier failure never awaits it, so
+ * a rejection is caught here rather than surfacing as unhandled; awaiting the
+ * returned promise still throws it.
+ */
+export function startRead<T>(read: PromiseLike<T>): Promise<T> {
+  const started = Promise.resolve(read);
+  started.catch(() => {});
+  return started;
 }
