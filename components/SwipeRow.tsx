@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useAnimation, PanInfo } from 'framer-motion';
+import { LazyMotion, m, useAnimation, type PanInfo } from 'framer-motion';
 import HandCheck from './notebook/HandCheck';
 
 interface Props {
@@ -18,6 +18,10 @@ interface Props {
 
 /** How far the row has to travel before letting go means something. */
 const THRESHOLD = 70;
+
+/* The drag and animation code loads after the page rather than with it:
+   the rows draw straight away and can be swiped a moment later. */
+const loadFeatures = () => import('framer-motion').then((mod) => mod.domMax);
 
 /**
  * A row that opens sideways onto an action.
@@ -77,7 +81,8 @@ export default function SwipeRow({
           </span>
         </div>
       )}
-      <motion.div
+      <LazyMotion features={loadFeatures} strict>
+      <m.div
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.6}
@@ -86,7 +91,8 @@ export default function SwipeRow({
         className={`relative z-10 ${surfaceClassName}`}
       >
         {children}
-      </motion.div>
+      </m.div>
+      </LazyMotion>
     </div>
   );
 }
