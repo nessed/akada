@@ -48,8 +48,14 @@ export default function GradeStanding({
   const [resolving, setResolving] = useState<'accept' | 'discard' | null>(null);
 
   const standing = useMemo(() => gradeStanding(course), [course]);
-  const draftTotal = rows.reduce((acc, r) => acc + r.weight, 0);
+  // Out of what counts once drop rules apply, not the sum of every row: seven
+  // 6% papers keeping five are 30% of the course, not 42.
+  const draftTotal = gradeStanding({ assessments: rows, grading: course.grading }).total;
   const pending = course.grading?.pending ?? null;
+  const carried = useMemo(
+    () => (pending ? carryMarks(course.assessments ?? [], pending.assessments) : null),
+    [course.assessments, pending],
+  );
 
   function open() {
     // Nothing yet: the usual pieces of a course, weights left blank, so
@@ -116,7 +122,7 @@ export default function GradeStanding({
     setResolving('accept');
     try {
       await updateCourseOptimistic(course.id, {
-        assessments: pending.assessments,
+        assessments: carried?.rows ?? pending.assessments,
         grading: { basis: pending.basis, dropRules: pending.dropRules, pending: null },
       });
     } catch (error) {
@@ -293,7 +299,11 @@ export default function GradeStanding({
         <div className="flex items-baseline justify-between">
           <p className="eyebrow m-0">What was read off the outline</p>
           <span className="tnum font-mono text-[11px] text-muted">
-            {round(pending.assessments.reduce((acc, r) => acc + r.weight, 0))}% of 100
+            {round(
+              gradeStanding({ assessments: pending.assessments, grading: { dropRules: pending.dropRules } })
+                .total,
+            )}
+            % of 100
           </span>
         </div>
 
@@ -327,6 +337,14 @@ export default function GradeStanding({
             {dropSentence(rule, pending.assessments)}
           </p>
         ))}
+
+        {carried && carried.lost.length > 0 && (
+          <p className="m-0 mt-3 font-serif text-[13px] italic leading-[1.5] text-warn">
+            {carried.lost.length === 1
+              ? `Your mark on ${carried.lost[0]} has no row here, so accepting clears it.`
+              : `Your marks on ${carried.lost.join(', ')} have no row here, so accepting clears them.`}
+          </p>
+        )}
 
         {pending.note && (
           <p className="m-0 mt-3 border-t border-line-soft pt-2.5 font-serif text-[13px] italic leading-[1.5] text-muted">
@@ -526,6 +544,33 @@ function basisSentence(basis: 'absolute' | 'relative', code: string): string {
 function dropSentence(rule: DropRule, rows: Assessment[]): string {
   const size = rows.filter((row) => row.group === rule.group).length;
   return `Of the ${size} in ${rule.group}, the best ${rule.keep} count.`;
+}
+
+/**
+ * A revised scheme keeps the marks already entered.
+ *
+ * A proposal arrives with every score blank, so accepting it as it stands
+ * would wipe a term of marks the moment the outline changed. Each mark moves
+ * to the proposed row with the same label, ignoring case and spacing, and a
+ * mark with nowhere to go is named on the card before the accept rather than
+ * quietly lost.
+ */
+function carryMarks(accepted: Assessment[], proposed: Assessment[]) {
+  const key = (label: string) => label.trim().toLowerCase().replace(/\s+/g, ' ');
+  const held = new Map(
+    accepted.filter((row) => row.score !== null && row.outOf).map((row) => [key(row.label), row]),
+  );
+  const used = new Set<string>();
+  const rows = proposed.map((row) => {
+    const k = key(row.label);
+    const was = held.get(k);
+    // One mark lands on one row, even if the proposal repeats a label.
+    if (!was || row.score !== null || used.has(k)) return row;
+    used.add(k);
+    return { ...row, score: was.score, outOf: was.outOf };
+  });
+  const lost = [...held.entries()].filter(([k]) => !used.has(k)).map(([, row]) => row.label);
+  return { rows, lost };
 }
 
 /** What most courses are marked on, offered with the weights blank. */

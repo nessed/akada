@@ -134,22 +134,82 @@ export function readRecords(sessions: Session[], today = isoDate()): Records {
 }
 
 /* ------------------------------------------------------------------ */
-/* The race against last week                                          */
+/* The race against another week                                       */
 /* ------------------------------------------------------------------ */
+
+/**
+ * What this week is raced against. Last week is the obvious one and the
+ * harshest after a good week; a usual week is the middle of every whole week
+ * before this one, empty ones included, so one big week does not set the
+ * bar; the best week is the one to chase when last week was a quiet one.
+ */
+export type PaceAgainst = 'last' | 'usual' | 'best';
 
 export interface Pace {
   /** Running totals, Monday first, seven of them. */
   thisWeek: number[];
+  /** The week raced against, as running totals. */
   lastWeek: number[];
   /** Monday is 0. */
   todayIndex: number;
-  /** Seconds ahead of last week by this point in it. Negative is behind. */
+  /** Seconds ahead of the other week by this point in it. Negative is behind. */
   lead: number;
-  /** What last week came to in all. */
+  /** What the other week came to in all. */
   lastTotal: number;
+  against: PaceAgainst;
+  /** The other week in a sentence: "last week", "a usual week", "your best week". */
+  name: string;
 }
 
-export function readPace(sessions: Session[], today = isoDate()): Pace {
+/** Whole weeks before this one needed before a usual week means anything. */
+export const USUAL_MIN_WEEKS = 3;
+
+export const PACE_NAMES: Record<PaceAgainst, string> = {
+  last: 'last week',
+  usual: 'a usual week',
+  best: 'your best week',
+};
+
+function runningFrom(days: Map<string, number>, from: string): number[] {
+  const out: number[] = [];
+  let sum = 0;
+  for (let i = 0; i < 7; i++) {
+    sum += days.get(addDays(from, i)) ?? 0;
+    out.push(sum);
+  }
+  return out;
+}
+
+/** Every whole week from the first one logged up to last week, Mondays, oldest first. */
+function priorMondays(days: Map<string, number>, mondayIso: string): string[] {
+  let first: string | null = null;
+  for (const iso of days.keys()) if (!first || iso < first) first = iso;
+  if (!first) return [];
+  const out: string[] = [];
+  for (
+    let m = isoDate(startOfWeek(new Date(first + 'T12:00:00')));
+    m < mondayIso;
+    m = addDays(m, 7)
+  ) {
+    out.push(m);
+  }
+  return out;
+}
+
+/** Which of the other weeks there is enough behind to race against. */
+export function paceChoices(sessions: Session[], today = isoDate()): Record<PaceAgainst, boolean> {
+  const days = byDay(sessions);
+  const mondayIso = isoDate(startOfWeek(new Date(today + 'T12:00:00')));
+  const prior = priorMondays(days, mondayIso);
+  const anyPrior = prior.some((m) => runningFrom(days, m)[6] > 0);
+  return { last: true, usual: prior.length >= USUAL_MIN_WEEKS, best: anyPrior };
+}
+
+export function readPace(
+  sessions: Session[],
+  today = isoDate(),
+  against: PaceAgainst = 'last',
+): Pace {
   const days = byDay(sessions);
   const monday = startOfWeek(new Date(today + 'T12:00:00'));
   const mondayIso = isoDate(monday);
@@ -159,25 +219,39 @@ export function readPace(sessions: Session[], today = isoDate()): Pace {
       DAY_MS,
   );
 
-  const running = (from: string) => {
-    const out: number[] = [];
-    let sum = 0;
-    for (let i = 0; i < 7; i++) {
-      sum += days.get(addDays(from, i)) ?? 0;
-      out.push(sum);
+  const thisWeek = runningFrom(days, mondayIso);
+  let other = runningFrom(days, lastMondayIso);
+  const prior = priorMondays(days, mondayIso);
+  if (against === 'usual' && prior.length > 0) {
+    const weeks = prior.map((m) => runningFrom(days, m));
+    other = Array.from({ length: 7 }, (_, i) => medianOf(weeks.map((w) => w[i])));
+    // Medians taken a day at a time can dip; a running total cannot.
+    for (let i = 1; i < 7; i++) other[i] = Math.max(other[i], other[i - 1]);
+  } else if (against === 'best' && prior.length > 0) {
+    let best = other;
+    for (const m of prior) {
+      const week = runningFrom(days, m);
+      if (week[6] > best[6]) best = week;
     }
-    return out;
-  };
+    other = best;
+  }
 
-  const thisWeek = running(mondayIso);
-  const lastWeek = running(lastMondayIso);
   return {
     thisWeek,
-    lastWeek,
+    lastWeek: other,
     todayIndex,
-    lead: thisWeek[todayIndex] - lastWeek[todayIndex],
-    lastTotal: lastWeek[6],
+    lead: thisWeek[todayIndex] - other[todayIndex],
+    lastTotal: other[6],
+    against,
+    name: PACE_NAMES[against],
   };
+}
+
+function medianOf(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = (sorted.length - 1) / 2;
+  return (sorted[Math.floor(mid)] + sorted[Math.ceil(mid)]) / 2;
 }
 
 /* ------------------------------------------------------------------ */

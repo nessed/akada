@@ -81,7 +81,7 @@ Ask me to attach the outline or syllabus, then stop and wait. Do not call any to
 
 Once it is attached: ${findCourse(course)} Then:
 
-1. set_grading_scheme with every graded component and its weight as a percentage of the course, whether it is graded absolutely or relatively (say if you had to assume), and any rule where not every item counts, such as best 6 of 7 quizzes. This lands as a proposal; tell me to accept it on the course page.
+1. set_grading_scheme with every graded component and its weight as a percentage of the course, whether it is graded absolutely or relatively (say if you had to assume), and any rule where not every item counts, such as best 6 of 7 quizzes, with each item in that group carrying what one counted item is worth. This lands as a proposal; tell me to accept it on the course page.
 2. Read my tasks for the course with get_tasks, then create_tasks for every deadline the outline actually dates and I do not already have: each midterm, final, quiz or test as kind exam with its weight; each reading as kind reading with pages when the outline gives them; everything else as kind task. No date the outline does not state.
 
 Then tell me in a few lines what went in, and anything the outline was vague or silent about.`);

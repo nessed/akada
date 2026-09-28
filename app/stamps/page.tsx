@@ -12,9 +12,10 @@ import HabitsPanel from '@/components/progression/HabitsPanel';
 import PagesExplainer from '@/components/progression/PagesExplainer';
 import RunPanel from '@/components/progression/RunPanel';
 import TrustPulse from '@/components/progression/TrustPulse';
-import { useActiveSemester, useCourses } from '@/lib/data-hooks';
+import WeekLedger from '@/components/progression/WeekLedger';
+import { useActiveSemester, useCourses, useTasks } from '@/lib/data-hooks';
 import { sortCourses } from '@/lib/data/course-order';
-import { MARKS_PER_PAGE, MARK_SECONDS } from '@/lib/progression';
+import { MARKS_PER_PAGE, MARK_SECONDS, readWeekLedger } from '@/lib/progression';
 import { FIRST_MARK_SECONDS } from '@/lib/progression/constants';
 import FirstNote from '@/components/FirstNote';
 import { useProgression } from '@/lib/progression/use-progression';
@@ -53,6 +54,11 @@ export default function RecordPage() {
   const { semester } = useActiveSemester();
   const { progression, logged, sitting, isLoading } = useProgression();
   const courses = useMemo(() => sortCourses(rawCourses), [rawCourses]);
+  const { tasks } = useTasks();
+  const weekLedger = useMemo(
+    () => (progression ? readWeekLedger(progression.ledger, progression.runs.weeks, tasks) : []),
+    [progression, tasks],
+  );
 
   /* What changed since the reader last opened this page. Read once, from
      the logged record rather than the sitting on the clock, then the new
@@ -281,6 +287,15 @@ export default function RecordPage() {
           )}
         </aside>
       </div>
+
+      {/* What each week held: hours, tallies, pages and courses, a line a
+          week, opened for the detail. The run beside the pages says which
+          weeks counted; this is where a week is looked back at. */}
+      {!empty && weekLedger.length > 0 && (
+        <div className="settle-in mt-[var(--density-gap)]">
+          <WeekLedger weeks={weekLedger} courses={courses} />
+        </div>
+      )}
 
       {/* What the term has taught the app about the reader. Reads the record
           without the sitting on the clock, so a figure here is a habit and
