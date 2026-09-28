@@ -42,6 +42,8 @@ export const SOUNDS: { name: SoundName; word: string }[] = [
   { name: 'bubble', word: 'bubble' },
   { name: 'paper', word: 'paper' },
   { name: 'start', word: 'start' },
+  { name: 'pause', word: 'pause' },
+  { name: 'stop', word: 'stop' },
 ];
 
 const MASTER = 0.75;
@@ -205,6 +207,65 @@ function mallet(ctx: AudioContext, at: number, freq: number, level: number): voi
   hiss(ctx, { at, peak: v * 0.25, decay: 0.01, freq: f * 4, q: 1.2 });
 }
 
+/**
+ * Something solid being hit, built the way the thing itself makes the sound:
+ * a burst of noise (the contact) rung through a few tuned resonators (the
+ * body). Nothing here is an oscillator, so there is no steady pitch to give
+ * it away as a beep; the body only rings as long as its resonances let it,
+ * and every hit is a different grain of noise.
+ *
+ * `modes` are the body's resonances as [Hz, Q, level]. A higher Q rings
+ * longer. `soft` is how dull the striker is: the cutoff on the contact noise,
+ * a fingertip or a felt low, a pencil high.
+ */
+function body(
+  ctx: AudioContext,
+  at: number,
+  modes: [number, number, number][],
+  { level, soft, contact = 0.006 }: { level: number; soft: number; contact?: number },
+): void {
+  if (!master) return;
+  const out = ctx.createGain();
+  out.gain.value = level * jitter(0.1);
+  out.connect(master);
+
+  const src = ctx.createBufferSource();
+  src.buffer = noise(ctx);
+  const striker = ctx.createBiquadFilter();
+  striker.type = 'lowpass';
+  striker.frequency.value = soft;
+  const hit = ctx.createGain();
+  hit.gain.setValueAtTime(0.0001, at);
+  hit.gain.exponentialRampToValueAtTime(1, at + 0.0008);
+  hit.gain.exponentialRampToValueAtTime(0.0001, at + contact);
+  src.connect(striker);
+  striker.connect(hit);
+
+  const pitch = jitter(0.025);
+  const nodes: AudioNode[] = [out, striker, hit];
+  let ring = 0;
+  for (const [freq, q, gain] of modes) {
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = freq * pitch;
+    bp.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    hit.connect(bp);
+    bp.connect(g);
+    g.connect(out);
+    nodes.push(bp, g);
+    ring = Math.max(ring, (q / (Math.PI * freq)) * 7);
+  }
+  src.start(at, Math.random() * 0.3);
+  src.stop(at + contact + 0.01);
+  // The resonators keep ringing after the source stops; let go once they have.
+  setTimeout(() => {
+    src.disconnect();
+    for (const node of nodes) node.disconnect();
+  }, (at - ctx.currentTime + contact + ring) * 1000 + 100);
+}
+
 /** A bubble coming up to the surface: a pure tone rising as it goes. */
 function bubble(ctx: AudioContext, at: number, freq: number, level: number, down = false): void {
   const f = freq * jitter(0.04);
@@ -254,12 +315,35 @@ const VOICES: Record<SoundName, (ctx: AudioContext, t: number) => void> = {
     mallet(ctx, t, 392, 0.11);
     mallet(ctx, t + 0.09, 587.33, 0.1);
   },
-  // Held. One low bar.
-  pause: (ctx, t) => mallet(ctx, t, 293.66, 0.1),
-  // Put down: the fifth again, coming home.
+  // Held: a knuckle set down on a wooden desk. Soft, low, over at once.
+  pause: (ctx, t) =>
+    body(
+      ctx,
+      t,
+      [
+        [165, 22, 1],
+        [372, 20, 0.55],
+        [690, 16, 0.28],
+        [1310, 12, 0.1],
+      ],
+      { level: 12, soft: 1100, contact: 0.007 },
+    ),
+  // Put away: a hardback closed. The air pushed out of the pages, then the
+  // covers meeting with the weight of the book behind them.
   stop: (ctx, t) => {
-    mallet(ctx, t, 587.33, 0.09);
-    mallet(ctx, t + 0.1, 392, 0.1);
+    hiss(ctx, { at: t, peak: 0.035, attack: 0.07, decay: 0.02, freq: 650, sweepTo: 1100, q: 0.7 });
+    body(
+      ctx,
+      t + 0.085,
+      [
+        [92, 7, 1],
+        [215, 9, 0.6],
+        [480, 7, 0.3],
+        [1150, 4, 0.12],
+      ],
+      { level: 5.5, soft: 2400, contact: 0.012 },
+    );
+    hiss(ctx, { at: t + 0.085, peak: 0.03, decay: 0.035, freq: 1900, q: 1 });
   },
 };
 
