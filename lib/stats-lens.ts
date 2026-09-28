@@ -373,13 +373,19 @@ export function readStandings(
 /* ------------------------------------------------------------------ */
 
 export interface Rhythm {
-  /** Focus seconds by weekday (Monday first) and hour of the day. */
+  /**
+   * Focus seconds by the reader's weekday (Monday first) and hour. Column 0
+   * is the hour their day starts at, so a night reads left to right without
+   * breaking at midnight.
+   */
   grid: number[][];
+  /** The wall-clock hour column 0 stands for: 0, or the day-end cutoff. */
+  startHour: number;
   /** Timed sittings placed on the grid. */
   placed: number;
   /** Every sitting's seconds by weekday, Monday first, placed or not. */
   byWeekday: number[];
-  /** The fullest cell, if the grid holds anything. */
+  /** The fullest cell, if the grid holds anything. `hour` is the wall-clock hour. */
   peak: { day: number; hour: number; seconds: number } | null;
 }
 
@@ -390,8 +396,15 @@ export interface Rhythm {
  * only those are placed on the grid, each block spread across the hours it
  * actually ran through. Every sitting counts toward its weekday, since the
  * date is known for all of them.
+ *
+ * Rows are the reader's days, not the calendar's. With a day that ends at
+ * 8am, three in the morning after Sunday is still Sunday, the same as every
+ * other count in the app; it used to land on Monday's row and make Monday
+ * the fullest day of somebody who studies on Sunday nights.
  */
-export function readRhythm(sessions: Session[], window: Window): Rhythm {
+export function readRhythm(sessions: Session[], window: Window, cutoff = 0): Rhythm {
+  const startHour = Math.max(0, Math.min(8, Math.round(cutoff)));
+  const shift = startHour * 3_600_000;
   const grid = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
   const byWeekday = new Array<number>(7).fill(0);
   let placed = 0;
@@ -409,10 +422,12 @@ export function readRhythm(sessions: Session[], window: Window): Rhythm {
       let at = start.getTime();
       let left = Math.min(block.seconds, 12 * 3600);
       while (left > 0) {
-        const d = new Date(at);
-        const toNextHour = 3600 - (d.getMinutes() * 60 + d.getSeconds());
+        const wall = new Date(at);
+        const toNextHour = 3600 - (wall.getMinutes() * 60 + wall.getSeconds());
         const take = Math.min(left, toNextHour);
-        grid[(d.getDay() + 6) % 7][d.getHours()] += take;
+        // The same instant, pulled back into the reader's day.
+        const day = new Date(at - shift);
+        grid[(day.getDay() + 6) % 7][day.getHours()] += take;
         left -= take;
         at += take * 1000;
         any = true;
@@ -423,12 +438,14 @@ export function readRhythm(sessions: Session[], window: Window): Rhythm {
 
   let peak: Rhythm['peak'] = null;
   for (let day = 0; day < 7; day++) {
-    for (let hour = 0; hour < 24; hour++) {
-      const seconds = grid[day][hour];
-      if (seconds > 0 && (!peak || seconds > peak.seconds)) peak = { day, hour, seconds };
+    for (let col = 0; col < 24; col++) {
+      const seconds = grid[day][col];
+      if (seconds > 0 && (!peak || seconds > peak.seconds)) {
+        peak = { day, hour: (col + startHour) % 24, seconds };
+      }
     }
   }
-  return { grid, placed, byWeekday, peak };
+  return { grid, startHour, placed, byWeekday, peak };
 }
 
 /* ------------------------------------------------------------------ */

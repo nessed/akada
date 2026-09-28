@@ -39,8 +39,10 @@ import { usePreferences } from '@/lib/preferences';
 import type { CatalogCourse } from '@/lib/catalog';
 import { courseFromCatalog, deriveCourseCode, parseCourseInput, weeklyGoalForCredits } from '@/lib/catalog';
 import {
+  addDays,
   daysBetween,
   isoDate,
+  logicalToday,
   PASTEL_PALETTE,
   resolveTint,
 } from '@/lib/utils';
@@ -252,10 +254,8 @@ function DashboardPageContent() {
   }
 
   async function handleSnoozeTask(task: Task) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
     try {
-      await updateTaskOptimistic(task.id, { dueDate: isoDate(tomorrow) });
+      await updateTaskOptimistic(task.id, { dueDate: addDays(isoDate(), 1) });
     } catch (error) {
       console.error('Failed to reschedule task:', error);
       notify('That task did not move.');
@@ -468,7 +468,9 @@ function DashboardPageContent() {
   const overdueTasks = tasks.filter(
     (t) => !t.completed && t.dueDate && t.dueDate < today,
   );
-  const now = new Date();
+  // The reader's day, not the wall clock's: at 3am with a day that ends at
+  // 8, the page's hours are still yesterday's and so is its date.
+  const now = logicalToday();
   /* "Sat, Sep 19, 2026" is how a receipt writes a date. The app writes it
      the way a diary does, so the parts are assembled rather than handed to
      toLocaleDateString whole. */

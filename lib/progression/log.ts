@@ -1,6 +1,7 @@
 'use client';
 
 import { createClient } from '../supabase';
+import { isoDate } from '../utils';
 import { LEARN_MAX_SHIFT, LEARN_MIN_IMPRESSIONS } from './constants';
 import type { MarkCandidate, MarkKind, NextMarkReading } from './next-mark';
 
@@ -128,7 +129,7 @@ function writeLedger(entries: LedgerEntry[]): void {
  */
 export async function logImpression(surface: string, reading: NextMarkReading): Promise<void> {
   if (typeof window === 'undefined') return;
-  const stamp = `${surface}:${reading.shown?.id ?? reading.silence ?? 'none'}:${new Date().toDateString()}`;
+  const stamp = `${surface}:${reading.shown?.id ?? reading.silence ?? 'none'}:${isoDate()}`;
 
   try {
     const seen = JSON.parse(window.localStorage.getItem(SEEN_KEY) || '[]') as string[];

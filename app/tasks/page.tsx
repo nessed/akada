@@ -30,7 +30,7 @@ import { keepTask, keepTickedSteps } from '@/lib/recall/actions';
 import { looksLikeReading, readingPrompt, recallOfTask, type RecallItem } from '@/lib/recall';
 import { beforeReadingPrompt } from '@/lib/recall/prompt';
 import { daysAgoWords, whenWords } from '@/lib/recall/words';
-import { formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
+import { addDays, formatRelativeDate, isoDate, resolveTint } from '@/lib/utils';
 import { cleanTaskTitle } from '@/lib/planner-safety';
 import { useTimerState } from '@/lib/timer-context';
 import {
@@ -257,9 +257,7 @@ function TasksPageContent() {
      once rather than three times with three chances to disagree. */
   const bounds = useMemo(() => {
     const today = isoDate();
-    const weekEnd = new Date();
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    return { today, weekEnd: isoDate(weekEnd) };
+    return { today, weekEnd: addDays(today, 7) };
   }, []);
 
   const matchesFilter = useMemo(
@@ -568,10 +566,8 @@ function TasksPageContent() {
   }
 
   async function snoozeTask(task: Task) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
     try {
-      await updateTaskOptimistic(task.id, { dueDate: isoDate(tomorrow) });
+      await updateTaskOptimistic(task.id, { dueDate: addDays(isoDate(), 1) });
     } catch (error) {
       console.error('Failed to reschedule task:', error);
       notify('That task did not move.');

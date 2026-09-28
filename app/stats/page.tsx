@@ -325,7 +325,10 @@ export default function StatsPage() {
     () => readStandings(lensCourses, sessions, windows, today, termStart),
     [lensCourses, sessions, windows, today, termStart],
   );
-  const rhythm = useMemo(() => readRhythm(lensSessions, windows.now), [lensSessions, windows]);
+  const rhythm = useMemo(
+    () => readRhythm(lensSessions, windows.now, prefs.dayEndingHour),
+    [lensSessions, windows, prefs.dayEndingHour],
+  );
   const lengths = useMemo(() => readLengths(lensSessions, windows.now), [lensSessions, windows]);
   const termWeeks = useMemo(
     () => readTermWeeks(lensSessions, lensTasks, termStart, semester?.endDate ?? null, today),

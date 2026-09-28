@@ -317,7 +317,9 @@ export default function SettingsPage() {
               <SettingGroup label="Day ends at">
                 <div className="px-[18px] py-4">
                   <p className="m-0 mb-3 text-[11px] text-muted">
-                    Sessions before this hour count for the day before
+                    {prefs.dayEndingHour > 0
+                      ? `A sitting started before ${prefs.dayEndingHour}am counts for the day before, so ${Math.max(1, prefs.dayEndingHour - 3)}am on a Monday is Sunday's. Today shows those hours in pencil.`
+                      : 'Sessions before this hour count for the day before'}
                   </p>
                   <DayEndPicker
                     value={prefs.dayEndingHour}

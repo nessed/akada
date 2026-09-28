@@ -5,6 +5,9 @@ import Link from 'next/link';
 import type { Course, Session, Task } from '@/lib/data';
 import type { UpNextSort } from '@/lib/preferences';
 import {
+  addDays,
+  dayEndingHour,
+  dayStartsAt,
   dueLabel,
   formatHM,
   formatRelativeDate,
@@ -496,6 +499,13 @@ export function TodayHours({
 }) {
   const today = isoDate();
   const todays = useMemo(() => sessionsForDate(sessions, today), [sessions, today]);
+  // Yesterday's, for the small hours: with a day that ends after midnight,
+  // what was studied at 4am belongs to the day before, and after the cutoff
+  // it used to drop off this page without a trace.
+  const yesterdays = useMemo(
+    () => sessionsForDate(sessions, addDays(today, -1)),
+    [sessions, today],
+  );
   const total = totalSeconds(todays);
 
   // Which courses the day was actually spent on, biggest first. Only the top
@@ -522,7 +532,7 @@ export function TodayHours({
         {total > 0 ? formatHM(total) : '0m'}
       </p>
 
-      <DayLedger sessions={todays} courses={courses} today={today} />
+      <DayLedger sessions={todays} carried={yesterdays} courses={courses} today={today} />
 
       {byCourse.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-ink-soft">
@@ -547,13 +557,23 @@ export function TodayHours({
  * it happened, in its course colour, with a mark for now. Only a sitting the
  * timer ran knows when it happened (its blocks carry their start); one logged
  * by hand counts in the figure above and is simply not placed.
+ *
+ * With a day that ends after midnight (Settings, "day ends at"), the strip
+ * also carries the small hours before today began: yesterday's blocks that
+ * ran after midnight, in pencil, left of a dashed line where the day started,
+ * with a line saying which day they were counted to. They are not in today's
+ * figure, since they are not today's, but they happened this morning and a
+ * reader who studied from four to seven should see it here.
  */
 function DayLedger({
   sessions,
+  carried = [],
   courses,
   today,
 }: {
   sessions: Session[];
+  /** The day before's sessions, read only for blocks past midnight. */
+  carried?: Session[];
   courses: Course[];
   today: string;
 }) {
@@ -566,26 +586,37 @@ function DayLedger({
   }, []);
 
   const dayStart = new Date(`${today}T00:00:00`).getTime();
+  // Where the reader's day begins, as hours on the strip: 0 for midnight.
+  const cutoff = now === null ? 0 : (dayStartsAt(today) - dayStart) / 3_600_000;
   const blocks = useMemo(() => {
-    const out: { key: string; from: number; to: number; color: string; live: boolean }[] = [];
-    for (const s of sessions) {
+    const out: { key: string; from: number; to: number; color: string; live: boolean; carried: boolean }[] = [];
+    const place = (s: Session, carried: boolean) => {
       const color = courses.find((c) => c.id === s.courseId)?.color ?? 'var(--ink-soft)';
       if (s.id.startsWith(LIVE_SESSION_PREFIX)) {
-        if (now === null) continue;
-        out.push({ key: s.id, from: now - s.durationSeconds * 1000, to: now, color, live: true });
-        continue;
+        if (now === null) return;
+        out.push({ key: s.id, from: now - s.durationSeconds * 1000, to: now, color, live: true, carried });
+        return;
       }
       for (const g of s.segments ?? []) {
         if (g.kind !== 'focus') continue;
         const from = Date.parse(g.startedAt);
         if (!Number.isFinite(from)) continue;
-        out.push({ key: `${s.id}:${g.ordinal}`, from, to: from + g.seconds * 1000, color, live: false });
+        out.push({ key: `${s.id}:${g.ordinal}`, from, to: from + g.seconds * 1000, color, live: false, carried });
       }
-    }
+    };
+    for (const s of sessions) place(s, false);
+    // Only the part of yesterday that ran on past midnight, into this
+    // morning, and only once today has begun: before the cutoff those hours
+    // are today's own and already on the strip.
+    if (cutoff > 0) for (const s of carried) place(s, true);
     return out
       .map((b) => ({ ...b, from: (b.from - dayStart) / 3_600_000, to: (b.to - dayStart) / 3_600_000 }))
-      .filter((b) => b.to > 0 && b.from < 30);
-  }, [sessions, courses, now, dayStart]);
+      .filter((b) => (b.carried ? b.to > 0 && b.from < cutoff : b.to > 0 && b.from < 32));
+  }, [sessions, carried, courses, now, dayStart, cutoff]);
+
+  const carriedSeconds = blocks
+    .filter((b) => b.carried)
+    .reduce((sum, b) => sum + (Math.min(b.to, cutoff) - Math.max(b.from, 0)) * 3600, 0);
 
   // Seven in the morning to midnight, stretched for an early start or a late
   // night past the day boundary.
@@ -603,12 +634,19 @@ function DayLedger({
     if (hh === 12) return '12p';
     return hh < 12 ? `${hh}a` : `${hh - 12}p`;
   };
+  const showBoundary = carriedSeconds > 0 && cutoff > first && cutoff < last;
+  const cutoffLabel = tickLabel(dayEndingHour()).replace('a', 'am').replace('p', 'pm');
+  const yesterdayName = new Date(`${addDays(today, -1)}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: 'long',
+  });
 
   return (
     <div className="mt-5">
       <div
         role="img"
-        aria-label={`${blocks.length} ${blocks.length === 1 ? 'block' : 'blocks'} timed today`}
+        aria-label={`${blocks.filter((b) => !b.carried).length} blocks timed today${
+          carriedSeconds > 0 ? `, and ${formatHM(carriedSeconds)} before the day began, counted to ${yesterdayName}` : ''
+        }`}
         className="relative h-[26px]"
       >
         <span aria-hidden className="absolute inset-x-0 top-[8px] h-[10px] rounded-[3px] bg-bg-tint" />
@@ -619,11 +657,20 @@ function DayLedger({
             className={`absolute top-[8px] h-[10px] min-w-[3px] rounded-[2px] ${b.live ? 'animate-tick' : ''}`}
             style={{
               left: at(b.from),
-              width: `calc(${at(b.to)} - ${at(b.from)})`,
+              width: `calc(${at(b.carried && !b.live ? Math.min(b.to, cutoff) : b.to)} - ${at(b.from)})`,
               background: b.color,
+              // Yesterday's, in pencil: on the page, not in today's figure.
+              opacity: b.carried ? 0.45 : undefined,
             }}
           />
         ))}
+        {showBoundary && (
+          <span
+            aria-hidden
+            className="absolute bottom-0 top-0 border-l border-dashed border-ink-soft"
+            style={{ left: at(cutoff) }}
+          />
+        )}
         {nowH !== null && nowH >= first && nowH <= last && (
           <span aria-hidden className="absolute bottom-0.5 top-0.5 w-[1.5px] rounded-full bg-ink" style={{ left: at(nowH) }} />
         )}
@@ -641,6 +688,15 @@ function DayLedger({
           </span>
         ))}
       </div>
+      {carriedSeconds >= 60 && (
+        <p className="m-0 mt-2.5 font-serif text-[12.5px] italic leading-snug text-muted">
+          <span className="font-mono not-italic tabular-nums text-ink-soft">{formatHM(carriedSeconds)}</span>{' '}
+          before {cutoffLabel}, counted to {yesterdayName} ·{' '}
+          <Link href="/settings" className="text-muted underline decoration-line-strong underline-offset-2 hover:text-ink">
+            your day ends at {cutoffLabel}
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

@@ -156,3 +156,23 @@ test('the race can be run against a usual week or the best one', () => {
 test('a usual week waits for three whole weeks', () => {
   assert.equal(paceChoices([sat('a', '2026-09-14', 60), sat('b', TODAY, 60)], TODAY).usual, false);
 });
+
+test('with a day that ends at 8am, the small hours sit on the day they belong to', () => {
+  // Monday 4am local, a sitting the reader's day files under Sunday.
+  const start = new Date(2026, 8, 28, 4, 0, 0);
+  const rhythm = readRhythm(
+    [
+      sat('night', '2026-09-27', 60, {
+        segments: [{ kind: 'focus', ordinal: 1, startedAt: start.toISOString(), seconds: 3600, targetSeconds: null }],
+      }),
+    ],
+    { from: '2026-09-21', to: '2026-09-28' },
+    8,
+  );
+  assert.equal(rhythm.startHour, 8);
+  // Sunday's row, twenty hours after the day began at 8am.
+  assert.equal(rhythm.grid[6][20], 3600);
+  assert.equal(rhythm.peak?.day, 6);
+  assert.equal(rhythm.peak?.hour, 4);
+  assert.equal(rhythm.byWeekday[6], 3600);
+});
