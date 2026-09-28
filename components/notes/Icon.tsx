@@ -1,7 +1,7 @@
 export type IconName =
   | 'read' | 'write' | 'upload' | 'download' | 'plus' | 'trash' | 'search' | 'rail' | 'railOpen'
   | 'settings' | 'contents' | 'notes' | 'copy' | 'close' | 'fold' | 'unfold' | 'split' | 'check'
-  | 'focus' | 'lamp' | 'sun' | 'spot' | 'expand' | 'shrink' | 'play' | 'minus' | 'back';
+  | 'focus' | 'lamp' | 'sun' | 'spot' | 'expand' | 'shrink' | 'play' | 'minus' | 'back' | 'trace' | 'highlight';
 
 const paths: Record<IconName, React.ReactNode> = {
   read: <path d="M4 5.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H4zM20 5.5h-6a2 2 0 0 0-2 2V20a2 2 0 0 1 2-2h6z" />,
@@ -31,6 +31,8 @@ const paths: Record<IconName, React.ReactNode> = {
   play: <path d="M8 5.5v13l10-6.5z" />,
   minus: <path d="M6 12h12" />,
   back: <path d="M19 12H5m6-6-6 6 6 6" />,
+  trace: <><path d="M17 3.5 20.5 7 10 17.5l-4.5 1 1-4.5z" /><path d="M3.5 21h3" opacity=".75" /><path d="M9 21h3" opacity=".45" /><path d="M14.5 21h3" opacity=".2" /></>,
+  highlight: <><path d="M14.5 4.5 19 9l-7.5 7.5H7V12z" /><path d="M4 20.5h11" strokeWidth="3" opacity=".35" /></>,
 };
 
 export default function Icon({ name, size = 18 }: { name: IconName; size?: number }) {

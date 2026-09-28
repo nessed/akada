@@ -54,7 +54,7 @@ export interface FanTree {
  * from its seed alone. Same constants as any textbook linear congruential
  * generator; the quality bar here is "looks unplanned", not cryptography.
  */
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let s = (seed >>> 0) || 1;
   return () => {
     s = (s * 1664525 + 1013904223) >>> 0;
