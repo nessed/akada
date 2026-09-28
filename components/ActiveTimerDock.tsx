@@ -4,7 +4,8 @@ import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCourses } from '@/lib/data-hooks';
 import { useTimer } from '@/lib/timer-context';
-import { formatHHMMSS, resolveTint } from '@/lib/utils';
+import { formatHHMMSS, formatHM, resolveTint } from '@/lib/utils';
+import { hasEarlierBlock, stretchFace } from '@/lib/timer-face';
 
 export default function ActiveTimerDock() {
   const router = useRouter();
@@ -23,13 +24,15 @@ export default function ActiveTimerDock() {
   const tint = course ? resolveTint(course.color, course.tint) : 'var(--bg-tint)';
   const code = course?.code ?? 'Timer';
 
-  /* Two different numbers, because the dock answers a different question in
-     each state. While a block runs it is "how long have I studied", which is
-     the sitting's focus total and not this one block. While a break runs it
-     is "how long have I got", which is the break. */
-  const breakLeft = breakTarget != null ? breakTarget - elapsedSeconds : 0;
-  const shown = onBreak ? Math.abs(breakLeft) : focusSeconds;
-  const breakOver = onBreak && breakLeft <= 0;
+  /* The same number the timer's face shows: the stretch on the clock, so a
+     new block after a break starts again rather than carrying the session.
+     The session's total rides beside it, smaller, once a block is behind
+     this one; before that the two would be the same number twice. */
+  const face = stretchFace({ onBreak, breakTarget, target: active.targetSeconds, elapsed: elapsedSeconds });
+  const shown = face.seconds;
+  const breakOver = onBreak && face.over;
+  const overrun = !onBreak && face.over;
+  const showTotal = hasEarlierBlock(active.segments);
 
   function openTimer() {
     router.push('/timer');
@@ -71,8 +74,6 @@ export default function ActiveTimerDock() {
             scrolled the page instead of opening the timer. The label is the
             button now, and the two controls sit beside it. */}
         <div
-          // Where a pause made from the keyboard sends its ring out from.
-          data-timer-dock
           className="pointer-events-auto flex items-center gap-1 rounded-[10px] border border-line bg-paper/90 p-1 backdrop-blur"
           style={{ boxShadow: `inset 0 0 0 1px ${tint}` }}
         >
@@ -82,7 +83,9 @@ export default function ActiveTimerDock() {
             aria-label={
               onBreak
                 ? `${code} on a break, ${breakOver ? 'over by' : 'remaining'} ${formatHHMMSS(shown)}. Open the timer.`
-                : `${active.isPaused ? 'Paused' : 'Running'} timer for ${code}, ${formatHHMMSS(shown)}. Open the timer.`
+                : `${active.isPaused ? 'Paused' : 'Running'} timer for ${code}, ${
+                    overrun ? 'over by ' : face.countdown ? 'remaining ' : ''
+                  }${formatHHMMSS(shown)}${showTotal ? `, ${formatHM(focusSeconds)} in this session` : ''}. Open the timer.`
             }
             className="flex min-h-[44px] items-center gap-2 rounded-[8px] bg-transparent px-1.5 text-left"
           >
@@ -109,7 +112,13 @@ export default function ActiveTimerDock() {
                   breakOver ? 'text-warn' : 'text-ink'
                 }`}
               >
+                {overrun ? '+' : ''}
                 {formatHHMMSS(shown)}
+                {showTotal ? (
+                  <span className="ml-1.5 text-[11px] font-medium text-muted" title="In this session">
+                    {formatHM(focusSeconds)}
+                  </span>
+                ) : null}
               </span>
             </span>
           </button>

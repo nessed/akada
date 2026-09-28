@@ -26,6 +26,22 @@ import { isLogSheetMounted } from './PendingSessionLogSheet';
  * the same rule the rest of the app follows: a key that does nothing is worse
  * than no key.
  */
+/**
+ * The page blinks once when `P` lands. The key is pressed with the eyes on
+ * the book, not on the dock, so without it there was no telling whether the
+ * clock heard. Two lids of ink come in from the top and bottom edges, soft
+ * where they meet, close fast and open a touch slower, the way an eye does.
+ * It catches no clicks, and a second press mid-blink starts it over.
+ */
+function blinkPage() {
+  document.querySelector('.page-blink')?.remove();
+  const lids = document.createElement('div');
+  lids.className = 'page-blink';
+  lids.setAttribute('aria-hidden', 'true');
+  lids.addEventListener('animationend', () => lids.remove(), { once: true });
+  document.body.appendChild(lids);
+}
+
 export default function TimerHotkeys() {
   const router = useRouter();
   const { active, onBreak, endBreak, pause, resume, stop } = useTimerState();
@@ -45,8 +61,7 @@ export default function TimerHotkeys() {
       const key = event.key.toLowerCase();
       if (key === 'p') {
         event.preventDefault();
-        // The page answers from the dock (see PauseRipple), since the key is
-        // pressed with the eyes on the book and the clock has to say it heard.
+        blinkPage();
         // The dock's left button, to the letter: resting means end the break.
         if (onBreak) endBreak();
         else if (active?.isPaused) resume();

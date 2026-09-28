@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useTimer } from '@/lib/timer-context';
+import { stretchFace } from '@/lib/timer-face';
 
 function formatTimerTitle(seconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(seconds));
@@ -17,7 +18,7 @@ function formatTimerTitle(seconds: number): string {
 }
 
 export default function TimerDocumentTitle() {
-  const { active, pendingLog, elapsedSeconds, focusSeconds, onBreak, breakTarget } = useTimer();
+  const { active, pendingLog, elapsedSeconds, onBreak, breakTarget } = useTimer();
   // What the router last put in the tab, as opposed to what this component
   // last put there. Capturing the base title once on mount meant that every
   // navigation made while a timer ran was forgotten: stopping the timer on
@@ -30,22 +31,28 @@ export default function TimerDocumentTitle() {
       baseTitleRef.current = document.title || 'Akada';
     }
 
-    const breakLeft = breakTarget != null ? breakTarget - elapsedSeconds : 0;
+    // The same number as the timer's face: the stretch on the clock, so the
+    // tab starts again on the new block after a break rather than carrying
+    // the whole session.
+    const face = active
+      ? stretchFace({ onBreak, breakTarget, target: active.targetSeconds, elapsed: elapsedSeconds })
+      : null;
+    const digits = face ? formatTimerTitle(face.seconds) : '';
     const next = pendingLog
       ? 'Log session | Akada'
-      : active
+      : active && face
         ? onBreak
-          ? // The tab is where a reader on a break is actually looking, so it
-            // carries the break rather than the hours behind it.
-            `${breakLeft <= 0 ? 'Break over' : 'Break'} ${formatTimerTitle(Math.abs(breakLeft))} | Timer`
+          ? `${face.over ? 'Break over' : 'Break'} ${digits} | Timer`
           : active.isPaused
-            ? `Paused ${formatTimerTitle(focusSeconds)} | Timer`
-            : `${formatTimerTitle(focusSeconds)} | Timer`
+            ? `Paused ${digits} | Timer`
+            : face.over
+              ? `Over ${digits} | Timer`
+              : `${digits} | Timer`
         : baseTitleRef.current;
 
     if (next && document.title !== next) document.title = next;
     appliedRef.current = next;
-  }, [active, breakTarget, elapsedSeconds, focusSeconds, onBreak, pendingLog]);
+  }, [active, breakTarget, elapsedSeconds, onBreak, pendingLog]);
 
   // Leaving the app on a timer title after this component goes away would
   // strand the tab on a frozen clock.

@@ -553,16 +553,44 @@ input[type='date']::-webkit-calendar-picker-indicator {
   animation: nav-mark 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) 0.06s backwards;
 }
 
-/* The ring a pause sends across the page (components/PauseRipple). Sized,
-   placed, coloured and animated from script; this is only what every ring
-   shares. Over everything, focus mode included, and it catches nothing. */
-.pause-ripple {
+/* The blink `P` gives the page (TimerHotkeys). Two lids of ink, one from
+   each edge, deepest at the edge and gone by the middle, so the page is
+   squeezed shut rather than covered by a sheet. They close in 130ms and open
+   over 230ms, and a faint wash over the whole page peaks as they meet. Over
+   everything, focus mode included, and it catches nothing. */
+.page-blink {
   position: fixed;
+  inset: 0;
   z-index: 1000;
   pointer-events: none;
-  border-style: solid;
-  border-radius: 50%;
-  box-sizing: border-box;
+  animation: blink-wash 0.36s linear both;
+}
+.page-blink::before,
+.page-blink::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  height: 58%;
+  animation: blink-lid 0.36s both;
+}
+.page-blink::before {
+  top: 0;
+  transform-origin: top;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--ink) 30%, transparent), transparent);
+}
+.page-blink::after {
+  bottom: 0;
+  transform-origin: bottom;
+  background: linear-gradient(to top, color-mix(in srgb, var(--ink) 30%, transparent), transparent);
+}
+@keyframes blink-lid {
+  0% { transform: scaleY(0); animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.5); }
+  36% { transform: scaleY(1); animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1); }
+  100% { transform: scaleY(0); }
+}
+@keyframes blink-wash {
+  0%, 100% { background: transparent; }
+  36% { background: color-mix(in srgb, var(--ink) 7%, transparent); }
 }
 
 /* A held clock breathes. Once its ink has come down to half, the digits go

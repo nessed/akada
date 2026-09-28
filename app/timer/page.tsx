@@ -22,6 +22,7 @@ import { MARKS_PER_PAGE } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useCourses, useTasks } from '@/lib/data-hooks';
 import { clockFace } from '@/lib/utils';
+import { hasEarlierBlock, stretchFace } from '@/lib/timer-face';
 import { NIGHT_UNDERLINE } from '@/lib/preferences';
 
 /**
@@ -76,6 +77,7 @@ export default function TimerPage() {
     active: liveActive,
     pendingLog,
     elapsedSeconds: liveElapsed,
+    focusSeconds: liveFocus,
     onBreak: liveOnBreak,
     breakTarget: liveBreakTarget,
     lastBlockNote,
@@ -118,11 +120,13 @@ export default function TimerPage() {
   const [held, setHeld] = useState<{
     active: NonNullable<typeof liveActive>;
     elapsed: number;
+    focus: number;
     onBreak: boolean;
     breakTarget: number | null;
   } | null>(null);
   const active = liveActive ?? (pendingLog ? held?.active ?? null : null);
   const elapsedSeconds = liveActive ? liveElapsed : held?.elapsed ?? 0;
+  const focusSeconds = liveActive ? liveFocus : held?.focus ?? 0;
   const onBreak = liveActive ? liveOnBreak : held?.onBreak ?? false;
   const breakTarget = liveActive ? liveBreakTarget : held?.breakTarget ?? null;
   /* Whether anything on screen can still be acted on. A held frame is a
@@ -169,6 +173,7 @@ export default function TimerPage() {
       setHeld({
         active: liveActive,
         elapsed: liveElapsed,
+        focus: liveFocus,
         onBreak: liveOnBreak,
         breakTarget: liveBreakTarget,
       });
@@ -183,7 +188,7 @@ export default function TimerPage() {
       clearPendingLog();
       router.replace('/dashboard');
     }
-  }, [clearPendingLog, liveActive, liveBreakTarget, liveElapsed, liveOnBreak, router, stop]);
+  }, [clearPendingLog, liveActive, liveBreakTarget, liveElapsed, liveFocus, liveOnBreak, router, stop]);
 
   /* Dead ends. A timer pointing at a course that has since been deleted, or
      an account with no courses at all, used to leave this screen spinning on
@@ -227,7 +232,12 @@ export default function TimerPage() {
      session stays on the night screen for the same reason. */
   const isBlock = target != null;
   const resting = onBreak && active != null;
-  const breakOver = resting && breakTarget != null && elapsed >= breakTarget;
+  /* The face is the stretch on the clock, the same number the dock and the
+     tab show. After a break it starts again on the new block; the session's
+     running total sits under it once there is an earlier block to add up. */
+  const face = stretchFace({ onBreak: resting, breakTarget, target, elapsed });
+  const breakOver = resting && face.over;
+  const showTotal = active != null && hasEarlierBlock(active.segments);
 
   /* Space pauses, F finishes, Escape goes back. Typed into a field they mean
      what the field means, so the handler stands down for one. */
@@ -287,16 +297,11 @@ export default function TimerPage() {
      open screen's "since" is the whole sitting, breaks and all. */
   const sittingStartedAt = active?.sittingStartedAt ?? wallNow;
 
-  // Block mode counts down; open mode counts up. The fan reads the same
-  // number either way, as a fraction of the target or of a long sitting.
-  const remaining = resting
-    ? breakTarget != null
-      ? Math.abs(breakTarget - elapsed)
-      : elapsed
-    : isBlock
-      ? Math.max(0, target - elapsed)
-      : elapsed;
-  const overrun = !resting && isBlock && elapsed > target;
+  // Block mode counts down, and past its target counts the overrun up; open
+  // mode counts up. The fan reads elapsed either way, as a fraction of the
+  // target or of a long sitting.
+  const remaining = face.seconds;
+  const overrun = !resting && face.over;
   const progress = resting
     ? // Held. Rest is not progress, and a fan that shrank back would be
       // telling the reader they had lost the block they just finished.
@@ -692,6 +697,14 @@ export default function TimerPage() {
                 {task ? <> · <span style={{ color: '#EFE9DC' }}>{task.title}</span></> : null}
                 {pausedMark}
               </p>
+              {showTotal ? (
+                <p className="m-0 mt-1.5 text-[12.5px]" style={{ color: '#958D7E' }}>
+                  <span className="font-mono tabular-nums" style={{ color: '#C8C0B0' }}>
+                    {clockFace(focusSeconds)}
+                  </span>{' '}
+                  <span className="font-serif italic">in this session</span>
+                </p>
+              ) : null}
               {/* The course's page, the same one the block frame carries in
                   its margin. It fills as the reader sits and a mark that
                   lands inks itself in where they can see it. The empty marks
@@ -836,6 +849,15 @@ export default function TimerPage() {
             {task ? <> · <span className="text-ink">{task.title}</span></> : null}
             {pausedMark}
           </p>
+          {/* The session so far, blocks added up, breaks left out. Second to
+              the face: it is the number the log sheet will ask about, not the
+              one being worked against right now. */}
+          {showTotal ? (
+            <p className="m-0 mt-1.5 text-[12.5px] text-muted">
+              <span className="font-mono tabular-nums text-ink-soft">{clockFace(focusSeconds)}</span>{' '}
+              <span className="font-serif italic">in this session</span>
+            </p>
+          ) : null}
         </div>
 
         {controls}
