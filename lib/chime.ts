@@ -53,7 +53,9 @@ interface LiveNode {
 interface PendingNote {
   kind: ChimeKind;
   dueAtMs: number;
-  played: boolean;
+  /** When it sounds on the audio clock, which is the only clock that knows. */
+  dueAtCtx: number;
+  nodes: OscillatorNode[];
 }
 
 let context: AudioContext | null = null;
@@ -111,9 +113,9 @@ function strike(ctx: AudioContext, at: number, atMs: number, root: number, note:
       gain.disconnect();
       osc.disconnect();
       live = live.filter((entry) => entry.node !== osc);
-      note.played = true;
     };
     live.push({ node: osc, startsAtMs: atMs });
+    note.nodes.push(osc);
   }
 }
 
@@ -132,7 +134,7 @@ export function scheduleChime(kind: ChimeKind, delaySeconds = 0): void {
   const delay = Math.max(0, Number.isFinite(delaySeconds) ? delaySeconds : 0);
   const start = ctx.currentTime + delay + 0.02;
   const startMs = Date.now() + delay * 1000;
-  const note: PendingNote = { kind, dueAtMs: startMs, played: false };
+  const note: PendingNote = { kind, dueAtMs: startMs, dueAtCtx: start, nodes: [] };
   pending.push(note);
   ROOTS[kind].forEach((root, i) => {
     strike(ctx, start + i * SPACING, startMs + i * SPACING * 1000, root, note);
@@ -148,20 +150,51 @@ export function ringChime(kind: ChimeKind): void {
  * Ring late rather than not at all.
  *
  * Called when the tab comes back to the front and on every timer tick. A note
- * whose moment has passed unplayed was scheduled against a clock that was
- * asleep at the time, and will never arrive on its own: its slot on the audio
- * timeline now sits behind the suspended context. A second of slack keeps a
- * note that is merely about to fire from being cut off and re-rung.
+ * whose moment has passed on the wall clock while the audio clock has not yet
+ * reached it was scheduled against a context that was asleep, and would only
+ * sound whenever that context caught up, which is to say at some arbitrary
+ * later moment. It is stopped and rung now instead.
+ *
+ * What decides "played" is the audio clock, not the note's own end. A note
+ * lasts over a second and a half from strike to silence, so judging it by
+ * when it finished had every chime that rang on time counted as missed a
+ * second in, rung again, and that one counted as missed in turn: a break
+ * opened on a chime that did not stop.
  */
 export function flushChime(): void {
-  if (pending.length === 0) return;
+  const ctx = context;
+  if (pending.length === 0 || !ctx) return;
+  // A context still asleep would swallow the late note too, and the next
+  // tick would count that one missed as well. Wake it and wait for it.
+  if (ctx.state !== 'running') {
+    void ctx.resume().catch(() => {});
+    return;
+  }
   const now = Date.now();
-  const missed = pending.filter((note) => !note.played && now >= note.dueAtMs + LATE_MS);
-  pending = pending.filter((note) => !note.played && now < note.dueAtMs + LATE_MS);
+  const missed: PendingNote[] = [];
+  const waiting: PendingNote[] = [];
+  for (const note of pending) {
+    if (ctx.currentTime >= note.dueAtCtx) continue; // it sounded
+    if (now >= note.dueAtMs + LATE_MS) missed.push(note);
+    else waiting.push(note);
+  }
+  pending = waiting;
+  if (missed.length === 0) return;
+  for (const note of missed) {
+    for (const node of note.nodes) {
+      try {
+        node.onended = null;
+        node.stop();
+        node.disconnect();
+      } catch {
+        // Already stopped.
+      }
+    }
+    live = live.filter((entry) => !note.nodes.includes(entry.node));
+  }
   // One note, however many were missed. Two chimes stacked because a phone
   // was away for an hour is the alarm this deliberately is not.
-  const kind = missed[missed.length - 1]?.kind;
-  if (kind) ringChime(kind);
+  ringChime(missed[missed.length - 1].kind);
 }
 
 /**

@@ -207,6 +207,17 @@ export default function TimerPage() {
   }, [cancel, clearPendingLog, course, courses.length, hydrated, liveActive, pendingLog, router, timerCourseId]);
 
   const isPaused = active?.isPaused ?? false;
+
+  /* The wall clock, for the frame's window. A running stretch re-renders
+     every second anyway; a held one does not, and its projected end moves
+     with the wall, so the screen is redrawn every so often while held. */
+  const [, setHeldRedraw] = useState(0);
+  useEffect(() => {
+    if (!live || !isPaused) return;
+    const id = window.setInterval(() => setHeldRedraw((n) => n + 1), 15 * 1000);
+    return () => window.clearInterval(id);
+  }, [live, isPaused]);
+  const wallNow = Date.now();
   /* The current stretch, which is what the face shows: time into this block,
      or time into this break. The sitting's total is `focusSeconds`. */
   const elapsed = clampSessionSeconds(elapsedSeconds);
@@ -274,8 +285,7 @@ export default function TimerPage() {
         : null;
   /* Two different starts. The frame's window is the stretch on the clock; the
      open screen's "since" is the whole sitting, breaks and all. */
-  const stretchStartedAt = active?.stretchStartedAt ?? Date.now();
-  const sittingStartedAt = active?.sittingStartedAt ?? Date.now();
+  const sittingStartedAt = active?.sittingStartedAt ?? wallNow;
 
   // Block mode counts down; open mode counts up. The fan reads the same
   // number either way, as a fraction of the target or of a long sitting.
@@ -329,6 +339,17 @@ export default function TimerPage() {
   /* A block set out after a break waits at zero for the reader to start it.
      Held there, it is ready rather than paused, and the button starts it. */
   const heldFresh = pausedFocus && (active?.accumulatedMs ?? 0) === 0;
+
+  /* The frame's "14:20 to 14:45". The end is where the stretch will actually
+     reach its length from here, so a ten-minute pause moves it ten minutes;
+     it used to be the start plus the target, which stopped being true the
+     first time anybody paused. A held block has not started, so both ends
+     are read from now. */
+  const stretchStartedAt = heldFresh ? wallNow : active?.stretchStartedAt ?? wallNow;
+  const stretchTargetMs = (resting ? breakTarget ?? 0 : target ?? 0) * 1000;
+  const stretchEndsAt = active
+    ? (isPaused ? wallNow : active.startedAt) + stretchTargetMs - Math.max(0, active.accumulatedMs)
+    : wallNow + stretchTargetMs;
   const clockEase: CSSProperties = {
     transition: 'opacity 480ms cubic-bezier(0.2, 0.7, 0.2, 1), color 480ms cubic-bezier(0.2, 0.7, 0.2, 1)',
   };
@@ -749,8 +770,7 @@ export default function TimerPage() {
             </span>
           </span>
           <span className="absolute right-9 top-4 z-10 font-mono text-[10.5px] tracking-[0.06em] text-muted">
-            {hhmm(stretchStartedAt)} to{' '}
-            {hhmm(stretchStartedAt + (resting ? breakTarget ?? 0 : target) * 1000)}
+            {hhmm(stretchStartedAt)} to {hhmm(stretchEndsAt)}
           </span>
           {/* The course's open page, in the margin of the frame. It reads the
               sitting on the clock, so a mark inked twelve minutes into this

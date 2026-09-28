@@ -174,7 +174,13 @@ const RUNNING_CHECKPOINT_MS = 10 * 1000;
 const STALE_RUNNING_MS = 4 * 60 * 60 * 1000;
 /** What "take a break" means when the reader has breaks switched off. */
 const DEFAULT_BREAK_SECONDS = 5 * 60;
-const TICK_MS = 500;
+/**
+ * How far past a whole second the tick lands. A tick that fired at an
+ * arbitrary phase showed each second up to half a second late, and after a
+ * resume a digit could sit for a second and a half or flick past in half.
+ * Landing just after the boundary is what makes the face change on the beat.
+ */
+const TICK_SLACK_MS = 15;
 
 /* localStorage is not always there to be written to: Safari's private mode
    throws on setItem, a blocked-cookies setting throws on the property access
@@ -529,15 +535,26 @@ function saveActiveIfCurrent(state: TimerState): boolean {
   }
 }
 
+/** How long the current stretch has run, in ms, unclamped. */
+function stretchMsAt(state: TimerState, atMs: number): number {
+  const liveMs = state.isPaused ? 0 : Math.max(0, atMs - state.startedAt);
+  return Math.max(0, state.accumulatedMs) + liveMs;
+}
+
 /**
  * How long the *current stretch* has run. A break is clamped to its own much
  * tighter ceiling, so the number on screen can never claim more rest than the
  * database would accept.
  */
 function stretchSecondsAt(state: TimerState, atMs: number): number {
-  const liveMs = state.isPaused ? 0 : Math.max(0, atMs - state.startedAt);
-  const seconds = (state.accumulatedMs + liveMs) / 1000;
+  const seconds = stretchMsAt(state, atMs) / 1000;
   return state.phase === 'break' ? clampBreakSeconds(seconds) : clampSessionSeconds(seconds);
+}
+
+/** Wait until just past the stretch's next whole second. */
+function msToNextSecond(state: TimerState, atMs: number): number {
+  const into = stretchMsAt(state, atMs) % 1000;
+  return 1000 - into + TICK_SLACK_MS;
 }
 
 function computeElapsed(state: TimerState): number {
@@ -546,10 +563,15 @@ function computeElapsed(state: TimerState): number {
   return stretchSecondsAt(safeState, Date.now());
 }
 
-/** Focus and rest across the whole sitting, the stretch in progress included. */
+/**
+ * Focus and rest across the whole sitting, given the stretch in progress as
+ * a number of seconds. Taking the stretch as a number rather than reading the
+ * clock again is what keeps the dock's total and the timer's face on the same
+ * second: two reads a few ms apart either side of a boundary used to disagree.
+ */
 function sittingTotals(
   state: TimerState,
-  atMs: number,
+  currentSeconds: number,
 ): { focusSeconds: number; breakSeconds: number } {
   let focus = 0;
   let rest = 0;
@@ -557,15 +579,14 @@ function sittingTotals(
     if (segment.kind === 'break') rest += segment.seconds;
     else focus += segment.seconds;
   }
-  const current = stretchSecondsAt(state, atMs);
-  if (state.phase === 'break') rest += current;
-  else focus += current;
+  if (state.phase === 'break') rest += currentSeconds;
+  else focus += currentSeconds;
   return { focusSeconds: clampSessionSeconds(focus), breakSeconds: clampSessionSeconds(rest) };
 }
 
 /** Focus this sitting has accumulated against the 18h ceiling. */
 function focusSecondsAt(state: TimerState, atMs: number): number {
-  return sittingTotals(state, atMs).focusSeconds;
+  return sittingTotals(state, stretchSecondsAt(state, atMs)).focusSeconds;
 }
 
 /**
@@ -773,7 +794,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       // is not a user gesture; that is what flushChime and the notification
       // are for.
       const resting = snapshot.active;
-      if (resting.phase === 'break' && resting.breakSeconds != null && soundOn()) {
+      if (resting.phase === 'break' && !resting.isPaused && resting.breakSeconds != null && soundOn()) {
         const left = resting.breakSeconds - computeElapsed(resting);
         if (left > 0) scheduleChime('back', left);
       }
@@ -874,11 +895,11 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Keep ticking
+  // Keep ticking, once a second, on the second.
   useEffect(() => {
     if (!active || active.isPaused) {
       if (tickRef.current) {
-        window.clearInterval(tickRef.current);
+        window.clearTimeout(tickRef.current);
         tickRef.current = null;
       }
       return;
@@ -903,9 +924,10 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    tickRef.current = window.setInterval(() => {
+    const tick = () => {
       const now = Date.now();
-      const current = activeRef.current ?? active;
+      const current = activeRef.current;
+      if (!current) return;
       if (!current.isPaused && now - current.lastSeenAt >= STALE_RUNNING_MS) {
         closeOut(current, current.lastSeenAt, 'away');
         return;
@@ -969,7 +991,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       // second to show the same digits. Only whole seconds are ever
       // displayed, so only whole seconds are published.
       setElapsed((prev) => {
-        const next = computeElapsed(current);
+        const next = stretchSecondsAt(current, now);
         return next === prev ? prev : next;
       });
       if (now - lastCheckpoint >= RUNNING_CHECKPOINT_MS) {
@@ -978,9 +1000,13 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         activeRef.current = checkpoint;
         saveActiveIfCurrent(checkpoint);
       }
-    }, TICK_MS);
+      // A backgrounded tab fires this late or not at all; nothing here
+      // counts ticks, so a late one only means a late redraw.
+      tickRef.current = window.setTimeout(tick, msToNextSecond(current, Date.now()));
+    };
+    tickRef.current = window.setTimeout(tick, msToNextSecond(active, Date.now()));
     return () => {
-      if (tickRef.current) window.clearInterval(tickRef.current);
+      if (tickRef.current) window.clearTimeout(tickRef.current);
       tickRef.current = null;
     };
   }, [active]);
@@ -1210,48 +1236,48 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     return log;
   }, []);
 
+  /* Both read the ref, like every other action here. They used to build the
+     next state from React's copy, which trails the ref by whatever the tick's
+     checkpoint and the input tracker have written since the last render. */
   const pause = useCallback(() => {
     const current = activeRef.current;
-    if (current && recoverStaleRunningTimer(current, Date.now())) return;
-    setActive((prev) => {
-      if (!prev || prev.isPaused) return prev;
-      const now = Date.now();
-      const next: TimerState = {
-        ...prev,
-        accumulatedMs: Math.min(
-          MAX_TIMER_MS,
-          Math.max(0, prev.accumulatedMs) + Math.max(0, now - prev.startedAt),
-        ),
-        isPaused: true,
-        lastSeenAt: now,
-        lastInputAt: now,
-      };
-      activeRef.current = next;
-      saveActive(next);
-      setElapsed(computeElapsed(next));
-      return next;
+    if (!current || current.isPaused) return;
+    const now = Date.now();
+    if (recoverStaleRunningTimer(current, now)) return;
+    // A break's closing note is on the audio clock and does not know the
+    // break has stopped counting. Held, it would ring on the old time.
+    if (current.phase === 'break') cancelChime();
+    applyActive({
+      ...current,
+      accumulatedMs: Math.min(MAX_TIMER_MS, stretchMsAt(current, now)),
+      isPaused: true,
+      lastSeenAt: now,
     });
-  }, [recoverStaleRunningTimer]);
+  }, [applyActive, recoverStaleRunningTimer]);
 
   const resume = useCallback(() => {
-    setActive((prev) => {
-      if (!prev || !prev.isPaused) return prev;
-      const now = Date.now();
-      const next: TimerState = {
-        ...prev,
-        startedAt: now,
-        // A block set out after a break and not yet started begins now, not
-        // when the break ended, so the chain and the finish time read true.
-        stretchStartedAt: prev.accumulatedMs === 0 ? now : prev.stretchStartedAt,
-        isPaused: false,
-        lastSeenAt: now,
-        lastInputAt: now,
-      };
-      activeRef.current = next;
-      saveActive(next);
-      return next;
-    });
-  }, []);
+    const current = activeRef.current;
+    if (!current || !current.isPaused) return;
+    const now = Date.now();
+    const next: TimerState = {
+      ...current,
+      startedAt: now,
+      // A block set out after a break and not yet started begins now, not
+      // when the break ended, so the chain and the finish time read true.
+      stretchStartedAt: current.accumulatedMs === 0 ? now : current.stretchStartedAt,
+      isPaused: false,
+      lastSeenAt: now,
+    };
+    // Put the break's closing note back where the break now ends.
+    if (next.phase === 'break' && next.breakSeconds != null && soundOn()) {
+      const left = next.breakSeconds - stretchSecondsAt(next, now);
+      if (left > 0) scheduleChime('back', left);
+    }
+    // The start of a held block is a click, and a click is what the browser
+    // wants before it lets the audio context run.
+    primeChime();
+    applyActive(next);
+  }, [applyActive]);
 
   const cancel = useCallback(() => {
     cancelChime();
@@ -1300,13 +1326,10 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     clearStoredTimerState();
   }, []);
 
-  /* The sitting's running totals. `elapsedSeconds` only ever publishes whole
-     seconds, so this recomputes once a second rather than four times. */
+  /* The sitting's running totals, read off the same second the face shows,
+     so the dock and the timer never sit one apart. */
   const totals = useMemo(
-    () => (active ? sittingTotals(active, Date.now()) : { focusSeconds: 0, breakSeconds: 0 }),
-    // elapsedSeconds is the clock these are read against; it is a dependency
-    // even though the expression does not name it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => (active ? sittingTotals(active, elapsedSeconds) : { focusSeconds: 0, breakSeconds: 0 }),
     [active, elapsedSeconds],
   );
 
