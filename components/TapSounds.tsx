@@ -10,15 +10,15 @@ const PRESSABLE =
 /**
  * One listener for the whole app, so a new button makes a sound without
  * anyone remembering to give it one. A control says what it wants with
- * `data-sound` ("bubble", "paper", "none"), on itself or on anything around
+ * `data-sound` ("knock", "paper", "none"), on itself or on anything around
  * it; otherwise it gets the plain wooden tap. A handler that plays a sound of
  * its own (a task ticked, the timer started) wins over both, see
  * `queueSound`.
  *
  * Listening on the capture phase of the window means this runs before
  * React's handlers do, so `data-sound` is read off the control as it was
- * when it was pressed: a toggle that is off still says "bubble", not the
- * "drop" it will say once it has turned on.
+ * when it was pressed: a toggle that is off still says "knock", not the
+ * "untick" it will say once it has turned on.
  */
 export default function TapSounds() {
   useEffect(() => {

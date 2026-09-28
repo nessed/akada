@@ -1067,31 +1067,38 @@ their own habit, with the marks appearing only once the line is touched, so
 the panel stays a page of sentences until something is being changed.
 
 ### Sounds under a finger
-A press makes a small sound, the way a pencil makes one on a desk. It is a
-**palette of three materials**, all synthesised on the Web Audio clock in
-`lib/sounds.ts`, no files, so nothing is ever late or a download:
+A press makes a small sound, the way a pencil makes one on a desk. All of it is
+synthesised on the Web Audio clock in `lib/sounds.ts`, no files, so nothing is
+ever late or a download.
+
+**Nothing is a tone.** There is no oscillator in the file. Every sound is a
+struck object, `body()`: a click rung through a few tuned resonators, the way
+a desk or a book actually makes its sound, with a little high noise laid over
+the contact for the grain of the surface. The first palette built its wood,
+its bubbles and the timer's marimba out of sine waves and every one of them
+read as a synth, because a pure tone at a steady pitch is a beep however it is
+shaped. That is the rule now: if it should sound like a thing, it goes on
+`body()` or `hiss()`, never on an oscillator.
 
 - **Wood** for something done to the page. `tap` is the default for anything
-  pressed, a light pencil-on-desk tok. `knock` is lower, for a choice made or
-  "hazy" in recall. `tick` is a task done, a firm tok with a small bubble up
-  out of it; `untick` is only softer and lower, because undoing is not a
+  pressed, a pencil tip set down, the smallest and quietest sound in the set.
+  `knock` is a knuckle on the lid of a small box: a toggle turned on, "hazy"
+  in recall. `tick` is a task done or a card remembered clearly, a pencil
+  stroke across the paper landing on the desk. `untick` is a softer, duller
+  knock, for undoing and for a toggle turned off, because undoing is not a
   failure.
-- **Bubble** for something turned on or coming up: `bubble` when a toggle
-  goes on, `drop` when it goes off, `bright` (two, rising) for a card
-  remembered clearly.
 - **Paper** for something put away: a swipe to delete, a recall card let go.
+- **The timer** is a book. `start` opens it, the cover set back on the desk
+  and the pages falling open after it (a sitting begun, resumed, or a break
+  ended early). `pause` is a knuckle set down beside it. `stop` closes it, the
+  air out of the pages and then the covers meeting.
 
-The timer's `start` is a **mallet**, wood left to ring: two bars a fifth
-apart going up (a sitting begun, resumed, or a break ended early). `pause` and
-`stop` are **struck bodies** (`body()`), not tones: a burst of noise rung
-through a few tuned resonators, the way the real thing makes its sound.
-`pause` is a knuckle set down on a wooden desk; `stop` is a hardback closed,
-the air out of the pages and then the covers meeting. They were two more
-mallet notes at first and read as a synth, because a sine held at one pitch
-for half a second is a beep however it is enveloped. Anything new that should
-sound like an object belongs on `body()`. Every strike is detuned a percent or two
-and struck a touch harder or softer, so ten ticks down a list do not sound
-like a machine. All of it sits under the chime.
+Every hit is detuned a couple of percent and struck a touch harder or softer,
+so ten ticks down a list do not sound like a machine. What does not vary is
+the loudness: the contact is a fixed click rather than a burst of noise,
+because noise that short swung one knock to four times the last on luck. All
+of it is over inside a sixth of a second, where the chime rings for a second
+and a half.
 
 One capture-phase click listener (`components/TapSounds.tsx`) gives every
 button, link and switch the plain `tap`, so a new control is never silent. A

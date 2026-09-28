@@ -305,7 +305,7 @@ export default function SettingsPage() {
               <SettingGroup label="Sound">
                 <SettingToggleRow
                   label="Sounds under your finger"
-                  sub="Wood for a tap or a tick, a bubble for on, paper for away"
+                  sub="Wood for a tap or a tick, paper for something put away"
                   value={prefs.uiSounds}
                   onChange={(v) => setPrefs({ uiSounds: v })}
                 />

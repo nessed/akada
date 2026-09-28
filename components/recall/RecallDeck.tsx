@@ -40,8 +40,8 @@ import { VerdictMark } from './RecallMarks';
  */
 
 const VERDICTS: RecallVerdict[] = ['clear', 'hazy', 'gone'];
-/** Clear comes up bright, hazy is a knock on the desk, gone is let go like a slip of paper. */
-const VERDICT_SOUND: Record<RecallVerdict, SoundName> = { clear: 'bright', hazy: 'knock', gone: 'paper' };
+/** Clear is ticked off, hazy is a knock on the desk, gone is let go like a slip of paper. */
+const VERDICT_SOUND: Record<RecallVerdict, SoundName> = { clear: 'tick', hazy: 'knock', gone: 'paper' };
 
 interface Props {
   states: RecallState[];
