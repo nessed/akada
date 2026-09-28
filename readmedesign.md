@@ -313,7 +313,9 @@ knows a finger is on it.
   note from 75% to 250%. It reflows rather than magnifies: the type and the
   measure grow together until the measure meets the screen, then the lines
   rewrap, so nothing runs off the side, and the block under the fingers holds
-  still. Off 100%, the bar shows the figure in mono; a tap on it goes back.
+  still. The reflow happens once, when the fingers let go; while they move
+  the sheet is only scaled on the compositor from the point between them,
+  since laying out a whole note every frame is what made it stutter. Off 100%, the bar shows the figure in mono; a tap on it goes back.
   The zoom is kept with the spotlight and the lamp.
 - **A pen can trace a line.** A stylus run left to right along the text is a
   sideways drag, and the browser used to take it for its back swipe. On a
