@@ -29,7 +29,7 @@ import { isLogSheetMounted } from './PendingSessionLogSheet';
 /**
  * The page blinks once when `P` lands. The key is pressed with the eyes on
  * the book, not on the dock, so without it there was no telling whether the
- * clock heard. Two lids of ink come in from the top and bottom edges, soft
+ * clock heard. Two lids of paper come in from the top and bottom edges, soft
  * where they meet, close fast and open a touch slower, the way an eye does.
  * It catches no clicks, and a second press mid-blink starts it over.
  */

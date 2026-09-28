@@ -475,9 +475,10 @@ minutes, the 18 hour limit).
 
 `P` holds or lets go of the clock from any screen (`TimerHotkeys`), and it is
 pressed with the eyes on the book, not on the dock. So the page answers it:
-it blinks once, like an eye. Two lids of `ink` come in from the top and bottom
-edges, deepest at the edge and gone by the middle, close in 130ms and open
-over 230ms, with a faint 7% wash over the whole page as they meet. It used to
+it blinks once, like an eye. Two lids of `bg` (the app's own background, so
+cream in the day and the night paper after dark) come in from the top and
+bottom edges, deepest at the edge and gone by the middle, close in 130ms and
+open over 230ms, with a 30% wash over the whole page as they meet. It used to
 be one flat veil at 16%, which read as the screen flickering rather than as a
 blink. It sits over focus mode too and catches no clicks. Only the key does
 it; a click on the dock already lands where the eye is. Reduced motion takes
