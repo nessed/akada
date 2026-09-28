@@ -16,6 +16,7 @@ import {
   whenWords,
 } from '@/lib/recall/words';
 import { addDays, isoDate } from '@/lib/utils';
+import type { SoundName } from '@/lib/sounds';
 import { VerdictMark } from './RecallMarks';
 
 /**
@@ -39,6 +40,8 @@ import { VerdictMark } from './RecallMarks';
  */
 
 const VERDICTS: RecallVerdict[] = ['clear', 'hazy', 'gone'];
+/** Clear comes up bright, hazy is a knock on the desk, gone is let go like a slip of paper. */
+const VERDICT_SOUND: Record<RecallVerdict, SoundName> = { clear: 'bright', hazy: 'knock', gone: 'paper' };
 
 interface Props {
   states: RecallState[];
@@ -274,6 +277,7 @@ export default function RecallDeck({
                 type="button"
                 onClick={() => answer(verdict)}
                 disabled={busy}
+                data-sound={VERDICT_SOUND[verdict]}
                 aria-label={VERDICT_MEANING[verdict]}
                 title={VERDICT_MEANING[verdict]}
                 className="flex h-10 items-center gap-2 rounded-[10px] px-2.5 font-serif text-[15px] text-ink-soft transition-colors hover:bg-bg-tint hover:text-ink disabled:opacity-40"

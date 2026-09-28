@@ -1044,7 +1044,8 @@ hours, and the log's Yesterday pointed at the day still being lived. Where the
 day starts as an instant, `dayStartsAt(iso)`.
 
 ### The chime
-The one sound the app makes, beyond the ambient noise a reader turns on
+The one sound that announces something; the rest only answer a finger (see
+"Sounds under a finger"), and the ambient noise is one a reader turns on
 themselves. It is a **struck glass**: three sine partials over a 1.5s
 exponential tail, two notes settling downward into a break and three opening
 upward out of one. Not an alarm, for the same reason nothing else in the app
@@ -1064,6 +1065,35 @@ Both the chime and the break length are the reader's to set, in Settings.
 `BreakLengthPicker` is written in `DayEndPicker`'s idiom: a sentence about
 their own habit, with the marks appearing only once the line is touched, so
 the panel stays a page of sentences until something is being changed.
+
+### Sounds under a finger
+A press makes a small sound, the way a pencil makes one on a desk. It is a
+**palette of three materials**, all synthesised on the Web Audio clock in
+`lib/sounds.ts`, no files, so nothing is ever late or a download:
+
+- **Wood** for something done to the page. `tap` is the default for anything
+  pressed, a light pencil-on-desk tok. `knock` is lower, for a choice made or
+  "hazy" in recall. `tick` is a task done, a firm tok with a small bubble up
+  out of it; `untick` is only softer and lower, because undoing is not a
+  failure.
+- **Bubble** for something turned on or coming up: `bubble` when a toggle
+  goes on, `drop` when it goes off, `bright` (two, rising) for a card
+  remembered clearly.
+- **Paper** for something put away: a swipe to delete, a recall card let go.
+
+The timer gets a **mallet**, wood left to ring: `start` is two bars a fifth
+apart going up (a sitting begun, resumed, or a break ended early), `pause` one
+low bar, `stop` the fifth coming home. Every strike is detuned a percent or two
+and struck a touch harder or softer, so ten ticks down a list do not sound
+like a machine. All of it sits under the chime.
+
+One capture-phase click listener (`components/TapSounds.tsx`) gives every
+button, link and switch the plain `tap`, so a new control is never silent. A
+control that wants something else says so with `data-sound` on itself or an
+ancestor (`data-sound="none"` for quiet); a handler that plays its own sound
+wins over both, because the listener's tap is deferred a turn and cleared by
+any `playSound` in between. Settings has its own toggle (apart from the
+chime's) and a "Listen" row to audition the palette.
 
 ### Marks, not chips
 The app does not use pills. A capsule with a tinted fill is how software says

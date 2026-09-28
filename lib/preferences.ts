@@ -50,6 +50,13 @@ export interface Preferences {
    */
   sessionSound: boolean;
   /**
+   * The small sounds under a finger: wood for a tap or a tick, a bubble for
+   * something turned on, paper for something put away (lib/sounds.ts).
+   * Separate from the chime, which has something to announce; these only
+   * answer a press, and a reader can want one without the other.
+   */
+  uiSounds: boolean;
+  /**
    * How long the break after a block runs, in minutes. `0` turns the break
    * off, so a block that ends just keeps counting the way it always did.
    */
@@ -83,6 +90,7 @@ const DEFAULTS: Preferences = {
   // On, now that it has a job. A break whose end is not announced is a break
   // the reader has to sit and watch, which is not a break.
   sessionSound: true,
+  uiSounds: true,
   breakMinutes: 5,
   hideWeekends: false,
   darkMode: true,
@@ -121,6 +129,7 @@ function sanitizePreferences(value: unknown): Preferences {
       : DEFAULTS.primaryAccent,
     sessionSound:
       typeof parsed.sessionSound === 'boolean' ? parsed.sessionSound : DEFAULTS.sessionSound,
+    uiSounds: typeof parsed.uiSounds === 'boolean' ? parsed.uiSounds : DEFAULTS.uiSounds,
     hideWeekends:
       typeof parsed.hideWeekends === 'boolean' ? parsed.hideWeekends : DEFAULTS.hideWeekends,
     breakMinutes: BREAK_MINUTE_VALUES.includes(Number(parsed.breakMinutes))

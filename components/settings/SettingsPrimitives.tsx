@@ -153,6 +153,8 @@ export function SettingToggleRow({
       role="switch"
       aria-checked={value}
       onClick={() => onChange(!value)}
+      // Turning on comes up like a bubble; turning off sinks.
+      data-sound={value ? 'drop' : 'bubble'}
       className={ROW_BASE}
     >
       <RowBody

@@ -9,6 +9,7 @@ import AppearanceEditor from '@/components/settings/AppearanceEditor';
 import CoursesEditor from '@/components/settings/CoursesEditor';
 import BreakLengthPicker from '@/components/settings/BreakLengthPicker';
 import DayEndPicker from '@/components/settings/DayEndPicker';
+import SoundSampler from '@/components/settings/SoundSampler';
 import ProfileEditor from '@/components/settings/ProfileEditor';
 import SemesterManager from '@/components/SemesterManager';
 import {
@@ -296,6 +297,19 @@ export default function SettingsPage() {
                   value={prefs.hideWeekends}
                   onChange={(v) => setPrefs({ hideWeekends: v })}
                 />
+              </SettingGroup>
+
+              {/* Apart from the chime below: that one announces something,
+                  these only answer a press, and a reader can want either
+                  without the other. */}
+              <SettingGroup label="Sound">
+                <SettingToggleRow
+                  label="Sounds under your finger"
+                  sub="Wood for a tap or a tick, a bubble for on, paper for away"
+                  value={prefs.uiSounds}
+                  onChange={(v) => setPrefs({ uiSounds: v })}
+                />
+                <SoundSampler />
               </SettingGroup>
 
               {/* The timer's own two preferences. They lived only on the
