@@ -37,6 +37,13 @@ const OceanScene = dynamic(() => import('@/components/OceanScene'), { ssr: false
 
 /* Where the open screen's chrome sits, as shares of it: the header, the face
    and the controls. Animals that wander over them go faint there. */
+/* The block frame's corners: the course code, the time range, the tally.
+   The wash thins to bare paper there and animals keep out. */
+const FRAME_POOLS: ClearRect[] = [
+  { x: -0.05, y: -0.1, w: 0.33, h: 0.2 },
+  { x: 0.72, y: -0.1, w: 0.33, h: 0.2 },
+  { x: -0.05, y: 0.88, w: 0.36, h: 0.2 },
+];
 const OPEN_CLEAR: ClearRect[] = [
   { x: 0, y: 0, w: 1, h: 0.09 },
   { x: 0, y: 0.64, w: 0.46, h: 0.36 },
@@ -90,7 +97,7 @@ function hhmm(ms: number): string {
 
 export default function TimerPage() {
   const router = useRouter();
-  const [{ timerDrawing }] = usePreferences();
+  const [{ timerDrawing, darkMode }] = usePreferences();
   const {
     hydrated,
     active: liveActive,
@@ -362,8 +369,15 @@ export default function TimerPage() {
           stretchMs: active.phase === 'focus' ? Math.max(0, active.accumulatedMs) : 0,
           runningSince: active.phase === 'focus' && !active.isPaused ? active.startedAt : null,
         }
-      : { frozen: focusSeconds };
+      : // After Finish the sitting is a still; after a close that bypassed
+        // the Finish button there is no snapshot, and the log says how long.
+        { frozen: held ? focusSeconds : pendingLog?.durationSeconds ?? focusSeconds };
   const oceanDepth = ocean ? depthAt(focusSeconds) : null;
+  /* In the frame the deep is laid on the page itself: on the night paper it
+     is night water from the start, on a daylight paper a wash that goes dark
+     by the midnight zone, where the jelly's ink turns light with it. */
+  const frameGround = darkMode ? 'night' : 'paper';
+  const frameLight = frameGround === 'night' || (oceanDepth?.z ?? 0) >= 0.42;
 
   /* The chain with the rest currently being taken drawn on the end of it, so
      the first break of a sitting has two marks to show rather than one. A
@@ -896,21 +910,54 @@ export default function TimerPage() {
           )}
           {/* Standing on a drawn ground, with the rest of its shape sketched
               in pencil above it for the ink to fill. */}
-          <StudyFan
-            species={timerDrawing}
-            body={heroBody}
-            progress={progress}
-            seed={drawingSeed}
-            color={heroColor}
-            depth={7}
-            trunkWidth={12}
-            padTop={46}
-            baseOffset={24}
-            sketch
-            ground
-            resting={pausedFocus}
-            className={`absolute inset-0 h-full w-full ${quiet}`}
-          />
+          {ocean && sittingKey && timerCourseId ? (
+            <OceanScene
+              sittingKey={sittingKey}
+              courseKey={courseKey(timerCourseId)}
+              color={color}
+              clock={oceanClock}
+              blocks={blockIndex}
+              resting={resting}
+              paused={pausedFocus}
+              still={!live}
+              ground={frameGround}
+              clear={FRAME_POOLS}
+              pools={FRAME_POOLS}
+              rules
+              className="!absolute inset-0 h-full w-full"
+            >
+              <StudyFan
+                species="ocean"
+                body={heroBody}
+                progress={progress}
+                seed={drawingSeed}
+                color={heroColor}
+                light={frameLight}
+                padTop={46}
+                baseOffset={24}
+                sketch
+                ground
+                resting={pausedFocus}
+                className={`absolute inset-0 h-full w-full ${quiet}`}
+              />
+            </OceanScene>
+          ) : (
+            <StudyFan
+              species={timerDrawing}
+              body={heroBody}
+              progress={progress}
+              seed={drawingSeed}
+              color={heroColor}
+              depth={7}
+              trunkWidth={12}
+              padTop={46}
+              baseOffset={24}
+              sketch
+              ground
+              resting={pausedFocus}
+              className={`absolute inset-0 h-full w-full ${quiet}`}
+            />
+          )}
         </div>
 
         <div key={resting ? 'face-rest' : 'face-focus'} className="animate-settle text-center">

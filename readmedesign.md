@@ -732,8 +732,22 @@ only ever grows, it never runs backwards, and none of it touches progress.
   thinner far layer, then fewer pixels. The ocean's code is fetched only by
   someone who has chosen it.
 
-In block mode the deep's jelly (its family and all) grows in the notebook
-frame as the jellyfish does. Geometry is in `lib/ocean/` (`depth`, `genome`,
+- **The way down is marked.** For the first minute and a half the surface
+  shows from below, a bright rippling ceiling at the top of the water that
+  rises out of view. Crossing into a new zone is a moment: a faint shimmer
+  (the thermocline) rises through the water over four seconds, and the zone's
+  name and depth are written in the margin in the hand, `twilight · 200 m`,
+  for six seconds, then go. Only a crossing actually watched is marked: a
+  reload, a still or reduced motion never announces one.
+
+**In the block frame** the deep is laid on the page itself, a watercolour
+over the notebook: the rules show faintly through the shallows and are
+covered by the deep. On a daylight paper the wash goes dark by the midnight
+zone and the jelly's ink turns light with it; on the night paper it is night
+water from the start. The wash thins back to bare paper in oval bleeds under
+the frame's three corners (the course code, the time range, the tally), and
+animals keep out of them, so what is written there reads at any depth. The
+pencil sketch and the ground are the jellyfish's, unchanged. Geometry is in `lib/ocean/` (`depth`, `genome`,
 `anatomy`, `biome`, `schedule`, `lineage`, `palette`), the drawing in
 `lib/ocean/draw.ts` and `sprites.ts`, the scene in `components/OceanScene.tsx`,
 which draws the far water behind the hero `StudyFan` and the near animals in
