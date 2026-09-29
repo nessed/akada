@@ -197,6 +197,7 @@ export default function StudyFan({
   const bellXRef = useRef(strand(BOB_STIFFNESS, BOB_DAMPING));
   const bellYRef = useRef(strand(BOB_STIFFNESS, BOB_DAMPING));
   const startleRef = useRef(-1e9);
+  const gazeRef = useRef(0);
   const swayRef = useRef(strand());
   const stretchRef = useRef(strand());
   const foldRef = useRef(strand(FOLD_STIFFNESS, FOLD_DAMPING));
@@ -401,7 +402,9 @@ export default function StudyFan({
       const bx = bellXRef.current;
       const by = bellYRef.current;
       const closing = foldRef.current;
-      bx.step(hand ? hand.held.bend : null);
+      // Left to itself the bell drifts a little toward a cursor over the
+      // frame, on the same soft spring, the way a curious thing would.
+      bx.step(hand ? hand.held.bend : null, restingRef.current ? 0 : gazeRef.current);
       by.step(hand ? hand.held.slack : null);
       closing.step(null, restingRef.current ? FOLD_REST : 0);
       for (let i = 0; i < TRAIL_SAMPLES; i++) drift[i] = bx.at(Math.round(i * TRAIL_LAG));
@@ -513,6 +516,11 @@ export default function StudyFan({
       // A cursor going past with no button down: the cursor reads as a hand
       // to take hold of on the jelly, and brushing it sets it rocking.
       if (jelly && physics && e.pointerType === 'mouse') {
+        const fr = frameOf();
+        if (fr) {
+          const off = e.clientX - fr.rect.left - fr.f.cx;
+          gazeRef.current = Math.max(-fr.f.R * 0.4, Math.min(fr.f.R * 0.4, off * 0.22));
+        }
         const over = overJelly(e);
         e.currentTarget.style.cursor = over ? 'grab' : '';
         if (over) {
@@ -574,6 +582,14 @@ export default function StudyFan({
       onPointerMove={physics ? drag : undefined}
       onPointerUp={physics ? release : undefined}
       onPointerCancel={physics ? release : undefined}
+      onPointerLeave={
+        physics && jelly
+          ? () => {
+              gazeRef.current = 0;
+              kickRef.current();
+            }
+          : undefined
+      }
       style={
         physics
           ? jelly

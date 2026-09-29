@@ -305,11 +305,24 @@ export function drawJelly(
     return drift[lo] + (drift[hi] - drift[lo]) * (at - lo);
   };
   // The bell goes where the hand takes it; everything below trails behind.
-  const bellShift = pull(0) * px;
-  const lag = (st: number) => (pull(st / Math.max(1, maxL)) - pull(0)) * px;
+  // Left alone it is never still: it wanders a little way either side on two
+  // slow slides that do not line up, and each depth of the trails reads the
+  // slide from a moment earlier, so they drag behind the bell as it goes.
+  const alive = time != null;
+  const wander = (t: number) =>
+    alive ? R * (0.07 * Math.sin(t / 3300) + 0.04 * Math.sin(t / 1700 + 1.3)) * (1 - k) : 0;
+  const handShift = pull(0) * px;
+  const bellShift = handShift + wander(tm);
+  const lag = (st: number) =>
+    (pull(st / Math.max(1, maxL)) - pull(0)) * px +
+    wander(tm - 900 * Math.min(1, st / Math.max(1, maxL))) -
+    wander(tm);
   // Lifted, the bell takes the tops of the trails with it and leaves their
   // tips, so the floor stays the floor and a full jelly still touches it.
-  const riseY = Math.max(rise * px, -padTop * 0.85);
+  // Each squeeze is a stroke: the bell jets up with it and sinks back as it
+  // lets go, and the trails, held at the tips, stretch and slacken behind.
+  const handY = Math.max(rise * px, -padTop * 0.85);
+  const riseY = Math.max(handY - (alive ? 0.11 * R * pulse * (1 - k) : 0), -padTop * 0.85);
   const hold = (st: number) => riseY * 0.85 * Math.min(1, st / (0.6 * maxL + 30 * px));
 
   const pose = (pp: number, kk: number, beat: number): Pose => {
@@ -349,7 +362,7 @@ export function drawJelly(
     const gy = y0 + now.bh * 0.55 + riseY;
     const reach = now.r * 2.3;
     const g = ctx.createRadialGradient(bx, gy, 0, bx, gy, reach);
-    g.addColorStop(0, withAlpha(ink.glow, 0.2));
+    g.addColorStop(0, withAlpha(ink.glow, 0.15 + 0.08 * pulse));
     g.addColorStop(0.5, withAlpha(ink.glow, 0.07));
     g.addColorStop(1, withAlpha(ink.glow, 0));
     ctx.fillStyle = g;
@@ -417,7 +430,7 @@ export function drawJelly(
     // goes faint, so a dragged bell never leaves a full-size ghost standing
     // where it used to hang.
     ctx.translate(bellShift, riseY);
-    ctx.globalAlpha = 1 - 0.7 * Math.min(1, Math.hypot(bellShift, riseY) / (R * 0.5));
+    ctx.globalAlpha = 1 - 0.7 * Math.min(1, Math.hypot(handShift, handY) / (R * 0.5));
     ctx.strokeStyle = sketch;
     ctx.lineWidth = 0.9 * px;
     ctx.setLineDash([1.5 * px, 3.5 * px]);
@@ -586,10 +599,12 @@ export function drawJelly(
 
   // The bell leans into a pull about the middle of its rim; the trails do
   // not, they hang from where they were.
+  // Leaning a touch into the slide it is on, so it is heading somewhere.
+  const lean = tilt + (alive ? 0.045 * Math.cos(tm / 3300) * (1 - k) : 0);
   ctx.save();
-  if (tilt) {
+  if (lean) {
     ctx.translate(bx, now.rimY);
-    ctx.rotate(tilt);
+    ctx.rotate(lean);
     ctx.translate(-bx, -now.rimY);
   }
   const wash = ctx.createLinearGradient(0, y0, 0, now.rimY);
@@ -729,7 +744,8 @@ export function drawJelly(
     ctx.fillStyle = ink.lamp;
     ctx.shadowColor = ink.lamp;
     ctx.shadowBlur = 6 * line;
-    ctx.globalAlpha = 0.8;
+    // The sense organs flicker, unevenly, the way a lit thing in the dark does.
+    ctx.globalAlpha = alive ? 0.62 + 0.2 * Math.sin(tm / 900) + 0.08 * Math.sin(tm / 370) : 0.8;
     ctx.beginPath();
     for (let j = 0; j < rim.length; j += 2) {
       ctx.moveTo(rim[j] + 2.4 * line, rim[j + 1]);

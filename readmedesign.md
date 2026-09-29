@@ -623,8 +623,15 @@ natural-history plate draws one, in the course colour, never a cartoon.
   pinch and swell as they twist, one edge ruffled, a darker rib down each.
 - **Alive.** While the clock runs the bell squeezes and lets go on the same
   4.2s cycle the held clock breathes on, quick in and slow out, the rim
-  flaring a little on the squeeze. A slow wave travels down every tentacle
-  and arm, and a few ink bubbles rise off the crown. It is the one drawing in
+  flaring a little on the squeeze. Each squeeze is a stroke: the bell jets
+  up with it (a tenth of its radius) and sinks as it lets go, and the
+  tentacles, held at the tips, stretch and slacken behind. Left alone it
+  wanders a little either side on two slow slides that do not line up, leaning
+  into the one it is on, with each depth of the trails reading the slide from
+  a moment earlier so they drag. A cursor over the frame draws it a little
+  toward it, and off the frame it drifts back. A slow wave travels down every
+  tentacle and arm, a few ink bubbles rise off the crown, and on the night
+  paper the sense organs flicker unevenly and the glow swells with the beat. It is the one drawing in
   the app that moves on its own, so its loop never parks while it is open;
   reduced motion gets a still jelly with no wave, no beat and no bubbles.
 - **Done.** Every other tentacle tip lights with a bead, the jelly's version
