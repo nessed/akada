@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   addSessionOptimistic,
   updateTaskOptimistic,
@@ -20,6 +21,11 @@ import { LONG_SITTING_SECONDS } from '@/lib/timer-idle';
 import { useNotice } from './Notice';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from './SessionLogModal';
+import { usePreferences } from '@/lib/preferences';
+import { courseKey, oceanKeyFromSegments } from '@/lib/ocean/key';
+
+/* Only fetched for a reader whose timer draws the deep. */
+const DiveRecap = dynamic(() => import('./DiveRecap'), { ssr: false });
 
 /**
  * How many log sheets are on the page.
@@ -49,6 +55,14 @@ export default function PendingSessionLogSheet() {
   // The pending sitting is folded into this reading, so `sitting` is what
   // saving it will do to the record, read before the reader decides.
   const { sitting, logged } = useProgression();
+  const [{ timerDrawing, darkMode }] = usePreferences();
+  // The deep's read of the session. A recovered sitting gets none: the clock
+  // ran on without the reader, and the ocean would be telling them about a
+  // dive they did not take.
+  const diveKey =
+    pendingLog && timerDrawing === 'ocean' && !pendingLog.recoveryReason
+      ? oceanKeyFromSegments(pendingLog.courseId, pendingLog.segments)
+      : null;
   // The reader's usual sitting on this course, from the record without this
   // one in it, so the figure is what "usually" meant before today.
   const usual = pendingLog ? logged?.habits.byCourse.get(pendingLog.courseId)?.sittings ?? null : null;
@@ -226,6 +240,17 @@ export default function PendingSessionLogSheet() {
       durationSeconds={chosen?.durationSeconds ?? 0}
       breakSeconds={chosen?.breakSeconds ?? 0}
       segments={chosen?.segments ?? []}
+      recap={
+        diveKey && pendingLog ? (
+          <DiveRecap
+            sittingKey={diveKey}
+            courseKey={courseKey(pendingLog.courseId)}
+            focusSeconds={chosen?.durationSeconds ?? 0}
+            dark={darkMode}
+            className="mt-3"
+          />
+        ) : null
+      }
       suggestions={suggestions}
       effect={pendingLog && sitting?.courseId === pendingLog.courseId ? sitting : null}
       usualSeconds={usual && settled(usual) ? usual.median : null}

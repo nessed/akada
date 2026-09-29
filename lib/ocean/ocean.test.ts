@@ -8,7 +8,9 @@ import { courseKey, oceanKey, oceanKeyFromSegments } from './key';
 import { childOf, DEFAULT_JELLY, jellyForBlock } from './lineage';
 import { speciesName } from './names';
 import { hash32, mulberry32 } from './random';
-import { populationAt, visitorsAt } from './schedule';
+import { EVENTS, eventAtMinute, eventsAt, eventsUpTo } from './events';
+import { diveRecap } from './recap';
+import { populationAt, spawnAt, visitorsAt } from './schedule';
 
 const VIEW = { width: 1280, height: 800 };
 
@@ -121,4 +123,60 @@ test('the same moment always shows the same animals, and a break brings nobody n
   assert.deepEqual(a.map((v) => [v.key, v.x, v.y]), b.map((v) => [v.key, v.x, v.y]));
   // Every visitor set off at or before now.
   for (const v of a) assert.ok(Number(v.key.split('.')[0]) <= 3000);
+});
+
+test('rare events keep their gap, stay in their zones, and are rare', () => {
+  let total = 0;
+  let hours = 0;
+  for (let k = 0; k < 60; k++) {
+    const biome = rollBiome(oceanKey('ev', k), courseKey('ev'));
+    const all = eventsUpTo(biome, 4 * 3600);
+    hours += 4;
+    total += all.length;
+    for (let i = 1; i < all.length; i++) assert.ok(all[i].start - all[i - 1].start >= 8 * 60, 'events too close');
+    for (const e of all) assert.ok(EVENTS[e.kind].zones.includes(depthAt(Math.floor(e.start / 60) * 60).zone), `${e.kind} out of its zone`);
+  }
+  // Somewhere around a few in ten hours; never a parade.
+  assert.ok(total / hours < 0.5, `${total} events in ${hours} hours`);
+  assert.ok(total > 0, 'no events at all in 240 hours');
+});
+
+test('an event is under way exactly across its own span', () => {
+  for (let k = 0; k < 200; k++) {
+    const biome = rollBiome(oceanKey('span', k), courseKey('span'));
+    for (let m = 1; m < 240; m++) {
+      const e = eventAtMinute(biome, m);
+      if (!e) continue;
+      const mid = e.start + e.seconds / 2;
+      assert.ok(eventsAt(biome, mid).some((x) => x.event.start === e.start));
+      assert.ok(!eventsAt(biome, e.start + e.seconds + 1).some((x) => x.event.start === e.start));
+      return;
+    }
+  }
+  assert.fail('no event found to check');
+});
+
+test('the recap names an animal that really swam by, the same every time', () => {
+  const key = oceanKey('rc', 1_700_000_000_000);
+  const a = diveRecap(key, courseKey('rc'), 70 * 60);
+  const b = diveRecap(key, courseKey('rc'), 70 * 60);
+  assert.deepEqual([a.meters, a.zone, a.notable?.id, a.event], [b.meters, b.zone, b.notable?.id, b.event]);
+  assert.equal(a.zone, 'midnight');
+  assert.ok(a.notable, 'nothing met in seventy minutes');
+  const biome = rollBiome(key, courseKey('rc'));
+  let seen = false;
+  for (let s = 0; s <= 70 * 60 && !seen; s++) seen = spawnAt(biome, s)?.id === a.notable!.id;
+  assert.ok(seen);
+  // It names something from the deepest water the session reached.
+  assert.equal(a.notable!.zone, 2);
+  // A session too short for anything is still a depth.
+  assert.equal(diveRecap(key, courseKey('rc'), 0).meters, 0);
+});
+
+test('spawnAt agrees with who is drawn on a full screen', () => {
+  const biome = rollBiome(oceanKey('sp', 3), courseKey('sp'));
+  const view = { width: 1280, height: 800 };
+  const t = 1800;
+  const drawn = new Set(visitorsAt(biome, t, view).map((v) => v.key.split('.')[0]));
+  for (const slot of drawn) assert.ok(spawnAt(biome, Number(slot)), `slot ${slot} drawn but not spawned`);
 });
