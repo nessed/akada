@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import HandNote from '@/components/notebook/HandNote';
 import StudyFan from '@/components/StudyFan';
+import WoodScene from '@/components/WoodScene';
 import type { TimerDrawing } from '@/lib/preferences';
 
 const CHOICES: { v: TimerDrawing; label: string; word: string; color: string }[] = [
   { v: 'tree', label: 'Tree', word: 'a tree', color: '#A8B89B' },
   { v: 'jelly', label: 'Jellyfish', word: 'a jellyfish', color: '#B5A8C9' },
+  { v: 'wood', label: 'Wood', word: 'a wood', color: '#A8B89B' },
 ];
 
 /**
@@ -57,6 +59,19 @@ export default function TimerDrawingPicker({
                     selected ? 'border-ink-soft' : 'border-line-soft'
                   }`}
                 >
+                  {choice.v === 'wood' ? (
+                    /* The wood as it stands an hour and three quarters in:
+                       young trees behind, the scrub in, still. */
+                    <span className="pointer-events-none relative block h-[118px] w-full max-w-[150px] overflow-hidden">
+                      <WoodScene
+                        mode="frame"
+                        courseId="settings"
+                        color={choice.color}
+                        preview={{ focus: 105 * 60, key: 'wood1:settings' }}
+                        hero={{ progress: 0.8, seed: 'settings', depth: 6, trunkWidth: 5, padTop: 8, baseOffset: 14, ground: true, interactive: false }}
+                      />
+                    </span>
+                  ) : (
                   <StudyFan
                     species={choice.v}
                     progress={0.8}
@@ -70,6 +85,7 @@ export default function TimerDrawingPicker({
                     interactive={false}
                     className="pointer-events-none block h-[118px] w-full max-w-[150px]"
                   />
+                  )}
                   <span className={`eyebrow ${selected ? 'text-ink' : ''}`}>{choice.label}</span>
                 </button>
               );
@@ -77,7 +93,7 @@ export default function TimerDrawingPicker({
           </div>
           <p className="mt-2.5 mb-0 text-right">
             <HandNote size={16} rotate={-1.5} color="var(--muted)">
-              same growth either way, only the drawing changes
+              same growth whichever you pick, only the drawing changes
             </HandNote>
           </p>
         </div>

@@ -671,7 +671,95 @@ natural-history plate draws one, in the course colour, never a cartoon.
 
 Geometry and drawing are in `lib/jelly.ts` (`buildJelly`, `drawJelly`,
 `jellyBeat`); `StudyFan` draws it when `species="jelly"`. The Settings row
-shows both choices as the real drawings, grown most of the way.
+shows every choice as the real drawing, grown most of the way.
+
+### The wood
+The third drawing, picked in Settings › Timer beside the tree and the
+jellyfish ("The timer draws a wood", `timerDrawing: 'wood'`). It is the
+tree, exactly the tree, standing in a land that ages as the reader sits:
+grass comes up round its foot in the first minutes, the meadow flowers over
+the first quarter hour, bushes come with the scrub, young trees rise behind
+it, and a long sitting ends in old growth with a fallen log, fungi and a
+trunk too wide for the page. Every rule above about the fan holds for the
+tree in the middle of it; the wood is what stands around it. Code in
+`lib/wood/` (pure, node-tested in `lib/wood/wood.test.ts`) and
+`components/WoodScene.tsx`.
+
+- **Succession runs on focus.** The land ages on the sitting's focus time,
+  pauses and breaks left out, and never goes back: meadow from 0, scrub from
+  15 minutes, young wood from 50, high wood from 110, old growth from 180
+  (`lib/wood/succession.ts`). A line under the clock says where it has got
+  to, "young wood · 46 years", the digits in mono and the words in the
+  serif, the same division the "in this session" line makes. When it turns
+  a stage the wind gusts through and a note in the hand appears in the
+  margin for a few seconds ("scrub, year 5"), and then the margin is clear.
+- **The page stays a page.** In the block frame the wood is pencil and pale
+  wash over the reader's own paper tone, with the rules showing through: a
+  pencil horizon, a far treeline washed in, grass as a few strokes, the
+  wood's trees drawn as fans (the same drawing as the tree, grown on the same
+  rule, faded by how far back they stand). Nothing is painted edge to edge.
+  On the open screen it is the night paper and the wood is drawn in light on
+  dark, with stars and a moon off to one side of the crown, never behind it.
+- **Everything is rolled from a key.** Each sitting's wood is named by its
+  course and its start (`woodKey`), and everything in it (the weather, the
+  wind, the season's leaf, the layout of the land, who lives there) is
+  rolled from that name, so a reload, the still frame behind the log sheet
+  and the line on it all rebuild the same wood rather than remembering one.
+  Half of each stage's species are rolled from the course alone, so a course
+  grows the same regulars sitting after sitting.
+- **Who lives there.** Animals are rolled from a grammar the way the
+  Creature Lab rolls sea life: songbirds, a hawk, owls, bats, butterflies,
+  moths, dragonflies, bees, fireflies, deer, foxes, hares, hedgehogs, each a
+  body plan whose parts the dice move, drawn as one outline with its
+  markings clipped inside it, like a natural-history plate, never a cartoon.
+  Each has a Latin name that the same animal always keeps. They keep hours:
+  the block frame is a day wood, the open screen a night wood (owls, bats,
+  moths, and fireflies low in the grass flashing on their own species'
+  rhythm); deer and foxes come at dusk, which is either. Within a stage a
+  few species turn up all the time and most rarely, on a long tail. Nothing
+  says which is rare.
+- **Arrivals, not a simulation.** Focus time is cut into seconds and a hash
+  of the key decides whether anything arrives in each, more often as the land
+  matures; each visit is a pure function of time since it came. Nothing new
+  comes during a break, and whoever was there drifts on slowly and leaves.
+  A small screen shows fewer of the same animals, never different ones, and
+  big walkers are capped so a herd never walls off the page.
+- **Birds land on the tree.** A bird can fly in and sit on one of the tree's
+  real branches, riding it as the wind moves it, drawn on the tree's own
+  canvas in the same frame. Take hold of the tree and every bird on it goes.
+  When a new block's tree is younger than the branch a bird chose, it leaves
+  from where it sat.
+- **A family.** Each sitting's first tree rolls a habit of its own (how it
+  splits, how hard it reaches up, its leaf and its flower), and every later
+  block grows the child of the block before (`treeForBlock`). The fan with
+  no habit is drawn to the digit as it always was, which a checksum test
+  holds. A finished block's tree steps back into the wood behind the one on
+  the clock and stays there for the sitting, so a long afternoon leaves a
+  small grove of relatives. They stay in leaf; only the reader's own tree
+  flowers, because only it says a block is done.
+- **Rare, and unannounced.** Some old growth grows a fairy ring. About once
+  in two hours of focus a stag comes out on the far side, stops, and stands.
+  Nothing marks either.
+- **Pause, break, stillness.** A held clock lets the wood come to rest over
+  a moment (the scene clock is eased, not cut) and the whole scene takes the
+  same `quiet` loss of colour the tree always has. A break is a rest: the
+  land waits, nobody new comes, and the wind and whoever is there move at
+  under a third of the pace. Reduced motion gets a still wood, redrawn every
+  thirty seconds as it grows, with no wind and no birds moving.
+- **The log sheet.** Under the sitting's figures, one line in the serif, lower
+  case: "grew into young wood · 50 years · met *Sylviapis pratensis*", with
+  a small ink sketch of that animal. It names the rarest thing that came
+  and was visible on any size of screen. No counts, no score, nothing to
+  beat; a sitting the app closed for the reader gets no line, and nor does
+  any drawing but the wood.
+- **Sound.** With ambient noise on, the noise closes in as the canopy does:
+  open in the meadow, most of the way muffled by old growth (a lowpass in
+  `useAmbientNoise`, eased so the change is never heard as a step).
+- **Cost.** The standing land is drawn once per step of growth into its own
+  canvas, trees are cached sprites, the scene runs at thirty frames a second
+  on at most one and a half device pixels, and the tree only puts its ink
+  down two dozen times a second while nothing but the wind is moving it. A
+  governor thins the flowers and fireflies if frames run long.
 
 ### The break
 A block that runs out keeps running, shown as overrun rather than stopped for

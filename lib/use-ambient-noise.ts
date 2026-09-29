@@ -9,13 +9,37 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * study fan; the audio graph is unchanged, only its home is. Nothing here
  * touches the DOM, so the timer screen can stay about the session.
  */
-export function useAmbientNoise() {
+/* The lowpass at either end of `muffle`: open air, and deep under a canopy. */
+const OPEN_HZ = 18000;
+const MUFFLED_HZ = 1100;
+
+function cutoff(muffle: number): number {
+  const m = Math.min(1, Math.max(0, muffle));
+  // Exponential, because pitch is heard that way: halfway is not 9.5kHz.
+  return OPEN_HZ * Math.pow(MUFFLED_HZ / OPEN_HZ, m);
+}
+
+/**
+ * `muffle`, 0 to 1, closes the noise down the way a canopy overhead does,
+ * with a lowpass that follows it slowly. The wood sets it as the trees come
+ * in; everything else leaves it at 0 and hears the noise as it always was.
+ */
+export function useAmbientNoise(muffle = 0) {
   const [whiteNoiseOn, setWhiteNoiseOn] = useState(false);
   const [whiteNoiseError, setWhiteNoiseError] = useState('');
   const whiteNoiseContextRef = useRef<AudioContext | null>(null);
   const whiteNoiseBufferRef = useRef<AudioBuffer | null>(null);
   const whiteNoiseSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const whiteNoiseGainRef = useRef<GainNode | null>(null);
+  const whiteNoiseFilterRef = useRef<BiquadFilterNode | null>(null);
+  const muffleRef = useRef(muffle);
+
+  useEffect(() => {
+    muffleRef.current = muffle;
+    const context = whiteNoiseContextRef.current;
+    const filter = whiteNoiseFilterRef.current;
+    if (context && filter) filter.frequency.setTargetAtTime(cutoff(muffle), context.currentTime, 1.5);
+  }, [muffle]);
   const whiteNoiseStartingRef = useRef(false);
 
 
@@ -28,8 +52,10 @@ export function useAmbientNoise() {
       }
       whiteNoiseSourceRef.current?.disconnect();
       whiteNoiseGainRef.current?.disconnect();
+      whiteNoiseFilterRef.current?.disconnect();
       whiteNoiseSourceRef.current = null;
       whiteNoiseGainRef.current = null;
+      whiteNoiseFilterRef.current = null;
       whiteNoiseContextRef.current?.close();
       whiteNoiseContextRef.current = null;
     };
@@ -147,6 +173,7 @@ export function useAmbientNoise() {
     const context = whiteNoiseContextRef.current;
     const source = whiteNoiseSourceRef.current;
     const gain = whiteNoiseGainRef.current;
+    const filter = whiteNoiseFilterRef.current;
 
     if (context && gain) {
       gain.gain.cancelScheduledValues(context.currentTime);
@@ -161,6 +188,8 @@ export function useAmbientNoise() {
       }
       source?.disconnect();
       gain?.disconnect();
+      filter?.disconnect();
+      if (whiteNoiseFilterRef.current === filter) whiteNoiseFilterRef.current = null;
       if (whiteNoiseSourceRef.current === source) whiteNoiseSourceRef.current = null;
       if (whiteNoiseGainRef.current === gain) whiteNoiseGainRef.current = null;
     }, 90);
@@ -193,12 +222,18 @@ export function useAmbientNoise() {
       source.loop = true;
       gain.gain.setValueAtTime(0, context.currentTime);
       gain.gain.linearRampToValueAtTime(0.45, context.currentTime + 0.12);
-      source.connect(gain);
+      const filter = context.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.Q.value = 0.5;
+      filter.frequency.setValueAtTime(cutoff(muffleRef.current), context.currentTime);
+      source.connect(filter);
+      filter.connect(gain);
       gain.connect(context.destination);
       source.start();
 
       whiteNoiseSourceRef.current = source;
       whiteNoiseGainRef.current = gain;
+      whiteNoiseFilterRef.current = filter;
       setWhiteNoiseOn(true);
     } catch (error) {
       console.error('Failed to play white noise:', error);

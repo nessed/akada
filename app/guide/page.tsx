@@ -127,7 +127,8 @@ export default function GuidePage() {
           course. Pick a <strong>block</strong>{' '}of 25, 45 or 60 minutes, or{' '}
           <strong>Untimed</strong>{' '}if you just want it to run. While it runs a small
           branching drawing grows in the course&apos;s colour, so there is something to
-          look at that isn&apos;t a clock ticking down. Take a break from the timer screen;
+          look at that isn&apos;t a clock ticking down. In Settings you can have it grow
+          as a jellyfish instead, or stand in a wood that ages the longer you sit. Take a break from the timer screen;
           when you end it, the next block waits at zero until you press Start.
         </p>
         <p>
