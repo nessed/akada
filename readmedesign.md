@@ -677,8 +677,9 @@ Geometry and drawing are in `lib/jelly.ts` (`buildJelly`, `drawJelly`,
 shows every choice as the real drawing, grown most of the way.
 
 ### The wood
-The third drawing, picked in Settings › Timer beside the tree and the
-jellyfish ("The timer draws a wood", `timerDrawing: 'wood'`). It is the
+The fourth drawing, picked in Settings › Timer beside the tree, the
+jellyfish and the deep ("The timer draws a wood", `timerDrawing: 'wood'`).
+Where the deep sinks, the wood stays put and grows up round the reader. It is the
 tree, exactly the tree, standing in a land that ages as the reader sits:
 grass comes up round its foot in the first minutes, the meadow flowers over
 the first quarter hour, bushes come with the scrub, young trees rise behind
