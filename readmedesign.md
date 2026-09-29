@@ -850,6 +850,13 @@ only ever grows, it never runs backwards, and none of it touches progress.
   tail. Nothing is announced and nothing is scored.
 - **The noise darkens.** With ambient noise on, a lowpass follows the depth:
   open at the surface, a low hush on the floor.
+- **Aquarium sounds.** Only while the deep is the chosen drawing, a second
+  button (three bubbles) sits beside the ambient noise one and plays a tank
+  heard from across a room: a low bed of water that swells slowly, a thin
+  shimmer, the hum of a pump, and bubbles that rise now and then, sometimes
+  in a short string. Synthesised (`lib/use-aquarium-sound.ts`), so it works
+  on iOS and offline, it muffles with the same depth the noise does, and it
+  is independent of the pink noise: either, both or neither.
 
 **The recap.** On the finish sheet, under the chain, one line of fact in the
 serif at 13px, lowercase, with a small ink drawing of the animal beside it:
