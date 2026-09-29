@@ -47,7 +47,49 @@ export interface FanTree {
   maxX: number;
   minY: number;
   depthMax: number;
+  /** Each branch's width as a share of its parent's, which the taper has to
+      land on for the joins to stay seamless. */
+  taper: number;
 }
+
+/**
+ * The habit of a tree: how wide it splits, how straight it keeps, how fast
+ * its branches shorten. The defaults are the fan as it has always grown, to
+ * the digit, because a saved session redraws from its seed and a changed
+ * constant would redraw every tree anyone has ever grown. The wood rolls its
+ * own (lib/wood/tree.ts) so that each block's tree is kin to the last one
+ * rather than a copy of it.
+ */
+export interface FanShape {
+  /** How far a split opens, in radians: `spreadMin` plus up to `spreadVar`. */
+  spreadMin: number;
+  spreadVar: number;
+  /** How far each branch strays from its even place in the split. */
+  jitter: number;
+  /** The pull back toward straight up: a branch keeps `keep` of its own angle
+      and takes `up` of vertical. The two sum to one. */
+  keep: number;
+  up: number;
+  /** A branch's length as a share of its parent's: `lenMin` plus up to `lenVar`. */
+  lenMin: number;
+  lenVar: number;
+  /** A branch's width as a share of its parent's. */
+  taper: number;
+  /** How far a branch bows off its straight line, either side, as a share of its length. */
+  bow: number;
+}
+
+export const DEFAULT_SHAPE: FanShape = {
+  spreadMin: 0.5,
+  spreadVar: 0.35,
+  jitter: 0.3,
+  keep: 0.9,
+  up: 0.1,
+  lenMin: 0.7,
+  lenVar: 0.12,
+  taper: 0.72,
+  bow: 0.22,
+};
 
 /**
  * A small LCG rather than Math.random, because the fan has to be reproducible
@@ -83,8 +125,10 @@ export function seedFrom(value: string | null | undefined, fallback = 19): numbe
  * @param depthMax how many splits deep to go. 7 for the block frame, 10 for
  *   an open session that has a whole screen to fill.
  * @param tripleP chance a split goes three ways rather than two.
+ * @param shape the tree's habit. Left out, the fan grows exactly as it
+ *   always has from the same seed.
  */
-export function buildFan(seed: number, depthMax = 7, tripleP = 0.2): FanTree {
+export function buildFan(seed: number, depthMax = 7, tripleP = 0.2, shape: FanShape = DEFAULT_SHAPE): FanTree {
   const r = rng(seed);
   const bow = rng(seed * 7 + 3);
   const segs: FanSegment[] = [];
@@ -102,17 +146,17 @@ export function buildFan(seed: number, depthMax = 7, tripleP = 0.2): FanTree {
     const x1 = x + Math.cos(ang) * len;
     const y1 = y + Math.sin(ang) * len;
     const self = segs.length;
-    segs.push({ x, y, x1, y1, w, d, p, a: ang, len, bow: (bow() - 0.5) * 0.22, kids: 0 });
+    segs.push({ x, y, x1, y1, w, d, p, a: ang, len, bow: (bow() - 0.5) * shape.bow, kids: 0 });
     if (p >= 0) segs[p].kids++;
 
     const n = d < 1 ? 2 : r() < tripleP ? 3 : 2;
-    const spread = 0.5 + r() * 0.35;
+    const spread = shape.spreadMin + r() * shape.spreadVar;
     for (let i = 0; i < n; i++) {
-      const off = (i - (n - 1) / 2) * spread + (r() - 0.5) * 0.3;
+      const off = (i - (n - 1) / 2) * spread + (r() - 0.5) * shape.jitter;
       // Pull each branch a tenth of the way back toward straight up, so the
       // fan keeps reaching for the top of its frame instead of splaying flat.
-      const a = (ang + off) * 0.9 + (-Math.PI / 2) * 0.1;
-      rec(x1, y1, a, len * (0.7 + r() * 0.12), w * 0.72, d + 1, self);
+      const a = (ang + off) * shape.keep + (-Math.PI / 2) * shape.up;
+      rec(x1, y1, a, len * (shape.lenMin + r() * shape.lenVar), w * shape.taper, d + 1, self);
     }
   };
 
@@ -126,7 +170,7 @@ export function buildFan(seed: number, depthMax = 7, tripleP = 0.2): FanTree {
     maxX = Math.max(maxX, s.x1);
     minY = Math.min(minY, s.y1);
   }
-  return { segs, minX, maxX, minY, depthMax };
+  return { segs, minX, maxX, minY, depthMax, taper: shape.taper };
 }
 
 export interface FanDrawOptions {
@@ -157,14 +201,51 @@ export interface FanDrawOptions {
   /** Device pixels to a CSS pixel, for the hairlines. */
   px?: number;
   /** Leaf fill and edge. Given, the growing tips carry a leaf each and a
-      finished fan flowers at its outermost tips. */
-  leaf?: { fill: string; edge: string; bloom: string; eye: string };
+      finished fan flowers at its outermost tips. `form` and `flower` are the
+      wood's: a tree's own leaf and bloom, left out for the fan's. */
+  leaf?: {
+    fill: string;
+    edge: string;
+    bloom: string;
+    eye: string;
+    form?: LeafForm;
+    flower?: FlowerForm;
+    /** One outermost tip in this many flowers. Three for the fan. */
+    every?: number;
+  };
   /** The pencil underdrawing: the shape still to come, dotted in this ink.
       Only where a block has a top to reach; an open session has no shape to
       sketch ahead of it. */
   sketch?: string;
   /** A drawn line for the stem to stand on, in this ink. */
   ground?: string;
+  /** Wipe the canvas first. On by default; the wood draws several trees into
+      one canvas and turns it off. */
+  clear?: boolean;
+}
+
+/** A leaf's outline: the fan's own is `oval`. */
+export type LeafForm = 'oval' | 'round' | 'narrow' | 'broad';
+/** What a finished tree flowers with: the fan's own is `disc`. */
+export type FlowerForm = 'disc' | 'star' | 'bell' | 'cluster';
+
+/* Length and breadth of each leaf form against the fan's oval, which is the
+   one every saved session was drawn with and so stays exactly as it was. */
+const LEAF_FORMS: Record<LeafForm, [number, number]> = {
+  oval: [1, 0.42],
+  round: [0.8, 0.72],
+  narrow: [1.25, 0.24],
+  broad: [1.05, 0.56],
+};
+
+/** Where the fan was put on its canvas, for anything that has to find a
+    branch afterwards. */
+export interface FanLayout {
+  sc: number;
+  ox: number;
+  oy: number;
+  bent: boolean;
+  progress: number;
 }
 
 /* Scratch for the bent pose: the end point and absolute angle of every
@@ -221,7 +302,7 @@ export function drawFan(
   width: number,
   height: number,
   opts: FanDrawOptions,
-): void {
+): FanLayout | null {
   const {
     progress,
     colors,
@@ -236,13 +317,14 @@ export function drawFan(
     leaf,
     sketch,
     ground,
+    clear = true,
   } = opts;
 
-  ctx.clearRect(0, 0, width, height);
+  if (clear) ctx.clearRect(0, 0, width, height);
 
   const spanX = tree.maxX - tree.minX;
   const spanY = -tree.minY;
-  if (spanX <= 0 || spanY <= 0) return;
+  if (spanX <= 0 || spanY <= 0) return null;
 
   const sc = Math.min((width * widthFill) / spanX, (height - padTop - Math.max(0, baseOffset)) / spanY);
   const ox = width / 2 - ((tree.minX + tree.maxX) / 2) * sc;
@@ -346,7 +428,7 @@ export function drawFan(
     const ey = qy + (cy + (by - cy) * t - qy) * t;
 
     const w0 = Math.max(1.4, s.w * trunkWidth);
-    const w1 = Math.max(1.2, s.w * 0.72 * trunkWidth);
+    const w1 = Math.max(1.2, s.w * tree.taper * trunkWidth);
     const wE = w0 + (w1 - w0) * t;
     const col = ramp[s.d];
     // The outermost twigs sit back a little so the fan does not read as a
@@ -406,33 +488,130 @@ export function drawFan(
      which is enough to read as a crown in bloom without speckling it. */
   if (leaf && tips.length) {
     const scale = Math.min(1.4, Math.max(0.8, trunkWidth / (11 * px))) * px;
+    const [long, broad] = LEAF_FORMS[leaf.form ?? 'oval'];
+    const every = leaf.every ?? 3;
     ctx.lineWidth = 0.8 * px;
     ctx.strokeStyle = leaf.edge;
     for (const tip of tips) {
       if (tip.done) {
-        if (tip.i % 3) continue;
-        ctx.fillStyle = leaf.bloom;
-        ctx.beginPath();
-        ctx.arc(tip.x, tip.y, 3.4 * scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = leaf.eye;
-        ctx.beginPath();
-        ctx.arc(tip.x, tip.y, 1.1 * scale, 0, Math.PI * 2);
-        ctx.fill();
+        if (tip.i % every) continue;
+        drawFlower(ctx, tip.x, tip.y, tip.a, scale, leaf.flower ?? 'disc', leaf.bloom, leaf.eye);
         continue;
       }
-      const size = (3 + 4.5 * Math.min(1, tip.grown * 1.4)) * scale;
+      const size = (3 + 4.5 * Math.min(1, tip.grown * 1.4)) * scale * long;
       const a = tip.a + (tip.i % 2 ? 0.5 : -0.5);
       const lx = tip.x + Math.cos(a) * size * 0.8;
       const ly = tip.y + Math.sin(a) * size * 0.8;
       ctx.fillStyle = leaf.fill;
       ctx.beginPath();
-      ctx.ellipse(lx, ly, size, size * 0.42, a, 0, Math.PI * 2);
+      ctx.ellipse(lx, ly, size, (size / long) * broad, a, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
   }
+
+  return { sc, ox, oy, bent, progress: p };
+}
+
+/**
+ * One flower on a finished tip. The disc with its dark eye is the fan's, and
+ * is drawn exactly as it always was; the others are the wood's trees, each
+ * of which flowers in its own way.
+ */
+function drawFlower(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  along: number,
+  scale: number,
+  form: FlowerForm,
+  bloom: string,
+  eye: string,
+): void {
+  ctx.fillStyle = bloom;
+  if (form === 'star') {
+    // Five petals, turned off the branch so no two tips flower the same way up.
+    for (let k = 0; k < 5; k++) {
+      const a = along + (k / 5) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.ellipse(x + Math.cos(a) * 2.6 * scale, y + Math.sin(a) * 2.6 * scale, 2.3 * scale, 1.2 * scale, a, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  } else if (form === 'bell') {
+    // A cup hung from the tip, mouth down, whichever way the twig points.
+    ctx.beginPath();
+    ctx.moveTo(x - 2.6 * scale, y + 0.4 * scale);
+    ctx.quadraticCurveTo(x - 2.8 * scale, y + 4.2 * scale, x - 3.4 * scale, y + 5 * scale);
+    ctx.lineTo(x + 3.4 * scale, y + 5 * scale);
+    ctx.quadraticCurveTo(x + 2.8 * scale, y + 4.2 * scale, x + 2.6 * scale, y + 0.4 * scale);
+    ctx.quadraticCurveTo(x, y - 1.6 * scale, x - 2.6 * scale, y + 0.4 * scale);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = eye;
+    ctx.beginPath();
+    ctx.arc(x, y + 5.6 * scale, 0.8 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  } else if (form === 'cluster') {
+    // Three small heads in a knot rather than one open face.
+    for (let k = 0; k < 3; k++) {
+      const a = along + (k / 3) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * 2.1 * scale, y + Math.sin(a) * 2.1 * scale, 1.9 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    return;
+  } else {
+    ctx.beginPath();
+    ctx.arc(x, y, 3.4 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = eye;
+  ctx.beginPath();
+  ctx.arc(x, y, 1.1 * scale, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * How much of segment `i` a fan at `progress` has drawn, 0 to 1. The same
+ * reading drawFan makes: each depth gets an equal slice of the run.
+ */
+export function fanGrown(tree: FanTree, progress: number, i: number): number {
+  const run = Math.min(1, Math.max(0, progress)) * (tree.depthMax + 1);
+  return Math.min(1, Math.max(0, run - tree.segs[i].d));
+}
+
+/**
+ * A point on segment `i` as the fan was last drawn, in the canvas's own
+ * pixels: `u` is the share of the way from where the branch leaves its
+ * parent to its tip, along the same bowed curve the ink follows, and `a` is
+ * the branch's heading there. It reads the pose drawFan has just written, so
+ * a bird sitting on a branch rides the sway with it; call it straight after
+ * drawFan, before anything else draws a fan into the same scratch.
+ */
+export function fanPointAt(tree: FanTree, layout: FanLayout, i: number, u: number): { x: number; y: number; a: number } {
+  const s = tree.segs[i];
+  const { sc, ox, oy, bent } = layout;
+  const x0 = bent ? (s.p >= 0 ? poseX[s.p] : 0) : s.x;
+  const y0 = bent ? (s.p >= 0 ? poseY[s.p] : 0) : s.y;
+  const x1 = bent ? poseX[i] : s.x1;
+  const y1 = bent ? poseY[i] : s.y1;
+  const ax = ox + x0 * sc;
+  const ay = oy + y0 * sc;
+  const bx = ox + x1 * sc;
+  const by = oy + y1 * sc;
+  const len = Math.hypot(bx - ax, by - ay) || 1;
+  const cx = (ax + bx) / 2 - ((by - ay) / len) * s.bow * len;
+  const cy = (ay + by) / 2 + ((bx - ax) / len) * s.bow * len;
+  const k = 1 - u;
+  const x = k * k * ax + 2 * u * k * cx + u * u * bx;
+  const y = k * k * ay + 2 * u * k * cy + u * u * by;
+  const tx = 2 * k * (cx - ax) + 2 * u * (bx - cx);
+  const ty = 2 * k * (cy - ay) + 2 * u * (by - cy);
+  return { x, y, a: Math.atan2(ty, tx) };
 }
 
 /** Mix two hex colours, `t` of the way from `a` to `b`. */

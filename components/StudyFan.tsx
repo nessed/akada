@@ -1,9 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildFan, drawFan, fanShades, mixHex, seedFrom, type FanTree } from '@/lib/fan';
+import { buildFan, drawFan, fanShades, mixHex, seedFrom, type FanLayout, type FanTree } from '@/lib/fan';
 import { buildJelly, PLAIN_BODY, drawJelly, jellyBeat, jellyFrame, jellyInk, jellyStartle, type JellyBody, type JellyShape } from '@/lib/jelly';
 import type { TimerDrawing } from '@/lib/preferences';
+import type { TreeGenome } from '@/lib/wood/tree';
+
+/** What the wood is handed after each frame of the tree, to draw on it. */
+export interface FanFrame {
+  tree: FanTree;
+  layout: FanLayout;
+  /** Device pixels to a CSS pixel. */
+  px: number;
+  /** A hand has hold of the tree right now. */
+  held: boolean;
+}
 
 interface Props {
   /** 0 to 1. At 1 the fan fills its frame; in block mode that is the target. */
@@ -43,6 +54,15 @@ interface Props {
   /** The jelly's counts and proportions. Left out, it is the plain jelly the
       "jellyfish" option has always drawn; the ocean rolls one per block. */
   body?: JellyBody;
+  /** The wood's tree: its own habit, leaf and flower. Left out, the fan. */
+  habit?: TreeGenome;
+  /** The wind the wood is blowing, in radians of lean. Read every frame. */
+  wind?: { current: number };
+  /** Keep drawing every frame, for a wood whose birds sit on the branches. */
+  alive?: boolean;
+  /** Drawn onto the tree's own canvas straight after the tree, so whatever
+      sits on a branch moves with it. */
+  overlay?: (ctx: CanvasRenderingContext2D, frame: FanFrame) => void;
   className?: string;
 }
 
@@ -175,6 +195,10 @@ export default function StudyFan({
   resting = false,
   species = 'tree',
   body,
+  habit,
+  wind,
+  alive = false,
+  overlay,
   className = '',
 }: Props) {
   // The deep's hero is the jellyfish; the ocean around it is OceanScene's.
@@ -206,6 +230,21 @@ export default function StudyFan({
   const stretchRef = useRef(strand());
   const foldRef = useRef(strand(FOLD_STIFFNESS, FOLD_DAMPING));
   const restingRef = useRef(resting);
+  const overlayRef = useRef(overlay);
+  const windRef = useRef(wind);
+  const aliveRef = useRef(alive);
+  const habitRef = useRef(habit);
+  // Read by the draw loop, which outlives any one render. Declared ahead of
+  // the effects that read them, so they are current by the time those run.
+  useEffect(() => {
+    overlayRef.current = overlay;
+    windRef.current = wind;
+    aliveRef.current = alive;
+    habitRef.current = habit;
+  });
+  /* The habit's identity for the geometry effect: a new object every render
+     would rebuild the tree sixty times a second. */
+  const habitKey = habit ? JSON.stringify(habit) : '';
 
   /* Whether the fan answers a hand at all. Decided on the client, because it
      turns on the reader's reduced-motion setting: someone who has asked for
@@ -265,10 +304,15 @@ export default function StudyFan({
   // Rebuilding the geometry is the expensive half, so it only happens when
   // the shape itself changes, never on a progress tick.
   useEffect(() => {
-    treeRef.current = buildFan(seedFrom(seed), depth, tripleP);
+    treeRef.current = buildFan(seedFrom(seed), depth, tripleP, habitRef.current?.shape);
     jellyRef.current = buildJelly(seedFrom(seed), body ?? PLAIN_BODY);
     shownRef.current = 0;
-  }, [seed, depth, tripleP, body]);
+  }, [seed, depth, tripleP, body, habitKey]);
+
+  // The wood wakes a parked tree when it comes alive again.
+  useEffect(() => {
+    if (alive) kickRef.current();
+  }, [alive]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -285,12 +329,19 @@ export default function StudyFan({
     const page = getComputedStyle(canvas);
     const pencil = light ? '#4A4438' : page.getPropertyValue('--line-strong').trim() || '#C9C0A8';
     const paper = light ? '#1A1815' : page.getPropertyValue('--paper').trim() || '#FBF8EF';
+    /* A wood's tree turns its leaves a little warm or cool of the course's
+       colour; the stem stays the course's own. */
+    const tint = habitRef.current?.tint ?? 0;
+    const leafColor = tint ? mixHex(color, tint > 0 ? '#E2B594' : '#9FC1B0', Math.abs(tint) * 0.22) : color;
     const leaf = leaves
       ? {
-          fill: mixHex(color, paper, light ? 0.35 : 0.45),
+          fill: mixHex(leafColor, paper, light ? 0.35 : 0.45),
           edge: light ? mixHex(color, '#FFFFFF', 0.25) : mixHex(color, '#000000', 0.22),
           bloom: light ? mixHex(color, '#FFFFFF', 0.55) : mixHex(color, paper, 0.2),
           eye: light ? paper : mixHex(color, '#000000', 0.45),
+          form: habitRef.current?.leaf,
+          flower: habitRef.current?.flower,
+          every: habitRef.current?.every,
         }
       : undefined;
     const ink = jellyInk(color, paper, light);
@@ -304,6 +355,7 @@ export default function StudyFan({
     const fold = new Array<number>(depth + 1).fill(0);
     const lagMax = Math.max(Math.round(depth * LAG_PER_DEPTH), Math.round(TRAIL_SAMPLES * TRAIL_LAG));
     let disposed = false;
+    let lastPaint = 0;
 
     /* The canvas is sized in device pixels so the strokes stay crisp on a
        retina screen, and re-measured on resize because an open-mode fan is
@@ -356,7 +408,7 @@ export default function StudyFan({
         });
         return;
       }
-      drawFan(ctx, tree, canvas.width, canvas.height, {
+      const layout = drawFan(ctx, tree, canvas.width, canvas.height, {
         progress: shownRef.current,
         colors,
         trunkWidth: trunkWidth * dpr,
@@ -371,6 +423,9 @@ export default function StudyFan({
         sketch: sketch ? pencil : undefined,
         ground: ground ? pencil : undefined,
       });
+      if (layout && overlayRef.current) {
+        overlayRef.current(ctx, { tree, layout, px: dpr, held: handRef.current != null });
+      }
     };
 
     /* One frame of the sway, written into the arrays the painter reads. Each
@@ -382,7 +437,9 @@ export default function StudyFan({
       const stretch = stretchRef.current;
       const closing = foldRef.current;
       const held = restingRef.current;
-      sway.step(hand ? hand.held.bend : null);
+      // The wind is where the tree comes to rest, so it leans into a gust
+      // and swings back through the spring the hand uses.
+      sway.step(hand ? hand.held.bend : null, windRef.current?.current ?? 0);
       stretch.step(hand ? hand.held.slack : null, held ? FOLD_SLACK : 0);
       closing.step(null, held ? FOLD_REST : 0);
       // Only the depths that have actually grown carry the lean, with a floor
@@ -449,12 +506,21 @@ export default function StudyFan({
       // catches up over about a second, which is what makes it grow.
       else shownRef.current = shown + gap * 0.045;
 
-      paint();
+      /* A tree kept alive by the wood only sways in the wind, which reads
+         the same at two dozen frames a second as at sixty; the springs still
+         step every frame so the swing is right, but the ink is only put
+         down when a hand is on it, it is still growing, or a frame is due. */
+      const now = performance.now();
+      if (!aliveRef.current || handRef.current || !grown || now - lastPaint > 40) {
+        paint();
+        lastPaint = now;
+      }
 
       /* A jelly swims for as long as it is open, so its loop never parks
          while the clock runs. A hidden tab gets no frames anyway. */
-      // A preview that cannot be touched (Settings) is a picture, and parks.
-      const swimming = jelly && !reduced && !restingRef.current && interactive;
+      // A preview that cannot be touched (Settings) is a picture, and parks,
+      // unless the wood is keeping it alive for the birds on its branches.
+      const swimming = (jelly && !reduced && !restingRef.current && interactive) || aliveRef.current;
       if (grown && rested && !swimming) {
         rafRef.current = null;
         return;
@@ -477,11 +543,17 @@ export default function StudyFan({
 
     return () => {
       disposed = true;
+      // Effects that run between this cleanup and the next mount (holding
+      // the clock, the wood waking the tree) call the kick; left pointing
+      // here it would book a frame for a loop that is already gone, and that
+      // stale booking would keep the next loop from ever starting. It did,
+      // for every drawing in the Settings preview.
+      kickRef.current = () => {};
       window.removeEventListener('resize', onResize);
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly, interactive]);
+  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly, interactive, habitKey]);
 
   /* Where the jelly is in the canvas, for a hand to land on. The tree can be
      taken hold of anywhere in its frame; a jelly is a thing in the water, and

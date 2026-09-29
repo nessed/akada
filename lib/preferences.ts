@@ -38,12 +38,13 @@ export type Density = 'cozy' | 'comfy' | 'compact';
 export type PrimaryAccent = 'classic' | 'green';
 /**
  * What the timer draws as a sitting goes on: the fan (lib/fan.ts), the
- * jellyfish (lib/jelly.ts), or the deep (lib/ocean), where the jellyfish
+ * jellyfish (lib/jelly.ts), the deep (lib/ocean), where the jellyfish
  * sinks through a generated ocean that fills with animals as the reader
- * sits. All three grow on the same progress, answer the same hand and close
- * the same way on a pause.
+ * sits, or the wood (lib/wood), where the fan stands in a land that ages
+ * from meadow to old growth as the reader sits. All of them grow on the
+ * same progress, answer the same hand and close the same way on a pause.
  */
-export type TimerDrawing = 'tree' | 'jelly' | 'ocean';
+export type TimerDrawing = 'tree' | 'jelly' | 'ocean' | 'wood';
 
 export interface Preferences {
   paperTone: PaperTone;
@@ -69,7 +70,7 @@ export interface Preferences {
    * off, so a block that ends just keeps counting the way it always did.
    */
   breakMinutes: number;
-  /** The fan, the jellyfish or the deep. See `TimerDrawing`. */
+  /** The fan, the jellyfish, the deep or the wood. See `TimerDrawing`. */
   timerDrawing: TimerDrawing;
   hideWeekends: boolean;
   /**
@@ -118,7 +119,7 @@ const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
 const PRIMARY_ACCENT_VALUES: PrimaryAccent[] = ['classic', 'green'];
 /** Zero is "no break"; the rest are what the timer offers. */
 const BREAK_MINUTE_VALUES = [0, 5, 10, 15];
-const TIMER_DRAWING_VALUES: TimerDrawing[] = ['tree', 'jelly', 'ocean'];
+const TIMER_DRAWING_VALUES: TimerDrawing[] = ['tree', 'jelly', 'ocean', 'wood'];
 
 function sanitizePreferences(value: unknown): Preferences {
   const parsed = value && typeof value === 'object' ? (value as Partial<Preferences>) : {};

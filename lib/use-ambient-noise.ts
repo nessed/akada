@@ -247,7 +247,8 @@ export function useAmbientNoise() {
     /** Set when the device refused audio, for the caller to show inline. */
     error: whiteNoiseError,
     toggle,
-    /** Darkens the noise with the ocean's depth; null leaves it as it was. */
+    /** Darkens the noise with the ocean's depth, or the wood's canopy closing
+        overhead; null leaves it as it was. */
     setDepth,
   };
 }

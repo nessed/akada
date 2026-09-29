@@ -6,13 +6,15 @@ import HandNote from '@/components/notebook/HandNote';
 import StudyFan from '@/components/StudyFan';
 import type { TimerDrawing } from '@/lib/preferences';
 
-/* The ocean's code is only fetched when someone opens this row. */
+/* The ocean's code and the wood's are only fetched when someone opens this row. */
 const OceanScene = dynamic(() => import('@/components/OceanScene'), { ssr: false });
+const WoodScene = dynamic(() => import('@/components/WoodScene'), { ssr: false });
 
 const CHOICES: { v: TimerDrawing; label: string; word: string; color: string }[] = [
   { v: 'tree', label: 'Tree', word: 'a tree', color: '#A8B89B' },
   { v: 'jelly', label: 'Jellyfish', word: 'a jellyfish', color: '#B5A8C9' },
   { v: 'ocean', label: 'The deep', word: 'the deep', color: '#A8BCC9' },
+  { v: 'wood', label: 'Wood', word: 'a wood', color: '#A8B89B' },
 ];
 
 /**
@@ -48,7 +50,7 @@ export default function TimerDrawingPicker({
 
       {open && (
         <div className="animate-fade-in">
-          <div className="mt-3.5 grid grid-cols-3 gap-2" role="radiogroup" aria-label="What the timer draws">
+          <div className="mt-3.5 grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="What the timer draws">
             {CHOICES.map((choice) => {
               const selected = choice.v === value;
               return (
@@ -88,6 +90,18 @@ export default function TimerDrawingPicker({
                         className="pointer-events-none absolute inset-0 h-full w-full"
                       />
                     </OceanScene>
+                  ) : choice.v === 'wood' ? (
+                    /* The wood as it stands an hour and three quarters in:
+                       young trees behind, the scrub in, still. */
+                    <span className="pointer-events-none relative block h-[118px] w-full max-w-[150px] overflow-hidden rounded-[6px]">
+                      <WoodScene
+                        mode="frame"
+                        courseId="settings"
+                        color={choice.color}
+                        preview={{ focus: 105 * 60, key: 'wood1:settings' }}
+                        hero={{ progress: 0.8, seed: 'settings', depth: 6, trunkWidth: 5, padTop: 8, baseOffset: 14, ground: true, interactive: false }}
+                      />
+                    </span>
                   ) : (
                     <StudyFan
                       species={choice.v}
@@ -110,7 +124,7 @@ export default function TimerDrawingPicker({
           </div>
           <p className="mt-2.5 mb-0 text-right">
             <HandNote size={16} rotate={-1.5} color="var(--muted)">
-              same growth all three ways; the deep also sinks as you sit
+              same growth every way; the deep sinks, the wood grows up round it
             </HandNote>
           </p>
         </div>

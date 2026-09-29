@@ -1134,3 +1134,19 @@ input[type='date']::-webkit-calendar-picker-indicator {
   pointer-events: none;
   background: color-mix(in srgb, var(--ink) 9%, transparent);
 }
+
+/* The wood's margin note when the land turns a stage ("scrub, year 5"):
+   written in, left a few seconds, and let go. See "The wood". */
+.stage-note {
+  display: inline-block;
+  animation: stage-note 6.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes stage-note {
+  0% { opacity: 0; transform: translateY(4px); }
+  8% { opacity: 1; transform: translateY(0); }
+  82% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-note { animation: none; }
+}

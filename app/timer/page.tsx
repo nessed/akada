@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
@@ -15,6 +15,9 @@ import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import { useNotice } from '@/components/Notice';
 import StudyFan from '@/components/StudyFan';
+import WoodScene from '@/components/WoodScene';
+import HandNote from '@/components/notebook/HandNote';
+import { arrival, successionAt } from '@/lib/wood/succession';
 import dynamic from 'next/dynamic';
 import type { ClearRect, OceanClock } from '@/components/OceanScene';
 import { mixHex } from '@/lib/fan';
@@ -137,6 +140,11 @@ export default function TimerPage() {
     if (noise.error) notify(noise.error);
   }, [noise.error, notify]);
   const [immersive, setImmersive] = useState(false);
+  /* The wood's margin note when the land turns a stage: "scrub, year 5",
+     in the hand, for a few seconds, and then the margin is clear again. */
+  const [stageNote, setStageNote] = useState<{ text: string; at: number } | null>(null);
+  const lastStageRef = useRef<number | null>(null);
+  const chromeRef = useRef<HTMLDivElement | null>(null);
 
   /* The screen as it stood the moment Finish was pressed. Stopping empties
      the timer, and with no target left a block screen read as an open one:
@@ -155,7 +163,14 @@ export default function TimerPage() {
   const focusSeconds = liveActive ? liveFocus : held?.focus ?? 0;
   // In the deep, the noise darkens as the water does. Stepped, so the
   // filter is only touched a few dozen times over a whole descent.
-  const noiseDepth = timerDrawing === 'ocean' ? Math.round(depthAt(focusSeconds).z * 50) / 50 : null;
+  // Under the wood's canopy it closes in the same way: open in the meadow,
+  // most of the way muffled by old growth.
+  const noiseDepth =
+    timerDrawing === 'ocean'
+      ? Math.round(depthAt(focusSeconds).z * 50) / 50
+      : timerDrawing === 'wood'
+        ? Math.round(arrival(successionAt(focusSeconds).z, 0.45, 0.45) * 0.85 * 50) / 50
+        : null;
   const setNoiseDepth = noise.setDepth;
   useEffect(() => setNoiseDepth(noiseDepth), [setNoiseDepth, noiseDepth]);
   const onBreak = liveActive ? liveOnBreak : held?.onBreak ?? false;
@@ -269,6 +284,27 @@ export default function TimerPage() {
   const face = stretchFace({ onBreak: resting, breakTarget, target, elapsed });
   const breakOver = resting && face.over;
   const showTotal = active != null && hasEarlierBlock(active.segments);
+
+  /* The wood reads the sitting's focus, not the stretch's: the land ages on
+     every block, and waits through the breaks. */
+  const woodFocus = liveActive ? liveFocus : held ? held.focus : pendingLog?.durationSeconds ?? 0;
+  const wood = timerDrawing === 'wood' ? successionAt(woodFocus) : null;
+  const woodStage = wood?.index ?? null;
+  useEffect(() => {
+    if (woodStage == null || !live) {
+      lastStageRef.current = woodStage;
+      return;
+    }
+    const before = lastStageRef.current;
+    lastStageRef.current = woodStage;
+    if (before != null && woodStage > before) {
+      const s = successionAt(woodFocus);
+      setStageNote({ text: `${s.name}, year ${s.years}`, at: Date.now() });
+      const id = window.setTimeout(() => setStageNote(null), 6500);
+      return () => window.clearTimeout(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [woodStage, live]);
 
   /* Space pauses, F finishes, Escape goes back. Typed into a field they mean
      what the field means, so the handler stands down for one. */
@@ -437,6 +473,28 @@ export default function TimerPage() {
       {heldFresh ? '\u00a0· ready' : '\u00a0· paused'}
     </span>
   ) : null;
+
+  /* The wood's line: the stage it has reached and how many years of growth,
+     the digits in mono and the words in the serif, the same division the
+     "in this session" line makes. */
+  const woodLine = (tone: { words: string; digits: string } | null) =>
+    wood ? (
+      <p className="m-0 mt-1.5 text-[12.5px]" style={tone ? { color: tone.words } : undefined}>
+        <span className={`font-serif italic ${tone ? '' : 'text-muted'}`}>{wood.name} · </span>
+        <span className={`font-mono tabular-nums ${tone ? '' : 'text-ink-soft'}`} style={tone ? { color: tone.digits } : undefined}>
+          {wood.years}
+        </span>{' '}
+        <span className={`font-serif italic ${tone ? '' : 'text-muted'}`}>{wood.years === 1 ? 'year' : 'years'}</span>
+      </p>
+    ) : null;
+  const stageMark = (ink: string) =>
+    stageNote ? (
+      <span key={stageNote.at} className="stage-note pointer-events-none">
+        <HandNote size={18} rotate={-2} color={ink}>
+          {stageNote.text}
+        </HandNote>
+      </span>
+    ) : null;
 
   /* Open mode is the one screen in the app that inverts, so the chrome takes
      its ink as a value rather than a token: on the night paper `text-ink` is
@@ -733,6 +791,19 @@ export default function TimerPage() {
               className={`absolute inset-0 h-full w-full ${quiet}`}
             />
           </OceanScene>
+        ) : timerDrawing === 'wood' ? (
+          <WoodScene
+            mode="open"
+            courseId={course?.id ?? pendingLog?.courseId ?? 'course'}
+            color={color}
+            sitting={active}
+            ended={!active ? pendingLog?.segments ?? null : null}
+            still={!live}
+            sessionId={active?.sessionId ?? null}
+            clearRef={chromeRef}
+            hero={{ progress, seed: fanSeed, depth: 10, tripleP: 0.3, trunkWidth: 15, padTop: 20, widthFill: 0.94, light: true, resting: pausedFocus }}
+            className={quiet}
+          />
         ) : (
           <StudyFan
             progress={progress}
@@ -759,7 +830,11 @@ export default function TimerPage() {
         <div className="pointer-events-none relative flex min-h-[100dvh] flex-col">
           <div className="pointer-events-auto">{header}</div>
           <div className="flex-1" />
-          <div className="pointer-events-auto flex flex-col gap-6 px-6 pb-[max(env(safe-area-inset-bottom),32px)] md:flex-row md:items-end md:justify-between md:px-12 md:pb-10">
+          {stageNote ? <div className="absolute right-6 top-20 md:right-12">{stageMark('#C8C0B0')}</div> : null}
+          <div
+            ref={chromeRef}
+            className="pointer-events-auto flex flex-col gap-6 px-6 pb-[max(env(safe-area-inset-bottom),32px)] md:flex-row md:items-end md:justify-between md:px-12 md:pb-10"
+          >
             <div key={resting ? 'face-rest' : 'face-focus'} className="animate-settle">
               <p className="eyebrow m-0 mb-2" style={{ color }}>
                 {code} · {resting ? 'Break' : 'Open'}
@@ -813,6 +888,7 @@ export default function TimerPage() {
                   <span className="font-serif italic">in this session</span>
                 </p>
               ) : null}
+              {woodLine({ words: '#958D7E', digits: '#C8C0B0' })}
               {/* The course's page, the same one the block frame carries in
                   its margin. It fills as the reader sits and a mark that
                   lands inks itself in where they can see it. The empty marks
@@ -946,6 +1022,18 @@ export default function TimerPage() {
                 className={`absolute inset-0 h-full w-full ${quiet}`}
               />
             </OceanScene>
+          ) : timerDrawing === 'wood' ? (
+            <WoodScene
+              mode="frame"
+              courseId={course?.id ?? pendingLog?.courseId ?? 'course'}
+              color={color}
+              sitting={active}
+              ended={!active ? pendingLog?.segments ?? null : null}
+              still={!live}
+              sessionId={active?.sessionId ?? null}
+              hero={{ progress, seed: fanSeed, depth: 7, trunkWidth: 12, padTop: 46, baseOffset: 24, sketch: true, ground: true, resting: pausedFocus }}
+              className={quiet}
+            />
           ) : (
             <StudyFan
               species={timerDrawing}
@@ -963,6 +1051,7 @@ export default function TimerPage() {
               className={`absolute inset-0 h-full w-full ${quiet}`}
             />
           )}
+          {stageNote ? <div className="absolute right-9 top-10 z-10">{stageMark('var(--ink-soft)')}</div> : null}
         </div>
 
         <div key={resting ? 'face-rest' : 'face-focus'} className="animate-settle text-center">
@@ -1001,6 +1090,7 @@ export default function TimerPage() {
               <span className="font-serif italic">in this session</span>
             </p>
           ) : null}
+          {woodLine(null)}
         </div>
 
         {controls}

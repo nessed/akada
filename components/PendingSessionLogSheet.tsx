@@ -23,9 +23,11 @@ import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from './SessionLogModal';
 import { usePreferences } from '@/lib/preferences';
 import { courseKey, oceanKeyFromSegments } from '@/lib/ocean/key';
+import { woodKeyFromSegments } from '@/lib/wood/clock';
 
-/* Only fetched for a reader whose timer draws the deep. */
+/* Only fetched for a reader whose timer draws the deep, or the wood. */
 const DiveRecap = dynamic(() => import('./DiveRecap'), { ssr: false });
+const WoodRecap = dynamic(() => import('./WoodRecap'), { ssr: false });
 
 /**
  * How many log sheets are on the page.
@@ -62,6 +64,11 @@ export default function PendingSessionLogSheet() {
   const diveKey =
     pendingLog && timerDrawing === 'ocean' && !pendingLog.recoveryReason
       ? oceanKeyFromSegments(pendingLog.courseId, pendingLog.segments)
+      : null;
+  // The wood's, under the same rule.
+  const woodKey =
+    pendingLog && timerDrawing === 'wood' && !pendingLog.recoveryReason
+      ? woodKeyFromSegments(pendingLog.courseId, pendingLog.segments)
       : null;
   // The reader's usual sitting on this course, from the record without this
   // one in it, so the figure is what "usually" meant before today.
@@ -247,6 +254,14 @@ export default function PendingSessionLogSheet() {
             courseKey={courseKey(pendingLog.courseId)}
             focusSeconds={chosen?.durationSeconds ?? 0}
             dark={darkMode}
+            className="mt-3"
+          />
+        ) : woodKey && pendingLog ? (
+          <WoodRecap
+            woodKey={woodKey}
+            courseId={pendingLog.courseId}
+            focusSeconds={chosen?.durationSeconds ?? 0}
+            night={pendingLog.segments.some((s) => s.kind === 'focus' && s.targetSeconds == null)}
             className="mt-3"
           />
         ) : null
