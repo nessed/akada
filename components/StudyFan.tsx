@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildFan, drawFan, fanShades, mixHex, seedFrom, type FanTree } from '@/lib/fan';
-import { buildJelly, drawJelly, jellyBeat, jellyInk, type JellyShape } from '@/lib/jelly';
+import { buildJelly, drawJelly, jellyBeat, jellyFrame, jellyInk, jellyStartle, type JellyShape } from '@/lib/jelly';
 import type { TimerDrawing } from '@/lib/preferences';
 
 interface Props {
@@ -72,7 +72,16 @@ const FOLD_DAMPING = 0.13;
    the tips, and each is this many frames behind the one before, so a pull
    moves the bell first and the tentacles follow it like a wake. */
 const TRAIL_SAMPLES = 13;
-const TRAIL_LAG = 1.4;
+const TRAIL_LAG = 2;
+/* A jelly hangs in water, not on a branch. It is softer than the fan, and
+   under-damped enough to bob back past where it started once or twice, which
+   is what the trails need to keep streaming after the bell has stopped. */
+const BOB_STIFFNESS = 0.028;
+const BOB_DAMPING = 0.075;
+/* A finger that goes down and comes up within this many milliseconds and this
+   many pixels is a poke, not a pull. */
+const POKE_MS = 350;
+const POKE_PX = 6;
 
 /**
  * One axis of the sway: a spring that remembers where it has been.
@@ -110,6 +119,15 @@ function strand(stiffness = STIFFNESS, damping = DAMPING) {
     },
     at(lag: number) {
       return past[(i - Math.min(lag, HISTORY - 1) + HISTORY) % HISTORY];
+    },
+    /** A shove: speed added on the spot, from a poke or a cursor brushing
+        past. It springs back like anything else that was let go. */
+    push(dv: number) {
+      v += dv;
+    },
+    /** Pixels a frame, which is what a bell leans into. */
+    get speed() {
+      return v;
     },
     /** Frames of dead calm. The outer branches are drawn from where the
         spring was, not where it is, so the fan is not actually at rest until
@@ -169,7 +187,16 @@ export default function StudyFan({
   const handRef = useRef<{
     from: { x: number; y: number };
     held: { bend: number; slack: number };
+    /* For a jelly: when it went down and how far it has travelled since, to
+       tell a poke from a pull when the finger comes up. */
+    at: number;
+    moved: number;
   } | null>(null);
+  /* The jelly's own springs. Sideways and vertical are separate, and both
+     hold pixels, not radians: the bell goes where the finger takes it. */
+  const bellXRef = useRef(strand(BOB_STIFFNESS, BOB_DAMPING));
+  const bellYRef = useRef(strand(BOB_STIFFNESS, BOB_DAMPING));
+  const startleRef = useRef(-1e9);
   const swayRef = useRef(strand());
   const stretchRef = useRef(strand());
   const foldRef = useRef(strand(FOLD_STIFFNESS, FOLD_DAMPING));
@@ -253,6 +280,8 @@ export default function StudyFan({
     const drift = new Array<number>(TRAIL_SAMPLES).fill(0);
     let stretchNow = 0;
     let contractNow = 0;
+    let riseNow = 0;
+    let tiltNow = 0;
     const bends = new Array<number>(depth + 1).fill(0);
     const slack = new Array<number>(depth + 1).fill(0);
     const fold = new Array<number>(depth + 1).fill(0);
@@ -294,13 +323,17 @@ export default function StudyFan({
           baseOffset: baseOffset * dpr,
           px: dpr,
           contract: closed,
-          pulse: reduced ? 0 : jellyBeat(performance.now()),
+          // The beat, and over it whatever a touch has set off.
+          pulse: reduced
+            ? 0
+            : Math.max(jellyBeat(performance.now()), jellyStartle(performance.now() - startleRef.current)),
           // The wave, the bubbles and the snow run on the clock; reduced
           // motion gets them standing still.
           time: reduced ? undefined : performance.now(),
           bubbles: true,
           drift: physics ? drift : undefined,
-          stretch: physics ? stretchNow : 0,
+          rise: physics ? riseNow : 0,
+          tilt: physics ? tiltNow : 0,
           sketch: sketch ? pencil : undefined,
           ground: ground ? pencil : undefined,
         });
@@ -360,13 +393,39 @@ export default function StudyFan({
       return hand == null && sway.quiet > lagMax && stretch.quiet > lagMax && closing.quiet > lagMax;
     };
 
+    /* One frame of the jelly's give. The bell has its own two springs and the
+       trails read the sideways one a few frames back, so they stream out
+       behind it; the lean is how fast the bell is going. */
+    const settleJelly = () => {
+      const hand = handRef.current;
+      const bx = bellXRef.current;
+      const by = bellYRef.current;
+      const closing = foldRef.current;
+      bx.step(hand ? hand.held.bend : null);
+      by.step(hand ? hand.held.slack : null);
+      closing.step(null, restingRef.current ? FOLD_REST : 0);
+      for (let i = 0; i < TRAIL_SAMPLES; i++) drift[i] = bx.at(Math.round(i * TRAIL_LAG));
+      riseNow = by.at(0);
+      const lean = Math.max(-0.32, Math.min(0.32, bx.speed * 0.022));
+      tiltNow += (lean - tiltNow) * 0.16;
+      if (Math.abs(tiltNow) < 0.001 && !hand) tiltNow = 0;
+      contractNow = Math.min(1, Math.max(0, closing.at(0) / FOLD_REST));
+      return (
+        hand == null &&
+        tiltNow === 0 &&
+        bx.quiet > lagMax &&
+        by.quiet > lagMax &&
+        closing.quiet > lagMax
+      );
+    };
+
     const step = () => {
       if (disposed) return;
       const target = targetRef.current;
       const shown = shownRef.current;
       const gap = target - shown;
       const grown = reduced || Math.abs(gap) < 0.0004;
-      const rested = physics ? settle() : true;
+      const rested = physics ? (jelly ? settleJelly() : settle()) : true;
 
       if (grown) shownRef.current = target;
       // Ease toward the target rather than tracking it exactly: the fan
@@ -406,22 +465,81 @@ export default function StudyFan({
     };
   }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly]);
 
-  /* Taking hold. The pull is read off the distance travelled rather than the
-     point grabbed, through a curve that gives most of its bend early and then
-     runs out: dragging further and further does not fold the fan in half. */
+  /* Where the jelly is in the canvas, for a hand to land on. The tree can be
+     taken hold of anywhere in its frame; a jelly is a thing in the water, and
+     a finger on empty water goes through it. Generous at the edges, because a
+     fingertip is not a pin. */
+  const frameOf = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return { rect, f: jellyFrame(rect.width, rect.height, { padTop, widthFill, baseOffset }) };
+  };
+  const overJelly = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const fr = frameOf();
+    if (!fr) return false;
+    const { rect, f } = fr;
+    const x = e.clientX - rect.left - f.cx - bellXRef.current.at(0);
+    const y = e.clientY - rect.top - bellYRef.current.at(0);
+    const slop = e.pointerType === 'mouse' ? 10 : 22;
+    const bottom = f.rimFull + f.maxL * Math.max(0.15, shownRef.current);
+    return Math.abs(x) < f.R * 1.25 + slop && y > f.y0 - slop && y < bottom + slop;
+  };
+
+  /* Taking hold. The tree's pull is read off the distance travelled through a
+     curve that gives most of its bend early and then runs out. The jelly's is
+     the finger itself: the bell goes where it is taken, close to one for one,
+     easing off only as it nears the edge of what the frame can spare, and the
+     tentacles stream out behind it. */
   const grab = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!physics) return;
-    handRef.current = { from: { x: e.clientX, y: e.clientY }, held: { bend: 0, slack: 0 } };
+    if (jelly && !overJelly(e)) return;
+    handRef.current = {
+      from: { x: e.clientX, y: e.clientY },
+      held: { bend: 0, slack: 0 },
+      at: performance.now(),
+      moved: 0,
+    };
     e.currentTarget.setPointerCapture(e.pointerId);
     e.currentTarget.style.cursor = 'grabbing';
+    // Touched, the bell clenches.
+    if (jelly) startleRef.current = performance.now();
     kickRef.current();
   };
 
   const drag = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const hand = handRef.current;
-    if (!hand) return;
+    if (!hand) {
+      // A cursor going past with no button down: the cursor reads as a hand
+      // to take hold of on the jelly, and brushing it sets it rocking.
+      if (jelly && physics && e.pointerType === 'mouse') {
+        const over = overJelly(e);
+        e.currentTarget.style.cursor = over ? 'grab' : '';
+        if (over) {
+          bellXRef.current.push(Math.max(-1.1, Math.min(1.1, e.movementX * 0.05)));
+          bellYRef.current.push(Math.max(-0.6, Math.min(0.6, e.movementY * 0.03)));
+          kickRef.current();
+        }
+      }
+      return;
+    }
     const dx = e.clientX - hand.from.x;
     const dy = e.clientY - hand.from.y;
+    hand.moved = Math.max(hand.moved, Math.hypot(dx, dy));
+    if (jelly) {
+      const fr = frameOf();
+      if (!fr) return;
+      const { R, y0 } = fr.f;
+      // Up is short (the bell must stay under the header) and down is short
+      // (the trails have a floor); sideways gets the most.
+      const soft = (d: number, lim: number) => lim * Math.tanh(d / lim);
+      const up = Math.max(8, Math.min(R * 0.7, y0 * 0.85));
+      hand.held = {
+        bend: soft(dx, R * 1.5),
+        slack: dy < 0 ? -soft(-dy, up) : soft(dy, R * 0.8),
+      };
+      return;
+    }
     hand.held = {
       bend: Math.tanh(dx / 230) * SWAY_MAX,
       // Pulling the crown down gathers the fan in; lifting draws it out.
@@ -430,9 +548,20 @@ export default function StudyFan({
   };
 
   const release = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!handRef.current) return;
+    const hand = handRef.current;
+    if (!hand) return;
     handRef.current = null;
-    e.currentTarget.style.cursor = 'grab';
+    e.currentTarget.style.cursor = jelly && e.pointerType === 'mouse' && overJelly(e) ? 'grab' : jelly ? '' : 'grab';
+    if (jelly && hand.moved < POKE_PX && performance.now() - hand.at < POKE_MS && e.type === 'pointerup') {
+      // A poke. The clench that met the finger is the stroke; this is what
+      // it does: jet up and away from the side that was touched, then drift
+      // back. A jelly does not stay where it is pushed.
+      const fr = frameOf();
+      const side = fr ? (e.clientX - fr.rect.left - fr.f.cx - bellXRef.current.at(0)) / fr.f.R : 0;
+      bellYRef.current.push(-3.4);
+      bellXRef.current.push(-Math.max(-1, Math.min(1, side)) * 1.6);
+      startleRef.current = performance.now();
+    }
     kickRef.current();
   };
 
@@ -447,9 +576,13 @@ export default function StudyFan({
       onPointerCancel={physics ? release : undefined}
       style={
         physics
-          ? // Sideways is the pull and up and down is still the page, so a
-            // thumb can scroll past the fan without catching on it.
-            { cursor: 'grab', touchAction: 'pan-y' }
+          ? jelly
+            ? // A jelly goes any way it is taken, up and down included, so a
+              // finger on the canvas is the jelly's and not the page's.
+              { touchAction: 'none' }
+            : // Sideways is the pull and up and down is still the page, so a
+              // thumb can scroll past the fan without catching on it.
+              { cursor: 'grab', touchAction: 'pan-y' }
           : undefined
       }
     />
