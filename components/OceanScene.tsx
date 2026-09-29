@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { mixHex } from '@/lib/fan';
 import { buildJelly, drawJelly, jellyBeat, jellyInk, type JellyShape } from '@/lib/jelly';
 import { rollBiome } from '@/lib/ocean/biome';
-import { depthAt } from '@/lib/ocean/depth';
-import { drawFloor, drawShafts, drawSnow, drawVisitor, drawWater, rollSnow } from '@/lib/ocean/draw';
+import { depthAt, ZONES } from '@/lib/ocean/depth';
+import { drawFloor, drawRules, drawShafts, drawShimmer, drawSnow, drawSurface, drawVisitor, drawWater, rollSnow } from '@/lib/ocean/draw';
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
 import { hash32 } from '@/lib/ocean/random';
@@ -44,6 +44,11 @@ interface Props {
   still?: boolean;
   ground: Ground;
   clear?: ClearRect[];
+  /** The notebook frame: the page's rules show through the shallows. */
+  rules?: boolean;
+  /** Where the wash thins back to bare paper, so what is written there reads
+      at any depth: the frame's corners. */
+  pools?: ClearRect[];
   /** The hero, drawn between the far water and the near animals. */
   children?: ReactNode;
   className?: string;
@@ -69,18 +74,21 @@ export default function OceanScene({
   still = false,
   ground,
   clear,
+  rules = false,
+  pools,
   children,
   className = '',
 }: Props) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const backRef = useRef<HTMLCanvasElement | null>(null);
   const frontRef = useRef<HTMLCanvasElement | null>(null);
+  const markRef = useRef<HTMLSpanElement | null>(null);
   const biome = useMemo(() => rollBiome(sittingKey, courseKey), [sittingKey, courseKey]);
   const snow = useMemo(() => ({ back: rollSnow(sittingKey, 60), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
 
   // Everything the loop reads, off a ref, so a per-second render of the page
   // never tears the loop down.
-  const live = useRef({ clock, blocks, resting, paused, still, ground, clear, color });
+  const live = useRef({ clock, blocks, resting, paused, still, ground, clear, color, rules, pools });
   const kickRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -119,6 +127,12 @@ export default function OceanScene({
     let ema = 4;
     let water: Water = waterAt(depthAt(shown).z, live.current.ground, live.current.color);
     let waterZ = -1;
+    /* A zone crossing: when it happened on the ambient clock. The first
+       paint only notes where the sitting already is, so a reload or a still
+       never announces a crossing it did not see. */
+    let zoneSeen = -1;
+    let crossedAt = -1e9;
+    let crossedZone = 0;
 
     const fit = () => {
       const rect = box.getBoundingClientRect();
@@ -158,10 +172,40 @@ export default function OceanScene({
         waterZ = depth.z;
       }
 
+      // Reduced motion has no clock to fade the name out on, so it gets none.
+      if (zoneSeen < 0 || L.still || reduced) zoneSeen = depth.zone;
+      else if (depth.zone > zoneSeen) {
+        zoneSeen = depth.zone;
+        crossedAt = ambient;
+        crossedZone = depth.zone;
+      }
+
       // The far water: the wash, the light, the snow, the floor.
       bctx.globalCompositeOperation = 'source-over';
       bctx.globalAlpha = 1;
       drawWater(bctx, W, H, water);
+      if (L.rules) drawRules(bctx, W, H, depth.z, px, water.dark ? '#FFFFFF' : '#8C8576');
+      if (L.pools?.length) {
+        // An oval bleed of bare paper, the way a wash stops short of a corner.
+        const paper = getComputedStyle(box).getPropertyValue('--paper').trim() || '#FBF8EF';
+        const n = parseInt(paper.replace('#', '').slice(0, 6), 16);
+        const rgb = Number.isFinite(n) ? `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}` : '251, 248, 239';
+        for (const r of L.pools) {
+          bctx.save();
+          bctx.translate((r.x + r.w / 2) * W, (r.y + r.h / 2) * H);
+          // Sized to what sits there, not to the frame: a tall phone frame
+          // would otherwise bleed half its page white.
+          bctx.scale(Math.min((r.w * W) / 1.4, 190 * px), Math.min((r.h * H) / 1.1, 64 * px));
+          const g = bctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+          g.addColorStop(0, `rgba(${rgb}, 0.96)`);
+          g.addColorStop(0.5, `rgba(${rgb}, 0.85)`);
+          g.addColorStop(1, `rgba(${rgb}, 0)`);
+          bctx.fillStyle = g;
+          bctx.fillRect(-1, -1, 2, 2);
+          bctx.restore();
+        }
+      }
+      drawSurface(bctx, W, H, shown, ambient, px);
       drawShafts(bctx, W, H, biome.env, water, ambient);
       drawSnow(bctx, W, H, snow.back, water.snow, ambient, biome.env.current, px, biome.env.visibility);
       drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px);
@@ -221,6 +265,22 @@ export default function OceanScene({
         drawVisitor(ctx, sprite, v, px, ambient, alpha, strips);
       }
       drawSnow(fctx, front.width, front.height, snow.front, water.snow, ambient * 1.3, biome.env.current, px, 1.8);
+
+      // The crossing: the shimmer rises through for four seconds, and the
+      // zone's name is written in the margin for six, then goes.
+      const since = ambient - crossedAt;
+      if (!reduced) drawShimmer(fctx, front.width, front.height, since / 4, ambient, px, water.dark ? 'rgba(239,233,220,1)' : 'rgba(255,255,255,1)');
+      const mark = markRef.current;
+      if (mark) {
+        const showing = since >= 0 && since < 6;
+        const a = showing ? Math.min(1, since / 0.8, (6 - since) / 1.2) : 0;
+        if (showing) {
+          const zn = ZONES[crossedZone];
+          mark.textContent = `${zn.name} · ${zn.m0.toLocaleString('en-US')} m`;
+          mark.style.color = water.dark ? '#C8C0B0' : '#6B6459';
+        }
+        mark.style.opacity = String(a);
+      }
 
       // Held, the water goes grey and still, the way the rest of the screen does.
       // The back canvas is opaque, so its colour can be drawn out in place;
@@ -311,7 +371,7 @@ export default function OceanScene({
   // parked (a pause settling, a still): a resume, a break or the sheet coming
   // up is then drawn at once.
   useEffect(() => {
-    live.current = { clock, blocks, resting, paused, still, ground, clear, color };
+    live.current = { clock, blocks, resting, paused, still, ground, clear, color, rules, pools };
     kickRef.current();
   });
 
@@ -320,6 +380,13 @@ export default function OceanScene({
       <canvas ref={backRef} aria-hidden data-no-doodle className="pointer-events-none absolute inset-0 h-full w-full" />
       {children}
       <canvas ref={frontRef} aria-hidden data-no-doodle className="pointer-events-none absolute inset-0 h-full w-full" />
+      {/* The zone's name, in the hand, for a few seconds after crossing into it. */}
+      <span
+        ref={markRef}
+        aria-hidden
+        className="font-hand pointer-events-none absolute right-[7%] top-[38%] text-[19px]"
+        style={{ opacity: 0, transform: 'rotate(-3deg)' }}
+      />
     </div>
   );
 }
