@@ -36,26 +36,45 @@ export interface JellyShape {
   /** Specks of marine snow for the night paper: where each starts, as a
       share of the canvas, how big, how bright, and how fast it rises. */
   snow: { x: number; y: number; s: number; o: number; v: number }[];
+  /** Bell height against width, 1 for the plain jelly. */
+  aspect: number;
+  /** Lobes on the rim. */
+  scallops: number;
 }
 
-const TENTACLES = 16;
-const ARMS = 4;
+/**
+ * The counts and proportions a jelly is built to. The plain jellyfish is
+ * always `PLAIN_BODY`; the ocean's jellies roll their own (lib/ocean/lineage),
+ * so every sitting's jelly is a different animal.
+ */
+export interface JellyBody {
+  tentacles: number;
+  hairs: number;
+  arms: number;
+  aspect: number;
+  scallops: number;
+  stingP: number;
+}
+
+export const PLAIN_BODY: JellyBody = { tentacles: 16, hairs: 15, arms: 4, aspect: 1, scallops: 16, stingP: 0.4 };
 const SNOW = 36;
 
 /** Build the jelly's fixed half from its seed. Cheap, and done once. */
-export function buildJelly(seed: number): JellyShape {
+export function buildJelly(seed: number, body: JellyBody = PLAIN_BODY): JellyShape {
   const r = rng(seed * 13 + 5);
+  const TENTACLES = Math.max(1, Math.round(body.tentacles));
+  const ARMS = Math.max(0, Math.round(body.arms));
   const raw = Array.from({ length: TENTACLES }, () => ({
     v: 0.84 + 0.16 * r(),
     ph: r() * Math.PI * 2,
     amp: 4 + r() * 5,
-    sting: r() < 0.4,
+    sting: r() < body.stingP,
   }));
   // The longest tentacle is exactly the full length, so the one that touches
   // the floor does so at the target and not a little before or after it.
   const longest = Math.max(...raw.map((t) => t.v));
   const tentacles = raw.map((t) => ({ ...t, v: t.v / longest }));
-  const hairs = Array.from({ length: TENTACLES - 1 }, () => ({ v: 0.22 + 0.2 * r(), ph: r() * Math.PI * 2 }));
+  const hairs = Array.from({ length: Math.max(0, Math.round(body.hairs)) }, () => ({ v: 0.22 + 0.2 * r(), ph: r() * Math.PI * 2 }));
   const arms = Array.from({ length: ARMS }, (_, i) => ({
     ph: r() * Math.PI * 2,
     off: (i - (ARMS - 1) / 2) * 0.09,
@@ -69,7 +88,7 @@ export function buildJelly(seed: number): JellyShape {
     o: 0.15 + r() * 0.35,
     v: 0.6 + r() * 0.8,
   }));
-  return { tentacles, hairs, arms, snow };
+  return { tentacles, hairs, arms, snow, aspect: body.aspect, scallops: Math.max(4, Math.round(body.scallops)) };
 }
 
 /** The inks a jelly is drawn in, mixed once from the course colour. */
@@ -142,14 +161,14 @@ export function jellyInk(color: string, paper: string, light: boolean): JellyInk
 export function jellyFrame(
   width: number,
   height: number,
-  o: { padTop?: number; widthFill?: number; baseOffset?: number } = {},
+  o: { padTop?: number; widthFill?: number; baseOffset?: number; aspect?: number } = {},
 ) {
-  const { padTop = 45, widthFill = 0.86, baseOffset = -2 } = o;
+  const { padTop = 45, widthFill = 0.86, baseOffset = -2, aspect = 1 } = o;
   const floor = height - baseOffset;
   const avail = floor - padTop;
   const R = Math.min(width * widthFill * 0.2, avail * 0.2);
   const y0 = padTop;
-  const rimFull = y0 + R * 0.8;
+  const rimFull = y0 + R * 0.8 * aspect;
   return { R, cx: width / 2, y0, floor, avail, rimFull, maxL: floor - rimFull };
 }
 
@@ -289,7 +308,12 @@ export function drawJelly(
   const p = Math.min(1, Math.max(0, progress));
   const k = Math.min(1, Math.max(0, contract));
   const tm = time ?? 0;
-  const { R, cx, y0, floor, avail, rimFull, maxL } = jellyFrame(width, height, { padTop, widthFill, baseOffset });
+  const { R, cx, y0, floor, avail, rimFull, maxL } = jellyFrame(width, height, {
+    padTop,
+    widthFill,
+    baseOffset,
+    aspect: shape.aspect,
+  });
   if (avail <= 0 || width <= 0) return;
 
   // Wave sizes and line weights are set for a bell about 76 CSS px across
@@ -330,7 +354,7 @@ export function drawJelly(
     const r = R * (0.42 + 0.58 * ease(grow));
     const sq = beat * (1 - kk);
     const rw = r * (1 - 0.22 * kk) * (1 - 0.06 * sq);
-    const bh = r * 0.8 * (1 + 0.2 * kk) * (1 + 0.04 * sq);
+    const bh = r * 0.8 * shape.aspect * (1 + 0.2 * kk) * (1 + 0.04 * sq);
     return { r, rw, bh, rimY: y0 + bh, L: maxL * pp * (1 - 0.08 * kk), k: kk, grow, sq };
   };
 
@@ -443,7 +467,7 @@ export function drawJelly(
     }
     ctx.stroke();
     ctx.beginPath();
-    bellPath(ctx, full, cx, y0, R, line);
+    bellPath(ctx, full, cx, y0, R, line, shape.scallops);
     ctx.stroke();
     ctx.restore();
   }
@@ -611,7 +635,7 @@ export function drawJelly(
   wash.addColorStop(0, ink.bellTop);
   wash.addColorStop(1, ink.bellRim);
   ctx.beginPath();
-  bellPath(ctx, now, bx, y0, R, line);
+  bellPath(ctx, now, bx, y0, R, line, shape.scallops);
   ctx.fillStyle = wash;
   ctx.globalAlpha = 0.95;
   ctx.fill();
@@ -725,14 +749,14 @@ export function drawJelly(
   ctx.strokeStyle = ink.edge;
   ctx.lineWidth = 1.5 * line;
   ctx.beginPath();
-  bellPath(ctx, now, bx, y0, R, line);
+  bellPath(ctx, now, bx, y0, R, line, shape.scallops);
   ctx.stroke();
   ctx.save();
   ctx.translate(0.9 * line, 0.7 * line);
   ctx.lineWidth = 0.6 * px;
   ctx.globalAlpha = 0.45;
   ctx.beginPath();
-  bellPath(ctx, now, bx, y0, R, line);
+  bellPath(ctx, now, bx, y0, R, line, shape.scallops);
   ctx.stroke();
   ctx.restore();
 
@@ -786,16 +810,24 @@ export function drawJelly(
 
 /**
  * The bell's outline into whatever path is open: a dome that flares a
- * little at the rim on the squeeze, and a rim of sixteen shallow scallops.
+ * little at the rim on the squeeze, and a rim of shallow scallops (sixteen on
+ * the plain jelly).
  */
-function bellPath(ctx: CanvasRenderingContext2D, q: Pose, bx: number, y0: number, R: number, line: number) {
+function bellPath(
+  ctx: CanvasRenderingContext2D,
+  q: Pose,
+  bx: number,
+  y0: number,
+  R: number,
+  line: number,
+  n = 16,
+) {
   const L = bx - q.rw;
   const Rr = bx + q.rw;
   const flare = q.rw * 0.05 * q.sq;
   ctx.moveTo(L - flare, q.rimY);
   ctx.bezierCurveTo(L, y0 + q.bh * 0.1, bx - q.rw * 0.58, y0, bx, y0);
   ctx.bezierCurveTo(bx + q.rw * 0.58, y0, Rr, y0 + q.bh * 0.1, Rr + flare, q.rimY);
-  const n = 16;
   const step = (2 * (q.rw + flare)) / n;
   const dip = 2.6 * line * (q.r / R);
   for (let i = 1; i <= n; i++) {
