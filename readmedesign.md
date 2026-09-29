@@ -630,7 +630,10 @@ natural-history plate draws one, in the course colour, never a cartoon.
 - **Done.** Every other tentacle tip lights with a bead, the jelly's version
   of the fan's flowers, and the pencil goes.
 - **The pencil sketch** is the whole jelly at full length, dotted, and it
-  beats with the bell so the ink never slides off its own underdrawing. **The
+  beats with the bell so the ink never slides off its own underdrawing. Taken
+  hold of, it goes with the bell and fades to a third as the jelly leaves its
+  place, so a dragged jelly never leaves a full-size ghost standing where it
+  hung, and it comes back as the jelly settles. **The
   floor** is a pencil line with a few grains of sand in place of grass.
 - **The hand.** The jelly is not the tree, and it is not pulled the tree's
   way. It is a thing in the water: a finger only takes hold where the jelly

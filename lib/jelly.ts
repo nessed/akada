@@ -413,6 +413,11 @@ export function drawJelly(
   if (sketch && p < 1) {
     const full = pose(1, 0, pulse * (1 - k));
     ctx.save();
+    // Taken hold of, the jelly takes its pencil with it, and the pencil
+    // goes faint, so a dragged bell never leaves a full-size ghost standing
+    // where it used to hang.
+    ctx.translate(bellShift, riseY);
+    ctx.globalAlpha = 1 - 0.7 * Math.min(1, Math.hypot(bellShift, riseY) / (R * 0.5));
     ctx.strokeStyle = sketch;
     ctx.lineWidth = 0.9 * px;
     ctx.setLineDash([1.5 * px, 3.5 * px]);
