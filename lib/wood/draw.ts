@@ -4,7 +4,7 @@ import type { AnimalGenome, Plan } from './fauna';
 import { GLOWS } from './fauna';
 import { buildFigure, LAYER_ORDER, type Figure, type Layer, type Pose } from './figures';
 import type { Land, LandElement } from './flora';
-import { animalInks, leafHue, recede, type Palette } from './palette';
+import { animalInks, grassHue, leafHue, recede, type Palette } from './palette';
 import { unit } from './random';
 import { groundY, HORIZON } from './schedule';
 import { arrival } from './succession';
@@ -386,7 +386,7 @@ export function drawGrass(ctx: CanvasRenderingContext2D, e: LandElement, L: Scen
   const s = scaleAt(e.d);
   const h = e.h * L.h * s * grow;
   const blades = 3 + Math.floor(unit(e.seed, 'n') * 4);
-  ctx.strokeStyle = recede(p, leafHue(p, e.hue), (1 - e.d) * 0.6 + (p.dark ? 0.35 : 0.05));
+  ctx.strokeStyle = recede(p, grassHue(p, e.hue), (1 - e.d) * 0.6 + (p.dark ? 0.35 : 0.05));
   ctx.lineWidth = Math.max(0.7, 0.9 * L.px * s);
   ctx.beginPath();
   for (let i = 0; i < blades; i++) {
@@ -407,7 +407,7 @@ export function drawFlowerHead(ctx: CanvasRenderingContext2D, e: LandElement, L:
   const s = scaleAt(e.d);
   const h = e.h * L.h * s * Math.min(1, grow * 1.3);
   const back = (1 - e.d) * 0.55 + (p.dark ? 0.3 : 0);
-  const stem = recede(p, leafHue(p, 0), back + 0.05);
+  const stem = recede(p, grassHue(p, 0), back + 0.05);
   const hue = mixHex(['#A8B89B', '#D4A5A5', '#B5A8C9', '#E2B594', '#A8BCC9', '#C99B7E', '#D9C58C', '#9FC1B0', '#9AA3AB', '#B89BAA'][e.hue % 10], p.course, 0.1);
   const petal = recede(p, p.dark ? mixHex(hue, p.paper, 0.35) : hue, back);
   const edge = recede(p, p.dark ? mixHex(hue, '#FFFFFF', 0.4) : mixHex(hue, '#1A1714', 0.55), back);
@@ -497,7 +497,10 @@ export function bushSprite(store: SpriteStore, e: LandElement, L: SceneLayout, p
   const w = Math.round(h * 2.2);
   const q = Math.round(grow * 12) / 12;
   const leaf = recede(p, leafHue(p, e.hue), (1 - e.d) * 0.55 + (p.dark ? 0.3 : 0));
-  const canvas = store.get(`bush|${e.id}|${q}|${w}x${h}|${p.paper}|${leaf}`, w, h, (ctx) => {
+  // Headroom above the clump, so no lobe is cut flat by the sprite's top.
+  const H = Math.round(h * 1.5);
+  const canvas = store.get(`bush|${e.id}|${q}|${w}x${H}|${p.paper}|${leaf}`, w, H, (ctx) => {
+    ctx.translate(0, H - h);
     const lobes = 7 + Math.floor(unit(e.seed, 'lobes') * 5);
     const hh = h * (0.35 + 0.65 * q);
     const cx = w / 2;
@@ -508,7 +511,7 @@ export function bushSprite(store: SpriteStore, e: LandElement, L: SceneLayout, p
       const arch = Math.sin(u * Math.PI);
       const r = hh * (0.2 + 0.12 * unit(e.seed, 'r', i)) * (0.6 + 0.4 * arch);
       const lx = Math.min(w - r * 1.2, Math.max(r * 1.2, cx + (u - 0.5) * w * 0.66 * (0.55 + 0.45 * q)));
-      const ly = Math.min(h - r * 0.75, Math.max(r * 1.05, h - hh * (0.2 + 0.5 * arch * (0.75 + 0.25 * unit(e.seed, 'y', i)))));
+      const ly = Math.min(h - r * 0.75, h - hh * (0.2 + 0.5 * arch * (0.75 + 0.25 * unit(e.seed, 'y', i))));
       ctx.beginPath();
       ctx.ellipse(lx, ly, r * 1.15, r, unit(e.seed, 'a', i) * 0.6 - 0.3, 0, Math.PI * 2);
       return { lx, ly, r };
@@ -553,7 +556,7 @@ export function bushSprite(store: SpriteStore, e: LandElement, L: SceneLayout, p
       }
     }
   });
-  return { canvas, w, h };
+  return { canvas, w, h: H };
 }
 
 /* ----------------------------------------------------- the land, standing */
@@ -618,8 +621,8 @@ export function drawStanding(ctx: CanvasRenderingContext2D, L: SceneLayout, p: P
   // The ground, a faint wash from the horizon down.
   const ground = ctx.createLinearGradient(0, horizonPx, 0, L.ground);
   const earth = night ? '#2A2721' : mixHex('#C9B98F', p.course, 0.08);
-  ground.addColorStop(0, hexA(earth, night ? 0.45 : p.dark ? 0.14 : 0.06));
-  ground.addColorStop(1, hexA(earth, night ? 0.85 : p.dark ? 0.26 : 0.14));
+  ground.addColorStop(0, hexA(earth, night ? 0.45 : p.dark ? 0.05 : 0.06));
+  ground.addColorStop(1, hexA(earth, night ? 0.85 : p.dark ? 0.11 : 0.14));
   ctx.fillStyle = ground;
   ctx.beginPath();
   horizonPath(ctx, L, land, horizonPx);
@@ -632,7 +635,7 @@ export function drawStanding(ctx: CanvasRenderingContext2D, L: SceneLayout, p: P
   const line = arrival(z, 0.34, 0.36);
   if (line > 0) {
     const n = land.treeline.length;
-    const leaf = night ? mixHex(leafHue(p, 1), '#1A1815', 0.72) : recede(p, leafHue(p, 1), 0.5);
+    const leaf = night ? mixHex(leafHue(p, 1), '#1A1815', 0.72) : recede(p, mixHex(leafHue(p, 1), '#A8AE98', 0.5), 0.5);
     ctx.fillStyle = hexA(leaf, night ? 0.9 : 0.55);
     ctx.strokeStyle = recede(p, p.pencil, 0.2);
     ctx.lineWidth = 0.8 * L.px;
@@ -728,20 +731,22 @@ function drawStone(ctx: CanvasRenderingContext2D, e: LandElement, L: SceneLayout
   const x = e.x * L.w;
   const y = groundPx(L, e.d);
   const r = e.h * L.h * s;
-  ctx.fillStyle = recede(p, p.dark ? '#3A362F' : '#D8D0BE', (1 - e.d) * 0.4);
-  ctx.strokeStyle = recede(p, p.pencil, (1 - e.d) * 0.3);
+  // Low and half sunk: a stone is mostly under the grass.
+  ctx.fillStyle = recede(p, p.dark ? '#34312B' : '#E2DBCB', (1 - e.d) * 0.4);
+  ctx.strokeStyle = recede(p, p.pencil, 0.15 + (1 - e.d) * 0.3);
   ctx.lineWidth = 0.8 * L.px;
   ctx.beginPath();
-  ctx.ellipse(x, y - r * 0.35, r * 1.3, r * 0.7, 0, Math.PI, 0);
-  ctx.closePath();
+  ctx.moveTo(x - r * 1.3, y);
+  ctx.bezierCurveTo(x - r * 1.2, y - r * 0.55, x - r * 0.3, y - r * 0.62, x + r * 0.35, y - r * 0.5);
+  ctx.bezierCurveTo(x + r * 0.95, y - r * 0.4, x + r * 1.3, y - r * 0.15, x + r * 1.35, y);
   ctx.fill();
   ctx.stroke();
+  ctx.globalAlpha = 0.5;
   ctx.beginPath();
-  ctx.moveTo(x - r * 0.4, y - r * 0.6);
-  ctx.lineTo(x - r * 0.1, y - r * 0.3);
-  ctx.moveTo(x + r * 0.2, y - r * 0.75);
-  ctx.lineTo(x + r * 0.5, y - r * 0.4);
+  ctx.moveTo(x - r * 0.5, y - r * 0.32);
+  ctx.lineTo(x - r * 0.15, y - r * 0.14);
   ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 function drawFern(ctx: CanvasRenderingContext2D, e: LandElement, L: SceneLayout, p: Palette, a: number): void {

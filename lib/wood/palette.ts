@@ -62,6 +62,13 @@ export function leafHue(p: Palette, pick: number): string {
   return mixHex(set[Math.abs(pick) % set.length], p.course, 0.12);
 }
 
+/** Grass stays green whatever the season does to the leaves: warmer in
+    autumn, fresher in spring, never orange. */
+export function grassHue(p: Palette, pick: number): string {
+  const set = p.season === 'autumn' ? ['#A3A77F', '#B0AA80', '#98A383'] : p.season === 'spring' ? ['#A5C2A4', '#9FB891', '#AFC49E'] : ['#95A585', '#A1B08F', '#8FA082'];
+  return mixHex(set[Math.abs(pick) % set.length], p.course, 0.08);
+}
+
 /** An animal's body, markings and ink on this paper. */
 export function animalInks(p: Palette, hue: number, accent: number) {
   const h = HUES[hue % HUES.length];

@@ -704,6 +704,10 @@ tree in the middle of it; the wood is what stands around it. Code in
   rule, faded by how far back they stand). Nothing is painted edge to edge.
   On the open screen it is the night paper and the wood is drawn in light on
   dark, with stars and a moon off to one side of the crown, never behind it.
+  On the page the tall trees stop short of the top edge, which is the
+  reader's own tree's to reach; on the open screen the land fades softly
+  behind the clock and the buttons, so the chrome is never read against a
+  log or a thicket. Anything standing on the ground casts a faint shadow.
 - **Everything is rolled from a key.** Each sitting's wood is named by its
   course and its start (`woodKey`), and everything in it (the weather, the
   wind, the season's leaf, the layout of the land, who lives there) is

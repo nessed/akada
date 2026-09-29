@@ -146,7 +146,7 @@ export function buildFigure(g: AnimalGenome, pose: Pose): Figure {
 function songbird(g: AnimalGenome, pose: Pose, owl: boolean): Figure {
   const s = new Sketch();
   const p = owl ? 1.22 : g.plump ?? 1;
-  const hs = owl ? 1.45 : g.head ?? 1;
+  const hs = owl ? 1.25 : g.head ?? 1;
   const crestH = owl ? 0 : g.crest === 'crest' ? 8 : g.crest === 'tuft' ? 3.5 : 0;
   const hx = 20;
   const hy = -8;
@@ -460,7 +460,12 @@ function lepidoptera(g: AnimalGenome, pose: Pose, moth: boolean): Figure {
       s.add('wingMark', oval(15 * hw * open * k, 8 * hw, 4.2 * Math.max(0.3, open), 4.2));
       s.add('dark', oval(15 * hw * open * k, 8 * hw, 1.8 * Math.max(0.3, open), 1.8));
     }
-    if (g.pattern === 'band') s.fill('wingMark', M([[9, -11], [25 * fw, -23 * fw], [27.5 * fw, -18 * fw], [12, -6.5]]));
+    if (g.pattern === 'band') {
+      s.fill(
+        'wingMark',
+        M(spline(moth ? [[12, -8], [20 * fw, -14], [26 * fw, -18 * fw], [27 * fw, -15.5 * fw], [20 * fw, -11], [13, -5.8]] : [[9, -11], [25 * fw, -23 * fw], [27.5 * fw, -18 * fw], [12, -6.5]], true, 3)),
+      );
+    }
     if (g.pattern === 'tip') s.fill('wingMark', M([[18 * fw, -26 * fw], [31 * fw, -26 * fw], [30 * fw, -17 * fw], [21 * fw, -17]]));
     if (g.pattern === 'margin') {
       for (const [x, y] of [[25 * fw, -21], [26 * fw, -16], [22, -10], [20 * hw, 6], [18 * hw, 12], [13 * hw, 15]] as Pt[]) {
@@ -598,8 +603,8 @@ function walker(g: AnimalGenome, pose: Pose): Figure {
   const hopping = pose.kind === 'hop';
 
   // Neck and head.
-  const neckA = grazing ? 0.75 : spec.neckUp;
-  const headA = grazing ? 1.25 : spec.neckUp + (g.plan === 'deer' ? 1.35 : g.plan === 'fox' ? 0.75 : 0.95);
+  const neckA = grazing ? 0.9 : spec.neckUp;
+  const headA = grazing ? 1.45 : spec.neckUp + (g.plan === 'deer' ? 1.35 : g.plan === 'fox' ? 0.75 : 0.95);
   const root: Pt = [cx + L * 0.38, cy - B * 0.2];
   const joint: Pt = [root[0] + Math.cos(neckA) * neckL, root[1] + Math.sin(neckA) * neckL];
   const hp = (x: number, y: number): Pt => {
@@ -781,7 +786,10 @@ function hedgehog(g: AnimalGenome, pose: Pose): Figure {
   }
   const dome = spline([[-13, -2.5 - bob], [-12, -9 - bob], [-4, -14 - bob], [6, -13 - bob], [12, -7 - bob], [13, -2.5 - bob], [0, -1.2 - bob]], true, 5);
   // The face and snout, pale, under the brim of spines.
-  s.fill('belly', spline([[8, -8 - bob], [15, -5.5 - bob], [19.5, -3.2 - bob], [15, -1.5 - bob], [8, -2 - bob]], true, 3));
+  // The face and snout, under the brim of spines: part of the body, so the
+  // nose sits on the end of it, with the pale of the face inside.
+  s.fill('body', spline([[8, -8 - bob], [15, -5.6 - bob], [19.8, -3.3 - bob], [15.5, -1.4 - bob], [8, -1.8 - bob]], true, 3));
+  s.fill('belly', spline([[10, -7 - bob], [15, -5 - bob], [18, -3.4 - bob], [14, -2.2 - bob], [10, -2.6 - bob]], true, 3));
   s.fill('body', dome);
   for (let i = 0; i < 26; i++) {
     const a = Math.PI + (i / 25) * Math.PI;

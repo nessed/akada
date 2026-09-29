@@ -261,6 +261,9 @@ export default function WoodScene({ mode, courseId, color, sitting, ended, previ
     let slowFrames = 0;
     let settledFor = 0;
     let clear: { x: number; y: number; w: number; h: number } | null = null;
+    // A soft patch the size of the chrome, for letting the land go quiet
+    // behind the clock and the buttons.
+    const hush = document.createElement('canvas');
 
     const measure = (): { L: SceneLayout; pal: Palette } => {
       const rect = wrap.getBoundingClientRect();
@@ -279,6 +282,19 @@ export default function WoodScene({ mode, courseId, color, sitting, ended, previ
       const pal = makePalette(paper, color, wood.env.season, night || luminance(paper) < 0.4);
       const chrome = clearRef?.current?.getBoundingClientRect();
       clear = chrome ? { x: (chrome.left - rect.left) * px, y: (chrome.top - rect.top) * px, w: chrome.width * px, h: chrome.height * px } : null;
+      hush.width = w;
+      hush.height = h;
+      const hctx = hush.getContext('2d');
+      if (hctx) {
+        hctx.clearRect(0, 0, w, h);
+        if (clear) {
+          const feather = 36 * px;
+          hctx.filter = `blur(${feather / 2}px)`;
+          hctx.fillStyle = 'rgba(0,0,0,0.72)';
+          hctx.fillRect(clear.x - feather / 2, clear.y - feather / 2, clear.w + feather, clear.h + feather);
+          hctx.filter = 'none';
+        }
+      }
       return { L, pal };
     };
     let { L, pal } = measure();
@@ -364,8 +380,14 @@ export default function WoodScene({ mode, courseId, color, sitting, ended, previ
         const stem = recede(pal, pal.dark ? '#7D6E5C' : '#8B775F', back + 0.1);
         // A tree comes up as a sapling and fades in, rather than standing
         // there as a bare trunk waiting for its crown.
-        const drawn = 0.25 + 0.75 * grown;
-        const sp = treeSprite(store, pal, tree, `t${e.id}`, e.h * L.ground * s, drawn, { stem, leaf }, L.px);
+        // The tall ones come in already branching, so they never stand
+        // there as a bare fork.
+        const floor = e.h > 0.7 ? 0.5 : 0.25;
+        const drawn = floor + (1 - floor) * grown;
+        // On the page the tall ones stop short of the top: that edge is the
+        // reader's own tree's to reach.
+        const tall = night ? e.h : Math.min(e.h, 0.78);
+        const sp = treeSprite(store, pal, tree, `t${e.id}`, tall * L.ground * s, drawn, { stem, leaf }, L.px);
         const x = e.x * L.w;
         const y = groundPx(L, e.d);
         const rot = sway(e);
@@ -486,6 +508,16 @@ export default function WoodScene({ mode, courseId, color, sitting, ended, previ
         const back = (1 - v.d) * 0.75;
         const alpha = v.alpha * inClear(x, y);
         if (alpha <= 0.02) continue;
+        // Anything on the ground casts a little shadow onto it.
+        if (plan === 'deer' || plan === 'fox' || plan === 'hare' || plan === 'hedgehog' || v.pose.kind === 'perch') {
+          ctx.save();
+          ctx.globalAlpha = alpha * (pal.dark ? 0.35 : 0.14);
+          ctx.fillStyle = pal.dark ? '#000000' : '#6B5A40';
+          ctx.beginPath();
+          ctx.ellipse(x, y, size * 0.45, size * 0.06, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
         if (size < 9 * L.px && (v.genome.plan === 'songbird' || v.genome.plan === 'raptor' || v.genome.plan === 'owl' || v.genome.plan === 'bat')) {
           drawSpeck(ctx, x, y, size, v.pose.t, inksFor(pal, v.genome, back).ink, L.px, alpha);
           continue;
@@ -555,6 +587,17 @@ export default function WoodScene({ mode, courseId, color, sitting, ended, previ
           fctx.lineTo(x + 3 * L.px * wood.env.windDir, y + 11 * L.px);
         }
         fctx.stroke();
+      }
+
+      // Behind the clock and the buttons the land goes quiet, so the page's
+      // one piece of chrome is never read against a log or a thicket.
+      if (clear) {
+        for (const c of [bctx, fctx]) {
+          c.save();
+          c.globalCompositeOperation = 'destination-out';
+          c.drawImage(hush, 0, 0);
+          c.restore();
+        }
       }
 
       // The governor: if drawing takes too long, thin the wood; if there is
