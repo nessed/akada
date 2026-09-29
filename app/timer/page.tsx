@@ -153,6 +153,11 @@ export default function TimerPage() {
   const active = liveActive ?? (pendingLog ? held?.active ?? null : null);
   const elapsedSeconds = liveActive ? liveElapsed : held?.elapsed ?? 0;
   const focusSeconds = liveActive ? liveFocus : held?.focus ?? 0;
+  // In the deep, the noise darkens as the water does. Stepped, so the
+  // filter is only touched a few dozen times over a whole descent.
+  const noiseDepth = timerDrawing === 'ocean' ? Math.round(depthAt(focusSeconds).z * 50) / 50 : null;
+  const setNoiseDepth = noise.setDepth;
+  useEffect(() => setNoiseDepth(noiseDepth), [setNoiseDepth, noiseDepth]);
   const onBreak = liveActive ? liveOnBreak : held?.onBreak ?? false;
   const breakTarget = liveActive ? liveBreakTarget : held?.breakTarget ?? null;
   /* Whether anything on screen can still be acted on. A held frame is a

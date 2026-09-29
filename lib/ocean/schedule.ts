@@ -41,6 +41,8 @@ export interface Visitor {
   alpha: number;
   /** Its own offset for bobbing, undulating and blinking. */
   phase: number;
+  /** Which way it faces, -1 to 1, when that is not `dir`: 0 is edge-on, mid-turn. */
+  face?: number;
 }
 
 /** Seconds of focus a crossing takes, far to near: far things are slow. */
@@ -94,6 +96,19 @@ function membersPerSpawn(pool: Species[]): number {
 }
 
 /**
+ * Which species a given second set off, if any, in a full-screen sea. Uses
+ * the same first two rolls as `visitorsAt`, so it names exactly who swam by;
+ * the recap reads this, so it is the same on a phone and a monitor.
+ */
+export function spawnAt(biome: Biome, slot: number): Species | null {
+  const r = mulberry32(hash32(biome.key, 'slot', slot));
+  const zone = depthAt(slot).zone;
+  const pool = biome.pools[zone];
+  if (r() >= rateAt(slot, 1, membersPerSpawn(pool))) return null;
+  return pool[pickIndex(r, pool.map((s) => s.abundance))];
+}
+
+/**
  * Everyone in the water at `t` seconds of focus, in a view of the given
  * size. `quality` below 1 thins the far layer, for a device that is
  * struggling; it never removes anything near.
@@ -133,6 +148,7 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1): Vi
     let x: number;
     let y: number;
     let alpha = LAYER_ALPHA[layer];
+    let face: number | undefined;
     if (species.floor) {
       // Floor-dwellers keep to the bottom and only shuffle along it,
       // fading in and out rather than crossing the whole page.
@@ -140,6 +156,36 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1): Vi
       x = x0 + dir * age * view.width * 0.18;
       y = view.height * range(r, 0.9, 0.96);
       alpha *= Math.min(1, age / 0.08, (1 - age) / 0.08);
+    } else if (species.curious && layer > 0) {
+      // Curious: comes in from its side, circles the jelly once or twice,
+      // and goes out the other way. Never over the bell: the circle is wide.
+      const cx = view.width / 2;
+      const cy = view.height * 0.3;
+      const rad = Math.min(view.width, view.height) * range(r, 0.24, 0.32);
+      const laps = range(r, 1, 2);
+      const from = dir > 0 ? -len : view.width + len;
+      const to = dir > 0 ? view.width + len : -len;
+      const start = dir > 0 ? Math.PI : 0;
+      const orbit = (a: number) => [cx + Math.cos(a) * rad, cy + Math.sin(a) * rad * 0.6] as const;
+      const arrive = orbit(start);
+      const leaveAt = start + dir * laps * Math.PI * 2;
+      const leave = orbit(leaveAt);
+      if (age < 0.25) {
+        const k = age / 0.25;
+        x = from + (arrive[0] - from) * k;
+        y = arrive[1] + (1 - k) * view.height * 0.1;
+      } else if (age < 0.8) {
+        const k = (age - 0.25) / 0.55;
+        const a = start + dir * laps * Math.PI * 2 * k;
+        [x, y] = orbit(a);
+        // Facing the way it is going round, and turning rather than flipping.
+        const f = -Math.sin(a) * dir * 1.6;
+        face = Math.sign(f || 1) * Math.max(0.2, Math.min(1, Math.abs(f)));
+      } else {
+        const k = (age - 0.8) / 0.2;
+        x = leave[0] + (to - leave[0]) * k;
+        y = leave[1];
+      }
     } else {
       const margin = len * 0.9;
       const travel = view.width + margin * 2;
@@ -163,10 +209,11 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1): Vi
           age,
           alpha,
           phase: phase + m * 0.7,
+          face,
         });
       }
     } else {
-      out.push({ key, species, layer, x, y, len, dir, age, alpha, phase });
+      out.push({ key, species, layer, x, y, len, dir, age, alpha, phase, face });
     }
   }
   // Far first, near last, which is the order they are drawn in.

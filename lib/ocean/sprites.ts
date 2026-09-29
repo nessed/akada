@@ -70,10 +70,20 @@ function render(species: Species, lenCss: number, dark: boolean, dpr: number): S
   const h = a.maxY - a.minY;
   const scale = (lenCss * dpr) / Math.max(w, h);
   const glow = species.genome.lit || dark;
-  // Room for the glow to fade out before the edge, or it is cut square.
-  const pad = Math.ceil((6 + (glow ? 22 : 0)) * dpr);
-  const cw = Math.min(2048, Math.ceil(w * scale + pad * 2));
-  const ch = Math.min(2048, Math.ceil(h * scale + pad * 2));
+  // The halo is left out of the bounds, so it does not shrink the animal,
+  // but it still needs the room: past the body, then its blur, or it is
+  // cut square. Evenly on both sides, so the body stays centred.
+  let ox = 0;
+  let oy = 0;
+  for (const s of [...a.layers.glowBack, ...a.layers.dotGlow]) {
+    if (s.kind !== 'disc') continue;
+    ox = Math.max(ox, a.minX - (s.x - s.rx), s.x + s.rx - a.maxX);
+    oy = Math.max(oy, a.minY - (s.y - s.ry), s.y + s.ry - a.maxY);
+  }
+  const padX = Math.ceil(ox * scale + (6 + (glow ? 22 : 0)) * dpr);
+  const padY = Math.ceil(oy * scale + (6 + (glow ? 22 : 0)) * dpr);
+  const cw = Math.min(2048, Math.ceil(w * scale + padX * 2));
+  const ch = Math.min(2048, Math.ceil(h * scale + padY * 2));
   const canvas = document.createElement('canvas');
   canvas.width = cw;
   canvas.height = ch;
@@ -82,7 +92,7 @@ function render(species: Species, lenCss: number, dark: boolean, dpr: number): S
   const ink = creatureInk(species.genome, dark);
   // Line weights in device pixels, heavier on a bigger animal.
   const lw = Math.max(0.6, Math.min(1.5, lenCss / 150)) * dpr;
-  ctx.setTransform(scale, 0, 0, scale, pad - a.minX * scale, pad - a.minY * scale);
+  ctx.setTransform(scale, 0, 0, scale, padX - a.minX * scale, padY - a.minY * scale);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   paint(ctx, a, ink, scale, lw, dpr, species.genome.pattern === 'bands');

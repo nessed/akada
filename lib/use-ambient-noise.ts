@@ -17,6 +17,10 @@ export function useAmbientNoise() {
   const whiteNoiseSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const whiteNoiseGainRef = useRef<GainNode | null>(null);
   const whiteNoiseStartingRef = useRef(false);
+  const filterRef = useRef<BiquadFilterNode | null>(null);
+  /* How deep the ocean is, 0 to 1, or null when the timer is not drawing one.
+     The noise darkens as the water does: the top end goes first. */
+  const depthRef = useRef<number | null>(null);
 
 
   useEffect(() => {
@@ -28,6 +32,8 @@ export function useAmbientNoise() {
       }
       whiteNoiseSourceRef.current?.disconnect();
       whiteNoiseGainRef.current?.disconnect();
+      filterRef.current?.disconnect();
+      filterRef.current = null;
       whiteNoiseSourceRef.current = null;
       whiteNoiseGainRef.current = null;
       whiteNoiseContextRef.current?.close();
@@ -143,10 +149,25 @@ export function useAmbientNoise() {
     return seamlessBuffer;
   }
 
+  /** The lowpass cutoff for a depth: open at the surface, a low hush on the floor. */
+  function cutoffFor(z: number | null) {
+    if (z == null) return 20000;
+    return 12000 * Math.pow(700 / 12000, Math.max(0, Math.min(1, z)));
+  }
+
+  /* Stable, so the timer can call it from an effect keyed on depth alone. */
+  const setDepth = useCallback((z: number | null) => {
+    depthRef.current = z;
+    const filter = filterRef.current;
+    const context = whiteNoiseContextRef.current;
+    if (filter && context) filter.frequency.setTargetAtTime(cutoffFor(z), context.currentTime, 1.5);
+  }, []);
+
   function stopWhiteNoise() {
     const context = whiteNoiseContextRef.current;
     const source = whiteNoiseSourceRef.current;
     const gain = whiteNoiseGainRef.current;
+    const filter = filterRef.current;
 
     if (context && gain) {
       gain.gain.cancelScheduledValues(context.currentTime);
@@ -161,6 +182,8 @@ export function useAmbientNoise() {
       }
       source?.disconnect();
       gain?.disconnect();
+      filter?.disconnect();
+      if (filterRef.current === filter) filterRef.current = null;
       if (whiteNoiseSourceRef.current === source) whiteNoiseSourceRef.current = null;
       if (whiteNoiseGainRef.current === gain) whiteNoiseGainRef.current = null;
     }, 90);
@@ -193,10 +216,16 @@ export function useAmbientNoise() {
       source.loop = true;
       gain.gain.setValueAtTime(0, context.currentTime);
       gain.gain.linearRampToValueAtTime(0.45, context.currentTime + 0.12);
-      source.connect(gain);
+      const filter = context.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.Q.value = 0.5;
+      filter.frequency.value = cutoffFor(depthRef.current);
+      source.connect(filter);
+      filter.connect(gain);
       gain.connect(context.destination);
       source.start();
 
+      filterRef.current = filter;
       whiteNoiseSourceRef.current = source;
       whiteNoiseGainRef.current = gain;
       setWhiteNoiseOn(true);
@@ -218,5 +247,7 @@ export function useAmbientNoise() {
     /** Set when the device refused audio, for the caller to show inline. */
     error: whiteNoiseError,
     toggle,
+    /** Darkens the noise with the ocean's depth; null leaves it as it was. */
+    setDepth,
   };
 }

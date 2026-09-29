@@ -739,6 +739,34 @@ only ever grows, it never runs backwards, and none of it touches progress.
   name and depth are written in the margin in the hand, `twilight · 200 m`,
   for six seconds, then go. Only a crossing actually watched is marked: a
   reload, a still or reduced motion never announces one.
+- **Some of them behave.** A few species are curious: they come in from
+  their side, circle the jelly once or twice, wide of the bell, turning edge-on
+  as they come round rather than flipping, and leave the other way. Lit
+  species blink, each in its own rhythm, a flash that dies away and then the
+  wait.
+- **Now and then, something rare.** One roll a minute against the zone's
+  rare events, never two within eight minutes, and the odds are flat per
+  minute: a long sitting has more minutes to be lucky in and no more luck per
+  minute. In the light, a whale's shadow goes slowly over (about one sitting
+  in four that reaches the twilight). From the midnight zone down the water
+  sometimes lights up, a cloud of tiny animals flashing that comes up over
+  seconds and never at once; less often a giant squid's eye opens at the edge
+  of the page, high and clear of the clock, blinks once and goes. In the abyss,
+  about one three-hour sitting in a hundred and fifty, something very large
+  goes past behind everything, a dark flank with lights along it; no head, no
+  tail. Nothing is announced and nothing is scored.
+- **The noise darkens.** With ambient noise on, a lowpass follows the depth:
+  open at the surface, a low hush on the floor.
+
+**The recap.** On the finish sheet, under the chain, one line of fact in the
+serif at 13px, lowercase, with a small ink drawing of the animal beside it:
+`down to 3,102 m · met Hamiophis vitrea · the water lit up`. The metres are
+mono digits, the name is the binomial in italic. The animal is the rarest one
+that really swam by in the deepest water the session reached, read off the
+same rolls the timer drew from on a reference full screen, so it is the same
+on any device; the phrase is the rarest event, if there was one. No counts,
+no "new!", no praise. A recovered session (the clock ran on without the
+reader) gets no recap: the ocean would be describing a dive nobody took.
 
 **In the block frame** the deep is laid on the page itself, a watercolour
 over the notebook: the rules show faintly through the shallows and are
@@ -748,7 +776,7 @@ water from the start. The wash thins back to bare paper in oval bleeds under
 the frame's three corners (the course code, the time range, the tally), and
 animals keep out of them, so what is written there reads at any depth. The
 pencil sketch and the ground are the jellyfish's, unchanged. Geometry is in `lib/ocean/` (`depth`, `genome`,
-`anatomy`, `biome`, `schedule`, `lineage`, `palette`), the drawing in
+`anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`), the drawing in
 `lib/ocean/draw.ts` and `sprites.ts`, the scene in `components/OceanScene.tsx`,
 which draws the far water behind the hero `StudyFan` and the near animals in
 front of it.

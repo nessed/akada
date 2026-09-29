@@ -187,6 +187,11 @@ export function drawVisitor(
 ) {
   const g = v.species.genome;
   const bob = Math.sin(ambient * 0.7 + v.phase) * v.len * 0.04 * px;
+  if (g.lit) {
+    // Its lights, in its own rhythm: a flash that dies away, then the wait.
+    const b = ((ambient / v.species.blink + v.phase / (Math.PI * 2)) % 1 + 1) % 1;
+    alpha *= 0.62 + 0.38 * Math.exp(-b * 7);
+  }
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(v.x * px, v.y * px + bob);
@@ -202,7 +207,7 @@ export function drawVisitor(
     ctx.scale(sx, sy);
     ctx.drawImage(sprite.canvas, -w / 2, -h / 2);
   } else {
-    ctx.scale(v.dir, 1);
+    ctx.scale(v.face ?? v.dir, 1);
     if (g.plan === 'ray') {
       const flap = 1 + 0.1 * Math.sin(ambient * 2 + v.phase);
       ctx.scale(1, flap);
@@ -303,5 +308,184 @@ export function drawShimmer(ctx: CanvasRenderingContext2D, w: number, h: number,
   }
   ctx.closePath();
   ctx.fill();
+  ctx.restore();
+}
+
+/* ---- The rare things. Each takes how far through it is, 0 to 1, and its
+   own seed, and is drawn straight in; none of them is a sprite. ---- */
+
+/** In and out softly, so nothing arrives in a flash. */
+function envelope(age: number, rise: number, fall: number): number {
+  return Math.max(0, Math.min(1, age / rise, (1 - age) / fall));
+}
+
+/**
+ * A whale, far overhead: only its shadow against the light, going the way
+ * the water goes, slowly, across the whole page.
+ */
+export function drawWhale(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, dir: 1 | -1, px: number, ambient: number, dark: boolean) {
+  const len = Math.max(w, h) * 0.62;
+  const travel = w + len * 2;
+  const x = dir > 0 ? -len + age * travel : w + len - age * travel;
+  const y = h * (0.1 + ((seed >>> 8) % 100) / 100 * 0.12);
+  const a = envelope(age, 0.15, 0.15) * (dark ? 0.2 : 0.16);
+  const fluke = Math.sin(ambient * 0.9) * len * 0.03;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = dark ? '#000000' : '#2A3438';
+  ctx.filter = `blur(${3 * px}px)`;
+  ctx.translate(x, y);
+  ctx.scale(dir, 1);
+  ctx.beginPath();
+  // Head at +x, tail stock tapering to -x, flukes at the end.
+  ctx.moveTo(len * 0.5, 0);
+  ctx.bezierCurveTo(len * 0.48, -len * 0.09, len * 0.1, -len * 0.11, -len * 0.3, -len * 0.04);
+  ctx.quadraticCurveTo(-len * 0.44, -len * 0.01 + fluke * 0.3, -len * 0.48, fluke * 0.5);
+  ctx.lineTo(-len * 0.6, -len * 0.07 + fluke);
+  ctx.quadraticCurveTo(-len * 0.55, fluke, -len * 0.6, len * 0.07 + fluke);
+  ctx.lineTo(-len * 0.48, len * 0.01 + fluke * 0.5);
+  ctx.quadraticCurveTo(-len * 0.44, len * 0.02, -len * 0.3, len * 0.05);
+  ctx.bezierCurveTo(len * 0.1, len * 0.12, len * 0.46, len * 0.08, len * 0.5, 0);
+  ctx.fill();
+  // A pectoral fin, hanging down.
+  ctx.beginPath();
+  ctx.moveTo(len * 0.22, len * 0.07);
+  ctx.quadraticCurveTo(len * 0.12, len * 0.22, len * 0.02, len * 0.2);
+  ctx.quadraticCurveTo(len * 0.1, len * 0.12, len * 0.14, len * 0.07);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The water lighting up: a cloud of tiny animals flashing, slowly spreading
+ * out from somewhere to one side. It comes up over seconds, never at once.
+ */
+export function drawStorm(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number) {
+  const env = envelope(age, 0.12, 0.3);
+  if (env <= 0) return;
+  const cx = w * (0.25 + ((seed >>> 4) % 100) / 100 * 0.5);
+  const cy = h * (0.35 + ((seed >>> 12) % 100) / 100 * 0.35);
+  const spread = Math.max(w, h) * (0.2 + age * 0.35);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  // A haze first, then the points.
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, spread);
+  g.addColorStop(0, `rgba(120, 214, 200, ${0.2 * env})`);
+  g.addColorStop(1, 'rgba(120, 214, 200, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  let s = seed || 1;
+  const next = () => {
+    s = (Math.imul(s ^ (s >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) | 0;
+    return ((s >>> 0) % 10000) / 10000;
+  };
+  for (let i = 0; i < 320; i++) {
+    const ang = next() * Math.PI * 2;
+    const rad = Math.sqrt(next()) * spread;
+    const period = 1.5 + next() * 3;
+    const off = next() * period;
+    const b = ((ambient + off) % period) / period;
+    const flash = Math.exp(-b * 8);
+    const x = cx + Math.cos(ang) * rad + Math.sin(ambient * 0.3 + i) * 6 * px;
+    const y = cy + Math.sin(ang) * rad * 0.7 + Math.cos(ambient * 0.25 + i) * 6 * px;
+    const r = (1.1 + flash * 2.6) * px;
+    ctx.globalAlpha = env * (0.3 + 0.7 * flash);
+    ctx.fillStyle = i % 5 === 0 ? '#C9F2FF' : '#8EF0D2';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * An eye at the edge of the page, bigger than anything else in the water,
+ * that opens, looks, blinks once, and is gone. The rest of the animal is
+ * never seen.
+ */
+export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, dark: boolean) {
+  const env = envelope(age, 0.25, 0.25);
+  if (env <= 0) return;
+  const left = seed % 2 === 0;
+  const r = Math.min(w, h) * 0.2;
+  const cx = left ? -r * 0.3 : w + r * 0.3;
+  // High on the page, clear of the clock and the controls.
+  const cy = h * (0.18 + ((seed >>> 6) % 100) / 100 * 0.2);
+  // One slow blink, just past the middle.
+  const lid = age > 0.55 && age < 0.65 ? Math.sin(((age - 0.55) / 0.1) * Math.PI) : 0;
+  const open = 1 - lid * 0.92;
+  ctx.save();
+  ctx.globalAlpha = env * (dark ? 0.75 : 0.65);
+  ctx.translate(cx, cy);
+  ctx.scale(1, open);
+  // Skin round it, then the eye.
+  const skin = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 1.6);
+  skin.addColorStop(0, dark ? 'rgba(90, 40, 36, 0.9)' : 'rgba(120, 70, 60, 0.7)');
+  skin.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = dark ? '#A89F8C' : '#D9D0BB';
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3B4A4E';
+  ctx.beginPath();
+  ctx.arc(left ? r * 0.12 : -r * 0.12, 0, r * 0.72, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#0B0B0A';
+  ctx.beginPath();
+  ctx.ellipse(left ? r * 0.16 : -r * 0.16, 0, r * 0.2, r * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath();
+  ctx.arc(left ? r * 0.35 : r * 0.1, -r * 0.3, r * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#1A1815';
+  ctx.lineWidth = 2 * px;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Something very large going past behind everything: a long dark flank,
+ * lit here and there, that never shows a head or a tail.
+ */
+export function drawLeviathan(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, dir: 1 | -1, px: number, ambient: number) {
+  const env = envelope(age, 0.2, 0.2);
+  if (env <= 0) return;
+  const y0 = h * (0.55 + ((seed >>> 5) % 100) / 100 * 0.2);
+  const thick = h * 0.34;
+  const shift = (dir > 0 ? age : 1 - age) * w * 1.6 - w * 0.3;
+  ctx.save();
+  ctx.globalAlpha = env * 0.55;
+  ctx.fillStyle = '#050505';
+  ctx.filter = `blur(${4 * px}px)`;
+  ctx.beginPath();
+  ctx.moveTo(-10, h + 10);
+  for (let i = 0; i <= 40; i++) {
+    const x = (i / 40) * (w + 20) - 10;
+    const y = y0 - Math.sin((x - shift) / w * Math.PI * 1.3 + ambient * 0.05) * thick * 0.35 - thick * 0.3;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w + 10, h + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.filter = 'none';
+  // A row of lights along the flank, moving with it.
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 14; i++) {
+    const x = ((i / 14) * w * 1.6 + shift) % (w * 1.6) - w * 0.3;
+    const y = y0 - Math.sin((x - shift) / w * Math.PI * 1.3 + ambient * 0.05) * thick * 0.35 - thick * 0.1;
+    const pulse = 0.5 + 0.5 * Math.sin(ambient * 1.2 + i);
+    ctx.globalAlpha = env * 0.8 * pulse;
+    ctx.fillStyle = '#9FE6D0';
+    ctx.beginPath();
+    ctx.arc(x, y, 3.2 * px, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }

@@ -34,6 +34,8 @@ interface Props {
    * duration and a question and not a word about why the duration mattered.
    */
   effect?: SittingEffect | null;
+  /** The deep's read of the session, when the timer drew one. */
+  recap?: React.ReactNode;
   /**
    * How long this reader's sittings on this course usually run, in seconds,
    * once there are enough to say. Set beside this one with no verb between
@@ -77,6 +79,7 @@ export default function SessionLogModal({
   breakSeconds = 0,
   segments = [],
   effect = null,
+  recap = null,
   usualSeconds = null,
   suggestions = [],
   saving = false,
@@ -258,6 +261,8 @@ export default function SessionLogModal({
             height={10}
           />
         )}
+
+        {recap}
 
         {/* The sitting read back to its reader, in the order it happened.
             Each block's length in mono beside what it covered in the serif,

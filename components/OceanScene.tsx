@@ -5,7 +5,22 @@ import { mixHex } from '@/lib/fan';
 import { buildJelly, drawJelly, jellyBeat, jellyInk, type JellyShape } from '@/lib/jelly';
 import { rollBiome } from '@/lib/ocean/biome';
 import { depthAt, ZONES } from '@/lib/ocean/depth';
-import { drawFloor, drawRules, drawShafts, drawShimmer, drawSnow, drawSurface, drawVisitor, drawWater, rollSnow } from '@/lib/ocean/draw';
+import {
+  drawEye,
+  drawFloor,
+  drawLeviathan,
+  drawRules,
+  drawShafts,
+  drawShimmer,
+  drawSnow,
+  drawStorm,
+  drawSurface,
+  drawVisitor,
+  drawWater,
+  drawWhale,
+  rollSnow,
+} from '@/lib/ocean/draw';
+import { eventsAt } from '@/lib/ocean/events';
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
 import { hash32 } from '@/lib/ocean/random';
@@ -210,6 +225,14 @@ export default function OceanScene({
       drawSnow(bctx, W, H, snow.back, water.snow, ambient, biome.env.current, px, biome.env.visibility);
       drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px);
 
+      // The rare things, when one is under way: behind everything, the
+      // large and far; the eye goes on the front, at the edge.
+      const events = eventsAt(biome, shown);
+      for (const { event, age } of events) {
+        if (event.kind === 'whale') drawWhale(bctx, W, H, age, event.seed, biome.env.current, px, ambient, water.dark);
+        else if (event.kind === 'leviathan') drawLeviathan(bctx, W, H, age, event.seed, biome.env.current, px, ambient);
+      }
+
       // The bloom: every finished block's jelly, hanging back in the water.
       const count = Math.min(10, L.blocks);
       for (let i = 0; i < count; i++) {
@@ -245,6 +268,9 @@ export default function OceanScene({
         bctx.drawImage(b.canvas, x, y);
       }
       bctx.globalAlpha = 1;
+      for (const { event, age } of events) {
+        if (event.kind === 'storm') drawStorm(bctx, W, H, age, event.seed, px, ambient);
+      }
 
       // The animals. Anything that wanders over the clock goes faint there.
       const visitors = visitorsAt(biome, shown, { width: css.w, height: css.h }, quality);
@@ -263,6 +289,9 @@ export default function OceanScene({
           }
         }
         drawVisitor(ctx, sprite, v, px, ambient, alpha, strips);
+      }
+      for (const { event, age } of events) {
+        if (event.kind === 'eye') drawEye(fctx, front.width, front.height, age, event.seed, px, water.dark);
       }
       drawSnow(fctx, front.width, front.height, snow.front, water.snow, ambient * 1.3, biome.env.current, px, 1.8);
 
