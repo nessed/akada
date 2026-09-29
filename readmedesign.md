@@ -628,8 +628,7 @@ natural-history plate draws one, in the course colour, never a cartoon.
   tentacles, held at the tips, stretch and slacken behind. Left alone it
   wanders a little either side on two slow slides that do not line up, leaning
   into the one it is on, with each depth of the trails reading the slide from
-  a moment earlier so they drag. A cursor over the frame draws it a little
-  toward it, and off the frame it drifts back. A slow wave travels down every
+  a moment earlier so they drag. A slow wave travels down every
   tentacle and arm, a few ink bubbles rise off the crown, and on the night
   paper the sense organs flicker unevenly and the glow swells with the beat. It is the one drawing in
   the app that moves on its own, so its loop never parks while it is open;
@@ -657,7 +656,8 @@ natural-history plate draws one, in the course colour, never a cartoon.
   Touching it makes it clench, the same squeeze as the beat, laid over it. A
   poke (down and up inside 350ms and 6px) is the clench and then a jet, up
   and away from the side that was touched. A cursor going by with no button
-  down shows a grab hand on the jelly and sets it rocking. None of it
+  down only shows a grab hand on the jelly: it moves when clicked, never for
+  a hover. None of it
   touches progress. The canvas takes `touch-action: none` for a jelly, so
   vertical pulls are the jelly's and not the page's; reduced motion gets a
   jelly that does not answer a hand at all.
