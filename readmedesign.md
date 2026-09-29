@@ -596,7 +596,10 @@ literal values rather than the paper tokens, because on the night ground
 `text-ink` is still the daylight ink. Its chrome floats over the fan and only
 the chrome takes the pointer: the empty middle of that screen is left to the
 tree, so a hand that reaches into it lands on a branch rather than on a sheet
-of glass laid over one.
+of glass laid over one. In the deep the whole screen is the
+ocean, and still only the jelly and the chrome take a hand: the water and
+the animals in it are drawn under and over the jelly on canvases that let the
+pointer through.
 
 ### The jellyfish
 The fan's alternative, picked in Settings › Timer ("The timer draws a tree /
@@ -761,6 +764,111 @@ tree in the middle of it; the wood is what stands around it. Code in
   down two dozen times a second while nothing but the wind is moving it. A
   governor thins the flowers and fireflies if frames run long.
 
+### The deep
+The third drawing in Settings › Timer ("The timer draws the deep",
+`timerDrawing: 'ocean'`). The jellyfish is still the drawing that grows and
+answers a hand; around it is an ocean the reader sinks through as they sit,
+generated for the sitting. Every rule of the fan and the jellyfish holds: it
+only ever grows, it never runs backwards, and none of it touches progress.
+
+- **Depth is focus time.** Breaks and pauses do not sink you and nothing
+  brings you back up. The zones are the ocean's own: **sunlight** to 15
+  minutes (0 to 200 m), **twilight** to 50 (to 1,000 m), **midnight** to 110
+  (to 4,000 m), **abyss** to 180 (to 6,000 m), and past three hours the
+  **trench**, which is sunk into slowly. Open mode says the depth after
+  "since", mono digits in the serif line: `since 14:20 · 1,240 m down`.
+- **The water is a wash, not a blue.** Sea-glass grey-green under the
+  surface, through slate, settling by the midnight zone on the night paper
+  (`#1A1815`) and then the desk colour (`#110F0D`) in the abyss: sinking is
+  the page going from day to night. The course colour tints it while there is
+  light, and light shafts come down, slanting and swaying, in the sunlit
+  water only. Marine snow drifts up the whole way.
+- **The animals are generated.** Every one is a genome rolled from the
+  sitting (`lib/ocean/genome.ts`): nine body plans (jelly, comb jelly,
+  siphonophore chain, fish, eel, ray, squid, and on the floor starfish and
+  crawlers) and dozens of traits, with the depth leaning on the dice, so the
+  deep ones come out clear-bodied, big-eyed or blind, lit, lured. They are
+  drawn in the jellyfish's ink, course pastels for their colour.
+- **An ecosystem, not a zoo.** Each zone has a pool of species; half of every
+  pool is rolled from the course and comes back every sitting of it (a
+  course's sea has its regulars), half from the sitting and is never seen
+  again. A few species in a pool are common and most are rare.
+- **It fills as you sit.** A handful at the start, about thirty by the hour,
+  about sixty by two, capped. Far animals are small, faint and slow, near
+  ones large and in full ink, and never more than four near. Schools cross as
+  one flock. Swimmers undulate, bells beat, rays flap, and the floor has a
+  few things shuffling on it once the abyss is reached, with vents breathing
+  where the sitting rolled them. Anything that wanders over the header, the
+  face or the controls goes faint there, so the clock always reads.
+- **The jelly has a family.** In the deep the jelly's own body is rolled too
+  (tentacles, arms, fringe, the height of its bell, a lean toward another
+  pastel), so each sitting's jelly is a different animal, and each block's
+  jelly is the child of the last, a little changed (`lib/ocean/lineage.ts`).
+  A finished block's jelly hangs back in the water as part of a bloom that
+  stays for the sitting, faint, and fainter still behind the hero.
+- **Pause and break.** Held, the ocean eases to a stop over about 700ms and
+  goes grey, the way the rest of the screen does; the jelly closes as it
+  always has. A break is a rest on a ledge: nobody new arrives and you do not
+  sink, but the water keeps breathing at a third of its pace.
+- **Reproducible.** The ocean is a pure function of the course, the moment
+  the sitting started (which the log keeps as the first stretch's start) and
+  the focus time: there is no simulation, so a reload puts every animal back
+  where it was, and a finished sitting can always be dived again.
+- **Reduced motion** gets a still, brought up to date every half minute.
+- **Performance.** Each species is inked once to a sprite and then only
+  placed; the canvases have a pixel budget, and a struggling device gets a
+  thinner far layer, then fewer pixels. The ocean's code is fetched only by
+  someone who has chosen it.
+
+- **The way down is marked.** For the first minute and a half the surface
+  shows from below, a bright rippling ceiling at the top of the water that
+  rises out of view. Crossing into a new zone is a moment: a faint shimmer
+  (the thermocline) rises through the water over four seconds, and the zone's
+  name and depth are written in the margin in the hand, `twilight · 200 m`,
+  for six seconds, then go. Only a crossing actually watched is marked: a
+  reload, a still or reduced motion never announces one.
+- **Some of them behave.** A few species are curious: they come in from
+  their side, circle the jelly once or twice, wide of the bell, turning edge-on
+  as they come round rather than flipping, and leave the other way. Lit
+  species blink, each in its own rhythm, a flash that dies away and then the
+  wait.
+- **Now and then, something rare.** One roll a minute against the zone's
+  rare events, never two within eight minutes, and the odds are flat per
+  minute: a long sitting has more minutes to be lucky in and no more luck per
+  minute. In the light, a whale's shadow goes slowly over (about one sitting
+  in four that reaches the twilight). From the midnight zone down the water
+  sometimes lights up, a cloud of tiny animals flashing that comes up over
+  seconds and never at once; less often a giant squid's eye opens at the edge
+  of the page, high and clear of the clock, blinks once and goes. In the abyss,
+  about one three-hour sitting in a hundred and fifty, something very large
+  goes past behind everything, a dark flank with lights along it; no head, no
+  tail. Nothing is announced and nothing is scored.
+- **The noise darkens.** With ambient noise on, a lowpass follows the depth:
+  open at the surface, a low hush on the floor.
+
+**The recap.** On the finish sheet, under the chain, one line of fact in the
+serif at 13px, lowercase, with a small ink drawing of the animal beside it:
+`down to 3,102 m · met Hamiophis vitrea · the water lit up`. The metres are
+mono digits, the name is the binomial in italic. The animal is the rarest one
+that really swam by in the deepest water the session reached, read off the
+same rolls the timer drew from on a reference full screen, so it is the same
+on any device; the phrase is the rarest event, if there was one. No counts,
+no "new!", no praise. A recovered session (the clock ran on without the
+reader) gets no recap: the ocean would be describing a dive nobody took.
+
+**In the block frame** the deep is laid on the page itself, a watercolour
+over the notebook: the rules show faintly through the shallows and are
+covered by the deep. On a daylight paper the wash goes dark by the midnight
+zone and the jelly's ink turns light with it; on the night paper it is night
+water from the start. The wash thins back to bare paper in oval bleeds under
+the frame's three corners (the course code, the time range, the tally), and
+animals keep out of them, so what is written there reads at any depth. The
+pencil sketch and the ground are the jellyfish's, unchanged. Geometry is in `lib/ocean/` (`depth`, `genome`,
+`anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`), the drawing in
+`lib/ocean/draw.ts` and `sprites.ts`, the scene in `components/OceanScene.tsx`,
+which draws the far water behind the hero `StudyFan` and the near animals in
+front of it.
+
 ### The break
 A block that runs out keeps running, shown as overrun rather than stopped for
 the reader. A **break** is a stretch taken by hand, from the timer, and the
@@ -868,7 +976,9 @@ else:
   inked on MATH · today counts · 38 minutes to the next tally on MATH". The
   landed part stays for the rest of the sitting, because it is the sitting's
   own record. The open-mode night screen carries only the landed part and
-  never a prompt, since that screen exists to hold one thing.
+  never a prompt, since that screen exists to hold one thing. (In the deep
+  that one thing is a place the reader sits inside: nothing in it is labelled
+  or asks for anything.)
 - **In the margin of the timer**, the course's open page as a tally, `4 / 15`
   in mono beside it. A mark that lands twelve minutes into a block draws
   itself in twelve minutes into the block: `TallyMarks` takes `fresh`, and

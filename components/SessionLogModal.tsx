@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import WoodSketch from './WoodSketch';
-import type { AnimalGenome } from '@/lib/wood/fauna';
 import type { Course, SessionSegment, Task } from '@/lib/data';
 import { MARKS_PER_PAGE, type SittingEffect } from '@/lib/progression';
 import { formatHM, resolveTint } from '@/lib/utils';
@@ -36,6 +34,8 @@ interface Props {
    * duration and a question and not a word about why the duration mattered.
    */
   effect?: SittingEffect | null;
+  /** The deep's read of the session, when the timer drew one. */
+  recap?: React.ReactNode;
   /**
    * How long this reader's sittings on this course usually run, in seconds,
    * once there are enough to say. Set beside this one with no verb between
@@ -48,11 +48,6 @@ interface Props {
    * note read through), offered under the note to be taken with a tap.
    */
   suggestions?: string[];
-  /**
-   * The wood's line, when the timer drew one: how far the land got and the
-   * rarest animal that came. Facts about the sitting, lower case, no counts.
-   */
-  wood?: { stage: string; years: number; name: string | null; id: string | null; genome: AnimalGenome | null } | null;
   saving?: boolean;
   errorMessage?: string;
   /**
@@ -84,9 +79,9 @@ export default function SessionLogModal({
   breakSeconds = 0,
   segments = [],
   effect = null,
+  recap = null,
   usualSeconds = null,
   suggestions = [],
-  wood = null,
   saving = false,
   errorMessage = '',
   notice = null,
@@ -267,23 +262,7 @@ export default function SessionLogModal({
           />
         )}
 
-        {/* The wood, read back: where the land got to, and who came. The
-            rarest one is named because it is a thing that happened, not a
-            prize; there is no count beside it and nothing to beat. */}
-        {wood && (
-          <div className="mt-3 flex items-center gap-2.5">
-            {wood.genome && wood.id ? <WoodSketch id={wood.id} genome={wood.genome} className="h-7 w-10 shrink-0" /> : null}
-            <p className="m-0 font-serif italic text-[13px] leading-[1.45] text-muted">
-              grew into {wood.stage} ·{' '}
-              <span className="font-mono not-italic tabular-nums text-[12px] text-ink-soft">{wood.years}</span> years
-              {wood.name ? (
-                <>
-                  {' '}· met <span className="text-ink">{wood.name}</span>
-                </>
-              ) : null}
-            </p>
-          </div>
-        )}
+        {recap}
 
         {/* The sitting read back to its reader, in the order it happened.
             Each block's length in mono beside what it covered in the serif,

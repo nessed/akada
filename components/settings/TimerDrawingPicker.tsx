@@ -1,14 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import HandNote from '@/components/notebook/HandNote';
 import StudyFan from '@/components/StudyFan';
-import WoodScene from '@/components/WoodScene';
 import type { TimerDrawing } from '@/lib/preferences';
+
+/* The ocean's code and the wood's are only fetched when someone opens this row. */
+const OceanScene = dynamic(() => import('@/components/OceanScene'), { ssr: false });
+const WoodScene = dynamic(() => import('@/components/WoodScene'), { ssr: false });
 
 const CHOICES: { v: TimerDrawing; label: string; word: string; color: string }[] = [
   { v: 'tree', label: 'Tree', word: 'a tree', color: '#A8B89B' },
   { v: 'jelly', label: 'Jellyfish', word: 'a jellyfish', color: '#B5A8C9' },
+  { v: 'ocean', label: 'The deep', word: 'the deep', color: '#A8BCC9' },
   { v: 'wood', label: 'Wood', word: 'a wood', color: '#A8B89B' },
 ];
 
@@ -45,7 +50,7 @@ export default function TimerDrawingPicker({
 
       {open && (
         <div className="animate-fade-in">
-          <div className="mt-3.5 grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="What the timer draws">
+          <div className="mt-3.5 grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="What the timer draws">
             {CHOICES.map((choice) => {
               const selected = choice.v === value;
               return (
@@ -59,10 +64,36 @@ export default function TimerDrawingPicker({
                     selected ? 'border-ink-soft' : 'border-line-soft'
                   }`}
                 >
-                  {choice.v === 'wood' ? (
+                  {choice.v === 'ocean' ? (
+                    // Twelve minutes down, held still: the light water, a few
+                    // animals, and the jelly in it.
+                    <OceanScene
+                      sittingKey="settings:preview"
+                      courseKey="settings:course"
+                      color={choice.color}
+                      clock={{ frozen: 12 * 60 }}
+                      blocks={0}
+                      resting={false}
+                      paused={false}
+                      still
+                      ground="paper"
+                      className="pointer-events-none block h-[118px] w-full max-w-[150px] overflow-hidden rounded-[6px]"
+                    >
+                      <StudyFan
+                        species="ocean"
+                        progress={0.8}
+                        seed="settings"
+                        color={choice.color}
+                        padTop={14}
+                        baseOffset={6}
+                        interactive={false}
+                        className="pointer-events-none absolute inset-0 h-full w-full"
+                      />
+                    </OceanScene>
+                  ) : choice.v === 'wood' ? (
                     /* The wood as it stands an hour and three quarters in:
                        young trees behind, the scrub in, still. */
-                    <span className="pointer-events-none relative block h-[118px] w-full max-w-[150px] overflow-hidden">
+                    <span className="pointer-events-none relative block h-[118px] w-full max-w-[150px] overflow-hidden rounded-[6px]">
                       <WoodScene
                         mode="frame"
                         courseId="settings"
@@ -72,19 +103,19 @@ export default function TimerDrawingPicker({
                       />
                     </span>
                   ) : (
-                  <StudyFan
-                    species={choice.v}
-                    progress={0.8}
-                    seed="settings"
-                    color={choice.color}
-                    depth={6}
-                    trunkWidth={5}
-                    padTop={choice.v === 'jelly' ? 12 : 8}
-                    baseOffset={14}
-                    ground
-                    interactive={false}
-                    className="pointer-events-none block h-[118px] w-full max-w-[150px]"
-                  />
+                    <StudyFan
+                      species={choice.v}
+                      progress={0.8}
+                      seed="settings"
+                      color={choice.color}
+                      depth={6}
+                      trunkWidth={5}
+                      padTop={choice.v === 'jelly' ? 12 : 8}
+                      baseOffset={14}
+                      ground
+                      interactive={false}
+                      className="pointer-events-none block h-[118px] w-full max-w-[150px]"
+                    />
                   )}
                   <span className={`eyebrow ${selected ? 'text-ink' : ''}`}>{choice.label}</span>
                 </button>
@@ -93,7 +124,7 @@ export default function TimerDrawingPicker({
           </div>
           <p className="mt-2.5 mb-0 text-right">
             <HandNote size={16} rotate={-1.5} color="var(--muted)">
-              same growth whichever you pick, only the drawing changes
+              same growth every way; the deep sinks, the wood grows up round it
             </HandNote>
           </p>
         </div>

@@ -9,38 +9,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * study fan; the audio graph is unchanged, only its home is. Nothing here
  * touches the DOM, so the timer screen can stay about the session.
  */
-/* The lowpass at either end of `muffle`: open air, and deep under a canopy. */
-const OPEN_HZ = 18000;
-const MUFFLED_HZ = 1100;
-
-function cutoff(muffle: number): number {
-  const m = Math.min(1, Math.max(0, muffle));
-  // Exponential, because pitch is heard that way: halfway is not 9.5kHz.
-  return OPEN_HZ * Math.pow(MUFFLED_HZ / OPEN_HZ, m);
-}
-
-/**
- * `muffle`, 0 to 1, closes the noise down the way a canopy overhead does,
- * with a lowpass that follows it slowly. The wood sets it as the trees come
- * in; everything else leaves it at 0 and hears the noise as it always was.
- */
-export function useAmbientNoise(muffle = 0) {
+export function useAmbientNoise() {
   const [whiteNoiseOn, setWhiteNoiseOn] = useState(false);
   const [whiteNoiseError, setWhiteNoiseError] = useState('');
   const whiteNoiseContextRef = useRef<AudioContext | null>(null);
   const whiteNoiseBufferRef = useRef<AudioBuffer | null>(null);
   const whiteNoiseSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const whiteNoiseGainRef = useRef<GainNode | null>(null);
-  const whiteNoiseFilterRef = useRef<BiquadFilterNode | null>(null);
-  const muffleRef = useRef(muffle);
-
-  useEffect(() => {
-    muffleRef.current = muffle;
-    const context = whiteNoiseContextRef.current;
-    const filter = whiteNoiseFilterRef.current;
-    if (context && filter) filter.frequency.setTargetAtTime(cutoff(muffle), context.currentTime, 1.5);
-  }, [muffle]);
   const whiteNoiseStartingRef = useRef(false);
+  const filterRef = useRef<BiquadFilterNode | null>(null);
+  /* How deep the ocean is, 0 to 1, or null when the timer is not drawing one.
+     The noise darkens as the water does: the top end goes first. */
+  const depthRef = useRef<number | null>(null);
 
 
   useEffect(() => {
@@ -52,10 +32,10 @@ export function useAmbientNoise(muffle = 0) {
       }
       whiteNoiseSourceRef.current?.disconnect();
       whiteNoiseGainRef.current?.disconnect();
-      whiteNoiseFilterRef.current?.disconnect();
+      filterRef.current?.disconnect();
+      filterRef.current = null;
       whiteNoiseSourceRef.current = null;
       whiteNoiseGainRef.current = null;
-      whiteNoiseFilterRef.current = null;
       whiteNoiseContextRef.current?.close();
       whiteNoiseContextRef.current = null;
     };
@@ -169,11 +149,25 @@ export function useAmbientNoise(muffle = 0) {
     return seamlessBuffer;
   }
 
+  /** The lowpass cutoff for a depth: open at the surface, a low hush on the floor. */
+  function cutoffFor(z: number | null) {
+    if (z == null) return 20000;
+    return 12000 * Math.pow(700 / 12000, Math.max(0, Math.min(1, z)));
+  }
+
+  /* Stable, so the timer can call it from an effect keyed on depth alone. */
+  const setDepth = useCallback((z: number | null) => {
+    depthRef.current = z;
+    const filter = filterRef.current;
+    const context = whiteNoiseContextRef.current;
+    if (filter && context) filter.frequency.setTargetAtTime(cutoffFor(z), context.currentTime, 1.5);
+  }, []);
+
   function stopWhiteNoise() {
     const context = whiteNoiseContextRef.current;
     const source = whiteNoiseSourceRef.current;
     const gain = whiteNoiseGainRef.current;
-    const filter = whiteNoiseFilterRef.current;
+    const filter = filterRef.current;
 
     if (context && gain) {
       gain.gain.cancelScheduledValues(context.currentTime);
@@ -189,7 +183,7 @@ export function useAmbientNoise(muffle = 0) {
       source?.disconnect();
       gain?.disconnect();
       filter?.disconnect();
-      if (whiteNoiseFilterRef.current === filter) whiteNoiseFilterRef.current = null;
+      if (filterRef.current === filter) filterRef.current = null;
       if (whiteNoiseSourceRef.current === source) whiteNoiseSourceRef.current = null;
       if (whiteNoiseGainRef.current === gain) whiteNoiseGainRef.current = null;
     }, 90);
@@ -225,15 +219,15 @@ export function useAmbientNoise(muffle = 0) {
       const filter = context.createBiquadFilter();
       filter.type = 'lowpass';
       filter.Q.value = 0.5;
-      filter.frequency.setValueAtTime(cutoff(muffleRef.current), context.currentTime);
+      filter.frequency.value = cutoffFor(depthRef.current);
       source.connect(filter);
       filter.connect(gain);
       gain.connect(context.destination);
       source.start();
 
+      filterRef.current = filter;
       whiteNoiseSourceRef.current = source;
       whiteNoiseGainRef.current = gain;
-      whiteNoiseFilterRef.current = filter;
       setWhiteNoiseOn(true);
     } catch (error) {
       console.error('Failed to play white noise:', error);
@@ -253,5 +247,8 @@ export function useAmbientNoise(muffle = 0) {
     /** Set when the device refused audio, for the caller to show inline. */
     error: whiteNoiseError,
     toggle,
+    /** Darkens the noise with the ocean's depth, or the wood's canopy closing
+        overhead; null leaves it as it was. */
+    setDepth,
   };
 }

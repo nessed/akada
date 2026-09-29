@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildFan, drawFan, fanShades, mixHex, seedFrom, type FanLayout, type FanTree } from '@/lib/fan';
-import { buildJelly, drawJelly, jellyBeat, jellyFrame, jellyInk, jellyStartle, type JellyShape } from '@/lib/jelly';
+import { buildJelly, PLAIN_BODY, drawJelly, jellyBeat, jellyFrame, jellyInk, jellyStartle, type JellyBody, type JellyShape } from '@/lib/jelly';
 import type { TimerDrawing } from '@/lib/preferences';
 import type { TreeGenome } from '@/lib/wood/tree';
 
@@ -51,6 +51,9 @@ interface Props {
   /** What grows: the fan, or the jellyfish (lib/jelly.ts). The same
       progress, pull and pause either way; only the drawing changes. */
   species?: TimerDrawing;
+  /** The jelly's counts and proportions. Left out, it is the plain jelly the
+      "jellyfish" option has always drawn; the ocean rolls one per block. */
+  body?: JellyBody;
   /** The wood's tree: its own habit, leaf and flower. Left out, the fan. */
   habit?: TreeGenome;
   /** The wind the wood is blowing, in radians of lean. Read every frame. */
@@ -191,13 +194,15 @@ export default function StudyFan({
   ground = false,
   resting = false,
   species = 'tree',
+  body,
   habit,
   wind,
   alive = false,
   overlay,
   className = '',
 }: Props) {
-  const jelly = species === 'jelly';
+  // The deep's hero is the jellyfish; the ocean around it is OceanScene's.
+  const jelly = species === 'jelly' || species === 'ocean';
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const treeRef = useRef<FanTree | null>(null);
   const jellyRef = useRef<JellyShape | null>(null);
@@ -274,9 +279,21 @@ export default function StudyFan({
 
   // The draw loop reads the target off a ref rather than a closure, so a
   // progress tick never has to tear down and rebuild the animation frame.
+  //
+  // It never runs backwards. "+5 min" lengthens a block, which lowers its
+  // fraction; the drawing holds where it stands until the clock catches up,
+  // since a fan that shrank would be telling the reader they had lost time.
+  // Only a new seed (a new block) starts it from nothing again.
+  const floorRef = useRef({ seed, at: 0 });
   useEffect(() => {
-    targetRef.current = Math.min(1, Math.max(0, progress));
-  }, [progress]);
+    const p = Math.min(1, Math.max(0, progress));
+    if (floorRef.current.seed !== seed) floorRef.current = { seed, at: 0 };
+    const target = Math.max(p, floorRef.current.at);
+    floorRef.current.at = target;
+    targetRef.current = target;
+    // A parked loop has to be woken for the tick to be drawn at all.
+    kickRef.current();
+  }, [progress, seed]);
 
   // Holding the clock sets the fan closing, and letting it go opens it.
   useEffect(() => {
@@ -288,9 +305,9 @@ export default function StudyFan({
   // the shape itself changes, never on a progress tick.
   useEffect(() => {
     treeRef.current = buildFan(seedFrom(seed), depth, tripleP, habitRef.current?.shape);
-    jellyRef.current = buildJelly(seedFrom(seed));
+    jellyRef.current = buildJelly(seedFrom(seed), body ?? PLAIN_BODY);
     shownRef.current = 0;
-  }, [seed, depth, tripleP, habitKey]);
+  }, [seed, depth, tripleP, body, habitKey]);
 
   // The wood wakes a parked tree when it comes alive again.
   useEffect(() => {
@@ -501,7 +518,9 @@ export default function StudyFan({
 
       /* A jelly swims for as long as it is open, so its loop never parks
          while the clock runs. A hidden tab gets no frames anyway. */
-      const swimming = (jelly && !reduced && !restingRef.current) || aliveRef.current;
+      // A preview that cannot be touched (Settings) is a picture, and parks,
+      // unless the wood is keeping it alive for the birds on its branches.
+      const swimming = (jelly && !reduced && !restingRef.current && interactive) || aliveRef.current;
       if (grown && rested && !swimming) {
         rafRef.current = null;
         return;
@@ -534,7 +553,7 @@ export default function StudyFan({
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly, habitKey]);
+  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly, interactive, habitKey]);
 
   /* Where the jelly is in the canvas, for a hand to land on. The tree can be
      taken hold of anywhere in its frame; a jelly is a thing in the water, and
@@ -544,7 +563,8 @@ export default function StudyFan({
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    return { rect, f: jellyFrame(rect.width, rect.height, { padTop, widthFill, baseOffset }) };
+    const f = jellyFrame(rect.width, rect.height, { padTop, widthFill, baseOffset, aspect: jellyRef.current?.aspect });
+    return { rect, f };
   };
   const overJelly = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const fr = frameOf();
@@ -634,6 +654,8 @@ export default function StudyFan({
     <canvas
       ref={canvasRef}
       aria-hidden
+      // A hand on the drawing is the drawing's, never the margin doodle's.
+      data-no-doodle
       className={className}
       onPointerDown={physics ? grab : undefined}
       onPointerMove={physics ? drag : undefined}

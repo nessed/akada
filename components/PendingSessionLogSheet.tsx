@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   addSessionOptimistic,
   updateTaskOptimistic,
@@ -21,9 +22,12 @@ import { useNotice } from './Notice';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from './SessionLogModal';
 import { usePreferences } from '@/lib/preferences';
-import { rollWood } from '@/lib/wood/biome';
-import { courseKey, woodKeyFromSegments } from '@/lib/wood/clock';
-import { woodRecap } from '@/lib/wood/recap';
+import { courseKey, oceanKeyFromSegments } from '@/lib/ocean/key';
+import { woodKeyFromSegments } from '@/lib/wood/clock';
+
+/* Only fetched for a reader whose timer draws the deep, or the wood. */
+const DiveRecap = dynamic(() => import('./DiveRecap'), { ssr: false });
+const WoodRecap = dynamic(() => import('./WoodRecap'), { ssr: false });
 
 /**
  * How many log sheets are on the page.
@@ -53,27 +57,22 @@ export default function PendingSessionLogSheet() {
   // The pending sitting is folded into this reading, so `sitting` is what
   // saving it will do to the record, read before the reader decides.
   const { sitting, logged } = useProgression();
+  const [{ timerDrawing, darkMode }] = usePreferences();
+  // The deep's read of the session. A recovered sitting gets none: the clock
+  // ran on without the reader, and the ocean would be telling them about a
+  // dive they did not take.
+  const diveKey =
+    pendingLog && timerDrawing === 'ocean' && !pendingLog.recoveryReason
+      ? oceanKeyFromSegments(pendingLog.courseId, pendingLog.segments)
+      : null;
+  // The wood's, under the same rule.
+  const woodKey =
+    pendingLog && timerDrawing === 'wood' && !pendingLog.recoveryReason
+      ? woodKeyFromSegments(pendingLog.courseId, pendingLog.segments)
+      : null;
   // The reader's usual sitting on this course, from the record without this
   // one in it, so the figure is what "usually" meant before today.
   const usual = pendingLog ? logged?.habits.byCourse.get(pendingLog.courseId)?.sittings ?? null : null;
-  const [{ timerDrawing }] = usePreferences();
-  /* The wood's line on the sheet: only for a sitting the wood grew, with
-     its stretches to name the wood by, and never for one the app closed on
-     the reader's behalf, which is a record kept, not a sitting finished. */
-  const woodLine = useMemo(() => {
-    if (timerDrawing !== 'wood' || !pendingLog || pendingLog.recoveryReason || !pendingLog.segments.length) return null;
-    const key = woodKeyFromSegments(pendingLog.courseId, pendingLog.segments);
-    if (!key) return null;
-    const night = pendingLog.segments.some((s) => s.kind === 'focus' && s.targetSeconds == null);
-    const recap = woodRecap(rollWood(key, courseKey(pendingLog.courseId)), pendingLog.durationSeconds, night);
-    return {
-      stage: recap.stage,
-      years: recap.years,
-      name: recap.notable?.name ?? null,
-      id: recap.notable?.id ?? null,
-      genome: recap.notable?.genome ?? null,
-    };
-  }, [timerDrawing, pendingLog]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -248,8 +247,26 @@ export default function PendingSessionLogSheet() {
       durationSeconds={chosen?.durationSeconds ?? 0}
       breakSeconds={chosen?.breakSeconds ?? 0}
       segments={chosen?.segments ?? []}
+      recap={
+        diveKey && pendingLog ? (
+          <DiveRecap
+            sittingKey={diveKey}
+            courseKey={courseKey(pendingLog.courseId)}
+            focusSeconds={chosen?.durationSeconds ?? 0}
+            dark={darkMode}
+            className="mt-3"
+          />
+        ) : woodKey && pendingLog ? (
+          <WoodRecap
+            woodKey={woodKey}
+            courseId={pendingLog.courseId}
+            focusSeconds={chosen?.durationSeconds ?? 0}
+            night={pendingLog.segments.some((s) => s.kind === 'focus' && s.targetSeconds == null)}
+            className="mt-3"
+          />
+        ) : null
+      }
       suggestions={suggestions}
-      wood={woodLine}
       effect={pendingLog && sitting?.courseId === pendingLog.courseId ? sitting : null}
       usualSeconds={usual && settled(usual) ? usual.median : null}
       saving={saving}

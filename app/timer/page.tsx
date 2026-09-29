@@ -18,6 +18,13 @@ import StudyFan from '@/components/StudyFan';
 import WoodScene from '@/components/WoodScene';
 import HandNote from '@/components/notebook/HandNote';
 import { arrival, successionAt } from '@/lib/wood/succession';
+import dynamic from 'next/dynamic';
+import type { ClearRect, OceanClock } from '@/components/OceanScene';
+import { mixHex } from '@/lib/fan';
+import { depthAt } from '@/lib/ocean/depth';
+import { courseKey, oceanKey, oceanKeyFromSegments } from '@/lib/ocean/key';
+import { jellyForBlock } from '@/lib/ocean/lineage';
+import { HUES } from '@/lib/ocean/palette';
 import SessionChain from '@/components/SessionChain';
 import NextMarkLine from '@/components/progression/NextMarkLine';
 import TallyMarks from '@/components/progression/TallyMarks';
@@ -27,6 +34,24 @@ import { useCourses, useTasks } from '@/lib/data-hooks';
 import { clockFace } from '@/lib/utils';
 import { hasEarlierBlock, stretchFace } from '@/lib/timer-face';
 import { NIGHT_UNDERLINE, usePreferences } from '@/lib/preferences';
+
+/* The deep is fetched only by someone who has chosen it. */
+const OceanScene = dynamic(() => import('@/components/OceanScene'), { ssr: false });
+
+/* Where the open screen's chrome sits, as shares of it: the header, the face
+   and the controls. Animals that wander over them go faint there. */
+/* The block frame's corners: the course code, the time range, the tally.
+   The wash thins to bare paper there and animals keep out. */
+const FRAME_POOLS: ClearRect[] = [
+  { x: -0.05, y: -0.1, w: 0.33, h: 0.2 },
+  { x: 0.72, y: -0.1, w: 0.33, h: 0.2 },
+  { x: -0.05, y: 0.88, w: 0.36, h: 0.2 },
+];
+const OPEN_CLEAR: ClearRect[] = [
+  { x: 0, y: 0, w: 1, h: 0.09 },
+  { x: 0, y: 0.64, w: 0.46, h: 0.36 },
+  { x: 0.58, y: 0.82, w: 0.42, h: 0.18 },
+];
 
 /**
  * The timer.
@@ -75,7 +100,7 @@ function hhmm(ms: number): string {
 
 export default function TimerPage() {
   const router = useRouter();
-  const [{ timerDrawing }] = usePreferences();
+  const [{ timerDrawing, darkMode }] = usePreferences();
   const {
     hydrated,
     active: liveActive,
@@ -100,10 +125,7 @@ export default function TimerPage() {
   const { courses } = useCourses();
   const { tasks } = useTasks();
   const { notify } = useNotice();
-  /* Under the wood's canopy the ambient noise closes in: open in the
-     meadow, most of the way muffled by old growth. */
-  const canopyMuffle = timerDrawing === 'wood' ? Math.round(arrival(successionAt(liveFocus).z, 0.45, 0.45) * 85) / 100 : 0;
-  const noise = useAmbientNoise(canopyMuffle);
+  const noise = useAmbientNoise();
   /* The record with this sitting folded in. The course's open page is drawn
      in the corner of the frame and fills as the reader sits; a mark that
      lands mid-block draws itself in there and then, which is the whole
@@ -139,6 +161,18 @@ export default function TimerPage() {
   const active = liveActive ?? (pendingLog ? held?.active ?? null : null);
   const elapsedSeconds = liveActive ? liveElapsed : held?.elapsed ?? 0;
   const focusSeconds = liveActive ? liveFocus : held?.focus ?? 0;
+  // In the deep, the noise darkens as the water does. Stepped, so the
+  // filter is only touched a few dozen times over a whole descent.
+  // Under the wood's canopy it closes in the same way: open in the meadow,
+  // most of the way muffled by old growth.
+  const noiseDepth =
+    timerDrawing === 'ocean'
+      ? Math.round(depthAt(focusSeconds).z * 50) / 50
+      : timerDrawing === 'wood'
+        ? Math.round(arrival(successionAt(focusSeconds).z, 0.45, 0.45) * 0.85 * 50) / 50
+        : null;
+  const setNoiseDepth = noise.setDepth;
+  useEffect(() => setNoiseDepth(noiseDepth), [setNoiseDepth, noiseDepth]);
   const onBreak = liveActive ? liveOnBreak : held?.onBreak ?? false;
   const breakTarget = liveActive ? liveBreakTarget : held?.breakTarget ?? null;
   /* Whether anything on screen can still be acted on. A held frame is a
@@ -352,6 +386,39 @@ export default function TimerPage() {
      first. During a break the seed stays on the block that just ended, which
      is the fan still on screen. */
   const fanSeed = `${active?.sessionId ?? 's'}-${resting ? Math.max(0, blocksDone - 1) : blocksDone}`;
+
+  /* The deep. The sitting's ocean is keyed on the course and the moment the
+     sitting started, which the log keeps too, so a finished sitting still
+     finds its own sea under the sheet. Each block's jelly is the child of
+     the last (lib/ocean/lineage); the ones already finished hang back in the
+     water as a bloom. */
+  const ocean = timerDrawing === 'ocean';
+  const blockIndex = resting ? Math.max(0, blocksDone - 1) : blocksDone;
+  const sittingKey =
+    ocean && timerCourseId
+      ? active?.sittingStartedAt != null && Number.isFinite(active.sittingStartedAt)
+        ? oceanKey(timerCourseId, active.sittingStartedAt)
+        : oceanKeyFromSegments(timerCourseId, pendingLog?.segments)
+      : null;
+  const heroBody = sittingKey ? jellyForBlock(sittingKey, blockIndex) : undefined;
+  const heroColor = heroBody ? mixHex(color, HUES[heroBody.hue], heroBody.hueMix) : color;
+  const drawingSeed = sittingKey ? `${sittingKey}-${blockIndex}` : fanSeed;
+  const oceanClock: OceanClock =
+    live && active
+      ? {
+          completedSeconds: segments.reduce((sum, s) => (s.kind === 'focus' ? sum + s.seconds : sum), 0),
+          stretchMs: active.phase === 'focus' ? Math.max(0, active.accumulatedMs) : 0,
+          runningSince: active.phase === 'focus' && !active.isPaused ? active.startedAt : null,
+        }
+      : // After Finish the sitting is a still; after a close that bypassed
+        // the Finish button there is no snapshot, and the log says how long.
+        { frozen: held ? focusSeconds : pendingLog?.durationSeconds ?? focusSeconds };
+  const oceanDepth = ocean ? depthAt(focusSeconds) : null;
+  /* In the frame the deep is laid on the page itself: on the night paper it
+     is night water from the start, on a daylight paper a wash that goes dark
+     by the midnight zone, where the jelly's ink turns light with it. */
+  const frameGround = darkMode ? 'night' : 'paper';
+  const frameLight = frameGround === 'night' || (oceanDepth?.z ?? 0) >= 0.42;
 
   /* The chain with the rest currently being taken drawn on the end of it, so
      the first break of a sitting has two marks to show rather than one. A
@@ -697,7 +764,34 @@ export default function TimerPage() {
           color: '#EFE9DC',
         }}
       >
-        {timerDrawing === 'wood' ? (
+        {ocean && sittingKey && timerCourseId ? (
+          <OceanScene
+            sittingKey={sittingKey}
+            courseKey={courseKey(timerCourseId)}
+            color={color}
+            clock={oceanClock}
+            blocks={blockIndex}
+            resting={resting}
+            paused={pausedFocus}
+            still={!live}
+            ground="night"
+            clear={OPEN_CLEAR}
+            className="!absolute inset-0 h-full w-full"
+          >
+            <StudyFan
+              progress={progress}
+              seed={drawingSeed}
+              color={heroColor}
+              species="ocean"
+              body={heroBody}
+              light
+              padTop={96}
+              widthFill={0.94}
+              resting={pausedFocus}
+              className={`absolute inset-0 h-full w-full ${quiet}`}
+            />
+          </OceanScene>
+        ) : timerDrawing === 'wood' ? (
           <WoodScene
             mode="open"
             courseId={course?.id ?? pendingLog?.courseId ?? 'course'}
@@ -722,7 +816,7 @@ export default function TimerPage() {
             trunkWidth={15}
             // The fan reaches up under the header; the jelly's bell hangs
             // from the top, so it is given the header's height to hang below.
-            padTop={timerDrawing === 'jelly' ? 96 : 20}
+            padTop={timerDrawing === 'tree' ? 20 : 96}
             widthFill={0.94}
             resting={pausedFocus}
             className={`absolute inset-0 h-full w-full ${quiet}`}
@@ -774,6 +868,15 @@ export default function TimerPage() {
                 ) : (
                   <>since {hhmm(sittingStartedAt)}</>
                 )}
+                {oceanDepth ? (
+                  <>
+                    {' · '}
+                    <span className="font-mono not-italic tabular-nums" style={{ color: '#C8C0B0' }}>
+                      {oceanDepth.meters.toLocaleString('en-US')} m
+                    </span>{' '}
+                    down
+                  </>
+                ) : null}
                 {task ? <> · <span style={{ color: '#EFE9DC' }}>{task.title}</span></> : null}
                 {pausedMark}
               </p>
@@ -888,7 +991,38 @@ export default function TimerPage() {
           )}
           {/* Standing on a drawn ground, with the rest of its shape sketched
               in pencil above it for the ink to fill. */}
-          {timerDrawing === 'wood' ? (
+          {ocean && sittingKey && timerCourseId ? (
+            <OceanScene
+              sittingKey={sittingKey}
+              courseKey={courseKey(timerCourseId)}
+              color={color}
+              clock={oceanClock}
+              blocks={blockIndex}
+              resting={resting}
+              paused={pausedFocus}
+              still={!live}
+              ground={frameGround}
+              clear={FRAME_POOLS}
+              pools={FRAME_POOLS}
+              rules
+              className="!absolute inset-0 h-full w-full"
+            >
+              <StudyFan
+                species="ocean"
+                body={heroBody}
+                progress={progress}
+                seed={drawingSeed}
+                color={heroColor}
+                light={frameLight}
+                padTop={46}
+                baseOffset={24}
+                sketch
+                ground
+                resting={pausedFocus}
+                className={`absolute inset-0 h-full w-full ${quiet}`}
+              />
+            </OceanScene>
+          ) : timerDrawing === 'wood' ? (
             <WoodScene
               mode="frame"
               courseId={course?.id ?? pendingLog?.courseId ?? 'course'}
@@ -903,9 +1037,10 @@ export default function TimerPage() {
           ) : (
             <StudyFan
               species={timerDrawing}
+              body={heroBody}
               progress={progress}
-              seed={fanSeed}
-              color={color}
+              seed={drawingSeed}
+              color={heroColor}
               depth={7}
               trunkWidth={12}
               padTop={46}
