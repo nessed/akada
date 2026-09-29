@@ -15,6 +15,13 @@ import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import { useNotice } from '@/components/Notice';
 import StudyFan from '@/components/StudyFan';
+import dynamic from 'next/dynamic';
+import type { ClearRect, OceanClock } from '@/components/OceanScene';
+import { mixHex } from '@/lib/fan';
+import { depthAt } from '@/lib/ocean/depth';
+import { courseKey, oceanKey, oceanKeyFromSegments } from '@/lib/ocean/key';
+import { jellyForBlock } from '@/lib/ocean/lineage';
+import { HUES } from '@/lib/ocean/palette';
 import SessionChain from '@/components/SessionChain';
 import NextMarkLine from '@/components/progression/NextMarkLine';
 import TallyMarks from '@/components/progression/TallyMarks';
@@ -24,6 +31,17 @@ import { useCourses, useTasks } from '@/lib/data-hooks';
 import { clockFace } from '@/lib/utils';
 import { hasEarlierBlock, stretchFace } from '@/lib/timer-face';
 import { NIGHT_UNDERLINE, usePreferences } from '@/lib/preferences';
+
+/* The deep is fetched only by someone who has chosen it. */
+const OceanScene = dynamic(() => import('@/components/OceanScene'), { ssr: false });
+
+/* Where the open screen's chrome sits, as shares of it: the header, the face
+   and the controls. Animals that wander over them go faint there. */
+const OPEN_CLEAR: ClearRect[] = [
+  { x: 0, y: 0, w: 1, h: 0.09 },
+  { x: 0, y: 0.64, w: 0.46, h: 0.36 },
+  { x: 0.58, y: 0.82, w: 0.42, h: 0.18 },
+];
 
 /**
  * The timer.
@@ -320,6 +338,32 @@ export default function TimerPage() {
      first. During a break the seed stays on the block that just ended, which
      is the fan still on screen. */
   const fanSeed = `${active?.sessionId ?? 's'}-${resting ? Math.max(0, blocksDone - 1) : blocksDone}`;
+
+  /* The deep. The sitting's ocean is keyed on the course and the moment the
+     sitting started, which the log keeps too, so a finished sitting still
+     finds its own sea under the sheet. Each block's jelly is the child of
+     the last (lib/ocean/lineage); the ones already finished hang back in the
+     water as a bloom. */
+  const ocean = timerDrawing === 'ocean';
+  const blockIndex = resting ? Math.max(0, blocksDone - 1) : blocksDone;
+  const sittingKey =
+    ocean && timerCourseId
+      ? active?.sittingStartedAt != null && Number.isFinite(active.sittingStartedAt)
+        ? oceanKey(timerCourseId, active.sittingStartedAt)
+        : oceanKeyFromSegments(timerCourseId, pendingLog?.segments)
+      : null;
+  const heroBody = sittingKey ? jellyForBlock(sittingKey, blockIndex) : undefined;
+  const heroColor = heroBody ? mixHex(color, HUES[heroBody.hue], heroBody.hueMix) : color;
+  const drawingSeed = sittingKey ? `${sittingKey}-${blockIndex}` : fanSeed;
+  const oceanClock: OceanClock =
+    live && active
+      ? {
+          completedSeconds: segments.reduce((sum, s) => (s.kind === 'focus' ? sum + s.seconds : sum), 0),
+          stretchMs: active.phase === 'focus' ? Math.max(0, active.accumulatedMs) : 0,
+          runningSince: active.phase === 'focus' && !active.isPaused ? active.startedAt : null,
+        }
+      : { frozen: focusSeconds };
+  const oceanDepth = ocean ? depthAt(focusSeconds) : null;
 
   /* The chain with the rest currently being taken drawn on the end of it, so
      the first break of a sitting has two marks to show rather than one. A
@@ -643,22 +687,51 @@ export default function TimerPage() {
           color: '#EFE9DC',
         }}
       >
-        <StudyFan
-          progress={progress}
-          seed={fanSeed}
-          color={color}
-          species={timerDrawing}
-          light
-          depth={10}
-          tripleP={0.3}
-          trunkWidth={15}
-          // The fan reaches up under the header; the jelly's bell hangs
-          // from the top, so it is given the header's height to hang below.
-          padTop={timerDrawing === 'jelly' ? 96 : 20}
-          widthFill={0.94}
-          resting={pausedFocus}
-          className={`absolute inset-0 h-full w-full ${quiet}`}
-        />
+        {ocean && sittingKey && timerCourseId ? (
+          <OceanScene
+            sittingKey={sittingKey}
+            courseKey={courseKey(timerCourseId)}
+            color={color}
+            clock={oceanClock}
+            blocks={blockIndex}
+            resting={resting}
+            paused={pausedFocus}
+            still={!live}
+            ground="night"
+            clear={OPEN_CLEAR}
+            className="!absolute inset-0 h-full w-full"
+          >
+            <StudyFan
+              progress={progress}
+              seed={drawingSeed}
+              color={heroColor}
+              species="ocean"
+              body={heroBody}
+              light
+              padTop={96}
+              widthFill={0.94}
+              resting={pausedFocus}
+              className={`absolute inset-0 h-full w-full ${quiet}`}
+            />
+          </OceanScene>
+        ) : (
+          <StudyFan
+            progress={progress}
+            seed={fanSeed}
+            color={color}
+            species={timerDrawing}
+            light
+            depth={10}
+            tripleP={0.3}
+            trunkWidth={15}
+            // The fan reaches up under the header; the jelly's bell hangs
+            // from the top, so it is given the header's height to hang below.
+            padTop={timerDrawing === 'tree' ? 20 : 96}
+            widthFill={0.94}
+            resting={pausedFocus}
+            className={`absolute inset-0 h-full w-full ${quiet}`}
+          />
+        )}
 
         {/* The chrome floats over the fan, and only the chrome takes the
             pointer. The empty middle of the screen is left to the tree, so a
@@ -701,6 +774,15 @@ export default function TimerPage() {
                 ) : (
                   <>since {hhmm(sittingStartedAt)}</>
                 )}
+                {oceanDepth ? (
+                  <>
+                    {' · '}
+                    <span className="font-mono not-italic tabular-nums" style={{ color: '#C8C0B0' }}>
+                      {oceanDepth.meters.toLocaleString('en-US')} m
+                    </span>{' '}
+                    down
+                  </>
+                ) : null}
                 {task ? <> · <span style={{ color: '#EFE9DC' }}>{task.title}</span></> : null}
                 {pausedMark}
               </p>
@@ -816,9 +898,10 @@ export default function TimerPage() {
               in pencil above it for the ink to fill. */}
           <StudyFan
             species={timerDrawing}
+            body={heroBody}
             progress={progress}
-            seed={fanSeed}
-            color={color}
+            seed={drawingSeed}
+            color={heroColor}
             depth={7}
             trunkWidth={12}
             padTop={46}
