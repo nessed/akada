@@ -632,8 +632,26 @@ natural-history plate draws one, in the course colour, never a cartoon.
 - **The pencil sketch** is the whole jelly at full length, dotted, and it
   beats with the bell so the ink never slides off its own underdrawing. **The
   floor** is a pencil line with a few grains of sand in place of grass.
-- **The pull** moves the bell and the trails follow a few frames behind it,
-  like a wake. **A held clock** narrows and deepens the bell and draws the
+- **The hand.** The jelly is not the tree, and it is not pulled the tree's
+  way. It is a thing in the water: a finger only takes hold where the jelly
+  is (the bell and the column of trails, with a little slop for a fingertip),
+  and empty water lets it through. Taken, the bell goes where the finger
+  goes, close to one for one and any direction, easing off only at the edge
+  of what the frame can spare (up stays under the header, down stays off the
+  floor). The trails stream out behind it, each hanging from where the bell
+  was a few frames earlier, while their tips stay put, so a lifted bell
+  bunches them and a lowered one stretches them, and a full jelly still
+  touches the floor. The bell leans into the pull about its rim. Let go and
+  it bobs back past where it started once or twice, on a softer spring than
+  the fan's, and keeps the speed of the hand, so a flick is thrown.
+  Touching it makes it clench, the same squeeze as the beat, laid over it. A
+  poke (down and up inside 350ms and 6px) is the clench and then a jet, up
+  and away from the side that was touched. A cursor going by with no button
+  down shows a grab hand on the jelly and sets it rocking. None of it
+  touches progress. The canvas takes `touch-action: none` for a jelly, so
+  vertical pulls are the jelly's and not the page's; reduced motion gets a
+  jelly that does not answer a hand at all.
+- **A held clock** narrows and deepens the bell and draws the
   trails in under it on the fold spring, and the beat, the wave and the
   bubbles stop.
 - **Open mode** hangs it lower, under the header. On the night paper it is

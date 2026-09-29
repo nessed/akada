@@ -134,6 +134,25 @@ export function jellyInk(color: string, paper: string, light: boolean): JellyInk
   };
 }
 
+/**
+ * Where the jelly sits in a frame of `width` x `height`, in whatever unit the
+ * frame is measured in. The drawing and the hit-test read the same numbers,
+ * so a hand lands on the bell where the bell is drawn.
+ */
+export function jellyFrame(
+  width: number,
+  height: number,
+  o: { padTop?: number; widthFill?: number; baseOffset?: number } = {},
+) {
+  const { padTop = 45, widthFill = 0.86, baseOffset = -2 } = o;
+  const floor = height - baseOffset;
+  const avail = floor - padTop;
+  const R = Math.min(width * widthFill * 0.2, avail * 0.2);
+  const y0 = padTop;
+  const rimFull = y0 + R * 0.8;
+  return { R, cx: width / 2, y0, floor, avail, rimFull, maxL: floor - rimFull };
+}
+
 export interface JellyDrawOptions {
   /** 0 to 1. At 1 the longest tentacle touches the floor. */
   progress: number;
@@ -154,11 +173,18 @@ export interface JellyDrawOptions {
   /** Milliseconds, for the things that move on their own: the wave down the
       tentacles, the bubbles, the snow. Leave it out and they stand still. */
   time?: number;
-  /** The pull, sampled from the bell (index 0) out to the tips of the
-      tentacles, each a few frames behind the one before. In radians, as
-      the fan's bends are; the bell moves by the first and the trails lag
-      behind it by the rest. */
+  /** Where the bell has been taken sideways, in CSS pixels, sampled from
+      now (index 0) back through the last few frames. The bell sits at the
+      first and each trail hangs from the sample its own depth down, so a
+      pull leaves the tentacles streaming behind it like a wake. */
   drift?: number[];
+  /** How far the bell has been taken down (up is negative), in CSS pixels.
+      The trails come with it at the top and stay where they were at the
+      tips, so they bunch and stretch rather than the frame moving. */
+  rise?: number;
+  /** The bell's lean in radians, clockwise positive, about the middle of its
+      rim. It leans into a pull and the trails stay behind. */
+  tilt?: number;
   /** Length multiplier on the trails, a tenth either side at most. */
   stretch?: number;
   /** The pencil underdrawing of the whole jelly, in this ink. */
@@ -250,6 +276,8 @@ export function drawJelly(
     pulse = 0,
     time,
     drift,
+    rise = 0,
+    tilt = 0,
     stretch = 0,
     sketch,
     ground,
@@ -261,18 +289,12 @@ export function drawJelly(
   const p = Math.min(1, Math.max(0, progress));
   const k = Math.min(1, Math.max(0, contract));
   const tm = time ?? 0;
-  const floor = height - baseOffset;
-  const avail = floor - padTop;
+  const { R, cx, y0, floor, avail, rimFull, maxL } = jellyFrame(width, height, { padTop, widthFill, baseOffset });
   if (avail <= 0 || width <= 0) return;
 
-  const R = Math.min(width * widthFill * 0.2, avail * 0.2);
   // Wave sizes and line weights are set for a bell about 76 CSS px across
   // the radius, the block frame's, and follow the bell from there.
   const line = Math.min(2.2, Math.max(0.6, R / (76 * px))) * px;
-  const cx = width / 2;
-  const y0 = padTop;
-  const rimFull = y0 + R * 0.8;
-  const maxL = floor - rimFull;
   const ease = (t: number) => 1 - (1 - t) * (1 - t);
 
   const pull = (t: number) => {
@@ -283,8 +305,12 @@ export function drawJelly(
     return drift[lo] + (drift[hi] - drift[lo]) * (at - lo);
   };
   // The bell goes where the hand takes it; everything below trails behind.
-  const bellShift = pull(0) * R * 0.6;
-  const lag = (st: number) => (pull(st / Math.max(1, maxL)) - pull(0)) * R * 0.6;
+  const bellShift = pull(0) * px;
+  const lag = (st: number) => (pull(st / Math.max(1, maxL)) - pull(0)) * px;
+  // Lifted, the bell takes the tops of the trails with it and leaves their
+  // tips, so the floor stays the floor and a full jelly still touches it.
+  const riseY = Math.max(rise * px, -padTop * 0.85);
+  const hold = (st: number) => riseY * 0.85 * Math.min(1, st / (0.6 * maxL + 30 * px));
 
   const pose = (pp: number, kk: number, beat: number): Pose => {
     const grow = Math.min(1, pp / 0.4);
@@ -320,7 +346,7 @@ export function drawJelly(
 
   /* The glow, under the jelly: the night paper only. */
   if (ink.glow) {
-    const gy = y0 + now.bh * 0.55;
+    const gy = y0 + now.bh * 0.55 + riseY;
     const reach = now.r * 2.3;
     const g = ctx.createRadialGradient(bx, gy, 0, bx, gy, reach);
     g.addColorStop(0, withAlpha(ink.glow, 0.2));
@@ -375,7 +401,7 @@ export function drawJelly(
         wave -
         (x0 - ox) * 0.3 * q.k * (st / reach) +
         (live ? lag(st) - (x0 - ox) * 0.04 * q.sq * ramp : 0);
-      stripY[j] = yy + st;
+      stripY[j] = yy + st - (live ? hold(st) : 0);
       stripW[j] = Math.max(0.35 * px, 1.9 * line * (1 - 0.85 * (st / Math.max(1, maxL))));
     }
     return n;
@@ -404,6 +430,10 @@ export function drawJelly(
     ctx.restore();
   }
 
+  // Everything from here is the live jelly, and it goes where the bell does.
+  ctx.save();
+  ctx.translate(0, riseY);
+
   /* The fine hairs at the rim, short and quick, under the tentacles. */
   if (now.grow > 0.05) {
     ctx.fillStyle = ink.tentacle;
@@ -420,7 +450,7 @@ export function drawJelly(
       for (let j = 0; j < n; j++) {
         const st = j * step;
         stripX[j] = x0 + 3 * line * Math.sin(st / (18 * line) - tm / 700 + h.ph) * (st / reach) + lag(st);
-        stripY[j] = now.rimY + 0.5 * px + st;
+        stripY[j] = now.rimY + 0.5 * px + st - hold(st);
         stripW[j] = Math.max(0.3 * px, 0.9 * line * (1 - st / reach));
       }
       traceStrip(ctx, n);
@@ -483,7 +513,7 @@ export function drawJelly(
           a.splay * st * (1 - 0.5 * k) +
           8 * line * Math.sin(st / (30 * line) - tm / 1300 + a.ph) * Math.min(1, st / (40 * line)) +
           lag(st);
-        stripY[j] = sy + st;
+        stripY[j] = sy + st - hold(st);
         const turn = 0.35 + 0.65 * Math.abs(Math.cos(st / (a.twist * line) + a.ph));
         stripW[j] = now.r * 0.16 * Math.pow(1 - tt, 0.9) * turn + 0.4 * px;
         if (j % 2 === 0) rib.push(stripX[j], stripY[j]);
@@ -549,6 +579,14 @@ export function drawJelly(
   const dome = (a: number, sc: number) =>
     [bx + Math.cos(a) * now.rw * sc, now.rimY - Math.pow(Math.sin(a), 0.85) * now.bh * sc] as const;
 
+  // The bell leans into a pull about the middle of its rim; the trails do
+  // not, they hang from where they were.
+  ctx.save();
+  if (tilt) {
+    ctx.translate(bx, now.rimY);
+    ctx.rotate(tilt);
+    ctx.translate(-bx, -now.rimY);
+  }
   const wash = ctx.createLinearGradient(0, y0, 0, now.rimY);
   wash.addColorStop(0, ink.bellTop);
   wash.addColorStop(1, ink.bellRim);
@@ -702,6 +740,7 @@ export function drawJelly(
     ctx.arc(rim[j], rim[j + 1], 1.1 * line, 0, Math.PI * 2);
   }
   ctx.fill();
+  ctx.restore();
 
   /* A few ink bubbles rising off the crown while it swims. Four of them,
      each on its own seven-second climb, fading in and out. */
@@ -721,6 +760,7 @@ export function drawJelly(
     }
     ctx.globalAlpha = 1;
   }
+  ctx.restore();
 }
 
 /**
@@ -754,6 +794,18 @@ export function jellyBeat(ms: number): number {
   const phase = (ms % 4200) / 4200;
   const smooth = (x: number) => x * x * (3 - 2 * x);
   return phase < 0.42 ? smooth(phase / 0.42) : 1 - smooth((phase - 0.42) / 0.58);
+}
+
+/**
+ * How hard a bell is squeezing `ms` after something touched it: a quick
+ * clench, then a slow letting go. It is laid over the beat, so a poke is a
+ * beat of its own and never a second clock.
+ */
+export function jellyStartle(ms: number): number {
+  const smooth = (x: number) => x * x * (3 - 2 * x);
+  if (ms < 0) return 0;
+  if (ms < 150) return smooth(ms / 150);
+  return Math.max(0, 1 - smooth(Math.min(1, (ms - 150) / 1000)));
 }
 
 /** `#rrggbb` to an rgba() string at `alpha`, for the glow's gradient. */
