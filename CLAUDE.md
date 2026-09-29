@@ -77,3 +77,26 @@ Paper tones, the night paper, and the heading-font choice all live in
 `lib/preferences.ts` and are written onto the root element as inline custom
 properties before first paint. A stylesheet rule cannot beat them — change
 the tokens there, not in `globals.css`.
+
+## Where things live
+
+Saves searching. If one of these moves, fix the line here in the same commit.
+
+- **Timer keys** (`P`, `K`, `R`, from any screen) are in
+  `components/TimerHotkeys.tsx`, mounted in the root layout. The timer
+  screen's own keys (Space, B, F, Esc) are in `app/timer/page.tsx`.
+- **The `?` help sheet** is buried in `app/tasks/page.tsx`, in a `k` / `l` list
+  of keys. Keys that only work while a sitting runs are listed only while one
+  does.
+- **Destructive actions** ask through `components/ConfirmSheet.tsx`. Never
+  `window.confirm()` or `prompt()`.
+- **Audio hooks** are `lib/use-*.ts` (`use-ambient-noise`,
+  `use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
+  files, so they work on iOS and offline.
+- **Timer state and actions** (`pause`, `stop`, `cancel`, breaks) are in
+  `lib/timer-context.tsx`; read them with `useTimerState()`.
+
+**A new hotkey means three edits in one commit:** the handler, the help sheet
+line, and the keys section in `readmedesign.md` ("Keys for the running
+clock" for the clock's). A key the help sheet doesn't list, or a spec that
+doesn't mention, is the same lag as any other stale spec.
