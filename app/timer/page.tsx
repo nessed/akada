@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
 import { useAmbientNoise } from '@/lib/use-ambient-noise';
+import { useAquariumSound } from '@/lib/use-aquarium-sound';
 import {
   BLOCK_NOTE_MAX,
   BREAK_LENGTHS,
@@ -126,6 +127,7 @@ export default function TimerPage() {
   const { tasks } = useTasks();
   const { notify } = useNotice();
   const noise = useAmbientNoise();
+  const aquarium = useAquariumSound();
   /* The record with this sitting folded in. The course's open page is drawn
      in the corner of the frame and fills as the reader sits; a mark that
      lands mid-block draws itself in there and then, which is the whole
@@ -139,6 +141,9 @@ export default function TimerPage() {
   useEffect(() => {
     if (noise.error) notify(noise.error);
   }, [noise.error, notify]);
+  useEffect(() => {
+    if (aquarium.error) notify(aquarium.error);
+  }, [aquarium.error, notify]);
   const [immersive, setImmersive] = useState(false);
   /* The wood's margin note when the land turns a stage: "scrub, year 5",
      in the hand, for a few seconds, and then the margin is clear again. */
@@ -173,6 +178,8 @@ export default function TimerPage() {
         : null;
   const setNoiseDepth = noise.setDepth;
   useEffect(() => setNoiseDepth(noiseDepth), [setNoiseDepth, noiseDepth]);
+  const setAquariumDepth = aquarium.setDepth;
+  useEffect(() => setAquariumDepth(noiseDepth), [setAquariumDepth, noiseDepth]);
   const onBreak = liveActive ? liveOnBreak : held?.onBreak ?? false;
   const breakTarget = liveActive ? liveBreakTarget : held?.breakTarget ?? null;
   /* Whether anything on screen can still be acted on. A held frame is a
@@ -722,6 +729,23 @@ export default function TimerPage() {
       )}
 
       <div className="flex items-center gap-1">
+        {timerDrawing === 'ocean' && (
+          <button
+            type="button"
+            onClick={aquarium.toggle}
+            aria-pressed={aquarium.on}
+            aria-label={aquarium.on ? 'Stop aquarium sounds' : 'Play aquarium sounds'}
+            title={aquarium.error || 'Aquarium sounds'}
+            style={{ color: aquarium.on ? ink : inkFaint }}
+            className="grid h-10 w-10 place-items-center rounded-[10px] transition-colors"
+          >
+            <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <circle cx="9" cy="16" r="3.5" />
+              <circle cx="16" cy="8.5" r="2.5" />
+              <circle cx="11" cy="4.5" r="1.2" />
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           onClick={noise.toggle}

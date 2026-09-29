@@ -1821,6 +1821,7 @@ function TasksPageContent() {
                     ? [
                         { k: 'P', l: 'Hold the running clock, or let it go' },
                         { k: 'K', l: 'Finish the session and log it' },
+                        { k: 'R', l: 'Reset the sitting, after asking' },
                       ]
                     : []),
                   { k: 'Z', l: 'Undo the last change, a tick included' },

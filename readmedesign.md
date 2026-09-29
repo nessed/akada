@@ -850,6 +850,13 @@ only ever grows, it never runs backwards, and none of it touches progress.
   tail. Nothing is announced and nothing is scored.
 - **The noise darkens.** With ambient noise on, a lowpass follows the depth:
   open at the surface, a low hush on the floor.
+- **Aquarium sounds.** Only while the deep is the chosen drawing, a second
+  button (three bubbles) sits beside the ambient noise one and plays a tank
+  heard from across a room: a low bed of water that swells slowly, a thin
+  shimmer, the hum of a pump, and bubbles that rise now and then, sometimes
+  in a short string. Synthesised (`lib/use-aquarium-sound.ts`), so it works
+  on iOS and offline, it muffles with the same depth the noise does, and it
+  is independent of the pink noise: either, both or neither.
 
 **The recap.** On the finish sheet, under the chain, one line of fact in the
 serif at 13px, lowercase, with a small ink drawing of the animal beside it:
@@ -1545,7 +1552,11 @@ the one screen that looked like a spreadsheet. It is now a planner spread.
   open it at the top of the list.
 
 ### Keys for the running clock
-Two more, and they work from every screen rather than from the timer.
+Three more, and they work from every screen rather than from the timer. `R`
+resets the sitting: it opens the same `ConfirmSheet` every destructive
+question uses ("Reset this sitting? The time so far won't be saved."), and
+only the sheet's Reset button throws the clock away, so a stray key never
+does. The rest of this section describes `P` and `K`.
 
 A sitting is started from a row on Today or Tasks and the reader then goes
 back to their book. The timer's own keys (Space, B, F) only exist on the
