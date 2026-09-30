@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimerState } from '@/lib/timer-context';
+import ConfirmSheet from './ConfirmSheet';
 import { isLogSheetMounted } from './PendingSessionLogSheet';
 
 /**
- * The two keys the running clock answers to, from anywhere.
+ * The keys the running clock answers to (P, K and R), from anywhere.
  *
  * A sitting is started from a row on Today or Tasks and then the reader goes
  * back to their book. Stopping it meant finding the dock with a mouse, and
@@ -44,7 +45,8 @@ function blinkPage() {
 
 export default function TimerHotkeys() {
   const router = useRouter();
-  const { active, onBreak, endBreak, pause, resume, stop } = useTimerState();
+  const { active, onBreak, endBreak, pause, resume, stop, cancel } = useTimerState();
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   useEffect(() => {
     if (!active) return;
@@ -70,6 +72,11 @@ export default function TimerHotkeys() {
         event.preventDefault();
         stop();
         if (!isLogSheetMounted()) router.push('/timer');
+      } else if (key === 'r') {
+        // Throws the sitting away, so it asks first. The key only opens the
+        // question; the sheet's own button is what does it.
+        event.preventDefault();
+        setConfirmingReset(true);
       }
     }
 
@@ -77,5 +84,18 @@ export default function TimerHotkeys() {
     return () => window.removeEventListener('keydown', onKey);
   }, [active, onBreak, endBreak, pause, resume, stop, router]);
 
-  return null;
+  return (
+    <ConfirmSheet
+      open={confirmingReset && !!active}
+      title="Reset this sitting?"
+      body="The time so far won't be saved."
+      confirmLabel="Reset"
+      cancelLabel="Keep going"
+      onCancel={() => setConfirmingReset(false)}
+      onConfirm={() => {
+        setConfirmingReset(false);
+        cancel();
+      }}
+    />
+  );
 }
