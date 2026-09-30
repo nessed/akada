@@ -356,7 +356,8 @@ export default function DesktopRail() {
     if (!start) return;
     setTip(null);
     // The length Up next would give it right now, so the popover opens on
-    // the same figure Today's Start carries.
+    // the same figure Today's Start carries. sizeOf takes the instant to its
+    // minute, which is the minute Today is sizing on.
     setStartTarget({
       task: start.task,
       course: start.course,

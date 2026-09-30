@@ -4,8 +4,8 @@ import { readHabits } from '@/lib/progression/habits';
 import type { CourseRecall, RecallReading } from '@/lib/recall';
 import { isLoggableDuration } from '@/lib/session-safety';
 import { shiftDate, weekOf } from '@/lib/student-day';
-import { readUpNext, type UpNextCandidate } from '@/lib/up-next';
-import { orLine, pickLine, plain, whyOf, type UpNextWhy } from '@/lib/up-next-copy';
+import { readUpNext, type UpNextCandidate, type UpNextQuiet } from '@/lib/up-next';
+import { orLine, pickLine, plain, quietCopy, whyOf, type UpNextWhy } from '@/lib/up-next-copy';
 import { sizeSession } from '@/lib/up-next-session';
 import { daysBetween } from '@/lib/utils';
 
@@ -107,9 +107,27 @@ export interface BriefingUpNext extends BriefingUpNextOffer {
   others: BriefingUpNextOffer[];
 }
 
+/**
+ * What Up next offers when it has nothing to pick: Today's quiet state, which
+ * is never empty. The course worth a session anyway, the heading and line
+ * Today prints for it ("No work is due before 29 Oct.", "MATH 101 is next,
+ * for Midterm I"), the piece when that is why, and the length its Start
+ * gives. Never `set-aside` here, since what was set aside is per device.
+ */
+export interface BriefingUpNextQuiet {
+  course: Course;
+  why: UpNextQuiet['why'];
+  heading: string;
+  reason: string | null;
+  prepFor: { task: Task; days: number } | null;
+  minutes: number;
+}
+
 export interface Briefing {
   today: string;
   upNext: BriefingUpNext | null;
+  /** Only when upNext is null: the course Today offers instead. */
+  upNextQuiet: BriefingUpNextQuiet | null;
   overdue: Task[];
   /** Due today and over the next week, soonest first. */
   dueSoon: Task[];
@@ -157,18 +175,21 @@ export function readBriefing({ today, courses, tasks, sessions, recall, recallSt
 
   // Up next, read the way Today reads it, from the same record and the same
   // date, so the connector and the screen name the same thing for the same
-  // reason. What Today also reads and this cannot is all per device: what
-  // was set aside with Not now and which Or row was put up instead (per day,
-  // and the server has no device), and the length last started from the
-  // popover, which only matters before the reader's blocks have settled and
-  // is 45 here until they do. The clock is left out on purpose: it only ever
-  // shortens Today's session to fit what is left of the evening, and a
-  // server's evening is nobody's. So the pick and its line are Today's, and
-  // the length is the one Today starts from before the evening trims it.
+  // reason. The record has to arrive whole for that: each task's place in
+  // its course's list, and each sitting's rest, recovery and chain of blocks
+  // (briefing-tool.ts reads them the way the adapter does). What Today also
+  // reads and this cannot is all per device: what was set aside with Not now
+  // and which Or row was put up instead (per day, and the server has no
+  // device), and the length last started from the popover, which only
+  // matters before the reader's blocks have settled and is 45 here until they
+  // do. The clock is left out on purpose: it only ever shortens Today's
+  // session to fit what is left of the evening, and a server's evening is
+  // nobody's. So the pick and its line are Today's, and the length is the one
+  // Today starts from before the evening trims it.
   const up = readUpNext({ today, courses, tasks, sessions: logged });
   const pace = readingRateDetail(tasks, logged);
   const habits = readHabits(courses, logged, tasks);
-  const minutesFor = (c: UpNextCandidate) =>
+  const minutesFor = (c: Pick<UpNextCandidate, 'task' | 'course' | 'spentSeconds'>) =>
     sizeSession(c, { habits, pace, tonight: null, lastUsedMinutes: null, returning: up.returning }).minutes;
   const offer = (c: UpNextCandidate, reason: string): BriefingUpNextOffer => ({
     task: c.task,
@@ -186,6 +207,22 @@ export function readBriefing({ today, courses, tasks, sessions, recall, recallSt
         others: up.others.map((c) => offer(c, orLine(c, today))),
       }
     : null;
+  // With nothing to pick Today still offers a course and a Start, so the
+  // connector does too, rather than leaving the assistant to rank the term
+  // again from `coming` and `week` and name a different course.
+  let upNextQuiet: BriefingUpNextQuiet | null = null;
+  const quiet = pick ? null : up.quiet;
+  if (quiet) {
+    const words = quietCopy(quiet, today);
+    upNextQuiet = {
+      course: quiet.course,
+      why: quiet.why,
+      heading: words.heading,
+      reason: words.line ? plain(words.line) : null,
+      prepFor: quiet.piece?.dueDate ? { task: quiet.piece, days: daysBetween(today, quiet.piece.dueDate) } : null,
+      minutes: minutesFor({ task: null, course: quiet.course, spentSeconds: 0 }),
+    };
+  }
 
   const openWeak = new Map<string, number>();
   for (const point of weakPoints ?? []) {
@@ -267,6 +304,7 @@ export function readBriefing({ today, courses, tasks, sessions, recall, recallSt
   return {
     today,
     upNext,
+    upNextQuiet,
     overdue,
     dueSoon,
     coming,

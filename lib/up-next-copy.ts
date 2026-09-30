@@ -189,15 +189,21 @@ export function plain(parts: LinePart[]): string {
  * the empty state always has a course and a Start, because a screen that
  * says there is nothing to do on the evening a course has gone untouched is
  * wrong on exactly the day it matters.
+ *
+ * Each heading claims only what Up next could have offered, which is work:
+ * an exam row is never the thing to do, so an unticked one can sit in Overdue
+ * right below, or a midterm in Coming, and "nothing open" or "nothing due"
+ * would be false beside it. Set aside is what was up today, not everything
+ * open, since work dated past three weeks was never up to set aside.
  */
 export function quietCopy(q: UpNextQuiet, today: string): { heading: string; line: LinePart[] | null } {
   if (q.why === 'set-aside') {
-    return { heading: 'Everything open is set aside for today.', line: [{ text: 'It comes back tomorrow.' }] };
+    return { heading: 'Everything up for today is set aside.', line: [{ text: 'It comes back tomorrow.' }] };
   }
   const heading =
     q.why === 'far' && q.nextDue
-      ? `Nothing on the list is due before ${dayWord(q.nextDue, today)}.`
-      : 'Nothing open on the list.';
+      ? `No work is due before ${dayWord(q.nextDue, today)}.`
+      : 'No work is open on the list.';
   return { heading, line: quietLine(q) };
 }
 

@@ -1,8 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { readBriefing, type Briefing, type BriefingQuiz, type BriefingUpNextOffer } from '@/lib/briefing';
+import { attachSegments, dropCutChain, segmentWindowStart } from '@/lib/data/segment-rows';
 import type { Course, RecallRecord, Session, Task, WeakPoint } from '@/lib/data/types';
 import {
+  cleanCompletedVia,
   cleanKind,
   cleanPages,
   cleanRecallKey,
@@ -15,7 +17,7 @@ import {
 } from '@/lib/planner-safety';
 import { cleanAttempts, cleanQuestions, writtenTally } from '@/lib/quiz/format';
 import { readRecall } from '@/lib/recall';
-import { cleanScore } from '@/lib/session-safety';
+import { clampSessionSeconds, cleanRecovery, cleanScore, sanitizeSession } from '@/lib/session-safety';
 import { studentDay, type StudentDay } from '@/lib/student-day';
 import { mcpSupabase, readStudentSettings } from './_shared';
 import {
@@ -97,25 +99,81 @@ function toTask(row: Record<string, unknown>): Task {
     priority: row.priority === 'high' ? 'high' : 'normal',
     completed: Boolean(row.completed),
     completedAt: (row.completed_at as string | null) ?? null,
+    // A skipped reading is not a read one, to the pace or to recall.
+    completedVia: cleanCompletedVia(row.completed_via, Boolean(row.completed)),
     createdAt: String(row.created_at ?? ''),
     kind: cleanKind(row.kind),
     weight: cleanWeight(row.weight),
     pages: cleanPages(row.pages),
+    // The order the student dragged the list into, which Up next keeps
+    // inside a course. Without it every task reads as unplaced, and the
+    // briefing names the oldest where Today names the one on top.
+    position: typeof row.sort_order === 'number' ? row.sort_order : undefined,
   };
 }
 
+/**
+ * A sitting as the app reads it back (rowToSession in the adapter): its rest
+ * and whether it was recovered, as well as its hours. The habits layer reads
+ * a sitting that reports rest but no chain as broken rather than one block,
+ * and leaves a recovered one out of the usual length, so without these the
+ * briefing sizes a different session from Today's and can step aside a
+ * different task.
+ */
 function toSession(row: Record<string, unknown>): Session {
   const practice = cleanScore(row.score, row.score_out_of);
-  return {
+  const rest = Number(row.break_seconds);
+  return sanitizeSession({
     id: String(row.id),
     courseId: String(row.course_id ?? ''),
     taskId: (row.task_id as string | null) ?? null,
     date: String(row.date ?? ''),
     durationSeconds: Number(row.duration_seconds ?? 0),
-    note: '',
+    note: typeof row.note === 'string' ? row.note : '',
     createdAt: String(row.created_at ?? ''),
+    breakSeconds: Number.isFinite(rest) ? clampSessionSeconds(rest) : 0,
     ...(practice ? { score: practice.score, scoreOutOf: practice.outOf } : {}),
-  };
+    recovery: cleanRecovery(row.recovery),
+  });
+}
+
+/**
+ * How session_segments is read back, as SupabaseAdapter.withSegments reads it
+ * for Today: a page is PostgREST's usual ceiling, and ten of them is a term
+ * of sittings several times over.
+ */
+const SEGMENT_PAGE = 1000;
+const SEGMENT_PAGES = 10;
+
+/**
+ * The sittings with their chains of blocks and breaks, which is what the
+ * usual length is the median of. Today reads them back onto every sitting
+ * (lib/data/segment-rows.ts); without them each sitting here would be one
+ * unbroken stretch, and four 25-minute blocks would size a 90-minute session.
+ * Optional like the other late tables: a project without session_segments,
+ * or a read that fails, keeps the sittings as the stretches they were.
+ */
+async function withSegments(supabase: McpSupabaseClient, userId: string, sessions: Session[]): Promise<Session[]> {
+  const from = segmentWindowStart(sessions);
+  if (!from) return sessions;
+  const rows: unknown[] = [];
+  let total = Infinity;
+  for (let page = 0; page < SEGMENT_PAGES && rows.length < total; page += 1) {
+    const read = await supabase
+      .from('session_segments')
+      .select('*', page === 0 ? { count: 'exact' } : undefined)
+      .eq('user_id', userId)
+      .gte('started_at', from)
+      .order('started_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(rows.length, rows.length + SEGMENT_PAGE - 1);
+    const got = optionalRows('session segments read', read);
+    if (!got) return sessions;
+    if (page === 0) total = read.count ?? (got.length < SEGMENT_PAGE ? got.length : Infinity);
+    if (got.length === 0) break;
+    rows.push(...got);
+  }
+  return attachSegments(sessions, rows.length >= total ? rows : dropCutChain(rows));
 }
 
 function toRecord(row: Record<string, unknown>): RecallRecord {
@@ -304,6 +362,28 @@ export function formatBriefing(b: Briefing, day: StudentDay, dailyGoalHours: num
           others: b.upNext.others.map((o) => offerOut(o, courses)),
         }
       : null,
+    // Only when up_next is null, which is when all the open work, exams
+    // aside, is dated past three weeks (`far`) or none is open at all
+    // (`nothing-open`). Today is never empty then: it names a course worth a
+    // session and why, and offers a Start for it. `heading` and `reason` are
+    // its two lines; `prepares_for` is set when an exam is why.
+    up_next_quiet: b.upNextQuiet
+      ? {
+          why: b.upNextQuiet.why,
+          heading: b.upNextQuiet.heading,
+          reason: b.upNextQuiet.reason,
+          session_minutes: b.upNextQuiet.minutes,
+          course: courseRef(b.upNextQuiet.course),
+          prepares_for: b.upNextQuiet.prepFor
+            ? {
+                id: b.upNextQuiet.prepFor.task.id,
+                title: b.upNextQuiet.prepFor.task.title,
+                due_date: b.upNextQuiet.prepFor.task.dueDate,
+                days: b.upNextQuiet.prepFor.days,
+              }
+            : null,
+        }
+      : null,
     overdue: { count: b.overdue.length, tasks: b.overdue.slice(0, 8).map((t) => taskOut(t, courses)) },
     due_this_week: b.dueSoon.slice(0, 12).map((t) => taskOut(t, courses)),
     coming: b.coming.map((c) => ({
@@ -391,7 +471,7 @@ export function formatBriefing(b: Briefing, day: StudentDay, dailyGoalHours: num
 export const GetBriefingInput = z.object({});
 
 export const GET_BRIEFING_DESCRIPTION =
-  'Start here. One read of where the signed-in student stands today, on their own day: what Akada’s Today screen puts up next (a task, or a course before its exam), the one line saying why, how long a session it sizes, and the two it offers instead, what is overdue and due this week, the exams and weighted work coming with how ready each course is (recall settled and due, open weak points, whether it has a grading scheme), this week’s hours against each course’s goal and how long since each was studied, recall due, the reading backlog in hours at their pace, quizzes waiting to be marked, grading proposals waiting to be accepted, and what Akada has learnt about how they work (reading pace, typical sitting, recent weeks, practice paper scores). `suggestions` lists the loose ends worth raising, most important first, each naming the tool that deals with it. Call this at the start of any conversation about what to do, how things are going, or planning, before reaching for the narrower reads. This tool never changes Akada data.';
+  'Start here. One read of where the signed-in student stands today, on their own day: what Akada’s Today screen puts up next (a task, or a course before its exam), the one line saying why, how long a session it sizes, and the two it offers instead (or, in up_next_quiet when no work is due within three weeks, the course Today offers a session on and why), what is overdue and due this week, the exams and weighted work coming with how ready each course is (recall settled and due, open weak points, whether it has a grading scheme), this week’s hours against each course’s goal and how long since each was studied, recall due, the reading backlog in hours at their pace, quizzes waiting to be marked, grading proposals waiting to be accepted, and what Akada has learnt about how they work (reading pace, typical sitting, recent weeks, practice paper scores). `suggestions` lists the loose ends worth raising, most important first, each naming the tool that deals with it. Call this at the start of any conversation about what to do, how things are going, or planning, before reaching for the narrower reads. This tool never changes Akada data.';
 
 export async function getBriefingTool(
   token: AuthenticatedToken,
@@ -422,7 +502,11 @@ export async function getBriefingTool(
     const courses = ((coursesRead.data ?? []) as Record<string, unknown>[]).map(toCourse);
     const inTerm = new Set(courses.map((c) => c.id));
     const tasks = ((tasksRead.data ?? []) as Record<string, unknown>[]).map(toTask).filter((t) => inTerm.has(t.courseId));
-    const sessions = ((sessionsRead.data ?? []) as Record<string, unknown>[]).map(toSession).filter((s) => inTerm.has(s.courseId));
+    const sessions = await withSegments(
+      supabase,
+      token.userId,
+      ((sessionsRead.data ?? []) as Record<string, unknown>[]).map(toSession).filter((s) => inTerm.has(s.courseId)),
+    );
     const recallRows = optionalRows('recall read', recallRead);
     const weakRows = optionalRows('weak points read', weakRead);
     const quizRows = optionalRows('quizzes read', quizzesRead);

@@ -180,9 +180,12 @@ simply has no clock and keeps dating in UTC, as it always did.
   day, joined in the one place the app never joins it (`lib/briefing.ts` does
   the reading; `app/api/mcp/briefing-tool.ts` loads and formats it):
   - `up_next`: what Today's Up next would show (`readUpNext` in
-    `lib/up-next.ts`, the same ranking Today runs). Usually a task; in the
-    run-up to an exam, when nothing on the course's list leads up to it, the
-    course itself, with `task` null and `title` reading "Before Midterm I".
+    `lib/up-next.ts`, the same ranking Today runs, on the same record: each
+    task's place in its course's list, and each sitting's rest, recovery and
+    chain of blocks from `session_segments`, read back the way the app's
+    adapter reads them). Usually a task; in the run-up to an exam, when
+    nothing on the course's list leads up to it, the course itself, with
+    `task` null and `title` reading "Before Midterm I".
     - `why`: in progress, overdue, due today, due soon, high priority with no
       date, and now also exam prep (work lifted into an exam's run-up, or the
       course before its exam), next on the list and due later. The old values
@@ -191,13 +194,30 @@ simply has no clock and keeps dating in UTC, as it always did.
     - `reason`: the line Today prints under the title, such as "you were on
       this yesterday · 2 days overdue".
     - `session_minutes`: the length Today's Start offers, before Today
-      shortens it to fit what is left of the evening.
+      shortens it to fit what is left of the evening. Until the student has
+      enough timed blocks for their usual length to settle (four, in the
+      course or across all of them), Today starts from the length last
+      picked in the start popover on that device; the briefing cannot see
+      that and uses 45 (25 for a first session back after four quiet days).
     - `prepares_for`: the exam or major piece the work leads up to (`id`,
       `title`, `due_date`, `days`), or null.
     - `others`: the two Today offers under Or, each with its own `why`,
       `reason` (one clause), `title`, `session_minutes`, `task` and `course`.
-    - Today's Not now and promote are per device, so the briefing can differ
-      only there.
+    - Three things Today reads are per device, and the briefing cannot see
+      them: what was set aside with Not now, which Or row was put up instead,
+      and (before block lengths settle) the length last started. The briefing
+      can differ from Today there, and in the evening trim above, and nowhere
+      else.
+  - `up_next_quiet`: null whenever `up_next` is not. `up_next` is null when
+    all the open work, exams aside, is dated more than three weeks out, or no
+    work is open. Today is never empty then (its quiet state): it names a
+    course worth a session and offers a Start for it, and this carries the
+    same thing: `why` (`far` or `nothing-open`; `set-aside` is per device and
+    never reaches here), `heading` and `reason` (Today's two lines, "No work
+    is due before 29 Oct." and "MATH 101 is next, for Midterm I"; `reason`
+    is null when there is nothing true to say about the course),
+    `session_minutes`, `course`, and `prepares_for` when an exam or major
+    piece within three weeks is why.
   - `overdue` and `due_this_week`.
   - `coming`: exams and weighted work (`countdowns`), each with its course's
     recall (kept, settled, due), its open weak points, and whether the course
@@ -685,8 +705,10 @@ place in the list. Unplaced tasks read after placed ones in "what matters"
 (`compareTaskOrder` in `lib/data/task-order.ts`, the same comparator the course
 page uses), so before anything is arranged the order is exactly the one the
 list always showed, and a task added later lands at the bottom. A task moved
-to another course in the app loses its place and goes to the bottom there. On
-a project without the column (run `supabase/schema.sql`, or the
+to another course in the app loses its place and goes to the bottom there. Up
+next reads the same order, on Today and in `get_briefing` alike: the top of
+a course's undated list is the one it offers, and ties inside a course go the
+same way. On a project without the column (run `supabase/schema.sql`, or the
 `20260925150000_add_task_sort_order` migration) the tool says so.
 
 ---

@@ -1,6 +1,6 @@
 import type { Course, Session, Task } from './data/types';
 import { compareTaskOrder } from './data/task-order';
-import { sortCourses } from './data/course-order';
+import { compareCourseOrder, sortCourses } from './data/course-order';
 import { preparesFor } from './recall';
 import { shiftDate, weekOf } from './student-day';
 import { daysBetween } from './utils';
@@ -43,9 +43,11 @@ import { examName } from './up-next-copy';
  *   which is a loose end rather than the next thing.
  *
  * Inside a tier the order is: what has not had its full sitting today, what
- * is heavy, what the reader was just on, the nearest date, then the student's
- * own order, then the course that has had least of its week (see
- * compareCandidates). Weight only ever breaks ties and is never shown.
+ * is heavy (outside eve and run-up, where every candidate is there for a
+ * major piece and the piece's date decides), what the reader was just on, the
+ * nearest date, then the course that has had least of its week, then the
+ * student's own order inside a course (see compareCandidates). Weight only
+ * ever breaks ties and is never shown.
  *
  * An exam row is never the thing to do: not before its date, not on it, not
  * after. Before it, the work that leads up to it is; after it, an unticked
@@ -111,6 +113,12 @@ export interface UpNextCandidate {
   /** True when the tier came from the eve/run-up lift rather than the task's own date. */
   lifted: boolean;
   /**
+   * The work an owed run-up settled on, lifted or not: a problem set due
+   * tomorrow already outranks the lift and keeps its own tier, but it is still
+   * the course's session before its exam tonight. A course key is its own run-up.
+   */
+  runUp: boolean;
+  /**
    * The nearest major piece (preparesFor) 1..14 days out in this course that
    * this work leads up to. Attached whether or not a session is owed; null
    * when this task IS the piece.
@@ -130,9 +138,9 @@ export interface UpNextCandidate {
 }
 
 /**
- * One Not now. `also` carries what answering it answered too: setting aside a
- * lifted pick sets aside its course's run-up, so passing on MATH prep does not
- * hand over the next MATH task a moment later.
+ * One Not now. `also` carries what answering it answered too: setting aside
+ * the work a run-up settled on sets aside its course's run-up, so passing on
+ * MATH prep does not hand over the next MATH task a moment later.
  */
 export interface UpNextSetAside {
   key: string;
@@ -237,12 +245,13 @@ export function usualSittingSeconds(sessions: Session[], today: string): number 
 }
 
 /**
- * What a Not now on this candidate sets aside: its own key, and for a lifted
- * task the run-up that lifted it, since passing on the run-up's pick answers
- * the run-up too.
+ * What a Not now on this candidate sets aside: its own key, and for the task
+ * a run-up settled on the run-up itself, since passing on the run-up's pick
+ * answers the run-up too. Lifted or not: whether tonight's MATH problem set
+ * is due Thursday or tomorrow, passing it is passing MATH prep.
  */
 export function setAsideKeys(c: UpNextCandidate): UpNextSetAside {
-  return { key: c.key, also: c.lifted && c.task ? [`runup:${c.course.id}`] : [] };
+  return { key: c.key, also: c.runUp && c.task ? [`runup:${c.course.id}`] : [] };
 }
 
 /**
@@ -267,8 +276,17 @@ export interface UpNextOrder {
 
 const tierIndex = (tier: UpNextTier | null): number => (tier ? TIER_ORDER.indexOf(tier) : TIER_ORDER.length);
 
-/** Its weight, or its piece's for a course offered before its exam. */
-const weightOf = (c: UpNextCandidate): number => (c.task ? c.task.weight : c.piece?.weight) ?? 0;
+/** The tiers where every candidate is there for a major piece. */
+const leadsUp = (tier: UpNextTier): boolean => tier === 'eve' || tier === 'run-up';
+
+/**
+ * Its weight. In eve and run-up it is the piece's (or its own, when the work
+ * is the piece), because that is what the candidate is there for: a lead-up
+ * task's own weight beside a course key's piece weight would be comparing two
+ * different things. Elsewhere, its own.
+ */
+const weightOf = (c: UpNextCandidate): number =>
+  (leadsUp(c.tier) ? (c.piece ?? c.task)?.weight : c.task ? c.task.weight : c.piece?.weight) ?? 0;
 
 /** The date it sorts by: an exam's run-up sorts by the exam, undated work last. */
 function dateOf(c: UpNextCandidate): string {
@@ -286,18 +304,29 @@ const carryRank = (c: UpNextCandidate): number => (c.carry ? CARRY_RANK[c.carry]
  * 2. Inside due-now, due or late before tomorrow; inside later, what is
  *    still ahead before what went stale.
  * 3. Not stepped aside before stepped aside.
- * 4. Heavy (HEAVY_WEIGHT or more) before light.
+ * 4. Heavy (HEAVY_WEIGHT or more) before light, except in eve and run-up:
+ *    every piece that lifts is major, so heaviness there would only say
+ *    which course had a lead-up task on its list, and let a final thirteen
+ *    days out beat a midterm in three. Its date decides instead.
  * 5. What the reader was on today, then yesterday, then the rest. A
  *    tie-break, not an override: the old "carry on" rule pinned a task for
  *    as long as a timer had touched it, whatever else came due.
  * 6. The date, soonest first; a run-up by its exam's date, undated last.
- * 7. Weight, heaviest first.
+ * 7. Weight, heaviest first (the piece's, in eve and run-up).
  * 8. High priority first.
- * 9. In one course, the student's own order (compareTaskOrder).
- * 10. The course with least of its week served first. Compared, never
- *     subtracted, because the share is Infinity for a course with no goal.
- * 11. The course studied longest ago first, never studied before all.
- * 12. Oldest first, then the key, so the order is total.
+ * 9. The course with least of its week served first. Compared, never
+ *    subtracted, because the share is Infinity for a course with no goal.
+ * 10. The course studied longest ago first, never studied before all.
+ * 11. The student's course order, then the course id: every step from here
+ *     on is inside one course.
+ * 12. The student's own order in that course (compareTaskOrder).
+ * 13. Oldest first, then the key.
+ *
+ * Every step reads one candidate's value or one course's, and the course
+ * steps all come before the order inside a course, so the order is total and
+ * transitive: the pick does not depend on the order the tasks arrived in, and
+ * drag order always holds inside a course. With the student's order compared
+ * before the courses were settled, two tied courses could go in a circle.
  */
 export function compareCandidates(a: UpNextCandidate, b: UpNextCandidate, order: UpNextOrder): number {
   const tier = tierIndex(a.tier) - tierIndex(b.tier);
@@ -308,9 +337,12 @@ export function compareCandidates(a: UpNextCandidate, b: UpNextCandidate, order:
 
   if (a.steppedAside !== b.steppedAside) return a.steppedAside ? 1 : -1;
 
-  const heavyA = weightOf(a) >= HEAVY_WEIGHT;
-  const heavyB = weightOf(b) >= HEAVY_WEIGHT;
-  if (heavyA !== heavyB) return heavyA ? -1 : 1;
+  // One tier by here, so one test says whether both lead up to a piece.
+  if (!leadsUp(a.tier)) {
+    const heavyA = weightOf(a) >= HEAVY_WEIGHT;
+    const heavyB = weightOf(b) >= HEAVY_WEIGHT;
+    if (heavyA !== heavyB) return heavyA ? -1 : 1;
+  }
 
   const carry = carryRank(a) - carryRank(b);
   if (carry !== 0) return carry;
@@ -325,11 +357,6 @@ export function compareCandidates(a: UpNextCandidate, b: UpNextCandidate, order:
   const highB = b.task?.priority === 'high';
   if (highA !== highB) return highA ? -1 : 1;
 
-  if (a.task && b.task && a.course.id === b.course.id) {
-    const own = compareTaskOrder(a.task, b.task);
-    if (own !== 0) return own;
-  }
-
   const shareA = order.weekShare.get(a.course.id) ?? Infinity;
   const shareB = order.weekShare.get(b.course.id) ?? Infinity;
   if (shareA < shareB) return -1;
@@ -337,6 +364,17 @@ export function compareCandidates(a: UpNextCandidate, b: UpNextCandidate, order:
 
   const studied = (order.lastStudied.get(a.course.id) ?? '').localeCompare(order.lastStudied.get(b.course.id) ?? '');
   if (studied !== 0) return studied;
+
+  if (a.course.id !== b.course.id) {
+    const course = compareCourseOrder(a.course, b.course);
+    if (course !== 0) return course;
+    return a.course.id < b.course.id ? -1 : 1;
+  }
+
+  if (a.task && b.task) {
+    const own = compareTaskOrder(a.task, b.task);
+    if (own !== 0) return own;
+  }
 
   const created = createdOf(a).localeCompare(createdOf(b));
   if (created !== 0) return created;
@@ -453,6 +491,7 @@ interface Draft {
   listable: boolean;
   tier: UpNextTier | null;
   lifted: boolean;
+  runUp: boolean;
   piece: Task | null;
   pieceDays: number | null;
   /** Had a usual-length session today. */
@@ -533,6 +572,7 @@ export function readUpNext(input: UpNextInput): UpNextReading {
       listable,
       tier: own,
       lifted: false,
+      runUp: false,
       piece: null,
       pieceDays: null,
       full: (rec.todayByTask.get(task.id) ?? 0) >= usualSeconds,
@@ -547,12 +587,10 @@ export function readUpNext(input: UpNextInput): UpNextReading {
     // What leads up to it: the course's undated work, and its dated work due
     // by the piece and not yet stale. A task due after the exam is not prep
     // for it, and a month-old loose end is not either.
-    const pool = drafts.filter(
-      (x) =>
-        x.task.courseId === courseId &&
-        (x.task.dueDate == null ||
-          (x.task.dueDate <= pieceDue && daysBetween(today, x.task.dueDate) >= -STALE_DAYS)),
-    );
+    const leadsTo = (t: Task) =>
+      t.courseId === courseId &&
+      (t.dueDate == null || (t.dueDate <= pieceDue && daysBetween(today, t.dueDate) >= -STALE_DAYS));
+    const pool = drafts.filter((x) => leadsTo(x.task));
     // Always, owed or not, so the reason ("for Midterm I") never flips the
     // moment a session is logged.
     for (const x of pool) {
@@ -586,12 +624,17 @@ export function readUpNext(input: UpNextInput): UpNextReading {
 
     if (target) {
       // Work that already outranks the lift (due tomorrow, say) is left
-      // where it is: it is already the course's session tonight.
+      // where it is: it is already the course's session tonight, and passing
+      // on it passes the run-up all the same.
+      target.runUp = true;
       if (tierIndex(target.own) > tierIndex(lift)) {
         target.tier = lift;
         target.lifted = true;
       }
-    } else {
+    } else if (!work.some((t) => passed.has(t.id) && leadsTo(t))) {
+      // The course key says nothing on the list leads up to it, so it stands
+      // only while that is true. Work that does, set aside today, was a pass
+      // on this run-up whichever way it came to be passed.
       courseKeys.push({
         key: `runup:${courseId}`,
         task: null,
@@ -599,6 +642,7 @@ export function readUpNext(input: UpNextInput): UpNextReading {
         title: `Before ${examName(piece, course)}`,
         tier: lift,
         lifted: true,
+        runUp: true,
         piece,
         pieceDays: days,
         carry: carryOf(`course:${courseId}`),
@@ -636,6 +680,7 @@ export function readUpNext(input: UpNextInput): UpNextReading {
       title: x.task.title,
       tier: x.tier,
       lifted: x.lifted,
+      runUp: x.runUp,
       piece: x.piece,
       pieceDays: x.pieceDays,
       carry: carryOf(x.task.id),
@@ -718,8 +763,9 @@ function othersFor(ranked: UpNextCandidate[], pick: UpNextCandidate, promoted: b
  * it: the course with an exam or major piece coming up within three weeks,
  * nearest first; else the course with least of its weekly goal served, when
  * some goal is still short; else the course left longest, never studied
- * first. "Longest" is only said where there is another course to be longer
- * than. Ties fall to the student's own course order.
+ * first. "Longest" is only said where another course has had a session
+ * since: two courses both studied today are tied, and neither has gone
+ * longest. Ties fall to the student's own course order.
  */
 function readQuiet(a: {
   today: string;
@@ -772,7 +818,9 @@ function readQuiet(a: {
       }
       course = oldest;
       const never = !a.rec.lastStudied.has(oldest.id);
-      line = never ? 'never' : sorted.length > 1 ? 'longest' : null;
+      const at = a.rec.lastStudied.get(oldest.id) ?? '';
+      const longer = sorted.some((c) => (a.rec.lastStudied.get(c.id) ?? '') > at);
+      line = never ? 'never' : longer ? 'longest' : null;
     }
   }
 

@@ -366,9 +366,10 @@ The page is separated by its own ruling instead, the way a ruled pad is:
     the length in mono with why in the serif after it ("40m your usual",
     "45m finishes it", "20m before 11pm", the hour in mono only when it has
     digits, so "before midnight" stays a word), and nothing after it when the
-    length is only the last one started or a first session back. While a
-    timer runs on the pick it is **On the clock** instead: a dot in the
-    course colour pulsing on `tick` beside the figure counting up. **Spent**
+    length is only the last one started or a first session back, or when the
+    ten-minute floor runs past the stop. While a timer runs on the pick it is
+    **On the clock** instead: a dot in the course colour pulsing on `tick`
+    beside the figure counting up. **Spent**
     in mono comes once a minute has gone on the task, with when it was last
     sat ("earlier today", "yesterday", "on 20 Sep") unless the reason already
     says "you were on this"; untouched work used to read "Spent —".
@@ -541,14 +542,22 @@ and not a drift:
    it says "open since 11 Sep", calmly, rather than a count in `warn` that
    grows every morning. Anything dated past three weeks is not a candidate.
 
-Inside a tier the first difference wins: what has not had a full session on
+Inside a tier the first difference wins: in due now, what is due today or
+already late before what is due tomorrow, and in later, what is still ahead
+before what is more than a week late; then what has not had a full session on
 it today (as long as the reader's usual: the median of their sittings of ten
 minutes or more over four weeks, held between 20 and 90 minutes, or 45 until
-there are five of them) before what has; the heavy (worth a tenth of the course or
-more) before the light; what the reader was on today, then yesterday; the
-nearest date; the heavier weight; high priority; in one course, the
-student's own order; the course with least of its weekly goal served; the
-course left longest, one never studied first.
+there are five of them) before what has; the heavy (worth a tenth of the
+course or more) before the light, except in the eve and the run-up, where
+everything is there for a major piece and the piece's date decides; what the
+reader was on today, then yesterday; the nearest date (the piece's, in the
+eve and the run-up); the heavier weight (the piece's there too); high
+priority; the course with least of its weekly goal served; the course left
+longest, one never studied first; the student's own course order; and only
+then, inside one course, the order the student dragged its list into, then
+the oldest. The courses are settled before the order inside one, so the pick
+is the same whatever order the tasks arrive in (Today and the briefing read
+them in different orders), and a dragged list always holds within its course.
 
 - **An exam is never the task**, not before its day, not on it, not after.
   Before it the work leading up to it is; on the day there is no prep, since
@@ -576,7 +585,9 @@ course left longest, one never studied first.
   lift (due tomorrow, say) stays where it is, since it is already the
   course's session tonight. With nothing on the list that leads up to it,
   the course itself is up: **Before Midterm I**, "nothing on the MATH list
-  leads up to it", and **Add a task for it**.
+  leads up to it", and **Add a task for it**. Only while that is true: work
+  that leads up to it and was set aside today still does, so the course is
+  not offered in its place.
 - **The naming rule.** The exam is named by its title only, as what the work
   is for ("for Midterm I", "Before Midterm I"), with any course code the
   student typed in front of it taken off, since the course line already says
@@ -586,6 +597,10 @@ course left longest, one never studied first.
   I" does not come and go with the spacing.
 - **Weight steers and is never shown.** It puts heavy work first inside a
   tier and breaks ties; no weight or per cent appears anywhere in Up next.
+  In the eve and the run-up it is the piece's weight that counts, and only
+  as a tie-break: every piece that pulls is major, so heaviness there would
+  only say which course had a lead-up task on its list, and let a final
+  thirteen days out beat a midterm in three.
 - **"You were on this" is a tie-break, not an override.** It needs a session
   of ten minutes or more on the task today or yesterday, and it only wins
   inside a tier. The old "carry on where you left off" pinned a task for as
@@ -607,11 +622,13 @@ course left longest, one never studied first.
   five timed sittings to learn that from, and at the end of their day once
   that point is under a quarter of an hour away); and a first session back
   after four quiet days, capped at 25, with no word about the gap. Never
-  under ten minutes. Nothing in it knows the daily goal or
-  shortens a session for having met it, since those would be reward and
-  permission lines. Only Up next itself re-renders on the minute
-  (`useMinuteClock`); the page and the rail see the clock only when the date
-  turns, and the rail sizes its start at the moment of the click.
+  under ten minutes, and when that floor runs past tonight's end the stop is
+  not named, since "10m before midnight" at five to midnight would be false.
+  Nothing in it knows the daily goal or shortens a session for having met
+  it, since those would be reward and permission lines. Only Up next itself
+  re-renders on the minute (`useMinuteClock`); the page and the rail see the
+  clock only when the date turns, and the rail sizes its start at the moment
+  of the click.
 - **Recall and weak points shape the session, never the order.** They reach
   the plan and the order of the recall deck and nothing else, and the pick is
   settled before either has loaded, so it never jumps a second after paint,
@@ -619,11 +636,14 @@ course left longest, one never studied first.
 - **Not now is a per-day convenience on one device** (`lib/up-next-day.ts`,
   in local storage). It sets the pick aside for tonight and writes nothing to
   the task, so the work comes back tomorrow in its honest tier (a task due
-  today reads "a day overdue"), and passing on a lifted pick passes on its
-  course's run-up too, so the next MATH task is not handed over a moment
-  later. An Or row put up next is kept the same way, for the day. Neither
-  reaches the briefing or another device, which is the one place those can
-  differ from Today (`MCP_SETUP.md` says so).
+  today reads "a day overdue"), and passing on the work a run-up settled on
+  passes on its course's run-up too, lifted or not (a MATH problem set due
+  tomorrow is still tonight's MATH session), so neither the next MATH task
+  nor the course itself is handed over a moment later. An Or row put up next
+  is kept the same way, for the day. Neither reaches the briefing or another
+  device; with the length last started from the popover, which only matters
+  before the reader's blocks settle, they are the only things the briefing
+  cannot see (`MCP_SETUP.md` says so).
 - **The Or rows spread across courses.** The first comes from a course other
   than the pick's and the second from a course other than both, before
   anything fills in by rank: three MATH tasks in a row are one choice offered
@@ -638,18 +658,26 @@ makes it that course:
 
 | When | Heading | Buttons |
 |---|---|---|
-| Everything open is set aside | "Everything open is set aside for today." with "It comes back tomorrow." | **Start MATH 45 min**, **Bring it back** |
-| All the open work is dated past three weeks | "Nothing on the list is due before 29 Oct." | **Start MATH 45 min**, **Add a task** |
-| Nothing is open | "Nothing open on the list." | **Start MATH 45 min**, **Add a task** |
+| Everything up for today is set aside | "Everything up for today is set aside." with "It comes back tomorrow." | **Start MATH 45 min**, **Bring it back** |
+| All the open work, exams aside, is dated past three weeks | "No work is due before 29 Oct." | **Start MATH 45 min**, **Add a task** |
+| No work is open | "No work is open on the list." | **Start MATH 45 min**, **Add a task** |
+
+Each heading claims only what Up next could have offered, which is work. An
+exam row is never the thing to do, so an unticked one can sit in Overdue
+right below, or a midterm in Coming, and "nothing open" or "nothing due"
+would be false beside it. Set aside is what was up today and not everything
+open, since work dated past three weeks was never up to be set aside.
 
 The course is the one with the nearest exam or major piece inside three
 weeks ("MATH 101 is next, for Midterm I"), else the one with least of its
 weekly goal served while a goal is still short ("…has had the least of its
 week so far"), else the one left longest ("…has gone longest without a
-session", said only where there is another course to be longer than, or
-"…has no session yet this term"), ties going to the reader's own course
-order. Start takes the short code, so two numbers do not sit side
-by side, and begins at the length Up next would give the course, in one tap;
+session", said only where another course has had a session since, so two
+courses both studied today are tied and neither is said to have gone
+longest; or "…has no session yet this term"), ties going to the reader's own
+course order. The connector's briefing carries it as `up_next_quiet`. Start
+takes the short code, so two numbers do not sit side by side, and begins at
+the length Up next would give the course, in one tap;
 while a timer runs it is Back to the timer. A term with no tasks at all still
 gets the getting-started block (see Explained once), and one with no courses
 the Add a course one.
@@ -2445,8 +2473,9 @@ met, and never again:
   a course timer while no session exists. It goes when the first task lands.
   After that Up next is never empty and never "a clean page", which it used
   to say with no button under it. With nothing to pick it says which of three
-  things is true (everything open is set aside for today, nothing is due
-  before a date more than three weeks off, nothing is open), names the one
+  things is true (everything up for today is set aside, no work is due
+  before a date more than three weeks off, no work is open; exams aside,
+  since an exam is never the thing to do), names the one
   course worth a session with the one true thing that makes it that course,
   and always has a **Start** for that course at the length it would give it,
   beside **Bring it back** or **Add a task** (see What Up next picks).
@@ -2558,8 +2587,12 @@ rules rather than in panels:
   It shows only what Today really shows: the date line, Up next with its
   course rule, its title and the serif-italic reason under it, its row of
   figures (Session with "your usual", Spent, Steps), one "Start with" line of
-  its plan, **Start 40 min** / Done / Not now, one Or row with its outlined
-  play mark, today's hours with the day ledger, and Coming with its dates.
+  its plan (a weak point, since the recall line points at a deck "just
+  below" that the sheet does not draw), **Start 40 min** / Done / Not now,
+  one Or row with its outlined play mark, today's hours with the day ledger,
+  and Coming with its dates. It is also an evening the ranking would put up,
+  down to the ledger: a MATH sitting there would have settled the run-up and
+  put the Or row up in its place.
 - **Margin notes** in the hand face (`font-hand`, muted ink), a few words
   each, with a drawn arrow where one points at something. Only where there is
   a margin: the ones beside the sketch appear at `xl`.

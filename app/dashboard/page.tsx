@@ -36,7 +36,7 @@ import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Task } from '@/lib/data';
 import { useUpNext } from '@/lib/use-up-next';
 import { recallFirst, setAsideKeys, type UpNextCandidate } from '@/lib/up-next';
-import { choose, setAside, takeBack } from '@/lib/up-next-day';
+import { choose, readUpNextDay, setAside, takeBack } from '@/lib/up-next-day';
 import type { CatalogCourse } from '@/lib/catalog';
 import { courseFromCatalog, deriveCourseCode, parseCourseInput, weeklyGoalForCredits } from '@/lib/catalog';
 import {
@@ -272,14 +272,23 @@ function DashboardPageContent() {
    * no task, so the work comes back tomorrow in its honest tier (a task due
    * today reads a day overdue), and passing on a lifted pick passes on its
    * course's run-up too, so the next task on that course is not handed over
-   * a moment later. The undo takes back exactly this one.
+   * a moment later. The undo takes back exactly this one, and when it was an
+   * Or row the reader had put up, puts it back up: setting a promoted row
+   * aside un-promotes it, and taking the pass back alone would leave the
+   * natural pick where the reader's own had been.
    */
   function handleNotNow(c: UpNextCandidate) {
     const s = setAsideKeys(c);
+    const promoted = readUpNextDay(today).chosen;
     setAside(today, s.key, s.also);
+    const unpromoted = promoted !== null && readUpNextDay(today).chosen === null;
     offer({
       label: `Not now: ${c.title}`,
-      restore: async () => takeBack(today, s.key),
+      restore: async () => {
+        takeBack(today, s.key);
+        // Unless another row has been put up since.
+        if (unpromoted && readUpNextDay(today).chosen === null) choose(today, promoted);
+      },
     });
   }
 

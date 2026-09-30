@@ -87,6 +87,7 @@ function cand(t: Task | null, patch: Partial<UpNextCandidate> = {}): UpNextCandi
     title: t?.title ?? 'Before Midterm I',
     tier: 'week',
     lifted: false,
+    runUp: false,
     piece: null,
     pieceDays: null,
     carry: null,
@@ -152,6 +153,17 @@ test('the evening left caps the session, never below ten', () => {
 
   const late = sizeSession(problemSet, ctx({ tonight: tonight(4) }));
   assert.equal(late.minutes, 10);
+  // Ten minutes from the floor runs past the stop, so the stop is not named,
+  // and the basis stays the evening's, so "your usual" is not claimed either.
+  assert.equal(late.basis, 'fits');
+  assert.equal(late.stopLabel, null);
+  const lateUsual = sizeSession(problemSet, ctx({ habits: habits({}, { blocks: minutes(4, 45) }), tonight: tonight(4) }));
+  assert.equal(lateUsual.basis, 'fits');
+  assert.equal(lateUsual.stopLabel, null);
+  // Twelve minutes left: ten ends by the stop, and it is said.
+  const edge = sizeSession(problemSet, ctx({ tonight: tonight(12) }));
+  assert.equal(edge.minutes, 10);
+  assert.equal(edge.stopLabel, '11pm');
 
   // An evening longer than the usual says nothing about it.
   const plenty = sizeSession(problemSet, ctx({ tonight: tonight(180) }));

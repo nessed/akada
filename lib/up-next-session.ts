@@ -95,7 +95,7 @@ export interface UpNextSession {
    * `finishes` what the reading has left; `fits` what the evening has left.
    */
   basis: 'usual' | 'last' | 'return' | 'finishes' | 'fits';
-  /** "11pm", "midnight": when basis is 'fits'. */
+  /** "11pm", "midnight": when basis is 'fits' and the session ends by then. */
   stopLabel: string | null;
   reading: {
     pages: number;
@@ -127,7 +127,10 @@ const floor5 = (n: number) => Math.floor(n / 5) * 5;
  * 5. The shortest of those, never under ten. `finishes` when the reading's
  *    time left is what set it (a tie with the usual or the evening goes to
  *    finishing, since the session does finish it and saying so is the more
- *    useful thing); `fits` when the evening alone set it.
+ *    useful thing); `fits` when the evening alone set it. The stop is named
+ *    only when the session ends by it: with under ten minutes left the floor
+ *    runs past it, and "before midnight" beside a ten-minute Start would be
+ *    false. The basis stays `fits`, so no other reason is claimed either.
  *
  * Nothing but a paged reading gets an estimate: steps are mastery trackers,
  * and the app does not know how long a problem set takes.
@@ -197,7 +200,7 @@ export function sizeSession(
   return {
     minutes,
     basis,
-    stopLabel: basis === 'fits' && ctx.tonight ? ctx.tonight.label : null,
+    stopLabel: basis === 'fits' && ctx.tonight && minutes <= fit ? ctx.tonight.label : null,
     reading: reading
       ? {
           ...reading,

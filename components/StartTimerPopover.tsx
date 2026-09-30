@@ -196,7 +196,15 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
         </span>
       </div>
 
-      <div className={`mt-4 grid gap-1.5 ${offered != null ? 'grid-cols-5' : 'grid-cols-4'}`}>
+      {/* With a length offered, Untimed keeps its own width and the four
+          figures share the rest: five even columns left the word 44px inside
+          its border at 320, and it runs 48. Its 4px sides are about the room
+          it has in four columns there, so it looks the same either way. */}
+      <div
+        className={`mt-4 grid gap-1.5 ${
+          offered != null ? 'grid-cols-[repeat(4,minmax(0,1fr))_auto]' : 'grid-cols-4'
+        }`}
+      >
         {(offered != null ? [offered, ...LENGTHS] : LENGTHS).map((n) => (
           <button
             key={n}
@@ -216,7 +224,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
           type="button"
           onClick={() => setMinutes(null)}
           aria-pressed={minutes == null}
-          className={`h-11 rounded-[10px] text-[12px] font-medium transition-colors ${
+          className={`h-11 rounded-[10px] px-1 text-[12px] font-medium transition-colors ${
             minutes == null
               ? 'border border-ink bg-bg-tint text-ink'
               : 'border border-line bg-transparent text-ink-soft hover:bg-bg-tint'

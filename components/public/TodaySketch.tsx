@@ -15,7 +15,12 @@ const [SAGE, ROSE] = PASTEL_PALETTE;
  * work due tomorrow outranks a run-up and would be the pick itself; and the
  * Coming rows are an exam (never the task), the midterm, and a piece further
  * out, so nothing on the sheet should have beaten the Or row to its place.
- * Change the sketch with Today, and keep it a screen Today could draw.
+ * Both of today's sittings in the ledger are POL's: twenty minutes of MATH
+ * today would be the run-up's session, nothing would be lifted, and The
+ * Prince would be up instead. The plan starts with a weak point rather than
+ * recall cards, because the recall line points at the deck "just below",
+ * which the sheet does not draw. Change the sketch with Today, and keep it a
+ * screen Today could draw.
  */
 export default function TodaySketch() {
   return (
@@ -64,12 +69,14 @@ export default function TodaySketch() {
             <span className="mt-1 block font-mono text-[15px] tabular-nums text-ink">2 / 6</span>
           </div>
         </div>
-        {/* The plan: what the session starts with, a noun phrase, not an order. */}
+        {/* The plan: what the session starts with, a noun phrase, not an order.
+            Here the one thing the reader keeps getting wrong before the
+            midterm, with where it is and never how many times. */}
         <p className="m-0 mt-4 flex items-baseline gap-3">
           <span className="eyebrow shrink-0 whitespace-nowrap text-muted">Start with</span>
           <span className="min-w-0 font-serif text-[13.5px] leading-[1.45] text-ink-soft">
-            the <span className="font-mono text-[12.5px] tabular-nums">2</span> MATH cards{' '}
-            <span className="hand-underline">in recall, just below</span>
+            Mixes up continuity and differentiability
+            <span className="italic text-muted"> · § 2.5, p.104-107</span>
           </span>
         </p>
         {/* Start full width over the pair on a phone, one row from sm, the
@@ -113,9 +120,10 @@ export default function TodaySketch() {
             <p className="m-0 mt-1.5 font-mono text-[28px] font-medium tabular-nums text-ink sm:text-[34px]">
               2h 10m
             </p>
-            {/* The day's ledger: the sittings where they happened, and now. */}
+            {/* The day's ledger: the sittings where they happened, and now.
+                Both POL's, so MATH is still owed its run-up tonight. */}
             <div className="relative mt-3 h-[10px] rounded-[3px] bg-bg-tint">
-              <span className="absolute inset-y-0 left-[18%] w-[8%] rounded-[2px]" style={{ background: SAGE.value }} />
+              <span className="absolute inset-y-0 left-[18%] w-[8%] rounded-[2px]" style={{ background: ROSE.value }} />
               <span className="absolute inset-y-0 left-[44%] w-[5%] rounded-[2px]" style={{ background: ROSE.value }} />
               <span className="absolute -inset-y-1 left-[58%] w-[1.5px] rounded-full bg-ink" />
             </div>

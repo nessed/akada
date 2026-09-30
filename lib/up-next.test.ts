@@ -128,6 +128,7 @@ function cand(t: Task | null, c: Course, patch: Partial<UpNextCandidate> = {}): 
     title: t?.title ?? 'Before Midterm I',
     tier: 'week',
     lifted: false,
+    runUp: false,
     piece: null,
     pieceDays: null,
     carry: null,
@@ -260,6 +261,44 @@ test('Not now on a lifted pick answers the run-up too', () => {
   assert.deepEqual(setAsideKeys(must(r, 'limits')), { key: 'limits', also: [] });
 });
 
+test('Not now on the work a run-up settled on answers the run-up, lifted or not', () => {
+  const input: UpNextInput = {
+    today: TODAY,
+    courses: [MATH()],
+    tasks: [
+      task('midterm', 'math', { title: 'MATH 101 Midterm I', kind: 'exam', weight: 25, dueDate: d(4) }),
+      task('ps3', 'math', { title: 'Problem set 3', dueDate: d(1) }),
+      task('limits', 'math', { title: 'Limits mastery' }),
+    ],
+    sessions: [],
+  };
+  // Due tomorrow already outranks the lift, so it keeps its own tier, and it
+  // is still the run-up's session tonight.
+  const r = readUpNext(input);
+  const ps3 = r.pick as UpNextCandidate;
+  assert.equal(ps3.key, 'ps3');
+  assert.equal(ps3.tier, 'due-now');
+  assert.equal(ps3.lifted, false);
+  assert.equal(plain(pickLine(ps3, TODAY)), 'for Midterm I · due tomorrow');
+  const passed = setAsideKeys(ps3);
+  assert.deepEqual(passed, { key: 'ps3', also: ['runup:math'] });
+
+  // Passing it does not hand over the next MATH task lifted in its place.
+  const after = readUpNext({ ...input, setAside: [passed] });
+  assert.ok(!keys(after.ranked).includes('runup:math'));
+  assert.equal(must(after, 'limits').lifted, false);
+  assert.equal(must(after, 'limits').tier, 'list');
+
+  // Nor, with nothing else on the list, does it come back as the course,
+  // saying nothing on the MATH list leads up to it while ps3 is on it. That
+  // holds for a pass that did not carry the run-up with it, too.
+  for (const pass of [passed, { key: 'ps3', also: [] }]) {
+    const bare = readUpNext({ ...input, tasks: without(input.tasks, 'limits'), setAside: [pass] });
+    assert.ok(!keys(bare.ranked).includes('runup:math'), JSON.stringify(pass));
+    assert.equal(bare.quiet?.why, 'set-aside');
+  }
+});
+
 function setAllAside(input: UpNextInput): { reading: UpNextReading; passes: UpNextSetAside[] } {
   const passes: UpNextSetAside[] = [];
   let reading = readUpNext(input);
@@ -275,7 +314,7 @@ test('setting everything aside gives the set-aside quiet state', () => {
   assert.equal(reading.pick, null);
   assert.equal(reading.quiet?.why, 'set-aside');
   assert.equal(reading.setAside, passes.length);
-  assert.equal(quietCopy(reading.quiet!, TODAY).heading, 'Everything open is set aside for today.');
+  assert.equal(quietCopy(reading.quiet!, TODAY).heading, 'Everything up for today is set aside.');
 });
 
 test('a promoted row leads, and the natural pick becomes the first other', () => {
@@ -434,6 +473,42 @@ test('the student\'s own order decides inside a course', () => {
   assert.deepEqual(keys(r.ranked), ['first', 'second']);
 });
 
+test('the order does not depend on the order the tasks arrive in, and drag order holds inside a course', () => {
+  // Two courses with no goals and nothing logged tie on their week and on
+  // when they were last studied. That is where the student's order inside x
+  // and the age of the tasks across courses used to disagree, and a, b and c
+  // went in a circle: a over b, b over c, c over a.
+  const x = course('x', 'HIST 200');
+  const y = course('y', 'PHIL 101');
+  const a = task('a', 'x', { priority: 'high', position: 2, createdAt: '2026-09-01T09:00:00.000Z' });
+  const b = task('b', 'y', { priority: 'high', createdAt: '2026-09-02T09:00:00.000Z' });
+  const c = task('c', 'x', { priority: 'high', position: 1, createdAt: '2026-09-03T09:00:00.000Z' });
+  const arrivals = [[a, b, c], [a, c, b], [b, a, c], [b, c, a], [c, a, b], [c, b, a]];
+  const orders = new Set(
+    arrivals.map((tasks) => keys(readUpNext({ today: TODAY, courses: [x, y], tasks, sessions: [] }).ranked).join(' ')),
+  );
+  assert.deepEqual([...orders], ['c a b']);
+});
+
+test('in the run-up the nearer exam comes first, whatever its course has on its list', () => {
+  // MATH's midterm is three days out with a tracker on the list to lift;
+  // HIST's final is thirteen out with nothing, so HIST is offered as the
+  // course. The final is the heavier piece, and it is still the later one.
+  const r = readUpNext({
+    today: TODAY,
+    courses: [MATH(), course('hist', 'HIST 200')],
+    tasks: [
+      task('midterm', 'math', { title: 'MATH 101 Midterm I', kind: 'exam', weight: 25, dueDate: d(3) }),
+      task('limits', 'math', { title: 'Limits mastery' }),
+      task('final', 'hist', { title: 'HIST 200 Final', kind: 'exam', weight: 40, dueDate: d(13) }),
+    ],
+    sessions: [],
+  });
+  assert.equal(r.pick?.key, 'limits');
+  assert.equal(r.pick?.tier, 'run-up');
+  assert.deepEqual(keys(r.ranked), ['limits', 'runup:hist']);
+});
+
 test('the course that has had least of its week breaks a tie', () => {
   const tasks = [task('e1', 'econ', { priority: 'high' }), task('p1', 'pol', { priority: 'high' })];
   const r = readUpNext({
@@ -529,14 +604,15 @@ test('the quiet states say why, and offer a course with one true line', () => {
   assert.equal(far.quiet?.course.id, 'math');
   assert.equal(far.quiet?.nextDue, d(30));
   const farCopy = quietCopy(far.quiet!, TODAY);
-  assert.equal(farCopy.heading, 'Nothing on the list is due before 29 Oct.');
+  // The midterm on 17 Oct is not work, so the heading stays true beside it.
+  assert.equal(farCopy.heading, 'No work is due before 29 Oct.');
   assert.equal(plain(farCopy.line ?? []), 'MATH 101 is next, for Midterm I');
 
   const empty = readUpNext(emptyTerm());
   assert.equal(empty.pick, null);
   assert.equal(empty.quiet?.why, 'nothing-open');
   assert.equal(empty.quiet?.line, 'least-week');
-  assert.equal(quietCopy(empty.quiet!, TODAY).heading, 'Nothing open on the list.');
+  assert.equal(quietCopy(empty.quiet!, TODAY).heading, 'No work is open on the list.');
   assert.equal(plain(quietCopy(empty.quiet!, TODAY).line ?? []), 'ECON 110 has had the least of its week so far');
 
   // No goals: the course never studied, then the one left longest.
@@ -560,6 +636,50 @@ test('the quiet states say why, and offer a course with one true line', () => {
 
   // No courses, no quiet state: that screen is Add a course.
   assert.equal(readUpNext({ today: TODAY, courses: [], tasks: [], sessions: [] }).quiet, null);
+});
+
+test('two courses studied the same day are tied, and neither has gone longest', () => {
+  const courses = [course('a', 'HIST 200'), course('b', 'PHIL 101')];
+  const tied = readUpNext({
+    today: TODAY,
+    courses,
+    tasks: [],
+    sessions: [session('a', TODAY, 30), session('b', TODAY, 30)],
+  });
+  assert.equal(tied.quiet?.course.id, 'a');
+  assert.equal(tied.quiet?.line, null);
+  assert.equal(quietCopy(tied.quiet!, TODAY).line, null);
+  // One course has nothing to be longer than.
+  const one = readUpNext({ today: TODAY, courses: [courses[0]], tasks: [], sessions: [session('a', d(-5), 30)] });
+  assert.equal(one.quiet?.line, null);
+});
+
+test('the quiet headings stay true beside exam rows and work dated past three weeks', () => {
+  // Everything ticked but a midterm three days gone, which waits in Overdue
+  // right under Up next to be ticked.
+  const exam = readUpNext({
+    today: TODAY,
+    courses: [MATH()],
+    tasks: [
+      task('midterm', 'math', { title: 'MATH 101 Midterm I', kind: 'exam', weight: 25, dueDate: d(-3) }),
+      task('ps2', 'math', { dueDate: d(-4), completed: true, completedAt: `${d(-4)}T10:00:00.000Z` }),
+    ],
+    sessions: [],
+  });
+  assert.equal(exam.quiet?.why, 'nothing-open');
+  assert.equal(quietCopy(exam.quiet!, TODAY).heading, 'No work is open on the list.');
+
+  // The one thing up set aside, with a paper due in a month still open: that
+  // paper was never up, so it is not what was set aside.
+  const input: UpNextInput = {
+    today: TODAY,
+    courses: [MATH()],
+    tasks: [task('ps', 'math', { dueDate: d(1) }), task('paper', 'math', { dueDate: d(30) })],
+    sessions: [],
+  };
+  const aside = readUpNext({ ...input, setAside: [{ key: 'ps', also: [] }] });
+  assert.equal(aside.quiet?.why, 'set-aside');
+  assert.equal(quietCopy(aside.quiet!, TODAY).heading, 'Everything up for today is set aside.');
 });
 
 test('the sitting on the clock never moves the pick', () => {

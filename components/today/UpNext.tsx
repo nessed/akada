@@ -189,8 +189,12 @@ export function UpNext({
   // Done, Not now and a promoted row lift the body off first and then hand
   // over, so the next one arrives into a space rather than replacing it
   // mid-frame. Keyed on the candidate, so the next one never inherits the
-  // lift; the timeout puts it back if the change never lands.
+  // lift, and dropped as soon as another one is up, so the same one brought
+  // straight back (Undo, bring back) arrives settled and takes taps; the
+  // timeout puts it back if the change never lands.
   const [leaving, setLeaving] = useState<string | null>(null);
+  const pickKey = pick?.key ?? null;
+  if (leaving !== null && leaving !== pickKey) setLeaving(null);
   useEffect(() => {
     if (!leaving) return;
     const t = window.setTimeout(() => setLeaving(null), RESTORE_MS);

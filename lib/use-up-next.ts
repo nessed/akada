@@ -132,9 +132,11 @@ export interface UpNextView {
   reading: UpNextReading;
   today: string;
   /**
-   * The session for a candidate at `now`. Null `now` (the server, the first
-   * render) sizes without tonight's end, so the figure is the reader's usual
-   * length until the clock is known, never a guess at the evening.
+   * The session for a candidate at `now`, taken to its minute, so any instant
+   * inside the minute useMinuteClock reports sizes as Today does. Null `now`
+   * (the server, the first render) sizes without tonight's end, so the figure
+   * is the reader's usual length until the clock is known, never a guess at
+   * the evening.
    */
   sizeOf(c: Pick<UpNextCandidate, 'task' | 'course' | 'spentSeconds'>, now: number | null): UpNextSession;
 }
@@ -172,7 +174,10 @@ export function useUpNext(): UpNextView {
       sizeSession(c, {
         habits,
         pace,
-        tonight: now == null ? null : readTonight({ today, now, dayEndingHour, habits }),
+        // Floored here rather than trusted to the caller: the rail hands in
+        // Date.now(), and half a minute past the one Today is showing is a
+        // minute less of evening, which floor5 can turn into five.
+        tonight: now == null ? null : readTonight({ today, now: floorMinute(now), dayEndingHour, habits }),
         // Read at call time: the popover may have changed it since the last render.
         lastUsedMinutes: readLastLength(),
         returning,
