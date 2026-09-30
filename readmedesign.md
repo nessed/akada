@@ -1764,7 +1764,11 @@ tick on any task row, on Today, Tasks or a course page, leaves "Done: <title>"
 with an Undo on it for eight seconds, and so does every bulk move and the
 open-ended date on Tasks. `Z` or `⌘Z` takes it from the keyboard, from any
 screen, but only while the slip is up, so the key is never bound to nothing.
-A new change replaces the slip rather than stacking, and undo only ever takes
+A tick's slip also carries **Log time**, and `Enter` reaches it from the
+keyboard while the slip is up: it opens `LogTimeSheet` on that task's course
+with the task already chosen, since a tick is when the time is still
+remembered. It is bound ahead of the Tasks list's own Enter so one press does
+one thing. A new change replaces the slip rather than stacking, and undo only ever takes
 back the change the slip names. A tick is one tap on a phone and a list that
 hides finished work takes the row away as it lands, so without this a stray
 tick was a task gone with nothing to say where.

@@ -1810,7 +1810,7 @@ function TasksPageContent() {
                 [
                   { k: '↑ ↓', l: 'Move down the list' },
                   { k: 'X', l: 'Select the row you are on' },
-                  { k: 'Enter', l: 'Open it, or save what you are typing' },
+                  { k: 'Enter', l: 'Open it, save what you are typing, or log time on what you just ticked' },
                   { k: 'N', l: 'New task' },
                   { k: 'S', l: 'Change order' },
                   // The clock's two keys, listed only while a sitting is

@@ -26,6 +26,7 @@ export default function LogTimeSheet({
   open,
   course,
   tasks,
+  initialTaskId = '',
   onClose,
   onSaved,
 }: {
@@ -33,6 +34,8 @@ export default function LogTimeSheet({
   course: Course;
   /** The course's tasks, to attach the time to one. Open ones first. */
   tasks: Task[];
+  /** The task the time starts attached to, for a sheet opened off a tick. */
+  initialTaskId?: string;
   onClose: () => void;
   onSaved?: (minutes: number) => void;
 }) {
@@ -47,9 +50,12 @@ export default function LogTimeSheet({
     if (!open) return;
     setMinutes(30);
     setTyped('');
-    setTaskId('');
+    setTaskId(initialTaskId);
     setDate(isoDate());
     setError('');
+    // Only a fresh opening resets the form; a later change of task id must
+    // not wipe what the reader has typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
