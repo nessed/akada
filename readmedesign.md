@@ -1835,7 +1835,8 @@ Three more, and they work from every screen rather than from the timer. `R`
 resets the sitting: it opens the same `ConfirmSheet` every destructive
 question uses ("Reset this sitting? The time so far won't be saved."), and
 only the sheet's Reset button throws the clock away, so a stray key never
-does. The rest of this section describes `P` and `K`.
+does. The timer screen's key hint names it too ("R reset"), since that is
+where a reader looks for the keys. The rest of this section describes `P` and `K`.
 
 A sitting is started from a row on Today or Tasks and the reader then goes
 back to their book. The timer's own keys (Space, B, F) only exist on the
