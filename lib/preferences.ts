@@ -15,25 +15,6 @@ export type PaperTone = 'warm' | 'paper' | 'stone' | 'white' | 'night';
 // Fraunces on the Paper tone is the default the app ships in; Cormorant /
 // Lora / Merriweather remain selectable in Appearance.
 export type HeadingFont = 'cormorant' | 'fraunces' | 'lora' | 'merriweather';
-/**
- * What the Up next panel reaches for first.
- *
- * `in-progress` is the default: whatever a timer last ran on, if that task is
- * still open and the session was today or yesterday. Reopening the app in the
- * middle of a problem set and being handed something else is the one thing
- * the panel can do that is plainly wrong, and neither of the other two rules
- * could avoid it, because both only ever looked at what was due.
- *
- * `last-done` picks the task whose course has gone longest without a study
- * session, so the panel rotates through the term instead of pinning itself to
- * one course. A reader with four overdue readings in one course would
- * otherwise see that same course every time they opened Today, while the
- * courses they were actually neglecting stayed invisible.
- *
- * `overdue` is the oldest behaviour, kept because "whatever has waited
- * longest" is the right answer in the week before a deadline.
- */
-export type UpNextSort = 'in-progress' | 'last-done' | 'overdue';
 export type Density = 'cozy' | 'comfy' | 'compact';
 export type PrimaryAccent = 'classic' | 'green';
 /**
@@ -49,7 +30,6 @@ export type TimerDrawing = 'tree' | 'jelly' | 'ocean' | 'wood';
 export interface Preferences {
   paperTone: PaperTone;
   headingFont: HeadingFont;
-  upNextSort: UpNextSort;
   density: Density;
   primaryAccent: PrimaryAccent;
   /**
@@ -95,7 +75,6 @@ const DEFAULTS: Preferences = {
   // in Appearance, and a record that already names a tone keeps it.
   paperTone: 'night',
   headingFont: 'fraunces',
-  upNextSort: 'in-progress',
   density: 'comfy',
   primaryAccent: 'classic',
   // On, now that it has a job. A break whose end is not announced is a break
@@ -114,7 +93,6 @@ const STORAGE_KEY = 'akada.preferences.v1';
 
 const PAPER_TONE_VALUES: PaperTone[] = ['warm', 'paper', 'stone', 'white', 'night'];
 const HEADING_FONT_VALUES: HeadingFont[] = ['cormorant', 'fraunces', 'lora', 'merriweather'];
-const UP_NEXT_SORT_VALUES: UpNextSort[] = ['in-progress', 'last-done', 'overdue'];
 const DENSITY_VALUES: Density[] = ['cozy', 'comfy', 'compact'];
 const PRIMARY_ACCENT_VALUES: PrimaryAccent[] = ['classic', 'green'];
 /** Zero is "no break"; the rest are what the timer offers. */
@@ -131,9 +109,6 @@ function sanitizePreferences(value: unknown): Preferences {
     headingFont: HEADING_FONT_VALUES.includes(parsed.headingFont as HeadingFont)
       ? (parsed.headingFont as HeadingFont)
       : DEFAULTS.headingFont,
-    upNextSort: UP_NEXT_SORT_VALUES.includes(parsed.upNextSort as UpNextSort)
-      ? (parsed.upNextSort as UpNextSort)
-      : DEFAULTS.upNextSort,
     density: DENSITY_VALUES.includes(parsed.density as Density)
       ? (parsed.density as Density)
       : DEFAULTS.density,
@@ -568,10 +543,12 @@ export function plannerDate(value = new Date()): string {
 
 /* ───────── one record for the whole app ─────────
    Every screen used to hold its own copy of the preferences in useState.
-   Today renders the settings sheet and its own Up next sort side by side, so
-   picking White in the sheet and then tapping the sort wrote the page's stale
-   copy back over it, and the reader was on Paper again. One record here, and
-   every caller of usePreferences reads and writes that same one. */
+   Today rendered the settings sheet beside a control of its own that wrote
+   preferences too (Up next's sort, since gone), so picking White in the
+   sheet and then tapping that control wrote the page's stale copy back over
+   it, and the reader was on Paper again. Any two screens mounted together
+   can do the same, so there is one record here, and every caller of
+   usePreferences reads and writes that same one. */
 
 let current: Preferences | null = null;
 const listeners = new Set<() => void>();

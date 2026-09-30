@@ -18,10 +18,10 @@ import StartTimerPopover, { type StartTarget } from '@/components/StartTimerPopo
 import {
   ComingPanel,
   TodayHours,
-  UpNext,
   WeekHours,
   CourseLine,
 } from '@/components/today/TodayPanels';
+import { UpNext, UpNextQuiet } from '@/components/today/UpNext';
 import DatePicker from '@/components/DatePicker';
 import { ReaderAvatar } from '@/components/SettingsGlyph';
 import LoadingIndicator, { ButtonSpinner } from '@/components/LoadingIndicator';
@@ -34,14 +34,14 @@ import { useClaudeSheet } from '@/components/claude/ClaudeSheet';
 import { outlinePrompt } from '@/lib/claude-asks';
 import CourseSearchInput from '@/components/CourseSearchInput';
 import type { Course, Task } from '@/lib/data';
-import { upNextFrom } from '@/lib/use-up-next';
-import { usePreferences } from '@/lib/preferences';
+import { useUpNext } from '@/lib/use-up-next';
+import { recallFirst, setAsideKeys, type UpNextCandidate } from '@/lib/up-next';
+import { choose, setAside, takeBack } from '@/lib/up-next-day';
 import type { CatalogCourse } from '@/lib/catalog';
 import { courseFromCatalog, deriveCourseCode, parseCourseInput, weeklyGoalForCredits } from '@/lib/catalog';
 import {
   addDays,
   daysBetween,
-  isoDate,
   logicalToday,
   PASTEL_PALETTE,
   resolveTint,
@@ -62,12 +62,23 @@ import {
   useTasks,
   useActiveSemester,
   useUserSettings,
+  useWeakPoints,
   addCourseOptimistic,
   addTaskOptimistic,
   toggleTaskOptimistic,
   skipTaskOptimistic,
   updateTaskOptimistic,
 } from '@/lib/data-hooks';
+
+/**
+ * A start that a running sitting stands in the way of, held while the reader
+ * says whether it can go. `start` is Up next's one tap, with its length;
+ * `pick` is a play mark that opens the popover once they have.
+ */
+type PendingTimer = { courseId: string; taskId: string | null } & (
+  | { then: 'start'; targetSeconds: number | null }
+  | { then: 'pick'; task: Task | null; course: Course; anchor: HTMLElement; minutes?: number | null }
+);
 
 /** The quiet uppercase caption every other form in the app labels a field with. */
 function SheetField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -114,7 +125,12 @@ function DashboardPageContent() {
   const { tasks, isLoading: tasksLoading } = useTasks();
   const { semester } = useActiveSemester();
   const { settings } = useUserSettings();
-  const [prefs, updatePrefs] = usePreferences();
+  // Up next, and what its plan draws on. Called up here with every other
+  // hook, above the loading return, so the order of hooks never changes
+  // between the render that is loading and the one that is not.
+  const up = useUpNext();
+  const today = up.today;
+  const { weakPoints, loaded: weakLoaded, available: weakAvailable } = useWeakPoints();
 
   const courses = rawCourses;
   const sessions = useMemo(
@@ -150,14 +166,12 @@ function DashboardPageContent() {
   const [newTaskHigh, setNewTaskHigh] = useState(false);
   const newTaskKind = useKindDraft();
 
-  // Set while a running timer stands between a tap and the timer screen.
   /** The play mark that opened the start popover, and what it points at. */
   const [startTarget, setStartTarget] = useState<StartTarget | null>(null);
 
-  const [pendingTimer, setPendingTimer] = useState<{
-    courseId: string;
-    taskId: string | null;
-  } | null>(null);
+  // Set while a running timer stands between a tap and what the tap asked
+  // for: a one-tap start, or the popover to pick a length in.
+  const [pendingTimer, setPendingTimer] = useState<PendingTimer | null>(null);
 
   // True while a sheet's own write is in flight, so its button can say so
   // and cannot be pressed a second time.
@@ -178,8 +192,8 @@ function DashboardPageContent() {
   const [newCourseTint, setNewCourseTint] = useState(PASTEL_PALETTE[0].tint);
   const [newCourseGoal, setNewCourseGoal] = useState(8);
 
-  function beginTimer(courseId: string, taskId: string | null) {
-    start(courseId, taskId);
+  function beginTimer(courseId: string, taskId: string | null, targetSeconds: number | null = null) {
+    start(courseId, taskId, targetSeconds);
     router.push('/timer');
   }
 
@@ -205,29 +219,78 @@ function DashboardPageContent() {
 
   /**
    * Every play mark on this screen opens the same popover. A task carries its
-   * own course; a course row passes one explicitly and leaves the task null.
-   * `untimed` is the "Untimed" button beside Start, which skips the length
-   * picker and goes straight to a session with no target. It is not the same
-   * idea as an open-ended task, which is one carrying no due date.
+   * own course; a course row passes one explicitly and leaves the task null,
+   * and Up next's Another length passes the length it sized, which the
+   * popover opens on.
+   *
+   * `start()` replaces whatever sitting is running, so no play mark here may
+   * reach it while one runs. The same sitting's own mark goes back to the
+   * timer rather than restarting it; any other asks first, with the popover
+   * opening only once the reader has said the running one can go.
    */
-  function openStartFor(
-    task: Task | null,
-    anchor: HTMLElement,
-    untimed: boolean,
-    course?: Course,
-  ) {
+  function openStartFor(task: Task | null, anchor: HTMLElement, course?: Course, minutes?: number | null) {
     const resolved = course ?? courses.find((c) => c.id === task?.courseId);
     if (!resolved) return;
-    if (untimed) {
-      if (active && (active.courseId !== resolved.id || active.taskId !== (task?.id ?? null))) {
-        setPendingTimer({ courseId: resolved.id, taskId: task?.id ?? null });
+    const taskId = task?.id ?? null;
+    if (active) {
+      if (active.courseId === resolved.id && active.taskId === taskId) {
+        router.push('/timer');
         return;
       }
-      start(resolved.id, task?.id ?? null, null);
-      router.push('/timer');
+      setPendingTimer({ courseId: resolved.id, taskId, then: 'pick', task, course: resolved, anchor, minutes });
       return;
     }
-    setStartTarget({ task, course: resolved, anchor });
+    setStartTarget({ task, course: resolved, anchor, minutes });
+  }
+
+  /**
+   * Up next's Start, and an Or row's play mark: one tap, at the length shown.
+   * It does not write the popover's last length, so a session shortened to
+   * fit the evening never teaches the default. The buttons are not drawn
+   * while a sitting runs, and this asks first anyway rather than trusting it.
+   */
+  function startPick(c: Pick<UpNextCandidate, 'task' | 'course'>, minutes: number) {
+    const taskId = c.task?.id ?? null;
+    if (active) {
+      if (active.courseId === c.course.id && active.taskId === taskId) {
+        router.push('/timer');
+        return;
+      }
+      setPendingTimer({ courseId: c.course.id, taskId, then: 'start', targetSeconds: minutes * 60 });
+      return;
+    }
+    beginTimer(c.course.id, taskId, minutes * 60);
+  }
+
+  /** Another length: the popover, opened on the length Up next gave. */
+  function pickLength(c: UpNextCandidate, minutes: number, anchor: HTMLElement) {
+    openStartFor(c.task, anchor, c.course, minutes);
+  }
+
+  /**
+   * Not now: set aside for today, on this device, and nothing else. It writes
+   * no task, so the work comes back tomorrow in its honest tier (a task due
+   * today reads a day overdue), and passing on a lifted pick passes on its
+   * course's run-up too, so the next task on that course is not handed over
+   * a moment later. The undo takes back exactly this one.
+   */
+  function handleNotNow(c: UpNextCandidate) {
+    const s = setAsideKeys(c);
+    setAside(today, s.key, s.also);
+    offer({
+      label: `Not now: ${c.title}`,
+      restore: async () => takeBack(today, s.key),
+    });
+  }
+
+  /** An Or row tapped: it leads until the day turns, and the old pick sits first under Or. */
+  function handleChoose(c: UpNextCandidate) {
+    choose(today, c.key);
+  }
+
+  function openAddTaskFor(courseId: string) {
+    newTaskKind.reset();
+    setAddingTaskFor(courseId);
   }
 
   /** "Open ended": the task stays, the date comes off. */
@@ -241,7 +304,6 @@ function DashboardPageContent() {
     }
   }
 
-  /** "Tomorrow": the same move the row menu calls Reschedule. */
   async function handleToggleStep(task: Task, stepId: string) {
     const subtasks = (task.subtasks ?? []).map((step) =>
       step.id === stepId ? { ...step, completed: !step.completed } : step,
@@ -253,9 +315,25 @@ function DashboardPageContent() {
     }
   }
 
-  async function handleSnoozeTask(task: Task) {
+  /**
+   * A row menu's "Tomorrow": work due today or already late moves to
+   * tomorrow, and can be taken back. It only ever moves a date later, so it
+   * is offered only on rows due by today (onReschedule is left off the rest),
+   * and refuses anything else here too: it used to set tomorrow on whatever
+   * it was pressed on, which pulled a deadline three weeks out forward to
+   * tomorrow and gave an undated note to self a date it never had.
+   */
+  async function handleTomorrowTask(task: Task) {
+    if (!task.dueDate || task.dueDate > today) return;
+    const prev = task.dueDate;
     try {
-      await updateTaskOptimistic(task.id, { dueDate: addDays(isoDate(), 1) });
+      await updateTaskOptimistic(task.id, { dueDate: addDays(today, 1) });
+      offer({
+        label: `Moved to tomorrow: ${task.title}`,
+        restore: async () => {
+          await updateTaskOptimistic(task.id, { dueDate: prev });
+        },
+      });
     } catch (error) {
       console.error('Failed to reschedule task:', error);
       notify('That task did not move.');
@@ -268,12 +346,20 @@ function DashboardPageContent() {
    * the rows that did land stay landed.
    */
   async function handleRescheduleOverdue() {
-    const todayIso = isoDate();
-    const stale = tasks.filter((t) => !t.completed && t.dueDate && t.dueDate < todayIso);
+    const stale = tasks.filter((t) => !t.completed && t.dueDate && t.dueDate < today);
     if (stale.length === 0) return;
+    // Each row's own date, so the undo puts every one back where it was
+    // rather than on one date for all of them.
+    const prev = new Map(stale.map((t) => [t.id, t.dueDate as string]));
+    const n = stale.length;
     try {
-      await Promise.all(stale.map((t) => updateTaskOptimistic(t.id, { dueDate: todayIso })));
-      notify(`Moved ${stale.length} ${stale.length === 1 ? 'task' : 'tasks'} to today.`);
+      await Promise.all(stale.map((t) => updateTaskOptimistic(t.id, { dueDate: today })));
+      offer({
+        label: `Moved ${n} ${n === 1 ? 'task' : 'tasks'} to today`,
+        restore: async () => {
+          await Promise.all([...prev].map(([id, dueDate]) => updateTaskOptimistic(id, { dueDate })));
+        },
+      });
     } catch (error) {
       console.error('Failed to reschedule overdue tasks:', error);
       notify('Some of those did not move.');
@@ -434,7 +520,7 @@ function DashboardPageContent() {
   function studyRecall(state: RecallState, anchor: HTMLElement) {
     const course = courses.find((c) => c.id === state.courseId);
     if (!course) return;
-    openStartFor(state.task, anchor, false, course);
+    openStartFor(state.task, anchor, course);
   }
 
 
@@ -463,7 +549,6 @@ function DashboardPageContent() {
     );
   }
 
-  const today = isoDate();
   const todayTasks = tasks.filter((t) => !t.completed && t.dueDate === today);
   const overdueTasks = tasks.filter(
     (t) => !t.completed && t.dueDate && t.dueDate < today,
@@ -480,21 +565,17 @@ function DashboardPageContent() {
     now.toLocaleDateString(undefined, { month: 'short' }),
     now.getFullYear(),
   ].join(' ');
-  /* The one task the screen asks for. Which one depends on the reader's rule,
-     see pickUpNext: by default whatever a timer last ran on and is still
-     open, else the course that has gone longest without a session, or the
-     oldest overdue thing if they have said they want that.
-
-     upNextFrom passes the open tasks too, because the resumed task is the one
-     pick that can sit outside the overdue/due-today pool: work you were in
-     the middle of an hour ago is live whether or not it happens to be due.
-     The rail's start reads the same function, so the two never disagree. */
-  const upNext = upNextFrom(tasks, sessions, prefs.upNextSort, today);
-  const dueTodayRest = todayTasks.filter((t) => t.id !== upNext?.id);
-  // What Up next would offer once this one is off the list, named under it.
-  const thenTask = upNext
-    ? upNextFrom(tasks.filter((t) => t.id !== upNext.id), sessions, prefs.upNextSort, today)
-    : null;
+  /* What Up next is already showing, its pick and the two under Or, is left
+     out of Overdue and Due today below it, so nothing on the screen is said
+     twice. Overdue is oldest first, since the oldest is what has waited
+     longest; it used to be the first five in whatever order they loaded. */
+  const onUpNext = new Set(
+    [up.reading.pick, ...up.reading.others].flatMap((c) => (c?.task ? [c.task.id] : [])),
+  );
+  const dueTodayRest = todayTasks.filter((t) => !onUpNext.has(t.id));
+  const overdueRest = overdueTasks
+    .filter((t) => !onUpNext.has(t.id))
+    .sort((a, b) => (a.dueDate as string).localeCompare(b.dueDate as string));
   // Dates are optional on a semester now (Settings → Semester lets you start
   // one with just a label). No dates just means no progress ribbon to show.
   const semesterInfo =
@@ -576,71 +657,77 @@ function DashboardPageContent() {
             pad's double rule closes the band; nothing below it is boxed. */}
         <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-x-[81px]">
           <div className="min-w-0">
-            {upNext ? (
+            {/* Up next: the pick, with its facts read off the record and the
+                sitting on the clock folded in for the one figure that counts
+                up. Only the drawing sees the live sitting; the pick came from
+                useUpNext, which never does. With nothing to pick it is the
+                quiet state, which still has a course and a Start. */}
+            {up.reading.pick ? (
               <WithLiveSessions sessions={sessions}>{(shown) => (
                 <UpNext
-                  task={upNext}
-                  course={courses.find((c) => c.id === upNext.courseId)}
-                  onStart={(task, el, untimed) => openStartFor(task, el, untimed)}
-                  onDone={handleToggleTask}
-                  onSnooze={handleSnoozeTask}
-                  onOpen={(task) => router.push(`/tasks?task=${encodeURIComponent(task.id)}`)}
-                  sort={prefs.upNextSort}
-                  onSortChange={(upNextSort) => updatePrefs({ upNextSort })}
+                  view={up}
                   sessions={shown}
+                  recallQueue={recall?.queue ?? []}
+                  weakPoints={weakLoaded && weakAvailable ? weakPoints : null}
+                  onStart={startPick}
+                  onPickLength={pickLength}
+                  onDone={handleToggleTask}
+                  onNotNow={handleNotNow}
+                  onChoose={handleChoose}
+                  onOpen={(c) => {
+                    if (c.task) router.push(`/tasks?task=${encodeURIComponent(c.task.id)}`);
+                  }}
                   onToggleStep={handleToggleStep}
-                  then={
-                    thenTask
-                      ? { task: thenTask, course: courses.find((c) => c.id === thenTask.courseId) }
-                      : null
-                  }
+                  onAddTask={openAddTaskFor}
                 />
               )}</WithLiveSessions>
-            ) : !tasksLoading && tasks.length === 0 ? (
+            ) : tasks.length === 0 ? (
               <GettingStarted
                 course={courses[0]}
                 hasSessions={rawSessions.length > 0}
-                onAddTask={() => {
-                  newTaskKind.reset();
-                  setAddingTaskFor(courses[0].id);
-                }}
-                onStart={(el) => openStartFor(null, el, false, courses[0])}
+                onAddTask={() => openAddTaskFor(courses[0].id)}
+                onStart={(el) => openStartFor(null, el, courses[0])}
               />
-            ) : (
-              <section>
-                <p className="eyebrow m-0 text-ink-soft">Up next</p>
-                <p className="m-0 mt-3 font-serif text-[20px] text-ink-soft">
-                  Nothing overdue and nothing due today.
-                </p>
-                <p className="m-0 mt-2 text-[13px] text-muted">
-                  A clean page. Start a course timer when you are ready.
-                </p>
-              </section>
-            )}
+            ) : up.reading.quiet ? (
+              <UpNextQuiet view={up} onStart={startPick} onAddTask={openAddTaskFor} />
+            ) : null}
 
             {/* The rest of the day's work sits under Up next, in the same
                 column: the recall card, Overdue and Due today are what Start
                 is for after this one. Below the fold they left the band's
-                left half empty for as long as the hours ran beside it. */}
-            <div className="settle-in mt-8 flex flex-col divide-y divide-line border-t border-line empty:hidden [&>*:last-child]:pb-0 [&>*]:py-7">
+                left half empty for as long as the hours ran beside it.
+
+                `#recall` is what the plan's "in recall, just below" points
+                at. It is on this column rather than on a wrapper round the
+                deck, because the deck renders nothing on a day with no cards
+                and an empty wrapper here would still take its share of the
+                divided rhythm; on a day the plan names cards, the deck is
+                this column's first child. */}
+            <div
+              id="recall"
+              className="settle-in mt-8 flex scroll-mt-6 flex-col divide-y divide-line border-t border-line empty:hidden [&>*:last-child]:pb-0 [&>*]:py-7"
+            >
             {/* Recall. A few things from the term to bring back with the book
                 shut, and nothing at all on a day with none due. Under Up next
                 rather than over it: it is a few minutes, and the day's work
-                is still the day's work. See lib/recall. */}
+                is still the day's work. The pick's course goes first, so the
+                card directly under Up next is the one its plan starts with.
+                See lib/recall. */}
             <RecallDeck
-              states={recall?.queue ?? []}
+              states={recallFirst(recall?.queue ?? [], up.reading.pick?.course.id ?? null)}
               courses={courses}
               closing="That's today's recall."
               onStudy={studyRecall}
               available={recallAvailable}
             />
 
-            {overdueTasks.length > 0 && (
+            {overdueRest.length > 0 && (
               <TaskSection
                 title="Overdue"
-                count={overdueTasks.length}
+                count={overdueRest.length}
                 countTone="warn"
                 action={
+                  // Every overdue task, the ones Up next is showing too.
                   <button
                     type="button"
                     onClick={handleRescheduleOverdue}
@@ -650,34 +737,34 @@ function DashboardPageContent() {
                   </button>
                 }
               >
-                {overdueTasks.slice(0, 5).map((task) => (
+                {overdueRest.slice(0, 5).map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
                     course={courses.find((c) => c.id === task.courseId)}
                     {...timerRowProps(task)}
                     onToggle={handleToggleTask}
-                    onStartTimer={(t, el) => openStartFor(t, el, false)}
+                    onStartTimer={(t, el) => openStartFor(t, el)}
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
-                    onReschedule={handleSnoozeTask}
+                    onReschedule={task.dueDate && task.dueDate <= today ? handleTomorrowTask : undefined}
                     onOpenEnded={handleOpenEndTask}
                     onSkip={handleSkipTask}
                     ground="page"
                   />
                 ))}
-                {overdueTasks.length > 5 && (
+                {overdueRest.length > 5 && (
                   <Link
                     href="/tasks?filter=overdue"
                     className="flex h-11 items-center justify-center text-[12px] text-muted no-underline hover:text-ink"
                   >
-                    {overdueTasks.length - 5} more overdue
+                    {overdueRest.length - 5} more overdue
                   </Link>
                 )}
               </TaskSection>
             )}
 
-            {/* The rest of what is due today. Up next already carries one of
-                them, and a section repeating it as its only row said the same
+            {/* The rest of what is due today, less what Up next is showing:
+                a section repeating the pick as its only row said the same
                 thing twice. */}
             {dueTodayRest.length > 0 && (
               <TaskSection title="Due today" count={dueTodayRest.length}>
@@ -688,9 +775,9 @@ function DashboardPageContent() {
                     course={courses.find((c) => c.id === task.courseId)}
                     {...timerRowProps(task)}
                     onToggle={handleToggleTask}
-                    onStartTimer={(t, el) => openStartFor(t, el, false)}
+                    onStartTimer={(t, el) => openStartFor(t, el)}
                     onOpen={(t) => router.push(`/tasks?task=${encodeURIComponent(t.id)}`)}
-                    onReschedule={handleSnoozeTask}
+                    onReschedule={task.dueDate && task.dueDate <= today ? handleTomorrowTask : undefined}
                     onOpenEnded={handleOpenEndTask}
                     onSkip={handleSkipTask}
                     ground="page"
@@ -1072,8 +1159,13 @@ function DashboardPageContent() {
         cancelLabel="Keep going"
         onCancel={() => setPendingTimer(null)}
         onConfirm={() => {
-          if (pendingTimer) beginTimer(pendingTimer.courseId, pendingTimer.taskId);
+          const pending = pendingTimer;
           setPendingTimer(null);
+          if (!pending) return;
+          // A one-tap start goes straight on; a play mark that asked for the
+          // popover gets it now, and the length is picked there.
+          if (pending.then === 'start') beginTimer(pending.courseId, pending.taskId, pending.targetSeconds);
+          else setStartTarget({ task: pending.task, course: pending.course, anchor: pending.anchor, minutes: pending.minutes });
         }}
       />
 

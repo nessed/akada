@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { readBriefing, type Briefing, type BriefingQuiz } from '@/lib/briefing';
+import { readBriefing, type Briefing, type BriefingQuiz, type BriefingUpNextOffer } from '@/lib/briefing';
 import type { Course, RecallRecord, Session, Task, WeakPoint } from '@/lib/data/types';
 import {
   cleanKind,
@@ -36,8 +36,8 @@ import {
  * Answering "what should I do tonight" used to mean get_overview, get_tasks,
  * get_recall, get_reading_backlog, get_weekly_stats and a get_weak_points per
  * course, and then re-deriving in the chat what the app had already worked
- * out: which task Today puts up next, which exam is closest and how ready the
- * course is for it. That re-derivation is where a model invents priorities.
+ * out: what Today puts up next and why, which exam is closest and how ready
+ * the course is for it. That re-derivation is where a model invents priorities.
  * This reads everything once, on the student's own day, runs it through
  * lib/briefing.ts (which is the app's own logic), and adds `suggestions`: the
  * loose ends in the order they are worth raising, each naming the tool that
@@ -184,6 +184,24 @@ function taskOut(task: Task, courses: Map<string, Course>) {
   };
 }
 
+/**
+ * One thing Up next offers, in the shape the pick and each of its `others`
+ * share. `task` is null only for a course offered before its exam, and
+ * `title` is then what Today shows for it ("Before Midterm I"), so an
+ * assistant always has something to call it by. `reason` is the line Today
+ * prints: the pick's why and when, an Or row's one clause.
+ */
+function offerOut(offer: BriefingUpNextOffer, courses: Map<string, Course>) {
+  return {
+    why: offer.why,
+    reason: offer.reason,
+    title: offer.title,
+    session_minutes: offer.minutes,
+    task: offer.task ? taskOut(offer.task, courses) : null,
+    course: courseRef(offer.course),
+  };
+}
+
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -266,7 +284,26 @@ export function formatBriefing(b: Briefing, day: StudentDay, dailyGoalHours: num
     ...(day.source === 'utc'
       ? { day_note: 'Akada does not know the student’s time zone yet (it learns it the next time they open the app), so `today` is UTC and may be a day out. Pass the student’s own date to anything that writes one.' }
       : {}),
-    up_next: b.upNext ? { why: b.upNext.why, task: taskOut(b.upNext.task, courses) } : null,
+    // Today's Up next. `why` keeps every value it had (and gains `exam prep`,
+    // `next on the list` and `due later`); `prepares_for` is the exam or major
+    // piece the work leads up to, with its id and its title as the task has
+    // it, so it can be matched against `coming` (the `reason` line is where
+    // it is said the way Today says it, "for Midterm I", without a course
+    // code in front); `others` are the two Today offers under Or.
+    up_next: b.upNext
+      ? {
+          ...offerOut(b.upNext, courses),
+          prepares_for: b.upNext.prepFor
+            ? {
+                id: b.upNext.prepFor.task.id,
+                title: b.upNext.prepFor.task.title,
+                due_date: b.upNext.prepFor.task.dueDate,
+                days: b.upNext.prepFor.days,
+              }
+            : null,
+          others: b.upNext.others.map((o) => offerOut(o, courses)),
+        }
+      : null,
     overdue: { count: b.overdue.length, tasks: b.overdue.slice(0, 8).map((t) => taskOut(t, courses)) },
     due_this_week: b.dueSoon.slice(0, 12).map((t) => taskOut(t, courses)),
     coming: b.coming.map((c) => ({
@@ -354,7 +391,7 @@ export function formatBriefing(b: Briefing, day: StudentDay, dailyGoalHours: num
 export const GetBriefingInput = z.object({});
 
 export const GET_BRIEFING_DESCRIPTION =
-  'Start here. One read of where the signed-in student stands today, on their own day: the task Akada’s Today screen puts up next and why, what is overdue and due this week, the exams and weighted work coming with how ready each course is (recall settled and due, open weak points, whether it has a grading scheme), this week’s hours against each course’s goal and how long since each was studied, recall due, the reading backlog in hours at their pace, quizzes waiting to be marked, grading proposals waiting to be accepted, and what Akada has learnt about how they work (reading pace, typical sitting, recent weeks, practice paper scores). `suggestions` lists the loose ends worth raising, most important first, each naming the tool that deals with it. Call this at the start of any conversation about what to do, how things are going, or planning, before reaching for the narrower reads. This tool never changes Akada data.';
+  'Start here. One read of where the signed-in student stands today, on their own day: what Akada’s Today screen puts up next (a task, or a course before its exam), the one line saying why, how long a session it sizes, and the two it offers instead, what is overdue and due this week, the exams and weighted work coming with how ready each course is (recall settled and due, open weak points, whether it has a grading scheme), this week’s hours against each course’s goal and how long since each was studied, recall due, the reading backlog in hours at their pace, quizzes waiting to be marked, grading proposals waiting to be accepted, and what Akada has learnt about how they work (reading pace, typical sitting, recent weeks, practice paper scores). `suggestions` lists the loose ends worth raising, most important first, each naming the tool that deals with it. Call this at the start of any conversation about what to do, how things are going, or planning, before reaching for the narrower reads. This tool never changes Akada data.';
 
 export async function getBriefingTool(
   token: AuthenticatedToken,

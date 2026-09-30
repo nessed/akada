@@ -189,12 +189,16 @@ is the whole screen, as it always was.
   second clock. A long list fades at whichever end has more behind it and
   keeps the current course in view. Pointing at the list shows a dashed
   "add a course" line after the last one, always there when the term has none.
-- **The start** at the foot offers what Up next would start, through the same
-  popover a row opens: the round start button in the course tint, the task in
-  the serif and its course under it. With no open work it offers to time the
-  first course; with no courses, or with a sitting already running, it steps
-  aside. `useUpNext` (`lib/use-up-next.ts`) is what both it and Today read, so
-  the two never offer different tasks. It used to be a dashed box with a
+- **The start** at the foot offers Up next's pick, through the same popover a
+  row opens, opened on the length Up next gives it: the round start button in
+  the course tint, the pick's title in the serif and its course under it.
+  With nothing to pick it offers to time the course Up next's quiet state
+  names; with no courses, or with a sitting already running, it steps aside.
+  `useUpNext` (`lib/use-up-next.ts`) is what both it and Today read, through
+  the same per-device day, so the two never offer different things, a Not
+  now on Today included. It sizes the length at the moment of the click
+  rather than keeping a minute clock of its own, so the rail never re-renders
+  on the minute. It used to be a dashed box with a
   `00:00` in it that linked to `/timer`, which sends anyone without a running
   sitting straight back to Today: a start button that started nothing.
 - **Settings** at the very foot, set like the screens. On the strip its icon
@@ -342,22 +346,72 @@ The page is separated by its own ruling instead, the way a ruled pad is:
 
 - **The head band.** On Today, Up next is the one thing that spans the page,
   with the hours beside it (from `xl`), since Start is what fills them.
-  **Up next** is the course rule and code with the course name in the serif
-  italic, the title at 40px (30 on a phone) with no swipe behind it, then a
-  row of labelled figures (`UpNextFact`): **Due** (Today, "2d overdue" in
-  `warn`, or the date, with a small `High` tag on `priority-tint`), **Spent**
-  in mono (**On the clock**, with the pulsing dot, while a timer runs on it)
-  and **Steps** done over total when the task has any. The steps themselves
-  follow as a line of stops joined by a `line-strong` rule: a filled dot with
-  a tick for a done one, a ring in the course colour and "Now" for the first
-  open one, an empty circle for the rest; a tap ticks one. It used to be one
-  italic sentence with the figures dropped into it, under a highlighter swipe
-  that went muddy on the night paper. Under the buttons, **After this** names
-  what Up next would offer next. The rest of the day's work (the recall card,
-  Overdue, Due today) follows in the same column, under a cutoff: below the
-  fold it left the band's left half empty for as long as the hours ran beside
-  it, whenever Up next had no steps. The sort rule sits top right as a serif
-  italic line with a cycle mark, not in the hand face.
+  **Up next** (`components/today/UpNext.tsx`) is the next session: one thing
+  to do now, why it is the one, how long to give it tonight and what to
+  start with. What it picks is its own section (What Up next picks, below).
+  It is drawn top to bottom with no box round it:
+  - **The course line and the title.** The course rule and code with the
+    course name in the serif italic, then the title at 40px (30 on a phone)
+    with no swipe behind it. A task's title opens the task; a course offered
+    before its exam, "Before Midterm I", links to the course page.
+  - **The reason**, one serif-italic line under the title: why this one, then
+    when it is due, joined by a middle dot, either half left out when it has
+    nothing to say. "for Midterm I · due Thursday", "you were on this
+    yesterday · 2 days overdue" with the overdue half in `warn`, "next on the
+    POL list", "no date" with the small `High` tag on `priority-tint` after
+    it. It sits under the title and never over it, so it is a standfirst and
+    not a kicker, and it is the one place the date is said: there is no Due
+    figure, because the line already carries the date.
+  - **The figures**, a row of labelled figures (`UpNextFact`). **Session** is
+    the length in mono with why in the serif after it ("40m your usual",
+    "45m finishes it", "20m before 11pm", the hour in mono only when it has
+    digits, so "before midnight" stays a word), and nothing after it when the
+    length is only the last one started or a first session back. While a
+    timer runs on the pick it is **On the clock** instead: a dot in the
+    course colour pulsing on `tick` beside the figure counting up. **Spent**
+    in mono comes once a minute has gone on the task, with when it was last
+    sat ("earlier today", "yesterday", "on 20 Sep") unless the reason already
+    says "you were on this"; untouched work used to read "Spent —".
+    **Steps** is done over total when the task has any.
+  - **The plan**, at most two lines under the eyebrows **Start with** and
+    **Then**, each a noun phrase and never an order. The course's cards in
+    today's recall come first ("the 2 MATH cards in recall, just below", the
+    last words a link down to the deck); then, when the work leads up to an
+    exam, one weak point (its summary, then "§ 1.3, p.22-24", never how many
+    times it was missed); then, for a paged reading, how far this session
+    goes ("about 15 of its 30 pages, at your pace", "the last 8 pages, at the
+    usual pace"). A course offered before its exam has **Add a task for it**
+    under the plan, since nothing on its list leads up to it and that is the
+    way to put something there.
+  - **The steps**, as a line of stops joined by a `line-strong` rule: a filled
+    dot with a tick for a done one, a ring in the course colour and "Now"
+    for the first open one, an empty circle for the rest; a tap ticks one.
+  - **The timer line**, only while a sitting runs on something other than
+    the pick: "the timer is running on CS 101 · Lab 4", or "…on CS 101, no
+    task", in the serif with the code as plain text, because it is a
+    sentence. It is there so the **Back to the timer** under it explains
+    itself.
+  - **The button row**, **Start {n} min · Done · Not now** (see "Today is
+    three things", and Buttons).
+  - **Two Or rows** under a `line-soft` rule: "Or" as an eyebrow on the
+    first, a short course rule, the title in the serif and under it the code
+    and one clause ("due tomorrow", "for Midterm I", "no date", "open since
+    11 Sep"). A round outlined play mark at the end starts it in one tap at
+    its own length; a tap anywhere else on the row puts it up next, and what
+    was up moves to the first row, so there is nothing to undo. Outlined and
+    never filled, since the one fill is Start, and gone while any timer runs.
+
+  The header's right-hand end is empty until something is set aside, and
+  then says so in the serif italic, "1 set aside today · bring back", the
+  count in mono; a tap brings all of it back. Up next was once one italic
+  sentence with the figures dropped into it, under a highlighter swipe that
+  went muddy on the night paper; after that a row of Due, Spent and Steps
+  with a sort rule top right and **After this** under the buttons, which
+  named what came next without saying why and could only be followed to the
+  task. The sort rule is gone, and the Or rows replace After this. The rest
+  of the day's work (the recall card, Overdue, Due today) follows in the same
+  column, under a cutoff: below the fold it left the band's left half empty
+  for as long as the hours ran beside it, whenever Up next had no steps.
   Beside it the day's hours, then under a cutoff **This week** (`WeekHours`)
   at the same size, 40px mono. Under the day's figure is the **day ledger**
   (`DayLedger`): a strip from 7am to midnight (stretched for an early start
@@ -390,10 +444,16 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   leads by position and size.
 - **Today is three things.** Up next, the hours (the day's and the week's),
   and Coming. Everything else
-  it carries is conditional: the recall card when something is due, Overdue
-  when something is, **Due today** only for what Up next is not already
-  showing (a section whose one row is the Up next task said it twice), and
-  **Before the exam** in the week before one. The course cards that used to
+  it carries is conditional: the recall card when something is due, with the
+  pick's course first so the card directly under Up next is the one its plan
+  starts with; **Overdue** when something is, oldest first; **Due today**;
+  and **Before the exam** in the week before one. Overdue and Due today both
+  leave out whatever Up next and its Or rows already show (a section whose
+  one row is the Up next task said it twice), and a section with nothing
+  left is not drawn. Overdue used to be the first five in whatever order they
+  loaded, and repeated the pick. **Reschedule all to today** still moves
+  every overdue task, the ones up there included, and can be undone. The
+  course cards that used to
   stand under the day, the week's bar chart and the "New here?" link to the
   guide are gone (the week came back as `WeekHours` in the head band). Under
   the fold, **Your courses this week** (`CourseLine`) is a row of four
@@ -406,9 +466,28 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   on `warn-tint` and the weight on the eyebrow line over the title. Under the
   run and the day of the term, the term is a row of one mark per week: the
   ones behind in `ink-soft`, this one on the highlighter, the rest in
-  `bg-tint`. Up next's row is **Start · Done · Tomorrow**, Start filled and
-  the other two outlined in `line`; the Untimed button beside Start went,
-  since Start's popover already offers 25/45/60/Untimed.
+  `bg-tint`. Up next's row is **Start {n} min · Done · Not now**. Start is
+  filled, carries the length the session was sized to ("Start 40 min", with
+  the play glyph), and starts in one tap at that length; **Another length**,
+  a serif text button under the row, opens the start popover on the same
+  figure, with 25, 45, 60 and Untimed beside it (the popover adds the figure
+  as a chip of its own, first, when it is none of the three). Done and Not
+  now are outlined in `line`. Done is for a task only, so a course offered
+  before its exam has Not now alone, across the row. While a timer runs the
+  filled button is **Back to the timer**, because Start would throw the
+  running sitting away, and Another length goes; Not now goes as well while
+  the timer is on the pick itself. **Not now** sets the pick aside for today
+  on this device and writes nothing to the task (see What Up next picks),
+  with "Not now: …" and undo. It replaced **Tomorrow**, which set tomorrow's
+  date on whatever it was pressed on: a deadline three weeks out came
+  forward, a note to self was given a date it never had, nothing undid it,
+  and the task was often straight back. On Today, Tomorrow lives only in a
+  row's `···` menu, and only on work due today or overdue, where it moves
+  the date one day later with "Moved to tomorrow: …" and undo. Every play
+  mark on Today goes through one guard as well: the sitting already running
+  goes back to the timer, and any other asks "Start this one instead?"
+  before the running one is discarded. There is no Untimed button beside
+  Start: the popover already offers it.
 - **The fold.** `.fold`, two `line-strong` rules 2px apart, the full content
   width. It closes the head band and is the one heavier line on the screen.
 - **The column rule.** From `xl` the page below the fold is two columns, the
@@ -432,6 +511,156 @@ only edged things on screen, so they read as above it again. Tasks is ruled
 this way too (see Tasks: the planner). Stats and the Record are deckle
 cards by design (see Stats: the chase, and The Record); Settings is not yet
 ruled.
+
+### What Up next picks
+The rule in one line: **the logged record and the date decide what is up;
+the clock decides only how long; the sitting on the clock changes only what
+the buttons say.** `lib/up-next.ts` reads the record in one pass and sorts
+open work into seven tiers, in this order. The order is opinion, written down
+where a test holds it (`lib/up-next.test.ts`), so changing it is a decision
+and not a drift:
+
+1. **The eve.** The night before an exam or a major piece, a session on its
+   course, above everything, work due today included, unless the course has
+   already had its session today.
+2. **Due now.** Due tomorrow or today, or a day or two late: still tonight's
+   work.
+3. **The run-up.** In the two weeks before an exam or a major piece, a
+   session on its course is owed every few days, and while one is owed the
+   course's best work towards it is lifted here. Below due now, so
+   tomorrow's closed-book response paper is not pushed out by a midterm that
+   is still days away.
+4. **The week.** Dated in the coming week, or three to seven days late.
+5. **Catch-up.** Undated work marked high priority.
+6. **The list.** The top of each course's undated list, one per course, in
+   the order the student dragged it into: how the mastery trackers and the
+   undated readings come up when nothing is dated. The rest of each list are
+   notes to self and stay on the course page.
+7. **Later.** Dated eight days to three weeks out, or more than a week late.
+   Work more than a week late is a loose end rather than the next thing, and
+   it says "open since 11 Sep", calmly, rather than a count in `warn` that
+   grows every morning. Anything dated past three weeks is not a candidate.
+
+Inside a tier the first difference wins: what has not had a full session on
+it today (as long as the reader's usual: the median of their sittings of ten
+minutes or more over four weeks, held between 20 and 90 minutes, or 45 until
+there are five of them) before what has; the heavy (worth a tenth of the course or
+more) before the light; what the reader was on today, then yesterday; the
+nearest date; the heavier weight; high priority; in one course, the
+student's own order; the course with least of its weekly goal served; the
+course left longest, one never studied first.
+
+- **An exam is never the task**, not before its day, not on it, not after.
+  Before it the work leading up to it is; on the day there is no prep, since
+  the day of an exam is for the exam; after it, an unticked exam waits in
+  Overdue to be ticked.
+- **Which exams pull.** The pieces recall prepares for (`preparesFor`): worth
+  a fifth of the course, or an unweighted exam that calls itself a midterm, a
+  final or an exam, one to fourteen days out. A quiz worth two per cent
+  marked as an exam pulls nothing, exactly as in recall.
+- **The run-up is spaced.** A session on the course is owed when there has
+  been none yet, or when the last one is at least three tenths of the time
+  left ago, rounded up and never under a day, `max(1, ⌈days × 3 / 10⌉)`:
+  every day in the last three, every other day from four to six out, every
+  third from seven to ten, every fourth from eleven to thirteen, and every
+  fifth at a fortnight. That is Cepeda et al. 2008, where the gap that best
+  serves a test is about 20 to 40% of the time left before it
+  (RECOMMENDATIONS, "The run-up"). Twenty minutes on the course in a day is
+  its session, so tonight's MATH problem set is tonight's MATH session, and
+  the run-up stops being owed the moment one is logged and comes back at the
+  spaced gap, which is what keeps it from sitting on top of the screen for a
+  fortnight. The lift goes to the course's own dated work towards the exam
+  first and its undated work after; within each, away from what the last
+  counted day already worked, so three run-up sessions are three different
+  things, and then in the student's order. Work that already outranks the
+  lift (due tomorrow, say) stays where it is, since it is already the
+  course's session tonight. With nothing on the list that leads up to it,
+  the course itself is up: **Before Midterm I**, "nothing on the MATH list
+  leads up to it", and **Add a task for it**.
+- **The naming rule.** The exam is named by its title only, as what the work
+  is for ("for Midterm I", "Before Midterm I"), with any course code the
+  student typed in front of it taken off, since the course line already says
+  it. Never with its day, a count of days, its weight, a `warn` tone or a
+  readiness figure beside it: Coming carries those. Every task that leads up
+  to it carries the exam whether a session is owed or not, so "for Midterm
+  I" does not come and go with the spacing.
+- **Weight steers and is never shown.** It puts heavy work first inside a
+  tier and breaks ties; no weight or per cent appears anywhere in Up next.
+- **"You were on this" is a tie-break, not an override.** It needs a session
+  of ten minutes or more on the task today or yesterday, and it only wins
+  inside a tier. The old "carry on where you left off" pinned a task for as
+  long as a timer had touched it, whatever else came due.
+- **A full session steps a task aside.** A task that has had a usual-length
+  session today goes behind the others in its tier, and on an undated list
+  it hands the course's one slot to the next task down, so an hour on one
+  mastery tracker brings up the next. It is back in its place tomorrow.
+  Nothing in due now or the eve is moved aside this way: work due by
+  tomorrow does not stop being due because it had an hour.
+- **The clock sizes the session, it never picks.** The length
+  (`lib/up-next-session.ts`) is the reader's own before it is anything else:
+  the median of their blocks on the course once four have settled, then of
+  all their blocks, then the length last started from the popover, then 45,
+  rounded to five and held between 15 and 90. It is shortened for three
+  reasons and no others: a paged reading that needs less to finish ("finishes
+  it"); an evening with less left in it ("before 11pm": tonight ends where
+  nine tenths of this reader's timed focus is usually done, once there are
+  five timed sittings to learn that from, and at the end of their day once
+  that point is under a quarter of an hour away); and a first session back
+  after four quiet days, capped at 25, with no word about the gap. Never
+  under ten minutes. Nothing in it knows the daily goal or
+  shortens a session for having met it, since those would be reward and
+  permission lines. Only Up next itself re-renders on the minute
+  (`useMinuteClock`); the page and the rail see the clock only when the date
+  turns, and the rail sizes its start at the moment of the click.
+- **Recall and weak points shape the session, never the order.** They reach
+  the plan and the order of the recall deck and nothing else, and the pick is
+  settled before either has loaded, so it never jumps a second after paint,
+  and Today, the rail and the connector's briefing agree.
+- **Not now is a per-day convenience on one device** (`lib/up-next-day.ts`,
+  in local storage). It sets the pick aside for tonight and writes nothing to
+  the task, so the work comes back tomorrow in its honest tier (a task due
+  today reads "a day overdue"), and passing on a lifted pick passes on its
+  course's run-up too, so the next MATH task is not handed over a moment
+  later. An Or row put up next is kept the same way, for the day. Neither
+  reaches the briefing or another device, which is the one place those can
+  differ from Today (`MCP_SETUP.md` says so).
+- **The Or rows spread across courses.** The first comes from a course other
+  than the pick's and the second from a course other than both, before
+  anything fills in by rank: three MATH tasks in a row are one choice offered
+  three times. With an Or row put up next, the first row is what would have
+  been up without it.
+
+**With nothing to pick** it is still Up next (`UpNextQuiet`): never "a clean
+page", and always with a Start. The eyebrow and the course line, then a
+heading in the serif at 22px saying why there is no task, and one serif
+italic line naming the course worth a session and the one true thing that
+makes it that course:
+
+| When | Heading | Buttons |
+|---|---|---|
+| Everything open is set aside | "Everything open is set aside for today." with "It comes back tomorrow." | **Start MATH 45 min**, **Bring it back** |
+| All the open work is dated past three weeks | "Nothing on the list is due before 29 Oct." | **Start MATH 45 min**, **Add a task** |
+| Nothing is open | "Nothing open on the list." | **Start MATH 45 min**, **Add a task** |
+
+The course is the one with the nearest exam or major piece inside three
+weeks ("MATH 101 is next, for Midterm I"), else the one with least of its
+weekly goal served while a goal is still short ("…has had the least of its
+week so far"), else the one left longest ("…has gone longest without a
+session", said only where there is another course to be longer than, or
+"…has no session yet this term"), ties going to the reader's own course
+order. Start takes the short code, so two numbers do not sit side
+by side, and begins at the length Up next would give the course, in one tap;
+while a timer runs it is Back to the timer. A term with no tasks at all still
+gets the getting-started block (see Explained once), and one with no courses
+the Add a course one.
+
+The three sort rules Up next used to carry ("carry on where you left off",
+"least studied first", "oldest overdue first") are gone, and so is the stored
+preference behind them. They differed only in tie-breaks inside one pool,
+explained themselves only in a hover title, and each tap quietly changed the
+rail's start as well. What each did survives above as a tie-break: carrying
+on as "you were on this", least studied as the week's share and the course
+left longest, oldest overdue as the late tiers and the date.
 
 ### Hours, not percentages
 Nothing in the app draws a percentage bar. A week against a goal is **one
@@ -1003,7 +1232,9 @@ else:
 The Today sections (the hours, the course line under the day) read the same
 augmented list, so the hour strokes fill and "2h
 to go" counts down while the clock runs. Anything that *decides* something,
-which task is up next, which course has gone quiet, still reads the record.
+which task is up next, which course has gone quiet, still reads the record
+and the date; the time of day only sizes Up next's session, and the sitting
+on the clock only changes Up next's buttons and its On the clock figure.
 
 Two candidates were added to the ranking. The **first mark** on a course is
 now named ("15 minutes to the first tally on MATH"); it is the short one
@@ -1030,10 +1261,10 @@ compared to anybody else.
 
 Two kinds of session never teach it anything: one closed for the reader
 (`recovery`, see The forgotten timer) and any over four hours, however it
-ended. Up next's "carry on where you left off" likewise ignores a session
-under ten minutes, which is a timer started and dropped.
+ended. Up next's "you were on this" likewise ignores a session under ten
+minutes, which is a timer started and dropped, and only ever breaks a tie.
 
-The app uses it in four places, and says it back in three.
+The app uses it in five places, and says it back in three.
 
 - **Next Mark reaches as far as your sitting.** The line names only what is
   within roughly one sitting. That was a fixed fifty minutes; once five
@@ -1053,6 +1284,16 @@ The app uses it in four places, and says it back in three.
 - **The start popover opens on your length.** Given enough timed blocks on a
   course, it opens on the fixed length nearest to how long your blocks on that
   course run, and says "your MATH blocks run about 35 min" under the choices.
+  Opened from Up next's Another length or the rail's start, it opens on the
+  length Up next sized instead, since that is the figure the reader was just
+  shown, and Enter "starts with Up next's length". Only a fixed length or
+  Untimed picked there is remembered as the last one used: a session
+  shortened to the evening says nothing about how long the reader likes to
+  work.
+- **Up next's session is your length.** The same block medians size it (the
+  course's, then all of them), the course's reading pace says how many pages
+  it covers, and the hour by which nine tenths of your timed focus is usually
+  done is where tonight ends when it is short. See What Up next picks.
 - **The log sheet sets this sitting beside your usual one**, two facts and no
   verb, the same shape as the week beside a typical week.
 
@@ -1060,9 +1301,9 @@ Said back: **marginalia**. `observations.ts` turns the habits into single
 sentences in the Next Mark voice ("your sittings mostly land in the evening",
 "MATH runs past the block more often than not · 5 of 7", "a 5 minute break of
 yours usually runs to 10") and `Marginalia` sets one of them under the Today
-title and under a course's title, in Caveat, rotated, the way the sort note
-already sits on Up next. A note about the present moment ("this is usually
-your hour", on a day nothing has been logged yet) wins outright; otherwise
+title and under a course's title, in Caveat, rotated. A note about the
+present moment ("this is usually your hour", on a day nothing has been
+logged yet) wins outright; otherwise
 the choice rotates by date among the best few, so the margin reads
 differently tomorrow. None of it says "you should" and none of it counts what
 was missed. A note that stops being true simply goes.
@@ -1178,7 +1419,12 @@ every week and no gap would ever widen. A piece is judged by its weight
 whenever it has one; an exam with none counts only when it calls itself a
 midterm, a final or an exam. Like Next Mark's
 deadlines, the exam steers the order and the timing and never appears in the
-copy. A second answer the same day replaces the first, and answers are kept
+copy. Up next alone names the exam, by its title, as what a session is for;
+never with its day, a count of days, its weight or a readiness figure beside
+it, which Coming carries. (That rule is there to keep "three days to the
+midterm" off progress and reward lines. Up next is the plan the reader asks
+for, and a pick lifted over tomorrow's reading with no stated purpose is the
+thing that made it read as arbitrary.) A second answer the same day replaces the first, and answers are kept
 in date order whichever way they arrive.
 
 **The day's few.** Today asks for five at most, no more than three from one
@@ -1225,7 +1471,11 @@ made before the list is read leaves the list unread and reads it fresh.
 **Where it is drawn.**
 - **Today**, under Up next and over the day's task lists: the card, the
   day's few. Under Up next rather than over it, because it is a few minutes
-  and the day's work is still the day's work.
+  and the day's work is still the day's work. The pick's course comes first
+  in the deck (`recallFirst`, a stable partition, so recall's own order
+  holds inside each half), so the card directly under Up next is the one
+  its plan's "Start with" points at. It changes the deck's order and never
+  the pick.
 - **The course page**, under the tasks: the course's standing as uprights
   and a sentence, then every kept thing in the order it comes up, its last
   three answers as marks in the margin ("new" before it has been asked), and
@@ -1372,7 +1622,8 @@ shaped. That is the rule now: if it should sound like a thing, it goes on
   stroke across the paper landing on the desk. `untick` is a softer, duller
   knock, for undoing and for a toggle turned off, because undoing is not a
   failure.
-- **Paper** for something put away: a swipe to delete, a recall card let go.
+- **Paper** for something put away: a swipe to delete, a recall card let go,
+  Up next's Not now.
 - **The timer** is a book. `start` opens it, the cover set back on the desk
   and the pages falling open after it (a sitting begun, resumed, or a break
   ended early). `pause` is a knuckle set down beside it. `stop` closes it, the
@@ -2192,6 +2443,13 @@ met, and never again:
   "nothing due", which reads as caught up; Up next says what the space is
   for and offers the two ways to fill it (Claude, or adding a deadline), and
   a course timer while no session exists. It goes when the first task lands.
+  After that Up next is never empty and never "a clean page", which it used
+  to say with no button under it. With nothing to pick it says which of three
+  things is true (everything open is set aside for today, nothing is due
+  before a date more than three weeks off, nothing is open), names the one
+  course worth a session with the one true thing that makes it that course,
+  and always has a **Start** for that course at the length it would give it,
+  beside **Bring it back** or **Add a task** (see What Up next picks).
 
 **Setup** (`/onboarding`) follows the same idea. It is four steps: what
 Akada is, the courses (searched in the catalog, section picked, weekly goal
@@ -2298,8 +2556,10 @@ rules rather than in panels:
   words; the drawing goes stale the same way if nobody minds it, so **when
   Today's parts or their names change, change the sketch in the same PR**.
   It shows only what Today really shows: the date line, Up next with its
-  course rule and its row of figures, Start/Done/Tomorrow, today's hours with
-  the day ledger, and Coming with its dates.
+  course rule, its title and the serif-italic reason under it, its row of
+  figures (Session with "your usual", Spent, Steps), one "Start with" line of
+  its plan, **Start 40 min** / Done / Not now, one Or row with its outlined
+  play mark, today's hours with the day ledger, and Coming with its dates.
 - **Margin notes** in the hand face (`font-hand`, muted ink), a few words
   each, with a drawn arrow where one points at something. Only where there is
   a margin: the ones beside the sketch appear at `xl`.
@@ -2340,6 +2600,14 @@ Desktop adds a third, which is the same idea at pointer scale: a **header
 action** at `h-10`/`h-11`, `rounded-[10px]`, `text-[13px]`, bordered in
 `line-strong` or filled for the one primary action on the screen.
 
+Up next's **Start {n} min** is both, by width. On a phone it is the Page CTA,
+full width at 56px, with Done and Not now under it as the sheet action pair
+and Another length centred under those, so at 320px nothing is squeezed onto
+one line. From `md` it is the filled header action, `h-11`, radius 10, 13px,
+with Done and Not now beside it as outlined header actions at the same
+height. It is the one solid fill on Today; Up next's Or rows start with an
+outlined round mark and never a filled one.
+
 Solid `bg-primary` fill belongs to the one primary action on a screen. A
 *selection* is never a solid fill: it is a `bg-tint` wash with an ink border
 or an accent tick (see `SectionPicker`).
@@ -2375,8 +2643,8 @@ Movement in the app is soft and deliberate:
 - **`settle`**: `0.34s` on the same curve, a 4px rise and fade. Whatever swaps in place on the timer screen (focus controls for break controls, the clock face going from block to rest, the "· paused" note) settles in with it rather than cutting.
 - **Pause** is the timer screen going quiet, not a switch: the clock lets its ink down to half over `480ms` and then breathes, slowly dimming and coming back on a `4.2s` cycle (`.held-breath`, dim to dimmer, never bright), the fan loses colour over `700ms` and closes its branches in like a flower at dusk, and the pause button crosses its glyph and word over (both are always rendered, stacked, so the button never changes width). Resume runs the same way back, the fan opening out with a small overshoot.
 - **Presses** on the timer's buttons give a `0.97` scale on `:active`. Small enough to feel, never enough to read as a bounce.
-- **Up next arriving.** The task body is keyed on the task, so when it changes (Done, Tomorrow, or the rule switched) the new one settles in and its course rule draws left to right (`.rule-draw`, `0.5s`). Done and Tomorrow first let the old task go with `.lift-away`, a `0.22s` fade and 6px lift, so the next one comes up into a space instead of replacing it in the same frame. The handwritten rule note settles when it is switched.
-- **Up next is live.** Its meta line carries the time already put into the task (mono digits) and when it was last sat. With a timer running on it the line says "on the clock" beside a dot in the course colour pulsing on `tick`, and the figure counts up with the sitting.
+- **Up next arriving.** The body is keyed on the candidate, so whenever it changes (Done, Not now, an Or row put up next, or the record moving) the new one settles in and its course rule draws left to right (`.rule-draw`, `0.5s`). Done, Not now and a tapped Or row first let the old one go with `.lift-away`, a `0.22s` fade and 6px lift, so the next comes up into a space instead of replacing it in the same frame. Each Or row settles in as it arrives, and so do the "set aside today" note, the timer line and the Session figure when its minutes change. The minute moves nothing else, and none of it has keyframes of its own.
+- **Up next is live.** While a timer runs on the pick, **Session** becomes **On the clock**: a dot in the course colour pulsing on `tick` beside the figure, which counts up with the sitting, and Not now steps aside. While any timer runs, Start is **Back to the timer**.
 - **Stats arriving.** Cards dealt in (`.deal-in`, `0.55s`, a 12px rise off a `-1.2deg` tilt), the heatmap inking in (`.heat-in`), bars filling from the rule (`.bar-grow`), lines drawn with a pen (`.ink-draw`, any path with `pathLength=1`), dots popping on (`.pop-in`), and a record stamped down (`.stamp-down`). See "Stats: the chase".
 - **Every screen arrives.** `PageShell` sets `.page-in` on the content column: a `0.34s` 6px rise and fade on the app's curve, so moving between tabs no longer cuts in whole while Stats and the timer each had an entrance of their own. The rail, the bar and the dock hold still around it. Backwards fill only, so `main` carries no transform once it has landed and a sheet inside it is still placed against the viewport.
 - **Sheets leave the way they came.** Every bottom sheet used to slide up and then vanish in a frame. `useLeaving` (and `<Leaving>` for a sheet written inline as `{value && ...}`) holds the last value on screen for `220ms` while `.sheet-leaving` fades the scrim and drops the panel 32px. The panel must be the wrapper's last child. A value that comes back mid-exit cancels it.

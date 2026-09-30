@@ -89,9 +89,30 @@ test('get_briefing joins the term into one read, on the app’s own rules', asyn
   assert.equal(out.today, today);
   assert.equal(out.day_known_from, 'utc');
 
-  // Up next is Today's: the problem set a timer ran on yesterday.
+  // Up next is Today's: the problem set a timer ran on yesterday. It is two
+  // days late, which is still tonight's work (due-now), and fifty minutes on
+  // it yesterday is past the ten-minute floor, so it says so. The midterm is
+  // four days out, so a MATH session is owed every two days, and yesterday's
+  // fifty minutes was one: the run-up is not owed and nothing is lifted. The
+  // problem set still leads up to the midterm, and says what for.
   assert.equal(out.up_next.task.id, 'task-set');
   assert.equal(out.up_next.why, 'in progress');
+  assert.equal(out.up_next.title, 'Problem set 3');
+  assert.equal(out.up_next.reason, 'you were on this yesterday · 2 days overdue');
+  assert.equal(out.up_next.course.code, 'MATH 101');
+  assert.equal(out.up_next.prepares_for.id, 'task-midterm');
+  assert.equal(out.up_next.prepares_for.title, 'Midterm I');
+  assert.equal(out.up_next.prepares_for.days, 4);
+  // Two sittings are too few for a usual block, and the server has no
+  // device to remember a last length, so the session is the default 45.
+  assert.equal(out.up_next.session_minutes, 45);
+  // Under Or, the other course's reading, due in two days.
+  assert.equal(out.up_next.others[0].task.id, 'task-read');
+  assert.equal(out.up_next.others[0].why, 'due soon');
+  assert.equal(out.up_next.others[0].course.code, 'POL 100');
+  assert.equal(typeof out.up_next.others[0].session_minutes, 'number');
+  // The exam row itself is never offered.
+  assert.ok(!out.up_next.others.some((o: any) => o.task?.id === 'task-midterm'));
   assert.equal(out.overdue.count, 1);
 
   // The midterm, with how ready its course is beside it.
@@ -154,4 +175,31 @@ test('get_briefing says there are no exams when none has been entered', async ()
   const out = read(await getBriefingTool(token, {}, fakeSupabase(tables) as never));
   assert.equal(out.loose_ends.no_exams_entered, true);
   assert.ok(out.suggestions.some((s: string) => /No exams are in Akada yet/.test(s)));
+});
+
+test('get_briefing turns a near exam into its run-up, never the exam itself', async () => {
+  const today = utcToday();
+  const tables = term(today);
+  // No MATH work left and no MATH sitting: the midterm is four days out, no
+  // session on the course has ever counted, so one is owed, and with nothing
+  // on the list to lift the course itself is offered before its exam.
+  tables.tasks = tables.tasks.filter((t) => t.id !== 'task-set');
+  tables.sessions = tables.sessions.filter((s) => s.id !== 's1');
+  const out = read(await getBriefingTool(token, {}, fakeSupabase(tables) as never));
+
+  assert.equal(out.up_next.why, 'exam prep');
+  assert.equal(out.up_next.task, null);
+  assert.equal(out.up_next.title, 'Before Midterm I');
+  assert.equal(out.up_next.course.id, MATH);
+  assert.equal(out.up_next.reason, 'nothing on the MATH list leads up to it');
+  assert.equal(out.up_next.prepares_for.id, 'task-midterm');
+  assert.equal(out.up_next.prepares_for.title, 'Midterm I');
+  assert.equal(out.up_next.prepares_for.days, 4);
+  // The only sitting left is four days old and nothing is logged today, which
+  // is a return: the first session back is capped at 25.
+  assert.equal(out.up_next.session_minutes, 25);
+  // The reading due in two days sits under it, below the owed run-up.
+  assert.deepEqual(out.up_next.others.map((o: any) => o.task?.id), ['task-read']);
+  // The exam is still counted down to, where it always was.
+  assert.equal(out.coming.find((c: any) => c.task.id === 'task-midterm').days, 4);
 });

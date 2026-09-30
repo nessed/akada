@@ -205,7 +205,7 @@ export default function DesktopRail() {
   const { courses } = useCourses();
   const { tasks } = useTasks();
   const { active } = useTimerState();
-  const upNext = useUpNext();
+  const { reading, sizeOf } = useUpNext();
   const { settings } = useUserSettings();
 
   const navRef = useRef<HTMLElement | null>(null);
@@ -235,16 +235,20 @@ export default function DesktopRail() {
     return { per, total };
   }, [tasks]);
 
-  /* What the start at the foot would begin: Up next, as Today reads it, or
-     with no open work the first course in the reader's order, untasked. */
-  const start = useMemo((): { course: Course; taskTitle: string | null; task: typeof upNext } | null => {
-    if (upNext) {
-      const course = courses.find((c) => c.id === upNext.courseId);
-      if (course) return { course, taskTitle: upNext.title, task: upNext };
-    }
-    const first = ordered[0];
-    return first ? { course: first, taskTitle: null, task: null } : null;
-  }, [upNext, courses, ordered]);
+  /* What the start at the foot would begin: Up next's pick, as Today reads
+     it (the same hook and the same per-device day, so a Not now on Today
+     reaches here too), or with nothing to pick the course Today's quiet
+     state names, untasked (the first course in the reader's order is only a
+     guard: with any course there is always a quiet course). `cand` is what
+     sizes it: the rail asks for the length at the moment of the click
+     rather than holding a minute clock of its own, so it never re-renders
+     on the minute. */
+  const start = useMemo(() => {
+    const c = reading.pick;
+    if (c) return { course: c.course, taskTitle: c.title, task: c.task, cand: c };
+    const q = reading.quiet?.course ?? ordered[0];
+    return q ? { course: q, taskTitle: null, task: null, cand: { task: null, course: q, spentSeconds: 0 } } : null;
+  }, [reading, ordered]);
 
   const narrowNow = () => (navRef.current?.getBoundingClientRect().width ?? 232) < 120;
 
@@ -351,7 +355,14 @@ export default function DesktopRail() {
   const openStart = () => {
     if (!start) return;
     setTip(null);
-    setStartTarget({ task: start.task, course: start.course, anchor: startRef.current });
+    // The length Up next would give it right now, so the popover opens on
+    // the same figure Today's Start carries.
+    setStartTarget({
+      task: start.task,
+      course: start.course,
+      anchor: startRef.current,
+      minutes: sizeOf(start.cand, Date.now()).minutes,
+    });
   };
 
   /**
@@ -589,8 +600,9 @@ export default function DesktopRail() {
         </div>
 
         {/* The start. It offers what Today would start next, through the same
-            popover a row opens, and draws no clock of its own: once a sitting
-            runs the dock is the only clock and this steps aside. */}
+            popover a row opens, opened on the length Up next gives it, and
+            draws no clock of its own: once a sitting runs the dock is the
+            only clock and this steps aside. */}
         {!active && start && (
           <div className="mx-1.5 mt-2 border-t border-line pt-2">
           <button

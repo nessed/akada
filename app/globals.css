@@ -438,10 +438,12 @@ input[type='date']::-webkit-calendar-picker-indicator {
   animation: ink-in 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-/* Up next arriving. Whenever the task changes, by Done, by Tomorrow or by
-   switching the rule, the course rule is drawn left to right the way a pen
-   draws it, and a highlighter swipe is pulled under the title a beat after.
-   Both play once per task: UpNext keys its body on the task id. */
+/* Up next arriving. Whenever what is up changes, by Done, by Not now or by
+   an Or row put up next, the course rule is drawn left to right the way a
+   pen draws it. It plays once per candidate: UpNext keys its body on the
+   candidate's key. Up next's title has no highlighter under it any more (it
+   went muddy on the night paper); hl-draw stays for the rail's current
+   screen, which draws it quicker (.hl-draw-quick, below). */
 @keyframes rule-draw {
   from {
     transform: scaleX(0);
@@ -463,9 +465,10 @@ input[type='date']::-webkit-calendar-picker-indicator {
   }
 }
 
-/* Up next leaving. Done and Tomorrow let the task go before the next one
-   comes up, a fade and a short lift, rather than swapping in the same
-   frame. Held so nothing flickers back while the list catches up. */
+/* Up next leaving. Done, Not now and a promoted Or row let the candidate go
+   before the next one comes up, a fade and a short lift, rather than
+   swapping in the same frame. Held so nothing flickers back while the list
+   catches up. */
 @keyframes lift-away {
   to {
     opacity: 0;
@@ -866,8 +869,9 @@ input[type='date']::-webkit-calendar-picker-indicator {
   outline-offset: -1px;
 }
 
-/* The page you are on, swiped in quicker than Up next's title: this plays on
-   every change of screen, and a nav mark has no business taking 0.9s. */
+/* The page you are on, swiped in quickly: this plays on every change of
+   screen, and a nav mark has no business taking the 0.9s a highlighter
+   under a title once took. */
 .hl-draw-quick {
   animation: hl-draw 0.35s cubic-bezier(0.3, 0.6, 0.25, 1) both;
 }

@@ -179,9 +179,25 @@ simply has no clock and keeps dating in UTC, as it always did.
 - **What it is**: one read of everything Today knows, on the student's own
   day, joined in the one place the app never joins it (`lib/briefing.ts` does
   the reading; `app/api/mcp/briefing-tool.ts` loads and formats it):
-  - `up_next`: the task Today's Up next would show (`pickUpNext`, the
-    `in-progress` rule) and `why` (in progress, overdue, due today, due soon,
-    high priority with no date).
+  - `up_next`: what Today's Up next would show (`readUpNext` in
+    `lib/up-next.ts`, the same ranking Today runs). Usually a task; in the
+    run-up to an exam, when nothing on the course's list leads up to it, the
+    course itself, with `task` null and `title` reading "Before Midterm I".
+    - `why`: in progress, overdue, due today, due soon, high priority with no
+      date, and now also exam prep (work lifted into an exam's run-up, or the
+      course before its exam), next on the list and due later. The old values
+      keep their meaning; in progress now has the ten-minute floor the pick
+      has.
+    - `reason`: the line Today prints under the title, such as "you were on
+      this yesterday · 2 days overdue".
+    - `session_minutes`: the length Today's Start offers, before Today
+      shortens it to fit what is left of the evening.
+    - `prepares_for`: the exam or major piece the work leads up to (`id`,
+      `title`, `due_date`, `days`), or null.
+    - `others`: the two Today offers under Or, each with its own `why`,
+      `reason` (one clause), `title`, `session_minutes`, `task` and `course`.
+    - Today's Not now and promote are per device, so the briefing can differ
+      only there.
   - `overdue` and `due_this_week`.
   - `coming`: exams and weighted work (`countdowns`), each with its course's
     recall (kept, settled, due), its open weak points, and whether the course
