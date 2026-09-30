@@ -1140,7 +1140,7 @@ export default function TimerPage() {
         )}
 
         <p className="key-hint m-0 -mt-3 font-mono text-[11px] text-muted-soft">
-          {resting ? 'Space back · F finish · Esc back' : 'Space pause · B break · F finish · Esc back'}
+          {resting ? 'Space back · F finish · R reset · Esc back' : 'Space pause · B break · F finish · R reset · Esc back'}
         </p>
       </div>
 
