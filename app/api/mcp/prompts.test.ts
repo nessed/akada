@@ -102,4 +102,7 @@ test('a prompt names the course, the tools, and the rules that stop a model gues
 
   assert.match(await text('study_now', { minutes: '45' }), /45 minutes/);
   assert.match(await text('study_now', { minutes: 'ages' }), /some time/);
+  // Up next can be null (nothing due for three weeks), and Today still
+  // names a course then, so the prompt has somewhere to go.
+  assert.match(await text('study_now'), /If up_next is null.*take up_next_quiet/s);
 });

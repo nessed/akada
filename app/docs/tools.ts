@@ -10,7 +10,7 @@ export const GROUPS: { id: string; title: string; tools: Tool[] }[] = [
     id: 'courses',
     title: 'Courses and tasks',
     tools: [
-      { name: 'get_briefing', access: 'Reads', does: 'Where you stand today in one read: what is up next, what is due, how ready each course is for what is coming, your week against your goals, and the loose ends worth sorting first.' },
+      { name: 'get_briefing', access: 'Reads', does: 'Where you stand today in one read: what is up next, why, and for how long, what is due, how ready each course is for what is coming, your week against your goals, and the loose ends worth sorting first.' },
       { name: 'find_course', access: 'Reads', does: 'Finds one of your courses in the current term by its code or name.' },
       { name: 'get_overview', access: 'Reads', does: 'Your courses in dashboard order, how many tasks are open in each, and your recent study sessions.' },
       { name: 'get_tasks', access: 'Reads', does: 'The term’s tasks, narrowed to a course, a date range, a priority or a kind if asked, and sorted by due date, priority, newest or your own order.' },

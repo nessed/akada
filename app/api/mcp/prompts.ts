@@ -69,7 +69,7 @@ export function studyNowPrompt(minutes?: string) {
   const time = minutes && /^\d{1,3}$/.test(minutes.trim()) ? `${minutes.trim()} minutes` : 'some time';
   return say(`I have ${time} to study right now. What should I do?
 
-Call get_briefing and give me one thing, in a line or two, with the reason it beats the alternatives. Take up_next unless something in the briefing is a better use of the time, and say which: an exam in the next few days, a quiz waiting to be marked, recall that is due, or a course that has gone quiet. Fit it to the time I have.
+Call get_briefing and give me one thing, in a line or two. Take up_next: it already weighs what is due, an exam's run-up and what I was just working on, and up_next.reason says why it is first; say that reason plainly. If up_next is null, no work is due in the next three weeks: take up_next_quiet instead, a session on that course, and say its reason when it has one. session_minutes is sized to how I usually work once there are enough sessions to tell, and is 45 until then; fit it to the time I have. Offer something else instead only if a quiz is waiting to be marked, or up_next will not fit the time I have, in which case take one of up_next.others, and say which. If up_next.why is exam prep, or up_next_quiet has a prepares_for, open with a recall round on that course.
 
 If it is a recall round or a quiz, offer to start it here. Do not change anything in Akada.`);
 }

@@ -150,6 +150,17 @@ export const PEAK_MIN_SHARE = 0.4;
 export const PEAK_MIN_DAYS = 3;
 
 /**
+ * Where the reader's evening usually ends: the hour by which this share of
+ * their placed focus, counted from the start of their day, is done. Nine
+ * tenths rather than all of it, because the one night that ran to 2am is the
+ * exception a usual stop is meant to leave out, and rather than half, because
+ * the middle of the evening is not where it ends. Up next sizes a session to
+ * fit before it (lib/up-next-session.ts), and only ever sizes: it never
+ * decides what comes up.
+ */
+export const USUAL_STOP_SHARE = 0.9;
+
+/**
  * The ranking learns. Each Next Mark line shown is logged with whether a
  * sitting followed within the hour (./log.ts). Once a kind of line has been
  * shown this many times, its follow rate against the others moves it up or

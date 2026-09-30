@@ -6,6 +6,7 @@ import type { Course, Task } from '@/lib/data';
 import { HABIT_MIN_BLOCKS, roughMinutes, settled } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useTimerState } from '@/lib/timer-context';
+import { LENGTHS, nearestLength, readLastLength, writeLastLength } from '@/lib/timer-length';
 
 /**
  * The start popover.
@@ -20,42 +21,30 @@ import { useTimerState } from '@/lib/timer-context';
  * The length it opens on is learned. Once a course has enough timed blocks
  * behind it, the popover opens on the fixed length nearest to how long this
  * reader's blocks on that course actually run, and says so under the
- * choices; until then it opens on whatever was used last.
+ * choices; until then it opens on whatever was used last. A caller that has
+ * already sized the session (Up next's Another length, the rail's start)
+ * passes that length instead, and when it is not one of the three the
+ * popover offers it as one more chip, first, so the figure the reader was
+ * just shown is the one it opens on.
  */
-
-const LENGTH_KEY = 'akada.timer.lastBlockMinutes';
-const LENGTHS = [25, 45, 60] as const;
 
 export interface StartTarget {
   task: Task | null;
   course: Course;
   /** The element the popover hangs off, so it opens where it was clicked. */
   anchor: HTMLElement | null;
+  /**
+   * The length to open on, when the caller has already sized the session:
+   * Up next's Another length, and the rail's start, pass the length Up next
+   * gives (lib/up-next-session.ts), so the popover opens on the figure the
+   * reader was just shown rather than on a different one. Null opens on
+   * Untimed. Left out, the popover opens on the learned or last length.
+   */
+  minutes?: number | null;
 }
 
-function readLastLength(): number | null {
-  if (typeof window === 'undefined') return 45;
-  try {
-    const raw = window.localStorage.getItem(LENGTH_KEY);
-    if (raw === 'open') return null;
-    const n = Number(raw);
-    return LENGTHS.includes(n as (typeof LENGTHS)[number]) ? n : 45;
-  } catch {
-    return 45;
-  }
-}
-
-function writeLastLength(minutes: number | null): void {
-  try {
-    window.localStorage.setItem(LENGTH_KEY, minutes == null ? 'open' : String(minutes));
-  } catch {
-    // Remembering the last length is a convenience, never a requirement.
-  }
-}
-
-/** The fixed length closest to how long the reader's blocks actually run. */
-function nearestLength(minutes: number): number {
-  return LENGTHS.reduce((best, n) => (Math.abs(n - minutes) < Math.abs(best - minutes) ? n : best), LENGTHS[0]);
+function isFixedLength(n: number): boolean {
+  return (LENGTHS as readonly number[]).includes(n);
 }
 
 function endsAt(minutes: number | null): ReactNode {
@@ -102,6 +91,10 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
 
   useEffect(() => {
     if (!target) return;
+    if (target.minutes !== undefined) {
+      setMinutes(target.minutes);
+      return;
+    }
     if (usualMinutes != null) {
       setMinutes(nearestLength(usualMinutes));
       return;
@@ -160,10 +153,17 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
   if (!target || !pos) return null;
 
   const { task, course } = target;
+  /* The length the caller sized, when it is not one of the fixed three: one
+     more chip, first and in the same style, so "Start 40 min" on Up next
+     opens on 40 rather than on the nearest round number. */
+  const offered = target.minutes != null && !isFixedLength(target.minutes) ? target.minutes : null;
 
   function go() {
     if (!target) return;
-    writeLastLength(minutes);
+    // Only a fixed length, or Untimed, is a choice about how long the reader
+    // likes to work. Up next's own figure (a session shortened to the
+    // evening, say) would read back as 45 and teach the default nothing true.
+    if (minutes == null || isFixedLength(minutes)) writeLastLength(minutes);
     start(target.course.id, target.task?.id ?? null, minutes == null ? null : minutes * 60);
     onStarted?.();
     onClose();
@@ -196,8 +196,16 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
         </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-4 gap-1.5">
-        {LENGTHS.map((n) => (
+      {/* With a length offered, Untimed keeps its own width and the four
+          figures share the rest: five even columns left the word 44px inside
+          its border at 320, and it runs 48. Its 4px sides are about the room
+          it has in four columns there, so it looks the same either way. */}
+      <div
+        className={`mt-4 grid gap-1.5 ${
+          offered != null ? 'grid-cols-[repeat(4,minmax(0,1fr))_auto]' : 'grid-cols-4'
+        }`}
+      >
+        {(offered != null ? [offered, ...LENGTHS] : LENGTHS).map((n) => (
           <button
             key={n}
             type="button"
@@ -216,7 +224,7 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
           type="button"
           onClick={() => setMinutes(null)}
           aria-pressed={minutes == null}
-          className={`h-11 rounded-[10px] text-[12px] font-medium transition-colors ${
+          className={`h-11 rounded-[10px] px-1 text-[12px] font-medium transition-colors ${
             minutes == null
               ? 'border border-ink bg-bg-tint text-ink'
               : 'border border-line bg-transparent text-ink-soft hover:bg-bg-tint'
@@ -250,7 +258,11 @@ export default function StartTimerPopover({ target, onClose, onStarted, stayPut,
       </button>
 
       <p className="key-hint m-0 mt-2.5 text-center font-mono text-[11px] text-muted-soft">
-        {usualMinutes != null ? 'Enter starts with your usual length' : 'Enter starts with the last used length'}
+        {target.minutes !== undefined
+          ? "Enter starts with Up next's length"
+          : usualMinutes != null
+            ? 'Enter starts with your usual length'
+            : 'Enter starts with the last used length'}
       </p>
     </div>
   );

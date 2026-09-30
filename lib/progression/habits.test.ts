@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Course, Session, SessionSegment } from '../data/types';
-import { readHabits } from './habits';
+import { readHabits, usualStopOffset } from './habits';
 import { followsLine, ledgerEntriesFromRows, mergeLedgers, rankingBias } from './log';
 import { readObservations, pickMarginNote } from './observations';
 
@@ -326,4 +326,47 @@ test('a course line is followed only by a session on that course', () => {
   assert.equal(followsLine({ kind: 'day-threshold', courseId: null }, 'cs'), true);
   assert.equal(followsLine({ kind: 'week-goal', courseId: 'econ' }, 'econ'), true);
   assert.equal(followsLine({ kind: 'week-goal', courseId: 'econ' }, 'cs'), false);
+});
+
+test('the usual stop is where nine tenths of the placed focus is done', () => {
+  // Nine evenings done by nine, and one night that ran on past eleven: the
+  // one late night is the exception a usual stop leaves out.
+  const evenings = [...DATES, DATES[0], DATES[1]].map((date) => timed('math', date, 20, [{ minutes: 40 }]));
+  const late = timed('math', DATES[2], 23, [{ minutes: 40 }]);
+  const habits = readHabits([MATH], [...evenings, late], []);
+  assert.equal(habits.placedSittings, 10);
+  assert.equal(usualStopOffset(habits.hours, habits.placedSittings, 0), 21);
+
+  // Four evenings at eight and one at ten: the eight o'clocks are four fifths
+  // of it, short of nine tenths, so the evening runs to the end of the ten.
+  const mixed = readHabits(
+    [MATH],
+    [...DATES.slice(0, 4).map((date) => timed('math', date, 20, [{ minutes: 40 }])), timed('math', DATES[4], 22, [{ minutes: 40 }])],
+    [],
+  );
+  assert.equal(usualStopOffset(mixed.hours, mixed.placedSittings, 0), 23);
+});
+
+test('there is no usual stop under five placed sittings, or with nothing placed', () => {
+  const four = readHabits([MATH], DATES.slice(0, 4).map((date) => timed('math', date, 20, [{ minutes: 40 }])), []);
+  assert.equal(four.placedSittings, 4);
+  assert.equal(usualStopOffset(four.hours, four.placedSittings, 0), null);
+  assert.equal(usualStopOffset(new Array(24).fill(0), 9, 0), null);
+});
+
+test('the usual stop is counted from the hour the reader\'s day ends', () => {
+  // A night owl: an hour and a half from eleven, into the small hours.
+  const owl = readHabits([MATH], DATES.slice(0, 5).map((date) => timed('math', date, 23, [{ minutes: 90 }])), []);
+  // With the day ending at midnight, the half hour after it opens the day
+  // and the evening only finishes at its very end: no stop before the day's.
+  assert.equal(usualStopOffset(owl.hours, owl.placedSittings, 0), 24);
+  // With the day ending at 4am, the evening ends at 1am, 21 hours on.
+  assert.equal(usualStopOffset(owl.hours, owl.placedSittings, 4), 21);
+
+  // The same evenings read from a later start give the same clock hour.
+  const hours = new Array(24).fill(0);
+  hours[21] = 5 * 3600;
+  hours[22] = 5 * 3600;
+  assert.equal(usualStopOffset(hours, 5, 0), 23);
+  assert.equal(usualStopOffset(hours, 5, 2), 21);
 });

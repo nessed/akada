@@ -453,9 +453,9 @@ export default function TaskRow({
               />
             )}
             {/* Named for what it does. It moves the task to tomorrow and
-                asks nothing, which is what "Tomorrow" on the Today panel
-                already calls the same action; "Reschedule" promised a date
-                picker that never opened. */}
+                asks nothing; "Reschedule" promised a date picker that never
+                opened. Today only passes it for work due today or overdue,
+                so it never pulls a deadline earlier or dates undated work. */}
             {onReschedule && !task.completed && (
               <MenuItem
                 label="Tomorrow"

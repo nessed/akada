@@ -49,7 +49,10 @@ offers the same two ways, plus a timer on a course.
 **Today** is the home screen. What is due, what is next, the hours on the day
 and the week, your courses with their weekly goals, and a countdown panel for
 anything weighted that is coming, with the reading backlog underneath it in
-pages and in hours at your measured pages-per-hour rate.
+pages and in hours at your measured pages-per-hour rate. Up next says in one
+line why its pick is the one (due tomorrow, or a session owed in an exam's
+run-up), sizes the session to how long you usually work and what is left of
+the evening, and offers two others from other courses in one tap.
 
 **Tasks** is the full list, filterable by overdue / today / this week / done,
 sortable, groupable by due date or by course. A task carries a due date, a

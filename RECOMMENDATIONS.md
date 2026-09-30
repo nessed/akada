@@ -263,3 +263,22 @@ can't enforce them anyway.
 - Gollwitzer & Sheeran 2006; Milkman et al. 2011, *PNAS*: implementation intentions, and where they do and don't carry over.
 - Carr & Walton 2014, *JESP*: cues of working together, +48–64% persistence.
 - Ariely & Wertenbroch 2002 on self-imposed deadlines was retracted in September 2026, so nothing here leans on it.
+
+## 30 September 2026: Up next reads the week
+
+Up next used to read four things, the overdue and due-today pools, a sort rule
+and one recent sitting, so it could hand you the midterm row itself, pin
+whatever a timer had touched since yesterday, and fall back to "A clean page",
+with no button under it, whenever nothing qualified. Now it sorts everything
+open into tiers by what is at stake: tomorrow's POL response paper first, and
+in the two weeks before the MATH midterm a MATH session every few days, the gap
+three tenths of the time left (Cepeda et al. 2008), which is the run-up from
+"What I'd build next" in its smallest form. It says in one line why the pick is
+the one ("for Midterm I · due Thursday"), sizes the session to your own block
+length and what is left of the evening, starts it in one tap, and opens the
+plan on that course's recall cards when there are any. #38's reach is still
+there, with ECON's catch-up as its own tier, and a normal-priority task with no
+date now comes up too, but only the top one of each course's list, so Limits
+and Continuity concepts get their turn when nothing is dated. Tomorrow on Up
+next, which rewrote due dates, is gone: **Not now** sets the pick aside for
+tonight on this device and changes nothing about the task.

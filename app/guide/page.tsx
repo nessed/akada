@@ -86,10 +86,18 @@ export default function GuidePage() {
 
       <Section id="today" title="Today">
         <p>
-          The home screen. <strong>Up next</strong>{' '}is the one thing to do now, with{' '}
-          <strong>Start</strong>{' '}beside it. Under it are recall, anything overdue or due
-          today, and your courses with their weekly goal drawn as small strokes, one per
-          hour, so you can see which course you have been ignoring.
+          The home screen. <strong>Up next</strong>{' '}is the next session: one thing to do
+          now, a line saying why it is the one, how long to give it tonight and what to start
+          with. What is due by tomorrow comes first. In the two weeks before anything worth a
+          fifth of the grade or more, like a midterm, a session on that course comes up every
+          few days, closer together as the day nears, starting with that course&apos;s recall
+          when it has some. The night before, it comes first until it has had its session.{' '}
+          <strong>Start</strong>{' '}begins it at
+          the length shown, or tap <strong>Another length</strong>. <strong>Not now</strong>{' '}
+          sets it aside until tomorrow, and the two under <strong>Or</strong>{' '}are one tap to
+          put up next or to start. Under them are recall, anything overdue or due today, and
+          your courses with their weekly goal drawn as small strokes, one per hour, so you can
+          see which course you have been ignoring.
         </p>
         <p>
           <strong>Coming</strong>{' '}counts down to anything that carries marks, and turns
@@ -111,7 +119,9 @@ export default function GuidePage() {
           </li>
           <li>
             <strong>Exam</strong>{' '}takes a weight, like 30%. It gets counted down to on
-            Today, and it pulls your recall forward so you are asked again before it.
+            Today, and it pulls your recall forward so you are asked again before it. One
+            worth a fifth of the grade or more also brings its course up on Up next every
+            few days in the two weeks before it.
           </li>
           <li>Everything else is a plain task.</li>
         </ul>
@@ -123,9 +133,10 @@ export default function GuidePage() {
 
       <Section id="timer" title="The timer">
         <p>
-          Press <strong>Start</strong>{' '}on Up next, or the play mark beside any task or
-          course. Pick a <strong>block</strong>{' '}of 25, 45 or 60 minutes, or{' '}
-          <strong>Untimed</strong>{' '}if you just want it to run. While it runs a small
+          Press <strong>Start</strong>{' '}on Up next to begin at the length it shows, or{' '}
+          <strong>Another length</strong>{' '}for a <strong>block</strong>{' '}of 25, 45 or 60
+          minutes, or <strong>Untimed</strong>{' '}if you just want it to run. The play mark
+          beside any task or course asks for a length the same way. While it runs a small
           branching drawing grows in the course&apos;s colour, so there is something to
           look at that isn&apos;t a clock ticking down. In Settings it can be a jellyfish
           instead, or <strong>the deep</strong>: an ocean you sink through as you study,

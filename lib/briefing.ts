@@ -1,28 +1,40 @@
 import type { Course, Session, Task, WeakPoint } from '@/lib/data/types';
-import { countdowns, pickUpNext, readingBacklog, readingRateDetail } from '@/lib/derive';
+import { countdowns, readingBacklog, readingRateDetail } from '@/lib/derive';
+import { readHabits } from '@/lib/progression/habits';
 import type { CourseRecall, RecallReading } from '@/lib/recall';
 import { isLoggableDuration } from '@/lib/session-safety';
 import { shiftDate, weekOf } from '@/lib/student-day';
+import { readUpNext, type UpNextCandidate, type UpNextQuiet } from '@/lib/up-next';
+import { orLine, pickLine, plain, quietCopy, whyOf, type UpNextWhy } from '@/lib/up-next-copy';
+import { sizeSession } from '@/lib/up-next-session';
 import { daysBetween } from '@/lib/utils';
 
 /**
  * Everything Today knows, read in one pass, for a reader that cannot see the
  * screen: the connector's get_briefing.
  *
- * Nothing here is new judgement. Up next is pickUpNext, the countdowns are
- * countdowns, the pace is readingRateDetail, recall is whatever readRecall
- * said. What this adds is the join the app never makes in one place: an exam
- * next to how much of its course is settled in recall and how many weak
- * points are open on it, a week's hours next to each course's goal and how
- * long since it was touched, and the loose ends (a quiz waiting to be marked,
- * a grading scheme waiting to be accepted, a course with nothing on its list)
- * that sit on four different screens.
+ * Nothing here is new judgement. Up next is readUpNext, sized by
+ * sizeSession and worded by the same lines Today prints under its title; the
+ * countdowns are countdowns, the pace is readingRateDetail, recall is
+ * whatever readRecall said. What this adds is the join the app never makes in
+ * one place: an exam next to how much of its course is settled in recall and
+ * how many weak points are open on it, a week's hours next to each course's
+ * goal and how long since it was touched, and the loose ends (a quiz waiting
+ * to be marked, a grading scheme waiting to be accepted, a course with
+ * nothing on its list) that sit on four different screens.
  *
  * Pure, so a test drives it with plain objects, and so it can never read a
  * clock: `today` is the student's, from lib/student-day.ts.
  */
 
-export type UpNextWhy = 'in progress' | 'overdue' | 'due today' | 'due soon' | 'high priority, no date';
+/**
+ * The short tag beside Up next. It lives with the rest of Up next's words now
+ * (lib/up-next-copy.ts), where it is worked out from the same candidate the
+ * pick is, so the tag can no longer disagree with the pick the way the old
+ * whyUpNext did when it had no ten-minute floor and the pick had one.
+ * Re-exported so a reader of the briefing's types still finds it here.
+ */
+export type { UpNextWhy };
 
 export interface BriefingQuiz {
   id: string;
@@ -73,9 +85,49 @@ export interface PracticeRun {
   best: { score: number; outOf: number; date: string };
 }
 
+/**
+ * One thing Up next offers, as the connector says it: the task, or null for
+ * a course offered before its exam (the title then reads "Before Midterm I");
+ * the tag and the line Today prints for it; and the length its Start gives.
+ */
+export interface BriefingUpNextOffer {
+  task: Task | null;
+  course: Course;
+  title: string;
+  why: UpNextWhy;
+  /** The pick's full line (why · when); an Or row's one clause. */
+  reason: string;
+  minutes: number;
+}
+
+export interface BriefingUpNext extends BriefingUpNextOffer {
+  /** The exam or major piece this leads up to, and how many days off it is. */
+  prepFor: { task: Task; days: number } | null;
+  /** The two Today offers under Or, at most. */
+  others: BriefingUpNextOffer[];
+}
+
+/**
+ * What Up next offers when it has nothing to pick: Today's quiet state, which
+ * is never empty. The course worth a session anyway, the heading and line
+ * Today prints for it ("No work is due before 29 Oct.", "MATH 101 is next,
+ * for Midterm I"), the piece when that is why, and the length its Start
+ * gives. Never `set-aside` here, since what was set aside is per device.
+ */
+export interface BriefingUpNextQuiet {
+  course: Course;
+  why: UpNextQuiet['why'];
+  heading: string;
+  reason: string | null;
+  prepFor: { task: Task; days: number } | null;
+  minutes: number;
+}
+
 export interface Briefing {
   today: string;
-  upNext: { task: Task; why: UpNextWhy } | null;
+  upNext: BriefingUpNext | null;
+  /** Only when upNext is null: the course Today offers instead. */
+  upNextQuiet: BriefingUpNextQuiet | null;
   overdue: Task[];
   /** Due today and over the next week, soonest first. */
   dueSoon: Task[];
@@ -106,24 +158,12 @@ const COMING_LIMIT = 5;
 
 const hoursOf = (seconds: number) => Math.round((seconds / 3600) * 10) / 10;
 
-function whyUpNext(task: Task, today: string, sessions: Session[]): UpNextWhy {
-  const recent = sessions.some(
-    (s) => s.taskId === task.id && s.date <= today && daysBetween(s.date, today) <= 1,
-  );
-  if (recent) return 'in progress';
-  if (task.dueDate && task.dueDate < today) return 'overdue';
-  if (task.dueDate === today) return 'due today';
-  if (task.dueDate) return 'due soon';
-  return 'high priority, no date';
-}
-
 export function readBriefing({ today, courses, tasks, sessions, recall, recallStored, weakPoints, quizzes }: BriefingInput): Briefing {
   const logged = sessions.filter((s) => isLoggableDuration(s.durationSeconds));
   const open = tasks.filter((t) => !t.completed);
   const overdue = open
     .filter((t) => t.dueDate && t.dueDate < today)
     .sort((a, b) => (a.dueDate as string).localeCompare(b.dueDate as string));
-  const dueToday = open.filter((t) => t.dueDate === today);
   const horizon = shiftDate(today, SOON_DAYS);
   const dueSoon = open
     .filter((t) => t.dueDate && t.dueDate >= today && t.dueDate <= horizon)
@@ -133,8 +173,56 @@ export function readBriefing({ today, courses, tasks, sessions, recall, recallSt
         Number(b.priority === 'high') - Number(a.priority === 'high'),
     );
 
-  // The app's default rule, the one Today opens on.
-  const next = pickUpNext('in-progress', overdue, dueToday, logged, open, today);
+  // Up next, read the way Today reads it, from the same record and the same
+  // date, so the connector and the screen name the same thing for the same
+  // reason. The record has to arrive whole for that: each task's place in
+  // its course's list, and each sitting's rest, recovery and chain of blocks
+  // (briefing-tool.ts reads them the way the adapter does). What Today also
+  // reads and this cannot is all per device: what was set aside with Not now
+  // and which Or row was put up instead (per day, and the server has no
+  // device), and the length last started from the popover, which only
+  // matters before the reader's blocks have settled and is 45 here until they
+  // do. The clock is left out on purpose: it only ever shortens Today's
+  // session to fit what is left of the evening, and a server's evening is
+  // nobody's. So the pick and its line are Today's, and the length is the one
+  // Today starts from before the evening trims it.
+  const up = readUpNext({ today, courses, tasks, sessions: logged });
+  const pace = readingRateDetail(tasks, logged);
+  const habits = readHabits(courses, logged, tasks);
+  const minutesFor = (c: Pick<UpNextCandidate, 'task' | 'course' | 'spentSeconds'>) =>
+    sizeSession(c, { habits, pace, tonight: null, lastUsedMinutes: null, returning: up.returning }).minutes;
+  const offer = (c: UpNextCandidate, reason: string): BriefingUpNextOffer => ({
+    task: c.task,
+    course: c.course,
+    title: c.title,
+    why: whyOf(c, today),
+    reason,
+    minutes: minutesFor(c),
+  });
+  const pick = up.pick;
+  const upNext: BriefingUpNext | null = pick
+    ? {
+        ...offer(pick, plain(pickLine(pick, today))),
+        prepFor: pick.piece && pick.pieceDays != null ? { task: pick.piece, days: pick.pieceDays } : null,
+        others: up.others.map((c) => offer(c, orLine(c, today))),
+      }
+    : null;
+  // With nothing to pick Today still offers a course and a Start, so the
+  // connector does too, rather than leaving the assistant to rank the term
+  // again from `coming` and `week` and name a different course.
+  let upNextQuiet: BriefingUpNextQuiet | null = null;
+  const quiet = pick ? null : up.quiet;
+  if (quiet) {
+    const words = quietCopy(quiet, today);
+    upNextQuiet = {
+      course: quiet.course,
+      why: quiet.why,
+      heading: words.heading,
+      reason: words.line ? plain(words.line) : null,
+      prepFor: quiet.piece?.dueDate ? { task: quiet.piece, days: daysBetween(today, quiet.piece.dueDate) } : null,
+      minutes: minutesFor({ task: null, course: quiet.course, spentSeconds: 0 }),
+    };
+  }
 
   const openWeak = new Map<string, number>();
   for (const point of weakPoints ?? []) {
@@ -180,7 +268,6 @@ export function readBriefing({ today, courses, tasks, sessions, recall, recallSt
     };
   });
 
-  const pace = readingRateDetail(tasks, logged);
   const backlog = readingBacklog(tasks);
   const pages = backlog.reduce((acc, t) => acc + (t.pages || 0), 0);
 
@@ -216,7 +303,8 @@ export function readBriefing({ today, courses, tasks, sessions, recall, recallSt
 
   return {
     today,
-    upNext: next ? { task: next, why: whyUpNext(next, today, logged) } : null,
+    upNext,
+    upNextQuiet,
     overdue,
     dueSoon,
     coming,

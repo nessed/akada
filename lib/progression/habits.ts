@@ -13,6 +13,7 @@ import {
   REACHABLE_SECONDS,
   REACH_MAX_SECONDS,
   REACH_MIN_SECONDS,
+  USUAL_STOP_SHARE,
 } from './constants';
 
 /**
@@ -422,6 +423,44 @@ export function readHabits(courses: Course[], sessions: Session[], tasks: Task[]
 /** Whether a stat has enough behind it to be stated as a habit. */
 export function settled(s: Stat, min = HABIT_MIN_SITTINGS): boolean {
   return s.n >= min;
+}
+
+/**
+ * How many hours after the start of the reader's day their studying usually
+ * stops: the end of the hour by which nine tenths of their placed focus is
+ * done (USUAL_STOP_SHARE), counted round the clock from the hour their day
+ * ends at. 23 for someone whose day ends at midnight and whose evenings are
+ * done by eleven; 22 for the same evenings with the day ending at 1am, since
+ * the count starts an hour later. A result of 24 is the whole day, which is
+ * the same as having no usual stop at all.
+ *
+ * Counting from the day's own start is what makes a night owl read right. A
+ * reader who works 10pm to 1am with the day ending at 4 has their evening
+ * end at 1am, the hour after midnight, not at 11pm because the hours after
+ * midnight happen to be small numbers.
+ *
+ * Null until the timer has placed enough sittings to say (the same
+ * HABIT_MIN_SITTINGS every habit waits for), because a sitting logged after
+ * the fact does not know when it happened, and one evening is not a usual
+ * stop. Up next reads it to size a session so it ends before the evening
+ * does; it never decides what comes up.
+ */
+export function usualStopOffset(hours: number[], placedSittings: number, dayEndingHour: number): number | null {
+  if (placedSittings < HABIT_MIN_SITTINGS) return null;
+  const total = hours.reduce((a, b) => a + (Number.isFinite(b) && b > 0 ? b : 0), 0);
+  if (total <= 0) return null;
+  const start = ((Math.floor(dayEndingHour) % 24) + 24) % 24;
+  // A hair under the share, so nine evenings in ten is nine tenths however
+  // the multiplication rounds. The values are seconds; a millionth of one is
+  // nothing anybody studied.
+  const enough = USUAL_STOP_SHARE * total - 1e-6;
+  let sum = 0;
+  for (let i = 0; i < 24; i++) {
+    const v = hours[(start + i) % 24];
+    sum += Number.isFinite(v) && v > 0 ? v : 0;
+    if (sum >= enough) return i + 1;
+  }
+  return 24;
 }
 
 /** "9pm", "noon", "7am". */

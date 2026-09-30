@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Assessment, Session, Task } from './data';
-import { gradeProjection, gradeStanding, isSkipped, medianPace, pickUpNext, readingPairs, readingRateDetail, workedTaskIds } from './derive';
+import { gradeProjection, gradeStanding, isSkipped, medianPace, readingPairs, readingRateDetail, workedTaskIds } from './derive';
 import { isoDate } from './utils';
 
 /** A calendar date `n` days from today, the way a due date is written. */
@@ -36,65 +36,6 @@ function session(courseId: string, daysAgo: number): Session {
     createdAt: `${day(-daysAgo)}T12:00:00.000Z`,
   };
 }
-
-const SORTS = ['in-progress', 'last-done', 'overdue'] as const;
-
-test('overdue work still comes first, whatever else is open', () => {
-  const late = task('late', { dueDate: day(-2) });
-  const soon = task('soon', { dueDate: day(1) });
-  for (const sort of SORTS) {
-    assert.equal(pickUpNext(sort, [late], [], [], [late, soon])?.id, 'late', sort);
-  }
-});
-
-test('with nothing due today, the soonest task due this week is next', () => {
-  const later = task('later', { dueDate: day(5) });
-  const tomorrow = task('tomorrow', { dueDate: day(1) });
-  for (const sort of SORTS) {
-    assert.equal(pickUpNext(sort, [], [], [], [later, tomorrow])?.id, 'tomorrow', sort);
-  }
-});
-
-test('with nothing dated this week, high priority open-ended work comes up, quietest course first', () => {
-  const busy = task('busy course', { courseId: 'course-a', priority: 'high' });
-  const quiet = task('quiet course', { courseId: 'course-b', priority: 'high' });
-  // Two days back, outside the window where "carry on" would keep the reader
-  // in the course they were just working on, which is its own rule.
-  const sessions = [session('course-a', 2), session('course-b', 6)];
-  for (const sort of SORTS) {
-    assert.equal(pickUpNext(sort, [], [], sessions, [busy, quiet])?.id, 'quiet course', sort);
-  }
-});
-
-test('carry on still means the course just worked, open-ended work included', () => {
-  const busy = task('busy course', { courseId: 'course-a', priority: 'high' });
-  const quiet = task('quiet course', { courseId: 'course-b', priority: 'high' });
-  const sessions = [session('course-a', 0), session('course-b', 6)];
-  assert.equal(pickUpNext('in-progress', [], [], sessions, [busy, quiet])?.id, 'busy course');
-  assert.equal(pickUpNext('last-done', [], [], sessions, [busy, quiet])?.id, 'quiet course');
-});
-
-test('a course never studied counts as the quietest of all', () => {
-  const studied = task('studied', { courseId: 'course-a', priority: 'high' });
-  const never = task('never', { courseId: 'course-c', priority: 'high' });
-  assert.equal(
-    pickUpNext('last-done', [], [], [session('course-a', 3)], [studied, never])?.id,
-    'never',
-  );
-});
-
-test('an open-ended task of normal priority is a note to self, not the next thing', () => {
-  const note = task('note to self');
-  const far = task('next month', { dueDate: day(30), priority: 'high' });
-  for (const sort of SORTS) {
-    assert.equal(pickUpNext(sort, [], [], [], [note, far]), null, sort);
-  }
-});
-
-test('finished work is never handed back', () => {
-  const done = task('done', { dueDate: day(1), completed: true, completedAt: new Date().toISOString() });
-  assert.equal(pickUpNext('last-done', [], [], [], [done]), null);
-});
 
 function piece(id: string, weight: number, score: number | null, outOf = 100, group?: string): Assessment {
   return { id, label: id, weight, score, outOf, ...(group ? { group } : {}) };
@@ -224,13 +165,4 @@ test('finished through the log sheet and timed is worked like any other', () => 
   const done = task('done', { completed: true, completedVia: 'session' });
   const sessions = [{ ...session('course-a', 1), taskId: 'done' }];
   assert.deepEqual([...workedTaskIds([done], sessions)], ['done']);
-});
-
-test('a timer started and dropped inside ten minutes is not work to carry on', () => {
-  const dropped = task('dropped', { courseId: 'course-a', dueDate: day(3) });
-  const due = task('due', { courseId: 'course-b', dueDate: day(1) });
-  const blip = { ...session('course-a', 0), taskId: 'dropped', durationSeconds: 5 * 60 };
-  assert.equal(pickUpNext('in-progress', [], [], [blip], [dropped, due])?.id, 'due');
-  const real = { ...blip, durationSeconds: 25 * 60 };
-  assert.equal(pickUpNext('in-progress', [], [], [real], [dropped, due])?.id, 'dropped');
 });
