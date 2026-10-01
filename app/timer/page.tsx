@@ -445,16 +445,25 @@ export default function TimerPage() {
   const heroBody = sittingKey ? jellyForBlock(sittingKey, blockIndex) : undefined;
   const heroColor = heroBody ? mixHex(color, HUES[heroBody.hue], heroBody.hueMix) : color;
   const drawingSeed = sittingKey ? `${sittingKey}-${blockIndex}` : fanSeed;
+  /* A break runs the stretch too: focus stands still through it, but the
+     animals swim on (OceanScene's swim clock), so it is handed over as is. */
   const oceanClock: OceanClock =
     live && active
       ? {
-          completedSeconds: segments.reduce((sum, s) => (s.kind === 'focus' ? sum + s.seconds : sum), 0),
-          stretchMs: active.phase === 'focus' ? Math.max(0, active.accumulatedMs) : 0,
-          runningSince: active.phase === 'focus' && !active.isPaused ? active.startedAt : null,
+          segments,
+          phase: active.phase,
+          stretchMs: Math.max(0, active.accumulatedMs),
+          runningSince: active.isPaused ? null : active.startedAt,
         }
       : // After Finish the sitting is a still; after a close that bypassed
         // the Finish button there is no snapshot, and the log says how long.
-        { frozen: held ? focusSeconds : pendingLog?.durationSeconds ?? focusSeconds };
+        // The log has the last stretch closed into it, so it is the one that
+        // knows how long the breaks were.
+        {
+          frozen: held ? focusSeconds : pendingLog?.durationSeconds ?? focusSeconds,
+          rest: (pendingLog?.segments ?? segments).reduce((sum, s) => (s.kind === 'break' ? sum + s.seconds : sum), 0),
+          segments: pendingLog?.segments ?? segments,
+        };
   const oceanDepth = ocean ? depthAt(focusSeconds) : null;
   /* The water as a picture, for a wallpaper: the scene and the jelly drawn
      again at full size (lib/wallpaper), without the clock on top of them. */

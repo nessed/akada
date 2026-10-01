@@ -6,13 +6,16 @@
  * something set off across the water in that second, what it was, which way
  * it went, how near. Where an animal is now is a pure function of how long
  * ago its slot was. So the same sitting always has the same animals in the
- * same places, a reload puts them all back, a pause freezes them mid-stroke,
- * and a break (when focus time stands still) brings nobody new.
+ * same places, a reload puts them all back, and a pause freezes them
+ * mid-stroke. A break brings nobody new, since arrivals are focus seconds,
+ * but whoever was in the water swims on through it on the scene clock (a
+ * third of the pace, `lib/wood/clock`) and leaves, the way the wood's do.
  *
  * The water fills as the sitting goes on: a handful at the start, a crowd by
  * the second hour, capped so the page never stops being a page.
  */
 
+import { sceneAtFocus } from '../wood/clock';
 import type { Biome, Species } from './biome';
 import { depthAt } from './depth';
 import { hash32, mulberry32, pickIndex, range } from './random';
@@ -23,6 +26,21 @@ export interface View {
 }
 
 export type Layer = 0 | 1 | 2;
+
+/**
+ * The clock the water moves on, when it is not plain focus time: focus at
+ * full speed, breaks at a crawl. Something arrives on a focus second and
+ * moves on this, so a break carries everyone on without adding anyone.
+ */
+export interface Swim {
+  scene: number;
+  segments: Parameters<typeof sceneAtFocus>[0];
+}
+
+/** How far into its life something that arrived at focus second `at` is. */
+export function swimAge(t: number, at: number, swim?: Swim): number {
+  return swim ? swim.scene - sceneAtFocus(swim.segments, at) : t - at;
+}
 
 export interface Visitor {
   key: string;
@@ -113,7 +131,7 @@ export function spawnAt(biome: Biome, slot: number): Species | null {
  * size. `quality` below 1 thins the far layer, for a device that is
  * struggling; it never removes anything near.
  */
-export function visitorsAt(biome: Biome, t: number, view: View, quality = 1): Visitor[] {
+export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swim?: Swim): Visitor[] {
   const out: Visitor[] = [];
   if (view.width <= 0 || view.height <= 0) return out;
   const scale = areaScale(view);
@@ -133,7 +151,7 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1): Vi
     if (species.school && layer === 2) layer = 1;
     const slow = 1.3 - 0.3 * Math.min(1.5, species.speed);
     const life = Math.min(LIFE_MAX, (species.floor ? 100 : LIFE[layer] * slow) * range(r, 0.9, 1.1));
-    const age = (now - slot) / life;
+    const age = swimAge(now, slot, swim) / life;
     if (age < 0 || age >= 1) continue;
     if (species.floor && floorCount >= FLOOR_CAP) continue;
     if (species.floor) floorCount++;
