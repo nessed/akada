@@ -63,8 +63,16 @@ export interface RenderPictureOptions {
    */
   onStrip?: (strip: HTMLCanvasElement, sourceY: number, y: number, rows: number) => void;
   signal?: AbortSignal;
-  /** The most pixels any working canvas may hold. 8 MP by default, never over 16 MP. */
+  /**
+   * The most pixels any working canvas may hold: 8 MP by default, never over
+   * 16 MP. Given explicitly, strips grow to fill it (fewer, taller strips,
+   * for a drawing whose every call costs the same however little of it is
+   * in the strip); by default they stop at 1024 supersampled rows.
+   */
   budget?: number;
+  /** The drawing reads pixels back (`getImageData`) from the context it is
+      given, so the strip canvas is kept where reads are cheap. */
+  readsPixels?: boolean;
 }
 
 /** iOS Safari's ceiling on one canvas, with a little room. */
@@ -85,8 +93,8 @@ export interface StripPlan {
 }
 
 /** How a picture of this size is cut into strips. Pure. */
-export function planStrips(width: number, height: number, supersample = 2, budget = DEFAULT_BUDGET): StripPlan {
-  const cap = Math.min(Math.max(budget, 1_000_000), CANVAS_LIMIT);
+export function planStrips(width: number, height: number, supersample = 2, budget?: number): StripPlan {
+  const cap = Math.min(Math.max(budget ?? DEFAULT_BUDGET, 1_000_000), CANVAS_LIMIT);
   let ss = Math.max(1, Math.min(4, Math.round(supersample)));
   // A strip the picture's width has to be a canvas Safari will make, with
   // room for at least a few rows.
@@ -94,7 +102,7 @@ export function planStrips(width: number, height: number, supersample = 2, budge
   const byBudget = Math.floor(cap / (width * ss * ss)) - 2 * PAD;
   // Not much past 1024 rows at the supersampled scale: a taller strip saves
   // little and holds the main thread longer.
-  const byTime = Math.floor(1024 / ss);
+  const byTime = budget == null ? Math.floor(1024 / ss) : Infinity;
   const rows = Math.max(1, Math.min(byBudget, byTime, height));
   const strips: { y: number; h: number }[] = [];
   for (let y = 0; y < height; y += rows) strips.push({ y, h: Math.min(rows, height - y) });
@@ -173,6 +181,8 @@ export async function renderPicturePng(options: RenderPictureOptions): Promise<B
 
   const tall = plan.rows + plan.pad * 2;
   const work = makeCanvas(W * ss, tall * ss);
+  // The context's attributes are fixed by its first getContext.
+  context(work, Boolean(options.readsPixels));
   const mask = frame ? makeCanvas(W * ss, tall * ss) : null;
   // The halving ladder: ss → ss/2 → ... → 1, each step its own canvas.
   const ladder: HTMLCanvasElement[] = [];

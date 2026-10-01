@@ -166,6 +166,9 @@ export default function SavePicture({ open, onClose, initial = 'moment', momentR
         if (!pic) throw new Error('No picture');
         draw = (ctx, w) => drawPicture(ctx, pic, w / pic.width);
         background = SITTING_GROUND[paper];
+        // The painting is costly per pixel and anti-aliases itself; at 300 dpi
+        // drawing it twice over buys nothing a print shows, and costs 4x.
+        supersample = framed ? 1 : 2;
       } else {
         const root = momentRoot?.();
         if (!root) throw new Error('No scene');

@@ -264,4 +264,9 @@ test('strips never ask for a canvas iOS would refuse, and cover every row once',
   }
   // A2 keeps its supersampling.
   assert.equal(planStrips(4961, 7016, 2).supersample, 2);
+  // An explicit budget makes fewer, taller strips, still within the limit.
+  const tall = planStrips(2480, 3508, 2, CANVAS_LIMIT);
+  assert.ok(tall.strips.length < planStrips(2480, 3508, 2).strips.length);
+  assert.ok(2480 * 2 * (tall.rows + tall.pad * 2) * 2 <= CANVAS_LIMIT);
+  assert.ok(planStrips(2480, 3508, 2, 1e9).rows * 2480 * 4 <= CANVAS_LIMIT, 'never past the limit');
 });
