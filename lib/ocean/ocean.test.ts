@@ -9,6 +9,7 @@ import { childOf, DEFAULT_JELLY, jellyForBlock } from './lineage';
 import { speciesName } from './names';
 import { hash32, mulberry32 } from './random';
 import { EVENTS, eventAtMinute, eventsAt, eventsUpTo } from './events';
+import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
 import { diveRecap } from './recap';
 import { populationAt, spawnAt, visitorsAt } from './schedule';
 
@@ -179,4 +180,38 @@ test('spawnAt agrees with who is drawn on a full screen', () => {
   const t = 1800;
   const drawn = new Set(visitorsAt(biome, t, view).map((v) => v.key.split('.')[0]));
   for (const slot of drawn) assert.ok(spawnAt(biome, Number(slot)), `slot ${slot} drawn but not spawned`);
+});
+
+test('kelp: about half of sittings, the same forest every time, at the edges', () => {
+  let withKelp = 0;
+  for (let i = 0; i < 400; i++) if (rollBiome(oceanKey('kp', i), courseKey('kp')).env.kelp) withKelp++;
+  assert.ok(withKelp > 160 && withKelp < 280, `${withKelp} of 400 sittings had kelp`);
+  const key = oceanKey('kp', 7);
+  assert.deepEqual(rollKelp(key), rollKelp(key));
+  assert.notDeepEqual(rollKelp(key), rollKelp(oceanKey('kp', 8)));
+  for (let i = 0; i < 50; i++) {
+    const kelp = rollKelp(oceanKey('kp', i));
+    assert.ok(kelp.ledges.length >= 1 && kelp.ledges.length <= 2);
+    for (const stalk of kelp.stalks) {
+      // Clear of the jelly, which hangs in the middle third.
+      assert.ok(stalk.x < 0.25 || stalk.x > 0.75, `a stalk stood at ${stalk.x}`);
+      // Rooted on its ledge, and never further up than a little past the surface.
+      assert.ok(stalk.base - stalk.height > KELP_SURFACE - 0.25);
+      const ledge = kelp.ledges.find((l) => (l.edge < 0 ? stalk.x < 0.5 : stalk.x > 0.5))!;
+      assert.ok((ledge.edge < 0 ? stalk.x : 1 - stalk.x) < ledge.reach, 'a stalk stood off the end of its ledge');
+    }
+  }
+});
+
+test('kelp only slides up the page, and is gone by the end of the sunlit water', () => {
+  let last = -1;
+  for (let s = 0; s <= 20 * 60; s += 5) {
+    const d = kelpDescent(s);
+    assert.ok(d >= last);
+    last = d;
+  }
+  assert.ok(kelpInView(0));
+  assert.ok(kelpInView(8 * 60), 'the ledge should be in view mid-zone');
+  assert.ok(!kelpInView(15 * 60), 'kelp was still on the page in the twilight');
+  assert.ok(!kelpInView(6 * 3600));
 });

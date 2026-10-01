@@ -8,6 +8,7 @@ import { depthAt, ZONES } from '@/lib/ocean/depth';
 import {
   drawEye,
   drawFloor,
+  drawKelp,
   drawLeviathan,
   drawRules,
   drawShafts,
@@ -21,6 +22,7 @@ import {
   rollSnow,
 } from '@/lib/ocean/draw';
 import { eventsAt } from '@/lib/ocean/events';
+import { rollKelp } from '@/lib/ocean/kelp';
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
 import { hash32 } from '@/lib/ocean/random';
@@ -100,6 +102,7 @@ export default function OceanScene({
   const markRef = useRef<HTMLSpanElement | null>(null);
   const biome = useMemo(() => rollBiome(sittingKey, courseKey), [sittingKey, courseKey]);
   const snow = useMemo(() => ({ back: rollSnow(sittingKey, 60), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
+  const kelp = useMemo(() => (biome.env.kelp ? rollKelp(biome.key) : null), [biome]);
 
   // Everything the loop reads, off a ref, so a per-second render of the page
   // never tears the loop down.
@@ -200,6 +203,8 @@ export default function OceanScene({
       bctx.globalAlpha = 1;
       drawWater(bctx, W, H, water);
       if (L.rules) drawRules(bctx, W, H, depth.z, px, water.dark ? '#FFFFFF' : '#8C8576');
+      // Under the paper's bleeds, so the corners still read through a forest.
+      if (kelp) drawKelp(bctx, W, H, kelp, shown, water, ambient, biome.env.current, px, L.clear, quality > 0.7);
       if (L.pools?.length) {
         // An oval bleed of bare paper, the way a wash stops short of a corner.
         const paper = getComputedStyle(box).getPropertyValue('--paper').trim() || '#FBF8EF';
@@ -394,7 +399,7 @@ export default function OceanScene({
       if (interval != null) window.clearInterval(interval);
       kickRef.current = () => {};
     };
-  }, [biome, snow, sittingKey]);
+  }, [biome, kelp, snow, sittingKey]);
 
   // Every render hands the loop the page's latest, and wakes it if it had
   // parked (a pause settling, a still): a resume, a break or the sheet coming
