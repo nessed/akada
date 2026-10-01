@@ -1100,8 +1100,17 @@ only ever grows, it never runs backwards, and none of it touches progress.
   belly, pooled at its edge. There is no lifted highlight on any body or
   bell: a pale blot or arc reads as gloss on plastic, so the light is only
   that bare paper and the thinner line on the lit side. A fish's snout
-  rounds off and its tail narrows to a wrist, and its mouth is a shut,
-  level cleft with the corner turned down, never a smile; a comb jelly's
+  rounds off and its tail narrows to a wrist, and every fish has a tail fin
+  at least a fifth of its body long, since a body that tapers to a point
+  reads as a lemon; its mouth is a shut,
+  level cleft with the corner turned down, never a smile. A fish with a
+  lure is a dark hunter, never see-through: a globe-bodied angler with a
+  jaw and needle teeth, or a long dragonfish with its light on a chin
+  barbel; ribs show only faintly, over the belly of a glass fish. A
+  siphonophore is a colony, not a string of beads: overlapping glass bells
+  at its head, a tapering stem with its groups unevenly spaced, trailing
+  15 to 40 degrees below level. Jellies are always glass, never a solid
+  dome or a flat saucer; a comb jelly's
   mouth end is one soft curve with its lobes drawn inside it, never a
   notch. Drawn big, the solid ones
   are shaded in contour hatching that runs with the spine, only in the

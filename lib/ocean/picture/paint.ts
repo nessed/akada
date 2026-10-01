@@ -1626,7 +1626,8 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
     // Read off what the engine drew, so the pen follows the rock as it is.
     const data = o.getImageData(0, 0, cw, chh).data;
     const step = Math.max(1, Math.round(2 * D));
-    const solidA = 60;
+    // (The haze lays it thin: a quarter of the way to opaque is rock.)
+    const solidA = 22;
     const cols: { x: number; top: number; low: number }[] = [];
     for (let x = 0; x < cw; x += step) {
       let top = -1;
@@ -1639,7 +1640,6 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
       }
       if (top >= 0 && x + ox >= 0 && x + ox <= w * D) cols.push({ x, top, low });
     }
-    if ((globalThis as { __dbgRock?: boolean }).__dbgRock) console.log("far", k.slot, cw, chh, cols.length, cols.slice(0, 3).map((q) => q.top).join(","), Math.max(...Array.from({ length: cw * chh }, (_, i) => data[i * 4 + 3])));
     if (cols.length > 4) {
       // From the page's edge along the crest to the lip, then down it.
       if (k.edge > 0) cols.reverse();
@@ -1654,7 +1654,7 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
         const a = cuts[s] + (s ? 2 : 0);
         const b = cuts[s + 1] - 1;
         if (b - a < 3) continue;
-        inkLine(o, pts.slice(a * 2, b * 2 + 2), false, { width: 0.4 * D, color: ink, alpha: night ? 0.26 : 0.3, swell: 0.3, taper: [0.1, 0.1], seed: hash32(k.seed, 'far', s) });
+        inkLine(o, pts.slice(a * 2, b * 2 + 2), false, { width: 0.4 * D, color: ink, alpha: night ? 0.3 : 0.36, swell: 0.3, taper: [0.1, 0.1], seed: hash32(k.seed, 'far', s) });
       }
       // A few strokes of hatching in its shadow, toward the lip and low.
       o.save();

@@ -659,8 +659,10 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
     const yTop = shape.minY;
     const yBot = Math.max(yTop + 4 * px, fa * H);
     const step = Math.max(1, 2 * px);
-    for (let i = 0; i < n; i++) {
-      const y = Y(yTop + (yBot - yTop) * (0.14 + (0.78 * (i + 0.2 + 0.6 * rs())) / n));
+    // Rows tried in turn, more of them than wanted, until two to four hold.
+    for (let i = 0; i < n + 6 && strata.length < n; i++) {
+      const slot = i < n ? i : (i * 0.618) % n;
+      const y = Y(yTop + (yBot - yTop) * (0.14 + (0.78 * (slot + 0.2 + 0.6 * rs())) / n));
       // The longest run across the rock at that row.
       let best: [number, number] = [0, 0];
       let start = NaN;
@@ -674,12 +676,7 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
         }
       }
       const runL = best[1] - best[0];
-      if (runL < 0.18 * shape.span) {
-        rs();
-        rs();
-        rs();
-        continue;
-      }
+      if (runL < 0.18 * shape.span) continue;
       const u0 = best[0] + runL * range(rs, 0.04, 0.2);
       const u1 = best[1] - runL * range(rs, 0.06, 0.25);
       const xa = Math.min(X(u0), X(u1));
