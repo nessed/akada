@@ -155,6 +155,9 @@ export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureIn
   const glow = GLOWS[Math.max(0, Math.min(3, Math.round(g.glow)))];
   const ink = dark ? mixHex(hue, '#FFFFFF', 0.45) : mixHex(hue, '#1A1714', 0.62);
   const water = dark ? '#1A1815' : '#FBF8EF';
+  // A fish with a lure (an angler, a dragonfish) is a dark animal on any
+  // water: one deep wash, so its jaw and its light are what show.
+  const angler = g.plan === 'fish' && !!g.lure;
   return {
     ink,
     pen: dark ? IRON_GALL.dark : IRON_GALL.light,
@@ -162,8 +165,8 @@ export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureIn
     paper: dark ? mixHex(hue, IRON_GALL.dark, 0.3) : '#FBF8EF',
     // A wash a little under the pastel's own value: laid over toned water it
     // must still read as pigment on the paper, not a pale cut-out.
-    body: dark ? mixHex(hue, water, 0.45) : mixHex(hue, '#6E655B', 0.1),
-    fin: dark ? mixHex(hue, water, 0.25) : mixHex(hue, water, 0.45),
+    body: angler ? mixHex(hue, dark ? '#0B0A09' : '#1A1714', dark ? 0.72 : 0.7) : dark ? mixHex(hue, water, 0.45) : mixHex(hue, '#6E655B', 0.1),
+    fin: angler ? mixHex(hue, dark ? '#0B0A09' : '#1A1714', dark ? 0.55 : 0.5) : dark ? mixHex(hue, water, 0.25) : mixHex(hue, water, 0.45),
     tent: dark ? mixHex(hue, '#FFFFFF', 0.35) : mixHex(hue, '#1A1714', 0.45),
     pat: dark ? mixHex(glow, water, 0.35) : mixHex(hue, '#1A1714', 0.42),
     glow: g.lit || dark ? glow : null,
@@ -171,7 +174,8 @@ export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureIn
     eyeW: dark ? mixHex(glow, '#FFFFFF', 0.3) : '#FBF8EF',
     pupil: '#141210',
     // A comb jelly is glass whatever the dice say: its rows are what shows.
-    bodyAlpha: g.clear ? 0.38 : g.plan === 'comb' ? 0.5 : 0.95,
-    finAlpha: g.clear ? 0.35 : 0.8,
+    // A bell is never opaque either: a solid dome reads as a lampshade.
+    bodyAlpha: angler ? 0.85 : g.clear ? 0.38 : g.plan === 'comb' ? 0.5 : g.plan === 'bell' ? 0.62 : 0.95,
+    finAlpha: angler ? 0.7 : g.clear ? 0.35 : 0.8,
   };
 }

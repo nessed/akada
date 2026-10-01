@@ -1224,8 +1224,11 @@ only ever grows, it never runs backwards, and none of it touches progress.
   sometimes lights up, a cloud of tiny animals flashing that comes up over
   seconds and never at once; less often a giant squid's eye opens at the edge
   of the page, high and clear of the clock, blinks once and goes: a striated
-  iris with a thin crescent pupil and two small highlights, set in a patch
-  of stippled, mottled skin, never haloed in colour. The whale is always the
+  iris darkening to its rim, the pupil a level lens the same above and
+  below, never bent into a mouth, set in a patch of mantle more than two
+  and a half eyes across: a half-strength wash of skin feathered at its
+  edge, red-brown chromatophores and the fold of a lid over it. Never a
+  halo, of stipple or of colour. The whale is always the
   whole animal, head, flipper and flukes, one soft grey shape a little over
   half the page long. In the abyss,
   about one three-hour sitting in a hundred and fifty, something very large
@@ -1235,9 +1238,15 @@ only ever grows, it never runs backwards, and none of it touches progress.
   `sightings-deep.ts`), which only lands in minutes the first roll left well
   alone, so no sitting saved before it lost or moved anything. In the light,
   a turtle comes in from the side, stops short of the jelly and looks it
-  over (turtles eat them), then thinks better of it and goes. From the
-  twilight down, a siphonophore longer than the page drifts across, so both
-  ends are never seen at once; and, rarest of anything, an oarfish hangs
+  over (turtles eat them), then thinks better of it and goes; it is drawn
+  as a plate draws one, each scute streaked from the corner it grew from
+  and the dome hatched, a round eye with no lid, a beak whose edge runs
+  straight. From the twilight down, a siphonophore longer than the page
+  drifts across, so both ends are never seen at once: six to ten clear,
+  overlapping swimming bells at its head, a stem that thins to a thread,
+  its feeding groups at uneven intervals, never level (on a screen it sags
+  corner to corner, in a picture it hangs from its head at 15 to 40
+  degrees); and, rarest of anything, an oarfish hangs
   nearly upright at one side, silver, its red crest running the whole length
   of it. From the midnight down, a single light bobs in the dark, and for a
   moment the teeth behind it show. In the abyss, a dumbo octopus hovers by

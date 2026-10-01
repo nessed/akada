@@ -611,102 +611,144 @@ export function drawSnellWindow(
     ctx.save();
     ctx.translate(body.x, body.y);
     ctx.scale(1, 1 / SNELL_SQUASH);
-    {
-      const halo = rm * 2.2;
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, halo);
-      const col = dark ? mixHex(sun.warmth, '#FFFFFF', 0.3) : '#FFFFFF';
-      const a = (dark ? 0.32 : 0.5) * (0.25 + 0.75 * lit);
-      g.addColorStop(0, rgba(col, a));
-      g.addColorStop(0.45, rgba(col, a * 0.55));
-      g.addColorStop(0.75, rgba(col, a * 0.18));
-      g.addColorStop(1, rgba(col, 0));
-      ctx.globalCompositeOperation = dark ? 'lighter' : 'screen';
-      ctx.fillStyle = g;
-      ctx.fillRect(-halo, -halo, halo * 2, halo * 2);
-    }
-    ctx.globalCompositeOperation = 'source-over';
-    if (dark) {
-      // By night the dark of the moon is faintly there by earthshine.
-      ctx.fillStyle = 'rgba(200, 210, 225, 0.08)';
+    if (o.print && !dark) {
+      // A print's moon on paper is a flat disc of paper a shade lighter
+      // than the sky round it (L* 96), with a pixel of soft edge and a few
+      // faint stippled seas: no halo, no lit side, no terminator, no gloss.
+      // Anything shaded on it turns it into a ball.
+      const edge = Math.max(0.6, px);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.filter = `blur(${(edge * 0.5).toFixed(2)}px)`;
+      ctx.fillStyle = '#F6F3EA';
       ctx.beginPath();
       ctx.arc(0, 0, rm, 0, TAU);
       ctx.fill();
-    }
-    const face = moonLitPath(rm, moon);
-    const seasIn = () => {
-      // The seas: soft blots, run together, more of them up and to one side.
-      const seas = mulberry32(hash32('moon', 'seas'));
-      ctx.fillStyle = dark ? 'rgba(120, 130, 140, 0.12)' : 'rgba(150, 140, 120, 0.12)';
-      for (let i = 0; i < 16; i++) {
-        const ang = -2.2 + seas() * 2.6;
-        const dist = rm * (0.15 + 0.55 * seas());
+      ctx.filter = 'none';
+      const seas = mulberry32(hash32('moon', 'seas', 'print'));
+      const patches = 3 + Math.floor(seas() * 3);
+      ctx.fillStyle = '#6E7066';
+      ctx.globalAlpha = 0.15;
+      const dot = Math.max(0.5 * px, rm * 0.035);
+      for (let i = 0; i < patches; i++) {
+        // The seas lie up and to one side, as the moon's own do.
+        const ang = -2.4 + seas() * 2.9;
+        const dist = rm * (0.2 + 0.42 * seas());
+        const px0 = Math.cos(ang) * dist;
+        const py0 = Math.sin(ang) * dist;
+        const ex = rm * (0.12 + 0.12 * seas());
+        const ey = ex * (0.6 + 0.35 * seas());
+        const n = Math.round(14 + 22 * (ex / rm));
+        for (let k = 0; k < n; k++) {
+          const t = Math.sqrt(seas());
+          const a = seas() * TAU;
+          const x = px0 + Math.cos(a) * ex * t;
+          const y = py0 + Math.sin(a) * ey * t;
+          if (x * x + y * y > rm * rm * 0.8) continue;
+          ctx.beginPath();
+          ctx.arc(x, y, dot * (0.6 + 0.8 * seas()), 0, TAU);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    } else {
+      {
+        const halo = rm * 2.2;
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, halo);
+        const col = dark ? mixHex(sun.warmth, '#FFFFFF', 0.3) : '#FFFFFF';
+        const a = (dark ? 0.32 : 0.5) * (0.25 + 0.75 * lit);
+        g.addColorStop(0, rgba(col, a));
+        g.addColorStop(0.45, rgba(col, a * 0.55));
+        g.addColorStop(0.75, rgba(col, a * 0.18));
+        g.addColorStop(1, rgba(col, 0));
+        ctx.globalCompositeOperation = dark ? 'lighter' : 'screen';
+        ctx.fillStyle = g;
+        ctx.fillRect(-halo, -halo, halo * 2, halo * 2);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      if (dark) {
+        // By night the dark of the moon is faintly there by earthshine.
+        ctx.fillStyle = 'rgba(200, 210, 225, 0.08)';
         ctx.beginPath();
-        ctx.ellipse(Math.cos(ang) * dist, Math.sin(ang) * dist, rm * (0.08 + seas() * 0.16), rm * (0.06 + seas() * 0.12), seas() * 3, 0, TAU);
+        ctx.arc(0, 0, rm, 0, TAU);
         ctx.fill();
       }
-    };
-    if (o.print) {
-      // The whole disc, barely there, so the face reads round and never as
-      // a letter; the lit part with its terminator soft, as it is seen
-      // through moving water.
-      ctx.fillStyle = dark ? 'rgba(200, 210, 225, 0.07)' : 'rgba(120, 130, 140, 0.07)';
-      ctx.beginPath();
-      ctx.arc(0, 0, rm, 0, TAU);
-      ctx.fill();
-      ctx.filter = `blur(${Math.max(0.6 * px, rm * 0.1).toFixed(2)}px)`;
-      ctx.fillStyle = dark ? '#EEF0EA' : '#FBF7EC';
-      ctx.fill(face);
-      // The seas, as soft as the terminator (a clip would cut them square
-      // along it).
-      seasIn();
-      ctx.filter = 'none';
-      // The pen once round the whole of it, fine and broken, only a little
-      // firmer on the lit side.
-      const rim: number[] = [];
-      for (let i = 0; i <= 60; i++) {
-        const a = (i / 60) * TAU;
-        rim.push(rm * Math.cos(a), rm * Math.sin(a));
+      const face = moonLitPath(rm, moon);
+      const seasIn = () => {
+        // The seas: soft blots, run together, more of them up and to one side.
+        const seas = mulberry32(hash32('moon', 'seas'));
+        ctx.fillStyle = dark ? 'rgba(120, 130, 140, 0.12)' : 'rgba(150, 140, 120, 0.12)';
+        for (let i = 0; i < 16; i++) {
+          const ang = -2.2 + seas() * 2.6;
+          const dist = rm * (0.15 + 0.55 * seas());
+          ctx.beginPath();
+          ctx.ellipse(Math.cos(ang) * dist, Math.sin(ang) * dist, rm * (0.08 + seas() * 0.16), rm * (0.06 + seas() * 0.12), seas() * 3, 0, TAU);
+          ctx.fill();
+        }
+      };
+      if (o.print) {
+        // The whole disc, barely there, so the face reads round and never as
+        // a letter; the lit part with its terminator soft, as it is seen
+        // through moving water.
+        ctx.fillStyle = dark ? 'rgba(200, 210, 225, 0.07)' : 'rgba(120, 130, 140, 0.07)';
+        ctx.beginPath();
+        ctx.arc(0, 0, rm, 0, TAU);
+        ctx.fill();
+        ctx.filter = `blur(${Math.max(0.6 * px, rm * 0.1).toFixed(2)}px)`;
+        ctx.fillStyle = dark ? '#EEF0EA' : '#FBF7EC';
+        ctx.fill(face);
+        // The seas, as soft as the terminator (a clip would cut them square
+        // along it).
+        seasIn();
+        ctx.filter = 'none';
+        // The pen once round the whole of it, fine and broken, only a little
+        // firmer on the lit side.
+        const rim: number[] = [];
+        for (let i = 0; i <= 60; i++) {
+          const a = (i / 60) * TAU;
+          rim.push(rm * Math.cos(a), rm * Math.sin(a));
+        }
+        inkLine(ctx, rim, true, {
+          width: Math.max(px * 0.5, rm * 0.035),
+          color: dark ? '#F4F0E6' : IRON_GALL.light,
+          alpha: dark ? 0.22 : 0.28,
+          lost: 0.5,
+          swell: 0.3,
+          taper: [0.1, 0.1],
+          seed: hash32('snell', seed, 'rim'),
+          min: px * 0.3,
+        });
+      } else {
+        ctx.save();
+        ctx.clip(face);
+        ctx.fillStyle = dark ? '#EEF0EA' : '#F6F1E4';
+        ctx.fillRect(-rm, -rm, rm * 2, rm * 2);
+        seasIn();
+        ctx.restore();
       }
-      inkLine(ctx, rim, true, {
-        width: Math.max(px * 0.5, rm * 0.035),
-        color: dark ? '#F4F0E6' : IRON_GALL.light,
-        alpha: dark ? 0.22 : 0.28,
-        lost: 0.5,
-        swell: 0.3,
-        taper: [0.1, 0.1],
-        seed: hash32('snell', seed, 'rim'),
-        min: px * 0.3,
-      });
-    } else {
-      ctx.save();
-      ctx.clip(face);
-      ctx.fillStyle = dark ? '#EEF0EA' : '#F6F1E4';
-      ctx.fillRect(-rm, -rm, rm * 2, rm * 2);
-      seasIn();
+      if (lit > 0.02 && !o.print) {
+        // The lit limb: the half of the rim on the lit side, in a broken line.
+        const waning = moon > 0.5;
+        const s = waning ? -1 : 1;
+        const limb: number[] = [];
+        const N = 30;
+        for (let i = 0; i <= N; i++) {
+          const a = -Math.PI / 2 + (Math.PI * i) / N;
+          limb.push(s * rm * Math.cos(a), rm * Math.sin(a));
+        }
+        inkLine(ctx, limb, false, {
+          width: Math.max(px * 0.6, rm * 0.06),
+          color: dark ? '#F4F0E6' : IRON_GALL.light,
+          alpha: dark ? 0.55 : 0.6,
+          lost: 0.55,
+          swell: 0.3,
+          taper: [0.15, 0.15],
+          seed: hash32('snell', seed, 'limb'),
+          min: px * 0.3,
+        });
+      }
       ctx.restore();
     }
-    if (lit > 0.02 && !o.print) {
-      // The lit limb: the half of the rim on the lit side, in a broken line.
-      const waning = moon > 0.5;
-      const s = waning ? -1 : 1;
-      const limb: number[] = [];
-      const N = 30;
-      for (let i = 0; i <= N; i++) {
-        const a = -Math.PI / 2 + (Math.PI * i) / N;
-        limb.push(s * rm * Math.cos(a), rm * Math.sin(a));
-      }
-      inkLine(ctx, limb, false, {
-        width: Math.max(px * 0.6, rm * 0.06),
-        color: dark ? '#F4F0E6' : IRON_GALL.light,
-        alpha: dark ? 0.55 : 0.6,
-        lost: 0.55,
-        swell: 0.3,
-        taper: [0.15, 0.15],
-        seed: hash32('snell', seed, 'limb'),
-        min: px * 0.3,
-      });
-    }
-    ctx.restore();
   }
 
   if (o.over) {

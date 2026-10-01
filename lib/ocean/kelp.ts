@@ -113,11 +113,14 @@ function rollStalk(r: Rand, edge: -1 | 1, layer: KelpLayer): KelpStalk {
     // Nothing on the lowest bit of stalk, and smaller blades at the growing tip.
     if (t * height < 0.05) continue;
     const tip = 1 - 0.45 * Math.max(0, (t - 0.9) / 0.1);
+    const len = range(r, layer === 2 ? 0.05 : 0.04, 0.07) * k * tip;
     blades.push({
       t,
       side,
-      len: range(r, layer === 2 ? 0.05 : 0.04, 0.07) * k * tip,
-      width: range(r, 0.008, 0.012) * k * (0.75 + 0.25 * tip),
+      len,
+      // A strap six to ten times as long as it is wide (a willow's leaf is
+      // four or five): off the same die as before, so nothing else moves.
+      width: len / range(r, 6.2, 9.6),
       angle: range(r, 0.35, 0.8),
       droop: range(r, 0.45, 1),
       curl: range(r, -0.15, 0.15),
@@ -140,13 +143,28 @@ function rollStalk(r: Rand, edge: -1 | 1, layer: KelpLayer): KelpStalk {
 const massOf = (ss: KelpStalk[]) => ss.reduce((m, s) => m + MASS[s.layer] * s.height, 0);
 
 /**
+ * What stands at the far side, where the forest is at both edges:
+ *
+ * - `few` (the live sea's, and the default): one or two stragglers back in
+ *   the haze, as it always has been.
+ * - `none`: nothing; the forest stands at its own edge only.
+ * - `grove`: a grove of three or four back in the haze on a rock of their
+ *   own, never one bare stipe that reads as a vine.
+ *
+ * The forest itself, its side, and where each of its stalks stands are the
+ * same whichever is asked for.
+ */
+export type KelpFarSide = 'few' | 'none' | 'grove';
+
+/**
  * The forest a sitting starts beside. Call only when `env.kelp` is set.
  *
  * Five to nine stalks at three depths. Where it stands at both edges of the
  * page the two sides are never a pair of curtains: one is the forest, the
- * other a few stragglers back in the haze, never more than two fifths of it.
+ * other a few stragglers back in the haze, never more than two fifths of it
+ * (or, with `farSide`, none, or a grove of three or more).
  */
-export function rollKelp(key: string): Kelp {
+export function rollKelp(key: string, opts?: { farSide?: KelpFarSide }): Kelp {
   // The first roll says which edges, and `picture/layout.ts` reads it the
   // same way: it must stay the first. The rest comes off its own stream.
   const r0 = mulberry32(hash32(key, 'kelp'));
@@ -189,6 +207,23 @@ export function rollKelp(key: string): Kelp {
       }
     }
     sides.set(edge, mine);
+  }
+  const farSide = opts?.farSide ?? 'few';
+  const away: -1 | 1 = main === -1 ? 1 : -1;
+  if (edges.length === 2 && farSide === 'none') {
+    sides.delete(away);
+    edges.splice(edges.indexOf(away), 1);
+  } else if (edges.length === 2 && farSide === 'grove') {
+    // Three or four, off a stream of their own (the forest's dice untouched),
+    // all back in the haze, close in by their wall and spread along it.
+    const rg = mulberry32(hash32(key, 'kelp', 'grove'));
+    const n = int(rg, 3, 4);
+    const grove = Array.from({ length: n }, () => rollStalk(rg, away, 0));
+    grove.forEach((st, i) => {
+      const off = 0.025 + (0.07 * (i + 0.5 + range(rg, -0.3, 0.3))) / n;
+      st.x = away < 0 ? off : 1 - off;
+    });
+    sides.set(away, grove);
   }
   if (edges.length === 2) {
     const big = sides.get(main)!;

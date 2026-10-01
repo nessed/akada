@@ -17,7 +17,7 @@
  */
 
 import { mixHex } from '../fan';
-import { buildAnatomy, type Anatomy, type LayerName, type Shape, type Tube } from './anatomy';
+import { buildAnatomy, jawed, type Anatomy, type LayerName, type Shape, type Tube } from './anatomy';
 import type { Species } from './biome';
 import { creatureInk, type CreatureInk } from './palette';
 import { bounds, contourHatch, detailFor, grain, inkLine, LIGHT, mottle, poolEdge, smooth, stipple, tubeWash, washFill } from './pen';
@@ -154,8 +154,9 @@ function render(species: Species, lenCss: number, dark: boolean, dpr: number, vi
     dpr,
     detail: pen.print ? Math.max(detailFor(devicePx), printDetail(devicePx, spacing)) : detailFor(devicePx),
     dark,
-    clear: g.clear || g.plan === 'bell' || g.plan === 'comb' || g.plan === 'chain',
+    clear: (g.clear && !jawed(g)) || g.plan === 'bell' || g.plan === 'comb' || g.plan === 'chain',
     plan: g.plan,
+    jawed: jawed(g),
     lit: g.lit,
     seed: species.seed,
   });
@@ -381,6 +382,8 @@ interface Paint {
   /** See-through: stippled rather than hatched, with a lit rim on dark water. */
   clear: boolean;
   plan: string;
+  /** One of the jawed hunters (an angler, a dragonfish): one dark wash. */
+  jawed: boolean;
   lit: boolean;
   seed: number;
 }
@@ -568,7 +571,16 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
       // star's arm, lighter on its lit side and down into its shadow.
       const paperTone = ink.paper ?? PAPER;
       const back = o.plan === 'fish' || o.plan === 'eel' || o.plan === 'squid' || o.plan === 'crawler';
-      const stops: [number, string][] = back
+      const stops: [number, string][] = o.jawed
+        ? [
+            // One deep wash, only a little lifted along the flank, so the
+            // globe still turns.
+            [0, mixHex(ink.body, DARK, 0.25)],
+            [0.38, mixHex(ink.body, paperTone, dark ? 0.1 : 0.16)],
+            [0.7, ink.body],
+            [1, mixHex(ink.body, DARK, 0.2)],
+          ]
+        : back
         ? [
             [0, mixHex(ink.body, DARK, dark ? 0.3 : 0.24)],
             [0.16, mixHex(ink.body, DARK, 0.06)],
@@ -591,6 +603,17 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     } else {
       wash(body, bodyBox, ink.body, ink.bodyAlpha, o.clear ? 0.45 : 0.32, o.clear ? 0.18 : 0.3);
     }
+    if (o.plan === 'chain' && !tiny) {
+      // A colony's bells and bracts overlap, glass over glass: each laid on
+      // its own, so where two cross the water shows through both.
+      ctx.save();
+      ctx.fillStyle = ink.body;
+      ctx.globalAlpha = 0.14;
+      for (const l of bodyLines) {
+        ctx.fill(pathOf([l]));
+      }
+      ctx.restore();
+    }
   }
   const inBody = (draw: () => void) => {
     ctx.save();
@@ -606,7 +629,8 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     ctx.fillStyle = GONAD;
     ctx.fill(p);
     ctx.restore();
-    if (detail >= 0.3) broken(ctx, lines('gonad'), 0.5 * base * weight, pen, 0.55, nextSeed());
+    // (A colony's small polyps are only the tinge: a line round each is a bead.)
+    if (detail >= 0.3 && o.plan !== 'chain') broken(ctx, lines('gonad'), 0.5 * base * weight, pen, 0.55, nextSeed());
   }
   plain('guts', 0.55, 0.45);
   inBody(() => {
@@ -662,7 +686,30 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     plain('detail', 0.5, 0.75);
     L.detail = saved;
   }
+  if (L.gape.length) {
+    // The throat, dark in the open mouth.
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#0E0C0A';
+    ctx.fill(shapes('gape'));
+    ctx.restore();
+  }
   penLines(bodyLines, o.plan === 'comb' ? 0.5 : o.plan === 'chain' ? 0.6 : o.clear ? 0.85 : 1);
+  if (L.teeth.length) {
+    // Needle teeth: bare paper, the pen round them only when they are big enough to hold it.
+    const p = shapes('teeth');
+    ctx.save();
+    ctx.fillStyle = dark ? '#D2C8B4' : '#E2D9C4';
+    ctx.globalAlpha = 0.88;
+    ctx.fill(p);
+    if (detail >= 0.3) {
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = dark ? '#0E0C0A' : pen;
+      ctx.lineWidth = Math.max(0.25, 0.3 * base);
+      ctx.stroke(p);
+    }
+    ctx.restore();
+  }
   combRows(ctx, L.rowB, L.rowF, o, ink, tiny, steps);
   strand('tentF', 0.95, 1, [0.04, 0.6]);
   strand('barbel', 0.55, 1, [0.02, 0.7]);

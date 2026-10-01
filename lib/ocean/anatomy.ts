@@ -28,6 +28,8 @@ export type LayerName =
   | 'finRay'
   | 'rays'
   | 'body'
+  | 'gape'
+  | 'teeth'
   | 'gonad'
   | 'guts'
   | 'gutFill'
@@ -48,7 +50,7 @@ export type LayerName =
   | 'lure';
 
 export const LAYERS: LayerName[] = [
-  'glowBack', 'tentB', 'legs', 'limb', 'fin', 'finRay', 'rays', 'body', 'gonad', 'guts', 'gutFill', 'pat', 'patLine',
+  'glowBack', 'tentB', 'legs', 'limb', 'fin', 'finRay', 'rays', 'body', 'gape', 'teeth', 'gonad', 'guts', 'gutFill', 'pat', 'patLine',
   'lines', 'detail', 'rowB', 'rowF', 'tentF', 'barbel', 'beads', 'nodes', 'dotGlow', 'dots', 'eye', 'pupil', 'lure',
 ];
 
@@ -256,8 +258,10 @@ function marks(line: Pt[], spacing: number, vr: Rng, put: (p: Pt, t: number) => 
 function bell(g: Genome, { P, C, vr, fine }: Kit) {
   // A dome, its sides always curving in toward the rim: never the straight
   // walls of a lampshade, never taller than a little over its width.
-  const bw = g.bw!, bh = Math.min(g.bh!, g.bw! * 1.05);
-  const shape = Math.max(0.8, g.shape!);
+  // Never a saucer with a brim either: at least a shallow dome deep, and
+  // the sides never flaring out at the rim.
+  const bw = g.bw!, bh = Math.max(g.bw! * 0.42, Math.min(g.bh!, g.bw! * 1.05));
+  const shape = Math.max(1, Math.min(1.6, g.shape!));
   const pts: Pt[] = [];
   for (let i = 0; i <= 40; i++) {
     const a = Math.PI - (i / 40) * Math.PI;
@@ -267,10 +271,15 @@ function bell(g: Genome, { P, C, vr, fine }: Kit) {
     pts.push([x, bh - Math.pow(Math.max(0, Math.sin(a)), shape) * bh * peak]);
   }
   const n = Math.max(1, g.lobes!);
+  // The margin seen a little from below: its near half bows down, so the
+  // rim is the front of an ellipse and not a ruled line.
+  const bow = Math.min(6, bh * 0.14) * 0.8;
   for (let i = 1; i <= n * 4; i++) {
     const x = bw - (i / (n * 4)) * 2 * bw;
-    const dip = g.lobes ? Math.abs(Math.sin((i / 4) * Math.PI)) * Math.min(6, bw * 0.12) : 0;
-    pts.push([x, bh + dip]);
+    const near = bow * Math.sqrt(Math.max(0, 1 - Math.pow(x / bw, 2)));
+    // Scallops, never a saw: each no deeper than a third of its width.
+    const dip = g.lobes ? Math.abs(Math.sin((i / 4) * Math.PI)) * Math.min(6, bw * 0.12, ((2 * bw) / n) * 0.33) : 0;
+    pts.push([x, bh + dip + near]);
   }
   P('body', pts, true);
   C('glowBack', 0, bh * 0.55, bw * 1.3, bh * 1.1);
@@ -552,87 +561,270 @@ function star(g: Genome, { P, C, T, vr, fine }: Kit) {
   C('detail', Math.cos(ma) * R0 * 0.55, Math.sin(ma) * R0 * 0.55, Math.max(0.5, R0 * 0.055));
 }
 
-/** A siphonophore: a float, then a string of swimming bells, each its own size, hanging their lines. */
-function chain(g: Genome, { P, C, vr }: Kit) {
-  let x = 0;
-  let y = 0;
-  let a = Math.PI / 2 + g.bend! * 0.3;
+/**
+ * A siphonophore: a colony, never a string of beads. At its head a float,
+ * if it has one, and the swimming bells packed two rows deep, overlapping,
+ * glass over glass (without a float, the two big angular bells of a
+ * calycophore); behind them the stem, tapering away, its groups (a bract, a
+ * feeding polyp, a fishing line with its side branches) set along it at
+ * uneven intervals and shrinking toward the end. It swims head first: the
+ * stem trails down behind it at 15 to 40 degrees, never level, so it never
+ * hangs as a clothesline or sags into a necklace.
+ */
+function chain(g: Genome, { P, C, vr, fine }: Kit) {
   const u = g.unit!;
-  if (g.float) {
-    const pts: Pt[] = [];
-    for (let i = 0; i < 16; i++) {
-      const t = (i / 16) * TAU;
-      const k = 1 + (Math.sin(t) < 0 ? 0.25 * Math.pow(-Math.sin(t), 3) : 0);
-      pts.push([Math.cos(t) * u * 0.75, -u * 1.2 + Math.sin(t) * u * 0.95 * k]);
+  const units = g.units!;
+  // Which way it swims, how steeply its stem leaves the bells, and how it
+  // droops further down behind: the chord between its ends lies 15 to 40
+  // degrees below level.
+  const side = g.bend! >= 0 ? 1 : -1;
+  const tilt = ((14 + 16 * Math.min(1, Math.abs(g.bend!))) * Math.PI) / 180;
+  const a0 = Math.atan2(Math.sin(tilt), -side * Math.cos(tilt));
+  const sag = -side * vr(0.12, 0.34);
+  const ph = vr(0, TAU);
+  const wave = vr(0.05, 0.14);
+  const head = g.float ? u * 0.9 : 0;
+  const bells = g.float ? 4 + Math.round(units * 0.4) : 2;
+  const bellS = (i: number) => (g.float ? u * (0.95 + 0.4 * Math.min(1, i / 3)) : u * (i ? 1.7 : 2.1));
+  const step = (i: number) => bellS(i) * (g.float ? 0.6 : 0.75);
+  let nectoLen = head;
+  for (let i = 0; i < bells; i++) nectoLen += step(i);
+  const siphoLen = u * (5 + units * 0.75);
+  const total = nectoLen + siphoLen;
+  // The axis from the head back, every short step, with its heading.
+  const axis: [number, number, number][] = [];
+  {
+    let x = 0;
+    let y = 0;
+    const ds = Math.max(0.6, u * 0.35);
+    for (let d = 0; d <= total + 1e-6; d += ds) {
+      const t = d / total;
+      const a = a0 + sag * t * t + wave * Math.sin(t * 7 + ph) * Math.min(1, t * 3);
+      axis.push([x, y, a]);
+      x += Math.cos(a) * ds;
+      y += Math.sin(a) * ds;
     }
-    P('body', pts, true);
-    C('dotGlow', 0, -u * 1.2, u);
-    C('detail', 0, -u * 1.75, u * 0.18);
   }
-  const stem: Pt[] = [[0, -u * 0.4]];
-  for (let i = 0; i < g.units!; i++) {
-    const s = u * vr(0.82, 1.15);
-    const side = i % 2 ? 1 : -1;
-    const nx = -Math.sin(a);
-    const ny = Math.cos(a);
-    const cx = x + nx * side * s * 0.28;
-    const cy = y + ny * side * s * 0.28;
-    // A swimming bell: rounded, its opening to one side, never a disc.
+  const atD = (d: number): [number, number, number] => {
+    const i = Math.max(0, Math.min(axis.length - 1, Math.round((d / total) * (axis.length - 1))));
+    return axis[i];
+  };
+  /** A frame at a point, turned to `a`: along it, then across. */
+  const frame = (cx: number, cy: number, a: number) => (px: number, py: number): Pt => [cx + px * Math.cos(a) - py * Math.sin(a), cy + px * Math.sin(a) + py * Math.cos(a)];
+
+  if (g.float) {
+    // The float: a small ovoid ahead of the bells, its pigment spot at the tip.
+    const [x, y, a] = atD(0);
+    const f = frame(x, y, a);
     const pts: Pt[] = [];
-    const tilt = a - Math.PI / 2 + side * vr(0.3, 0.6);
-    for (let q = 0; q < 12; q++) {
-      const t = (q / 12) * TAU;
-      const open = Math.cos(t) > 0.75 ? 0.82 : 1;
-      const px = Math.cos(t) * s * 0.85 * open;
-      const py = Math.sin(t) * s * 0.6;
-      pts.push([cx + px * Math.cos(tilt) - py * Math.sin(tilt), cy + px * Math.sin(tilt) + py * Math.cos(tilt)]);
+    for (let q = 0; q < 14; q++) {
+      const t = (q / 14) * TAU;
+      pts.push(f(Math.cos(t) * u * 0.62 + u * 0.15, Math.sin(t) * u * 0.36));
     }
     P('body', pts, true);
-    // The swimming sac inside it, open toward the bell's mouth: an arc, not a mark.
+    C('glowBack', x, y, u * 1.6);
+    const [sx, sy] = f(-u * 0.3, 0);
+    C('detail', sx, sy, u * 0.12);
+  }
+
+  // The swimming bells: alternate sides of the stem, each overlapping the
+  // one before, the youngest (nearest the float) smallest.
+  let d = head;
+  for (let i = 0; i < bells; i++) {
+    const s = bellS(i) * vr(0.9, 1.1);
+    d += step(i) * vr(0.85, 1.15);
+    const [x, y, a] = atD(d - step(i) * 0.5);
+    const sg = g.float ? (i % 2 ? 1 : -1) : i ? 1 : 0;
+    const turn = a + sg * (g.float ? vr(0.35, 0.6) : 0.3);
+    const f = frame(x - Math.sin(a) * sg * s * 0.3, y + Math.cos(a) * sg * s * 0.3, turn);
+    const pts: Pt[] = [];
+    const n = 16;
+    for (let q = 0; q < n; q++) {
+      const t = (q / n) * TAU;
+      const c = Math.cos(t);
+      const sn = Math.sin(t);
+      if (g.float) {
+        // A physonect's bell: a soft box with two shoulders, its mouth facing back.
+        const sq = 1 + 0.12 * Math.pow(Math.sin(2 * t), 2);
+        const mouth = c > 0.8 ? 0.86 : 1;
+        pts.push(f(c * s * 0.62 * sq * mouth, sn * s * 0.44 * sq));
+      } else {
+        // A calycophore's bell: a rounded bullet, blunt at the front, its
+        // mouth wide at the back.
+        const k = c < 0 ? 1 - 0.25 * Math.pow(-c, 3) : 1;
+        pts.push(f(c * s * 0.7, sn * s * 0.36 * k * (c > 0.85 ? 0.92 : 1)));
+      }
+    }
+    P('body', pts, true);
+    // The swimming sac inside it, open toward the bell's mouth.
     const sac: Pt[] = [];
-    const a0 = vr(0.5, 0.9);
+    const m0 = vr(0.5, 0.8);
     for (let q = 0; q <= 8; q++) {
-      const t = a0 + (q / 8) * (TAU - 2 * a0);
-      const px = Math.cos(t) * s * 0.5 + s * 0.1;
-      const py = Math.sin(t) * s * 0.34;
-      sac.push([cx + px * Math.cos(tilt) - py * Math.sin(tilt), cy + px * Math.sin(tilt) + py * Math.cos(tilt)]);
+      const t = m0 + (q / 8) * (TAU - 2 * m0);
+      sac.push(f(Math.cos(t) * s * 0.4 + s * 0.16, Math.sin(t) * s * (g.float ? 0.26 : 0.22)));
     }
     P('lines', sac);
-    stem.push([x, y]);
-    const line = hang(x, y, g.dangle! * vr(0.3, 1), Math.PI / 2 + vr(-0.2, 0.2), {
-      wave: vr(0.05, 0.25),
-      freq: vr(0.06, 0.12),
+    if (!g.float) P('lines', [f(-s * 0.6, -s * 0.12), f(s * 0.1, -s * 0.2), f(s * 0.6, -s * 0.2)]);
+    if (g.lit) {
+      const [lx, ly] = f(0, 0);
+      C('dotGlow', lx, ly, Math.max(2, s * 0.35));
+      C('dots', lx, ly, Math.max(0.6, s * 0.1));
+    }
+  }
+
+  // The stem: one pen line from the bells back, tapering to a hair.
+  P('tentF', axis.filter((_, i) => (i / (axis.length - 1)) * total >= nectoLen * 0.6).map(([x, y]) => [x, y] as Pt));
+
+  // The groups down the stem, at uneven intervals (each gap 0.65 to 1.35 of
+  // the mean), smaller toward the end.
+  const groups = 3 + Math.round(units * 0.5);
+  const gap = siphoLen / groups;
+  let at = nectoLen + gap * vr(0.3, 0.6);
+  while (at < total - u * 0.8) {
+    const t = (at - nectoLen) / siphoLen;
+    const k = 1 - 0.55 * t;
+    const [x, y, a] = atD(at);
+    // A bract: a pointed leaf of glass, its root on the stem, raked back
+    // and out above it, now one way and now the other: a feather, not a bead.
+    const up = vr(0, 1) < 0.7 ? -1 : 1;
+    const bf = frame(x, y, a - side * up * vr(0.3, 0.7));
+    const bl = u * vr(0.9, 1.25) * k;
+    const bw = u * vr(0.26, 0.36) * k;
+    P('body', [[0, 0], [bl * 0.3, -bw * 0.9], [bl * 0.72, -bw * 0.8], [bl, -bw * 0.15], [bl * 0.62, bw * 0.3], [bl * 0.2, bw * 0.35]].map(([px, py]) => bf(px, py * up * side)), true);
+    // The feeding polyp, hanging: a small flask with a tinge.
+    P('gonad', blob(x + Math.cos(a) * u * 0.1, y + u * 0.36 * k, u * 0.16 * k, u * 0.32 * k, Math.PI / 2 + side * 0.25, vr, 8), true);
+    // Its fishing line, streaming back as the colony swims, each its own
+    // length, a few curled, with the side branches it fishes with.
+    const len = g.dangle! * (u / 7) * vr(0.35, 1.15) * (1 - 0.3 * t);
+    const line = hang(x, y + u * 0.62 * k, len, Math.PI / 2 + side * vr(0.2, 0.55), {
+      wave: vr(0.05, 0.2),
+      freq: vr(0.05, 0.11),
       ph: vr(0, TAU),
-      curl: vr(0, 1) < 0.3 ? vr(-2.5, 2.5) : 0,
-      drift: vr(-0.3, 0.3),
+      curl: vr(0, 1) < 0.4 ? vr(1.2, 2.6) * (vr(0, 1) < 0.5 ? -1 : 1) : 0,
+      drift: side * vr(0.05, 0.45),
     });
     P('tentB', line);
-    if (vr(0, 1) < 0.34) marks(line, 12, vr, ([bx, by]) => C('beads', bx, by, 0.6), 0.15);
+    marks(line, Math.max(3.5, u * 1.1), fine, ([bx, by], tt) => {
+      const l = u * 0.28 * (1 - 0.6 * tt) * k;
+      const sa = Math.PI / 2 + side * fine(0.4, 1.2);
+      // Fine work: only a drawing big enough to hold it shows the side branches.
+      P('lines', [[bx, by], [bx + Math.cos(sa) * l * 0.6, by + Math.sin(sa) * l * 0.6], [bx + Math.cos(sa + 1.2) * l, by + Math.sin(sa + 1.2) * l]]);
+      C('nodes', bx + Math.cos(sa + 1.2) * l, by + Math.sin(sa + 1.2) * l, Math.max(0.2, l * 0.18));
+    }, 0.14);
     if (g.lit) {
-      C('dotGlow', cx, cy, 3);
-      C('dots', cx, cy, 1);
+      C('dotGlow', x, y + u * 0.36 * k, Math.max(1.6, u * 0.3 * k));
+      C('dots', x, y + u * 0.36 * k, Math.max(0.5, u * 0.08));
     }
-    a += g.bend! * 0.18 + vr(-0.06, 0.06);
-    x += Math.cos(a) * u * 1.4;
-    y += Math.sin(a) * u * 1.4;
+    at += gap * vr(0.65, 1.35);
   }
-  P('detail', stem);
 }
 
 /* ---- The bilateral plans ---- */
 
+/**
+ * A fish that grew a lure is a dark hunter with a jaw, whatever else it
+ * rolled, drawn as one of two: a round anglerfish with its rod on its
+ * forehead, or a long dragonfish with its light on a barbel under its chin.
+ * (A lure on a mackerel's body, see-through, reads as a skeleton.)
+ */
+export function lureKind(g: Genome): 'angler' | 'dragon' | null {
+  if (g.plan !== 'fish' || !g.lure) return null;
+  return (g.blunt ?? 1) >= 0.85 ? 'angler' : 'dragon';
+}
+
+/** One of the jawed hunters: one dark wash, never see-through. */
+export function jawed(g: Genome): boolean {
+  return lureKind(g) !== null;
+}
+
+/**
+ * A fish's tail fin. Every fish has one, at least 0.22 of its body's length
+ * and never more than a third: a body that tapers to a point with no fin
+ * reads as a lemon or a zeppelin. Its height goes by the body's depth as
+ * well as the dice, so a slim fish never carries a deep one's crescent.
+ * A tail rolled as none is the squared-off fan of a wrasse; a filament is a
+ * spear-point fin the thread runs on from. Returns how many straight tail
+ * rays it put first in `finRay`.
+ */
+function caudal(g: Genome, { P, vr }: Kit, tx: number, ty: number, depth: number, angler: boolean): number {
+  const raw = g.A! * 0.75 * g.tailSize!;
+  const shape = angler ? 'round' : g.tail;
+  const reach = angler ? 24 : Math.max(22, Math.min(34, raw * 1.05));
+  const span = (k: number, lo = 8) => Math.max(lo, Math.min(depth * k, raw));
+  const root = depth * 0.05;
+  let f: Pt[];
+  let edge: Pt[];
+  let H: number;
+  if (shape === 'fork' || shape === 'lunate') {
+    // A fork's notch is a V halfway in; a crescent's a shallow curve, its
+    // horns swept back.
+    const lun = shape === 'lunate';
+    H = span(lun ? 0.95 : 0.85);
+    const notch = lun ? 0.6 : 0.48;
+    f = [
+      [tx + 2, ty - root],
+      [tx - reach * (lun ? 0.5 : 0.4), ty - H * (lun ? 0.62 : 0.55)],
+      [tx - reach, ty - H],
+      [tx - reach * (lun ? 0.68 : 0.72), ty - H * (lun ? 0.42 : 0.5)],
+      [tx - reach * notch, ty],
+      [tx - reach * (lun ? 0.68 : 0.72), ty + H * (lun ? 0.42 : 0.5)],
+      [tx - reach, ty + H],
+      [tx - reach * (lun ? 0.5 : 0.4), ty + H * (lun ? 0.62 : 0.55)],
+      [tx + 2, ty + root],
+    ];
+    edge = f.slice(2, 7);
+  } else if (shape === 'round') {
+    H = span(angler ? 0.32 : 0.62, angler ? 12 : 8);
+    f = [[tx + 2, ty]];
+    for (let a = 2.25; a <= 4.04; a += 0.12) f.push([tx + 2 + Math.cos(a) * (reach + 2), ty + Math.sin(a) * H]);
+    edge = f.slice(1);
+  } else if (shape === 'filament') {
+    H = span(0.36);
+    f = [[tx + 2, ty - root], [tx - reach * 0.4, ty - H], [tx - reach, ty], [tx - reach * 0.4, ty + H], [tx + 2, ty + root]];
+    edge = f.slice(1, 4);
+  } else {
+    H = span(0.55);
+    f = [
+      [tx + 2, ty - root],
+      [tx - reach * 0.82, ty - H],
+      [tx - reach, ty - H * 0.82],
+      [tx - reach * 0.93, ty],
+      [tx - reach, ty + H * 0.82],
+      [tx - reach * 0.82, ty + H],
+      [tx + 2, ty + root],
+    ];
+    edge = f.slice(1, 6);
+  }
+  P('fin', f, true);
+  fanRays(P, [tx + 1, ty], edge, shape === 'filament' ? 9 : 14);
+  if (shape === 'filament') {
+    // The thread runs on from the fin's point.
+    const line: Pt[] = [];
+    const ph = vr(0, TAU);
+    const len = Math.max(26, Math.min(60, raw * 2.2));
+    for (let s = 0; s <= len; s += 3) line.push([tx - reach - s, ty + Math.sin(s / 10 + ph) * 3 * Math.min(1, s / 12)]);
+    P('tentF', line);
+  }
+  for (let q = -3; q <= 3; q++) P('finRay', [[tx, ty], [tx - reach * 0.75, ty + q * H * 0.2]]);
+  return 7;
+}
+
 /** Fish, eels, rays, squid and crawlers: a spine with a width along it.
     Returns how many tail rays it put first in `finRay`. */
-function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
+function bilateral(g: Genome, kit: Kit): number {
+  const { P, C, T, rr, fine, vr } = kit;
   const plan = g.plan;
   const fish = plan === 'fish';
   const eel = plan === 'eel';
   const ray = plan === 'ray';
   const squid = plan === 'squid';
   const crawler = plan === 'crawler';
+  const lk = lureKind(g);
+  const angler = lk === 'angler';
+  const dragon = lk === 'dragon';
   let tailRays = 0;
   const L = 100;
-  const A = g.A!;
+  const A = angler ? 52 + g.A! * 0.6 : dragon ? 12 + g.A! * 0.25 : g.A!;
   const N = 44;
   const spine: [number, number, number][] = [];
   const top: Pt[] = [];
@@ -654,6 +846,11 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
     }
     const u = Math.pow(t, g.skew!);
     let p = Math.pow(Math.max(0.02, Math.sin(Math.PI * (0.05 + 0.9 * u))), g.blunt!);
+    if (angler) {
+      // A globe behind a blunt face, the tail on a short wrist.
+      const ball = Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.6) / 0.43, 2)));
+      return Math.max(ball, Math.min(0.12 + 0.55 * t, 0.3));
+    }
     if (fish) {
       // A snout rounds off and a tail narrows to its wrist, however blunt the
       // dice made the middle: never a bottle's flat face and flat base.
@@ -665,40 +862,44 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
   for (let i = 0; i <= N; i++) {
     const t = i / N;
     const x = t * L;
-    const y = Math.sin(t * Math.PI * (eel ? 2.6 : 1) + g.segs!) * g.wave! * (squid ? 0.4 : 1);
+    const y = angler ? 0 : Math.sin(t * Math.PI * (eel ? 2.6 : 1) + g.segs!) * g.wave! * (squid ? 0.4 : 1);
     let w = A * prof(t);
-    if (g.armor && (fish || crawler)) w *= 1 + 0.07 * Math.cos(t * g.segs! * TAU);
+    // Plates show as a faint ripple in the outline, never a saw's edge.
+    if (g.armor && !lk && (fish || crawler)) w *= 1 + (fish ? 0.03 : 0.07) * Math.cos(t * g.segs! * TAU);
     spine.push([x, y, w]);
     top.push([x, y - w * 0.46]);
     bot.unshift([x, y + w * 0.54]);
   }
-  P('body', top.concat(bot), true);
+  const outline = top.concat(bot);
+  /** A hunter's open mouth: the snout, the corner of the gape, the jaw's tip. */
+  let gape: Pt[] | null = null;
+  if (lk) {
+    const [hx, hy, hw] = spine[N];
+    // The gape cut into the face, back nearly to the eye, the lower jaw
+    // slung out past the snout and turned up.
+    const back = angler ? A * 0.33 : 13;
+    const jut = angler ? A * 0.08 : 3.5;
+    gape = [
+      [hx + 0.5, hy - hw * (angler ? 0.3 : 0.2)],
+      [hx - back, hy + hw * 0.1],
+      [hx + jut, hy + hw * (angler ? 0.1 : 0.22)],
+    ];
+    outline.splice(top.length, 0, ...gape, [hx + jut * 0.45, hy + hw * 0.5]);
+  }
+  P('body', outline, true);
   T(top, bot.slice().reverse());
   const at = (t: number) => spine[Math.max(0, Math.min(N, Math.round(t * N)))];
   const [tx, ty] = spine[0];
   const T0 = A * 0.75 * g.tailSize!;
 
   // The tail: a fish's own, a crawler's fan, a ray's whip; an eel's is its fin.
-  if (fish && g.tail === 'fork') {
-    const f: Pt[] = [[tx + 2, ty], [tx - T0 * 0.95, ty - T0], [tx - T0 * 0.45, ty], [tx - T0 * 0.95, ty + T0]];
-    P('fin', f, true);
-    fanRays(P, [tx + 1, ty], f.slice(1), 14);
-  }
-  if (fish && g.tail === 'round') {
-    const f: Pt[] = [[tx + 2, ty]];
-    for (let a = 2.3; a <= 3.99; a += 0.12) f.push([tx + Math.cos(a) * T0, ty + Math.sin(a) * T0 * 0.9]);
-    P('fin', f, true);
-    fanRays(P, [tx + 1, ty], f.slice(1), 13);
-  }
-  if (fish && g.tail === 'lunate') {
-    const f: Pt[] = [[tx + 2, ty], [tx - T0 * 0.5, ty - T0 * 1.05], [tx - T0 * 0.2, ty - T0 * 0.3], [tx - T0 * 0.28, ty], [tx - T0 * 0.2, ty + T0 * 0.3], [tx - T0 * 0.5, ty + T0 * 1.05]];
-    P('fin', f, true);
-    fanRays(P, [tx + 1, ty], f.slice(1), 14);
-  }
-  if ((fish || ray) && g.tail === 'filament') {
+  if (fish) tailRays = caudal(g, kit, tx, ty, Math.max(...spine.map((p) => p[2])), angler);
+  if (ray && g.tail === 'filament') {
+    // A whip, never much past the disc's own length: longer, the disc is a
+    // kite on its string.
     const f: Pt[] = [];
     const ph = vr(0, TAU);
-    for (let s = 0; s <= T0 * 3; s += 3) f.push([tx - s, ty + Math.sin(s / 10 + ph) * 3 * Math.min(1, s / 12)]);
+    for (let s = 0; s <= Math.min(T0 * 3, L * 0.5); s += 3) f.push([tx - s, ty + Math.sin(s / 10 + ph) * 3 * Math.min(1, s / 12)]);
     P('tentF', f);
   }
   if (crawler && g.tail === 'fan') {
@@ -707,13 +908,31 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
       P('fin', f, true);
       fanRays(P, [tx, ty], f.slice(1), 3);
     }
-  }
-  if ((fish && g.tail !== 'none' && g.tail !== 'filament') || (crawler && g.tail === 'fan')) {
     for (let q = -3; q <= 3; q++) P('finRay', [[tx, ty], [tx - T0 * 0.7, ty + q * T0 * 0.22]]);
     tailRays = 7;
   }
 
-  if (fish) {
+  if (lk) {
+    // Small soft fins far back, above and below the wrist: on the globe of
+    // an angler, or set opposite each other near a dragonfish's tail.
+    for (const sg of [-1, 1]) {
+      const t0 = angler ? (sg < 0 ? 0.2 : 0.17) : sg < 0 ? 0.1 : 0.08;
+      const t1 = t0 + (angler ? 0.14 : 0.13);
+      const H = angler ? A * (sg < 0 ? 0.13 : 0.1) : A * 0.45;
+      const base: Pt[] = [];
+      const edge: Pt[] = [];
+      for (let i = 0; i <= 8; i++) {
+        const [x, y, w] = at(t0 + ((t1 - t0) * i) / 8);
+        const off = sg < 0 ? w * 0.46 : w * 0.54;
+        const q = i / 8;
+        base.push([x, y + sg * (off - 1)]);
+        edge.unshift([x - H * 0.5 * (1 - q), y + sg * (off + H * Math.sin(Math.PI * Math.pow(q, 0.8)) * 0.9 + H * 0.15)]);
+      }
+      P('fin', base.concat(edge), true);
+      pairRays(P, base, edge.slice().reverse(), 7);
+    }
+  }
+  if (fish && !lk) {
     for (let d = 0; d < g.dorsal!; d++) {
       const t0 = 0.3 + d * 0.28 + rr(-0.05, 0.05);
       const t1 = t0 + rr(0.12, 0.3);
@@ -782,13 +1001,13 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
     }
     P('fin', f, true);
   }
-  if (fish && g.pectoral) {
+  if (fish && !lk && g.pectoral) {
     const [x, y, w] = at(0.72);
     const f: Pt[] = [[x, y + w * 0.1], [x - A * 0.55, y + w * 0.35 + A * 0.25], [x - A * 0.35, y + w * 0.15]];
     P('fin', f, true);
     fanRays(P, [x - A * 0.12, y + w * 0.12], f, 7);
   }
-  if (fish && g.anal) {
+  if (fish && !lk && g.anal) {
     const [x, y, w] = at(0.26);
     const f: Pt[] = [[x + 6, y + w * 0.54], [x - 6, y + w * 0.54 + A * 0.35], [x - 8, y + w * 0.5]];
     P('fin', f, true);
@@ -870,13 +1089,58 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
       P('legs', line);
     }
   }
-  if ((g.armor && fish) || crawler) {
+  if ((g.armor && fish && !lk) || crawler) {
     for (let q = 1; q < g.segs!; q++) {
       const [x, y, w] = at(0.1 + (q / g.segs!) * 0.8);
       P('detail', [[x, y - w * 0.44], [x - 2, y], [x, y + w * 0.52]]);
     }
   }
-  if (fish) {
+  if (lk && gape) {
+    const jaw = angler ? A : 46;
+    // The jaw: the throat dark in the gape, and needle teeth along both lips,
+    // the front ones longest, leaning in, a few crossing the gape.
+    P('gape', gape, true);
+    const [S, Cn, J] = gape;
+    const tooth = (from: Pt, to: Pt, t: number, len: number, up: number) => {
+      const px = from[0] + (to[0] - from[0]) * t;
+      const py = from[1] + (to[1] - from[1]) * t;
+      const dx = to[0] - from[0];
+      const dy = to[1] - from[1];
+      const d = Math.hypot(dx, dy) || 1;
+      const ux = dx / d;
+      const uy = dy / d;
+      // Across the lip into the mouth, raked back toward the throat.
+      const nx = -uy * up;
+      const ny = ux * up;
+      const rake = vr(0.15, 0.5);
+      const bw = Math.max(0.6, len * 0.13);
+      const tx = px + (nx + ux * rake) * len;
+      const ty = py + (ny + uy * rake) * len;
+      // A needle, curved a little back along its length.
+      const mx = px + (nx + ux * rake * 0.4) * len * 0.55;
+      const my = py + (ny + uy * rake * 0.4) * len * 0.55;
+      P('teeth', [[px - ux * bw, py - uy * bw], [mx - ux * bw * 0.55, my - uy * bw * 0.55], [tx, ty], [mx + ux * bw * 0.55, my + uy * bw * 0.55], [px + ux * bw, py + uy * bw]], true);
+    };
+    const nU = 6 + Math.floor(vr(0, 3));
+    for (let q = 0; q < nU; q++) {
+      const t = 0.05 + (q / nU) * 0.75 + vr(-0.03, 0.03);
+      tooth(S, Cn, t, jaw * (0.045 + 0.09 * (1 - t)) * vr(0.5, 1.3), 1);
+    }
+    const nL = 5 + Math.floor(vr(0, 3));
+    for (let q = 0; q < nL; q++) {
+      const t = 0.04 + (q / nL) * 0.75 + vr(-0.03, 0.03);
+      tooth(J, Cn, t, jaw * (0.05 + 0.11 * (1 - t)) * vr(0.5, 1.3), -1);
+    }
+    // The gill opening: small, low on an angler's globe; a cover's edge on a dragonfish.
+    if (angler) {
+      const [gx, gy, gw] = at(0.5);
+      P('detail', [[gx + 1, gy + gw * 0.12], [gx - 0.5, gy + gw * 0.22], [gx + 0.5, gy + gw * 0.32]]);
+    } else {
+      const [gx, gy, gw] = at(0.78);
+      P('detail', [[gx + 0.5, gy - gw * 0.3], [gx - gw * 0.07, gy + gw * 0.04], [gx + 0.8, gy + gw * 0.4]]);
+    }
+  }
+  if (fish && !lk) {
     // The gill cover's edge, and the mouth.
     const [x, y, w] = at(0.8);
     P('detail', [[x + 0.5, y - w * 0.3], [x - w * 0.07, y + w * 0.04], [x + 0.8, y + w * 0.4]]);
@@ -903,7 +1167,7 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
       }
     }
   }
-  if (fish || eel) {
+  if ((fish && !lk) || eel) {
     // The lateral line: plain when it is the animal's mark, fine otherwise.
     const line: Pt[] = [];
     for (let i = 5; i <= N - 7; i++) {
@@ -939,7 +1203,8 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
     const [x, y, w] = at(t);
     return [x, y + v * w * 0.42, w];
   };
-  const pattern = g.pattern;
+  // A hunter is one dark wash: markings on it read as a toy's.
+  const pattern = lk ? 'none' : g.pattern;
   if (squid && pattern !== 'none') {
     // A squid's colour is its chromatophores: a scatter of small dabs.
     for (let q = 0; q < g.patN! * 3; q++) {
@@ -998,16 +1263,20 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
     P('guts', spine.slice(1, Math.round(N * 0.68)).map(([x, y, w]) => [x, y - w * 0.05] as Pt));
     const [gx, gy, gw] = at(0.5);
     C('gutFill', gx, gy, A * 0.16, gw * 0.14);
-  } else if (g.clear && !ray) {
-    P('guts', spine.slice(3, N - 3).map(([x, y]) => [x, y] as Pt));
-    for (let q = 3; q < N - 5; q += 3) {
+  } else if (g.clear && !ray && !lk) {
+    // Through a glass fish: the backbone, and the gut slung under it. The
+    // ribs only fine and only over the belly, raked back as ribs are: a
+    // ladder of them from snout to tail is an X-ray, or a whale fall.
+    P('guts', spine.slice(4, N - 6).map(([x, y, w]) => [x, y - w * 0.04] as Pt));
+    for (let q = Math.round(N * 0.36); q < N * 0.7; q += 2) {
       const [x, y, w] = spine[q];
-      P('guts', [[x, y - w * 0.3], [x, y + w * 0.3]]);
+      P('lines', [[x, y], [x - w * 0.06, y + w * 0.16], [x - w * 0.14, y + w * 0.3]]);
     }
+    // The gut: a soft bean under the backbone, never a coin.
     const [gx, gy, gw] = at(0.55);
-    C('gutFill', gx, gy + gw * 0.08, A * 0.18, gw * 0.18);
+    P('gutFill', blob(gx, gy + gw * 0.14, Math.min(A * 0.5, 15), gw * 0.14, vr(-0.12, 0.05), vr, 10), true);
   }
-  if (g.photo && !ray) {
+  if (g.photo && !ray && !angler) {
     for (let q = 0; q < g.photoN!; q++) {
       const [x, y, w] = at(0.18 + (q / g.photoN!) * 0.72);
       C('dotGlow', x, y + w * 0.42, 2.8);
@@ -1019,7 +1288,13 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
   // above shows one each side. More than one rolled reads as a row of small
   // organs under it, as a lanternfish's are.
   const eyes = g.eyes!;
-  if (eyes > 0 && !ray) {
+  if (angler) {
+    // Small and high, over the corner of the gape.
+    const [x, y, w] = at(0.82);
+    const er = A * 0.04;
+    C('eye', x, y - w * 0.2, er);
+    C('pupil', x + er * 0.1, y - w * 0.2, er * 0.72);
+  } else if (eyes > 0 && !ray) {
     const et = squid ? 0.82 : eel ? 0.9 : crawler ? 0.9 : 0.87;
     const [x, y, w] = at(et);
     const er = w * (squid ? 0.14 : eel ? 0.15 : crawler ? 0.16 : g.eyeBig ? 0.17 : 0.12);
@@ -1049,12 +1324,33 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
       P('barbel', line);
     }
   }
-  if ((fish || eel) && g.lure) {
-    const [x, y, w] = at(0.9);
-    const tip: Pt = [x + A * 0.9, y - w * 0.46 - A * 0.55];
-    P('lure', [[x, y - w * 0.46], [x + A * 0.3, y - w * 0.46 - A * 0.8], tip]);
-    C('dotGlow', tip[0], tip[1], A * 0.2);
-    C('dots', tip[0], tip[1], A * 0.07);
+  if (angler) {
+    // The rod from the forehead, arched forward over the mouth, and the
+    // bait at its end: a bulb with a filament or two, its light.
+    const [x, y, w] = at(0.8);
+    const b: Pt = [x, y - w * 0.46];
+    const tip: Pt = [b[0] + A * 0.46, b[1] - A * 0.2];
+    P('lure', [b, [b[0] + A * 0.04, b[1] - A * 0.24], [b[0] + A * 0.22, b[1] - A * 0.36], [b[0] + A * 0.38, b[1] - A * 0.33], tip]);
+    const er = A * 0.045;
+    P('fin', blob(tip[0], tip[1] + er * 0.6, er, er * 1.2, 0.3, vr, 9), true);
+    for (let q = 0; q < 2; q++) {
+      const a = Math.PI / 2 + vr(-0.6, 0.6);
+      const len = A * vr(0.06, 0.12);
+      P('lure', [[tip[0], tip[1] + er * 1.6], [tip[0] + Math.cos(a) * len * 0.5, tip[1] + er * 1.6 + Math.sin(a) * len * 0.5], [tip[0] + Math.cos(a + 0.4) * len, tip[1] + er * 1.6 + Math.sin(a + 0.4) * len]]);
+    }
+    C('dotGlow', tip[0], tip[1] + er * 0.6, A * 0.13);
+    C('dots', tip[0], tip[1] + er * 0.6, er * 0.55);
+  } else if ((eel || dragon) && g.lure) {
+    // A dragonfish's lure: a barbel off the chin, hanging, its bulb lit.
+    const [x, y, w] = at(0.95);
+    // Trailing back under the throat as it swims, slack, curled at the bulb:
+    // never a stiff pin with a ball on it.
+    const len = L * vr(0.1, 0.16);
+    const line = hang(x, y + w * 0.5, len, Math.PI / 2 + vr(0.15, 0.45), { wave: vr(0.12, 0.22), freq: vr(0.12, 0.2), ph: vr(0, TAU), curl: vr(0.8, 1.6), drift: vr(0.3, 0.7) }, 1);
+    P('lure', line);
+    const e = line[line.length - 1];
+    C('dotGlow', e[0], e[1], Math.max(2.5, Math.min(6, A * 0.6)));
+    C('dots', e[0], e[1], Math.max(0.9, Math.min(1.8, A * 0.17)));
   }
   return tailRays;
 }

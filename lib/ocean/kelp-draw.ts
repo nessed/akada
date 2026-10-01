@@ -437,8 +437,10 @@ function drawStalk(
     const el = Math.hypot(dex, dey);
     dex /= el;
     dey /= el;
-    // The bladder, an ellipse along the way the blade leaves.
-    const fr = Math.max(1.1 * px, L * 0.06);
+    // The bladder (a pneumatocyst), a plump ellipse along the way the blade
+    // leaves: 0.13 of the blade's length, the giant kelp's mark (a willow
+    // or a bamboo leaf has none).
+    const fr = Math.max(1.1 * px, L * 0.066);
     const fx = p.x + d0x * fr * 0.9;
     const fy = p.y + d0y * fr * 0.9;
     const bx = fx + d0x * fr * 0.95;
@@ -461,18 +463,28 @@ function drawStalk(
       const ny = tx / tl;
       mx += nx * curl * u * u;
       my += ny * curl * u * u;
-      // A strap: out quickly from the bladder, near enough even down its
-      // length, then drawn in to a blunt point over its last third.
-      const body = (W / 2) * Math.pow(Math.min(1, u / 0.14), 0.6) * (u > 0.66 ? Math.pow(Math.cos(((u - 0.66) / 0.34) * (Math.PI / 2)), 0.65) : 1) * (0.9 + 0.1 * Math.sin(u * 3));
+      // A strap: a short neck off the bladder, out to its width over the
+      // first fifth, near enough even down its length (a leaf swells in its
+      // middle and comes to a point; a blade does not), and rounded off
+      // blunt over its last fifth.
+      const body =
+        (W / 2) *
+        Math.pow(Math.min(1, u / 0.2), 0.75) *
+        (u > 0.8 ? Math.pow(Math.cos(((u - 0.8) / 0.2) * (Math.PI / 2)), 0.4) : 1) *
+        (0.94 + 0.06 * Math.sin(u * 5 + b.ph));
       let ra = 0;
       let rb = 0;
       if (k > 0 && k < SEG && (big || detail)) {
-        // The ruffled margin: a quick frill riding a slower one, each edge its own.
-        // Uneven: the frills bunch and spread along it, never a saw's teeth.
-        const f = (u * L) / (0.01 * page);
+        // The ruffled margin, 0.03 of the blade's length deep: a quick frill
+        // riding a slower one, each edge its own, bunching and spreading
+        // along it, never a saw's teeth. It dies away at the neck and tip.
+        // Fine frills drawn big (a lobe or two is an oak's leaf), a slow
+        // wave small, where the outline has too few points for more.
+        const f = u * (big ? 10.5 : 4);
         const g = f + 0.6 * Math.sin(f * 0.9 + b.ph);
-        ra = (0.2 * Math.sin(g * 6.28 + b.ph) + 0.08 * Math.sin(f * 11.3 + b.ph * 1.7)) * body;
-        rb = (0.17 * Math.sin(g * 5.1 + b.ph + 2.1) + 0.07 * Math.sin(f * 9.7 + b.ph)) * body;
+        const amp = 0.03 * L * Math.min(1, u / 0.18, (1 - u) / 0.12);
+        ra = amp * (0.82 * Math.sin(g * 6.28 + b.ph) + 0.18 * Math.sin(f * 9.1 + b.ph * 1.7));
+        rb = amp * (0.82 * Math.sin(g * 5.6 + b.ph + 2.1) + 0.18 * Math.sin(f * 8.3 + b.ph));
       }
       edgeA[k][0] = mx + nx * (body + ra);
       edgeA[k][1] = my + ny * (body + ra);
@@ -516,6 +528,25 @@ function drawStalk(
     shadow.closePath();
   };
 
+  /* The blade's corrugations: two lines down it either side of its middle,
+     each over a stretch of its length of its own, off the scratch edges. */
+  const corrugations = (into: Path2D, j: number) => {
+    const ph = stalk.blades[j].ph;
+    for (const [edge, f, a0, a1] of [
+      [edgeA, 0.42, 0.12 + 0.08 * Math.sin(ph), 0.7 + 0.1 * Math.cos(ph)],
+      [edgeB, 0.36, 0.2 + 0.06 * Math.cos(ph * 1.3), 0.82 + 0.06 * Math.sin(ph * 2)],
+    ] as const) {
+      const k0 = Math.max(1, Math.round(a0 * SEG));
+      const k1 = Math.min(SEG - 1, Math.round(a1 * SEG));
+      if (k1 - k0 < 2) continue;
+      for (let k = k0; k <= k1; k++) {
+        const x = mid[k][0] + (edge[k][0] - mid[k][0]) * f;
+        const y = mid[k][1] + (edge[k][1] - mid[k][1]) * f;
+        if (k === k0) into.moveTo(x, y);
+        else into.lineTo(x, y);
+      }
+    }
+  };
   /* One blade, finished, over whatever is already down. */
   const finish = (g: NonNullable<ReturnType<typeof shapeOf>>, j: number) => {
     const a = g.faint ? 0.3 : 1;
@@ -529,14 +560,13 @@ function drawStalk(
     ctx.globalAlpha = a * 0.75;
     ctx.fill(shadow);
     if (!big) {
-      // Small: its midrib and one plain line round it.
-      ctx.beginPath();
-      ctx.moveTo(g.bx, g.by);
-      for (let k = 1; k < SEG; k++) ctx.lineTo(mid[k][0], mid[k][1]);
+      // Small: its corrugations and one plain line round it.
+      const cor = new Path2D();
+      corrugations(cor, j);
       ctx.strokeStyle = ink.line;
       ctx.lineWidth = 0.45 * px * scale;
-      ctx.globalAlpha = a * 0.55;
-      ctx.stroke();
+      ctx.globalAlpha = a * 0.45;
+      ctx.stroke(cor);
       ctx.lineWidth = (far ? 0.5 : 0.75) * px * scale;
       ctx.globalAlpha = a * (far ? 0.6 : 0.85);
       ctx.stroke(path);
@@ -580,9 +610,10 @@ function drawStalk(
     }
     // The midrib and, here and there, a short soft crease across it from
     // near the midrib, the way a giant kelp's blade is wrinkled, never a row.
+    // No midrib (a kelp blade has none; a leaf's is what makes it a leaf):
+    // two long corrugations down it instead, broken, off its middle.
     const veins = new Path2D();
-    veins.moveTo(g.bx, g.by);
-    for (let k = 1; k < SEG; k++) veins.lineTo(mid[k][0], mid[k][1]);
+    corrugations(veins, j);
     const folds = new Path2D();
     for (let k = 3; k < SEG - 3; k++) {
       const hsh = Math.sin(k * 12.9898 + j * 78.233 + stalk.blades[j].ph) * 43758.5453;
@@ -620,7 +651,7 @@ function drawStalk(
   /* Its bladder: a little bead of gas, lit on top. */
   const floatOf = (g: { fx: number; fy: number; fr: number; d0x: number; d0y: number }, a: number) => {
     ctx.beginPath();
-    ctx.ellipse(g.fx, g.fy, g.fr, g.fr * 0.6, Math.atan2(g.d0y, g.d0x), 0, Math.PI * 2);
+    ctx.ellipse(g.fx, g.fy, g.fr, g.fr * 0.72, Math.atan2(g.d0y, g.d0x), 0, Math.PI * 2);
     ctx.globalAlpha = a;
     ctx.fillStyle = ink.float;
     ctx.fill();
@@ -646,12 +677,9 @@ function drawStalk(
       if (!g || g.front !== front) continue;
       any = true;
       outlineOf(g, g.faint ? faint : plain, g.faint ? shFaint : shPlain, g.aDark);
-      if (detail) {
-        veins.moveTo(g.bx, g.by);
-        for (let k = 1; k < SEG; k++) veins.lineTo(mid[k][0], mid[k][1]);
-      }
+      if (detail) corrugations(veins, j);
       floats.moveTo(g.fx + g.d0x * g.fr, g.fy + g.d0y * g.fr);
-      floats.ellipse(g.fx, g.fy, g.fr, g.fr * 0.6, Math.atan2(g.d0y, g.d0x), 0, Math.PI * 2);
+      floats.ellipse(g.fx, g.fy, g.fr, g.fr * 0.72, Math.atan2(g.d0y, g.d0x), 0, Math.PI * 2);
     }
     if (!any) return;
     for (const [path, shadow, a] of [

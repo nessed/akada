@@ -310,6 +310,7 @@ export function rockShape(seed: number, span: number, thick: number, px: number,
     const feet = Math.min(...ups.slice(0, -1).map(([, top, , ry]) => top + ry * 1.25), Hr * 0.4);
     add(0.12 * S, Math.max(Hr * 0.12, feet) * range(r, 0.92, 1.04), 0.66 * S, Math.max(0.42 * Hr, (Hr * 1.05 - feet) / 2));
   }
+  noMushroom(boulders, Hr);
   let lo = Infinity;
   let hi = -Infinity;
   let minY = Infinity;
@@ -354,6 +355,100 @@ export function rockShape(seed: number, span: number, thick: number, px: number,
   return made;
 }
 
+/** The widest a rock may be over the narrowest of it below, down to where
+    the wash lets go: past this it reads as a cap on a stem, a mushroom. */
+export const MAX_CAP = 1.55;
+
+/** Whether a point of the rock's frame is inside a boulder. */
+function inBoulder(b: Boulder, u: number, y: number): boolean {
+  const ex = (u - b.cx) / b.rx;
+  const ey = (y - b.cy) / b.ry;
+  const d2 = ex * ex + ey * ey;
+  if (d2 > 2.6) return false;
+  const th = Math.atan2(ey, ex);
+  return Math.sqrt(d2) < lumps(b, th < 0 ? th + Math.PI * 2 : th);
+}
+
+/**
+ * How mushroomed a rock is: row by row from its top to where the wash lets
+ * go, its width out from the wall, and the most any row is wider than the
+ * narrowest row under it; and the row that narrowest is.
+ */
+export function capRatio(boulders: Boulder[], Hr: number, fadeAt = 0.62): { ratio: number; neck: number } {
+  let minY = Infinity;
+  let hi = 0;
+  for (const b of boulders) {
+    minY = Math.min(minY, b.cy - b.ry * 1.2);
+    hi = Math.max(hi, b.cx + b.rx * 1.2);
+  }
+  const rows = 48;
+  const y1 = fadeAt * Hr;
+  const ys: number[] = [];
+  const ws: number[] = [];
+  const du = Math.max(0.5, hi / 120);
+  for (let i = 0; i < rows; i++) {
+    const y = minY + ((y1 - minY) * (i + 0.5)) / rows;
+    let lo = Infinity;
+    let top = -Infinity;
+    for (let u = 0; u <= hi; u += du) {
+      if (!boulders.some((b) => inBoulder(b, u, y))) continue;
+      lo = Math.min(lo, u);
+      top = Math.max(top, u);
+    }
+    if (top > lo) {
+      ys.push(y);
+      ws.push(top - lo);
+    }
+  }
+  let ratio = 1;
+  let neck = NaN;
+  let minBelow = Infinity;
+  let minAt = NaN;
+  for (let i = ws.length - 1; i >= 0; i--) {
+    if (Number.isFinite(minBelow) && ws[i] / minBelow > ratio) {
+      ratio = ws[i] / minBelow;
+      neck = minAt;
+    }
+    if (ws[i] < minBelow) {
+      minBelow = ws[i];
+      minAt = ys[i];
+    }
+  }
+  return { ratio, neck };
+}
+
+/**
+ * No cap on a stem: while the rock is wider above than `MAX_CAP` times its
+ * narrowest under it, the boulder that reaches furthest across that neck
+ * is broadened out from its wall side, until it holds up what is over it.
+ */
+function noMushroom(boulders: Boulder[], Hr: number) {
+  for (let it = 0; it < 14; it++) {
+    const { ratio, neck } = capRatio(boulders, Hr);
+    if (ratio <= MAX_CAP || !Number.isFinite(neck)) return;
+    let best = -1;
+    let reach = -Infinity;
+    // Only what runs on down under the neck: broadening the cap would only
+    // make it worse.
+    boulders.forEach((b, i) => {
+      if (Math.abs(neck - b.cy) >= b.ry || b.cy + b.ry < neck + 0.12 * Hr) return;
+      const rr = b.cx + b.rx * Math.sqrt(1 - ((neck - b.cy) / b.ry) ** 2);
+      if (rr > reach) {
+        reach = rr;
+        best = i;
+      }
+    });
+    if (best < 0) return;
+    const b = boulders[best];
+    // Wider by a tenth, its wall side kept where it was.
+    const k = 1.1;
+    const ncx = b.cx + (k - 1) * b.rx;
+    for (let i = 0; i < b.pts.length; i += 2) b.pts[i] = ncx + (b.pts[i] - b.cx) * k;
+    b.cx = ncx;
+    b.rx *= k;
+  }
+}
+
 /**
  * The boulders of the grammars past the heap, back to front, in the rock's
  * frame: `u` out from the wall, `y` down from its nominal top. Each one's
@@ -370,8 +465,9 @@ function buildGrammar(
   // The mass it all stands in, back into the wall and down past where the wash runs dry.
   const foot = (cx: number, top: number, rx: number) => add(cx, top, rx, Math.max(0.5 * Hr, (Hr * 1.3 - top) / 2), [2.2, 2.6]);
   if (g === 'slab') {
-    // Set back under the beds, so they overhang it.
-    foot(-0.02 * S, Hr * 0.5, 0.5 * S);
+    // Set back under the beds, so they overhang it, and up into them, so
+    // they never sit on a neck of it.
+    foot(0.06 * S, Hr * 0.2, 0.62 * S);
     // Beds from the lowest up, each laid over the one under it, thick and
     // square-ended: one tabular mass whose bedding steps in and out.
     const beds = 2 + (r() < 0.6 ? 1 : 0);
@@ -407,13 +503,14 @@ function buildGrammar(
   }
   if (g === 'overhang') {
     foot(0.02 * S, Hr * 0.5, 0.42 * S);
-    // The support, set back by the wall and narrower than what it holds up.
-    add(0.08 * S, Hr * 0.12, S * range(r, 0.26, 0.32), Hr * 0.46, [2.4, 2.6]);
+    // The support, set back by the wall and narrower than what it holds up,
+    // but not by much: a ledge, never a mushroom (`MAX_CAP`).
+    add(0.2 * S, Hr * 0.12, S * range(r, 0.38, 0.44), Hr * 0.46, [2.4, 2.6]);
     // A block on top by the wall, now and then.
     if (r() < 0.5) add(0.1 * S, -Hr * range(r, 0.2, 0.28), S * 0.22, Hr * 0.17, [3, 3]);
     // The cap, jutting out over open water, its underside turned from the light.
     const ry = Hr * range(r, 0.2, 0.27);
-    add(S * range(r, 0.5, 0.56), -Hr * range(r, 0.02, 0.1), S * range(r, 0.46, 0.52), ry, [2.6, 3.4]);
+    add(S * range(r, 0.5, 0.56), -Hr * range(r, 0.02, 0.1), S * range(r, 0.4, 0.46), ry, [2.6, 3.4]);
     return;
   }
   // A field of boulders down a slope: lower and wider than a heap, the far
@@ -484,6 +581,9 @@ export interface RockPlace {
 
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
 
+/** The strip of bare paper left inside a rock's lit outline, px of pen. */
+const PAPER_GAP = 2.5;
+
 /**
  * A rock in pen and wash, into a context of its own (its foot is let go of
  * by erasing, so draw it on a layer and lay that down): each boulder washed
@@ -537,6 +637,68 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
   const [lx, ly] = LIGHT;
   // Toward the light, for a rounded form: from the top left and a little in front.
   const LV = [-0.55, -0.7, 0.36].map((v) => v / Math.hypot(0.55, 0.7, 0.36));
+  // Whether a point of the page is inside a boulder, `margin` device px
+  // short of its edge.
+  const inB = (b: Boulder, x: number, y: number, margin = 0) => {
+    const ex = (at.dir * (x - X(b.cx))) / b.rx;
+    const ey = (y - Y(b.cy)) / b.ry;
+    const th = Math.atan2(ey, ex);
+    const rr = lumps(b, th < 0 ? th + Math.PI * 2 : th);
+    const s = Math.hypot(ex, ey);
+    if (margin <= 0) return s < rr;
+    const rad = Math.hypot(b.rx * Math.cos(th), b.ry * Math.sin(th)) * rr;
+    return s * rad < rr * (rad - margin);
+  };
+  // Two to four bedding planes across the rock, near level (within 8°),
+  // each broken, with the shadow of its ledge under it: where it runs, at
+  // rows down the rock from its top to where it goes into the water.
+  const rs = mulberry32(k.seed ^ 0x2545f491);
+  const strata: [number, number, number, number][] = [];
+  if (!far) {
+    const n = 2 + Math.floor(rs() * 3);
+    const yTop = shape.minY;
+    const yBot = Math.max(yTop + 4 * px, fa * H);
+    const step = Math.max(1, 2 * px);
+    for (let i = 0; i < n; i++) {
+      const y = Y(yTop + (yBot - yTop) * (0.14 + (0.78 * (i + 0.2 + 0.6 * rs())) / n));
+      // The longest run across the rock at that row.
+      let best: [number, number] = [0, 0];
+      let start = NaN;
+      for (let u = shape.lo; u <= shape.hi + step; u += step) {
+        const x = X(u);
+        const isIn = u <= shape.hi && shape.boulders.some((b) => inB(b, x, y, 2 * px));
+        if (isIn && !Number.isFinite(start)) start = u;
+        if (!isIn && Number.isFinite(start)) {
+          if (u - start > best[1] - best[0]) best = [start, u];
+          start = NaN;
+        }
+      }
+      const runL = best[1] - best[0];
+      if (runL < 0.18 * shape.span) {
+        rs();
+        rs();
+        rs();
+        continue;
+      }
+      const u0 = best[0] + runL * range(rs, 0.04, 0.2);
+      const u1 = best[1] - runL * range(rs, 0.06, 0.25);
+      const xa = Math.min(X(u0), X(u1));
+      const xb = Math.max(X(u0), X(u1));
+      const tilt = Math.tan(range(rs, -8, 8) * (Math.PI / 180));
+      strata.push([xa, y - (tilt * (xb - xa)) / 2, xb, y + (tilt * (xb - xa)) / 2]);
+    }
+  }
+  const ledgeH = 5 * px;
+  const ledge = (x: number, y: number) => {
+    let s = 0;
+    for (const [xa, ya, xb, yb] of strata) {
+      if (x < xa || x > xb) continue;
+      const d = y - (ya + ((yb - ya) * (x - xa)) / (xb - xa));
+      if (d > 0 && d < ledgeH * 3) s += 0.38 * Math.exp(-d / ledgeH);
+      else if (d < 0 && d > -ledgeH) s -= 0.12;
+    }
+    return s;
+  };
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -590,22 +752,18 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       ctx.restore();
     }
     union.addPath(path);
-    // The wash, lifted where the light lands and deeper where it doesn't.
-    const g = ctx.createRadialGradient(
-      cx - at.dir * 0.4 * b.rx,
-      cy - 0.5 * b.ry,
-      0,
-      cx - at.dir * 0.4 * b.rx,
-      cy - 0.5 * b.ry,
-      Math.max(b.rx, b.ry) * 1.9,
-    );
+    // The wash, laid along the light: lifted on the side it comes from and
+    // deeper on the far side, as flat as stone is. Nothing is added to it
+    // for a highlight; the lightest the stone gets is the paper let through.
+    const ext = Math.max(b.rx, b.ry);
+    const g = ctx.createLinearGradient(cx - lx * ext, cy - ly * ext, cx + lx * ext, cy + ly * ext);
     // The mass the rest stand in is in their shadow, and darker for it: the
     // rock goes down into the water through its deeper tones, never a pale hem.
     const foot = bi === shape.foot;
     const tint = mixHex(mixHex(stone, bi % 2 ? deep : lift, 0.08 + 0.06 * r()), deep, foot ? 0.3 : 0);
-    g.addColorStop(0, mixHex(tint, lift, foot ? 0.25 : 0.6));
-    g.addColorStop(0.45, tint);
-    g.addColorStop(1, mixHex(tint, deep, 0.7));
+    g.addColorStop(0, mixHex(tint, lift, foot ? 0.15 : 0.4));
+    g.addColorStop(0.5, tint);
+    g.addColorStop(1, mixHex(tint, deep, 0.6));
     ctx.fillStyle = g;
     ctx.globalAlpha = 1;
     ctx.fill(path);
@@ -616,42 +774,38 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
     ctx.lineWidth = Math.max(2 * px, 0.04 * Math.min(b.rx, b.ry));
     ctx.stroke(path);
     ctx.globalAlpha = 1;
-    // A strip of bare paper along its lit top, where the brush never went;
-    // not where its top runs in under a boulder already down.
-    const covered = (x: number, y: number) =>
-      shape.boulders.some((e, j) => {
-        if (j >= bi) return false;
-        const ex = (at.dir * (x - X(e.cx))) / e.rx;
-        const ey = (y - Y(e.cy)) / e.ry;
-        const th = Math.atan2(ey, ex);
-        return Math.hypot(ex, ey) < 0.985 * lumps(e, th < 0 ? th + Math.PI * 2 : th);
-      });
-    const strip = new Path2D();
-    let on = false;
-    for (let i = 0; i <= BN; i++) {
-      const th = ((i % BN) / BN) * Math.PI * 2;
-      const lit = shadeAt(th, 1) < 0.22 && Math.sin(th) < 0.35;
-      const rr = lumps(b, th) * 0.86;
-      const x = cx + at.dir * b.rx * rr * Math.cos(th);
-      const y = cy + b.ry * rr * Math.sin(th);
-      if (!lit || bi === shape.foot || lf(x, y) < 0.6 || covered(x, y)) {
-        on = false;
-        continue;
+    const covered = (x: number, y: number) => shape.boulders.some((e, j) => j < bi && inB(e, x, y, 0.2 * px));
+    // Along its lit edge the brush stopped short of the line: a strip of
+    // bare paper 2.5 px of pen wide just inside the outline (the wash taken
+    // back off, nothing put on), not where it runs in under a boulder
+    // already down, and not down where the rock goes into the water.
+    if (!foot) {
+      const gapRun = new Path2D();
+      let on = false;
+      for (let i = 0; i <= BN; i++) {
+        const q = i % BN;
+        const th = (q / BN) * Math.PI * 2;
+        const x = pts[q * 2];
+        const y = pts[q * 2 + 1];
+        const lit = shadeAt(th, 1) < 0.2 && Math.sin(th) < 0.3;
+        // The brush skips now and then: a gap, not a gleam.
+        const skip = valueNoise(k.seed ^ 0x77 ^ bi, q / 7, 0.5) < 0.3;
+        if (!lit || skip || lf(x, y) < 0.6 || covered(x, y)) {
+          on = false;
+          continue;
+        }
+        if (on) gapRun.lineTo(x, y);
+        else gapRun.moveTo(x, y);
+        on = true;
       }
-      if (on) strip.lineTo(x, y);
-      else strip.moveTo(x, y);
-      on = true;
-    }
-    const sw = Math.min(b.rx, b.ry);
-    ctx.strokeStyle = k.paper;
-    for (const [wd, a] of [
-      [0.2, 0.16],
-      [0.13, 0.2],
-      [0.07, 0.26],
-    ]) {
-      ctx.globalAlpha = a * (dark ? 0.6 : 1) * (far ? 0.5 : 1);
-      ctx.lineWidth = wd * sw;
-      ctx.stroke(strip);
+      ctx.save();
+      ctx.clip(path);
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = '#000';
+      ctx.globalAlpha = far ? 0.35 : 0.62;
+      ctx.lineWidth = 2 * (PAPER_GAP + 0.5) * px;
+      ctx.stroke(gapRun);
+      ctx.restore();
     }
     if (far) {
       // Far off, only a broken thread of the pen round its silhouette.
@@ -666,6 +820,8 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
         }
         dash = [];
       };
+      // At least two gaps in it, wherever the dice fall.
+      let gaps = 0;
       for (let q = 0; q <= m; q++) {
         const i = q % m;
         const j = (q + 1) % m;
@@ -677,8 +833,12 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
         }
         if (on) dash.push(x, y);
         left -= Math.hypot(pts[j * 2] - x, pts[j * 2 + 1] - y);
-        if (left <= 0) {
-          if (on) flush();
+        const forced = !on || gaps >= 2 ? false : q === Math.floor(m / 3) || q === Math.floor((2 * m) / 3);
+        if (left <= 0 || forced) {
+          if (on) {
+            flush();
+            gaps++;
+          }
           on = !on;
           left = b.rx * (on ? range(rf, 0.35, 1) : range(rf, 0.08, 0.3));
         }
@@ -686,155 +846,31 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       flush();
       return;
     }
-    // Contour hatching, the way an engraver models a round thing: lines
-    // that run across the boulder as if wrapped round it, seen a little from
-    // above, so they bow as the form does and crowd together where it turns
-    // away. Laid only where it is in shadow (in the light, on dark water),
-    // each line thickening into the dark; crossed by a second set that runs
-    // down the form only where it is darkest.
-    // Finer drawn big, where there is the time; a little more open live.
-    const sp = (px >= 3 ? 2.4 : fine ? 2.9 : 3.4) * px;
-    const from = dark ? 0.6 : 0.3;
-    const wmax = (fine ? 1.05 : 0.85) * px;
-    // Each line is stroked in pieces by its weight, a few weights to a
-    // boulder, which draws far quicker than a ribbon for every line.
-    const weights = [0.3, 0.55, 0.8, 1.05].map((f) => f * wmax);
-    const lines = weights.map(() => new Path2D());
-    const ribbon = (run: number[]) => {
-      const m = run.length / 3;
-      if (m < 2) return;
-      let cur = -1;
-      for (let j = 0; j < m; j++) {
-        // Each line runs out thin at both ends.
-        const wd = run[j * 3 + 2] * Math.min(1, (j + 0.5) / 3, (m - j - 0.5) / 3);
-        let k = 0;
-        while (k < weights.length - 1 && wd > (weights[k] + weights[k + 1]) / 2) k++;
-        if (k !== cur) {
-          if (j > 0) lines[k].moveTo(run[j * 3 - 3], run[j * 3 - 2]);
-          else lines[k].moveTo(run[0], run[1]);
-          cur = k;
-        }
-        if (j > 0) lines[k].lineTo(run[j * 3], run[j * 3 + 1]);
-      }
+    // The engraver's hatch (`hatchStrokes`): short straight strokes all one
+    // way along the light, dense where the boulder turns from it, crossed
+    // where it is darkest, hardly any on its lit face; the ledges' shadows
+    // under the bedding planes, and a little unevenness so a boulder is a
+    // stone and not a ball. On dark water the light ink marks the light
+    // instead, and is never crossed.
+    // The ball's shade pushed apart (a stone's faces turn more sharply than
+    // a ball's): its lit face opens, the far side closes into shadow.
+    const sh0 = (x: number, y: number) =>
+      clamp01((shadeXY(x, y) - 0.22) / 0.42 + ledge(x, y) + 0.22 * (valueNoise(k.seed ^ bi, x / (13 * px), y / (13 * px)) - 0.5));
+    const field: HatchField = {
+      // Light ink on dark water: only the faces most in the light.
+      shade: dark ? (x, y) => 0.85 * (1 - sh0(x, y)) : sh0,
+      inside: (x, y) => inB(b, x, y, (PAPER_GAP + 0.5) * px),
+      keep: lf,
+      noCross: dark,
     };
-    // A point on the boulder's surface at latitude (sin sl) and longitude ph
-    // round its front, to the page, with its shade; null round the back.
-    const tilt = 0.42;
-    const ct = Math.cos(tilt);
-    const st = Math.sin(tilt);
-    // Asked for its shade first, which is cheap, and only then where it falls.
-    const onForm = (sl: number, cp: number, sp0: number, need: number): [number, number, number] | null => {
-      const cl = Math.sqrt(Math.max(0, 1 - sl * sl));
-      const x = cl * cp;
-      const z0 = cl * sp0;
-      const y = sl * ct + z0 * st;
-      const z = z0 * ct - sl * st;
-      if (z <= 0.02) return null;
-      const sh = shadeN(at.dir * x, y, z);
-      if ((dark ? 1 - sh : sh) <= need) return [0, 0, sh];
-      const s = Math.min(1, Math.hypot(x, y));
-      const th = Math.atan2(y, x);
-      const rr = lumps(b, th < 0 ? th + Math.PI * 2 : th, s);
-      return [cx + at.dir * b.rx * x * rr, cy + b.ry * y * rr, sh];
-    };
-    const nLat = Math.max(3, Math.round((2 * b.ry) / sp));
-    const Q = px >= 3 ? 64 : 40;
-    const cosQ = new Float32Array(Q + 1);
-    const sinQ = new Float32Array(Q + 1);
-    for (let q = 0; q <= Q; q++) {
-      cosQ[q] = Math.cos((q / Q) * Math.PI);
-      sinQ[q] = Math.sin((q / Q) * Math.PI);
-    }
-    for (let i = 0; i < nLat; i++) {
-      const sl = -1 + (2 * (i + 0.5 + (r() - 0.5) * 0.35)) / nLat;
-      const g1 = r() * 6.28;
-      const g2 = r() * 6.28;
-      let run: number[] = [];
-      for (let q = 0; q <= Q; q++) {
-        const p = onForm(sl, cosQ[q], sinQ[q], from);
-        const want = p ? (dark ? 1 - p[2] : p[2]) : 0;
-        // The engraver's line lifts now and then.
-        const gap = Math.sin(g1 + q * 0.31) * Math.sin(g2 + q * 0.83);
-        const fl = p && want > from ? lf(p[0], p[1]) : 0;
-        if (!p || want <= from || gap > 0.75 || fl < 0.06) {
-          ribbon(run);
-          run = [];
-          continue;
-        }
-        run.push(p[0], p[1], wmax * Math.min(1.25, 0.15 + ((want - from) / (1 - from)) * 1.2) * fl);
-      }
-      ribbon(run);
-    }
-    if (fine && !dark) {
-      // Down the form, in the deepest shadow only.
-      const deepFrom = 0.74;
-      const nLon = Math.max(3, Math.round((Math.PI * b.rx) / (sp * 1.5)));
-      for (let i = 0; i < nLon; i++) {
-        const ph = (Math.PI * (i + 0.5 + (r() - 0.5) * 0.4)) / nLon;
-        const cp = Math.cos(ph);
-        const sp0 = Math.sin(ph);
-        let run: number[] = [];
-        for (let q = 0; q <= 30; q++) {
-          const sl = -1 + (2 * q) / 30;
-          const p = onForm(sl, cp, sp0, deepFrom);
-          const want = p ? p[2] : 0;
-          const fl = p && want > deepFrom ? lf(p[0], p[1]) : 0;
-          if (!p || want <= deepFrom || fl < 0.06) {
-            ribbon(run);
-            run = [];
-            continue;
-          }
-          run.push(p[0], p[1], wmax * 0.8 * Math.min(1, (want - deepFrom) / 0.12) * fl);
-        }
-        ribbon(run);
-      }
-    }
-    ctx.strokeStyle = k.line;
-    ctx.globalAlpha = dark ? 0.5 : 0.85;
-    // Butt-ended and bevelled: at a line this fine nothing else shows, and
-    // a round join at every point is most of the cost of drawing it.
-    ctx.lineCap = 'butt';
-    ctx.lineJoin = 'bevel';
-    lines.forEach((l, i) => {
-      ctx.lineWidth = weights[i];
-      ctx.stroke(l);
-    });
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    // A stipple gathering into the shadow: round dots drawn big, specks of
-    // a device pixel or two (which read the same, and draw far quicker) small.
-    if (fine) {
-      const dots = new Path2D();
-      const step = (px >= 3 ? 2.4 : 3.1) * px;
-      const rad = (px >= 3 ? 0.42 : 0.48) * px;
-      const round = px >= 3;
-      const dFrom = dark ? 0.55 : 0.42;
-      for (let y = box.y; y < box.y + box.h; y += step) {
-        for (let x = box.x; x < box.x + box.w; x += step) {
-          const qx = x + (r() - 0.5) * step * 0.9;
-          const qy = y + (r() - 0.5) * step * 0.9;
-          // Drawn without a clip, which costs more than the dots: kept a
-          // little inside the boulder's own round instead.
-          const ex = (qx - cx) / b.rx;
-          const ey = (qy - cy) / b.ry;
-          if (ex * ex + ey * ey > 0.8) {
-            r();
-            continue;
-          }
-          const sh0 = shadeXY(qx, qy);
-          const sh = dark ? 1 - sh0 : sh0;
-          if (sh <= dFrom || r() > Math.pow((sh - dFrom) / (1 - dFrom), 1.4) || rf() > lf(qx, qy)) continue;
-          const rr = rad * (0.7 + 0.6 * r());
-          if (round) {
-            dots.moveTo(qx + rr, qy);
-            dots.arc(qx, qy, rr, 0, Math.PI * 2);
-          } else dots.rect(qx - rr, qy - rr, rr * 2, rr * 2);
-        }
-      }
-      ctx.fillStyle = k.line;
-      ctx.globalAlpha = dark ? 0.4 : 0.55;
-      ctx.fill(dots);
-    }
+    const hp = new Path2D();
+    // Long strokes close together (the lanes 80 px² of pen apart, over the
+    // stroke and its gap), so the shadow reads as a tone, not a scatter.
+    const len = Math.max(10 * px, Math.min(30 * px, 0.55 * Math.min(b.rx, b.ry)));
+    hatchStrokes(hp, box, field, { px, seed: (k.seed ^ Math.imul(bi + 1, 0x9e3779b1)) >>> 0, len, width: (dark ? 0.75 : fine ? 1 : 0.85) * px });
+    ctx.fillStyle = k.line;
+    ctx.globalAlpha = dark ? 0.38 : 0.85;
+    ctx.fill(hp);
     // A crack or two, in from the top and down the face.
     if (d > 0.25 && r() < 0.8) {
       const count = 1 + Math.floor(r() * 2);
@@ -919,6 +955,79 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       }
     }
   });
+  // The bedding planes, broken, over the boulders they cross; let go of
+  // with the rest of the pen toward the foot.
+  if (strata.length) {
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.clip(union);
+    for (const [xa, ya, xb, yb] of strata) {
+      for (const piece of strataLine(xa, ya, xb, yb, rs, px)) {
+        const mid = piece.length >> 1;
+        const a = lf(piece[mid & ~1], piece[(mid & ~1) + 1]);
+        if (a < 0.1) continue;
+        inkLine(ctx, piece, false, {
+          width: (fine ? 0.95 : 0.8) * px,
+          color: k.line,
+          alpha: (dark ? 0.5 : 0.8) * a,
+          swell: 0,
+          lost: 0,
+          taper: [0.12, 0.2],
+          raw: true,
+          min: 0.25 * px,
+        });
+      }
+    }
+    ctx.restore();
+  }
+  // Far off, three to six strokes of the hatch where it is darkest (where it
+  // is lit, on dark water), so a rock in the haze is still drawn, never smoke.
+  if (far) {
+    const rh = mulberry32(k.seed ^ 0x68e31da4);
+    const want = 3 + Math.floor(rh() * 4);
+    const cands: [number, number, number][] = [];
+    const yBot = Math.max(shape.minY + 4 * px, (fa + 0.05) * H);
+    for (let i = 0; i < 90; i++) {
+      const x = X(shape.lo + (shape.hi - shape.lo) * rh());
+      const y = Y(shape.minY + (yBot - shape.minY) * rh());
+      let front = -1;
+      for (let j = shape.boulders.length - 1; j >= 0; j--) {
+        if (inB(shape.boulders[j], x, y, 3 * px)) {
+          front = j;
+          break;
+        }
+      }
+      if (front < 0 || lf(x, y) < 0.4) continue;
+      const b = shape.boulders[front];
+      const ex = (x - X(b.cx)) / b.rx;
+      const ey = (y - Y(b.cy)) / b.ry;
+      const s2 = Math.min(1, ex * ex + ey * ey);
+      const nz = Math.sqrt(1 - s2);
+      const s = clamp01(0.5 - 0.62 * (ex * LV[0] + ey * LV[1] + nz * LV[2]) + 0.1 * ey);
+      cands.push([dark ? 1 - s : s, x, y]);
+    }
+    cands.sort((p, q) => q[0] - p[0]);
+    const strokes = new Path2D();
+    const picked: [number, number][] = [];
+    const len = Math.max(6 * px, Math.min(11 * px, 0.25 * shape.height));
+    for (const [, x, y] of cands) {
+      if (picked.length >= want) break;
+      if (picked.some(([px0, py0]) => Math.hypot(px0 - x, py0 - y) < len * 0.35)) continue;
+      picked.push([x, y]);
+      const ax = Math.sin(HATCH_LEAN + (rh() - 0.5) * 0.08);
+      const ay = Math.cos(HATCH_LEAN + (rh() - 0.5) * 0.08);
+      const l = len * range(rh, 0.75, 1.1);
+      const wd = 0.5 * px;
+      strokes.moveTo(x - (ax * l) / 2, y - (ay * l) / 2);
+      strokes.lineTo(x + ay * wd * 0.5, y - ax * wd * 0.5);
+      strokes.lineTo(x + (ax * l) / 2, y + (ay * l) / 2);
+      strokes.lineTo(x - ay * wd * 0.5, y + ax * wd * 0.5);
+      strokes.closePath();
+    }
+    ctx.fillStyle = k.line;
+    ctx.globalAlpha = dark ? 0.35 : 0.42;
+    ctx.fill(strokes);
+  }
   // Where the pigment settled unevenly over the whole of it (drawn big only:
   // a phone's screen would not show it), and the paper's tooth.
   if (fine && px >= 3) {
@@ -989,6 +1098,560 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
     ctx.fillRect(x, 0, cw, ctx.canvas.height);
   }
   ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// The engraver's hatch, shared by the rocks and the walls
+
+/**
+ * Stone is hatched the way a plate engraver hatches it: in short, near
+ * straight strokes laid all one way, along the light, whatever the shape
+ * (a line that wraps round the form reads as a shell). They lean 15 to 25°
+ * off the vertical, top left to bottom right, as the light falls; one set
+ * on the page, mirrored for no wall.
+ */
+const HATCH_LEAN = (20 * Math.PI) / 180;
+/** The second set, laid across the first where it is darkest: 60° round from it. */
+const CROSS_LEAN = HATCH_LEAN - Math.PI / 3;
+
+/**
+ * How many strokes to an area, by shade: in shadow one to every 80 square
+ * px of pen; on the lit face hardly any, one to 600 or so; between, a ramp.
+ */
+function hatchOdds(s: number): number {
+  if (s <= 0.25) return 0.12;
+  if (s >= 0.58) return 1;
+  const t = (s - 0.25) / 0.33;
+  return 0.12 + 0.88 * t * t * (3 - 2 * t);
+}
+
+/** Where the cross-hatch starts: the darkest fifth of the shade. */
+const CROSS_FROM = 0.84;
+
+/** A quick integer hash of a seed and two lattice indices, 0 to 2^32. */
+function ihash(seed: number, i: number, j: number): number {
+  let h = (seed ^ Math.imul(i, 0x27d4eb2d) ^ Math.imul(j, 0x165667b1)) | 0;
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/** A smooth noise in 0..1 off a seed: lattice values, eased between. */
+function valueNoise(seed: number, x: number, y: number): number {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const fx = x - xi;
+  const fy = y - yi;
+  const ex = fx * fx * (3 - 2 * fx);
+  const ey = fy * fy * (3 - 2 * fy);
+  const v00 = ihash(seed, xi, yi) / 4294967296;
+  const v10 = ihash(seed, xi + 1, yi) / 4294967296;
+  const v01 = ihash(seed, xi, yi + 1) / 4294967296;
+  const v11 = ihash(seed, xi + 1, yi + 1) / 4294967296;
+  const top = v00 + (v10 - v00) * ex;
+  const bot = v01 + (v11 - v01) * ex;
+  return top + (bot - top) * ey;
+}
+
+/** How a stroke's roll is made: part smooth noise (so strokes keep or drop
+    in blocks), part its own die. */
+const rollOf = (n: number, u: number) => 0.5 * n + 0.5 * u;
+
+/** The roll is bunched toward its middle, so odds of `p` keep a stroke
+    whose roll falls under the roll's own `p` quantile: a table of them,
+    worked out once. */
+let quantiles: Float32Array | null = null;
+function spread(p: number): number {
+  if (p >= 1) return 2;
+  if (p <= 0) return -1;
+  if (!quantiles) {
+    const n = 4096;
+    const r = mulberry32(0x6a09e667);
+    const v: number[] = [];
+    for (let i = 0; i < n; i++) v.push(rollOf(valueNoise(0x5bd1e995, r() * 400, r() * 400), r()));
+    v.sort((a, b) => a - b);
+    quantiles = new Float32Array(65);
+    for (let i = 0; i <= 64; i++) quantiles[i] = v[Math.min(n - 1, Math.round((i / 64) * (n - 1)))];
+  }
+  const f = p * 64;
+  const i = Math.min(63, Math.floor(f));
+  return quantiles[i] + (quantiles[i + 1] - quantiles[i]) * (f - i);
+}
+
+interface HatchField {
+  /** 0 lit to 1 darkest, in the sense the ink marks (light ink: where it is lit). */
+  shade: (x: number, y: number) => number;
+  /** Whether a point is inside what is hatched (a stroke is trimmed to it). */
+  inside?: (x: number, y: number) => boolean;
+  /** How much of the hatching is left at a point, 0 to 1 (a foot let go of,
+      a wall going down into the water): fewer strokes, and finer. */
+  keep?: (x: number, y: number) => number;
+  /** No cross-hatch (light ink on dark water: the brightest stays open). */
+  noCross?: boolean;
+}
+
+/**
+ * Directional hatching over a box, into `into` as filled ribbons (the caller
+ * fills it once): lanes of strokes along the lean, `area` square device px
+ * to a stroke where it is darkest, each stroke kept by the odds of its
+ * shade, pointed at both ends and fattest in its middle, a hair bowed (a
+ * turn of 0.05 rad over its length at most). Deterministic from `seed` and
+ * the box: a box drawn in pieces comes out as one.
+ */
+function hatchStrokes(
+  into: Path2D | ((y: number) => Path2D),
+  box: { x: number; y: number; w: number; h: number },
+  f: HatchField,
+  o: { px: number; seed: number; len: number; width: number },
+): void {
+  const { px } = o;
+  const len = o.len;
+  const gap = Math.max(1.5 * px, 0.16 * len);
+  // One stroke to 80 square px of pen where it is darkest.
+  const lane = Math.max(1.6 * px, (80 * px * px) / (len + gap));
+  const sets: [number, boolean][] = [[HATCH_LEAN, false]];
+  // Crossed only where the lanes are close enough to read as a tone.
+  if (!f.noCross && lane <= 4.6 * px) sets.push([CROSS_LEAN, true]);
+  for (const [lean, cross] of sets) {
+    // Along the stroke, and across it.
+    const ax = Math.sin(lean);
+    const ay = Math.cos(lean);
+    const nx = ay;
+    const ny = -ax;
+    // The box's corners in (along, across): the lanes that cross it.
+    let a0 = Infinity;
+    let a1 = -Infinity;
+    let c0 = Infinity;
+    let c1 = -Infinity;
+    for (const [x, y] of [
+      [box.x, box.y],
+      [box.x + box.w, box.y],
+      [box.x, box.y + box.h],
+      [box.x + box.w, box.y + box.h],
+    ]) {
+      const a = x * ax + y * ay;
+      const c = x * nx + y * ny;
+      a0 = Math.min(a0, a);
+      a1 = Math.max(a1, a);
+      c0 = Math.min(c0, c);
+      c1 = Math.max(c1, c);
+    }
+    // Lanes on a grid fixed to the page, so pieces of one box line up.
+    // Neighbouring lanes start their strokes nearly together and keep or
+    // drop them nearly together (a smooth noise under the dice), so the
+    // strokes gather into the blocks a graver cuts, not a fall of rain.
+    const sp = cross ? lane * 1.15 : lane;
+    const period = len + gap;
+    const salt = o.seed ^ (cross ? 0x2c1b3c6d : 0);
+    for (let c = Math.floor(c0 / sp) * sp; c <= c1; c += sp) {
+      const li = Math.round(c / sp);
+      const lr = mulberry32(ihash(salt, li, 0x3c6ef372));
+      const off = c + (lr() - 0.5) * sp * 0.22;
+      const phase = period * (1.6 * valueNoise(salt, li * 0.21, 0.5) + (lr() - 0.5) * 0.1);
+      for (let ai = Math.floor((a0 - phase) / period); ai * period + phase <= a1; ai++) {
+        const a = ai * period + phase;
+        // Each stroke its own dice, so a box drawn in pieces comes out the same.
+        const sr = mulberry32(ihash(salt ^ 0x9e37, li, ai));
+        const l = len * (0.86 + 0.28 * sr());
+        const am = a + l / 2 + (sr() - 0.5) * gap * 0.3;
+        const mx = am * ax + off * nx;
+        const my = am * ay + off * ny;
+        const roll = rollOf(valueNoise(salt ^ 0x55, am / (period * 1.4), li * 0.23), sr());
+        const lean2 = (sr() - 0.5) * 0.07;
+        const bow = (sr() - 0.5) * 0.016 * l;
+        if (mx < box.x - len || mx > box.x + box.w + len || my < box.y - len || my > box.y + box.h + len) continue;
+        if (f.inside && !f.inside(mx, my)) continue;
+        const s = f.shade(mx, my);
+        const kp = f.keep ? f.keep(mx, my) : 1;
+        if (kp <= 0.02) continue;
+        const odds = cross ? clamp01((s - CROSS_FROM) / 0.1) : hatchOdds(s);
+        if (roll > spread(odds * kp)) continue;
+        // Its own few degrees off the set: 15 to 25° off the vertical in all.
+        const ca = Math.cos(lean2);
+        const sa = Math.sin(lean2);
+        const dx = ax * ca - ay * sa;
+        const dy = ax * sa + ay * ca;
+        // Trimmed to what it is hatching, from the middle out.
+        let t0 = -l / 2;
+        let t1 = l / 2;
+        if (f.inside) {
+          const st = Math.max(1.2 * px, l / 8);
+          for (let t = 0; t >= -l / 2; t -= st) {
+            if (!f.inside(mx + dx * t, my + dy * t)) break;
+            t0 = t;
+          }
+          for (let t = 0; t <= l / 2; t += st) {
+            if (!f.inside(mx + dx * t, my + dy * t)) break;
+            t1 = t;
+          }
+          // No ticks: a stroke cut to a stub is left out, and a crossing
+          // one must run most of its length, or it reads as a scribbled x.
+          if (t1 - t0 < Math.max(2.5 * px, (cross ? 0.75 : 0.35) * l)) continue;
+        }
+        const wd = o.width * (0.4 + 0.65 * Math.min(1, s)) * (0.55 + 0.45 * kp) * (cross ? 0.8 : 1);
+        // Five points down it, the graver going in and lifting out at its ends.
+        const L = t1 - t0;
+        const tm = (t0 + t1) / 2;
+        const W = [0.22, 0.85, 1, 0.85, 0.22];
+        const T = [0, 0.25, 0.5, 0.75, 1];
+        const side = (k: number, sgn: number): [number, number] => {
+          const t = tm + (T[k] - 0.5) * L;
+          const b = bow * Math.sin(Math.PI * T[k]);
+          const half = (wd * W[k]) / 2;
+          return [mx + dx * t - dy * (b + sgn * half), my + dy * t + dx * (b + sgn * half)];
+        };
+        const path = typeof into === 'function' ? into(my) : into;
+        const p0 = side(0, 1);
+        path.moveTo(p0[0], p0[1]);
+        for (let k = 1; k < 5; k++) {
+          const p = side(k, 1);
+          path.lineTo(p[0], p[1]);
+        }
+        for (let k = 4; k >= 0; k--) {
+          const p = side(k, -1);
+          path.lineTo(p[0], p[1]);
+        }
+        path.closePath();
+      }
+    }
+  }
+}
+
+/** A line broken in two to four, drawn with a little wobble: a bedding plane. */
+function strataLine(x0: number, y0: number, x1: number, y1: number, r: Rand, px: number): number[][] {
+  const L = Math.hypot(x1 - x0, y1 - y0);
+  if (L < 6 * px) return [];
+  const pieces: number[][] = [];
+  // One to three breaks, fewer on a short line: broken, never a dash rule.
+  const nBreak = Math.max(1, Math.min(1 + Math.floor(r() * 3), Math.round(L / (50 * px))));
+  const cuts = [0];
+  for (let i = 0; i < nBreak; i++) cuts.push(range(r, 0.15, 0.85));
+  cuts.push(1);
+  cuts.sort((a, b) => a - b);
+  const ph = r() * 6.28;
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const g = Math.min(0.05, (cuts[i + 1] - cuts[i]) * 0.25, (4 * px) / L) * range(r, 0.6, 1.4);
+    const a = cuts[i] + (i > 0 ? g / 2 : 0);
+    const b = cuts[i + 1] - (i + 2 < cuts.length ? g / 2 : 0);
+    if ((b - a) * L < 4 * px) continue;
+    const pts: number[] = [];
+    const n = Math.max(3, Math.ceil(((b - a) * L) / (4 * px)));
+    for (let k = 0; k <= n; k++) {
+      const t = a + ((b - a) * k) / n;
+      const wob = Math.sin(ph + t * 11) * 0.5 * px + Math.sin(ph * 2 + t * 29) * 0.3 * px;
+      pts.push(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t + wob);
+    }
+    pieces.push(pts);
+  }
+  return pieces;
+}
+
+/** A scratch context with no transform, to ask a path what is inside it. */
+let probe: CanvasRenderingContext2D | null = null;
+function probeCtx(): CanvasRenderingContext2D | null {
+  if (probe || typeof document === 'undefined') return probe;
+  const c = document.createElement('canvas');
+  c.width = 1;
+  c.height = 1;
+  probe = c.getContext('2d');
+  return probe;
+}
+
+/**
+ * A cliff face down a side of the picture, in the rocks' own hand: the
+ * rock's wash, the same strokes all one way along the light (dense where
+ * the face is in shadow, cross-hatched where darkest, sparse where it is
+ * lit), a few broken bedding planes across it with the shadow of the ledge
+ * under each, and an ink line down its open side (the side away from the
+ * page edge it belongs to), with a strip of bare paper inside it where that
+ * side faces the light.
+ *
+ * `outline` is in the context's own coordinates and `box` is its bounds;
+ * `side` is the page edge the wall belongs to (by default whichever edge
+ * `box` is nearer, read off the canvas). Below `fadeFrom` its hatching,
+ * its line and its wash thin out, to about 0.35 at `fadeTo` (both default
+ * to the box's top and bottom).
+ *
+ * Deterministic from `seed`, `box` and `px`: drawn again, or in strips (one
+ * call per strip under a clip), it comes out the same, stroke for stroke.
+ * It reads the outline once a 2 px row to find its open edge, so a whole
+ * wall costs a few ms; a caller drawing many strips can draw it once to a
+ * layer of its own instead.
+ */
+export function inkWall(
+  ctx: CanvasRenderingContext2D,
+  outline: Path2D,
+  box: { x0: number; y0: number; x1: number; y1: number },
+  style: RockStyle,
+  px: number,
+  seed: number,
+  opts?: { side?: 'left' | 'right'; fadeFrom?: number; fadeTo?: number },
+): void {
+  const bw = box.x1 - box.x0;
+  const bh = box.y1 - box.y0;
+  if (!(bw > 0 && bh > 0)) return;
+  const pc = probeCtx();
+  const dark = style.dark;
+  const side = opts?.side ?? (box.x0 + box.x1 < ctx.canvas.width ? 'left' : 'right');
+  // Toward the open water: +1 for a left wall, -1 for a right. A right
+  // wall's open edge faces the light, a left wall's turns from it.
+  const out = side === 'left' ? 1 : -1;
+  const litEdge = out < 0;
+  const fy0 = opts?.fadeFrom ?? box.y0;
+  const fy1 = Math.max(fy0 + 1, opts?.fadeTo ?? box.y1);
+  const keep = (y: number) => {
+    const t = clamp01((y - fy0) / (fy1 - fy0));
+    return 1 - 0.65 * t * t * (3 - 2 * t);
+  };
+  const stone = style.rock;
+  const deep = mixHex(stone, dark ? '#000000' : '#2A2320', dark ? 0.45 : 0.32);
+  const lift = mixHex(stone, style.paper, dark ? 0.18 : 0.32);
+  const nearX = side === 'left' ? box.x0 : box.x1;
+  const farX = side === 'left' ? box.x1 : box.x0;
+
+  // The open edge, row by row: the furthest point of the outline out toward
+  // the water, bracketed from the row before and then halved down to a
+  // fiftieth of a pixel or so.
+  const rowStep = Math.max(1, 2 * Math.min(px, 2));
+  const rows: number[] = [];
+  const edge: number[] = [];
+  if (pc) {
+    const inside = (x: number, y: number) => pc.isPointInPath(outline, x, y);
+    const beyond = (x: number, lim: number) => (x - lim) * out >= 0;
+    const coarse = Math.max(2, 3 * px);
+    let last = NaN;
+    for (let y = box.y0 + rowStep / 2; y < box.y1; y += rowStep) {
+      let a: number;
+      let b: number;
+      if (Number.isFinite(last) && inside(last, y)) {
+        a = last;
+        b = last + out * coarse;
+        while (!beyond(b, farX) && inside(b, y)) {
+          a = b;
+          b += out * coarse;
+        }
+      } else {
+        a = farX;
+        while (!beyond(nearX, a) && !inside(a, y)) a -= out * coarse;
+        if (beyond(nearX, a) && !inside(a, y)) {
+          last = NaN;
+          continue;
+        }
+        b = a + out * coarse;
+      }
+      for (let it = 0; it < 6; it++) {
+        const m = (a + b) / 2;
+        if (inside(m, y)) a = m;
+        else b = m;
+      }
+      rows.push(y);
+      edge.push(a);
+      last = a;
+    }
+  }
+  const edgeAt = (y: number) => {
+    if (!rows.length) return farX;
+    const f = Math.max(0, Math.min(rows.length - 1, (y - rows[0]) / rowStep));
+    const i = Math.floor(f);
+    const j = Math.min(rows.length - 1, i + 1);
+    return edge[i] + (edge[j] - edge[i]) * (f - i);
+  };
+
+  // Bedding planes across it, near level (±8°), one a 40 to 90 px of pen
+  // down, each the lip of a ledge with its shadow under it.
+  const rs = mulberry32(hash32(seed, 'strata'));
+  const strata: { y: number; slope: number; x0: number; x1: number }[] = [];
+  for (let y = box.y0 + range(rs, 14, 44) * px; y < box.y1; y += range(rs, 40, 90) * px) {
+    const slope = Math.tan(range(rs, -8, 8) * (Math.PI / 180));
+    const e = edgeAt(y);
+    const inset = range(rs, 0.05, 0.4) * Math.abs(e - nearX);
+    if (side === 'left') strata.push({ y, slope, x0: box.x0 - 2 * px, x1: e - inset });
+    else strata.push({ y, slope, x0: e + inset, x1: box.x1 + 2 * px });
+  }
+  const lipAt = (st: (typeof strata)[number], x: number) => st.y + st.slope * (x - box.x0);
+  const ledgeShadow = 7 * px;
+  const ph = (seed % 1000) * 0.0137;
+  const shade = (x: number, y: number) => {
+    const e = edgeAt(y);
+    // Across the face: deeper back toward the page edge, where the face
+    // turns away into the cleft; a left wall's face turned more from the light.
+    const toward = clamp01(((e - x) * out) / Math.max(8 * px, bw));
+    let s = 0.26 + 0.42 * toward + (litEdge ? -0.08 : 0.04);
+    // A low roll in the rock, so the tone is not a ramp.
+    s += 0.2 * (valueNoise(seed, x / (40 * px), y / (55 * px)) - 0.5) + 0.1 * Math.sin(y / (37 * px) + ph) * Math.sin(x / (23 * px) + y / (61 * px) + ph * 3);
+    // Under each ledge its shadow, dark at the lip and lifting down the
+    // face; over it, the ledge's top turned up to the light.
+    for (const st of strata) {
+      const d = y - lipAt(st, x);
+      if (d > 0 && d < ledgeShadow * 4) s += 0.55 * Math.exp(-d / (1.6 * ledgeShadow));
+      else if (d < 0 && d > -2.5 * ledgeShadow) s -= 0.3 * (1 + d / (2.5 * ledgeShadow));
+    }
+    return clamp01(s);
+  };
+  // Light ink on dark water marks only the faces most in the light.
+  const inkShade = dark ? (x: number, y: number) => 0.85 * (1 - shade(x, y)) : shade;
+
+  ctx.save();
+  ctx.clip(outline);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // The wash, in bands down the wall so it thins with depth (no layer, no
+  // erasing: it may be drawn straight onto the picture). Where the open
+  // edge faces the light the brush stops 2.5 px of pen short of it: bare
+  // paper inside the line, nothing added.
+  const g = ctx.createLinearGradient(farX, box.y0, nearX, box.y0 + bw * 0.6);
+  g.addColorStop(0, mixHex(stone, lift, 0.5));
+  g.addColorStop(0.55, stone);
+  g.addColorStop(1, mixHex(stone, deep, 0.55));
+  let washPath: Path2D | null = null;
+  if (litEdge && rows.length > 1) {
+    washPath = new Path2D();
+    const gapW = 2.5 * px;
+    washPath.moveTo(nearX + 4 * px, rows[0] - rowStep);
+    washPath.lineTo(edge[0] + gapW, rows[0] - rowStep);
+    for (let i = 0; i < rows.length; i++) washPath.lineTo(edge[i] + gapW, rows[i]);
+    washPath.lineTo(edge[rows.length - 1] + gapW, box.y1 + rowStep);
+    washPath.lineTo(nearX + 4 * px, box.y1 + rowStep);
+    washPath.closePath();
+  }
+  ctx.fillStyle = g;
+  // Bands on whole device pixels, so they meet without a seam.
+  const washBands = 28;
+  const bandY = (i: number) => (i <= 0 ? box.y0 - 2 : i >= washBands ? box.y1 + 2 : Math.round(box.y0 + (bh * i) / washBands));
+  for (let i = 0; i < washBands; i++) {
+    const ya = bandY(i);
+    const yb = bandY(i + 1);
+    ctx.globalAlpha = keep((ya + yb) / 2);
+    if (washPath) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(Math.floor(box.x0) - 2, ya, bw + 4, yb - ya);
+      ctx.clip();
+      ctx.fill(washPath);
+      ctx.restore();
+    } else ctx.fillRect(Math.floor(box.x0) - 2, ya, bw + 4, yb - ya);
+  }
+  // Where the pigment settled unevenly, a wall's width at a time down it,
+  // and the paper's tooth, both going with the wash.
+  const rm = mulberry32(hash32(seed, 'mottle'));
+  for (let y = box.y0; y < box.y1; y += bw * 1.4) {
+    const hgt = Math.min(bw * 1.8, box.y1 - y);
+    mottle(ctx, washPath ?? outline, { x: box.x0, y, w: bw, h: hgt }, deep, lift, (dark ? 0.2 : 0.26) * keep(y + hgt / 2), (rm() * 4294967296) >>> 0);
+  }
+  const gr = grain(ctx);
+  if (gr) {
+    gr.setTransform?.(new DOMMatrix([px, 0, 0, px, 0, 0]));
+    ctx.fillStyle = gr;
+    for (let i = 0; i < washBands; i++) {
+      const ya = bandY(i);
+      const yb = bandY(i + 1);
+      ctx.globalAlpha = (dark ? 0.3 : 0.24) * keep((ya + yb) / 2);
+      ctx.fillRect(Math.floor(box.x0) - 2, ya, bw + 4, yb - ya);
+    }
+  }
+  // Where the pigment ran to the open edge and dried there: darker along it.
+  if (rows.length > 1) {
+    const pool = new Path2D();
+    const inset = (litEdge ? 5 * px : 0) * -out;
+    pool.moveTo(edge[0] + inset, rows[0]);
+    for (let i = 1; i < rows.length; i++) pool.lineTo(edge[i] + inset, rows[i]);
+    ctx.strokeStyle = deep;
+    ctx.lineWidth = 5 * px;
+    ctx.globalAlpha = dark ? 0.25 : 0.3;
+    ctx.stroke(pool);
+  }
+  // The shadow under each ledge, in the wash: the ink comes after.
+  ctx.fillStyle = deep;
+  for (const st of strata) {
+    const xa = box.x0 - 4 * px;
+    const xb = box.x1 + 4 * px;
+    const sg = ctx.createLinearGradient(0, st.y, 0, st.y + ledgeShadow * 1.6);
+    sg.addColorStop(0, rgba(deep, 0.32));
+    sg.addColorStop(1, rgba(deep, 0));
+    ctx.fillStyle = sg;
+    ctx.globalAlpha = keep(st.y);
+    ctx.beginPath();
+    ctx.moveTo(xa, lipAt(st, xa));
+    ctx.lineTo(xb, lipAt(st, xb));
+    ctx.lineTo(xb, lipAt(st, xb) + ledgeShadow * 1.6);
+    ctx.lineTo(xa, lipAt(st, xa) + ledgeShadow * 1.6);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // The hatching, binned into bands down the wall so its alpha thins with
+  // depth as its strokes do.
+  const len = Math.max(14, Math.min(26, bw / (5 * px))) * px;
+  const field: HatchField = {
+    shade: inkShade,
+    keep: (x, y) => (litEdge && Math.abs(x - edgeAt(y)) < 4.5 * px ? 0 : keep(y)),
+    noCross: dark,
+  };
+  const bands = 24;
+  const bins = Array.from({ length: bands }, () => new Path2D());
+  const binOf = (y: number) => bins[Math.max(0, Math.min(bands - 1, Math.floor(((y - box.y0) / bh) * bands)))];
+  hatchStrokes(binOf, { x: box.x0, y: box.y0, w: bw, h: bh }, field, { px, seed: hash32(seed, 'hatch'), len, width: (dark ? 0.8 : 0.95) * px });
+  ctx.fillStyle = style.line;
+  bins.forEach((b, i) => {
+    ctx.globalAlpha = (dark ? 0.42 : 0.82) * keep(box.y0 + (bh * (i + 0.5)) / bands);
+    ctx.fill(b);
+  });
+  // The bedding planes, broken, in the pen.
+  ctx.globalAlpha = 1;
+  for (const st of strata) {
+    for (const piece of strataLine(st.x0, lipAt(st, st.x0), st.x1, lipAt(st, st.x1), rs, px)) {
+      inkLine(ctx, piece, false, {
+        width: 1.1 * px,
+        color: style.line,
+        alpha: (dark ? 0.6 : 0.9) * keep(st.y),
+        taper: [0.12, 0.2],
+        raw: true,
+        swell: 0,
+        lost: 0,
+        min: 0.25 * px,
+      });
+    }
+  }
+  ctx.restore();
+  // The open edge in one pressure line: heavy where the face turns from the
+  // light (a left wall's), lighter and lifting where it faces it; broken
+  // where a row lost the outline. Its alpha follows depth band by band.
+  const runs: number[][] = [];
+  let run: number[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (i > 0 && rows[i] - rows[i - 1] > rowStep * 1.5) {
+      runs.push(run);
+      run = [];
+    }
+    run.push(edge[i], rows[i]);
+  }
+  runs.push(run);
+  const edgeBands = 12;
+  const eY = (i: number) => (i <= 0 ? box.y0 - 8 * px : i >= edgeBands ? box.y1 + 8 * px : Math.round(box.y0 + (bh * i) / edgeBands));
+  for (let i = 0; i < edgeBands; i++) {
+    const ya = eY(i);
+    const yb = eY(i + 1);
+    const a = keep((ya + yb) / 2);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(Math.floor(box.x0) - 8 * px, ya, bw + 16 * px, yb - ya);
+    ctx.clip();
+    for (const rn of runs) {
+      if (rn.length < 6 || rn[1] > yb + 4 * px || rn[rn.length - 1] < ya - 4 * px) continue;
+      inkLine(ctx, rn, false, {
+        width: (litEdge ? 0.95 : 1.3) * px * (dark ? 0.8 : 1),
+        color: style.line,
+        alpha: (dark ? 0.6 : 0.9) * a,
+        swell: 0.5,
+        lost: litEdge ? 0.45 : 0.12,
+        taper: [0.02, 0.02],
+        raw: true,
+        seed: hash32(seed, 'edge', Math.round(rn[1])),
+        light: dark ? UNLIGHT : LIGHT,
+        min: 0.25 * px,
+      });
+    }
+    ctx.restore();
+  }
 }
 
 /** `#rrggbb` as rgba() at `a`. */
