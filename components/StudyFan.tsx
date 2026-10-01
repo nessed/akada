@@ -6,6 +6,7 @@ import { buildJelly, PLAIN_BODY, drawJelly, jellyBeat, jellyFrame, jellyInk, jel
 import { JellyAtContext } from '@/lib/ocean/jelly-at';
 import type { TimerDrawing } from '@/lib/preferences';
 import type { TreeGenome } from '@/lib/wood/tree';
+import { registerWallpaperLayer } from '@/lib/wallpaper';
 
 /** What the wood is handed after each frame of the tree, to draw on it. */
 export interface FanFrame {
@@ -359,13 +360,16 @@ export default function StudyFan({
     const lagMax = Math.max(Math.round(depth * LAG_PER_DEPTH), Math.round(TRAIL_SAMPLES * TRAIL_LAG));
     let disposed = false;
     let lastPaint = 0;
+    // A wallpaper being drawn: its own density, the bell open, no pencil.
+    let override: number | null = null;
+    let overrideSize: { w: number; h: number } | null = null;
 
     /* The canvas is sized in device pixels so the strokes stay crisp on a
        retina screen, and re-measured on resize because an open-mode fan is
        sized to the viewport rather than to a fixed frame. */
     const fit = () => {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = overrideSize ? { width: overrideSize.w, height: overrideSize.h } : canvas.getBoundingClientRect();
+      const dpr = override ?? Math.min(window.devicePixelRatio || 1, 2);
       const w = Math.max(1, Math.round(rect.width * dpr));
       const h = Math.max(1, Math.round(rect.height * dpr));
       if (canvas.width !== w || canvas.height !== h) {
@@ -386,7 +390,7 @@ export default function StudyFan({
         if (!shape) return;
         // A held jelly with no hand to settle it (reduced motion, or a
         // drawing nobody can pull) is simply closed.
-        const closed = physics ? contractNow : restingRef.current ? 1 : 0;
+        const closed = override != null ? 0 : physics ? contractNow : restingRef.current ? 1 : 0;
         drawJelly(ctx, shape, canvas.width, canvas.height, {
           progress: shownRef.current,
           ink,
@@ -406,8 +410,8 @@ export default function StudyFan({
           drift: physics ? drift : undefined,
           rise: physics ? riseNow : 0,
           tilt: physics ? tiltNow : 0,
-          sketch: sketch ? pencil : undefined,
-          ground: ground ? pencil : undefined,
+          sketch: sketch && override == null ? pencil : undefined,
+          ground: ground && override == null ? pencil : undefined,
         });
         return;
       }
@@ -553,6 +557,23 @@ export default function StudyFan({
     window.addEventListener('resize', onResize);
     kick();
 
+    // The deep's jelly is the one hero a wallpaper takes along with the water.
+    const unregister = jelly
+      ? registerWallpaperLayer({
+          canvas,
+          render: (ratio, size) => {
+            override = ratio;
+            overrideSize = size;
+            paint();
+          },
+          restore: () => {
+            override = null;
+            overrideSize = null;
+            paint();
+          },
+        })
+      : () => {};
+
     return () => {
       disposed = true;
       // Effects that run between this cleanup and the next mount (holding
@@ -561,6 +582,7 @@ export default function StudyFan({
       // stale booking would keep the next loop from ever starting. It did,
       // for every drawing in the Settings preview.
       kickRef.current = () => {};
+      unregister();
       window.removeEventListener('resize', onResize);
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
