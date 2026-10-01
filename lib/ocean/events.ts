@@ -12,7 +12,17 @@ import type { Biome } from './biome';
 import { depthAt } from './depth';
 import { hash32 } from './random';
 
-export type EventKind = 'whale' | 'storm' | 'eye' | 'leviathan';
+export type EventKind =
+  | 'whale'
+  | 'storm'
+  | 'eye'
+  | 'leviathan'
+  | 'turtle'
+  | 'siphonophore'
+  | 'lure'
+  | 'dumbo'
+  | 'whalefall'
+  | 'oarfish';
 
 interface Spec {
   zones: number[];
@@ -30,16 +40,40 @@ export const EVENTS: Record<EventKind, Spec> = {
   storm: { zones: [2, 3], perHour: 0.25, seconds: 75, phrase: 'the water lit up', weight: 400 },
   eye: { zones: [2, 3], perHour: 0.12, seconds: 16, phrase: "a giant squid's eye, briefly", weight: 700 },
   leviathan: { zones: [3, 4], perHour: 0.005, seconds: 40, phrase: 'something very large went past', weight: 1000 },
+  turtle: { zones: [0, 1], perHour: 0.2, seconds: 34, phrase: 'a turtle came to look at the jelly', weight: 300 },
+  siphonophore: { zones: [1, 2], perHour: 0.05, seconds: 90, phrase: 'a siphonophore longer than the page', weight: 600 },
+  lure: { zones: [2, 3], perHour: 0.12, seconds: 24, phrase: 'a light in the dark, and teeth', weight: 350 },
+  dumbo: { zones: [3, 4], perHour: 0.1, seconds: 45, phrase: 'a dumbo octopus', weight: 450 },
+  // Arrives over its span, then stays on the floor for the rest of the sitting.
+  whalefall: { zones: [3, 4], perHour: 0.04, seconds: 20, phrase: 'a whale fall on the floor', weight: 800 },
+  oarfish: { zones: [1, 2], perHour: 0.006, seconds: 60, phrase: 'an oarfish, hanging in the dark', weight: 1100 },
 };
 const ORDER: EventKind[] = ['leviathan', 'eye', 'storm', 'whale'];
+/* The second roll, added after the first had been out in the world: its
+   events only land in minutes the first left well alone, so no saved
+   sitting loses or moves anything it already had. */
+const LATER: EventKind[] = ['oarfish', 'whalefall', 'siphonophore', 'dumbo', 'lure', 'turtle'];
 const GAP_MINUTES = 8;
-const MAX_SECONDS = 75;
+const MAX_SECONDS = 90;
 
 function rawAt(biome: Biome, minute: number): EventKind | null {
   const zone = depthAt(minute * 60).zone;
   const u = hash32(biome.key, 'event', minute) / 4294967296;
   let edge = 0;
   for (const kind of ORDER) {
+    const spec = EVENTS[kind];
+    if (!spec.zones.includes(zone)) continue;
+    edge += spec.perHour / 60;
+    if (u < edge) return kind;
+  }
+  return null;
+}
+
+function laterAt(biome: Biome, minute: number): EventKind | null {
+  const zone = depthAt(minute * 60).zone;
+  const u = hash32(biome.key, 'event-later', minute) / 4294967296;
+  let edge = 0;
+  for (const kind of LATER) {
     const spec = EVENTS[kind];
     if (!spec.zones.includes(zone)) continue;
     edge += spec.perHour / 60;
@@ -60,12 +94,30 @@ export interface OceanEvent {
 /** The event that begins in a given minute, if any. */
 export function eventAtMinute(biome: Biome, minute: number): OceanEvent | null {
   if (minute < 1) return null;
-  const kind = rawAt(biome, minute);
+  const kind = rawAt(biome, minute) ?? laterEventAt(biome, minute);
   if (!kind) return null;
   // Raw hits, not kept ones, so the rule never needs to look further back.
-  for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (rawAt(biome, m)) return null;
+  if (rawAt(biome, minute)) for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (rawAt(biome, m)) return null;
   const seed = hash32(biome.key, 'event-seed', minute);
   return { kind, start: minute * 60 + (seed % 20), seconds: EVENTS[kind].seconds, seed };
+}
+
+/** A later roll's event, kept only with the first roll quiet for the gap either side of it. */
+function laterEventAt(biome: Biome, minute: number): EventKind | null {
+  const kind = laterAt(biome, minute);
+  if (!kind) return null;
+  for (let m = Math.max(1, minute - GAP_MINUTES); m <= minute + GAP_MINUTES; m++) if (rawAt(biome, m)) return null;
+  for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (laterAt(biome, m)) return null;
+  return kind;
+}
+
+/** The first event of a kind at or before `t`, for the ones that stay once they arrive. */
+export function firstEventUpTo(biome: Biome, kind: EventKind, t: number): OceanEvent | null {
+  for (let m = 1; m * 60 <= t; m++) {
+    const e = eventAtMinute(biome, m);
+    if (e && e.kind === kind && e.start <= t) return e;
+  }
+  return null;
 }
 
 /** Events under way at `t`, with how far through each is (0 to 1). */

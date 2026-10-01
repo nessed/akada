@@ -8,7 +8,7 @@ import { courseKey, oceanKey, oceanKeyFromSegments } from './key';
 import { childOf, DEFAULT_JELLY, jellyForBlock } from './lineage';
 import { speciesName } from './names';
 import { hash32, mulberry32 } from './random';
-import { EVENTS, eventAtMinute, eventsAt, eventsUpTo } from './events';
+import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type EventKind } from './events';
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
 import { diveRecap } from './recap';
 import { populationAt, spawnAt, visitorsAt } from './schedule';
@@ -214,4 +214,29 @@ test('kelp only slides up the page, and is gone by the end of the sunlit water',
   assert.ok(kelpInView(8 * 60), 'the ledge should be in view mid-zone');
   assert.ok(!kelpInView(15 * 60), 'kelp was still on the page in the twilight');
   assert.ok(!kelpInView(6 * 3600));
+});
+
+test('the later sightings all turn up, and the first roll never hears of them', () => {
+  const seen = new Set<EventKind>();
+  for (let k = 0; k < 600 && seen.size < 9; k++) {
+    for (const e of eventsUpTo(rollBiome(oceanKey('later', k), courseKey('later')), 4 * 3600)) seen.add(e.kind);
+  }
+  for (const kind of ['turtle', 'siphonophore', 'lure', 'dumbo', 'whalefall'] as EventKind[]) assert.ok(seen.has(kind), `no ${kind} in 600 sittings`);
+  // Golden: a first-roll event that was there before the later roll existed is still there.
+  const biome = rollBiome(oceanKey('gold', 1), courseKey('gold'));
+  const first = eventsUpTo(biome, 4 * 3600).filter((e) => ['whale', 'storm', 'eye', 'leviathan'].includes(e.kind));
+  for (const e of first) assert.equal(eventAtMinute(biome, Math.floor(e.start / 60))?.kind, e.kind);
+});
+
+test('a whale fall stays on the floor once it has come', () => {
+  for (let k = 0; k < 400; k++) {
+    const biome = rollBiome(oceanKey('fall', k), courseKey('fall'));
+    const fall = eventsUpTo(biome, 4 * 3600).find((e) => e.kind === 'whalefall');
+    if (!fall) continue;
+    assert.equal(firstEventUpTo(biome, 'whalefall', fall.start - 1), null);
+    assert.equal(firstEventUpTo(biome, 'whalefall', fall.start)?.start, fall.start);
+    assert.equal(firstEventUpTo(biome, 'whalefall', 4 * 3600)?.start, fall.start);
+    return;
+  }
+  assert.fail('no whale fall in 400 sittings');
 });
