@@ -14,6 +14,7 @@ import { outcropAtSlot, outcropsInView } from './outcrop';
 import { drained } from './palette';
 import { diveRecap } from './recap';
 import { populationAt, spawnAt, visitorsAt } from './schedule';
+import { BREAK_PACE } from '../wood/clock';
 
 const VIEW = { width: 1280, height: 800 };
 
@@ -126,6 +127,37 @@ test('the same moment always shows the same animals, and a break brings nobody n
   assert.deepEqual(a.map((v) => [v.key, v.x, v.y]), b.map((v) => [v.key, v.x, v.y]));
   // Every visitor set off at or before now.
   for (const v of a) assert.ok(Number(v.key.split('.')[0]) <= 3000);
+});
+
+test('a break carries whoever was there on and out, and nobody new comes in', () => {
+  const biome = rollBiome(oceanKey('c2', 7), courseKey('c2'));
+  const seg = (kind: 'focus' | 'break', seconds: number) => ({ kind, seconds, startedAt: new Date(0).toISOString(), targetSeconds: null });
+  const segments = [seg('focus', 3000)];
+  const at = (rest: number, closed = segments) => ({ scene: 3000 + BREAK_PACE * rest, segments: closed });
+  // With no break yet, the swim clock is focus time and changes nothing.
+  const plain = visitorsAt(biome, 3000, VIEW);
+  const swum = visitorsAt(biome, 3000, VIEW, 1, at(0));
+  assert.deepEqual(swum.map((v) => [v.key, v.x, v.y]), plain.map((v) => [v.key, v.x, v.y]));
+  // A minute into a break: the same animals, further along, none new.
+  const minute = visitorsAt(biome, 3000, VIEW, 1, at(60));
+  const keys = new Set(plain.map((v) => v.key));
+  assert.ok(minute.length > 0);
+  for (const v of minute) assert.ok(keys.has(v.key), `${v.key} arrived during a break`);
+  const moved = minute.filter((v) => {
+    const was = plain.find((p) => p.key === v.key);
+    return was && (was.x !== v.x || was.y !== v.y);
+  });
+  assert.ok(moved.length > 0, 'nobody moved during the break');
+  // Long enough, and the water is empty.
+  assert.equal(visitorsAt(biome, 3000, VIEW, 1, at(600)).length, 0);
+  // After it, the next block's arrivals start their crossings fresh.
+  const after = visitorsAt(biome, 3060, VIEW, 1, { scene: 3060 + BREAK_PACE * 600, segments: [...segments, seg('break', 600)] });
+  assert.ok(after.length > 0);
+  for (const v of after) assert.ok(Number(v.key.split('.')[0]) > 3000);
+  assert.deepEqual(
+    after.map((v) => [v.key, v.x]),
+    visitorsAt(biome, 3060, VIEW).filter((v) => Number(v.key.split('.')[0]) > 3000).map((v) => [v.key, v.x]),
+  );
 });
 
 test('rare events keep their gap, stay in their zones, and are rare', () => {

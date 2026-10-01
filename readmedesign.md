@@ -1092,10 +1092,14 @@ only ever grows, it never runs backwards, and none of it touches progress.
 - **Pause and break.** Held, the ocean eases to a stop over about 700ms and
   goes grey, the way the rest of the screen does; the jelly closes as it
   always has. A break is a rest on a ledge: nobody new arrives and you do not
-  sink, but the water keeps breathing at a third of its pace.
+  sink, but the water keeps breathing at a third of its pace, and whoever was
+  in it swims on at that pace and leaves, the wood's scene clock
+  (`lib/wood/clock.ts`). Arrivals are focus seconds; where an animal or a
+  sighting has got to is read on the scene clock, so nothing hangs mid-stroke
+  for five minutes.
 - **Reproducible.** The ocean is a pure function of the course, the moment
   the sitting started (which the log keeps as the first stretch's start) and
-  the focus time: there is no simulation, so a reload puts every animal back
+  the focus and break time: there is no simulation, so a reload puts every animal back
   where it was, and a finished sitting can always be dived again.
 - **Reduced motion** gets a still, brought up to date every half minute.
 - **Performance.** Each species is inked once to a sprite and then only
