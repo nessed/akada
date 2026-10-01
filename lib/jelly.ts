@@ -739,7 +739,7 @@ export function drawJelly(
   // How much drawing the bell carries: a wallpaper's jelly is near enough
   // to be stippled; the block frame's is not.
   const detail = detailFor(R);
-  const dark = ink.glow != null;
+  const dark = ink.lamp != null || ink.glow != null;
 
   // Engraved shading down the right of the dome, the side away from the
   // light, in concentric strokes that follow its curve; drawn big, finer,
@@ -1143,7 +1143,10 @@ function plateLight(
     stripY[i] = ey + ((iy - ey) / dl) * inset;
     widths.push(sw * Math.pow(Math.sin(Math.PI * t), 0.6) * (0.85 + 0.15 * Math.sin(t * 9 + 1)));
   }
-  const night = ink.glow != null;
+  // `lamp` is only set on the night inks, and stays when a caller drops the
+  // glow (the picture does, so the halo isn't cut square): keyed on the glow,
+  // the strip came out in the night paper's own near-black.
+  const night = ink.lamp != null || ink.glow != null;
   ctx.fillStyle = night ? mixHex(ink.bellTop, ink.lamp ?? ink.bellTop, 0.45) : (ink.paper ?? '#FBF8EF');
   // A wider breath of it first, so its edges are soft, then the strip.
   for (const [grow, a] of [
