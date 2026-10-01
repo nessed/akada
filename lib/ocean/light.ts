@@ -264,11 +264,12 @@ function brokenDisc(rd: number, r: Rand, fill: (g: CanvasRenderingContext2D, rd:
     const yEnd = -rd * 1.1 + step * (i + 1);
     const last = i === bands - 1;
     const bottom = last ? (x: number) => pad + x * 0 : cut(yEnd, i);
-    const gap = last ? 0 : step * tear * (0.04 + 0.3 * r() * r());
+    // Only some cuts open into gaps; the rest are just a slip sideways.
+    const gap = last || r() < 0.55 ? 0 : step * tear * (0.08 + 0.3 * r());
     // The swell grows toward the disc's edge, where the slope is steepest.
     const mid = yEnd - step / 2;
     const edge = 1 - Math.min(1, Math.abs(mid) / (rd * 1.05));
-    const dx = (Math.sin(ph + i * 1.9) * 0.1 + (r() - 0.5) * 0.1) * rd * tear * (1.2 - edge * 0.6);
+    const dx = (Math.sin(ph + i * 1.9) * 0.16 + (r() - 0.5) * 0.14) * rd * tear * (1.3 - edge * 0.6);
     const band = new Path2D();
     const N = 24;
     for (let k = 0; k <= N; k++) {
@@ -700,7 +701,7 @@ function paintRays(w: number, h: number, o: RayOptions): Surface | null {
     const ey = y0 + dy * len;
     const grad = g.createLinearGradient(x0, y0, ex, ey);
     // Uneven along its length: a few soft breaks, then the fade.
-    const breaks = [0, 0.04, 0.12 + r() * 0.1, 0.3 + r() * 0.15, 0.5 + r() * 0.15, 0.75, 1];
+    const breaks = [0, 0.09, 0.16 + r() * 0.08, 0.3 + r() * 0.15, 0.5 + r() * 0.15, 0.75, 1];
     const level = [0, 1, 0.55 + 0.45 * r(), 0.35 + 0.5 * r(), 0.25 + 0.3 * r(), 0.12 * r() + 0.06, 0];
     for (let k = 0; k < breaks.length; k++) {
       // The water swallows it: light falls off with distance.
@@ -934,7 +935,7 @@ export function drawLightPass(
     const dark = lum < 0.45;
     // Light in water is never the pure colour of its source: the water
     // scatters it toward white and warmth, which also keeps it off neon.
-    const [r, g, b] = rgbOf(mixHex(L.color, '#F6F0E2', 0.35));
+    const [r, g, b] = rgbOf(mixHex(L.color, '#F6F0E2', 0.42));
     const pool = (alpha: number, reach: number) => {
       const gr = ctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, reach);
       for (const [t, f] of FALLOFF) gr.addColorStop(t, `rgba(${r}, ${g}, ${b}, ${Math.min(1, alpha * f).toFixed(4)})`);
@@ -949,7 +950,7 @@ export function drawLightPass(
     pool((dark ? 0.75 : 0.4) * s, R * 0.75);
     // And a hot core where the light itself is.
     ctx.globalCompositeOperation = dark ? 'lighter' : 'screen';
-    pool(0.5 * s, R * 0.18);
+    pool(0.28 * s, R * 0.16);
   }
   ctx.restore();
 }

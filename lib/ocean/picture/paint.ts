@@ -16,7 +16,7 @@ import { depthAt } from '../depth';
 import { drawEye, drawFloor, drawLeviathan, drawStorm, drawVisitor, drawWhale } from '../draw';
 import { rollKelp, type Kelp } from '../kelp';
 import { drawKelp } from '../kelp-draw';
-import { drawGodRays, drawLightPass, drawSnellWindow, drawSnowDeep, dither, godRayLight, sunFor } from '../light';
+import { drawGodRays, drawSnellWindow, drawSnowDeep, godRayLight, sunFor } from '../light';
 import { jellyForBlock } from '../lineage';
 import { outcropAtSlot, type Growth, type GrowthKind, type Outcrop } from '../outcrop';
 import { drawOutcrops, OutcropCache } from '../outcrop-sprite';
@@ -40,6 +40,7 @@ interface Caches {
   occluder: { key: string; canvas: HTMLCanvasElement } | null;
   rayLight: { key: string; at: (x: number, y: number) => number } | null;
   wash2: { key: string; canvas: HTMLCanvasElement } | null;
+  dither: HTMLCanvasElement | null;
 }
 
 /** The plan's own store of what is slow to make, out of sight of a JSON of it. */
@@ -61,6 +62,7 @@ function cachesOf(plan: Plan): Caches {
         occluder: null,
         rayLight: null,
         wash2: null,
+        dither: null,
       } satisfies Caches,
     });
   }
@@ -102,6 +104,50 @@ function __t(name: string) {
   __last = now;
 }
 
+type InSight = (x0: number, y0: number, x1: number, y1: number, pad?: number) => boolean;
+
+/** The part of the picture a strip shows, in the picture's device px. */
+interface View {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * What of the picture the canvas can show: the canvas's own rectangle taken
+ * back through the transform the caller set. Only ever used to skip what is
+ * wholly out of sight, never to change how anything is drawn, so a picture
+ * drawn in strips is the picture drawn whole.
+ */
+function viewOf(ctx: CanvasRenderingContext2D, W: number, H: number): View {
+  const all = { x0: 0, y0: 0, x1: W, y1: H };
+  try {
+    const cw = ctx.canvas?.width;
+    const ch = ctx.canvas?.height;
+    if (!(cw > 0 && ch > 0)) return all;
+    const inv = ctx.getTransform().inverse();
+    const pts = [
+      inv.transformPoint({ x: 0, y: 0 }),
+      inv.transformPoint({ x: cw, y: 0 }),
+      inv.transformPoint({ x: 0, y: ch }),
+      inv.transformPoint({ x: cw, y: ch }),
+    ];
+    const x0 = Math.min(...pts.map((p) => p.x));
+    const x1 = Math.max(...pts.map((p) => p.x));
+    const y0 = Math.min(...pts.map((p) => p.y));
+    const y1 = Math.max(...pts.map((p) => p.y));
+    if (![x0, x1, y0, y1].every(Number.isFinite)) return all;
+    return { x0: Math.max(0, x0 - 2), y0: Math.max(0, y0 - 2), x1: Math.min(W, x1 + 2), y1: Math.min(H, y1 + 2) };
+  } catch {
+    return all;
+  }
+}
+
+function sees(v: View, x0: number, y0: number, x1: number, y1: number): boolean {
+  return x1 >= v.x0 && x0 <= v.x1 && y1 >= v.y0 && y0 <= v.y1;
+}
+
 export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): void {
   __last = performance.now();
   const D = px * plan.unit;
@@ -112,6 +158,10 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   const ambient = 30 + (plan.seed % 997) / 31;
   const sun = sunFor(plan.hour);
   const night = plan.ground === 'night';
+  const view = viewOf(ctx, W, H);
+  if (view.x1 <= view.x0 || view.y1 <= view.y0) return;
+  /** Whether a box in units, grown by `pad` units, is in sight. */
+  const inSight = (x0: number, y0: number, x1: number, y1: number, pad = 0) => sees(view, (x0 - pad) * D, (y0 - pad) * D, (x1 + pad) * D, (y1 + pad) * D);
 
   ctx.save();
   ctx.globalAlpha = 1;
@@ -119,73 +169,86 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
-  __t('The water: the depths colour ');
   // ---- The water: the depth's colour down the page, then the paint.
   const g = ctx.createLinearGradient(0, 0, 0, H);
   for (const s of plan.zStops) g.addColorStop(s.y / plan.h, tone(plan, s.z));
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  paintWash(ctx, plan, c, D, W, H);
+  ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0);
+  paintWash(ctx, plan, c, D, W, H, view);
+  __t('water');
 
-  __t('The light from above, carved b');
-  // ---- The light from above, carved by everything that stands in it.
-  // The light reaches as far as the light does: the shafts fade out by the
-  // end of the twilight, however far below that the picture goes.
+  // ---- The light from above, carved by everything that stands in it. The
+  // shafts fade out by the end of the twilight, however far below that the
+  // picture goes. They are soft, so they are worked out at no more than a
+  // few thousand pixels and drawn back up.
   const lit = litDepth(plan);
   const RH = lit * D;
+  const rs = Math.max(1, Math.max(W, RH) / 2400);
   const occluder = occluderOf(plan, c, lit);
   const rays = {
-    source: { x: plan.window.x * D, y: plan.window.y * D },
+    source: { x: (plan.window.x * D) / rs, y: (plan.window.y * D) / rs },
     occluder,
     strength: 0.55 + 0.6 * Math.max(0, 1 - plan.zMax / 0.6),
     sun,
-    px: D,
+    px: D / rs,
     seed: plan.seed,
     dark: night,
   };
-  drawGodRays(ctx, W, RH, rays);
+  if (sees(view, 0, 0, W, RH)) {
+    ctx.save();
+    ctx.scale(rs, rs);
+    drawGodRays(ctx, W / rs, RH / rs, rays);
+    ctx.restore();
+  }
+  __t('rays');
 
-  __t('Far: the big shapes behind eve');
   // ---- Far: the big shapes behind everything, then the far animals, hazy.
-  for (const e of plan.events) if (e.far) paintEvent(ctx, plan, e, D, ambient);
-  paintCast(ctx, plan, c, D, ambient, 0);
+  for (const e of plan.events) if (e.far) paintEvent(ctx, plan, e, D, ambient, inSight);
+  paintCast(ctx, plan, c, D, ambient, 0, inSight);
+  __t('far');
 
-  __t('The places passed: kelp, rocks');
   // ---- The places passed: kelp, rocks, the ledges of the breaks, the floor.
-  if (c.kelp && plan.kelp) paintKelp(ctx, plan, c.kelp, c, D, ambient);
+  if (c.kelp && plan.kelp) paintKelp(ctx, plan, c.kelp, c, D, ambient, inSight);
+  __t('kelp');
   for (const r of plan.rocks) {
+    if (!inSight(r.box.x0, r.box.y0, r.box.x1, r.y + r.thick, 90)) continue;
     const o = outcropAtSlot(plan.key, r.slot, !!plan.kelp);
     if (!o) continue;
     drawOutcrops(ctx, W, H, [{ outcrop: { ...o, thick: r.thick / plan.h }, top: r.y / plan.h }], c.rocks, waterAtY(plan, r.y), D, undefined);
   }
   for (const l of plan.ledges) {
+    if (!inSight(l.box.x0, l.box.y0, l.box.x1, l.y + l.thick, 90)) continue;
     drawOutcrops(ctx, W, H, [{ outcrop: ledgeOutcrop(l, plan.h), top: l.y / plan.h }], c.rocks, waterAtY(plan, l.y), D, undefined);
   }
-  if (plan.floor) paintFloor(ctx, plan, c, D, ambient);
+  __t('rocks');
+  if (plan.floor && inSight(0, plan.floor.y - 80, plan.w, plan.h)) paintFloor(ctx, plan, c, D, ambient);
+  __t('places');
 
-  __t('Middle: the rare things in the');
   // ---- Middle: the rare things in the water, the middle animals.
-  for (const e of plan.events) if (!e.far && e.kind !== 'eye') paintEvent(ctx, plan, e, D, ambient);
-  paintCast(ctx, plan, c, D, ambient, 1);
+  for (const e of plan.events) if (!e.far && e.kind !== 'eye') paintEvent(ctx, plan, e, D, ambient, inSight);
+  paintCast(ctx, plan, c, D, ambient, 1, inSight);
+  __t('middle');
 
-  __t('The way down: bubbles rising o');
   // ---- The way down: bubbles rising off it, and the jellies, the hero last.
-  paintBubbles(ctx, plan, D);
-  for (const j of plan.jellies) paintJelly(ctx, plan, c, j, D);
+  paintBubbles(ctx, plan, D, inSight);
+  for (const j of plan.jellies) if (inSight(j.box.x0, j.box.y0, j.box.x1, j.box.y1, j.r * 1.4)) paintJelly(ctx, plan, c, j, D);
+  __t('jellies');
 
-  __t('Near.');
   // ---- Near.
-  paintCast(ctx, plan, c, D, ambient, 2);
-  for (const e of plan.events) if (e.kind === 'eye') paintEvent(ctx, plan, e, D, ambient);
+  paintCast(ctx, plan, c, D, ambient, 2, inSight);
+  for (const e of plan.events) if (e.kind === 'eye') paintEvent(ctx, plan, e, D, ambient, inSight);
+  __t('near');
 
-  __t('Light: what glows lights what ');
   // ---- Light: what glows lights what is near it.
-  drawLightPass(ctx, W, H, lightsOf(plan, c, D), D);
+  paintLights(ctx, plan, lightsOf(plan, c, D), view);
+  __t('lights');
 
-  __t('Snow, near to far, caught in t');
   // ---- Snow, near to far, caught in the light.
   const rayKey = `${W}|${H}|${D}`;
-  if (!c.rayLight || c.rayLight.key !== rayKey) c.rayLight = { key: rayKey, at: godRayLight(W, RH, rays) };
+  if (!c.rayLight || c.rayLight.key !== rayKey) {
+    const at = godRayLight(W / rs, RH / rs, rays);
+    c.rayLight = { key: rayKey, at: (x, y) => at(x / rs, y / rs) };
+  }
   const rayAt = c.rayLight.at;
   drawSnowDeep(ctx, W, H, {
     seed: plan.seed,
@@ -195,28 +258,110 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     dark: night || plan.zMax > 0.5,
     litBy: (x, y) => Math.max(rayAt(x, y), jellyLight(plan, x / D, y / D)),
   });
+  __t('snow');
 
-  __t('The sky, looking up, and a whi');
-  // ---- The sky, looking up, and a whisper of noise so nothing bands.
-  drawSnellWindow(ctx, W, H, {
-    cx: plan.window.x * D,
-    cy: plan.window.y * D,
-    radius: plan.window.r * D,
-    sun,
-    moon: plan.moon,
-    dark: night,
-    px: D,
-    seed: plan.seed,
-  });
-  ctx.restore();
+  // ---- The sky, looking up.
+  const win = plan.window;
+  if (inSight(win.x - win.r, win.y - win.r, win.x + win.r, win.y + win.r, win.r * 0.6)) {
+    drawSnellWindow(ctx, W, H, { cx: win.x * D, cy: win.y * D, radius: win.r * D, sun, moon: plan.moon, dark: night, px: D, seed: plan.seed });
+  }
   __t('snell');
-  dither(ctx, W, H, plan.seed);
+
+  // ---- A whisper of noise, so no gradient bands.
+  paintDither(ctx, c, plan.seed, view);
+  ctx.restore();
   __t('dither');
+}
+
+/* ---- Light and noise, without reading the canvas back ---- */
+
+/** A glow's falloff: a bright core, then a long tail as the water scatters it (as light.ts's). */
+const FALLOFF = [0, 0.04, 0.09, 0.16, 0.26, 0.4, 0.58, 0.78, 1].map((t) => {
+  const f = (s: number) => 1 / (1 + (s / 0.13) ** 2);
+  return [t, Math.max(0, (f(t) - f(1)) / (1 - f(1)))] as const;
+});
+
+interface Light {
+  x: number;
+  y: number;
+  r: number;
+  color: string;
+  strength: number;
+  /** Whether the water round it is dark: the plan knows, so nothing is read back. */
+  dark: boolean;
+}
+
+/**
+ * The light pass of light.ts, done the same way, except that whether each
+ * light sits in dark water comes from the plan rather than from reading the
+ * canvas under it: a readback stalls the canvas, and in a strip the pixels
+ * under a light may not be there to read.
+ */
+function paintLights(ctx: CanvasRenderingContext2D, plan: Plan, lights: Light[], view: View) {
+  void plan;
+  ctx.save();
+  for (const L of lights) {
+    const s = Math.max(0, Math.min(2, L.strength));
+    if (s <= 0.005 || !sees(view, L.x - L.r, L.y - L.r, L.x + L.r, L.y + L.r)) continue;
+    const n = parseInt(L.color.replace('#', '').slice(0, 6), 16);
+    const rgb = Number.isFinite(n) ? `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}` : '191, 243, 230';
+    const pool = (alpha: number, reach: number) => {
+      const gr = ctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, reach);
+      for (const [t, f] of FALLOFF) gr.addColorStop(t, `rgba(${rgb}, ${Math.min(1, alpha * f).toFixed(4)})`);
+      ctx.fillStyle = gr;
+      ctx.fillRect(L.x - reach, L.y - reach, reach * 2, reach * 2);
+    };
+    ctx.globalCompositeOperation = L.dark ? 'lighter' : 'screen';
+    pool((L.dark ? 0.6 : 0.45) * s, L.r);
+    ctx.globalCompositeOperation = 'overlay';
+    pool((L.dark ? 0.75 : 0.4) * s, L.r * 0.75);
+    ctx.globalCompositeOperation = L.dark ? 'lighter' : 'screen';
+    pool(0.5 * s, L.r * 0.18);
+  }
+  ctx.restore();
+}
+
+const DITHER = 128;
+
+/**
+ * Dither without a readback: a fixed tile of faint light and dark specks
+ * (a couple of levels either way), laid in the picture's own coordinates so
+ * strips join, over the part in sight.
+ */
+function paintDither(ctx: CanvasRenderingContext2D, c: Caches, seed: number, view: View) {
+  if (typeof document === 'undefined') return;
+  if (!c.dither) {
+    const t = document.createElement('canvas');
+    t.width = DITHER;
+    t.height = DITHER;
+    const o = t.getContext('2d');
+    if (!o) return;
+    const img = o.createImageData(DITHER, DITHER);
+    const r = mulberry32(hash32('picture-dither', seed));
+    for (let i = 0; i < DITHER * DITHER; i++) {
+      const u = r() + r() - 1;
+      const v = u > 0 ? 255 : 0;
+      img.data[i * 4] = v;
+      img.data[i * 4 + 1] = v;
+      img.data[i * 4 + 2] = v;
+      img.data[i * 4 + 3] = Math.round(Math.abs(u) * 3);
+    }
+    o.putImageData(img, 0, 0);
+    c.dither = t;
+  }
+  const pattern = ctx.createPattern(c.dither, 'repeat');
+  if (!pattern) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = pattern;
+  ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0);
+  ctx.restore();
 }
 
 /* ---- The wash ---- */
 
-function paintWash(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, W: number, H: number) {
+function paintWash(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, W: number, H: number, view: View) {
   // The wash's paint is neutral and soft. It is laid once into a canvas of
   // its own, no bigger than a few million pixels, and stretched over the
   // picture: a poster does not need a poster-sized stain, and strips of the
@@ -237,7 +382,15 @@ function paintWash(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: numb
       c.wash2 = { key, canvas };
     }
   }
-  if (c.wash2) ctx.drawImage(c.wash2.canvas, 0, 0, W, H);
+  if (c.wash2) {
+    // Only the slice in sight, a pixel wider each way so strips join.
+    const k = c.wash2.canvas.width / W;
+    const sx = Math.max(0, Math.floor(view.x0 * k) - 1);
+    const sy = Math.max(0, Math.floor(view.y0 * k) - 1);
+    const sw = Math.min(c.wash2.canvas.width, Math.ceil(view.x1 * k) + 1) - sx;
+    const sh = Math.min(c.wash2.canvas.height, Math.ceil(view.y1 * k) + 1) - sy;
+    if (sw > 0 && sh > 0) ctx.drawImage(c.wash2.canvas, sx, sy, sw, sh, sx / k, sy / k, sw / k, sh / k);
+  }
   // Rich darks are never flat: a mottle of deeper pigment where the deep is.
   if (plan.zMax > 0.5) {
     const r = mulberry32(hash32(plan.seed, 'mottle'));
@@ -247,10 +400,11 @@ function paintWash(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: numb
       const x = r() * plan.w;
       const y = yFrom + r() * (plan.h - yFrom);
       const rad = (90 + r() * 260) * D;
-      const gr = ctx.createRadialGradient(x * D, y * D, 0, x * D, y * D, rad);
       const lift = r() < 0.4;
-      const col = lift ? (plan.ground === 'night' ? '60, 72, 92' : '70, 78, 104') : '4, 4, 10';
       const a = (lift ? 0.05 : 0.12) * (0.5 + r() * 0.5);
+      if (!sees(view, x * D - rad, y * D - rad, x * D + rad, y * D + rad)) continue;
+      const gr = ctx.createRadialGradient(x * D, y * D, 0, x * D, y * D, rad);
+      const col = lift ? (plan.ground === 'night' ? '60, 72, 92' : '70, 78, 104') : '4, 4, 10';
       gr.addColorStop(0, `rgba(${col}, ${a})`);
       gr.addColorStop(1, `rgba(${col}, 0)`);
       ctx.fillStyle = gr;
@@ -327,9 +481,10 @@ function speciesOf(c: Caches, zone: number, slot: number): Species | null {
   return c.biome.pools[zone]?.[slot] ?? null;
 }
 
-function paintCast(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, ambient: number, layer: 0 | 1 | 2) {
+function paintCast(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, ambient: number, layer: 0 | 1 | 2, inSight: InSight) {
   for (const a of plan.cast) {
     if (a.layer !== layer) continue;
+    if (!inSight(a.box.x0, a.box.y0, a.box.x1, a.box.y1, a.len * 0.6 + 10)) continue;
     const sp = speciesOf(c, a.zone, a.slot);
     if (!sp) continue;
     const water = waterAtY(plan, a.y);
@@ -432,15 +587,20 @@ function jellyLight(plan: Plan, x: number, y: number): number {
   return best;
 }
 
-function lightsOf(plan: Plan, c: Caches, D: number) {
-  const lights: { x: number; y: number; r: number; color: string; strength: number }[] = [];
+function lightsOf(plan: Plan, c: Caches, D: number): Light[] {
+  const lights: Light[] = [];
+  const darkAt = (y: number) => {
+    const t = tone(plan, zAt(plan, y));
+    const n = parseInt(t.slice(1, 7), 16);
+    return plan.ground === 'night' || (0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255 < 0.45;
+  };
   for (const j of plan.jellies) {
     const z = zAt(plan, j.y);
     const body = jellyForBlock(plan.key, j.block);
     const tint = mixHex(plan.color, HUES[body.hue] ?? plan.color, body.hueMix);
     const deep = Math.max(0, Math.min(1, (z - 0.35) / 0.4));
     const s = (j.hero ? 0.75 : 0.4) * (plan.ground === 'night' ? 0.5 + 0.5 * deep : deep);
-    if (s > 0.02) lights.push({ x: j.x * D, y: (j.y + j.r * 0.4) * D, r: j.r * (j.hero ? 5 : 3.6) * D, color: mixHex(tint, '#FFFFFF', 0.35), strength: s });
+    if (s > 0.02) lights.push({ x: j.x * D, y: (j.y + j.r * 0.4) * D, r: j.r * (j.hero ? 5 : 3.6) * D, color: mixHex(tint, '#FFFFFF', 0.35), strength: s, dark: darkAt(j.y) });
   }
   // Each light reads the canvas under it, which costs: the jellies, the
   // rare things, and the few nearest lit animals, no more.
@@ -453,21 +613,22 @@ function lightsOf(plan: Plan, c: Caches, D: number) {
     const z = zAt(plan, a.y);
     if (z < 0.45 && plan.ground === 'paper') continue;
     const glow = ['#9FE8FF', '#B8FFD9', '#FFD9A0', '#E3C2FF'][Math.max(0, Math.min(3, Math.round(sp.genome.glow)))];
-    lights.push({ x: a.x * D, y: a.y * D, r: a.len * 1.1 * D, color: glow, strength: 0.25 });
+    lights.push({ x: a.x * D, y: a.y * D, r: a.len * 1.1 * D, color: glow, strength: 0.25, dark: darkAt(a.y) });
   }
   for (const e of plan.events) {
-    if (e.kind === 'lure') lights.push({ x: e.x * D, y: e.y * D, r: 90 * D, color: '#BFF3E6', strength: 0.45 });
-    if (e.kind === 'storm') lights.push({ x: e.x * D, y: e.y * D, r: 300 * D, color: '#8EF0D2', strength: 0.1 });
+    if (e.kind === 'lure') lights.push({ x: e.x * D, y: e.y * D, r: 90 * D, color: '#BFF3E6', strength: 0.45, dark: darkAt(e.y) });
+    if (e.kind === 'storm') lights.push({ x: e.x * D, y: e.y * D, r: 300 * D, color: '#8EF0D2', strength: 0.1, dark: darkAt(e.y) });
   }
   return lights;
 }
 
 /* ---- The bubbles ---- */
 
-function paintBubbles(ctx: CanvasRenderingContext2D, plan: Plan, D: number) {
+function paintBubbles(ctx: CanvasRenderingContext2D, plan: Plan, D: number, inSight: InSight) {
   ctx.save();
   ctx.lineWidth = Math.max(0.6, 0.7 * D);
   for (const b of plan.bubbles) {
+    if (!inSight(b.x - b.r, b.y - b.r, b.x + b.r, b.y + b.r, 2)) continue;
     const water = waterAtY(plan, b.y);
     const line = water.dark ? 'rgba(232, 224, 207, ' : 'rgba(42, 35, 32, ';
     const a = water.dark ? 0.55 : 0.4;
@@ -490,13 +651,14 @@ function paintBubbles(ctx: CanvasRenderingContext2D, plan: Plan, D: number) {
 
 /* ---- The places ---- */
 
-function paintKelp(ctx: CanvasRenderingContext2D, plan: Plan, kelp: Kelp, c: Caches, D: number, ambient: number) {
+function paintKelp(ctx: CanvasRenderingContext2D, plan: Plan, kelp: Kelp, c: Caches, D: number, ambient: number, inSight: InSight) {
   if (!plan.kelp) return;
   // The forest is drawn as the live sea draws it, a frame at a time, the
   // frames stacked down the page: three frames from the canopy to the rock.
   const hf = plan.kelp.bottom / 2.45;
   const s = Math.max(0.45, Math.min(1, hf / 520));
   for (let k = 0; k < 3; k++) {
+    if (!inSight(0, k * hf - (k ? 0 : hf), plan.w, k === 2 ? plan.h : (k + 1) * hf)) continue;
     const water = waterAtY(plan, (k + 0.5) * hf);
     const focus = (k * 60) / 0.19;
     ctx.save();
@@ -645,7 +807,8 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
 
 /* ---- The rare things ---- */
 
-function paintEvent(ctx: CanvasRenderingContext2D, plan: Plan, e: PlacedEvent, D: number, ambient: number) {
+function paintEvent(ctx: CanvasRenderingContext2D, plan: Plan, e: PlacedEvent, D: number, ambient: number, inSight: InSight) {
+  if (e.kind === 'whalefall' ? !(e.box && inSight(e.box.x0, e.box.y0, e.box.x1, e.box.y1, 120)) : !inSight(e.rx, e.ry, e.rx + e.rw, e.ry + e.rh, 40)) return;
   const water = waterAtY(plan, e.y);
   const dark = water.dark;
   const w = e.rw * D;

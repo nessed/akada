@@ -9,8 +9,12 @@
  */
 
 import { mixHex } from '../fan';
-import { HUES } from './palette';
+import { HUES, IRON_GALL } from './palette';
+import { detailFor, hatch, inkLine, LIGHT, shadeAcross, stipple } from './pen';
 import { mulberry32 } from './random';
+
+/** The light as the pen takes it: on dark water the light ink marks the light. */
+const UNLIGHT: [number, number] = [-LIGHT[0], -LIGHT[1]];
 
 /** In and out softly, so nothing arrives in a flash. */
 function envelope(age: number, rise: number, fall: number): number {
@@ -132,7 +136,8 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
     ctx.fill(body);
 
     // The ink, fading the same way: the far end of it is barely there.
-    const inkTone = dark ? '214, 228, 222' : '40, 44, 42';
+    // The one ink, iron-gall on light water and off-white on dark.
+    const inkTone = dark ? '232, 224, 207' : '42, 35, 32';
     const line = ctx.createRadialGradient(ux, uy, 0, ux, uy, 1.0 * L);
     line.addColorStop(0, `rgba(${inkTone}, 0.85)`);
     line.addColorStop(1, `rgba(${inkTone}, 0.04)`);
@@ -155,7 +160,8 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
     ctx.stroke();
     const skin = mulberry32(seed ^ 0x5c1);
     ctx.fillStyle = line;
-    for (let k = 0; k < 26; k++) {
+    // Big, the stipple goes on over the whole of the lit head.
+    for (let k = 0, n = detailFor(L) > 0.4 ? 160 : 26; k < n; k++) {
       const sx = -0.08 * L - skin() * 0.45 * L;
       const sy = -0.08 * L + skin() * 0.18 * L + (sx + 0.08 * L) * -0.1;
       ctx.globalAlpha = seen * (0.2 + skin() * 0.3);
@@ -179,7 +185,7 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
       ctx.moveTo(x, y);
       ctx.quadraticCurveTo(x + len * 0.3, y - len * 0.6, x + len * 0.1, y - len);
     }
-    ctx.strokeStyle = dark ? '#E9EFE6' : '#3A3A36';
+    ctx.strokeStyle = dark ? IRON_GALL.dark : IRON_GALL.light;
     ctx.globalAlpha = seen * 0.75;
     ctx.lineWidth = 0.7 * px;
     ctx.stroke();
@@ -242,12 +248,15 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
 
   const pale = mixHex(hue, '#EFE9DC', 0.55);
   const water = dark ? '#1A1815' : '#FBF8EF';
-  const ink = dark ? mixHex(pale, '#FFFFFF', 0.45) : mixHex(pale, '#1A1714', 0.62);
+  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
   const wash = dark ? mixHex(pale, water, 0.12) : mixHex(pale, water, 0.2);
+  const light = dark ? UNLIGHT : LIGHT;
 
   // Small for an octopus, but big enough to be found.
   const S = Math.min(w, h) * 0.11;
   const R = S * 0.3;
+  const d = detailFor(R * 5);
+  const pw = px * (1 - 0.35 * d);
   const ph = (ambient / beat) * Math.PI * 2 + phase;
   const flap = Math.sin(ph);
   // The body rises just after the fins come down.
@@ -311,8 +320,36 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     ctx.quadraticCurveTo(tx + out * R * 0.14, ty + R * 0.14, tx + out * R * 0.24 + curl, ty + R * 0.04);
   }
   ctx.globalAlpha = env * 0.75;
-  ctx.lineWidth = 0.8 * px;
+  ctx.lineWidth = 0.8 * pw;
   ctx.stroke();
+  if (d > 0.4) {
+    // Big: the suckers down each arm in a row, each with a fine cirrus
+    // beside it, the way a dumbo's arms are fringed.
+    const suckers = new Path2D();
+    const cirri = new Path2D();
+    for (let i = 0; i < 8; i++) {
+      const [tx, ty] = tips[i];
+      const rx = -Math.cos(angles[i]) * R * 0.4;
+      const qx = tx * 0.8;
+      const qy = ty * 0.45;
+      for (let t = 0.35; t < 0.97; t += 0.09) {
+        const u = 1 - t;
+        const x = u * u * rx + 2 * u * t * qx + t * t * tx;
+        const y = u * u * R * 0.05 + 2 * u * t * qy + t * t * ty;
+        const sr = R * 0.028 * (1.2 - t * 0.6);
+        suckers.moveTo(x + sr, y);
+        suckers.ellipse(x, y, sr, sr * 0.75, 0, 0, Math.PI * 2);
+        const out = -Math.cos(angles[i]) >= 0 ? 1 : -1;
+        cirri.moveTo(x + out * sr * 1.4, y);
+        cirri.lineTo(x + out * sr * 1.4 + out * R * 0.05, y + R * 0.03);
+      }
+    }
+    ctx.globalAlpha = env * 0.45;
+    ctx.lineWidth = 0.4 * px;
+    ctx.stroke(suckers);
+    ctx.globalAlpha = env * 0.35;
+    ctx.stroke(cirri);
+  }
 
   // The fins, high on each side of the crown like ears, rowing.
   const raise = 0.35 + 0.55 * flap;
@@ -331,12 +368,14 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     ctx.globalAlpha = env * 0.9;
     ctx.lineWidth = 0.9 * px;
     ctx.stroke(fin);
-    // A couple of strokes of shading along the fin.
+    // A couple of strokes of shading along the fin, more of them big.
     ctx.beginPath();
-    ctx.moveTo(0.2 * R, 0.02 * R);
-    ctx.quadraticCurveTo(0.55 * R, -0.04 * R, 0.85 * R, 0.0);
+    for (const o of d > 0.4 ? [-0.12, -0.04, 0.04, 0.12, 0.19] : [0]) {
+      ctx.moveTo(0.2 * R, (0.02 + o) * R);
+      ctx.quadraticCurveTo(0.55 * R, (-0.04 + o * 1.3) * R, (0.85 - Math.abs(o)) * R, o * R);
+    }
     ctx.globalAlpha = env * 0.35;
-    ctx.lineWidth = 0.6 * px;
+    ctx.lineWidth = 0.5 * pw;
     ctx.stroke();
     ctx.restore();
   }
@@ -355,8 +394,25 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   ctx.globalAlpha = env * 0.9;
   ctx.fill(bell);
   ctx.globalAlpha = env;
-  ctx.lineWidth = 1.1 * px;
-  ctx.stroke(dome);
+  if (d > 0.4) {
+    // Stipple down the mantle's shadow side, and the dome in one pressure line.
+    const box = { x: -R, y: -1.62 * R, w: 2 * R, h: 1.7 * R };
+    stipple(ctx, bell, box, { spacing: 1.4 * px, radius: 0.3 * px, shade: shadeAcross(box, light), from: 0.42, color: ink, alpha: 0.55, seed: seed ^ 0xd0 });
+    const pts: number[] = [];
+    const cub = (p: number[]) => {
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16;
+        const u = 1 - t;
+        pts.push(u * u * u * p[0] + 3 * u * u * t * p[2] + 3 * u * t * t * p[4] + t * t * t * p[6], u * u * u * p[1] + 3 * u * u * t * p[3] + 3 * u * t * t * p[5] + t * t * t * p[7]);
+      }
+    };
+    cub([-R * 0.85, 0, -R * 0.98, -R * 0.95, -R * 0.62, -R * 1.62, 0, -R * 1.62]);
+    cub([0, -R * 1.62, R * 0.62, -R * 1.62, R * 0.98, -R * 0.95, R * 0.85, 0]);
+    inkLine(ctx, pts, false, { width: 1.1 * pw, color: ink, swell: 0.8, taper: [0.08, 0.08], seed, light });
+  } else {
+    ctx.lineWidth = 1.1 * px;
+    ctx.stroke(dome);
+  }
   ctx.save();
   ctx.translate(0.9 * px, 0.4 * px);
   ctx.globalAlpha = env * 0.3;
@@ -417,7 +473,7 @@ export function drawWhaleFall(
   const cx = w * (0.375 + rand() * 0.25);
   const sag0 = rand() * Math.PI * 2;
 
-  const ink = dark ? mixHex(BONE, '#FFFFFF', 0.35) : mixHex(BONE, '#1A1714', 0.62);
+  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
   const wash = dark ? mixHex(BONE, '#110F0D', 0.55) : mixHex(BONE, '#FBF8EF', 0.3);
   const ground = dark ? '#080706' : '#2E3431';
   const silt = dark ? 'rgba(8, 7, 6, ' : 'rgba(46, 52, 49, ';
@@ -540,7 +596,9 @@ export function drawWhaleFall(
   shoulder.closePath();
 
   const thick = Math.max(2.2 * px, L * 0.007);
-  const ink1 = 1.1 * px;
+  // On a wallpaper the bones are near enough to engrave.
+  const d = detailFor(L * 0.35);
+  const ink1 = 1.1 * px * (1 - 0.35 * d);
 
   // Far ribs first, faint, as the other side of the animal.
   ctx.strokeStyle = wash;
@@ -565,14 +623,73 @@ export function drawWhaleFall(
   ctx.lineWidth = thick * 1.6;
   ctx.stroke(jaw);
 
+  if (d > 0.4) {
+    // Engraved: each rib and the jaw a bone with two edges, shaded along
+    // its underside, and the skull and the vertebrae hatched below, crossed
+    // where they sit in the silt.
+    const deep = mixHex(wash, dark ? '#000000' : '#5A4A38', 0.35);
+    ctx.save();
+    ctx.translate(0, thick * 0.22);
+    ctx.strokeStyle = deep;
+    ctx.globalAlpha = a * 0.6;
+    ctx.lineWidth = thick * 0.4;
+    ctx.stroke(near);
+    ctx.lineWidth = thick * 0.6;
+    ctx.stroke(jaw);
+    ctx.restore();
+    const under = (top: number, bottom: number) => (_x: number, y: number) => 0.15 + 1.05 * ((y - top) / Math.max(1, bottom - top));
+    hatch(ctx, skull, { x: 0, y: -0.052 * L, w: 0.22 * L, h: 0.066 * L }, {
+      spacing: 1.7 * px,
+      angle: 1.15,
+      shade: under(-0.05 * L, 0.012 * L),
+      from: 0.5,
+      cross: dark ? undefined : 0.85,
+      color: ink,
+      width: 0.4 * px,
+      alpha: a * 0.55,
+      seed: seed ^ 0x5c,
+    });
+    hatch(ctx, centra, { x: s0 - 4 * px, y: -0.05 * L, w: L - s0 + 8 * px, h: 0.05 * L + 2 * px }, {
+      spacing: 1.5 * px,
+      angle: 1.35,
+      shade: under(-0.04 * L, 0),
+      from: 0.5,
+      cross: dark ? undefined : 0.85,
+      color: ink,
+      width: 0.35 * px,
+      alpha: a * 0.5,
+      seed: seed ^ 0xce,
+    });
+    hatch(ctx, shoulder, { x: 0.25 * L, y: -0.06 * L, w: 0.08 * L, h: 0.064 * L }, {
+      spacing: 1.7 * px,
+      angle: 1.0,
+      shade: under(-0.055 * L, 0.002 * L),
+      from: 0.5,
+      color: ink,
+      width: 0.4 * px,
+      alpha: a * 0.5,
+      seed: seed ^ 0x5b,
+    });
+    // Both edges of each long bone in the pen.
+    ctx.strokeStyle = ink;
+    ctx.globalAlpha = a * 0.75;
+    ctx.lineWidth = thick + ink1 * 1.4;
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.stroke(near);
+    ctx.lineWidth = thick * 1.6 + ink1 * 1.4;
+    ctx.stroke(jaw);
+    ctx.globalCompositeOperation = 'source-over';
+  }
   ctx.strokeStyle = ink;
   ctx.globalAlpha = a;
   ctx.lineWidth = ink1;
   ctx.stroke(skull);
   ctx.stroke(centra);
   ctx.stroke(shoulder);
+  ctx.globalAlpha = a * (d > 0.4 ? 0.35 : 1);
   ctx.stroke(near);
   ctx.stroke(jaw);
+  ctx.globalAlpha = a;
   ctx.lineWidth = 0.9 * px;
   ctx.stroke(spines);
 
