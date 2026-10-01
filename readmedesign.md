@@ -1088,8 +1088,15 @@ only ever grows, it never runs backwards, and none of it touches progress.
   warm off-white on the night one), colour only in the washes; outlines are
   a pen's, swelling on the side away from the light, thinning and breaking
   where it is hardest, tapering to a hair at a tentacle's tip; bodies are
-  watercolour, graded darker along the back to a strip of bare paper down
-  the flank and a paler belly, pooled at its edge. Drawn big, the solid ones
+  watercolour a little under the pastel's own value, graded darker along
+  the back, the upper flank let go broadly toward bare paper and a paler
+  belly, pooled at its edge. There is no lifted highlight on any body or
+  bell: a pale blot or arc reads as gloss on plastic, so the light is only
+  that bare paper and the thinner line on the lit side. A fish's snout
+  rounds off and its tail narrows to a wrist, and its mouth is a shut,
+  level cleft with the corner turned down, never a smile; a comb jelly's
+  mouth end is one soft curve with its lobes drawn inside it, never a
+  notch. Drawn big, the solid ones
   are shaded in contour hatching that runs with the spine, only in the
   shaded part of the body and crossed only in its darkest; the clear ones in
   stipple. Markings are marks, not patterns: spots are dabs of wash, bars
@@ -1099,7 +1106,10 @@ only ever grows, it never runs backwards, and none of it touches progress.
   in the head, one in profile, with two highlights. Each body plan gets only
   its own parts: an eel is one tapering body with one fin ribbon round it, a
   squid a mantle, fins, arms and two clubbed tentacles. Small, on the live timer, they stay line and wash, since a
-  speck has no room for engraving and a phone no time for it. The rocks,
+  speck has no room for engraving and a phone no time for it. In a picture
+  (a print) how much drawing an animal gets is judged by how many of the
+  page's hatching lines it spans (`printDetail` in `sprites.ts`), not by its
+  pixel size, so the mid and near cast are engraved like the big ones. The rocks,
   coral, kelp, eels, the sightings and the jelly are drawn with the same pen
   and the same ink, so the whole sea is one hand's.
 - **An ecosystem, not a zoo.** Each zone has a pool of species; half of every

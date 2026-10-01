@@ -254,13 +254,17 @@ function marks(line: Pt[], spacing: number, vr: Rng, put: (p: Pt, t: number) => 
 /* ---- The radial plans ---- */
 
 function bell(g: Genome, { P, C, vr, fine }: Kit) {
-  const bw = g.bw!, bh = g.bh!;
+  // A dome, its sides always curving in toward the rim: never the straight
+  // walls of a lampshade, never taller than a little over its width.
+  const bw = g.bw!, bh = Math.min(g.bh!, g.bw! * 1.05);
+  const shape = Math.max(0.8, g.shape!);
   const pts: Pt[] = [];
   for (let i = 0; i <= 40; i++) {
     const a = Math.PI - (i / 40) * Math.PI;
     const x = Math.cos(a) * bw;
-    const peak = g.cap && Math.abs(x) < bw * 0.3 ? 1.12 : 1;
-    pts.push([x, bh - Math.pow(Math.max(0, Math.sin(a)), g.shape!) * bh * peak]);
+    // A cap rises out of the dome as one swell, not a knob set on it.
+    const peak = g.cap ? 1 + 0.12 * Math.max(0, 1 - Math.pow(x / (bw * 0.4), 2)) : 1;
+    pts.push([x, bh - Math.pow(Math.max(0, Math.sin(a)), shape) * bh * peak]);
   }
   const n = Math.max(1, g.lobes!);
   for (let i = 1; i <= n * 4; i++) {
@@ -343,24 +347,31 @@ function bell(g: Genome, { P, C, vr, fine }: Kit) {
  * the far ones seen faint through it, and the gonads lying along them.
  */
 function comb(g: Genome, { P, C, vr }: Kit) {
-  const ow = g.ow!, oh = g.oh!;
+  // Never a cigar: at least a third as wide as it is long.
+  const oh = g.oh!, ow = Math.max(g.ow!, oh * 0.36);
   const lean = vr(-0.09, 0.09);
   const lobes = g.lobed;
   // The right half's outline from the pole down, as shares of the half-width
   // and half-height: a lobate one's two lobes hang below a notch, a sac-like
   // one is widest at its mouth, with lips; each a little its own.
   const right: Pt[] = lobes
-    ? [[0, -1], [0.32, -0.92], [0.62, -0.64], [0.8, -0.2], [0.86, 0.28], [0.97, 0.66], [0.92, 1.06], [0.68, 1.27], [0.44, 1.14], [0.3, 0.84], [0.12, 0.76]]
-    : [[0, -1], [0.42, -0.9], [0.74, -0.6], [0.93, -0.15], [0.98, 0.3], [0.9, 0.7], [0.8, 0.93], [0.52, 1.01], [0.22, 0.93]];
+    ? [[0, -1], [0.32, -0.92], [0.6, -0.66], [0.8, -0.24], [0.9, 0.2], [0.95, 0.58], [0.9, 0.9], [0.76, 1.1], [0.56, 1.22], [0.34, 1.27], [0.14, 1.29]]
+    : [[0, -1], [0.42, -0.9], [0.74, -0.6], [0.93, -0.15], [0.98, 0.3], [0.9, 0.7], [0.8, 0.93], [0.52, 1.03], [0.22, 1.06]];
   const sides = [-1, 1].map((sg) => {
     const k = sg > 0 ? vr(1, 1.14) : vr(0.86, 1);
-    const drop = vr(0.85, 1.12);
+    // How much further one side hangs than the other: a little, or the
+    // mouth end steps.
+    const drop = 1 + (vr(0.85, 1.12) - 1) * 0.35;
     return right.map(([x, y], i) => {
       const yy = (y > 0.5 ? 0.5 + (y - 0.5) * drop : y) * oh + (i ? vr(-0.025, 0.025) * oh : 0);
       return [sg * x * ow * k * (i ? vr(0.95, 1.05) : 1) + lean * yy, yy] as Pt;
     });
   });
-  const pts: Pt[] = [...sides[1], [lean * oh * (lobes ? 0.78 : 0.95), oh * (lobes ? 0.8 : 0.97)], ...sides[0].slice(1).reverse()];
+  // The mouth end is one soft curve: the lobes are drawn inside it, never
+  // notched out of it (a notch reads as a mitten).
+  const e0 = sides[0][sides[0].length - 1];
+  const e1 = sides[1][sides[1].length - 1];
+  const pts: Pt[] = [...sides[1], [(e0[0] + e1[0]) / 2, (e0[1] + e1[1]) / 2 + oh * 0.01], ...sides[0].slice(1).reverse()];
   P('body', pts, true);
   /** The half-width at a height, from the outline above the lobes. */
   const at = (u: number, side: number, kk = 1): Pt => {
@@ -410,6 +421,20 @@ function comb(g: Genome, { P, C, vr }: Kit) {
         C('dotGlow', row[i][0], row[i][1], 2.4);
         C('dots', row[i][0], row[i][1], 0.9);
       }
+    }
+  }
+  if (lobes) {
+    // The two oral lobes, folded up inside the outline: a fine line each.
+    for (const side of [-1, 1]) {
+      // Inset from the side and following it down, then turning in under
+      // the body toward the mouth: a fold, not a straight cut.
+      const lobe: Pt[] = [];
+      for (let i = 0; i <= 12; i++) {
+        const k = i / 12;
+        const turn = Math.pow(Math.max(0, (k - 0.55) / 0.45), 1.6);
+        lobe.push(at(0.38 + k * 0.78, side, 0.84 - 0.66 * turn));
+      }
+      P('lines', lobe);
     }
   }
   // The pharynx, faint through it, and the statocyst at the pole.
@@ -628,7 +653,14 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
       return 0.72 - ((t - 0.94) / 0.06) * 0.22;
     }
     const u = Math.pow(t, g.skew!);
-    return Math.pow(Math.max(0.02, Math.sin(Math.PI * (0.05 + 0.9 * u))), g.blunt!);
+    let p = Math.pow(Math.max(0.02, Math.sin(Math.PI * (0.05 + 0.9 * u))), g.blunt!);
+    if (fish) {
+      // A snout rounds off and a tail narrows to its wrist, however blunt the
+      // dice made the middle: never a bottle's flat face and flat base.
+      if (t > 0.88) p *= Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.88) / 0.12, 2) * 0.86));
+      p = Math.min(p, 0.15 + 1.7 * t);
+    }
+    return p;
   };
   for (let i = 0; i <= N; i++) {
     const t = i / N;
@@ -849,8 +881,16 @@ function bilateral(g: Genome, { P, C, T, rr, fine, vr }: Kit): number {
     const [x, y, w] = at(0.8);
     P('detail', [[x + 0.5, y - w * 0.3], [x - w * 0.07, y + w * 0.04], [x + 0.8, y + w * 0.4]]);
     const [sx, sy, sw] = spine[N];
-    const [mx, my, mw] = at(0.93);
-    const mouth: Pt[] = [[sx - 0.2, sy + sw * 0.08], [(sx + mx) / 2, (sy + my) / 2 + mw * 0.12], [mx, my + mw * 0.12]];
+    const [mx, my, mw] = at(0.925);
+    // A plate's fish keeps its mouth shut and level: a cleft from the tip of
+    // the snout running back and a little down, bowed up a hair rather than
+    // dipped (a dip is a smile), its corner turned down.
+    const mouth: Pt[] = [
+      [sx - 0.3, sy + sw * 0.12],
+      [(sx + mx) / 2, (sy + my) / 2 + (sw * 0.12 + mw * 0.2) / 2 - mw * 0.025],
+      [mx, my + mw * 0.2],
+      [mx - 0.9, my + mw * 0.27],
+    ];
     P('detail', mouth);
     if (g.teeth) {
       // A few fangs along the jaw, uneven.

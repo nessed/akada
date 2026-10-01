@@ -1059,7 +1059,9 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     const vary = (unit01(s.key, 'rock-reach', rest.index) - 0.5) * 0.05;
     let reach = clamp(0.17 + 0.11 * Math.min(1, rest.seconds / 1800) + vary, 0.15, 0.32);
     if (!near) reach = Math.max(0.15, reach * (nBreaks > 4 ? 0.75 : 0.86));
-    const off = 0.065 + 0.03 * unit01(s.key, 'rock-off', rest.index);
+    // Every rock runs well off the page (0.08 W or more): it is the end of a wall, never an island.
+    // (A wide page crowded with breaks has no room for rocks that big: there they run off it less.)
+    const off = (!tall && nBreaks > 4 ? 0.065 : 0.085) + 0.03 * unit01(s.key, 'rock-off', rest.index);
     const want = 0.55 + (ratioMax - 0.55) * unit01(s.key, 'rock-ratio', rest.index);
     let sh = distinctShape(hash32(s.key, 'break-rock', rest.index), want, shapes);
     const cap0 = (near ? (nBreaks > 4 ? 0.14 : 0.2) : nBreaks > 4 ? 0.1 : 0.15) * h;
@@ -1092,7 +1094,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     } as Spec;
   });
 
-  const blocked = (k: PlacedRock, placed: PlacedRock[], gapK = 1, capPlus = 0): boolean => {
+  const blocked = (k: PlacedRock, placed: PlacedRock[], gapK = 1, capPlus = 0, mirK = 0): boolean => {
     if (k.y < h * 0.07 || k.y + k.height > e.rockFoot) return true;
     if (rockTouches(k, w, e.winBox, 4)) return true;
     for (const j of jellies) if (rockTouches(k, w, j.box, CLEAR)) return true;
@@ -1103,9 +1105,20 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
       const gap = Math.max(o.y - (k.y + k.height), k.y - (o.y + o.height));
       if (gap < (o.kind === 'kelp' ? h * 0.04 : minGap * gapK)) return true;
     }
-    for (const o of placed) if (o.edge !== k.edge && rockTouches(k, w, o.box, 8)) return true;
+    for (const o of placed) {
+      if (o.edge === k.edge) continue;
+      if (rockTouches(k, w, o.box, 8)) return true;
+      if (mirK > 0 && mirrors(k, o, mirK)) return true;
+    }
     return false;
   };
+  /** Never a mirrored pair: two rocks across the page from each other at the same depth read as a stage's wings. */
+  const mirrors = (k: PlacedRock, o: PlacedRock, mirK = 1) => {
+    if (o.edge === k.edge) return false;
+    const mid = (r: PlacedRock) => r.y + r.height / 2;
+    return Math.abs(mid(o) - mid(k)) < h * 0.08 * mirK || Math.abs(o.y - k.y) < h * 0.08 * mirK;
+  };
+  const mirrorCost = (k: PlacedRock, placed: PlacedRock[]) => placed.reduce((a, o) => a + (mirrors(k, o) ? 4 : 0), 0);
   const bandCost = (k: PlacedRock) => {
     const c = k.y + k.height * 0.5;
     let near = 0;
@@ -1120,7 +1133,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
   // still a fifth of the short side).
   type Pose = { edge: -1 | 1; centre: number; k: number };
   const build = (sp: Spec, p: Pose): PlacedRock => {
-    const off = p.k < 1 ? 0.06 : sp.off;
+    const off = !tall && nBreaks > 4 ? 0.065 : p.k < 1 ? 0.08 : sp.off;
     const reach = Math.max(!tall && p.k <= 0.6 ? (sp.plane === 1 && nBreaks > 4 ? 0.1 : 0.12) : 0.15, (sp.reach + sp.off) * p.k - off);
     const shape = p.k < 1 ? rockOfRatio(sp.shape, Math.max(0.55, sp.shape.ratio * p.k)) : sp.shape;
     const height = shape.ratio * (reach + off) * w;
@@ -1133,7 +1146,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     const lip = k.edge < 0 ? k.reach * w : w - k.reach * w;
     const across = Math.max(0, Math.abs(lip - sp.nearX) - w * 0.22);
     // The latest breaks' rocks are held closest to their depth.
-    const hold = sp.plane === 2 ? 9 : 3;
+    const hold = sp.plane === 2 ? 14 : 3;
     return (Math.abs(k.y + k.height / 2 - sp.anchor) / h) * hold + (across / w) * 2 + bandCost(k) + (k.edge !== nearWallOf(sp) ? 0.15 : 0) + (1 - (k.height / sp.height)) * 0.6;
   };
   const alternates = (placed: PlacedRock[]) => {
@@ -1149,7 +1162,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     for (let i = specs.length - 1; i >= 0; i--) {
       const k = build(specs[i], poses[i]);
       if (blocked(k, placed)) cost += 40;
-      cost += costOf(specs[i], k);
+      cost += costOf(specs[i], k) + mirrorCost(k, placed);
       placed.push(k);
     }
     // Never strict left-right-left down the page: that is a diagram.
@@ -1187,7 +1200,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
         if (pick && t === 30) break;
         const rock = build(sp, tries[t]);
         if (blocked(rock, placed)) continue;
-        const kc = costOf(sp, rock);
+        const kc = costOf(sp, rock) + mirrorCost(rock, placed);
         if (!pick || kc < pick.cost) pick = { pose: tries[t], rock, cost: kc };
       }
       if (pick) {
@@ -1300,12 +1313,13 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
   for (const sp of specs) {
     if (kept.some((o) => o.kind === 'break' && o.rest === sp.rest)) continue;
     let pick: { rock: PlacedRock; cost: number } | null = null;
-    for (const [gapK, capPlus] of [[1, 0], [0.66, 0], [0.4, 0], [0.4, 1]]) {
-      for (const kk of [0.72, 0.6, 0.5]) {
+    // The pair rule gives way before the room between rocks on one wall does.
+    for (const [gapK, capPlus, mirK] of [[1, 0, 1], [1, 0, 0.5], [1, 0, 0], [0.66, 0, 0], [0.4, 0, 0], [0.4, 1, 0]]) {
+      for (const kk of [0.72, 0.6, 0.5, 0.45]) {
         for (let y = h * 0.08; y < h * 0.92; y += h * 0.01) {
           for (const edge of [-1, 1] as const) {
             const rock = build(sp, { edge, centre: y, k: kk });
-            if (blocked(rock, kept, gapK, capPlus)) continue;
+            if (blocked(rock, kept, gapK, capPlus, mirK)) continue;
             const cost = costOf(sp, rock) + (kept.some((o) => o.kind === 'break' && sameRock(o.shape, rock.shape)) ? 6 : 0);
             if (!pick || cost < pick.cost) pick = { rock, cost };
           }
@@ -1350,7 +1364,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     if (e.kelpBottom != null && y0 < e.kelpBottom && o.zone === 0) continue;
     const r = mulberry32(hash32(s.key, 'passed', o.slot));
     const reach = clamp(o.reach, 0.15, 0.26) * 0.6;
-    const off = 0.06 + 0.02 * r();
+    const off = 0.08 + 0.02 * r();
     const want = Math.max(0.55, Math.min(ratioMax, (h * 0.1) / ((reach + off) * w)));
     const sh = distinctShape(hash32(s.key, 'passed-rock', o.slot), want, shapes);
     const height = sh.ratio * (reach + off) * w;
@@ -1372,7 +1386,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
         shape: sh,
       };
       const k: PlacedRock = { ...base, box: rockBox(base, w) };
-      if (blocked(k, [...chosen, ...passed])) continue;
+      if (blocked(k, [...chosen, ...passed], 1, 0, 1)) continue;
       passed.push(k);
       shapes.push(sh);
       break;
@@ -1402,14 +1416,22 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
   const sd = e.seed;
   switch (e.kind) {
     case 'whale': {
-      const rh = h * 0.5;
-      const len = Math.max(w, rh) * 0.62;
+      // Its whole silhouette, never cut: drawWhale makes it 0.62 of its
+      // region's longer side, a tenth to a fifth of the region down, so a
+      // square region a little bigger than the whale holds all of it (the
+      // flukes, the flipper, the head's taper). It is 0.45 to 0.6 of the
+      // page's width, caught at the middle of its pass (full strength),
+      // well inside the page and on the side away from the way down.
+      const len = w * (0.48 + 0.1 * (((sd >>> 3) % 100) / 100));
+      const rw = len / 0.62;
+      const rh = rw;
       const ny = rh * (0.1 + (((sd >>> 8) % 100) / 100) * 0.12);
-      const want = w * (side > 0 ? 0.62 : 0.38);
-      const travel = w + len * 2;
-      const age = o.current > 0 ? (want + len) / travel : (w + len - want) / travel;
-      const ry = clamp(y, h * 0.1, h * 0.45) - ny;
-      return { ...base, age: clamp(age, 0.15, 0.85), rx: 0, ry, rw: w, rh, x: want, y: ry + ny, far: true, box: null };
+      // The body runs from 0.6 of its length behind the middle to 0.5 ahead.
+      const lo = len * 0.62 + w * 0.02;
+      const hi = w - len * 0.62 - w * 0.02;
+      const want = clamp(w * (side > 0 ? 0.6 : 0.4), Math.min(lo, hi), Math.max(lo, hi));
+      const cy = clamp(y, h * 0.16, h * 0.45);
+      return { ...base, age: 0.5, rx: want - rw / 2, ry: cy - ny, rw, rh, x: want, y: cy, far: true, box: null };
     }
     case 'leviathan': {
       const top = clamp(y - h * 0.3, h * 0.25, h * 0.7);

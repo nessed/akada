@@ -42,6 +42,12 @@ export interface JellyShape {
   aspect: number;
   /** Lobes on the rim. */
   scallops: number;
+  /** The oral arms' length against the plain jelly's, 1 for it. */
+  armLength: number;
+  /** How deep the rim's lobes are cut against the plain jelly's, 1 for it. */
+  lobeDepth: number;
+  /** A turn of the colour wheel, in degrees, laid over whatever ink it is drawn in. */
+  hueShift: number;
 }
 
 /**
@@ -56,6 +62,20 @@ export interface JellyBody {
   aspect: number;
   scallops: number;
   stingP: number;
+  /* The traits below are optional, so a lineage's genome is a body as it is:
+     left out, each is the plain jelly's. A picture rolls them to make a
+     family whose members are visibly different animals. */
+  /** The oral arms' length against the plain jelly's: 0.5 short stubs to 2
+      long trailing ribbons. Default 1. */
+  armLength?: number;
+  /** How deep the rim's lobes are cut against the plain jelly's: 0 a clean
+      rim, 1 the plain jelly's shallow scallops, 3 or 4 a deeply lobed one.
+      Default 1. */
+  lobeDepth?: number;
+  /** Degrees round the colour wheel the jelly's colours are turned, the
+      pen's line and the plate's gonads excepted (a sibling tinted 25
+      degrees off its parent, say). Default 0. */
+  hueShift?: number;
 }
 
 export const PLAIN_BODY: JellyBody = { tentacles: 16, hairs: 15, arms: 4, aspect: 1, scallops: 16, stingP: 0.4 };
@@ -94,11 +114,23 @@ export function buildJelly(seed: number, body: JellyBody = PLAIN_BODY): JellySha
     o: 0.15 + r() * 0.35,
     v: 0.6 + r() * 0.8,
   }));
-  return { tentacles, hairs, arms, snow, aspect: body.aspect, scallops: Math.max(4, Math.round(body.scallops)) };
+  return {
+    tentacles,
+    hairs,
+    arms,
+    snow,
+    aspect: body.aspect,
+    scallops: Math.max(4, Math.round(body.scallops)),
+    armLength: Math.max(0.2, Math.min(3, body.armLength ?? 1)),
+    lobeDepth: Math.max(0, Math.min(5, body.lobeDepth ?? 1)),
+    hueShift: body.hueShift ?? 0,
+  };
 }
 
 /** The moon jelly's four gonads: a soft pink, mixed with the course colour. */
 const GONAD = '#E8C9D4';
+/** The plate's gonads, laid as they are whatever the jelly's colour. */
+const PLATE_GONAD = '#D8B9C8';
 
 /** The inks a jelly is drawn in, mixed once from the course colour. */
 export interface JellyInk {
@@ -122,6 +154,14 @@ export interface JellyInk {
   lamp?: string;
   /** Marine snow, night paper only. */
   snow?: string;
+  /** Drawn as a natural-history plate draws it (the deep's pen): a dome
+      whose sides turn in to the rim, lit by a strip of bare paper rather
+      than a gloss, the outline weighted into the shadow and broken twice in
+      the light, the gonads soft washes with no line. Left out, it is the
+      plain jellyfish drawing as it has always been. */
+  plate?: boolean;
+  /** The paper it is drawn on: the bare-paper strip is this. */
+  paper?: string;
 }
 
 /**
@@ -150,6 +190,8 @@ export function jellyInk(color: string, paper: string, light: boolean, pen = tru
       glow: color,
       lamp: mixHex(color, '#FFFFFF', 0.55),
       snow: '#C8C0B0',
+      plate: pen,
+      paper,
     };
   }
   return {
@@ -165,6 +207,8 @@ export function jellyInk(color: string, paper: string, light: boolean, pen = tru
     bloom: mixHex(color, paper, 0.15),
     eye: mixHex(color, '#1A1714', 0.5),
     sheen: '#FFFFFF',
+    plate: pen,
+    paper,
   };
 }
 
@@ -301,7 +345,7 @@ export function drawJelly(
 ): void {
   const {
     progress,
-    ink,
+    ink: inkIn,
     padTop = 45,
     widthFill = 0.86,
     baseOffset = -2,
@@ -320,6 +364,9 @@ export function drawJelly(
 
   ctx.clearRect(0, 0, width, height);
 
+  const ink = shape.hueShift ? turnedInk(inkIn, shape.hueShift) : inkIn;
+  const plate = ink.plate === true;
+  const lobe = shape.lobeDepth;
   const p = Math.min(1, Math.max(0, progress));
   const k = Math.min(1, Math.max(0, contract));
   const tm = time ?? 0;
@@ -483,7 +530,7 @@ export function drawJelly(
     }
     ctx.stroke();
     ctx.beginPath();
-    bellPath(ctx, full, cx, y0, R, line, shape.scallops);
+    bellPath(ctx, full, cx, y0, R, line, shape.scallops, plate, lobe);
     ctx.stroke();
     ctx.restore();
   }
@@ -562,7 +609,7 @@ export function drawJelly(
 
   /* The oral arms: four ribbons that pinch and swell as they twist, one
      edge ruffled, a darker rib down the middle, tapering to a point. */
-  const armLen = (now.L * 0.5 + now.r * 0.35 * now.grow) * (1 + stretch);
+  const armLen = (now.L * 0.5 + now.r * 0.35 * now.grow) * (1 + stretch) * shape.armLength;
   if (armLen > 4 * px) {
     const step = 3 * px;
     const n = Math.floor(armLen / step) + 1;
@@ -662,8 +709,9 @@ export function drawJelly(
   }
 
   /* The bell over the tops of the trails. */
-  const dome = (a: number, sc: number) =>
-    [bx + Math.cos(a) * now.rw * sc, now.rimY - Math.pow(Math.sin(a), 0.85) * now.bh * sc] as const;
+  const dome = plate
+    ? plateDome(now, bx)
+    : (a: number, sc: number) => [bx + Math.cos(a) * now.rw * sc, now.rimY - Math.pow(Math.sin(a), 0.85) * now.bh * sc] as const;
 
   // The bell leans into a pull about the middle of its rim; the trails do
   // not, they hang from where they were.
@@ -678,12 +726,13 @@ export function drawJelly(
   const wash = ctx.createLinearGradient(0, y0, 0, now.rimY);
   wash.addColorStop(0, ink.bellTop);
   wash.addColorStop(1, ink.bellRim);
-  ctx.beginPath();
-  bellPath(ctx, now, bx, y0, R, line, shape.scallops);
+  const bell = new Path2D();
+  bellPath(bell, now, bx, y0, R, line, shape.scallops, plate, lobe);
   ctx.fillStyle = wash;
   ctx.globalAlpha = 0.95;
-  ctx.fill();
+  ctx.fill(bell);
   ctx.globalAlpha = 1;
+  if (plate) plateLight(ctx, bell, dome, now, ink, line);
 
   // How much drawing the bell carries: a wallpaper's jelly is near enough
   // to be stippled; the block frame's is not.
@@ -738,11 +787,33 @@ export function drawJelly(
   );
   ctx.stroke();
 
-  // Eight canals from the crown, each forking on its way to the rim.
+  // Eight canals from the crown, each forking on its way to the rim. On the
+  // plate they run down the dome as its meridians would, so they say it is
+  // round rather than standing like the ribs of a shade.
   ctx.lineWidth = 0.7 * px;
-  ctx.globalAlpha = 0.5;
+  ctx.globalAlpha = plate ? 0.36 : 0.5;
   ctx.beginPath();
-  for (let j = 0; j < 8; j++) {
+  if (plate) {
+    // Each runs down its own meridian: the dome's profile, drawn in toward
+    // the middle by how far round the bell it is, from under the crown.
+    for (let j = 0; j < 8; j++) {
+      const u = 0.94 * Math.cos((Math.PI * (j + 0.5)) / 8);
+      let fx = 0;
+      let fy = 0;
+      for (let q = 0; q <= 12; q++) {
+        const [x, y] = dome((Math.PI / 2) * (0.78 - (0.78 * q) / 12), 0.97);
+        const mx = bx + (x - bx) * u;
+        if (q === 0) ctx.moveTo(mx, y);
+        else if (q <= 9) ctx.lineTo(mx, y);
+        if (q === 9) [fx, fy] = [mx, y];
+      }
+      const ex = bx + now.rw * 0.97 * u;
+      for (const side of [-1, 1]) {
+        ctx.moveTo(fx, fy);
+        ctx.quadraticCurveTo(ex + side * 1.5 * line, (fy + now.rimY) / 2, ex + side * 4 * line, now.rimY - px);
+      }
+    }
+  } else for (let j = 0; j < 8; j++) {
     const xj = bx + now.rw * 0.84 * ((j / 7) * 2 - 1);
     const mx = bx + (xj - bx) * 0.62;
     const my = y0 + now.bh * 0.46;
@@ -803,10 +874,38 @@ export function drawJelly(
     const gy0 = gy + Math.sin(th) * now.bh * 0.19;
     return { gx0, gy0, open: Math.atan2(gy - gy0, bx - gx0) };
   });
+  if (plate) {
+    // Four soft washes and no line: an organ seen through the clear bell,
+    // each a plump kidney turned to the middle, not a letter.
+    ctx.fillStyle = PLATE_GONAD;
+    const kidney = (gx0: number, gy0: number, open: number, grow: number) => {
+      const p = new Path2D();
+      const N = 26;
+      for (let q = 0; q <= N; q++) {
+        const a = open + (Math.PI * 2 * q) / N;
+        const c = Math.cos(a - open);
+        // A dent on the side toward the middle, round everywhere else.
+        const rr = rg * (1.25 + 0.12 * grow) * (1 - 0.32 * Math.pow(Math.max(0, c), 3)) * (1 + 0.05 * Math.sin(a * 3 + gx0));
+        const x = gx0 + Math.cos(a) * rr;
+        const y = gy0 + Math.sin(a) * rr * 0.74;
+        if (q) p.lineTo(x, y);
+        else p.moveTo(x, y);
+      }
+      p.closePath();
+      return p;
+    };
+    for (const g of shoes) {
+      ctx.globalAlpha = 0.09;
+      ctx.fill(kidney(g.gx0, g.gy0, g.open, 1.6));
+      ctx.globalAlpha = 0.23;
+      ctx.fill(kidney(g.gx0, g.gy0, g.open, 0));
+    }
+    ctx.globalAlpha = 1;
+  }
   ctx.fillStyle = ink.gonad;
   ctx.save();
   ctx.lineJoin = 'round';
-  for (const g of shoes) {
+  if (!plate) for (const g of shoes) {
     // The wash, and a wider breath of it round its edge, as wet colour spreads.
     const strength = dark ? 0.7 : 1;
     ctx.globalAlpha = 0.1 * strength;
@@ -824,7 +923,7 @@ export function drawJelly(
   ctx.lineWidth = 0.5 * px;
   ctx.globalAlpha = 0.45;
   ctx.beginPath();
-  shoes.forEach((g, gi) => {
+  if (!plate) shoes.forEach((g, gi) => {
     const from = g.open + 1.3;
     const to = g.open + Math.PI * 2 - 1.3;
     const out = rg * 1.36;
@@ -841,17 +940,20 @@ export function drawJelly(
   });
   ctx.stroke();
 
-  // A lick of white on the crown, where the light catches it.
-  ctx.strokeStyle = ink.sheen;
-  ctx.lineWidth = 2.2 * line;
-  ctx.globalAlpha = 0.7;
-  ctx.beginPath();
-  for (let a = 2.35, first = true; a >= 1.85; a -= 0.05, first = false) {
-    const [x, y] = dome(a, 0.9);
-    if (first) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  // A lick of white on the crown, where the light catches it: the plain
+  // jelly's. The plate's light is its strip of bare paper, never a gloss.
+  if (!plate) {
+    ctx.strokeStyle = ink.sheen;
+    ctx.lineWidth = 2.2 * line;
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    for (let a = 2.35, first = true; a >= 1.85; a -= 0.05, first = false) {
+      const [x, y] = dome(a, 0.9);
+      if (first) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
   }
-  ctx.stroke();
   ctx.globalAlpha = 1;
 
   // The outline, and a fainter second pass just off it, the way a pen
@@ -860,16 +962,22 @@ export function drawJelly(
   // hardest, as the bell's clear edge is lost in it. On dark water it is
   // the lit side that carries the weight, over a soft rim of the jelly's
   // own light.
-  const outline = bellPts(now, bx, y0, R, line, shape.scallops);
+  const outline = bellPts(now, bx, y0, R, line, shape.scallops, plate, lobe);
   if (dark && ink.lamp) {
     ctx.strokeStyle = ink.lamp;
     ctx.lineWidth = 4 * line;
     ctx.globalAlpha = 0.16 + 0.06 * pulse;
-    ctx.beginPath();
-    bellPath(ctx, now, bx, y0, R, line, shape.scallops);
-    ctx.stroke();
+    ctx.stroke(bell);
     ctx.globalAlpha = 1;
   }
+  if (plate) {
+    // One pressure line, 0.4 to 1.2 of its weight from the light round into
+    // the shadow, lifted off the paper twice along the lit shoulder.
+    ctx.fillStyle = ink.edge;
+    ctx.globalAlpha = 0.95;
+    pressureOutline(ctx, outline, 1.5 * line * (1 - 0.25 * detail), LIGHT, Math.max(5 * line, 0.07 * now.rw));
+    ctx.globalAlpha = 1;
+  } else {
   // The weight follows the light: thin on the lit side and breaking where
   // it is hardest, the clear edge lost in it, and heavy where the bell turns
   // away, with a second stroke laid into the shadow along the right of the
@@ -935,15 +1043,16 @@ export function drawJelly(
       }
     }
   }
-  ctx.strokeStyle = ink.edge;
-  ctx.save();
-  ctx.translate(0.9 * line, 0.7 * line);
-  ctx.lineWidth = 0.6 * px;
-  ctx.globalAlpha = 0.45;
-  ctx.beginPath();
-  bellPath(ctx, now, bx, y0, R, line, shape.scallops);
-  ctx.stroke();
-  ctx.restore();
+    ctx.strokeStyle = ink.edge;
+    ctx.save();
+    ctx.translate(0.9 * line, 0.7 * line);
+    ctx.lineWidth = 0.6 * px;
+    ctx.globalAlpha = 0.45;
+    ctx.beginPath();
+    bellPath(ctx, now, bx, y0, R, line, shape.scallops);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Eight sense organs round the rim; on the night paper they glow.
   const rim: number[] = [];
@@ -994,10 +1103,112 @@ export function drawJelly(
 }
 
 /**
- * The bell's outline as points, the same curve `bellPath` traces, for the
- * pen's pressure line.
+ * The plate's light on the bell, after its wash: the pigment pooled at the
+ * edge where it dried, and a strip of bare paper left along the lit
+ * shoulder, a little in from the edge and running out at both ends. On the
+ * night paper the strip is the jelly's own light instead.
  */
-function bellPts(q: Pose, bx: number, y0: number, R: number, line: number, n = 16): number[] {
+function plateLight(
+  ctx: CanvasRenderingContext2D,
+  bell: Path2D,
+  dome: (a: number, sc: number) => readonly [number, number],
+  q: Pose,
+  ink: JellyInk,
+  line: number,
+) {
+  ctx.save();
+  ctx.clip(bell);
+  ctx.strokeStyle = ink.bellRim;
+  ctx.globalAlpha = 0.45;
+  ctx.lineWidth = 3 * line;
+  ctx.stroke(bell);
+  ctx.restore();
+  const bw = 2 * q.rw;
+  const sw = 0.06 * bw;
+  const N = 28;
+  room(N + 1);
+  const a0 = 1.62;
+  const a1 = 2.86;
+  const widths: number[] = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const a = a0 + (a1 - a0) * t;
+    const [ex, ey] = dome(a, 1);
+    const [ix, iy] = dome(a, 0.9);
+    const dl = Math.hypot(ex - ix, ey - iy) || 1;
+    const inset = 0.022 * bw + sw / 2;
+    stripX[i] = ex + ((ix - ex) / dl) * inset;
+    stripY[i] = ey + ((iy - ey) / dl) * inset;
+    widths.push(sw * Math.pow(Math.sin(Math.PI * t), 0.6) * (0.85 + 0.15 * Math.sin(t * 9 + 1)));
+  }
+  const night = ink.glow != null;
+  ctx.fillStyle = night ? mixHex(ink.bellTop, ink.lamp ?? ink.bellTop, 0.45) : (ink.paper ?? '#FBF8EF');
+  // A wider breath of it first, so its edges are soft, then the strip.
+  for (const [grow, a] of [
+    [2.2, 0.1],
+    [1.5, 0.22],
+    [1, night ? 0.35 : 0.62],
+  ] as const) {
+    for (let i = 0; i <= N; i++) stripW[i] = widths[i] * grow;
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    traceStrip(ctx, N + 1);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * The plate's bell: a dome with a crown, not a lampshade. Its sides swell
+ * out past the rim a little way above it and turn back in to it, as a moon
+ * jelly's margin curls under, so no wall of it ever stands upright, and its
+ * shoulders fall away from the crown faster than an ellipse's would. A point
+ * on it at `a` (0 at the right of the rim, pi at the left, over the crown)
+ * and `sc` of the way out from the middle of the rim.
+ */
+function plateDome(q: Pose, bx: number): (a: number, sc: number) => readonly [number, number] {
+  // How far under its widest point the rim is tucked; the squeeze opens it.
+  const d = 0.3 * (1 - 0.45 * q.sq);
+  const sd = Math.sin(d);
+  const A = q.rw / Math.cos(d);
+  const B = q.bh / (1 + sd);
+  const cy = q.rimY - B * sd;
+  const span = (Math.PI + 2 * d) / Math.PI;
+  return (a: number, sc: number) => {
+    const ph = -d + a * span;
+    const s = Math.sin(ph);
+    const y = cy - B * (s > 0 ? Math.pow(s, 1.35) : s);
+    return [bx + A * Math.cos(ph) * sc, q.rimY - (q.rimY - y) * sc] as const;
+  };
+}
+
+/**
+ * The bell's outline as points, the same curve `bellPath` traces, for the
+ * pen's pressure line. `plate` is the plate's dome (`plateDome`), and `lobe`
+ * how deep its rim's lobes are cut.
+ */
+function bellPts(q: Pose, bx: number, y0: number, R: number, line: number, n = 16, plate = false, lobe = 1): number[] {
+  if (plate) {
+    const dome = plateDome(q, bx);
+    const out: number[] = [];
+    const N = 48;
+    for (let i = 0; i <= N; i++) {
+      const [x, y] = dome(Math.PI * (1 - i / N), 1);
+      out.push(x, y);
+    }
+    // The rim, right to left: lobes bulging down between the notches.
+    const step = (2 * q.rw) / n;
+    const dip = 2.6 * line * (q.r / R) * lobe;
+    for (let i = 0; i < n; i++) {
+      const xa = q.rw + bx - i * step;
+      for (let k = 1; k <= 5; k++) {
+        if (i === n - 1 && k === 5) break;
+        const t = k / 5;
+        out.push(xa - t * step, q.rimY + Math.pow(Math.sin(Math.PI * t), 0.7) * dip);
+      }
+    }
+    return out;
+  }
   const L = bx - q.rw;
   const Rr = bx + q.rw;
   const flare = q.rw * 0.05 * q.sq;
@@ -1070,14 +1281,23 @@ function bellDots(shape: JellyShape, dark: boolean): number[] {
  * the plain jelly).
  */
 function bellPath(
-  ctx: CanvasRenderingContext2D,
+  ctx: CanvasRenderingContext2D | Path2D,
   q: Pose,
   bx: number,
   y0: number,
   R: number,
   line: number,
   n = 16,
+  plate = false,
+  lobe = 1,
 ) {
+  if (plate) {
+    const pts = bellPts(q, bx, y0, R, line, n, true, lobe);
+    ctx.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
+    ctx.closePath();
+    return;
+  }
   const L = bx - q.rw;
   const Rr = bx + q.rw;
   const flare = q.rw * 0.05 * q.sq;
@@ -1115,6 +1335,154 @@ export function jellyStartle(ms: number): number {
   if (ms < 0) return 0;
   if (ms < 150) return smooth(ms / 150);
   return Math.max(0, 1 - smooth(Math.min(1, (ms - 150) / 1000)));
+}
+
+/**
+ * The plate's outline: one pressure line round a closed shape, `base` wide
+ * on average, from 0.4 of it where the shape faces the light to 1.2 where
+ * it turns away, and lifted off the paper twice along the lit side (`gap`
+ * long), running out thin into each gap. Filled in the current fill style.
+ */
+function pressureOutline(ctx: CanvasRenderingContext2D, pts: number[], base: number, light: readonly [number, number], gap: number) {
+  const m = pts.length / 2;
+  if (m < 4) return;
+  let area = 0;
+  for (let i = 0; i < m; i++) {
+    const j = (i + 1) % m;
+    area += pts[i * 2] * pts[j * 2 + 1] - pts[j * 2] * pts[i * 2 + 1];
+  }
+  const sgn = area > 0 ? 1 : -1;
+  const ll = Math.hypot(light[0], light[1]) || 1;
+  const face = new Float64Array(m);
+  const along = new Float64Array(m + 1);
+  for (let i = 0; i < m; i++) {
+    const a = (i - 1 + m) % m;
+    const b = (i + 1) % m;
+    const dx = pts[b * 2] - pts[a * 2];
+    const dy = pts[b * 2 + 1] - pts[a * 2 + 1];
+    const dl = Math.hypot(dx, dy) || 1;
+    // Outward, then how squarely it faces along the light: 1 turned away.
+    face[i] = (((dy / dl) * light[0] - (dx / dl) * light[1]) * sgn) / ll;
+    const j = (i + 1) % m;
+    along[i + 1] = along[i] + Math.hypot(pts[j * 2] - pts[i * 2], pts[j * 2 + 1] - pts[i * 2 + 1]);
+  }
+  const total = along[m];
+  // The longest run facing the light.
+  let from = -1;
+  let longest = 0;
+  for (let i = 0; i < m; i++) {
+    if (face[i] > -0.3 || face[(i - 1 + m) % m] <= -0.3) continue;
+    let len = 0;
+    for (let k = i; face[k % m] <= -0.3 && len < total; k++) len += along[(k % m) + 1] - along[k % m];
+    if (len > longest) {
+      longest = len;
+      from = i;
+    }
+  }
+  // Two gaps in it, a third and two thirds of the way along: each one's middle round the outline.
+  const gaps: number[] = [];
+  const half = Math.min(gap, longest * 0.18) / 2;
+  if (from >= 0) for (const f of [0.3, 0.72]) gaps.push((along[from] + longest * f) % total);
+  const ring = (s: number, c: number) => Math.min(Math.abs(s - c), total - Math.abs(s - c));
+  // -1 in a gap; otherwise 0 to 1, how far from a gap's end, for the taper into it.
+  const inGap = (s: number) => {
+    let t = 1;
+    for (const c of gaps) {
+      const dc = ring(s, c);
+      if (dc < half) return -1;
+      t = Math.min(t, (dc - half) / (base * 6));
+    }
+    return t;
+  };
+  // The walk starts in a gap (or anywhere, with none), so every run is open.
+  let s0 = 0;
+  if (gaps.length) {
+    let best = Infinity;
+    for (let i = 0; i < m; i++) {
+      const dc = ring(along[i], gaps[0]);
+      if (dc < best) {
+        best = dc;
+        s0 = i;
+      }
+    }
+  }
+  let n = 0;
+  const flush = () => {
+    if (n >= 2) {
+      ctx.beginPath();
+      traceStrip(ctx, n);
+      ctx.fill();
+    }
+    n = 0;
+  };
+  room(m + 2);
+  for (let q = 0; q <= m; q++) {
+    const i = (s0 + q) % m;
+    const t = inGap(along[i]);
+    if (t < 0) {
+      flush();
+      continue;
+    }
+    stripX[n] = pts[i * 2];
+    stripY[n] = pts[i * 2 + 1];
+    stripW[n] = base * (0.8 + 0.4 * face[i]) * (0.35 + 0.65 * Math.sqrt(t));
+    n++;
+  }
+  flush();
+}
+
+/** `#rrggbb` turned `deg` round the colour wheel, its lightness and saturation kept. */
+function turnHue(hex: string, deg: number): string {
+  const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
+  if (!Number.isFinite(n) || hex.length < 7) return hex;
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const mx = Math.max(r, g, b);
+  const mn = Math.min(r, g, b);
+  const l = (mx + mn) / 2;
+  const d = mx - mn;
+  if (d < 1e-6) return hex;
+  const c = d;
+  let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (((h * 60 + deg) % 360) + 360) % 360;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m0 = l - c / 2;
+  const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  const to = (v: number) =>
+    Math.round(Math.max(0, Math.min(1, v + m0)) * 255)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${to(r1)}${to(g1)}${to(b1)}`;
+}
+
+/* An ink turned round the wheel, made once for each ink and turn. The pen's
+   lines keep their colour: it is the animal that is tinted. */
+const turnedInks = new WeakMap<JellyInk, Map<number, JellyInk>>();
+
+function turnedInk(ink: JellyInk, deg: number): JellyInk {
+  let m = turnedInks.get(ink);
+  if (!m) {
+    m = new Map();
+    turnedInks.set(ink, m);
+  }
+  const hit = m.get(deg);
+  if (hit) return hit;
+  const t = (c: string) => turnHue(c, deg);
+  const made: JellyInk = {
+    ...ink,
+    bellTop: t(ink.bellTop),
+    bellRim: t(ink.bellRim),
+    gonad: t(ink.gonad),
+    tentacle: t(ink.tentacle),
+    sting: t(ink.sting),
+    arm: t(ink.arm),
+    bloom: t(ink.bloom),
+    glow: ink.glow && t(ink.glow),
+    lamp: ink.lamp && t(ink.lamp),
+  };
+  m.set(deg, made);
+  return made;
 }
 
 /** The fractional part, always 0 to 1. */

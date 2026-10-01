@@ -944,39 +944,102 @@ function envelope(age: number, rise: number, fall: number): number {
 }
 
 /**
- * A whale, far overhead: only its shadow against the light, going the way
- * the water goes, slowly, across the whole page.
+ * A whale's outline, side on, head at +x, in shares of its length about its
+ * middle: a rorqual's long body, the head tapering flat to the snout, the
+ * throat full under it, a small hooked dorsal fin far back, the tail stock
+ * narrowing to the flukes (seen a little from the side, one lobe up and one
+ * down), and a long pectoral flipper hanging back from under the chest.
  */
-export function drawWhale(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, dir: 1 | -1, px: number, ambient: number, dark: boolean) {
-  const len = Math.max(w, h) * 0.62;
+const WHALE_BODY: number[] = [
+  // The snout, and the flat head rising from it.
+  0.5, 0.014, 0.488, -0.002, 0.455, -0.017, 0.4, -0.033, 0.33, -0.05, 0.24, -0.063, 0.12, -0.071, 0.0, -0.07, -0.11, -0.062, -0.17, -0.055,
+  // The dorsal fin, small and hooked back.
+  -0.195, -0.064, -0.218, -0.082, -0.232, -0.085, -0.232, -0.068, -0.245, -0.05,
+  // The tail stock, deep and narrowing, to the flukes' root.
+  -0.3, -0.04, -0.36, -0.03, -0.41, -0.021, -0.44, -0.016,
+  // The upper fluke, out and back to its tip; the trailing edge in to the notch.
+  -0.462, -0.04, -0.49, -0.075, -0.522, -0.1, -0.545, -0.104, -0.538, -0.075, -0.522, -0.04, -0.508, -0.008, -0.512, 0.002,
+  // The lower fluke, the notch out to its tip and back along its leading edge.
+  -0.522, 0.03, -0.54, 0.066, -0.556, 0.09, -0.535, 0.088, -0.5, 0.064, -0.468, 0.036, -0.44, 0.016,
+  // The belly forward to the throat and the jaw.
+  -0.4, 0.022, -0.32, 0.034, -0.2, 0.053, -0.08, 0.068, 0.05, 0.078, 0.17, 0.081, 0.28, 0.074, 0.37, 0.058, 0.44, 0.039, 0.485, 0.025,
+];
+const WHALE_FLIPPER: number[] = [
+  0.29, 0.05, 0.262, 0.096, 0.21, 0.148, 0.14, 0.194, 0.088, 0.22, 0.072, 0.214, 0.112, 0.176, 0.162, 0.13, 0.186, 0.094, 0.18, 0.058,
+];
+/** How far the outline reaches above and below its middle line, in shares of its length. */
+const WHALE_TOP = 0.11;
+const WHALE_BOTTOM = 0.228;
+
+/** The whale's shadow, blurred once at a size and placed. */
+let whaleShadows: { key: string; canvas: HTMLCanvasElement | null; q: number; x0: number; y0: number }[] = [];
+
+function whaleShadow(len: number, blur: number, color: string): { canvas: HTMLCanvasElement | null; q: number; x0: number; y0: number } {
+  const key = `${Math.round(len)}|${Math.round(blur * 10)}|${color}`;
+  const hit = whaleShadows.find((s) => s.key === key);
+  if (hit) return hit;
+  // Kept small, so the blur is a few of its own pixels: it is soft anyway,
+  // and scaled up it is softer.
+  const q = Math.max(0.06, Math.min(1, 3 / Math.max(1, blur)));
+  const pad = blur * 3;
+  const x0 = -0.57 * len - pad;
+  const y0 = -WHALE_TOP * len - pad;
+  const c = scratch((1.09 * len + pad * 2) * q, ((WHALE_TOP + WHALE_BOTTOM) * len + pad * 2) * q);
+  const g = c?.getContext('2d');
+  if (c && g) {
+    g.scale(q, q);
+    g.translate(-x0, -y0);
+    g.filter = `blur(${(blur * q).toFixed(2)}px)`;
+    g.scale(len, len);
+    const path = smoothPath(WHALE_BODY, true, 4);
+    path.addPath(smoothPath(WHALE_FLIPPER, true, 4));
+    g.fillStyle = color;
+    g.fill(path);
+  }
+  const made = { key, canvas: c && g ? c : null, q, x0, y0 };
+  whaleShadows = [made, ...whaleShadows].slice(0, 2);
+  return made;
+}
+
+/**
+ * A whale, far overhead: only its shadow against the light, going the way
+ * the water goes, slowly, across the whole page. Always the whole animal,
+ * head, flipper and flukes, about half the page's width long; soft, its
+ * edge blurred a hundredth of the page's short side; and faint, an eighth
+ * darker than the paper, or a seventh darker than the night's water.
+ *
+ * It keeps itself wholly inside the region it is given top to bottom (and
+ * draws itself smaller if the region is too short to hold it), so a band
+ * the caller hands it is never cut straight across. `page`, the page's
+ * short side, sets the blur; without it the region's short side does.
+ */
+export function drawWhale(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, dir: 1 | -1, px: number, ambient: number, dark: boolean, page?: number) {
+  const a = envelope(age, 0.15, 0.15) * (dark ? 0.15 : 0.12);
+  if (a <= 0) return;
+  const blur = Math.max(1.5 * px, 0.01 * (page ?? Math.min(w, h)));
+  const len = Math.max(20 * px, Math.min(w * 0.52, (h - blur * 4) / (WHALE_TOP + WHALE_BOTTOM)));
   const travel = w + len * 2;
   const x = dir > 0 ? -len + age * travel : w + len - age * travel;
-  const y = h * (0.1 + ((seed >>> 8) % 100) / 100 * 0.12);
-  const a = envelope(age, 0.15, 0.15) * (dark ? 0.2 : 0.16);
-  const fluke = Math.sin(ambient * 0.9) * len * 0.03;
+  const top = WHALE_TOP * len + blur * 2;
+  const bottom = WHALE_BOTTOM * len + blur * 2;
+  const want = h * (0.1 + ((seed >>> 8) % 100) / 100 * 0.12);
+  const y = h > top + bottom ? Math.max(top, Math.min(h - bottom, want)) : top;
+  const shadow = whaleShadow(len, blur, dark ? '#000000' : '#2A3438');
   ctx.save();
-  ctx.globalAlpha = a;
-  ctx.fillStyle = dark ? '#000000' : '#2A3438';
-  ctx.filter = `blur(${3 * px}px)`;
+  ctx.globalAlpha *= a;
   ctx.translate(x, y);
   ctx.scale(dir, 1);
-  ctx.beginPath();
-  // Head at +x, tail stock tapering to -x, flukes at the end.
-  ctx.moveTo(len * 0.5, 0);
-  ctx.bezierCurveTo(len * 0.48, -len * 0.09, len * 0.1, -len * 0.11, -len * 0.3, -len * 0.04);
-  ctx.quadraticCurveTo(-len * 0.44, -len * 0.01 + fluke * 0.3, -len * 0.48, fluke * 0.5);
-  ctx.lineTo(-len * 0.6, -len * 0.07 + fluke);
-  ctx.quadraticCurveTo(-len * 0.55, fluke, -len * 0.6, len * 0.07 + fluke);
-  ctx.lineTo(-len * 0.48, len * 0.01 + fluke * 0.5);
-  ctx.quadraticCurveTo(-len * 0.44, len * 0.02, -len * 0.3, len * 0.05);
-  ctx.bezierCurveTo(len * 0.1, len * 0.12, len * 0.46, len * 0.08, len * 0.5, 0);
-  ctx.fill();
-  // A pectoral fin, hanging down.
-  ctx.beginPath();
-  ctx.moveTo(len * 0.22, len * 0.07);
-  ctx.quadraticCurveTo(len * 0.12, len * 0.22, len * 0.02, len * 0.2);
-  ctx.quadraticCurveTo(len * 0.1, len * 0.12, len * 0.14, len * 0.07);
-  ctx.fill();
+  // Gliding: the faintest pitch, as it rises and settles.
+  ctx.rotate(Math.sin(ambient * 0.21 + (seed % 13)) * 0.012);
+  if (shadow.canvas) {
+    ctx.drawImage(shadow.canvas, shadow.x0, shadow.y0, shadow.canvas.width / shadow.q, shadow.canvas.height / shadow.q);
+  } else {
+    ctx.scale(len, len);
+    const path = smoothPath(WHALE_BODY, true, 4);
+    path.addPath(smoothPath(WHALE_FLIPPER, true, 4));
+    ctx.fillStyle = dark ? '#000000' : '#2A3438';
+    ctx.fill(path);
+  }
   ctx.restore();
 }
 
@@ -1068,9 +1131,10 @@ export function drawStorm(ctx: CanvasRenderingContext2D, w: number, h: number, a
   ctx.restore();
 }
 
-/** Squid skin and its chromatophores: rust and brown, drained by the depth. */
-const SQUID_SKIN = { light: '#B08C80', dark: '#5E4A44' } as const;
-const CHROMATOPHORES = ['#9C4A2E', '#7A3B26', '#5C3324', '#8E5A3A'];
+/** Squid skin: a grey-brown the depth has drained, never a red. */
+const SQUID_SKIN = { light: '#9A8F82', dark: '#59534C' } as const;
+/** Its chromatophores, small and few, as drained as the skin. */
+const CHROMATOPHORES = ['#76604F', '#664F42', '#5A4B41'];
 
 /** The still parts of an eye, drawn once round its middle and placed each frame. */
 interface EyeLayer {
@@ -1084,7 +1148,6 @@ interface EyeLayer {
 
 interface EyeLayers {
   key: string;
-  vignette: EyeLayer | null;
   skin: EyeLayer | null;
   ball: EyeLayer | null;
 }
@@ -1104,36 +1167,19 @@ function eyeLayer(x: number, y: number, w: number, h: number, q: number, paint: 
   return { canvas: c, x, y, w, h };
 }
 
-/** The water closing in round the eye: soft, so it is kept at a quarter of the size. */
-function paintEyeVignette(ctx: CanvasRenderingContext2D, re: number, seed: number, dark: boolean, out: number): void {
-  const r = mulberry32(hash32('squid-eye', seed, 'vignette'));
-  const px0 = out * re * 0.7;
-  const py0 = re * 0.15;
-  const base = 1;
-  // The water closing in round it: a soft, uneven shadow, never a ring.
-  const dim = dark ? '5, 6, 10' : '42, 35, 32';
-  const vig = (x: number, y: number, rad: number, a: number) => {
-    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-    g.addColorStop(0, `rgba(${dim}, ${a})`);
-    g.addColorStop(0.55, `rgba(${dim}, ${a * 0.5})`);
-    g.addColorStop(1, `rgba(${dim}, 0)`);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, rad, 0, Math.PI * 2);
-    ctx.fill();
-  };
-  ctx.globalAlpha = base;
-  const vk = dark ? 1 : 0.6;
-  vig(px0 + out * re, py0, re * 4.4, 0.12 * vk);
-  for (let k = 0; k < 6; k++) {
-    const a = r() * Math.PI * 2;
-    const dist = re * (1.2 + r() * 1.6);
-    vig(px0 + Math.cos(a) * dist + out * re * 0.6, py0 + Math.sin(a) * dist * 0.8, re * (1.2 + r() * 1.3), 0.045 * vk);
-  }
+/** The mantle patch's half width and half height, in eye radii: more than twice the eye across, both ways. */
+const PATCH_RX = 2.9;
+const PATCH_RY = 2.3;
+/** How far in from the page's edge the eye's middle sits, in eye radii. */
+const EYE_INSET = 0.82;
 
-}
-
-/** The patch of mantle round the eye: its skin, chromatophores, the socket and the folds. */
+/**
+ * The patch of mantle round the eye, as an engraver gives skin: dots,
+ * crowded into the socket and the side away from the light and thinning out
+ * to nothing, over the thinnest grey wash; a few chromatophores, small and
+ * drained; the fold over the eye and the crease under it. No glow, no ring
+ * of colour: where the dots stop, the water goes on.
+ */
 function paintEyeSkin(ctx: CanvasRenderingContext2D, re: number, seed: number, px: number, dark: boolean, out: number): void {
   const r = mulberry32(hash32('squid-eye', seed, 'skin'));
   const cx = 0;
@@ -1142,119 +1188,111 @@ function paintEyeSkin(ctx: CanvasRenderingContext2D, re: number, seed: number, p
   const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
   const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
   const skin = dark ? SQUID_SKIN.dark : SQUID_SKIN.light;
-  const px0 = out * re * 0.7;
-  const py0 = re * 0.15;
-  const base = 1;
+  // Round the eye, a little more of it toward the page than off it, so
+  // what shows of it is still twice the eye across.
+  const px0 = -out * re * 0.3;
+  const py0 = re * 0.08;
+  const RX = re * PATCH_RX;
+  const RY = re * PATCH_RY;
   const lidW = Math.max(0.7 * px, re * 0.035);
-  // The mantle: an uneven patch of wash, thickest round the eye and thinning
-  // to nothing, its edge ragged rather than stopped.
-  // Laid out round the patch's middle, in a frame squashed to its ellipse.
+  // Its outline: ragged, never an ellipse's clean edge.
   const blob = (scale: number, salt: number) => {
     const pts: number[] = [];
     const q = mulberry32(hash32('squid-skin', seed, salt));
     const ph = [q() * 6.28, q() * 6.28, q() * 6.28];
-    for (let k = 0; k < 40; k++) {
-      const a = (k / 40) * Math.PI * 2;
-      const rr = re * 2.5 * scale * (1 + 0.07 * Math.sin(a * 3 + ph[0]) + 0.05 * Math.sin(a * 7 + ph[1]) + 0.035 * Math.sin(a * 13 + ph[2]) + (q() - 0.5) * 0.05);
-      pts.push(Math.cos(a) * rr, Math.sin(a) * rr);
+    for (let k = 0; k < 48; k++) {
+      const a = (k / 48) * Math.PI * 2;
+      const rr = scale * (1 + 0.08 * Math.sin(a * 3 + ph[0]) + 0.05 * Math.sin(a * 7 + ph[1]) + 0.03 * Math.sin(a * 13 + ph[2]) + (q() - 0.5) * 0.04);
+      pts.push(px0 + Math.cos(a) * RX * rr, py0 + Math.sin(a) * RY * rr);
     }
     return smoothPath(pts, true, 3);
   };
-  const skinA = dark ? 0.62 : 0.5;
-  ctx.save();
-  ctx.translate(px0, py0);
-  ctx.scale(1.1, 0.85);
-  const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, re * 2.6);
-  sg.addColorStop(0, mixHex(skin, '#000000', 0.12));
-  sg.addColorStop(0.5, skin);
-  sg.addColorStop(0.82, `${skin}55`);
-  sg.addColorStop(1, `${skin}00`);
-  ctx.globalAlpha = base * skinA;
-  ctx.fillStyle = sg;
-  ctx.fill(blob(1.0, 9));
-  // Mottling: thinner washes laid over it, each stopping somewhere else.
-  for (let k = 0; k < 3; k++) {
-    ctx.globalAlpha = base * 0.06;
-    ctx.fillStyle = mixHex(skin, '#5C3324', 0.3);
-    ctx.fill(blob(0.5 + k * 0.16, k));
+  const patch = blob(1, 0);
+  const box = { x: px0 - RX * 1.2, y: py0 - RY * 1.2, w: RX * 2.4, h: RY * 2.4 };
+  // How far out in the patch a point lies: 0 at its middle, 1 at its edge.
+  const outAt = (x: number, y: number) => Math.hypot((x - px0) / RX, (y - py0) / RY);
+  // The wash: the thinnest grey, two layers each stopping somewhere else,
+  // so the tone gathers toward the eye without a gradient's glow.
+  ctx.fillStyle = skin;
+  for (let k = 0; k < 2; k++) {
+    ctx.globalAlpha = dark ? 0.08 : 0.06;
+    ctx.fill(blob(0.7 - k * 0.22, k + 1));
   }
-  ctx.restore();
-  const patch = new Path2D();
-  patch.ellipse(px0, py0, re * 2.6 * 1.1, re * 2.6 * 0.85, 0, 0, Math.PI * 2);
+  ctx.globalAlpha = 1;
 
-  // Chromatophores: small dots of rust and brown, crowded nearer the eye and
-  // thinning out to the patch's edge, a few of them opened wide and soft.
-  const nDots = Math.round(160 + 480 * d);
+  // The dots: the skin's tone, thick in the socket and on the shadow side.
+  const across = shadeAcross(box, light);
+  const tone = (x: number, y: number) => {
+    const o = outAt(x, y);
+    const fade = Math.max(0, 1 - Math.pow(o, 2.6));
+    const socket = Math.exp(-Math.pow((Math.hypot(x - cx, y - cy) - re * 1.25) / (re * 0.35), 2));
+    return Math.min(1, fade * (0.35 + 0.55 * across(x, y)) + socket * 0.5 * fade);
+  };
+  stipple(ctx, patch, box, {
+    spacing: Math.max(1.3 * px, re * 0.042),
+    radius: Math.max(0.32 * px, re * 0.0095),
+    shade: (x, y) => (Math.hypot(x - cx, y - cy) < re * 1.06 ? 0 : tone(x, y)),
+    from: 0.08,
+    color: ink,
+    alpha: dark ? 0.6 : 0.7,
+    seed: seed ^ 0x51c,
+  });
+
+  // Chromatophores: a scatter of small dots, a little larger than the
+  // stipple, never haloed, thinning out to the edge.
+  const nDots = Math.round(50 + 150 * d);
   const dotPaths = CHROMATOPHORES.map(() => new Path2D());
-  const halos = new Path2D();
   for (let k = 0; k < nDots; k++) {
     const a = r() * Math.PI * 2;
-    const t = Math.pow(r(), 0.8);
-    const dist = re * (1.15 + t * 1.3);
-    const x = px0 + Math.cos(a) * dist * 1.1 - out * re * 0.5 * (1 - t);
-    const y = py0 + Math.sin(a) * dist * 0.85;
-    if (Math.hypot(x - cx, y - cy) < re * 1.16) continue;
-    if (r() > 1.05 - t * 0.65) continue;
-    const big = r() < 0.07;
-    const rad = Math.max(0.45 * px, re * (big ? 0.022 + r() * 0.016 : 0.006 + r() * 0.015));
+    const t = Math.sqrt(r());
+    const x = px0 + Math.cos(a) * RX * t * 0.95;
+    const y = py0 + Math.sin(a) * RY * t * 0.95;
+    if (Math.hypot(x - cx, y - cy) < re * 1.2) continue;
+    if (r() > 1.1 - t) continue;
+    const rad = Math.max(0.5 * px, re * (0.014 + r() * 0.016));
     const dp = dotPaths[Math.floor(r() * dotPaths.length)];
     dp.moveTo(x + rad, y);
     dp.ellipse(x, y, rad, rad * (0.7 + r() * 0.3), r() * 3, 0, Math.PI * 2);
-    if (big) {
-      halos.moveTo(x + rad * 1.9, y);
-      halos.ellipse(x, y, rad * 1.9, rad * 1.6, r() * 3, 0, Math.PI * 2);
-    }
   }
-  ctx.globalAlpha = base * 0.08;
-  ctx.fillStyle = dark ? '#A0603F' : '#9C4A2E';
-  ctx.fill(halos);
   dotPaths.forEach((p, i) => {
-    ctx.globalAlpha = base * (dark ? 0.4 : 0.45) * (0.75 + 0.1 * i);
-    ctx.fillStyle = dark ? mixHex(CHROMATOPHORES[i], '#E8E0CF', 0.12) : CHROMATOPHORES[i];
+    ctx.globalAlpha = (dark ? 0.32 : 0.4) * (0.8 + 0.1 * i);
+    ctx.fillStyle = dark ? mixHex(CHROMATOPHORES[i], '#E8E0CF', 0.25) : CHROMATOPHORES[i];
     ctx.fill(p);
   });
-  // And the skin's own stipple, where it turns from the light.
-  if (d > 0.2) {
-    const box = { x: px0 - re * 2.8, y: py0 - re * 2.2, w: re * 5.6, h: re * 4.4 };
-    const across = shadeAcross(box, light);
-    stipple(ctx, patch, box, {
-      spacing: Math.max(1.4 * px, re * 0.05),
-      radius: Math.max(0.3 * px, re * 0.008),
-      shade: (x, y) => across(x, y) * Math.min(1, Math.hypot(x - cx, y - cy) / (re * 1.6)),
-      from: 0.38,
+
+  // The socket's rim in contour lines, round the ball on its shadow side.
+  if (d > 0.15) {
+    const rim = new Path2D();
+    rim.arc(cx, cy, re * 1.42, 0, Math.PI * 2);
+    rim.arc(cx, cy, re * 1.06, 0, Math.PI * 2, true);
+    const rb = { x: cx - re * 1.45, y: cy - re * 1.45, w: re * 2.9, h: re * 2.9 };
+    hatch(ctx, rim, rb, {
+      spacing: Math.max(1.3 * px, re * 0.06),
+      angle: -0.75 + Math.PI / 2,
+      bow: 1.4,
+      shade: shadeAcross(rb, light),
+      from: 0.52,
       color: ink,
-      alpha: base * 0.4,
-      seed: seed ^ 0x51c,
+      width: Math.max(0.4 * px, re * 0.012),
+      alpha: 0.45,
+      seed: seed ^ 0x50c,
     });
   }
 
-  // The socket: the skin folds in round the ball, a shade darker, softly.
-  const sock = ctx.createRadialGradient(cx, cy, re * 0.9, cx, cy, re * 1.45);
-  const sc = mixHex(skin, dark ? '#000000' : '#2A2320', 0.4);
-  sock.addColorStop(0, sc);
-  sock.addColorStop(0.35, `${sc}AA`);
-  sock.addColorStop(1, `${sc}00`);
-  ctx.globalAlpha = base * 0.6;
-  ctx.fillStyle = sock;
-  ctx.beginPath();
-  ctx.arc(cx, cy, re * 1.45, 0, Math.PI * 2);
-  ctx.fill();
-
-  // The fold of skin over the eye, off to the body's side, and a short
-  // crease under it: not rings, the skin's own lines.
+  // The fold of skin over the eye, flatter than the ball and off toward the
+  // body, and a short crease under it: the skin's own lines, not rings.
   const fold: number[] = [];
   const crease: number[] = [];
   for (let i = 0; i <= 10; i++) {
     const t = i / 10;
-    const a = -Math.PI / 2 + out * (-0.9 + t * 1.6);
-    const rr = re * (1.28 + 0.1 * Math.sin(t * Math.PI));
-    fold.push(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92);
-    const b = Math.PI / 2 - out * (-0.5 + t * 1.1);
-    const rc = re * (1.2 + 0.06 * Math.sin(t * Math.PI));
-    crease.push(cx + Math.cos(b) * rc, cy + Math.sin(b) * rc);
+    const a = -Math.PI / 2 + out * (-0.75 + t * 1.25);
+    fold.push(cx + out * re * 0.25 + Math.cos(a) * re * 1.55, cy + re * 0.25 + Math.sin(a) * re * 1.5);
+    const b = Math.PI / 2 - out * (-0.25 + t * 0.8);
+    crease.push(cx + out * re * 0.2 + Math.cos(b) * re * 1.35, cy - re * 0.1 + Math.sin(b) * re * 1.35);
   }
-  inkLine(ctx, fold, false, { width: lidW * 0.7, color: ink, alpha: base * 0.4, taper: [0.3, 0.4], seed: seed ^ 0xf01d, light, plate: true });
-  inkLine(ctx, crease, false, { width: lidW * 0.5, color: ink, alpha: base * 0.28, taper: [0.4, 0.4], seed: seed ^ 0xc4ea, light, plate: true });
+  ctx.globalAlpha = 1;
+  inkLine(ctx, fold, false, { width: lidW * 0.75, color: ink, alpha: 0.5, taper: [0.3, 0.4], seed: seed ^ 0xf01d, light, plate: true });
+  inkLine(ctx, crease, false, { width: lidW * 0.55, color: ink, alpha: 0.35, taper: [0.4, 0.4], seed: seed ^ 0xc4ea, light, plate: true });
 }
 
 /** The ball itself, round and open: the lids are laid over it each frame. */
@@ -1306,23 +1344,27 @@ function paintEyeBall(ctx: CanvasRenderingContext2D, re: number, seed: number, p
     coll.push(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.9 + re * 0.02);
   }
   inkLine(ctx, coll, true, { width: Math.max(0.5 * px, re * 0.014), color: '#2A2320', alpha: base * 0.4, seed: seed ^ 0xc011, light: LIGHT, plate: true });
-  // The pupil: a broad crescent lying on its side, a bean more than a
-  // sickle: its ends blunt, its upper edge only just dipping, the lower
-  // one full. (Pointed horns would make it a smile.)
-  const pup: number[] = [];
-  const pa = re * 0.6;
-  for (let i = 0; i <= 18; i++) {
-    const a = Math.PI + (i / 18) * Math.PI;
-    const u = Math.cos(a);
-    const top = -re * 0.1 + re * 0.05 * (1 - u * u);
-    pup.push(cx + u * pa, top + Math.sin(a) * re * 0.04 + cy);
+  // The pupil: a thin crescent lying on its side, its back arched and its
+  // horns drooping to points: a slit, not a half-disc, and the wrong way up
+  // to be a smile. The inner edge arches less than the outer, so it is
+  // thickest in the middle.
+  const pupTop: number[] = [];
+  const pupBottom: number[] = [];
+  const pw = re * 0.6;
+  const sag = re * 0.085;
+  const thick = re * 0.2;
+  for (let i = 0; i <= 24; i++) {
+    const u = -1 + (i / 24) * 2;
+    const yc = cy + re * 0.02 + sag * u * u;
+    const th = thick * Math.pow(1 - u * u, 0.85);
+    pupTop.push(cx + u * pw, yc - th);
+    pupBottom.push(cx + u * pw, yc);
   }
-  for (let i = 1; i < 18; i++) {
-    const a = (i / 18) * Math.PI;
-    const u = Math.cos(a);
-    pup.push(cx + u * pa * 0.98, cy - re * 0.06 + Math.sin(a) * re * 0.3);
-  }
-  const pupil = smoothPath(pup, true, 4);
+  const pupil = new Path2D();
+  pupil.moveTo(pupTop[0], pupTop[1]);
+  for (let i = 2; i < pupTop.length; i += 2) pupil.lineTo(pupTop[i], pupTop[i + 1]);
+  for (let i = pupBottom.length - 4; i >= 2; i -= 2) pupil.lineTo(pupBottom[i], pupBottom[i + 1]);
+  pupil.closePath();
   ctx.globalAlpha = base * 0.95;
   ctx.fillStyle = '#16120F';
   ctx.fill(pupil);
@@ -1341,31 +1383,37 @@ function paintEyeBall(ctx: CanvasRenderingContext2D, re: number, seed: number, p
       seed: seed ^ 0xba11,
     });
   }
-  // Two highlights: the window, over the pupil's upper edge, and a small
-  // second one low on the far side.
+  // Two small highlights: the window, up on the iris over the pupil, and a
+  // fainter one low on the far side.
   ctx.globalAlpha = base * 0.85;
   ctx.fillStyle = '#FBF8EF';
   ctx.beginPath();
-  ctx.ellipse(cx - re * 0.2, cy - re * 0.08, re * 0.13, re * 0.08, -0.45, 0, Math.PI * 2);
+  ctx.ellipse(cx - re * 0.3, cy - re * 0.34, re * 0.085, re * 0.05, -0.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = base * 0.5;
   ctx.beginPath();
-  ctx.ellipse(cx + re * 0.34, cy + re * 0.36, re * 0.05, re * 0.035, -0.5, 0, Math.PI * 2);
+  ctx.ellipse(cx + re * 0.36, cy + re * 0.38, re * 0.04, re * 0.026, -0.5, 0, Math.PI * 2);
   ctx.fill();
 }
 
 /**
  * An eye at the edge of the page, bigger than anything else in the water,
  * that opens, looks, blinks once, and is gone. The rest of the animal is
- * never seen: only the patch of mantle the eye is set in, its skin stippled
- * with chromatophores, fading into the dark it came out of.
+ * never seen: only the patch of mantle the eye is set in, its skin in
+ * stipple and a few chromatophores, fading out into the water.
  *
  * It is drawn as a plate's eye, not a target: a silvery iris struck through
  * with fine radial lines, a crescent of pupil lying on its side, two
  * highlights, contour hatching round the ball where it turns from the light,
  * and the lids a pen line that closes over it for the blink. The eye is
- * about 7.5% of the page's short side, and at the page's edge most of it
- * (three quarters) is in. All but the lids is drawn once and placed.
+ * about 7.5% of the page's short side, set so the page's edge only just
+ * touches its rim (nine tenths of it across is in); the patch of mantle,
+ * more than twice its width, runs on off the page. Nothing round it is
+ * coloured: no glow, no halo. All but the lids is drawn once and placed.
+ *
+ * Its patch is kept wholly inside the region it is given top to bottom,
+ * so a band no shorter than 5.4 eye radii (a fifth of the page's short
+ * side) never cuts it.
  *
  * `page`, the page's short side, sizes it; without it the region is taken
  * to be the page, unless it is a band across it (as the picture gives it,
@@ -1379,10 +1427,14 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
   const short = page ?? (h < w * 0.35 ? w : unit);
   const re = Math.max(4 * px, Math.min(0.2 * unit, short * 0.0375));
   const out = left ? -1 : 1;
-  // Three quarters in: the edge of the page crosses its outer rim.
-  const cx = left ? re * 0.4 : w - re * 0.4;
-  // High on the page, clear of the clock and the controls.
-  const cy = h * (0.18 + ((seed >>> 6) % 100) / 100 * 0.2);
+  // Nine tenths in: the edge of the page crosses the patch of mantle, and
+  // only just touches the rim of the eye.
+  const cx = left ? re * EYE_INSET : w - re * EYE_INSET;
+  // High on the page, clear of the clock and the controls; and the whole
+  // patch inside what it was given, so no edge of it is ever cut straight.
+  const reach = re * (PATCH_RY * 1.15 + 0.15) + 2 * px;
+  const want = h * (0.18 + ((seed >>> 6) % 100) / 100 * 0.2);
+  const cy = h > reach * 2 ? Math.max(reach, Math.min(h - reach, want)) : h / 2;
   // One slow blink, just past the middle.
   const lid = age > 0.55 && age < 0.65 ? Math.sin(((age - 0.55) / 0.1) * Math.PI) : 0;
   const open = 1 - lid * 0.96;
@@ -1397,8 +1449,7 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
   if (!layers) {
     layers = {
       key,
-      vignette: eyeLayer(-7 * re, -5.6 * re, 14 * re, 11.2 * re, 0.25, (g) => paintEyeVignette(g, re, seed, dark, out)),
-      skin: eyeLayer(-3.8 * re, -2.8 * re, 7.6 * re, 5.8 * re, 1, (g) => paintEyeSkin(g, re, seed, px, dark, out)),
+      skin: eyeLayer(-(PATCH_RX * 1.2 + 0.5) * re, -(PATCH_RY * 1.2 + 0.1) * re, (PATCH_RX * 2.4 + 1) * re, (PATCH_RY * 2.4 + 0.3) * re, 1, (g) => paintEyeSkin(g, re, seed, px, dark, out)),
       ball: eyeLayer(-1.1 * re, -1.1 * re, 2.2 * re, 2.2 * re, 1, (g) => paintEyeBall(g, re, seed, px, dark)),
     };
     eyeLayers = [layers, ...eyeLayers].slice(0, 2);
@@ -1418,7 +1469,6 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
       ctx.restore();
     }
   };
-  place(layers.vignette, () => paintEyeVignette(ctx, re, seed, dark, out));
   place(layers.skin, () => paintEyeSkin(ctx, re, seed, px, dark, out));
 
   // The aperture the lids leave: round when open, a slit at the blink.
@@ -1490,8 +1540,10 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
     inkLine(ctx, bulge, false, { width: Math.max(0.5 * px, re * 0.02), color: ink, alpha: base * 0.35 * shut, taper: [0.3, 0.3], seed: seed ^ 0xb0, light, plate: true });
   }
   const lidW = Math.max(0.7 * px, re * 0.035);
-  inkLine(ctx, ap.top, false, { width: lidW * 1.3, color: ink, alpha: base * 0.85, taper: [0.14, 0.14], seed: seed ^ 0x11d, light, plate: true });
-  inkLine(ctx, ap.bottom, false, { width: lidW * 0.8, color: ink, alpha: base * 0.55, taper: [0.32, 0.32], seed: seed ^ 0x11e, light, plate: true });
+  // In the light ink of the dark water, held back: a pale ring all round
+  // would make a cartoon's outline of it.
+  inkLine(ctx, ap.top, false, { width: lidW * 1.3, color: ink, alpha: base * (dark ? 0.6 : 0.85), taper: [0.14, 0.14], seed: seed ^ 0x11d, light, plate: true });
+  inkLine(ctx, ap.bottom, false, { width: lidW * 0.8, color: ink, alpha: base * (dark ? 0.3 : 0.55), taper: [0.32, 0.32], seed: seed ^ 0x11e, light, plate: true });
   ctx.restore();
 }
 

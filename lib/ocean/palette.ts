@@ -160,7 +160,9 @@ export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureIn
     pen: dark ? IRON_GALL.dark : IRON_GALL.light,
     // On dark water there is no paper to leave bare; only a faint lift.
     paper: dark ? mixHex(hue, IRON_GALL.dark, 0.3) : '#FBF8EF',
-    body: dark ? mixHex(hue, water, 0.45) : mixHex(hue, water, 0.2),
+    // A wash a little under the pastel's own value: laid over toned water it
+    // must still read as pigment on the paper, not a pale cut-out.
+    body: dark ? mixHex(hue, water, 0.45) : mixHex(hue, '#6E655B', 0.1),
     fin: dark ? mixHex(hue, water, 0.25) : mixHex(hue, water, 0.45),
     tent: dark ? mixHex(hue, '#FFFFFF', 0.35) : mixHex(hue, '#1A1714', 0.45),
     pat: dark ? mixHex(glow, water, 0.35) : mixHex(hue, '#1A1714', 0.42),

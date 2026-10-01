@@ -152,7 +152,7 @@ function render(species: Species, lenCss: number, dark: boolean, dpr: number, vi
     base,
     spacing,
     dpr,
-    detail: detailFor(devicePx),
+    detail: pen.print ? Math.max(detailFor(devicePx), printDetail(devicePx, spacing)) : detailFor(devicePx),
     dark,
     clear: g.clear || g.plan === 'bell' || g.plan === 'comb' || g.plan === 'chain',
     plan: g.plan,
@@ -160,6 +160,20 @@ function render(species: Species, lenCss: number, dark: boolean, dpr: number, vi
     seed: species.seed,
   });
   return { canvas, w: box.cw, h: box.ch };
+}
+
+/**
+ * How much drawing a printed animal carries: judged by how many of the
+ * page's hatching lines it spans, not by its raw size. A plate's small fish
+ * is engraved with the same burin as its big one, just with fewer strokes, so
+ * an animal a print shows twenty lines long already gets its pressure line,
+ * its graded wash and its contour hatching, and by thirty its fins' rays and
+ * its lateral line. (The live clock keeps `detailFor`, which stays cheap: a
+ * sprite there is redrawn whenever a size bucket is first met.)
+ */
+export function printDetail(devicePx: number, spacing: number): number {
+  const lines = devicePx / Math.max(0.5, spacing);
+  return Math.max(0, Math.min(1, (lines - 6) / 22));
 }
 
 /* ---- Shapes in device pixels ---- */
@@ -453,10 +467,15 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     ctx.fillRect(box.x, box.y, box.w, box.h);
     ctx.restore();
   };
-  /** A watercolour wash: laid, pooled at its edge, uneven, grained. */
-  const wash = (region: Path2D, box: Box, color: string, alpha: number, edge: number, highlight: number, grainAmt: number) => {
+  /**
+   * A watercolour wash: laid, pooled at its edge, uneven, grained. Never a
+   * lifted highlight: a soft pale blot on a body reads as gloss on plastic,
+   * so the light is left to the bare strip a graded wash keeps and to the
+   * thinner line on the lit side.
+   */
+  const wash = (region: Path2D, box: Box, color: string, alpha: number, edge: number, grainAmt: number) => {
     const cheap = detail < 0.3;
-    washFill(ctx, region, box, { color, alpha, edge: cheap ? edge * 0.8 : 0, paper: tiny ? null : ink.paper, highlight, granulate: 0, px: Math.max(0.5, base * 0.5) });
+    washFill(ctx, region, box, { color, alpha, edge: cheap ? edge * 0.8 : 0, paper: null, granulate: 0, px: Math.max(0.5, base * 0.5) });
     if (cheap) return;
     const m = Math.min(box.w, box.h);
     poolEdge(ctx, region, mixHex(color, DARK, 0.4), alpha * edge, Math.max(1, Math.min(m * 0.07, base * 6)), base * 0.45);
@@ -498,7 +517,7 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
   if (limbLines.length) {
     const region = pathOf(limbLines);
     const box = boxOf(limbLines);
-    wash(region, box, mixHex(ink.body, ink.fin, 0.3), ink.bodyAlpha, 0.3, 0, 0.25);
+    wash(region, box, mixHex(ink.body, ink.fin, 0.3), ink.bodyAlpha, 0.3, 0.25);
     penLines(limbLines, 0.7);
   }
 
@@ -507,7 +526,7 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
   if (finLines.length) {
     const region = pathOf(finLines);
     const box = boxOf(finLines);
-    wash(region, box, ink.fin, ink.finAlpha, 0.28, 0, 0.22);
+    wash(region, box, ink.fin, ink.finAlpha, 0.28, 0.22);
     if (fine > 0 && L.rays.length) {
       ctx.save();
       ctx.clip(region);
@@ -518,11 +537,20 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     }
   }
   // The old straight tail rays give way to the fine ones as they come in.
+  // They stay inside the tail: a crescent's rays past its edge are whiskers.
   if (L.finRay.length) {
-    const keep = fine > 0.5 ? L.finRay.slice(a.tailRays) : L.finRay;
     const saved = L.finRay;
-    L.finRay = keep;
-    plain('finRay', 0.45, 0.5 * (fine > 0.5 ? 1 : 1 - fine * 0.6));
+    const alpha = 0.5 * (fine > 0.5 ? 1 : 1 - fine * 0.6);
+    const tail = fine > 0.5 ? [] : saved.slice(0, a.tailRays);
+    if (tail.length && finLines.length) {
+      L.finRay = tail;
+      ctx.save();
+      ctx.clip(pathOf(finLines));
+      plain('finRay', 0.45, alpha);
+      ctx.restore();
+    }
+    L.finRay = saved.slice(a.tailRays);
+    plain('finRay', 0.45, alpha);
     L.finRay = saved;
   }
   penLines(finLines, 0.72);
@@ -534,19 +562,20 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
   const solidTubes = !o.clear && tubes.length > 0;
   if (body && bodyBox) {
     if (heavy && solidTubes && !tiny) {
-      // Graded across the body: for a swimmer, darker along the back, a
-      // strip of bare paper down the flank, the belly paler; for a star's
-      // arm, lighter on its lit side and down into its shadow.
+      // Graded across the body: for a swimmer, darker along the back, the
+      // upper flank let go broadly toward bare paper (broad and soft, never a
+      // narrow bright stripe, which reads as a gloss), the belly paler; for a
+      // star's arm, lighter on its lit side and down into its shadow.
       const paperTone = ink.paper ?? PAPER;
       const back = o.plan === 'fish' || o.plan === 'eel' || o.plan === 'squid' || o.plan === 'crawler';
       const stops: [number, string][] = back
         ? [
-            [0, mixHex(ink.body, DARK, dark ? 0.3 : 0.22)],
-            [0.2, ink.body],
-            [0.33, mixHex(ink.body, paperTone, dark ? 0.35 : 0.62)],
-            [0.47, ink.body],
-            [0.82, mixHex(ink.body, paperTone, dark ? 0.12 : 0.28)],
-            [1, mixHex(ink.body, DARK, 0.08)],
+            [0, mixHex(ink.body, DARK, dark ? 0.3 : 0.24)],
+            [0.16, mixHex(ink.body, DARK, 0.06)],
+            [0.4, mixHex(ink.body, paperTone, dark ? 0.24 : 0.34)],
+            [0.62, mixHex(ink.body, paperTone, dark ? 0.16 : 0.26)],
+            [0.86, mixHex(ink.body, paperTone, dark ? 0.08 : 0.14)],
+            [1, mixHex(ink.body, DARK, 0.1)],
           ]
         : [
             [0, mixHex(ink.body, paperTone, dark ? 0.2 : 0.4)],
@@ -560,7 +589,7 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
       mottle(ctx, body, bodyBox, mixHex(ink.body, DARK, 0.2), paperTone, ink.bodyAlpha * 0.14, o.seed ^ 0x6d1);
       grainOver(body, bodyBox, 0.3);
     } else {
-      wash(body, bodyBox, ink.body, ink.bodyAlpha, o.clear ? 0.45 : 0.32, tiny ? 0 : dark ? 0.45 : 0.85, o.clear ? 0.18 : 0.3);
+      wash(body, bodyBox, ink.body, ink.bodyAlpha, o.clear ? 0.45 : 0.32, o.clear ? 0.18 : 0.3);
     }
   }
   const inBody = (draw: () => void) => {
@@ -605,7 +634,7 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
       }
     }
     ctx.globalAlpha = 1;
-    if (L.patLine.length) penLines(lines('patLine'), 1.15, 0.75, ink.pat, [0.1, 0.35]);
+    if (L.patLine.length) penLines(lines('patLine'), 0.8, 0.6, ink.pat, [0.15, 0.4]);
     if (body && bodyBox && heavy) shade(ctx, body, bodyBox, tubes, ink, o);
   });
   // The fine lines: the lateral line's pores, a gill cover, a ray's radials.
@@ -851,7 +880,7 @@ function shade(ctx: CanvasRenderingContext2D, body: Path2D, box: Box, tubes: Tub
   // Room for a few lines across the body's shadowed part, or none at all.
   let thick = 0;
   for (const t of tubes) for (let i = 0; i < t.a.length; i += 2) thick = Math.max(thick, Math.hypot(t.b[i] - t.a[i], t.b[i + 1] - t.a[i + 1]));
-  if (thick * 0.45 < spacing * 2.5) return;
+  if (thick * 0.45 < spacing * 2) return;
   const field = shadeField(body, box, spacing * 0.6);
   contourHatch(ctx, body, tubes, {
     spacing,

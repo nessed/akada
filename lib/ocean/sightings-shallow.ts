@@ -287,15 +287,19 @@ export function drawTurtle(
   ctx.globalAlpha = alpha;
   ctx.lineWidth = 1.2 * pw;
   ctx.stroke(head);
-  // The plates on its head, the cheek, the line of the beak, the neck's crease.
+  // The plates on its head, the cheek scale, the line of the beak, the
+  // neck's crease. The beak's line runs back straight from the tip and
+  // turns a little down at its corner: a turtle's mouth never smiles.
   const marks = new Path2D();
   marks.moveTo(0.35 * u, -0.074 * u);
   marks.lineTo(0.375 * u, -0.054 * u);
   marks.lineTo(0.45 * u, -0.06 * u);
-  marks.moveTo(0.39 * u, -0.01 * u);
-  marks.quadraticCurveTo(0.405 * u, 0.015 * u, 0.385 * u, 0.04 * u);
-  marks.moveTo(0.478 * u, 0.006 * u);
-  marks.quadraticCurveTo(0.45 * u, 0.012 * u, 0.425 * u, 0.008 * u);
+  marks.moveTo(0.372 * u, -0.012 * u);
+  marks.lineTo(0.392 * u, -0.008 * u);
+  marks.lineTo(0.398 * u, 0.012 * u);
+  marks.moveTo(0.48 * u, 0.008 * u);
+  marks.lineTo(0.44 * u, 0.014 * u);
+  marks.quadraticCurveTo(0.426 * u, 0.016 * u, 0.418 * u, 0.026 * u);
   marks.moveTo(0.31 * u, -0.046 * u);
   marks.quadraticCurveTo(0.322 * u, 0.0, 0.31 * u, 0.044 * u);
   ctx.lineWidth = 0.8 * pw;

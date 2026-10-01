@@ -126,30 +126,53 @@ interface Glazes {
   n: number;
   /** The top edge of glaze k (1 to n - 1), CSS px down the page at CSS px X across it. */
   at: (k: number, X: number) => number;
+  /** How crisp glaze k's edge is at X, 0 (melted into the next) to 1 (a dried edge). */
+  crisp: (k: number, X: number) => number;
 }
 
 function glazesFor(cssW: number, cssH: number, seed: number, soft = false): Glazes {
   const n = Math.max(3, Math.min(7, Math.round(cssH / 230)));
-  // Soft: a print's glazes, laid flatter, so their edges read as washes
-  // drying and never as a range of hills on the horizon.
-  const lean = soft ? 0.35 : 1;
-  const sway = soft ? 0.3 : 1;
   const l = lattice(hash32('wash', seed, 'glaze'));
   const r = mulberry32(hash32('wash', seed, 'glazes'));
   const band = cssH / n;
   const base = [0];
   for (let k = 1; k < n; k++) base.push(band * (k + (r() - 0.5) * 0.4));
-  // Each edge laid a little aslant, as a brush crosses a page, wandering
-  // and ragged rather than rolling: a wash's edge, not a horizon.
-  const slant = Array.from({ length: n }, () => (r() - 0.5) * 0.14 * lean);
+  if (!soft) {
+    // Each edge laid a little aslant, as a brush crosses a page, wandering
+    // and ragged rather than rolling: a wash's edge, not a horizon.
+    const slant = Array.from({ length: n }, () => (r() - 0.5) * 0.14);
+    return {
+      n,
+      at: (k, X) =>
+        base[k] +
+        slant[k] * (X - cssW / 2) +
+        (fbm(l, X / 260 + k * 17.3, k * 5.1, 4) - 0.5) * band * 0.5 +
+        (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 10 +
+        (noise(l, X / 9 + k * 7, k * 3.3) - 0.5) * 2.5,
+      crisp: () => 1,
+    };
+  }
+  // A print's glazes: each laid by a brush that crossed only part of the
+  // page (never more than seven tenths of it), tilted a degree to three,
+  // one way and then the other, its edge ragged by a few hundredths of the
+  // page; past the ends of its stroke it melts into the wash. No edge runs
+  // from side to side, so nothing reads as a horizon.
+  const slant = Array.from({ length: n }, (_, k) => (k % 2 ? 1 : -1) * Math.tan(((1 + 2 * r()) * Math.PI) / 180));
+  const reach = Array.from({ length: n }, () => {
+    const wide = cssW * (0.35 + 0.3 * r());
+    const mid = wide / 2 + r() * Math.max(0, cssW - wide);
+    return { a: mid - wide / 2, b: mid + wide / 2 };
+  });
+  const fade = cssW * 0.1;
   return {
     n,
     at: (k, X) =>
       base[k] +
-      slant[k] * (X - cssW / 2) +
-      (fbm(l, X / (soft ? 520 : 260) + k * 17.3, k * 5.1, soft ? 2 : 4) - 0.5) * band * 0.5 * sway +
-      (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 10 * sway +
-      (noise(l, X / 9 + k * 7, k * 3.3) - 0.5) * 2.5,
+      slant[k] * (X - (reach[k].a + reach[k].b) / 2) +
+      (fbm(l, X / (cssW * 0.3) + k * 17.3, k * 5.1, 3) - 0.5) * cssH * 0.2 +
+      (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 16 +
+      (noise(l, X / 9 + k * 7, k * 3.3) - 0.5) * 3,
+    crisp: (k, X) => smooth(reach[k].a - fade, reach[k].a + fade, X) * (1 - smooth(reach[k].b - fade, reach[k].b + fade, X)),
   };
 }
 
@@ -183,10 +206,16 @@ function buildStain(cssW: number, cssH: number, seed: number, soft = false): HTM
   const poolK = soft ? 0.018 : 0.035;
   // The glaze edges are a function of X alone: worked out a column at a time.
   const edges = new Float32Array(sw * n);
+  const crisp = new Float32Array(sw * n);
   for (let i = 0; i < sw; i++) {
     const X = (i + 0.5) * step;
-    for (let k = 1; k < n; k++) edges[i * n + k] = glazes.at(k, X);
+    for (let k = 1; k < n; k++) {
+      edges[i * n + k] = glazes.at(k, X);
+      crisp[i * n + k] = glazes.crisp(k, X);
+    }
   }
+  // Where a glaze's edge has melted it is spread over most of a band.
+  const meltW = (cssH / n) * 0.9;
   const img = t.createImageData(sw, sh);
   const d = img.data;
   for (let j = 0; j < sh; j++) {
@@ -213,10 +242,12 @@ function buildStain(cssW: number, cssH: number, seed: number, soft = false): HTM
       let pooled = 0;
       for (let k = 1; k < n; k++) {
         const e = edges[i * n + k];
-        laid += smooth(e - edgeW, e + edgeW, Y);
+        const cr = crisp[i * n + k];
+        const ew = edgeW + (meltW - edgeW) * (1 - cr);
+        laid += smooth(e - ew, e + ew, Y);
         // Pigment gathered just inside each glaze's edge as it dried.
         const below = Y - e;
-        if (below > -10 && below < 60) pooled += Math.exp(-(((below - 6) / 16) ** 2));
+        if (cr > 0 && below > -10 && below < 60) pooled += Math.exp(-(((below - 6) / 16) ** 2)) * cr;
       }
       const stair = (laid + 0.5) / n - Y / cssH;
       const s = stair * (soft ? 0.32 : 0.55) + pooled * poolK + p * 0.17 + m * 0.05 + stroke * 0.05 - lift * 0.035 + rim * 0.03 + run;
@@ -331,10 +362,11 @@ export class Wash {
     const stepX = 5;
     for (let k = 1; k < glazes.n; k++) {
       let level = -1;
+      let lightOn = false;
       for (let X = -stepX; X <= stain.w + stepX; X += stepX) {
         const y = glazes.at(k, X);
         // The line comes and goes along its length, as a dried edge does.
-        const v = noise(l, X / 90 + k * 13, k * 7.3);
+        const v = noise(l, X / 90 + k * 13, k * 7.3) * (0.4 + 0.6 * glazes.crisp(k, X));
         // Mostly gone: a dried edge shows in short broken runs, never a rule.
         const lv = v < 0.56 ? -1 : Math.min(LEVELS - 1, Math.floor(((v - 0.56) / 0.44) * LEVELS));
         const x = X * sx;
@@ -343,8 +375,11 @@ export class Wash {
           if (lv >= 0) dark[lv].moveTo(x, yy);
           level = lv;
         } else if (lv >= 0) dark[lv].lineTo(x, yy);
-        if (X === -stepX) light.moveTo(x, (y - 5) * sy);
-        else light.lineTo(x, (y - 5) * sy);
+        // The breath of white goes only where the edge dried crisp.
+        const on = glazes.crisp(k, X) > 0.5;
+        if (on && lightOn) light.lineTo(x, (y - 5) * sy);
+        else if (on) light.moveTo(x, (y - 5) * sy);
+        lightOn = on;
       }
     }
     t.save();

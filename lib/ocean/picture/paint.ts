@@ -34,7 +34,7 @@ import { Wash } from '../wash';
 import { causticsOn } from '../caustics';
 import type { Growth, GrowthKind } from '../outcrop';
 import { drawGrowth, inkRock, rockShape, rockStyle } from '../outcrop-sprite';
-import { floorAt, rockOutline, rockX, type PlacedEvent, type PlacedJelly, type PlacedRock, type Plan } from './layout';
+import { floorAt, REF, rockOutline, rockX, type PlacedEvent, type PlacedJelly, type PlacedRock, type Plan } from './layout';
 
 interface Caches {
   biome: Biome;
@@ -53,6 +53,7 @@ interface Caches {
   rays: { key: string; canvas: HTMLCanvasElement } | null;
   window: { key: string; canvas: HTMLCanvasElement } | null;
   fall: Fall | null;
+  column: string[] | null;
 }
 
 /** The plan's own store of what is slow to make, out of sight of a JSON of it. */
@@ -81,6 +82,7 @@ function cachesOf(plan: Plan): Caches {
         rays: null,
         window: null,
         fall: null,
+        column: null,
       } satisfies Caches,
     });
   }
@@ -227,13 +229,76 @@ function fallOf(plan: Plan, c: Caches): Fall {
   return c.fall;
 }
 
-/** The water at y on the page: its depth's colour, and the page's fall at its foot. */
-function waterTone(plan: Plan, c: Caches, y: number): string {
+/** The water at y on the page as the depth dial alone gives it: its depth's colour, and the page's fall at its foot. */
+function rawTone(plan: Plan, c: Caches, y: number): string {
   const f = fallOf(plan, c);
   const base = tone(plan, zAt(plan, y));
   const t = Math.max(0, Math.min(1, (y - f.from) / (f.to - f.from)));
   const k = t * t * (3 - 2 * t);
   return k > 0 ? mixHex(base, f.deep, f.most * Math.pow(k, 1.15)) : base;
+}
+
+/** Samples down the page of the water as it is laid. */
+const COLUMN = 240;
+/** The steepest the water may darken in the upper part of the page: L* per hundredth of its height. */
+const STEEPEST = 2.2;
+
+/**
+ * The water down the page as it is laid: the depth's colour, eased. The
+ * dial runs fastest through the twilight, and laid as it comes a long
+ * sitting would drop from sea-glass to slate in a few hundredths of the
+ * page: a hard band that reads as a sea's surface seen side on, with
+ * everything above it floating in the sky. So the colour is blurred down
+ * the page (in L*a*b*), wider until nothing in its upper three fifths
+ * darkens faster than STEEPEST: the deepening is spread over half the page
+ * or more, a smooth fall, and the page still goes as dark as it went.
+ */
+function columnOf(plan: Plan, c: Caches): string[] {
+  if (c.column) return c.column;
+  const N = COLUMN;
+  const lab = Array.from({ length: N }, (_, i) => labOf(rawTone(plan, c, (plan.h * i) / (N - 1))));
+  const blur = (src: [number, number, number][], sigma: number) => {
+    const rad = Math.ceil(sigma * 3);
+    const wts = Array.from({ length: rad * 2 + 1 }, (_, k) => Math.exp(-(((k - rad) / sigma) ** 2) / 2));
+    return src.map((_, i) => {
+      const acc: [number, number, number] = [0, 0, 0];
+      let wsum = 0;
+      for (let k = -rad; k <= rad; k++) {
+        const v = src[Math.max(0, Math.min(N - 1, i + k))];
+        const wk = wts[k + rad];
+        acc[0] += v[0] * wk;
+        acc[1] += v[1] * wk;
+        acc[2] += v[2] * wk;
+        wsum += wk;
+      }
+      return acc.map((a) => a / wsum) as [number, number, number];
+    });
+  };
+  /** The steepest fall in the upper three fifths, L* per hundredth of the page. */
+  const steepest = (col: [number, number, number][]) => {
+    let worst = 0;
+    for (let i = 1; i < Math.round(N * 0.6); i++) worst = Math.max(worst, col[i - 1][0] - col[i][0]);
+    return (worst * (N - 1)) / 100;
+  };
+  let out = blur(lab, N * 0.05);
+  for (let sigma = N * 0.06; sigma <= N * 0.16 + 1e-9 && steepest(out) > STEEPEST; sigma += N * 0.01) out = blur(lab, sigma);
+  // The foot keeps the dark it was given: blurring would lift the very
+  // bottom toward the water above it.
+  for (let i = Math.round(N * 0.8); i < N; i++) {
+    const t = (i - N * 0.8) / (N * 0.2);
+    const L = out[i][0] + (lab[i][0] - out[i][0]) * t;
+    if (L < out[i][0]) out[i] = [L, out[i][1], out[i][2]];
+  }
+  c.column = out.map(([L, A, B]) => hexOfLab(L, A, B));
+  return c.column;
+}
+
+/** The water at y on the page, as it is laid. */
+function waterTone(plan: Plan, c: Caches, y: number): string {
+  const col = columnOf(plan, c);
+  const f = Math.max(0, Math.min(COLUMN - 1, (y / plan.h) * (COLUMN - 1)));
+  const i = Math.min(COLUMN - 2, Math.floor(f));
+  return mixHex(col[i], col[i + 1], f - i);
 }
 
 /** The water at a point on the page, as the picture lays it: its colour, and whether ink on it is the light ink. */
@@ -1505,7 +1570,7 @@ function eventLayer(plan: Plan, c: Caches, e: PlacedEvent, D: number, ambient: n
     return null;
   }
   // Generous: a proof this small can miss a hair or a speck at the edge.
-  const pad = 12;
+  const pad = e.kind === 'whale' ? 34 : 12;
   const ux0 = Math.max(x0, x0 + bx0 / q - pad);
   const uy0 = Math.max(y0, y0 + by0 / q - pad);
   const ux1 = Math.min(x1, x0 + (bx1 + 1) / q + pad);
@@ -1523,6 +1588,23 @@ function eventLayer(plan: Plan, c: Caches, e: PlacedEvent, D: number, ambient: n
   o.scale(k, k);
   o.translate(-ux0 * D, -uy0 * D);
   drawEvent(o, plan, c, e, D, ambient);
+  if (e.kind === 'whale') {
+    // A shadow seen through a hundred metres of water: softer than the pen
+    // makes it, a hundredth of the page's short side, and lighter, 10 to 14
+    // percent on paper and never more than a sixth darker than the water by night.
+    const soft = document.createElement('canvas');
+    soft.width = canvas.width;
+    soft.height = canvas.height;
+    const so = soft.getContext('2d');
+    if (so) {
+      so.filter = `blur(${(0.007 * REF * D * k).toFixed(2)}px)`;
+      so.globalAlpha = plan.ground === 'night' ? 0.75 : 0.8;
+      so.drawImage(canvas, 0, 0);
+      o.setTransform(1, 0, 0, 1, 0, 0);
+      o.clearRect(0, 0, canvas.width, canvas.height);
+      o.drawImage(soft, 0, 0);
+    }
+  }
   const made: EventLayer = { canvas, x: ux0 * D, y: uy0 * D, w: (ux1 - ux0) * D, h: (uy1 - uy0) * D, k };
   c.events.set(key, made);
   return made;

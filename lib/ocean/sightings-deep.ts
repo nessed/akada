@@ -375,21 +375,21 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   ctx.lineJoin = 'round';
   const base = ctx.globalAlpha * env;
 
-  // The mantle: 1.2 times as tall as wide, an egg fuller at the crown,
-  // leaning back.
-  const MW = 0.46 * S;
-  const MH = MW * 1.2;
-  const mcx = 0.06 * S;
-  const mcy = -0.34 * S;
-  // Leaning into the way it goes, crown first, as it swims.
-  const tilt = 0.28;
+  // The mantle: an upright egg, 1.3 times as tall as it is wide, a little
+  // fuller at the crown, hardly leaning.
+  const MW = 0.42 * S;
+  const MH = MW * 1.3;
+  const mcx = 0.02 * S;
+  const mcy = -0.36 * S;
+  // Leaning a touch into the way it goes, crown first, as it swims.
+  const tilt = 0.08;
   const mantle: number[] = [];
   for (let k = 0; k < 28; k++) {
     const t = (k / 28) * Math.PI * 2;
     const c = Math.cos(t);
     const sn = Math.sin(t);
-    // Fuller at the crown (sn < 0), drawn in at the neck.
-    const full = 1 - 0.12 * sn;
+    // Fuller at the crown (sn < 0), drawn in a little at the foot.
+    const full = 1 - 0.06 * sn;
     const u = (MW / 2) * c * full * (0.97 + 0.06 * unitOf(seed, k));
     const v = (MH / 2) * sn;
     mantle.push(mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt));
@@ -404,7 +404,7 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   // Under the mantle, toward its back.
   // Inside the mantle's lower half: the arms grow out of the body itself,
   // with no neck between, and the web runs on from the mantle.
-  const crown = { x: mcx - Math.sin(tilt) * MH * 0.3, y: mcy + Math.cos(tilt) * MH * 0.3 };
+  const crown = { x: mcx - Math.sin(tilt) * MH * 0.32, y: mcy + Math.cos(tilt) * MH * 0.32 };
   interface Arm {
     pts: number[];
     near: boolean;
@@ -415,16 +415,18 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     const a = (i / 8) * Math.PI * 2 + 0.2;
     const ca = Math.cos(a);
     const sa = Math.sin(a);
-    const rx0 = crown.x + ca * 0.17 * S;
+    const rx0 = crown.x + ca * 0.16 * S;
     const ry0 = crown.y + sa * 0.05 * S;
-    const reach = (0.34 + 0.06 * unitOf(seed, i + 40)) * S * spread;
-    // The skirt trails back from the way it swims.
-    const tx = crown.x + ca * reach - 0.14 * S;
-    const ty = crown.y + 0.36 * S + sa * 0.08 * S - (spread - 1) * 0.6 * S;
+    const reach = (0.29 + 0.05 * unitOf(seed, i + 40)) * S * spread;
+    // The skirt hangs under it, trailing only a little from the way it swims.
+    const tx = crown.x + ca * reach - 0.04 * S;
+    const ty = crown.y + 0.4 * S + sa * 0.08 * S - (spread - 1) * 0.6 * S;
     const curl = Math.sin(ambient * 0.6 + i * 1.3) * 0.04 * S;
     // Each arm bows out and its tip curls back in, never a straight spoke.
     arms.push({
-      pts: [rx0, ry0, rx0 + ca * 0.24 * S, ry0 + 0.1 * S, tx + ca * 0.06 * S + curl, ty - 0.08 * S, tx - ca * 0.04 * S + curl, ty + 0.03 * S],
+      // Down from the body first, then flaring out, the tip flicked outward:
+      // a skirt, never a lampshade's straight side.
+      pts: [rx0, ry0, rx0 + ca * 0.05 * S, ry0 + 0.17 * S, tx - ca * 0.07 * S + curl, ty - 0.1 * S, tx + ca * 0.03 * S + curl, ty - 0.01 * S],
       near: sa > 0,
       depth: sa,
     });
@@ -490,8 +492,8 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
       const wob = (unitOf(seed, Math.round(t * 100)) - 0.5) * 0.5;
       hairs.moveTo(ax + nx * pw * 0.6, ay + ny * pw * 0.6);
       hairs.quadraticCurveTo(ax + nx * len * 0.7, ay + ny * len * 0.7, ax + nx * len + (tx / tn) * len * (0.4 + wob), ay + ny * len + (ty / tn) * len * (0.4 + wob));
-      if (d > 0.4) {
-        const sr = S * 0.007 * (1.2 - t * 0.6);
+      if (d > 0.85) {
+        const sr = S * 0.0045 * (1.2 - t * 0.6);
         sucks.moveTo(ax - nx * pw * 1.4 + sr, ay - ny * pw * 1.4);
         sucks.ellipse(ax - nx * pw * 1.4, ay - ny * pw * 1.4, sr, sr * 0.7, Math.atan2(ty, tx), 0, Math.PI * 2);
       }
@@ -546,19 +548,18 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
       ctx.stroke(path);
     }
   };
-  // The fins row together, both swept back along the mantle: the far one
-  // shows over its back, the near one lies over its side.
-  const row = 0.55 * flap;
-  const finLen = 0.3 * S;
-  const finWid = 0.11 * S;
+  // The ear fins, one each side of the mantle high up, at ten and two
+  // o'clock, standing out and up; they row together, down and back up.
+  const row = 0.42 * flap;
+  const finLen = 0.27 * S;
+  const finWid = 0.105 * S;
 
   // Far side first: its fin, its arms and the web behind.
   // A point on the mantle's surface, from its own frame (u across, v down).
   const onMantle = (u: number, v: number): [number, number] => [mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt)];
-  // The far fin is behind the mantle: only its tip shows over the crown,
-  // and only as it rises.
-  const farRoot = onMantle(MW * 0.05, -MH * 0.18);
-  fin(farRoot[0], farRoot[1], -Math.PI / 2 - 0.55 - row * 0.9, finLen * 0.85, finWid * 0.8, 0.6, 1);
+  // The far fin, at ten o'clock, behind the mantle's edge.
+  const farRoot = onMantle(-MW * 0.36, -MH * 0.2);
+  fin(farRoot[0], farRoot[1], -Math.PI + 0.4 - tilt - row, finLen * 0.9, finWid * 0.9, 0.75, 1);
   ctx.globalAlpha = base * 0.3;
   ctx.fillStyle = web;
   ctx.fill(farWeb);
@@ -596,7 +597,7 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
       const v = (MH / 2) * sn;
       dome.push(mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt));
     }
-    inkLine(g, dome, false, { width: pw * 1.15, color: ink, alpha: 1, seed, light, taper: [0.12, 0.12], plate: true, min: 0.25 * px });
+    inkLine(g, dome, false, { width: pw * 0.95, color: ink, alpha: 0.8, seed, light, taper: [0.12, 0.12], plate: true, min: 0.25 * px });
   };
   const pad = pw * 3;
   const mKey = `${seed}|${Math.round(S * 10)}|${px}|${dark ? 1 : 0}|${way}`;
@@ -631,7 +632,7 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   }
   for (const A of order) {
     if (!A.near) continue;
-    armLine(A, 0.85, 20 + A.depth * 7);
+    armLine(A, dark ? 0.6 : 0.85, 20 + A.depth * 7);
     cirri(A, 1);
   }
   // The web's margin between the near arms, a fine line.
@@ -661,39 +662,26 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     }
   }
 
-  // The near fin, standing out from the side.
-  const nearRoot = onMantle(-MW * 0.42, -MH * 0.02);
-  fin(nearRoot[0], nearRoot[1], Math.PI - 0.05 + row * 0.7, finLen, finWid, 1, 2);
+  // The near fin, at two o'clock, over the mantle's edge.
+  const nearRoot = onMantle(MW * 0.38, -MH * 0.2);
+  fin(nearRoot[0], nearRoot[1], -0.4 + tilt + row, finLen, finWid, 0.9, 2);
 
-  // The eye: small, low on the side toward the way it's going, a bulge of
-  // skin round it; and only the rim of the far one, past the front.
-  const er = Math.max(0.8 * px, MW * 0.04);
-  const [ex, ey] = onMantle(MW * 0.22, MH * 0.12);
+  // The eye: small, on the near side under the fin, a bulge of skin over
+  // it; dark, with no highlight, so it is an eye on an animal and never a
+  // face looking out.
+  const er = Math.max(0.8 * px, MW * 0.036);
+  const [ex, ey] = onMantle(MW * 0.3, MH * 0.1);
   const bulge: number[] = [];
   for (let k = 0; k <= 10; k++) {
-    const a = Math.PI * (1.05 + (k / 10) * 0.9);
+    const a = Math.PI * (1.1 + (k / 10) * 0.8);
     bulge.push(ex + Math.cos(a) * er * 2.2, ey + Math.sin(a) * er * 1.8);
   }
-  inkLine(ctx, bulge, false, { width: pw * 0.6, color: ink, alpha: base * 0.55, taper: [0.3, 0.3], seed: seed ^ 0xe1, light, plate: true, min: 0.25 * px });
-  // Dark in either water, the light ink only round it.
-  ctx.globalAlpha = base * 0.95;
-  ctx.fillStyle = mixHex(hue, '#16120F', 0.8);
+  inkLine(ctx, bulge, false, { width: pw * 0.55, color: ink, alpha: base * 0.45, taper: [0.3, 0.3], seed: seed ^ 0xe1, light, plate: true, min: 0.25 * px });
+  ctx.globalAlpha = base * 0.7;
+  ctx.fillStyle = mixHex(hue, '#16120F', 0.7);
   ctx.beginPath();
-  ctx.ellipse(ex, ey, er, er * 0.85, 0, 0, Math.PI * 2);
+  ctx.ellipse(ex, ey, er, er * 0.75, tilt, 0, Math.PI * 2);
   ctx.fill();
-  if (dark) {
-    ctx.strokeStyle = ink;
-    ctx.globalAlpha = base * 0.6;
-    ctx.lineWidth = Math.max(0.35 * px, pw * 0.5);
-    ctx.stroke();
-  }
-  if (er > 1.6 * px) {
-    ctx.fillStyle = '#FBF8EF';
-    ctx.globalAlpha = base * 0.75;
-    ctx.beginPath();
-    ctx.arc(ex - er * 0.35, ey - er * 0.3, er * 0.22, 0, Math.PI * 2);
-    ctx.fill();
-  }
   void r;
   ctx.restore();
 }
@@ -924,11 +912,21 @@ function topOf(tops: Pt[], x: number): number {
   return best[1];
 }
 
+/** How much the floor is foreshortened: we look down on it at about 25°. */
+const FORE = 0.42;
+
 /**
  * The bones, in the drawing's own frame: the skull's tip at the origin on
- * the floor line, the tail along +x. Seen a little from above and from the
- * side, so the far ribs stand behind the spine and the near ones fall
- * forward off it, toward the reader; the near floor is below the line.
+ * the floor line, the tail along +x. Seen a little from above, as a plate
+ * shows a skeleton lying where it fell: the spine a long gentle curve of
+ * separate blocks, shrinking to the tail and sinking into the silt as they
+ * go; the ribs in pairs either side of it, arcs lying splayed on the floor
+ * (the far ones behind the spine, the near ones toward the reader), some of
+ * the far ones still arched up off it, some snapped with the piece lying by;
+ * the skull a broad flat wedge, its two long jaws bowed out either side.
+ *
+ * A point on the floor is (X along the whale, Z toward the reader, H up),
+ * all in shares of L, and lands on the page at (X, Z · FORE − H).
  */
 function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: number, dark: boolean, dir: number, tops: Pt[], siltColor?: string): void {
   const r = mulberry32(hash32('whale-bones', seed));
@@ -936,6 +934,7 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
   const wash = dark ? mixHex(BONE, '#110F0D', 0.5) : mixHex(BONE, '#FBF8EF', 0.25);
   const pale = dark ? mixHex(BONE, '#110F0D', 0.3) : mixHex(BONE, '#FBF8EF', 0.55);
+  const shade = dark ? mixHex(BONE, '#110F0D', 0.68) : mixHex(BONE, '#2A2320', 0.3);
   const lightBase: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
   const light: [number, number] = [lightBase[0] * dir, lightBase[1]];
   const b: Bones = { ctx, dark, px, d, ink, wash, pale, light, seed };
@@ -944,169 +943,194 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   const crest = dark ? mixHex(silt, '#8C8576', 0.35) : mixHex(silt, '#C9C3B4', 0.3);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+  const P = (X: number, Z: number, H: number): Pt => [X * L, (Z * FORE - H) * L];
+  // A cubic on the floor, as its control points land on the page.
+  const C = (pts: [number, number, number][]): number[] => pts.flatMap(([X, Z, H]) => P(X, Z, H));
+
+  // The spine's line on the floor: a long gentle S, from behind the skull
+  // to the tail.
+  const X0 = 0.275;
+  const X1 = 0.975;
+  const bend = 0.06 + r() * 0.025;
+  const ph0 = (r() - 0.5) * 0.6;
+  const zs = (X: number) => {
+    const u = (X - X0) / (X1 - X0);
+    return -0.03 + bend * (Math.sin(Math.PI * 1.15 * u + ph0) - Math.sin(ph0));
+  };
+  const slope = (X: number) => (zs(X + 0.005) - zs(X - 0.005)) / 0.01;
+  const ZS = zs(X0);
 
   // The scour under it, darker than the floor round it, fading every way.
   ctx.save();
-  ctx.translate(0.5 * L, -0.004 * L);
-  ctx.scale(1, 0.05);
-  const scour = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.56 * L);
+  ctx.translate(0.5 * L, ZS * FORE * L);
+  ctx.scale(1, 0.12);
+  const scour = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.58 * L);
   const sh = dark ? '4, 4, 3' : '26, 23, 20';
-  scour.addColorStop(0, `rgba(${sh}, ${dark ? 0.3 : 0.18})`);
-  scour.addColorStop(0.7, `rgba(${sh}, ${dark ? 0.18 : 0.1})`);
+  scour.addColorStop(0, `rgba(${sh}, ${dark ? 0.3 : 0.16})`);
+  scour.addColorStop(0.7, `rgba(${sh}, ${dark ? 0.16 : 0.08})`);
   scour.addColorStop(1, `rgba(${sh}, 0)`);
   ctx.fillStyle = scour;
   ctx.beginPath();
-  ctx.arc(0, 0, 0.56 * L, 0, Math.PI * 2);
+  ctx.arc(0, 0, 0.58 * L, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // The spine, from behind the skull to the tail, the bones shrinking and
-  // closing up as they go, sinking deeper into the silt toward the tail.
-  const N = 26;
-  const ph = r() * 6.28;
-  const spine: { x: number; y: number; a: number; b: number; rot: number; t: number; gone: boolean }[] = [];
+  // The vertebrae: seventeen blocks, closing up and shrinking to the tail,
+  // each a little apart from the next, sinking deeper toward the tail.
+  const N = 17;
+  interface Vert { X: number; Z: number; hv: number; len: number; sink: number; rot: number; gone: boolean }
+  const verts: Vert[] = [];
+  let X = X0 + 0.012;
   for (let k = 0; k < N; k++) {
     const t = k / (N - 1);
-    const u = 0.245 + 0.73 * (1 - Math.pow(1 - t, 1.25));
-    const un = 0.245 + 0.73 * (1 - Math.pow(1 - Math.min(1, t + 1 / (N - 1)), 1.25));
-    const hv = L * (0.034 * Math.pow(1 - t, 0.85) + 0.007);
-    let x = u * L;
-    let y = -L * (0.016 * (1 - 0.7 * t)) + L * 0.003 * Math.sin(t * 5 + ph);
-    let rot = (r() - 0.5) * 0.3;
-    // Settled unevenly, some deeper in the silt than others.
-    y += hv * (r() - 0.3) * 0.35;
-    x += (r() - 0.5) * hv * 0.25;
-    // A few knocked loose and rolled off the line.
-    const loose = k > 2 && r() < 0.2;
-    if (loose) {
-      x += (r() - 0.5) * hv * 1.2;
-      y += hv * (0.2 + r() * 0.35);
-      rot = (r() - 0.5) * 1.6;
-    }
-    const gone = k > 4 && r() < 0.09;
-    spine.push({ x, y, a: Math.max(1.4 * px, (un - u) * L * 0.38), b: hv / 2, rot, t, gone });
+    const step = 0.052 * (1 - 0.55 * t);
+    const hv = 0.036 * Math.pow(1 - t, 0.7) + 0.008;
+    // One or two knocked a little off the line.
+    const knocked = k > 3 && r() < 0.12;
+    const Z = zs(X) + (knocked ? (r() - 0.3) * 0.03 : 0);
+    verts.push({ X: X + (knocked ? (r() - 0.5) * 0.01 : 0), Z, hv, len: step * 0.74, sink: hv * (0.15 + 0.45 * t), rot: (r() - 0.5) * (knocked ? 0.5 : 0.1), gone: k > 5 && k < N - 2 && r() < 0.06 });
+    X += step;
   }
+  // Where a vertebra's middle lands on the page, and the spine's angle there.
+  const at = (v: Vert): Pt => P(v.X, v.Z, v.hv / 2 - v.sink);
+  const angleAt = (v: Vert) => Math.atan2(slope(v.X) * FORE, 1) + v.rot;
 
-  // Ribs: the far ones first, standing behind the spine or fallen away
-  // from it; the near ones after it, fallen toward the reader.
+  // The ribs, ten pairs off the first ten vertebrae. On each side one arc
+  // out from the spine and swept back toward the tail, lying on the floor;
+  // a few of the far ones still arched up off it; some snapped, the piece
+  // lying beside; one or two gone.
   const ribs = (near: boolean) => {
     const q = mulberry32(hash32('ribs', seed, near ? 1 : 0));
-    for (let i = 0; i < 12; i++) {
-      const v = spine[i + 2];
-      if (v.gone) continue;
-      const hs = 0.45 + q() * 0.75;
-      const ls = 0.6 + q() * 0.8;
-      const tilt = (q() - 0.5) * 0.9;
+    const side = near ? 1 : -1;
+    for (let i = 0; i < 10; i++) {
+      const v = verts[i + 1];
+      const missing = q() < 0.1;
       const fate = q();
-      const w0 = L * 0.0085 * (1 - i / 22) * (0.85 + q() * 0.3);
-      const w1 = w0 * 0.45;
-      const rx = v.x;
-      const ry = v.y - v.b * 0.2;
-      const rot = (pts: number[]) => {
-        const c = Math.cos(tilt);
-        const sn = Math.sin(tilt);
-        for (let k = 2; k < pts.length; k += 2) {
-          const dx = pts[k] - rx;
-          const dy = pts[k + 1] - ry;
-          pts[k] = rx + dx * c - dy * sn;
-          pts[k + 1] = ry + dx * sn + dy * c;
-        }
-        return pts;
-      };
-      let p: number[];
-      let stand: boolean;
-      if (!near) {
-        stand = fate < 0.45;
-        p = fate < 0.45
-          ? rot([rx, ry, rx + 0.012 * L, ry - 0.062 * L * hs, rx + 0.052 * L * ls, ry - 0.085 * L * hs, rx + 0.072 * L * ls, -0.03 * L])
-          : rot([rx, ry, rx + 0.025 * L, ry - 0.022 * L, rx + 0.06 * L * ls, -0.04 * L, rx + 0.095 * L * ls, -0.033 * L]);
-      } else {
-        stand = fate < 0.3;
-        p = fate < 0.3
-          ? rot([rx, ry, rx - 0.006 * L, ry - 0.05 * L * hs, rx + 0.045 * L * ls, ry - 0.045 * L * hs, rx + 0.062 * L * ls, 0.014 * L])
-          : rot([rx, v.y + v.b * 0.4, rx + 0.022 * L, 0.003 * L, rx + 0.05 * L * ls, 0.012 * L, rx + 0.085 * L * ls, 0.01 * L]);
-      }
-      // Some stood until they snapped: what is left stands, the rest lies under it.
-      const broken = stand && q() < 0.55;
-      const end = broken ? 0.35 + q() * 0.35 : 1;
-      bone(b, along(p, 0, end, 14), w0, broken ? w0 * 0.75 : w1, i * 2 + (near ? 101 : 1));
+      const snap = q();
+      const where = q();
+      const sway = (q() - 0.5) * 0.25;
+      if (v.gone || missing) continue;
+      const length = (0.085 + 0.065 * Math.sin((Math.PI * (i + 1)) / 11)) * (0.92 + where * 0.16);
+      // Across the spine and back along it, in the floor's plane.
+      const s = slope(v.X);
+      const nn = Math.hypot(s, 1);
+      const nx = (-s / nn) * side;
+      const nz = (1 / nn) * side;
+      const tx = 1 / nn;
+      const tz = s / nn;
+      const stand = !near && fate < 0.3 ? 1 : 0;
+      const sweep = 0.32 + sway;
+      const along = (u: number, w: number): [number, number] => [v.X + nx * u + tx * w, v.Z + nz * u + tz * w];
+      const h0 = v.hv * 0.7 - v.sink;
+      const pts: [number, number, number][] = stand
+        ? [
+            [...along(0.012, 0), h0],
+            [...along(length * 0.25, length * 0.05), 0.075],
+            [...along(length * 0.8, length * sweep * 0.6), 0.07],
+            [...along(length, length * sweep), 0.012],
+          ]
+        : [
+            [...along(0.012, 0), h0],
+            [...along(length * 0.35, length * 0.03), h0 * 0.6 + 0.01],
+            [...along(length * 0.8, length * sweep * 0.55), 0.004],
+            [...along(length, length * sweep), 0],
+          ];
+      const cp = C(pts);
+      const broken = snap < (stand ? 0.6 : 0.3);
+      const end = broken ? 0.45 + q() * 0.3 : 1;
+      const w0 = L * 0.0085 * (1 - i / 26);
+      const w1 = w0 * 0.42;
+      bone(b, along(cp, 0, end, 16), w0, broken ? w0 * 0.7 : w1, i * 2 + (near ? 101 : 1));
+      if (stand && !broken) tops.push(cubic(cp, 0.45));
       if (broken) {
-        const [bx, by] = cubic(p, end);
-        const fy = near ? 0.008 * L : -0.028 * L;
-        const flen = 0.03 * L + q() * 0.03 * L;
-        const fa = (q() - 0.5) * 0.6;
-        const fx = bx + (q() - 0.3) * 0.02 * L;
-        const frag = [fx, fy, fx + Math.cos(fa) * flen * 0.33, fy - 0.004 * L, fx + Math.cos(fa) * flen * 0.66, fy - 0.003 * L + Math.sin(fa) * flen * 0.2, fx + Math.cos(fa) * flen, fy + Math.sin(fa) * flen * 0.3];
-        bone(b, along(frag, 0, 1, 8), w0 * 0.7, w1, i * 2 + (near ? 151 : 51));
-        void by;
+        // The piece that fell, lying on the floor just past the break.
+        const [ex, ez] = along(length * (0.6 + end * 0.35), length * sweep * end + 0.015);
+        const fa = (q() - 0.5) * 1.2 + Math.atan2(nz, nx);
+        const fl = length * (1 - end) * (0.8 + q() * 0.3);
+        const frag = C([
+          [ex, ez, 0.002],
+          [ex + Math.cos(fa) * fl * 0.33, ez + Math.sin(fa) * fl * 0.33, 0.004],
+          [ex + Math.cos(fa) * fl * 0.66 + 0.006, ez + Math.sin(fa) * fl * 0.66, 0.003],
+          [ex + Math.cos(fa) * fl + 0.01, ez + Math.sin(fa) * fl, 0],
+        ]);
+        bone(b, along(frag, 0, 1, 8), w0 * 0.65, w1, i * 2 + (near ? 151 : 51));
       }
     }
   };
-  ribs(false);
 
-  // The skull: a long flat rostrum running out to the tip, the braincase low
-  // and broad behind it, its top a lighter plane seen from above, the orbit
-  // a hollow under the brow; on its far side, nothing but the top's edge.
-  const sk = mulberry32(hash32('skull', seed));
-  const jit = () => (sk() - 0.5) * 0.002 * L;
-  const skullTop: number[] = [];
-  const skullPts: number[] = [];
-  const profile: Pt[] = [
-    [0, -0.004], [0.05, -0.009], [0.1, -0.016], [0.138, -0.026], [0.162, -0.039], [0.184, -0.047], [0.205, -0.051], [0.222, -0.048], [0.236, -0.036], [0.247, -0.017],
+  // The skull, a broad flat wedge seen from above and the near side: its top
+  // a long triangle of rostrum running out to the tip, wide at the back
+  // where the braincase is; its near wall below that edge; the far jaw
+  // lying bowed out behind it, the near jaw in front.
+  const skullTop: [number, number, number][] = [
+    [0, 0, 0.008], [0.05, 0.021, 0.013], [0.11, 0.035, 0.02], [0.165, 0.05, 0.027], [0.205, 0.07, 0.032], [0.232, 0.062, 0.036], [0.258, 0.034, 0.04], [0.27, 0, 0.042],
+    [0.258, -0.034, 0.04], [0.232, -0.062, 0.036], [0.205, -0.07, 0.032], [0.165, -0.05, 0.027], [0.11, -0.035, 0.02], [0.05, -0.021, 0.013],
   ];
-  for (const [u, v] of profile) skullPts.push(u * L + jit(), v * L + jit());
-  const under: Pt[] = [[0.25, 0.004], [0.236, 0.008], [0.214, 0.003], [0.19, 0.006], [0.14, 0.005], [0.07, 0.003], [0.01, 0.001]];
-  for (const [u, v] of under) skullPts.push(u * L + jit(), v * L + jit());
-  mass(b, skullPts, { angle: -0.12, bow: 0.5, spacing: L * 0.0045, from: 0.42, cross: 0.75, stip: true, salt: 9001 });
-  // The back of the skull: the occipital shield's edge, and the squamosal
-  // coming down behind the orbit.
-  inkLine(ctx, [0.205 * L, -0.049 * L, 0.218 * L, -0.036 * L, 0.226 * L, -0.018 * L, 0.228 * L, 0.002 * L], false, { width: Math.max(0.5 * px, L * 0.0013), color: ink, alpha: 0.6, seed: seed ^ 0x73, light, taper: [0.2, 0.3], plate: true });
-  // The top plane: from the tip along the ridge, the far edge a little higher.
-  for (const [u, v] of profile) skullTop.push(u * L, v * L);
-  for (let i = profile.length - 1; i >= 0; i--) {
-    const [u, v] = profile[i];
-    const lift = 0.006 * Math.sin(Math.min(1, u / 0.2) * Math.PI * 0.9);
-    skullTop.push(u * L - 0.004 * L, (v - lift) * L);
-  }
-  ctx.globalAlpha = 0.85;
-  ctx.fillStyle = pale;
-  ctx.fill(smoothPath(skullTop, true, 4));
-  ctx.globalAlpha = 1;
-  inkLine(ctx, skullTop.slice(profile.length * 2), false, { width: Math.max(0.5 * px, L * 0.0012), color: ink, alpha: 0.7, seed: seed ^ 0x70, light, taper: [0.2, 0.2], plate: true });
-  // The blowhole's slit on the top, and a suture.
-  inkLine(ctx, [0.118 * L, -0.03 * L, 0.13 * L, -0.0335 * L, 0.142 * L, -0.036 * L], false, { width: Math.max(0.6 * px, L * 0.002), color: ink, alpha: 0.75, seed: seed ^ 0x71, light, plate: true });
-  inkLine(ctx, [0.02 * L, -0.006 * L, 0.07 * L, -0.012 * L, 0.11 * L, -0.019 * L], false, { width: Math.max(0.4 * px, L * 0.0009), color: ink, alpha: 0.45, seed: seed ^ 0x72, light, plate: true });
-  // The brow, and the orbit under it: a hollow in shadow, not a dark disc.
-  const orbit = lump(0.176 * L, -0.03 * L, 0.014 * L, 0.0075 * L, -0.25, sk, 0.8, 14);
-  const orbitPath = smoothPath(orbit, true, 4);
-  ctx.globalAlpha = 0.45;
-  ctx.fillStyle = mixHex(wash, dark ? '#000000' : '#2A2320', 0.45);
-  ctx.fill(orbitPath);
-  ctx.globalAlpha = 1;
-  const ob = boundsOf(orbit);
-  hatch(ctx, orbitPath, ob, { spacing: Math.max(1.2 * px, L * 0.0022), angle: 0.9, shade: (x, y) => 0.5 + 0.5 * ((y - ob.y) / ob.h), from: 0.35, cross: 0.7, color: ink, width: Math.max(0.4 * px, L * 0.0006), alpha: 0.6, seed: seed ^ 0x0b });
-  inkLine(ctx, orbit.slice(0, 16), false, { width: Math.max(0.5 * px, L * 0.0013), color: ink, alpha: 0.7, seed: seed ^ 0x0c, light, taper: [0.2, 0.3], plate: true });
-  inkLine(ctx, [0.152 * L, -0.04 * L, 0.17 * L, -0.0425 * L, 0.19 * L, -0.04 * L, 0.203 * L, -0.033 * L], false, { width: Math.max(0.7 * px, L * 0.0022), color: ink, alpha: 0.8, seed: seed ^ 0x0d, light, plate: true });
-  tops.push([0.04 * L, -0.012 * L], [0.1 * L, -0.022 * L], [0.16 * L, -0.044 * L], [0.2 * L, -0.06 * L], [0.235 * L, -0.044 * L]);
-
-  // The vertebrae, each a drum with its end turned a little to the reader,
-  // a spine standing off its top and its processes either side.
-  for (const v of spine) {
-    if (v.gone) continue;
-    const { x, y, a, rot, t } = v;
-    const bb = v.b;
-    const proc = t < 0.78;
-    const salt = Math.round(t * 1000);
-    if (proc) {
-      // The far process, behind.
-      bone(b, [x - a * 0.1, y - bb * 0.3, x - a * 0.25, y - bb * 0.55, x - a * 0.4, y - bb * 0.85 - bb * 0.4 * (1 - t)], a * 0.42, a * 0.22, salt + 3);
+  const onSkull = (X: number, Z: number, H: number) => P(X, ZS + Z, H);
+  const farJaw = C([[0.252, ZS - 0.082, 0.004], [0.19, ZS - 0.135, 0.004], [0.07, ZS - 0.1, 0.003], [0.008, ZS - 0.03, 0.002]]);
+  const nearJaw = C([[0.256, ZS + 0.08, 0.004], [0.19, ZS + 0.14, 0.004], [0.07, ZS + 0.11, 0.003], [0.006, ZS + 0.035, 0.002]]);
+  const paintSkull = () => {
+    // The near wall: from the top's near edge down into the silt.
+    const nearEdge = skullTop.slice(0, 8);
+    const wall: number[] = [];
+    for (const [Xs, Zk, H] of nearEdge) wall.push(...onSkull(Xs, Zk, H));
+    for (let i = nearEdge.length - 1; i >= 0; i--) {
+      const [Xs, Zk] = nearEdge[i];
+      wall.push(...onSkull(Xs, Zk, -0.006));
     }
-    const body = lump(x, y, a, bb, rot, r, 0.55, 16);
-    mass(b, body, { angle: Math.PI / 2 - 0.1 + rot, bow: 0.5, spacing: Math.max(1.3 * px, bb * 0.16), from: 0.45, cross: 0.8, salt: salt + 5 });
+    mass(b, wall, { angle: Math.PI / 2 - 0.2, bow: 0.4, spacing: L * 0.0042, from: 0.3, cross: 0.7, wash: shade, salt: 9002 });
+    // The top: pale, lit, shaded only toward its far edge.
+    const top: number[] = [];
+    for (const [Xs, Zk, H] of skullTop) top.push(...onSkull(Xs, Zk, H));
+    mass(b, top, { angle: -0.08, bow: 0.4, spacing: L * 0.0045, from: 0.55, wash: pale, stip: true, salt: 9001 });
+    // The ridge down the rostrum's middle, the nasal opening, and the
+    // occipital shield's edge.
+    const mid: number[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const Xs = 0.02 + (i / 8) * 0.17;
+      mid.push(...onSkull(Xs, 0, 0.009 + 0.024 * (Xs / 0.19) + 0.002));
+    }
+    inkLine(ctx, mid, false, { width: Math.max(0.5 * px, L * 0.0012), color: ink, alpha: 0.55, seed: seed ^ 0x72, light, taper: [0.3, 0.2], plate: true });
+    const nasal = lump(...onSkull(0.178, 0, 0.031), 0.012 * L, 0.004 * L, 0, r, 0.8, 12);
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = mixHex(wash, dark ? '#000000' : '#2A2320', 0.55);
+    ctx.fill(smoothPath(nasal, true, 4));
+    ctx.globalAlpha = 1;
+    inkLine(ctx, nasal, true, { width: Math.max(0.5 * px, L * 0.0011), color: ink, alpha: 0.7, seed: seed ^ 0x71, light, plate: true });
+    const shield = [...onSkull(0.2, -0.05, 0.034), ...onSkull(0.212, 0, 0.037), ...onSkull(0.2, 0.05, 0.034)];
+    inkLine(ctx, shield, false, { width: Math.max(0.5 * px, L * 0.0013), color: ink, alpha: 0.6, seed: seed ^ 0x73, light, taper: [0.2, 0.2], plate: true });
+    // The near orbit: a hollow in shadow under the back corner, not a dark disc.
+    const orbit = lump(...onSkull(0.212, 0.07, 0.016), 0.014 * L, 0.0075 * L, 0.1, r, 0.8, 14);
+    const orbitPath = smoothPath(orbit, true, 4);
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = mixHex(wash, dark ? '#000000' : '#2A2320', 0.5);
+    ctx.fill(orbitPath);
+    ctx.globalAlpha = 1;
+    const ob = boundsOf(orbit);
+    hatch(ctx, orbitPath, ob, { spacing: Math.max(1.2 * px, L * 0.0022), angle: 0.9, shade: (_x, y) => 0.5 + 0.5 * ((y - ob.y) / ob.h), from: 0.3, cross: 0.7, color: ink, width: Math.max(0.4 * px, L * 0.0006), alpha: 0.6, seed: seed ^ 0x0b });
+    inkLine(ctx, orbit.slice(0, 16), false, { width: Math.max(0.5 * px, L * 0.0013), color: ink, alpha: 0.7, seed: seed ^ 0x0c, light, taper: [0.2, 0.3], plate: true });
+    tops.push(onSkull(0.06, 0, 0.012), onSkull(0.12, 0, 0.022), onSkull(0.18, 0, 0.032), onSkull(0.24, 0, 0.04));
+  };
+
+  // A vertebra: the far process, the drum with its end face turned to the
+  // skull, its neural spine leaning back, the near process.
+  const vertebra = (v: Vert, k: number) => {
+    const [x, y] = at(v);
+    const a = (v.len / 2) * L;
+    const bb = (v.hv / 2) * L;
+    const rot = angleAt(v);
+    const t = k / (N - 1);
+    const proc = t < 0.8;
+    const salt = 300 + k * 17;
+    if (proc) {
+      bone(b, [x - a * 0.1, y - bb * 0.2, x - a * 0.05, y - bb * 0.7, x + a * 0.05, y - bb * 1.2], a * 0.42, a * 0.22, salt + 3);
+    }
+    const body = lump(x, y, a, bb, rot, r, 0.45, 18);
+    mass(b, body, { angle: Math.PI / 2 - 0.1 + rot, bow: 0.5, spacing: Math.max(1.3 * px, bb * 0.2), from: 0.45, cross: 0.8, salt: salt + 5 });
     // The end face, a disc of spongy bone turned toward the skull.
-    const ex = x - Math.cos(rot) * a * 0.82;
-    const ey = y - Math.sin(rot) * a * 0.82;
-    const face = lump(ex, ey, a * 0.26, bb * 0.88, rot, r, 1, 14);
+    const ex = x - Math.cos(rot) * a * 0.8;
+    const ey = y - Math.sin(rot) * a * 0.8;
+    const face = lump(ex, ey, a * 0.24, bb * 0.88, rot, r, 1, 14);
     const facePath = smoothPath(face, true, 4);
     ctx.globalAlpha = 1;
     ctx.fillStyle = pale;
@@ -1114,73 +1138,77 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
     if (d > 0.3) stipple(ctx, facePath, boundsOf(face), { spacing: Math.max(1.2 * px, bb * 0.12), radius: Math.max(0.3 * px, bb * 0.02), shade: () => 0.55, from: 0.2, color: ink, alpha: 0.35, seed: hash32(seed, salt, 'f') });
     inkLine(ctx, face, true, { width: Math.max(0.5 * px, bb * 0.05), color: ink, alpha: 0.75, seed: hash32(seed, salt, 'fi'), light, plate: true });
     if (proc) {
-      // The neural spine, leaning back toward the tail.
-      const lean = 0.45 + r() * 0.35 + rot;
-      const len = bb * 2 * (0.9 + r() * 0.4) * (1 - t * 0.65) * (r() < 0.25 ? 0.35 + r() * 0.3 : 1);
-      const sx = x + a * 0.1;
-      const sy = y - bb * 0.8;
+      const lean = 0.5 + r() * 0.3 + rot;
+      const len = bb * 1.9 * (0.9 + r() * 0.3) * (1 - t * 0.6) * (r() < 0.2 ? 0.45 : 1);
+      const sx = x + a * 0.05;
+      const sy = y - bb * 0.85;
       const tx = sx + Math.sin(lean) * len;
       const ty = sy - Math.cos(lean) * len;
-      bone(b, [sx, sy, (sx + tx) / 2 - len * 0.05, (sy + ty) / 2, tx, ty], a * 0.6, a * 0.3, salt + 7);
+      bone(b, [sx, sy, (sx + tx) / 2 - len * 0.05, (sy + ty) / 2, tx, ty], a * 0.55, a * 0.28, salt + 7);
       tops.push([tx, ty]);
-      // And the near process, down toward the reader, into the silt.
-      bone(b, [x + a * 0.1, y + bb * 0.2, x + a * 0.25, y + bb * 0.6, x + a * 0.35, y + bb * 1.1], a * 0.45, a * 0.25, salt + 9);
+      bone(b, [x + a * 0.05, y + bb * 0.3, x + a * 0.12, y + bb * 0.7, x + a * 0.2, y + bb * 1.05], a * 0.42, a * 0.24, salt + 9);
     }
     tops.push([x, y - bb]);
-  }
+  };
 
-  // The shoulder blade, fallen against the spine near the skull: a fan.
+  // Back to front: the far jaw and the far ribs, the skull, the spine, the
+  // silt heaped along the spine's near side, then the near ribs and jaw.
+  bone(b, along(farJaw, 0, 1, 24), L * 0.009, L * 0.006, 9201);
+  ribs(false);
+  paintSkull();
+  verts.forEach((v, k) => {
+    if (!v.gone) vertebra(v, k);
+  });
+
+  // The shoulder blade, fallen flat on the near side behind the skull: a fan.
   const sc = mulberry32(hash32('scapula', seed));
-  const scap: number[] = [0.265 * L, 0.004 * L, 0.258 * L, -0.012 * L, 0.27 * L, -0.03 * L, 0.29 * L, -0.042 * L, 0.312 * L, -0.044 * L, 0.33 * L, -0.034 * L, 0.338 * L, -0.016 * L, 0.33 * L, 0.002 * L, 0.3 * L, 0.006 * L];
-  for (let i = 0; i < scap.length; i++) scap[i] += (sc() - 0.5) * 0.002 * L;
-  mass(b, scap, { angle: -1.1, bow: 0.6, spacing: L * 0.004, from: 0.45, stip: true, salt: 9100 });
-  inkLine(ctx, [0.27 * L, -0.002 * L, 0.29 * L, -0.02 * L, 0.31 * L, -0.038 * L], false, { width: Math.max(0.6 * px, L * 0.0018), color: ink, alpha: 0.7, seed: seed ^ 0x5c, light, plate: true });
+  const scapF: [number, number][] = [[0.27, 0.035], [0.285, 0.05], [0.31, 0.075], [0.338, 0.085], [0.36, 0.075], [0.362, 0.05], [0.34, 0.04], [0.3, 0.032]];
+  const scap: number[] = [];
+  for (const [Xs, Zs] of scapF) scap.push(...P(Xs + (sc() - 0.5) * 0.003, ZS + Zs + (sc() - 0.5) * 0.004, 0.003));
 
-  // The silt heaped along the spine's foot, so the bones sink into it rather than
-  // sit on it: a ragged bank along the front, thicker at the skull and the
-  // tail, with grains on it and a lit crest.
+  // The silt heaped along the spine's near side, so the bones sink into it
+  // rather than sit on it: a ragged bank, thicker toward the tail, with
+  // grains on it and a lit crest.
   const hp = mulberry32(hash32('silt-heap', seed));
   const heap: number[] = [];
-  const crestPts: number[] = [];
   const M = 60;
   const p1 = hp() * 6.28;
   const p2 = hp() * 6.28;
+  const hvAt = (Xq: number) => 0.036 * Math.pow(1 - Math.min(1, Math.max(0, (Xq - X0) / (X1 - X0))), 0.7) + 0.008;
   for (let i = 0; i <= M; i++) {
-    const u = -0.05 + (i / M) * 1.1;
-    const bump = 0.004 + 0.004 * Math.max(0, Math.sin(u * 23 + p1)) + 0.003 * Math.max(0, Math.sin(u * 61 + p2)) + 0.006 * Math.exp(-Math.pow((u - 0.12) / 0.08, 2)) + 0.007 * Math.max(0, (u - 0.6) / 0.4) + hp() * 0.002;
-    const edge = Math.min(1, (u + 0.05) / 0.06, (1.05 - u) / 0.06);
-    const y = -bump * L * Math.max(0, edge);
-    heap.push(u * L, y);
-    crestPts.push(u * L, y);
+    const u = (i / M);
+    const Xq = X0 - 0.01 + u * (X1 - X0 + 0.04);
+    const bump = 0.003 + 0.004 * Math.max(0, Math.sin(u * 23 + p1)) + 0.003 * Math.max(0, Math.sin(u * 61 + p2)) + 0.012 * u + hp() * 0.002;
+    const edge = Math.min(1, u / 0.06, (1 - u) / 0.06);
+    const base = zs(Xq) * FORE + hvAt(Xq) * 0.5 + 0.004;
+    heap.push(Xq * L, (base - bump * Math.max(0, edge)) * L);
   }
   const heapPath = new Path2D();
   heapPath.moveTo(heap[0], heap[1]);
   for (let i = 2; i < heap.length; i += 2) heapPath.lineTo(heap[i], heap[i + 1]);
-  heapPath.lineTo(1.05 * L, 0.012 * L);
-  heapPath.lineTo(-0.05 * L, 0.012 * L);
+  for (let i = heap.length - 2; i >= 0; i -= 2) heapPath.lineTo(heap[i], heap[i + 1] + 0.022 * L);
   heapPath.closePath();
-  const fill = ctx.createLinearGradient(0, -0.02 * L, 0, 0.012 * L);
+  const hbox = boundsOf(heap);
+  hbox.h += 0.022 * L;
+  const fill = ctx.createLinearGradient(0, hbox.y, 0, hbox.y + hbox.h);
   fill.addColorStop(0, mixHex(silt, crest, 0.5));
-  fill.addColorStop(0.5, silt);
-  fill.addColorStop(0.68, silt);
+  fill.addColorStop(0.45, silt);
   fill.addColorStop(1, `${silt}00`);
-  ctx.globalAlpha = 0.94;
+  ctx.globalAlpha = 0.92;
   ctx.fillStyle = fill;
   ctx.fill(heapPath);
   ctx.globalAlpha = 1;
-  const hbox = { x: -0.05 * L, y: -0.03 * L, w: 1.1 * L, h: 0.07 * L };
-  stipple(ctx, heapPath, hbox, { spacing: Math.max(1.3 * px, L * 0.0025), radius: Math.max(0.3 * px, L * 0.0005), shade: (_x, y) => Math.max(0, 0.75 - (y + 0.01 * L) / (0.05 * L)), from: 0.25, color: crest, alpha: 0.6, seed: seed ^ 0x51 });
-  inkLine(ctx, crestPts, false, { width: Math.max(0.5 * px, L * 0.0012), color: dark ? IRON_GALL.dark : crest, alpha: dark ? 0.4 : 0.7, seed: seed ^ 0x52, light, taper: [0.05, 0.05], plate: true, min: 0.3 * px });
+  stipple(ctx, heapPath, hbox, { spacing: Math.max(1.3 * px, L * 0.0025), radius: Math.max(0.3 * px, L * 0.0005), shade: (_x, y) => Math.max(0, 0.75 - (y - hbox.y) / hbox.h), from: 0.25, color: crest, alpha: 0.6, seed: seed ^ 0x51 });
+  inkLine(ctx, heap, false, { width: Math.max(0.5 * px, L * 0.0012), color: dark ? IRON_GALL.dark : crest, alpha: dark ? 0.35 : 0.7, seed: seed ^ 0x52, light, taper: [0.05, 0.05], plate: true, min: 0.3 * px });
 
+  mass(b, scap, { angle: -1.1, bow: 0.6, spacing: L * 0.004, from: 0.45, stip: true, salt: 9100 });
+  inkLine(ctx, [...P(0.285, ZS + 0.04, 0.004), ...P(0.31, ZS + 0.06, 0.004), ...P(0.335, ZS + 0.078, 0.004)], false, { width: Math.max(0.6 * px, L * 0.0016), color: ink, alpha: 0.65, seed: seed ^ 0x5c, light, plate: true });
   ribs(true);
-
-  // A jaw, lying in front of the skull, half in the silt.
-  bone(b, along([-0.012 * L, 0.008 * L, 0.06 * L, -0.004 * L, 0.15 * L, -0.002 * L, 0.225 * L, 0.009 * L], 0, 1, 22), L * 0.008, L * 0.012, 9200);
+  bone(b, along(nearJaw, 0, 1, 24), L * 0.0105, L * 0.007, 9200);
   // The flipper's small bones, scattered in front of the shoulder.
   const fl = mulberry32(hash32('flipper', seed));
   for (let i = 0; i < 6; i++) {
-    const fx = (0.3 + fl() * 0.12) * L;
-    const fy = (0.004 + fl() * 0.012) * L;
+    const [fx, fy] = P(0.33 + fl() * 0.1, ZS + 0.09 + fl() * 0.04, 0.002);
     const fa = (fl() - 0.5) * 1.2;
     const fl0 = (0.008 + fl() * 0.008) * L;
     bone(b, [fx, fy, fx + Math.cos(fa) * fl0 * 0.5, fy + Math.sin(fa) * fl0 * 0.5, fx + Math.cos(fa) * fl0, fy + Math.sin(fa) * fl0], L * 0.004, L * 0.003, 9300 + i);
@@ -1189,11 +1217,12 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   // And drifts of it over the bones lying on the near floor, so they go
   // under and come out again.
   const dr = mulberry32(hash32('drifts', seed));
-  for (let i = 0; i < 16; i++) {
-    const x = (0.02 + dr() * 0.8) * L;
-    const y = (0.006 + dr() * 0.01) * L;
-    const hw = (0.012 + dr() * 0.025) * L;
-    const hh = (0.003 + dr() * 0.004) * L;
+  for (let i = 0; i < 14; i++) {
+    const Xd = 0.04 + dr() * 0.85;
+    const x = Xd * L;
+    const y = (zs(Math.max(X0, Xd)) * FORE + 0.02 + dr() * 0.03) * L;
+    const hw = (0.012 + dr() * 0.022) * L;
+    const hh = (0.003 + dr() * 0.003) * L;
     const pts: number[] = [];
     for (let k = 0; k <= 10; k++) {
       const u = -1 + (k / 10) * 2;
