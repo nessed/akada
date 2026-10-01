@@ -153,7 +153,7 @@ function buildStain(cssW: number, cssH: number, seed: number): HTMLCanvasElement
       // More at the page's edges, and most at its foot.
       const edge = Math.min(X, cssW - X, Y);
       const run = Math.pow(1 - smooth(0, 120, edge), 2) * 0.07 + Math.pow(1 - smooth(0, 170, cssH - Y), 2) * 0.07 * foot;
-      const s = p * 0.2 + m * 0.06 - lift * 0.035 + rim * 0.07 + run;
+      const s = p * 0.2 + m * 0.06 - lift * 0.035 + rim * 0.055 + run;
       put(d, (j * sw + i) * 4, s);
     }
   }

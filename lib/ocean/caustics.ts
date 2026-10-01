@@ -57,8 +57,8 @@ function buildTile(): HTMLCanvasElement | null {
     const v = y / TILE;
     for (let x = 0; x < TILE; x++) {
       const u = x / TILE;
-      const wu = u + 0.05 * Math.sin(TAU * (2 * v) + ph[0]) + 0.025 * Math.sin(TAU * (3 * u + 2 * v) + ph[1]);
-      const wv = v + 0.05 * Math.sin(TAU * (2 * u) + ph[2]) + 0.025 * Math.sin(TAU * (2 * u - 3 * v) + ph[3]);
+      const wu = u + 0.04 * Math.sin(TAU * (2 * v) + ph[0]) + 0.02 * Math.sin(TAU * (3 * u + 2 * v) + ph[1]);
+      const wv = v + 0.04 * Math.sin(TAU * (2 * u) + ph[2]) + 0.02 * Math.sin(TAU * (2 * u - 3 * v) + ph[3]);
       const cx = Math.floor(wu * CELLS);
       const cy = Math.floor(wv * CELLS);
       let f1 = 9;
@@ -126,7 +126,7 @@ export class Caustics {
     const base = (CELL_CSS * px * SHRINK * CELLS) / TILE;
     const layers = [
       { k: 1, turn: 0, vx: 7, vy: 4, breathe: 0.45, alpha: 0.62 },
-      { k: 0.71, turn: 0.55, vx: -5, vy: 6.5, breathe: 0.31, alpha: 0.38 },
+      { k: 1.23, turn: 0.55, vx: -5, vy: 6.5, breathe: 0.31, alpha: 0.32 },
     ];
     for (let i = 0; i < layers.length; i++) {
       const L = layers[i];
