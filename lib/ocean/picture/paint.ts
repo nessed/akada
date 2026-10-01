@@ -128,6 +128,17 @@ function tone(plan: Plan, z: number): string {
   return mixHex(mixHex(wt.top, wt.bottom, 0.45), '#141A26', 0.3 * Math.max(0, Math.min(1, (z - 0.2) / 0.5)));
 }
 
+// PROBE
+const __P: Record<string, number> = ((globalThis as unknown as { __picT?: Record<string, number> }).__picT ??= {});
+let __pl = '';
+let __pt = 0;
+function __probe(name: string) {
+  const now = performance.now();
+  if (__pl) __P[__pl] = (__P[__pl] ?? 0) + now - __pt;
+  __pl = name === 'end' ? '' : name;
+  __pt = now;
+}
+
 type InSight = (x0: number, y0: number, x1: number, y1: number, pad?: number) => boolean;
 
 /** The part of the picture a strip shows, in the picture's device px. */
@@ -173,6 +184,7 @@ function sees(v: View, x0: number, y0: number, x1: number, y1: number): boolean 
 }
 
 export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): void {
+  __probe('start');
   const D = px * plan.unit;
   const W = plan.w * D;
   const H = plan.h * D;
@@ -192,6 +204,7 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'low';
 
+  __probe("The water: the depth's c");
   // ---- The water: the depth's colour down the page, then the paint.
   const g = ctx.createLinearGradient(0, 0, 0, H);
   for (const s of plan.zStops) g.addColorStop(s.y / plan.h, tone(plan, s.z));
@@ -199,6 +212,7 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0);
   paintWash(ctx, plan, c, D, W, H, view);
 
+  __probe('The light from above, ca');
   // ---- The light from above, carved by everything that stands in it. The
   // shafts are soft, so they are laid once into a layer of their own at no
   // more than a few thousand pixels, faded out by the end of the twilight
@@ -228,10 +242,12 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     ctx.restore();
   }
 
+  __probe('Far: the big shapes behi');
   // ---- Far: the big shapes behind everything, then the far animals, hazy.
   for (const e of plan.events) if (e.far) paintEvent(ctx, plan, e, D, ambient, inSight);
   paintCast(ctx, plan, c, D, ambient, 0, inSight);
 
+  __probe('The places passed: kelp,');
   // ---- The places passed: kelp, rocks, the ledges of the breaks, the floor.
   if (c.kelp && plan.kelp) paintKelp(ctx, plan, c.kelp, c, D, ambient, inSight);
   for (const r of plan.rocks) {
@@ -244,18 +260,22 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   }
   if (plan.floor && inSight(0, plan.floor.y - 80, plan.w, plan.h)) paintFloor(ctx, plan, c, D, ambient);
 
+  __probe('Middle: the rare things ');
   // ---- Middle: the rare things in the water, the middle animals.
   for (const e of plan.events) if (!e.far && e.kind !== 'eye') paintEvent(ctx, plan, e, D, ambient, inSight);
   paintCast(ctx, plan, c, D, ambient, 1, inSight);
 
+  __probe('The way down: bubbles ri');
   // ---- The way down: bubbles rising off it, and the jellies, the hero last.
   paintBubbles(ctx, plan, D, inSight);
   for (const j of plan.jellies) if (inSight(j.box.x0, j.box.y0, j.box.x1, j.box.y1, j.r * 1.4)) paintJelly(ctx, plan, c, j, D);
 
+  __probe('Near.');
   // ---- Near.
   paintCast(ctx, plan, c, D, ambient, 2, inSight);
   for (const e of plan.events) if (e.kind === 'eye') paintEvent(ctx, plan, e, D, ambient, inSight);
 
+  __probe('The sky, looking up: a s');
   // ---- The sky, looking up: a small soft window at the very top, over
   // everything in the water; nothing crosses it but a few fish, dark
   // against the light. Soft, so on a poster it is drawn smaller and up.
@@ -269,9 +289,11 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     paintSilhouettes(ctx, plan, D);
   }
 
+  __probe('Light: what glows lights');
   // ---- Light: what glows lights what is near it.
   paintLights(ctx, plan, lightsOf(plan, c, D), view);
 
+  __probe('Snow, near to far, caugh');
   // ---- Snow, near to far, caught in the light.
   const rayKey = `${W}|${H}|${D}`;
   if (!c.rayLight || c.rayLight.key !== rayKey) {
@@ -288,9 +310,11 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     litBy: (x, y) => Math.max(rayAt(x, y), jellyLight(plan, x / D, y / D)),
   });
 
+  __probe('A whisper of noise, so n');
   // ---- A whisper of noise, so no gradient bands.
   paintDither(ctx, c, plan.seed, view);
   ctx.restore();
+  __probe('end');
 }
 
 /** The net of light off the surface, on what faces up in the sunlit water. */

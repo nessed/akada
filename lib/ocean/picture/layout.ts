@@ -370,10 +370,12 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     // Alternate walls; but not so far from the jelly that it would have to
     // cross the page to rest, and never stacked over a ledge just above.
     const crowded = (e: -1 | 1) => ledges.some((l) => l.edge === e && Math.abs(l.y - yHere) < h * 0.12);
-    let edge: -1 | 1 = wall;
     const far = (e: -1 | 1) => (e < 0 ? jx / w : 1 - jx / w);
-    if (far(edge) > 0.55 && !crowded((-edge) as -1 | 1)) edge = (-edge) as -1 | 1;
-    if (crowded(edge) && far((-edge) as -1 | 1) < 0.75) edge = (-edge) as -1 | 1;
+    let edge: -1 | 1 = tall ? wall : jx < w / 2 ? -1 : 1;
+    if (tall) {
+      if (far(edge) > 0.55 && !crowded((-edge) as -1 | 1)) edge = (-edge) as -1 | 1;
+      if (crowded(edge) && far((-edge) as -1 | 1) < 0.75) edge = (-edge) as -1 | 1;
+    } else if (crowded(edge) && far((-edge) as -1 | 1) <= 0.5) edge = (-edge) as -1 | 1;
     wall = edge === -1 ? 1 : -1;
     const vary = ((hash32(s.key, 'ledge-reach', r.index) % 1000) / 1000 - 0.5) * 0.06;
     const reach = clamp(0.15 + 0.11 * Math.min(1, r.seconds / 1800) + vary, 0.13, 0.29);
@@ -382,7 +384,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
       // The jelly comes over to rest above the end of the rock; on a wide
       // page only part of the way, so the way down still crosses it.
       const want = lip - edge * j.r * 0.55;
-      const most = tall ? w : w * 0.16;
+      const most = tall ? w : w * 0.2;
       const x = j.x + clamp(want - j.x, -most, most);
       j.x = clamp(x, w * MARGIN + j.r * 1.15, w * (1 - MARGIN) - j.r * 1.15);
       j.box = jellyBox(j);
