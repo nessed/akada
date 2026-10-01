@@ -59,13 +59,15 @@ export async function renderWallpaper(root: HTMLElement): Promise<Wallpaper | nu
   return blob ? { blob, width: out.width, height: out.height } : null;
 }
 
-/** Hands the picture to the share sheet where there is one (so a phone can
-    "Save Image" straight to Photos), and downloads it where there isn't. */
+/** Hands the picture to the share sheet on a phone or tablet (so it can
+    "Save Image" straight to Photos), and downloads it everywhere else. */
 export async function saveWallpaper(wall: Wallpaper, name: string): Promise<void> {
   const file = new File([wall.blob], name, { type: 'image/png' });
   const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
-  const touch = window.matchMedia?.('(pointer: coarse)').matches ?? false;
-  if (touch && nav.canShare?.({ files: [file] })) {
+  // A phone or tablet, by what it says it is: a touchscreen laptop reports
+  // touch too, and the share sheet there is a Windows dialog nobody wanted.
+  const handheld = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (handheld && nav.canShare?.({ files: [file] })) {
     try {
       await nav.share({ files: [file] });
       return;

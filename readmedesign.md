@@ -1204,7 +1204,8 @@ only ever grows, it never runs backwards, and none of it touches progress.
   (`lib/wallpaper.ts`; each canvas registers a layer), with none of the
   chrome, none of the page's rules or paper bleeds, nothing faded out of the
   clock's way, the bell open and the colour back if the sitting is held. On a
-  touch device the share sheet takes it, so it can go straight to Photos.
+  phone or tablet the share sheet takes it, so it can go straight to Photos;
+  everywhere else, a touchscreen laptop included, it is a plain download.
 - **Full screen** is the browser's where there is one (`requestFullscreen`),
   and the header put away where there isn't, which is every iPhone. Either way
   a small exit mark sits in the corner, since the header is where the button
