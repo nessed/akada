@@ -1246,7 +1246,7 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
     if (!target) return;
     if (i > 0) target.clearRect(0, 0, cw, chh);
     const ps = part.span * S;
-    const shape = rockShape(part.seed, ps, part.thick * ps, D);
+    const shape = rockShape(part.seed, ps, part.thick * ps, D, part.grammar ?? 'heap');
     const x0 = rockX(k, w, part.at) * D - ox;
     const y0 = (k.y + (k.shape.lift + part.dy) * span) * D - oy;
     target.lineCap = 'round';

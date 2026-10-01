@@ -21,7 +21,7 @@ import type { Species } from '../biome';
 import { depthAt, ZONES } from '../depth';
 import type { EventKind, OceanEvent } from '../events';
 import { KELP_ROCK, rollKelp } from '../kelp';
-import { rockShape } from '../outcrop-sprite';
+import { ROCK_GRAMMARS, rockShape, rollGrammar, type RockGrammar } from '../outcrop-sprite';
 import { moonPhase, sunFor } from '../light';
 import { jellyForBlock } from '../lineage';
 import { hash32, mulberry32, type Rand } from '../random';
@@ -87,6 +87,8 @@ export interface RockPart {
   span: number;
   dy: number;
   thick: number;
+  /** The engine's grammar for it (a heap of boulders, a slab, a spire, an overhang, a field of them). */
+  grammar?: RockGrammar;
 }
 
 /**
@@ -326,12 +328,12 @@ const profiles = new Map<string, { top: number[]; under: number[]; solid: number
  * that span below its nominal top: the top its boulders make, and their
  * underside down to where the wash lets go of it.
  */
-function profile(seed: number, thick: number): { top: number[]; under: number[]; solid: number[] } {
-  const key = `${seed}|${thick}`;
+function profile(seed: number, thick: number, grammar: RockGrammar = 'heap'): { top: number[]; under: number[]; solid: number[] } {
+  const key = `${seed}|${thick}|${grammar}`;
   const hit = profiles.get(key);
   if (hit) return hit;
   const S = 100;
-  const shape = rockShape(seed, S, thick * S, 1);
+  const shape = rockShape(seed, S, thick * S, 1, grammar);
   const foot = shape.height * ROCK_FOOT;
   const firm = shape.height * ROCK_SOLID;
   const top: number[] = [];
@@ -372,13 +374,13 @@ const silhouettes = new Map<string, RockShape>();
 /** The silhouette of engine rocks set together, normalised to its box. */
 export function rockSilhouette(parts: RockPart[]): RockShape {
   const ps = parts.map((p) => ({ ...p, thick: Math.round(p.thick * 1000) / 1000 }));
-  const key = ps.map((p) => `${p.seed}|${p.at}|${p.span}|${p.dy}|${p.thick}`).join(';');
+  const key = ps.map((p) => `${p.seed}|${p.at}|${p.span}|${p.dy}|${p.thick}|${p.grammar ?? 'heap'}`).join(';');
   const hit = silhouettes.get(key);
   if (hit) return hit;
   const top: number[] = [];
   const under: number[] = [];
   const solid: number[] = [];
-  const prof = ps.map((p) => profile(p.seed, p.thick));
+  const prof = ps.map((p) => profile(p.seed, p.thick, p.grammar));
   for (let i = 0; i <= ROCK_N; i++) {
     const u = i / ROCK_N;
     let t = Infinity;
@@ -428,7 +430,7 @@ export function rockSilhouette(parts: RockPart[]): RockShape {
  * block behind a lower ledge (1), a spur standing up at the lip from a low
  * shelf (2), or two humps, the outer one lower (3).
  */
-export function rockOfKind(seed: number, kind: number, want: number, exact = true): RockShape {
+export function rockOfKind(seed: number, kind: number, want: number, exact = true, grammar: RockGrammar = 'heap'): RockShape {
   const r = mulberry32(hash32('rock-kind', seed, kind));
   const sd = (i: number) => hash32(seed, 'part', i);
   const build = (k: number): RockPart[] => {
@@ -460,11 +462,12 @@ export function rockOfKind(seed: number, kind: number, want: number, exact = tru
   };
   // Scaled to stand as tall as asked, as near as the engine goes.
   let k = want;
-  let s = rockSilhouette(build(k));
+  const dressed = (parts: RockPart[]) => parts.map((p) => (grammar === 'heap' ? p : { ...p, grammar }));
+  let s = rockSilhouette(dressed(build(k)));
   for (let i = 0; i < (exact ? 1 : 0); i++) {
     k = Math.max(0.35, Math.min(1.3, k * (want / Math.max(0.05, s.ratio))));
     k = Math.round(k * 50) / 50;
-    s = rockSilhouette(build(k));
+    s = rockSilhouette(dressed(build(k)));
   }
   return s;
 }
@@ -591,24 +594,26 @@ function rockBox(k: Omit<PlacedRock, 'box'>, w: number): Box {
 
 /** A shape for a new rock unlike any already on the page. */
 function distinctShape(seed: number, want: number, others: RockShape[]): RockShape {
-  let best: RockShape | null = null;
   let bestIoU = Infinity;
   const first = seed % 4;
+  // A grammar of its own as well: a slab, a spire, an overhang, a field of
+  // boulders or a heap, the page's rocks each told by its build.
+  const g0 = ROCK_GRAMMARS.indexOf(rollGrammar(hash32(seed, 'grammar')));
+  const grammarOf = (t: number) => ROCK_GRAMMARS[(g0 + t) % ROCK_GRAMMARS.length];
+  const used = new Set(others.map((o) => o.parts[0]?.grammar ?? 'heap'));
   let bestT = 0;
   for (let t = 0; t < (others.length ? 10 : 1); t++) {
     // Judged roughly (the silhouette, normalised, hardly cares how tall it is asked to be), made exactly after.
-    const s = rockOfKind(hash32(seed, 'try', t), (first + t) % 4, want, false);
-    // Alike in silhouette counts, and more so with the crest alike as well.
-    const worst = others.reduce((a, o) => Math.max(a, rockIoU(s, o) + Math.max(0, 0.12 - crestDiff(s, o))), 0);
+    const s = rockOfKind(hash32(seed, 'try', t), (first + t) % 4, want, false, grammarOf(t));
+    // Alike in silhouette counts, and more so with the crest alike as well, and a grammar already on the page.
+    const worst = others.reduce((a, o) => Math.max(a, rockIoU(s, o) + Math.max(0, 0.12 - crestDiff(s, o))), 0) + (used.has(grammarOf(t)) ? 0.25 : 0);
     if (worst < bestIoU) {
-      best = s;
       bestIoU = worst;
       bestT = t;
     }
-    if (t >= 1 && !others.some((o) => sameRock(s, o))) break;
+    if (t >= 1 && !used.has(grammarOf(t)) && !others.some((o) => sameRock(s, o))) break;
   }
-  void best;
-  return rockOfKind(hash32(seed, 'try', bestT), (first + bestT) % 4, want);
+  return rockOfKind(hash32(seed, 'try', bestT), (first + bestT) % 4, want, true, grammarOf(bestT));
 }
 
 /* ---- The floor and the trench ---- */
@@ -1382,7 +1387,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     const twins = () => kept.some((o) => o.kind !== 'kelp' && sameRock(o.shape, rock.shape));
     for (let t = 0; twins() && t < 12; t++) {
       const want = Math.max(0.53, k.shape.ratio * 0.97);
-      let shape = rockOfKind(hash32(k.seed, 'again', t), t % 4, want);
+      let shape = rockOfKind(hash32(k.seed, 'again', t), t % 4, want, true, ROCK_GRAMMARS[t % ROCK_GRAMMARS.length]);
       if (shape.ratio > k.shape.ratio) shape = rockOfRatio(shape, want);
       if (shape.ratio > Math.max(k.shape.ratio * 1.01, 0.56) || shape.ratio < 0.5) continue;
       const height = shape.ratio * (k.reach + k.off) * w;
@@ -1444,7 +1449,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     const rest = kept.filter((_, j) => j !== i);
     for (let t = 0; t < 24; t++) {
       const want = Math.max(0.52, k.shape.ratio * (0.92 + 0.02 * (t % 4)));
-      let shape = rockOfKind(hash32(k.seed, 'twin', t), (t + 1) % 4, want);
+      let shape = rockOfKind(hash32(k.seed, 'twin', t), (t + 1) % 4, want, true, ROCK_GRAMMARS[(t + 2) % ROCK_GRAMMARS.length]);
       if (shape.ratio > k.shape.ratio) shape = rockOfRatio(shape, want);
       if (shape.ratio > Math.max(k.shape.ratio * 1.01, 0.56) || shape.ratio < 0.5) continue;
       if (others.some((o) => sameRock(o.shape, shape))) continue;
