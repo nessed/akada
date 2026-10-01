@@ -1385,7 +1385,14 @@ not show and nothing is scored, as everywhere in the deep.
 (about a sixth of its short side across) and the only one in full ink, a
 pool of its own light round it; the one before is about half its size, the
 older ones smaller and further off, the oldest only faint shapes in the
-water. Siblings are visibly different animals. On a tall page the hero
+water. Siblings are visibly different animals: each differs from the
+hero in at least two things you can see (the bell's height, the trails'
+length, the arms, the hue), no two hang at the same depth or within reach
+of each other's arms, and on a wide page they zigzag off the diagonal
+rather than ride it. Far off they are hazed toward the water but keep their
+rim, ribs and trails, never a soap bubble. With no floor under it, the
+hero's trails reach most of the way down and one near animal swims in the
+page's foot, so a short sitting's picture is never empty at the bottom. On a tall page the hero
 hangs a little below the middle. Past three hours the floor parts into a
 trench under it, two walls falling into a dark cleft, and the whale fall,
 if there is one, lies on the gentler slope, never in the cleft.
@@ -1433,7 +1440,13 @@ their real sizes against each other (a turtle three school fish long, a
 squid one or two). A trench's walls fall in ledges, each lip jutting over
 the drop with its shadow under it, the beds of rock lying level across
 them, lit only on the wall that faces the window. A passing whale is always
-its whole shadow, half the page long.
+its whole shadow, half the page long (smaller only when the page is
+crowded), soft, pitched a little head-up with its back fading in, and
+never laid along the water's steepest fall, where its level back would draw
+a horizon. Sightings keep a clear margin from everything, walls included;
+the squid's eye is a twentieth of the short side across. On the cream
+paper the moon is a flat pale disc with a few faint seas in it, never
+shaded like a ball.
 
 **Drawn for the wall.** At print size everything is inked at its full
 detail; things far off are hazier and take the water's colour; the pictures

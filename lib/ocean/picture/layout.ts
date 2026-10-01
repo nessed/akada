@@ -1446,8 +1446,9 @@ function footAnimal(cast: PlacedAnimal[], e: { w: number; h: number; jellies: Pl
       if (b.y1 > h * (1 - MARGIN) || b.y0 < band.y0 - hh) continue;
       if (fixed.some((f) => boxGap(f, b) < CLEAR)) continue;
       if (e.rocks.some((r) => rockTouches(r, w, b, CLEAR))) continue;
-      // Across from the hero, but not pressed to the edge.
-      const cost = -Math.min(Math.abs(x - hero.x), w * 0.35) + Math.abs(y - cy) * 0.5;
+      // Across from the hero, but in open water, not pressed to a wall.
+      const walled = e.rocks.some((r) => rockTouches(r, w, b, 0.08 * Math.min(w, h)));
+      const cost = -Math.min(Math.abs(x - hero.x), w * 0.35) + Math.abs(y - cy) * 0.5 + (walled ? w * 0.3 : 0);
       if (!best || cost < best.cost) best = { x, y, cost };
     }
   }
@@ -2257,7 +2258,8 @@ function settleEvents(
       return false;
     }
     for (const o of done) if (o.box && !o.far && o.kind !== 'whalefall' && boxGap(o.box, b) < 0) return true;
-    if (v.kind === 'turtle') return false;
+    // Even loosely, never on a rock or its wall.
+    if (v.kind === 'turtle') return e.rocks.some((k) => rockTouches(k, w, b, 0));
     for (const j of e.jellies) if (!j.hero && v.kind !== 'eye' && inter(b, j.box) > 0) return true;
     if (LONE.includes(v.kind) || v.kind === 'eye' || v.kind === 'dumbo') {
       for (const k of e.rocks) if (rockTouches(k, w, b, v.kind === 'eye' ? 40 : LONE.includes(v.kind) ? 6 : 0)) return true;
