@@ -16,8 +16,13 @@
 import { mixHex } from '../fan';
 import { zoneMid } from './depth';
 import type { EelPatch, Growth, Outcrop, outcropsInView } from './outcrop';
-import { HUES, waterAt, type Water } from './palette';
-import { chance, int, mulberry32, range, type Rand } from './random';
+import { HUES, IRON_GALL, waterAt, type Water } from './palette';
+import { detailFor, grain, hatch, inkLine, LIGHT, stipple } from './pen';
+import { chance, hash32, int, mulberry32, range, type Rand } from './random';
+
+/** The light from the top left, and the other way for light ink on dark
+    water, which marks where the light falls rather than where it doesn't. */
+const UNLIGHT: [number, number] = [-LIGHT[0], -LIGHT[1]];
 
 interface Placed {
   canvas: HTMLCanvasElement;
@@ -252,6 +257,296 @@ function drawSand(
   ctx.restore();
 }
 
+/** Soft blotches, 0 to 1, for where crust gathers on rock: no grid shows. */
+function blotch(x: number, y: number, k: number): number {
+  return (
+    0.5 +
+    0.28 * Math.sin(x * 0.021 * k + 1.3) * Math.sin(y * 0.027 * k + 0.4) +
+    0.22 * Math.sin((x + y) * 0.047 * k + 2.1) * Math.sin((x - y) * 0.039 * k + 0.7)
+  );
+}
+
+/** What `inkRock` needs to know about a rock: its crest, its body, and how
+    its faces turn to the light. */
+export interface RockInk {
+  /** Points along the crest from the wall to the lip and a little way down it. */
+  crest: number[];
+  /** The rock's region: the wash is already laid in it. */
+  body: Path2D;
+  box: { x: number; y: number; w: number; h: number };
+  /** How far down the rock a point is, 0 at the crest to 1 at its foot. */
+  v: (x: number, y: number) => number;
+  /** How much a point is on the face of the lip, 0 to 1. */
+  lip: (x: number) => number;
+  /** 1 when the lip faces away from the light (into shadow), -1 toward it. */
+  away: number;
+  /** Which way the rock runs from the wall, across the page: 1 right, -1 left. */
+  dir: 1 | -1;
+  /** Where the wash runs dry, so the marks thin out with it: 1 full to 0 gone. */
+  fade: (y: number) => number;
+  line: string;
+  rock: string;
+  dark: boolean;
+  alpha: number;
+  px: number;
+  /** How much drawing the rock carries, 0 to 1. */
+  d: number;
+  seed: number;
+  /** A few barnacles on its face. */
+  barnacles?: boolean;
+  /** Points along the underside, from the lip back to the wall, where it has one. */
+  under?: number[];
+}
+
+/**
+ * A rock in pen and wash, over a wash already laid: the pigment pooled at
+ * the crest, paper grain, contour hatching that follows the crest down the
+ * face and thickens into the shadow, strokes down the lip, cross-hatching
+ * where it is darkest, a crust of stipple gathered in blotches, a few
+ * cracks and barnacles, and the crest in one pressure line over it all. On
+ * dark water the light ink marks where the light falls instead. Shared by
+ * the outcrops and the kelp's ledge; small or live it is only the crest and
+ * a few contours, which cost a handful of strokes.
+ */
+export function inkRock(ctx: CanvasRenderingContext2D, k: RockInk): void {
+  const { px, alpha, d } = k;
+  const r = mulberry32(k.seed);
+  ctx.save();
+  ctx.clip(k.body);
+  // The pigment that ran to the crest and dried darker there.
+  const crestPath = new Path2D();
+  crestPath.moveTo(k.crest[0], k.crest[1]);
+  for (let i = 2; i < k.crest.length; i += 2) crestPath.lineTo(k.crest[i], k.crest[i + 1]);
+  ctx.strokeStyle = mixHex(k.rock, k.dark ? '#000000' : '#1A1714', 0.3);
+  ctx.globalAlpha = alpha * 0.35;
+  ctx.lineWidth = 6 * px;
+  ctx.stroke(crestPath);
+  // How much a mark is wanted at a point: shadow on light water, light on dark.
+  const shade = k.dark
+    ? (x: number, y: number) => (0.95 - 2.2 * k.v(x, y) - 0.45 * k.lip(x) * k.away + 0.12 * (blotch(x / px, y / px, 1) - 0.5)) * k.fade(y)
+    : (x: number, y: number) =>
+        (0.12 + 1.05 * Math.pow(k.v(x, y), 1.2) + 0.45 * k.lip(x) * k.away + 0.2 * (blotch(x / px, y / px, 1) - 0.5)) *
+        (0.4 + 0.6 * k.fade(y));
+  if (d > 0.35) {
+    // Paper tooth, in bands that thin as the wash runs dry.
+    const gr = grain(ctx);
+    if (gr) {
+      gr.setTransform?.(new DOMMatrix([px, 0, 0, px, 0, 0]));
+      ctx.fillStyle = gr;
+      const bands = 6;
+      for (let b = 0; b < bands; b++) {
+        const y = k.box.y + (k.box.h * b) / bands;
+        ctx.globalAlpha = alpha * (k.dark ? 0.35 : 0.28) * k.fade(y + k.box.h / bands / 2);
+        ctx.fillRect(k.box.x, y, k.box.w, k.box.h / bands + 1);
+      }
+    }
+  }
+  // The pen strokes that model it, as wavering ribbons that break now and
+  // then the way an engraver's lines do, so no run of them reads as a pattern.
+  const strokes = new Path2D();
+  const ribbon = (pts: number[], weight: (x: number, y: number, i: number) => number, ph: number) => {
+    const run: number[] = [];
+    let along = 0;
+    const flush = () => {
+      const m = run.length / 3;
+      if (m >= 3) {
+        strokes.moveTo(run[0], run[1] - run[2] / 2);
+        for (let j = 1; j < m; j++) strokes.lineTo(run[j * 3], run[j * 3 + 1] - run[j * 3 + 2] / 2);
+        for (let j = m - 1; j >= 0; j--) strokes.lineTo(run[j * 3], run[j * 3 + 1] + run[j * 3 + 2] / 2);
+        strokes.closePath();
+      }
+      run.length = 0;
+    };
+    for (let j = 0; j < pts.length; j += 2) {
+      if (j) along += Math.hypot(pts[j] - pts[j - 2], pts[j + 1] - pts[j - 1]);
+      const gap = Math.sin(ph + along / (19 * px)) * Math.sin(ph * 1.7 + along / (7.3 * px));
+      const wd = weight(pts[j], pts[j + 1], j / 2);
+      if (gap < 0.55 && wd > 0.15 * px) run.push(pts[j], pts[j + 1], wd);
+      else flush();
+    }
+    flush();
+  };
+  const fine = d > 0.35;
+  const sp = (fine ? 2.6 : 3.4) * px;
+  // Under the crest: the crest again a little way down, its boulders easing
+  // out as it goes, so the top reads as rolling over.
+  const m = k.crest.length / 2;
+  const base: number[] = [];
+  for (let j = 0; j < m; j++) {
+    let sum = 0;
+    let c = 0;
+    for (let q = Math.max(0, j - 6); q <= Math.min(m - 1, j + 6); q++, c++) sum += k.crest[q * 2 + 1];
+    base.push(sum / c);
+  }
+  const n1 = fine ? 6 : 3;
+  for (let i = 1; i <= n1; i++) {
+    const damp = 1 - i / (n1 + 2);
+    const pts: number[] = [];
+    const ph = r() * 6.28;
+    for (let j = 0; j < m; j++) {
+      const x = k.crest[j * 2];
+      pts.push(x, base[j] + (k.crest[j * 2 + 1] - base[j]) * damp + i * sp + Math.sin(ph + x / (29 * px)) * sp * 0.25);
+    }
+    const t = i / n1;
+    ribbon(
+      pts,
+      (x, y) =>
+        (fine ? 0.6 : 0.5) * px * k.fade(y) * (k.dark ? 1.2 * (1 - 0.7 * t) : 0.45 + 0.9 * t) * (0.55 + 0.9 * (blotch(x / px, y / px, 1) - 0.2)),
+      ph,
+    );
+  }
+  // Up from the underside, where the rock turns away into its own shadow:
+  // lines that follow it, heaviest at the edge.
+  if (k.under && k.under.length >= 4) {
+    const n2 = fine ? 9 : 4;
+    for (let i = 0; i < n2; i++) {
+      const pts: number[] = [];
+      const ph = r() * 6.28;
+      for (let j = 0; j < k.under.length; j += 2) {
+        const x = k.under[j];
+        pts.push(x, k.under[j + 1] - (i + 0.6) * sp + Math.sin(ph + x / (31 * px)) * sp * 0.2);
+      }
+      const t = i / n2;
+      ribbon(pts, (x, y) => (k.dark ? 0 : (fine ? 0.75 : 0.55) * px * (1.25 - t) * Math.sqrt(k.fade(y)) * (0.6 + 0.8 * (blotch(x / px, y / px, 1) - 0.2))), ph);
+    }
+  }
+  ctx.fillStyle = k.line;
+  ctx.globalAlpha = alpha * (fine ? 0.6 : 0.32);
+  ctx.fill(strokes);
+  if (fine) {
+    // Down the face, near-upright strokes where it is in shadow (or, on dark
+    // water, in the light), heaviest on the lip.
+    hatch(ctx, k.body, k.box, {
+      spacing: 2.6 * px,
+      angle: Math.PI / 2 - 0.22 * k.dir,
+      shade: (x, y) => (k.dark ? shade(x, y) * (0.5 + 0.6 * k.lip(x)) : shade(x, y) * (0.75 + 0.35 * k.lip(x) * k.away)),
+      from: 0.55,
+      color: k.line,
+      width: 0.5 * px,
+      alpha: alpha * 0.5,
+      seed: k.seed ^ 5,
+    });
+    // And across them where it is darkest, a second set.
+    if (!k.dark) {
+      hatch(ctx, k.body, k.box, {
+        spacing: 2.9 * px,
+        angle: -0.6 * k.dir,
+        shade: (x, y) => shade(x, y),
+        from: 0.85,
+        color: k.line,
+        width: 0.45 * px,
+        alpha: alpha * 0.4,
+        seed: k.seed ^ 9,
+      });
+    }
+    // A crust of stipple, gathered in blotches, thickest near the crest.
+    stipple(ctx, k.body, k.box, {
+      spacing: 2.2 * px,
+      radius: 0.42 * px,
+      shade: (x, y) => (0.2 + 0.8 * blotch(x / px, y / px, 1.7)) * (1 - 0.75 * k.v(x, y)) * k.fade(y),
+      from: 0.32,
+      color: k.line,
+      alpha: alpha * 0.55,
+      seed: k.seed ^ 13,
+    });
+  }
+  ctx.restore();
+  if (d > 0.25) {
+    // Cracks: short jagged lines in from the crest and across the lip,
+    // now and then forking.
+    const count = 2 + Math.floor(r() * 3);
+    for (let c = 0; c < count; c++) {
+      const j = 2 * Math.floor((0.15 + r() * 0.75) * (k.crest.length / 2 - 1));
+      let cx = k.crest[j];
+      let cy = k.crest[j + 1] + (2 + r() * 5) * px;
+      let a = Math.PI / 2 + (r() - 0.5) * 0.9;
+      const crack: number[] = [cx, cy];
+      const segs = 3 + Math.floor(r() * 4);
+      for (let s = 0; s < segs; s++) {
+        a += (r() - 0.5) * 1.3;
+        a = Math.max(0.4, Math.min(Math.PI - 0.4, a));
+        const len = (3 + r() * 5) * px;
+        cx += Math.cos(a) * len;
+        cy += Math.sin(a) * len;
+        crack.push(cx, cy);
+        if (s === 1 && r() < 0.5) {
+          const fa = a + (r() < 0.5 ? 0.8 : -0.8);
+          inkLine(ctx, [cx, cy, cx + Math.cos(fa) * 4 * px, cy + Math.sin(fa) * 4 * px, cx + Math.cos(fa + 0.3) * 8 * px, cy + Math.sin(fa + 0.3) * 8 * px], false, {
+            width: 0.5 * px,
+            color: k.line,
+            alpha: alpha * 0.5 * k.fade(cy),
+            taper: [0, 0.8],
+            seed: c * 7 + 1,
+            raw: true,
+            min: 0.2 * px,
+          });
+        }
+      }
+      inkLine(ctx, crack, false, { width: 0.8 * px, color: k.line, alpha: alpha * 0.7 * k.fade(cy), taper: [0.05, 0.7], seed: c * 7 + 3, raw: true, min: 0.2 * px });
+    }
+  }
+  if (k.barnacles && d > 0.3 && r() < 0.65) {
+    // A few barnacles just under the crest: a low cone, its plates, the slit on top.
+    const nb = 2 + Math.floor(r() * 4);
+    const j0 = 2 * Math.floor((0.2 + r() * 0.5) * (k.crest.length / 2 - 1));
+    const shell = k.dark ? mixHex(k.rock, '#E8E0CF', 0.35) : mixHex(k.rock, '#FBF8EF', 0.55);
+    for (let b = 0; b < nb; b++) {
+      const j = Math.min(k.crest.length - 2, j0 + 2 * Math.floor(b * (1.5 + r() * 2)));
+      const bw = (2.2 + r() * 1.6) * px;
+      const x = k.crest[j] + (r() - 0.5) * 4 * px;
+      const y = k.crest[j + 1] + (2.5 + r() * 6) * px;
+      const cone = new Path2D();
+      cone.moveTo(x - bw, y + bw * 0.35);
+      cone.quadraticCurveTo(x - bw * 0.7, y - bw * 0.6, x - bw * 0.3, y - bw * 0.7);
+      cone.lineTo(x + bw * 0.3, y - bw * 0.7);
+      cone.quadraticCurveTo(x + bw * 0.7, y - bw * 0.6, x + bw, y + bw * 0.35);
+      cone.closePath();
+      ctx.fillStyle = shell;
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.fill(cone);
+      ctx.strokeStyle = k.line;
+      ctx.lineWidth = 0.5 * px;
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.stroke(cone);
+      ctx.beginPath();
+      ctx.moveTo(x - bw * 0.25, y - bw * 0.62);
+      ctx.lineTo(x + bw * 0.25, y - bw * 0.62);
+      for (const f of [-0.55, 0, 0.55]) {
+        ctx.moveTo(x + f * bw * 0.5, y - bw * 0.55);
+        ctx.lineTo(x + f * bw, y + bw * 0.25);
+      }
+      ctx.lineWidth = 0.4 * px;
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.stroke();
+    }
+  }
+  // The crest, in one pressure line that runs on down the lip and lifts.
+  inkLine(ctx, k.crest, false, {
+    width: (d > 0.35 ? 1.5 : 1.25) * px,
+    color: k.line,
+    alpha: alpha * 0.85,
+    swell: 0.8,
+    taper: [0, 0.16],
+    lost: d > 0.35 ? 0.3 : 0.15,
+    seed: k.seed ^ 3,
+    raw: true,
+    light: k.dark ? UNLIGHT : LIGHT,
+    min: 0.3 * px,
+  });
+}
+
+/** A cubic's points, appended to `out` (not its start). */
+function cubicPts(out: number[], p: number[], n: number) {
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const u = 1 - t;
+    out.push(
+      u * u * u * p[0] + 3 * u * u * t * p[2] + 3 * u * t * t * p[4] + t * t * t * p[6],
+      u * u * u * p[1] + 3 * u * u * t * p[3] + 3 * u * t * t * p[5] + t * t * t * p[7],
+    );
+  }
+}
+
 /** The rock, as the kelp's ledge is drawn: inked along its top and lip, and
     bleeding away underneath toward the page edge it comes out of, so it reads
     as rock jutting from a wall rather than a bowl floating in the water. */
@@ -270,22 +565,31 @@ function drawRock(
   // holds still while the sea darkens around it.
   const zw = waterAt(zoneMid(o.zone), dark ? 'night' : 'paper', '#A8BCC9');
   const rock = dark ? mixHex(zw.bottom, '#000000', 0.28) : mixHex(zw.bottom, '#6B6459', 0.42);
-  const line = dark ? mixHex(zw.bottom, '#FFFFFF', 0.22) : mixHex(zw.bottom, '#1A1714', 0.55);
+  const line = dark ? IRON_GALL.dark : IRON_GALL.light;
   // Fainter as the light goes, but never lost: in the dark the rock is
   // what the growths stand on, and it is mostly its ink that shows.
   const alpha = 0.92 * (0.65 + 0.35 * zw.light);
 
   const crestY = (f: number) => top - crestRise(o, f, px);
   const edge = new Path2D();
+  const crest: number[] = [X(0), crestY(0)];
   edge.moveTo(X(0), crestY(0));
-  for (let k = 1; k <= 48; k++) edge.lineTo(X((k / 48) * 0.88), crestY((k / 48) * 0.88));
+  for (let k = 1; k <= 48; k++) {
+    edge.lineTo(X((k / 48) * 0.88), crestY((k / 48) * 0.88));
+    crest.push(X((k / 48) * 0.88), crestY((k / 48) * 0.88));
+  }
   const lipTop = crestY(0.88);
-  edge.bezierCurveTo(X(0.96), lipTop, X(1.01), top + thick * 0.12, X(0.97), top + thick * 0.3);
+  const lip = [X(0.88), lipTop, X(0.96), lipTop, X(1.01), top + thick * 0.12, X(0.97), top + thick * 0.3];
+  edge.bezierCurveTo(lip[2], lip[3], lip[4], lip[5], lip[6], lip[7]);
+  cubicPts(crest, lip, 10);
   // The underside runs back to the wall and is never inked: the wash runs dry
   // before it gets there.
+  const under = [X(0.97), top + thick * 0.3, X(0.8), top + thick * 0.45, X(0.3), top + thick * 0.7, X(0), top + thick];
   const body = new Path2D(edge);
-  body.bezierCurveTo(X(0.8), top + thick * 0.45, X(0.3), top + thick * 0.7, X(0), top + thick);
+  body.bezierCurveTo(under[2], under[3], under[4], under[5], under[6], under[7]);
   body.closePath();
+  // A little way on round the lip, where the pen lifts.
+  cubicPts(crest, [under[0], under[1], X(0.93), top + thick * 0.35, X(0.88), top + thick * 0.4, X(0.84), top + thick * 0.42], 4);
 
   const g = ctx.createLinearGradient(0, top, 0, top + thick);
   g.addColorStop(0, rock);
@@ -295,31 +599,49 @@ function drawRock(
   ctx.globalAlpha = alpha * 0.9;
   ctx.fillStyle = g;
   ctx.fill(body);
-  ctx.globalAlpha = alpha * 0.75;
-  ctx.strokeStyle = line;
-  ctx.lineWidth = 1.2 * px;
-  ctx.stroke(edge);
-  ctx.clip(body);
-  // Engraved shading down the face of the lip.
-  ctx.beginPath();
-  for (let i = 0; i < 7; i++) {
-    const f = 0.9 - i * 0.022;
-    ctx.moveTo(X(f), top + thick * (0.12 + i * 0.015));
-    ctx.lineTo(X(f - 0.01), top + thick * (0.34 + i * 0.03));
+  // The underside as a lookup by x, for how far down the rock a point is.
+  const ux: number[] = [];
+  const uy: number[] = [];
+  const tmp: number[] = [under[0], under[1]];
+  cubicPts(tmp, under, 24);
+  for (let i = 0; i < tmp.length; i += 2) {
+    ux.push(tmp[i]);
+    uy.push(tmp[i + 1]);
   }
-  ctx.globalAlpha = alpha * 0.35;
-  ctx.lineWidth = 0.8 * px;
-  ctx.stroke();
-  // Stipple near the top, where the rock catches what light there is.
-  ctx.fillStyle = line;
-  for (const d of o.specks) {
-    const depth = 0.05 + d.y * 0.45;
-    ctx.globalAlpha = alpha * 0.45 * (1 - depth / 0.6);
-    ctx.beginPath();
-    ctx.arc(X(0.03 + d.x * 0.82), top + thick * depth, d.r * px, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  const underAt = (x: number) => {
+    if (x >= ux[0]) return uy[0];
+    for (let i = 1; i < ux.length; i++) {
+      if (x >= ux[i]) {
+        const t = (x - ux[i]) / (ux[i - 1] - ux[i] || 1);
+        return uy[i] + (uy[i - 1] - uy[i]) * t;
+      }
+    }
+    return uy[uy.length - 1];
+  };
+  const f0 = (x: number) => Math.max(0, Math.min(0.88, (x - x0) / span));
   ctx.restore();
+  inkRock(ctx, {
+    crest,
+    body,
+    box: { x: x0, y: top - 14 * px, w: span * 1.03, h: thick + 14 * px },
+    v: (x, y) => {
+      const c = crestY(f0(x));
+      return Math.max(0, Math.min(1, (y - c) / Math.max(4 * px, underAt(x) - c)));
+    },
+    lip: (x) => Math.max(0, 1 - Math.abs(x - X(0.95)) / (0.12 * span)),
+    away: 1,
+    dir: 1,
+    fade: (y) => Math.max(0, Math.min(1, 1.25 - (y - top) / thick)),
+    line,
+    rock,
+    dark,
+    alpha,
+    px,
+    d: detailFor(Math.min(span, thick * 2.5)),
+    seed: hash32(o.id, 'rock'),
+    barnacles: o.zone < 2,
+    under: tmp,
+  });
   return crestY;
 }
 

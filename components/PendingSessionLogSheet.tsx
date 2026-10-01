@@ -21,6 +21,7 @@ import { LONG_SITTING_SECONDS } from '@/lib/timer-idle';
 import { useNotice } from './Notice';
 import { clampSessionSeconds, isLoggableDuration } from '@/lib/session-safety';
 import SessionLogModal from './SessionLogModal';
+import SavePicture from './SavePicture';
 import { usePreferences } from '@/lib/preferences';
 import { courseKey, oceanKeyFromSegments } from '@/lib/ocean/key';
 import { woodKeyFromSegments } from '@/lib/wood/clock';
@@ -28,6 +29,9 @@ import { woodKeyFromSegments } from '@/lib/wood/clock';
 /* Only fetched for a reader whose timer draws the deep, or the wood. */
 const DiveRecap = dynamic(() => import('./DiveRecap'), { ssr: false });
 const WoodRecap = dynamic(() => import('./WoodRecap'), { ssr: false });
+
+/* The scene still under the sheet on the timer, for "this moment". */
+const findScene = () => document.querySelector<HTMLElement>('[data-ocean-scene]');
 
 /**
  * How many log sheets are on the page.
@@ -74,6 +78,8 @@ export default function PendingSessionLogSheet() {
   // one in it, so the figure is what "usually" meant before today.
   const usual = pendingLog ? logged?.habits.byCourse.get(pendingLog.courseId)?.sittings ?? null : null;
   const [open, setOpen] = useState(false);
+  // Keep the picture, opened from under the dive's recap.
+  const [pictureOpen, setPictureOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [online, setOnline] = useState(true);
@@ -138,6 +144,7 @@ export default function PendingSessionLogSheet() {
       return;
     }
     setOpen(false);
+    setPictureOpen(false);
     setSaveError('');
     setSaving(false);
   }, [pendingLog]);
@@ -240,55 +247,84 @@ export default function PendingSessionLogSheet() {
   }
 
   return (
-    <SessionLogModal
-      open={open}
-      course={course}
-      task={task}
-      durationSeconds={chosen?.durationSeconds ?? 0}
-      breakSeconds={chosen?.breakSeconds ?? 0}
-      segments={chosen?.segments ?? []}
-      recap={
-        diveKey && pendingLog ? (
-          <DiveRecap
-            sittingKey={diveKey}
-            courseKey={courseKey(pendingLog.courseId)}
-            focusSeconds={chosen?.durationSeconds ?? 0}
-            dark={darkMode}
-            className="mt-3"
-          />
-        ) : woodKey && pendingLog ? (
-          <WoodRecap
-            woodKey={woodKey}
-            courseId={pendingLog.courseId}
-            focusSeconds={chosen?.durationSeconds ?? 0}
-            night={pendingLog.segments.some((s) => s.kind === 'focus' && s.targetSeconds == null)}
-            className="mt-3"
-          />
-        ) : null
-      }
-      suggestions={suggestions}
-      effect={pendingLog && sitting?.courseId === pendingLog.courseId ? sitting : null}
-      usualSeconds={usual && settled(usual) ? usual.median : null}
-      saving={saving}
-      notice={
-        pendingLog && course ? (
-          <LogNotice
-            log={pendingLog}
-            courseCode={course.code}
-            useQuiet={useQuiet}
-            onUseQuiet={setUseQuiet}
-          />
-        ) : null
-      }
-      errorMessage={
-        saveError ||
-        (!online && pendingLog
-          ? 'Offline. Kept on this device.'
-          : '')
-      }
-      onCancel={handleDiscard}
-      onSave={handleSave}
-    />
+    <>
+      <SessionLogModal
+        open={open}
+        course={course}
+        task={task}
+        durationSeconds={chosen?.durationSeconds ?? 0}
+        breakSeconds={chosen?.breakSeconds ?? 0}
+        segments={chosen?.segments ?? []}
+        recap={
+          diveKey && pendingLog ? (
+            <>
+              <DiveRecap
+                sittingKey={diveKey}
+                courseKey={courseKey(pendingLog.courseId)}
+                focusSeconds={chosen?.durationSeconds ?? 0}
+                dark={darkMode}
+                className="mt-3"
+              />
+              {/* The sitting as one picture, kept before the sheet takes it
+                  away. One quiet line, the same pencil link the notice uses. */}
+              <button
+                type="button"
+                onClick={() => setPictureOpen(true)}
+                className="hand-underline mt-2 bg-transparent px-0.5 font-serif text-[13px] italic text-ink-soft"
+              >
+                keep the picture of this sitting
+              </button>
+            </>
+          ) : woodKey && pendingLog ? (
+            <WoodRecap
+              woodKey={woodKey}
+              courseId={pendingLog.courseId}
+              focusSeconds={chosen?.durationSeconds ?? 0}
+              night={pendingLog.segments.some((s) => s.kind === 'focus' && s.targetSeconds == null)}
+              className="mt-3"
+            />
+          ) : null
+        }
+        suggestions={suggestions}
+        effect={pendingLog && sitting?.courseId === pendingLog.courseId ? sitting : null}
+        usualSeconds={usual && settled(usual) ? usual.median : null}
+        saving={saving}
+        notice={
+          pendingLog && course ? (
+            <LogNotice
+              log={pendingLog}
+              courseCode={course.code}
+              useQuiet={useQuiet}
+              onUseQuiet={setUseQuiet}
+            />
+          ) : null
+        }
+        errorMessage={
+          saveError ||
+          (!online && pendingLog
+            ? 'Offline. Kept on this device.'
+            : '')
+        }
+        onCancel={handleDiscard}
+        onSave={handleSave}
+      />
+      {diveKey && pendingLog && (
+        <SavePicture
+          open={pictureOpen}
+          onClose={() => setPictureOpen(false)}
+          initial="sitting"
+          momentRoot={findScene}
+          sitting={{
+            courseId: pendingLog.courseId,
+            color: course?.color ?? '#A8B89B',
+            segments: chosen?.segments ?? pendingLog.segments,
+            tzOffset: new Date().getTimezoneOffset(),
+          }}
+          night={darkMode}
+          name={`akada-sitting-${pendingLog.date || isoDate()}`}
+        />
+      )}
+    </>
   );
 }
 

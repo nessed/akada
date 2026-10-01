@@ -8,6 +8,7 @@ import PageShell from '@/components/PageShell';
 import { useNotice } from '@/components/Notice';
 import SwipeRow from '@/components/SwipeRow';
 import LoadingIndicator from '@/components/LoadingIndicator';
+import SavePicture from '@/components/SavePicture';
 import Heatmap from '@/components/Heatmap';
 import GradeWeighting from '@/components/term/GradeWeighting';
 import type { Course, Session, Task } from '@/lib/data';
@@ -104,6 +105,11 @@ export default function StatsPage() {
   const [against, setAgainst] = useState<PaceAgainst>('last');
   const [prefs] = usePreferences();
   const [deletedSession, setDeletedSession] = useState<Session | null>(null);
+  /* A past sitting's picture, painted again from its record. Only for a
+     reader whose timer draws the deep, and only for a sitting that kept its
+     stretches and was ended by the reader: the same rule as the recap. */
+  const [pictureOf, setPictureOf] = useState<{ session: Session; color: string } | null>(null);
+  const pictures = prefs.timerDrawing === 'ocean';
   const undoTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -643,6 +649,15 @@ export default function StatsPage() {
                       session={entry.session}
                       course={entry.course}
                       onDelete={deleteSession}
+                      onPicture={
+                        pictures && entry.session.segments?.length && !entry.session.recovery
+                          ? () =>
+                              setPictureOf({
+                                session: entry.session,
+                                color: entry.course?.color ?? '#A8B89B',
+                              })
+                          : undefined
+                      }
                     />
                   ) : entry.kind === 'tasks-added' ? (
                     <AddedLine key={entry.id} count={entry.count} />
@@ -671,6 +686,24 @@ export default function StatsPage() {
           .
         </p>
       )}
+
+      <SavePicture
+        open={pictureOf != null}
+        onClose={() => setPictureOf(null)}
+        initial="sitting"
+        sitting={
+          pictureOf
+            ? {
+                courseId: pictureOf.session.courseId,
+                color: pictureOf.color,
+                segments: pictureOf.session.segments ?? [],
+                tzOffset: new Date().getTimezoneOffset(),
+              }
+            : null
+        }
+        night={prefs.darkMode}
+        name={`akada-sitting-${pictureOf?.session.date ?? 'past'}`}
+      />
 
       {deletedSession && (
         <div
@@ -813,10 +846,13 @@ function SessionEntry({
   session,
   course,
   onDelete,
+  onPicture,
 }: {
   session: Session;
   course?: Course;
   onDelete: (id: string) => void;
+  /** Paint this sitting as a picture, when it can be. */
+  onPicture?: () => void;
 }) {
   return (
     <SwipeRow
@@ -862,6 +898,20 @@ function SessionEntry({
           <span className="font-mono text-[13px] font-semibold text-ink tabular-nums">
             {formatHM(clampSessionSeconds(session.durationSeconds))}
           </span>
+          {onPicture && (
+            <button
+              type="button"
+              onClick={onPicture}
+              aria-label="Keep the picture of this sitting"
+              title="Keep the picture"
+              className="flex h-7 w-7 touch:h-10 touch:w-10 items-center justify-center rounded-full text-muted-soft opacity-70 transition-opacity hover:text-ink-soft hover:opacity-100"
+            >
+              <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="3.5" width="16" height="17" rx="2" />
+                <path d="M4 15.5l4.5-4 3.5 3 3-2.5 5 4.5" />
+              </svg>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onDelete(session.id)}
