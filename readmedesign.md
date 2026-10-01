@@ -882,7 +882,10 @@ natural-history plate draws one, in the course colour, never a cartoon.
   inked in that sea's one iron-gall ink, like everything else there; the
   jellyfish drawing on its own keeps an edge in its own colour. Drawn big,
   a stipple gathers on the bell's shadow side, and on dark water a soft rim
-  of its own glow swells with the beat.
+  of its own glow swells with the beat. The clover of horseshoes is a soft
+  pink wash with only a broken thread along each curve, and the stinging
+  beads hang on about a third of the tentacles, each at its own spacing, so
+  they never line up in rows.
 - **The trails.** Sixteen tentacles taper from the rim to hairline tips, a
   few of them strung with stinging cells; fifteen short fine hairs fill the
   fringe between them; and four oral arms hang in the middle as ribbons that
@@ -1085,12 +1088,17 @@ only ever grows, it never runs backwards, and none of it touches progress.
   warm off-white on the night one), colour only in the washes; outlines are
   a pen's, swelling on the side away from the light, thinning and breaking
   where it is hardest, tapering to a hair at a tentacle's tip; bodies are
-  watercolour, pooled darker at their edge with a strip of bare paper left
-  along the back. Drawn big, the solid ones are shaded in engraved hatching
-  (crossed only in the deepest shadow) and the clear ones in stipple, and
-  the fine anatomy comes in: fin rays, scales, the lateral line, the gill
-  cover, beads on the tentacles, the lights as rings; eyes get an iris and
-  two highlights. Small, on the live timer, they stay line and wash, since a
+  watercolour, graded darker along the back to a strip of bare paper down
+  the flank and a paler belly, pooled at its edge. Drawn big, the solid ones
+  are shaded in contour hatching that runs with the spine, only in the
+  shaded part of the body and crossed only in its darkest; the clear ones in
+  stipple. Markings are marks, not patterns: spots are dabs of wash, bars
+  are brush strokes fading to the belly, never a grid. The fine anatomy comes
+  in: fin rays, the lateral line, the gill cover, beads along a third of the
+  tentacles at their own spacing, the lights as rings; an eye is an iris set
+  in the head, one in profile, with two highlights. Each body plan gets only
+  its own parts: an eel is one tapering body with one fin ribbon round it, a
+  squid a mantle, fins, arms and two clubbed tentacles. Small, on the live timer, they stay line and wash, since a
   speck has no room for engraving and a phone no time for it. The rocks,
   coral, kelp, eels, the sightings and the jelly are drawn with the same pen
   and the same ink, so the whole sea is one hand's.
@@ -1144,11 +1152,14 @@ only ever grows, it never runs backwards, and none of it touches progress.
   species blink, each in its own rhythm, a flash that dies away and then the
   wait.
 - **Kelp, where the light is.** About half of sittings start at the edge of
-  a kelp forest (`lib/ocean/kelp.ts`): a few olive-gold stalks at one side of
-  the page or both, rooted on a ledge of rock far below and reaching up to the
-  surface, where the longer ones lay their tops along it as canopy. Each blade
-  is a long ruffled ribbon on a little float, in the animals' ink, and the
-  stalks further back are finer and fainter. It is the one plant in the sea
+  a kelp forest (`lib/ocean/kelp.ts`, drawn by `kelp-draw.ts`): five to nine
+  winding stalks at three depths, the far ones smaller, paler and hazier, on
+  one side of the page; if the other side has any, it is a straggler or two,
+  never a second curtain. They root on a heap of boulders far below and reach
+  up to the surface, where the canopy bends over and lies a short way along
+  it. Each blade is a ruffled strap on a gas bladder, streaming out with the
+  current, in a golden-brown wash with its own darker ink, draining toward
+  the water's colour as it goes down. It is the one plant in the sea
   and it stays in the sunlit water, since nothing grows where the light has
   gone. The reader starts among the tops and sinks past them: the stalks slide
   up the page, swaying on the slow clock with the sway travelling up them, and
@@ -1170,9 +1181,15 @@ only ever grows, it never runs backwards, and none of it touches progress.
   Some rocks in the light and the twilight carry a patch of sand with a
   colony of garden eels standing up out of it, leaning into the current;
   tap near them and they drop into their burrows, then come back up one at
-  a time a few seconds later (`lib/ocean/garden-eels.ts`). Each
-  rock is inked once to a sprite and then only placed, and like everything
-  written on the page it goes faint where it crosses the clock.
+  a time a few seconds later (`lib/ocean/garden-eels.ts`). A rock is a heap
+  of lumpy boulders with a broken top, undercut lips and clefts, its foot
+  running back into the wall and fading (`rockShape`, `inkRock` in
+  `outcrop-sprite.ts`, shared by the kelp's ledge and the pictures): engraved
+  in curved contour lines in its shadow, crossed only in the darkest of it,
+  stippled into the shade, a strip of bare paper along its lit top. Sea fans
+  are a flat net, wider than tall; sponges are lopsided vases with a rolled
+  lip. Each rock is inked once to a sprite and then only placed, and like
+  everything written on the page it goes faint where it crosses the clock.
 - **Now and then, something rare.** One roll a minute against the zone's
   rare events, never two within eight minutes, and the odds are flat per
   minute: a long sitting has more minutes to be lucky in and no more luck per
@@ -1235,9 +1252,11 @@ only ever grows, it never runs backwards, and none of it touches progress.
   - *The whole sitting* is the sitting painted as one picture (see "The
     sitting as a picture" below).
   - A print sits on cream rag paper (or the night paper) with a margin a
-    little heavier at the foot, a soft deckle where the paint stops, and a
-    pressed plate mark round it, lit from the top left, like an etching. No
-    words, no mark of the app.
+    little heavier at the foot, a deckle where the paint stops (a fine ragged
+    edge with the tide line a wash leaves just inside it), and a plate mark
+    pressed round it: a narrow bevel lit along its top and left, the plate a
+    shade darker than the margin, like an etching. Fine rag texture
+    throughout. No words, no mark of the app.
   - Saving takes its time on purpose. There is no spinner: the picture's
     shape is a pencil outline that fills in strip by strip, with "letting it
     develop…" in the hand under it and a Stop. Pictures are drawn in strips
@@ -1297,16 +1316,32 @@ not show and nothing is scored, as everywhere in the deep.
 | When it began | The light at the surface (`sunFor` in `light.ts`): the shafts lean one way in the morning and the other in the afternoon, white at noon, amber at dusk; after dark the window of sky holds the moon in that night's real phase. |
 | Which course | The water's tint and the course's own species among the cast, so a term of one course's pictures look like a set. |
 | Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Together they are the way down, read through them and a thin trail of rising bubbles, never a drawn line. |
-| Each break | A rock outcrop at that depth, a longer break a longer rock. |
+| Each break | A rock at that depth, near and fully inked, a longer break a longer rock. Rocks merely passed are drawn far, small and faint in the water's colour, so the near rocks still count the breaks. |
 | What swam by | The species that really did, met where they were met, curated to a cast of twenty or thirty; the rarest gets the best place. |
 | Rare sightings | Drawn where they happened; the whale fall lies on the floor. |
 | What was passed | Kelp at the top if it began in kelp, rocks and their growths at their depths, the floor if the abyss was reached. |
 
+**The hero leads.** The last block's jelly is the largest thing on the page
+(about a sixth of its short side across) and the only one in full ink, a
+pool of its own light round it; the one before is about half its size, the
+older ones smaller and further off, the oldest only faint shapes in the
+water. Siblings are visibly different animals. On a tall page the hero
+hangs a little below the middle. Past three hours the floor parts into a
+trench under it, two walls falling into a dark cleft, and the whale fall,
+if there is one, lies on the gentler slope, never in the cleft.
+
 **Composed, not cropped.** Each shape is laid out on its own: tall for a
 phone or a print (the way down a gentle S), wide for a laptop (a diagonal).
 A layout solver tries many arrangements from the sitting's own key, scores
-them (nothing overlapping, nothing cut by the edge, a third of the water
-left open, near, middle and far each its own), and keeps the best, so the
+them, and keeps the best. Some things are rules, not scores: a margin round
+the hero, jellies never crowding each other, nothing over the window of sky,
+the rare things touching nothing, and the rocks and the cast moving to make
+room, never the jellies' path. The rest is weighed: nothing cut by the edge,
+no three things in a row at one height, the cast in a few loose groups with
+one wide calm stretch of water left open, near, middle and far each its own,
+and things far off made hazy in their own colour, never set on a pale
+backing. The page darkens to its foot whatever the length, so even a short
+sitting has a deep end. The result is the same every time, so the
 same sitting always makes the same picture, today or in a year, from the
 timer, the finish sheet or Stats.
 
