@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTimer } from '@/lib/timer-context';
+import { breakStartsAt, useTimer } from '@/lib/timer-context';
 import { useAmbientNoise } from '@/lib/use-ambient-noise';
 import { useAquariumSound } from '@/lib/use-aquarium-sound';
 import { renderWallpaper, saveWallpaper } from '@/lib/wallpaper';
@@ -34,7 +34,7 @@ import TallyMarks from '@/components/progression/TallyMarks';
 import { MARKS_PER_PAGE } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useCourses, useTasks } from '@/lib/data-hooks';
-import { clockFace } from '@/lib/utils';
+import { clockFace, formatHM } from '@/lib/utils';
 import { hasEarlierBlock, stretchFace } from '@/lib/timer-face';
 import { NIGHT_UNDERLINE, usePreferences } from '@/lib/preferences';
 
@@ -349,7 +349,8 @@ export default function TimerPage() {
   }, [woodStage, live]);
 
   /* Space pauses, F finishes, Escape goes back. Typed into a field they mean
-     what the field means, so the handler stands down for one. */
+     what the field means, so the handler stands down for one. B is not here:
+     it takes a break from every screen, so it lives in TimerHotkeys. */
   useEffect(() => {
     if (!liveActive) return;
     const onKey = (e: KeyboardEvent) => {
@@ -363,9 +364,6 @@ export default function TimerPage() {
         if (onBreak) endBreak();
         else if (liveActive.isPaused) resume();
         else pause();
-      } else if (e.key === 'b' || e.key === 'B') {
-        e.preventDefault();
-        if (!onBreak) startBreak();
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         handleStop();
@@ -376,7 +374,7 @@ export default function TimerPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [endBreak, handleStop, immersive, liveActive, onBreak, pause, resume, router, startBreak, toggleImmersive]);
+  }, [endBreak, handleStop, immersive, liveActive, onBreak, pause, resume, router, toggleImmersive]);
 
   if (!hydrated || (!course && !pendingLog)) {
     return (
@@ -521,11 +519,26 @@ export default function TimerPage() {
     'absolute inset-0 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)]';
   const swapWord =
     'col-start-1 row-start-1 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)]';
+  /* How long the clock has been held, once that is a minute or more. A
+     pause used to be a frozen number and nothing else, so a reader coming
+     back had no way to tell whether they had been gone five minutes or
+     fifty, which is the thing that decides whether it was a break. */
+  const heldSeconds =
+    pausedFocus && !heldFresh && active?.pausedAt != null ? Math.max(0, (wallNow - active.pausedAt) / 1000) : 0;
   const pausedMark = pausedFocus ? (
     <span className="inline-block animate-settle" style={{ animationDelay: '120ms' }}>
       {heldFresh ? '\u00a0· ready' : '\u00a0· paused'}
+      {heldSeconds >= 60 ? (
+        <>
+          {' '}
+          <span className="font-mono not-italic tabular-nums">{formatHM(heldSeconds)}</span>
+        </>
+      ) : null}
     </span>
   ) : null;
+  /* Whether Break, pressed now, files the hold as the rest it was. Named on
+     the button when it does, since it is a different thing to press. */
+  const breakFromPause = live && active != null && !resting && breakStartsAt(active, wallNow) < wallNow;
 
   /* The wood's line: the stage it has reached and how many years of growth,
      the digits in mono and the words in the serif, the same division the
@@ -691,7 +704,7 @@ export default function TimerPage() {
       </button>
 
       {isBlock && secondary('+5 min', () => extend(5 * 60))}
-      {secondary('Break', () => startBreak())}
+      {secondary(breakFromPause ? 'Count as break' : 'Break', () => startBreak())}
       {finishButton}
       {discardButton}
     </div>
@@ -1197,7 +1210,9 @@ export default function TimerPage() {
         )}
 
         <p className="key-hint m-0 -mt-3 font-mono text-[11px] text-muted-soft">
-          {resting ? 'Space back · F finish · R reset · Esc back' : 'Space pause · B break · F finish · R reset · Esc back'}
+          {resting
+            ? 'Space back · F finish · R reset · Esc back'
+            : `Space ${isPaused ? (heldFresh ? 'start' : 'resume') : 'pause'} · B ${breakFromPause ? 'count as break' : 'break'} · F finish · R reset · Esc back`}
         </p>
       </div>
 

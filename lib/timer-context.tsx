@@ -61,8 +61,19 @@ interface TimerState {
    * "I have stepped away, count nothing"; break means "I am resting on
    * purpose, count it as rest". Folding one into the other would make the
    * record unreadable, which is the whole reason for keeping it.
+   *
+   * What a reader can do is say so afterwards: Break pressed on a held block
+   * starts the break where the hold began (see `breakStartsAt`), because
+   * the person who paused and walked off was resting the whole time.
    */
   phase: 'focus' | 'break';
+  /**
+   * When the clock was last held, or null while it runs. A block set out
+   * after a break and not yet started is held from the moment it was set
+   * out. Read for the pause's own length, for a break taken from a pause,
+   * and for the ceiling on how long a sitting can sit held.
+   */
+  pausedAt: number | null;
   /**
    * How long this sitting's breaks run, in seconds, or null for a sitting
    * that does not take them and simply runs past its block target the way it
@@ -88,9 +99,12 @@ interface PendingTimerLog {
   /**
    * Why the sitting was closed for the reader rather than by them: `idle`
    * held after no input (see lib/timer-idle.ts), `away` recovered after the
-   * page went unseen, `break` a break past its ceiling, `max` the 18h limit.
+   * page went unseen, `break` a break past its ceiling, `max` the 18h limit,
+   * `pause` held past MAX_PAUSE_MS. The last is the one reason that casts no
+   * doubt on the hours, since a held clock counted nothing; it explains the
+   * sheet and is not written to the session.
    */
-  recoveryReason?: 'idle' | 'away' | 'max' | 'break';
+  recoveryReason?: 'idle' | 'away' | 'max' | 'break' | 'pause';
   /**
    * The same sitting cut at the moment it went quiet, when that was a while
    * before it stopped: offered on the log sheet as the length to log, and
@@ -175,6 +189,21 @@ const RUNNING_CHECKPOINT_MS = 10 * 1000;
 const STALE_RUNNING_MS = 4 * 60 * 60 * 1000;
 /** What "take a break" means when the reader has breaks switched off. */
 const DEFAULT_BREAK_SECONDS = 5 * 60;
+/**
+ * How long a sitting can sit held before it is closed where the hold began.
+ * A pause had no ceiling at all, so a clock paused before dinner was still on
+ * the dock the next afternoon and, resumed then, logged into yesterday. Long
+ * enough for a lecture between two halves of a chapter; past it, the second
+ * half is a new session. Closing it costs nothing, because a held clock
+ * counted nothing.
+ */
+export const MAX_PAUSE_MS = 2 * 60 * 60 * 1000;
+/**
+ * A break taken from a pause starts where the pause did, unless that would
+ * leave it less than this before its own ceiling. A forty-four minute pause
+ * filed as a break would be closed out a minute later as one that overran.
+ */
+const BACKDATE_HEADROOM_MS = 5 * 60 * 1000;
 /**
  * How far past a whole second the tick lands. A tick that fired at an
  * arbitrary phase showed each second up to half a second late, and after a
@@ -390,7 +419,42 @@ function sanitizeActive(value: unknown): TimerState | null {
       ? Number(state.stretchStartedAt)
       : startedAt - Math.max(0, accumulatedMs),
     segments: sanitizeSegments(state.segments),
+    // A clock held before this was tracked reads its heartbeat as the moment
+    // it was held. Close enough for every reader of it: the ceiling, the
+    // "paused 12m" line, a break taken from it.
+    pausedAt: !state.isPaused
+      ? null
+      : typeof state.pausedAt === 'number' && Number.isFinite(state.pausedAt)
+        ? state.pausedAt
+        : Number.isFinite(lastSeenAt)
+          ? lastSeenAt
+          : startedAt,
   };
+}
+
+/**
+ * Where a break taken at `now` begins.
+ *
+ * Normally now. From a held block, where the hold began: the reader paused,
+ * walked off, came back and pressed Break, and the time in between was rest
+ * that the record otherwise kept as nothing at all. A block set out after a
+ * break and never started is not a pause anybody took, so that starts now,
+ * and so does a hold too long to be a break that could still run on.
+ */
+export function breakStartsAt(
+  state: Pick<TimerState, 'phase' | 'isPaused' | 'pausedAt' | 'accumulatedMs'>,
+  now: number,
+): number {
+  if (state.phase !== 'focus' || !state.isPaused || state.pausedAt == null) return now;
+  if (state.accumulatedMs <= 0) return now;
+  const held = now - state.pausedAt;
+  if (held < 1000 || held > MAX_BREAK_SECONDS * 1000 - BACKDATE_HEADROOM_MS) return now;
+  return state.pausedAt;
+}
+
+/** Whether the clock has been held past MAX_PAUSE_MS at `now`. */
+function pauseOverrun(state: TimerState, now: number): boolean {
+  return state.isPaused && state.pausedAt != null && now - state.pausedAt >= MAX_PAUSE_MS;
 }
 
 /**
@@ -453,7 +517,8 @@ function sanitizePendingLog(value: unknown): PendingTimerLog | null {
       log.recoveryReason === 'idle' ||
       log.recoveryReason === 'away' ||
       log.recoveryReason === 'max' ||
-      log.recoveryReason === 'break'
+      log.recoveryReason === 'break' ||
+      log.recoveryReason === 'pause'
         ? log.recoveryReason
         : undefined,
     quiet: sanitizeQuiet(log.quiet, durationSeconds),
@@ -612,20 +677,26 @@ function closeStretch(state: TimerState, atMs: number): SessionSegment[] {
   ];
 }
 
-/** End the block here and rest. The clock restarts on the break. */
-function toBreakState(state: TimerState, atMs: number, breakSeconds: number): TimerState {
+/**
+ * End the block here and rest. The clock restarts on the break, from `from`:
+ * now, or where the hold began when the break is filed from a pause (see
+ * breakStartsAt). A held block's stretch counted nothing past the hold, so
+ * closing it at either moment records the same block.
+ */
+function toBreakState(state: TimerState, atMs: number, breakSeconds: number, from = atMs): TimerState {
   return {
     ...state,
     phase: 'break',
     segments: closeStretch(state, atMs),
     breakSeconds,
-    startedAt: atMs,
-    stretchStartedAt: atMs,
+    startedAt: from,
+    stretchStartedAt: from,
     accumulatedMs: 0,
     // A break inherits nothing from the block: a session paused at the moment
     // its block ran out should come back to a break that is actually running,
     // not one frozen behind a pause the reader has forgotten about.
     isPaused: false,
+    pausedAt: null,
     lastSeenAt: atMs,
     lastInputAt: atMs,
   };
@@ -646,22 +717,26 @@ function toFocusState(state: TimerState, atMs: number): TimerState {
     stretchStartedAt: atMs,
     accumulatedMs: 0,
     isPaused: true,
+    pausedAt: atMs,
     lastSeenAt: atMs,
     lastInputAt: atMs,
   };
 }
 
 /**
- * Ring for the break now and arrange the note that ends it.
+ * Ring for the break now and arrange the note that ends it, `already`
+ * seconds in for a break filed from a pause. One already past its length
+ * gets no closing note: it would ring the moment it was arranged.
  *
  * Both are set going in, because the second one has to be on the audio clock
  * before the tab has any chance to be backgrounded. See lib/chime.ts.
  */
-function announceBreak(breakSeconds: number): void {
+function announceBreak(breakSeconds: number, already = 0): void {
   cancelChime();
   if (!soundOn()) return;
   ringChime('break');
-  scheduleChime('back', breakSeconds);
+  const left = breakSeconds - already;
+  if (left > 0) scheduleChime('back', left);
 }
 
 function buildPendingLog(
@@ -727,6 +802,9 @@ function loadActiveSnapshot(): { active: TimerState | null; pendingLog: PendingT
     const breakOverrun =
       parsed.phase === 'break' && stretchSecondsAt(parsed, now) >= MAX_BREAK_SECONDS;
     const maxReached = focusSecondsAt(parsed, now) >= MAX_SESSION_SECONDS;
+    // Held too long to still be the same sitting. Checked here as well as on
+    // the open page, because the usual way it happens is a closed laptop.
+    const heldTooLong = pauseOverrun(parsed, now);
     // Gone quiet while this page was closed or asleep: held, not stopped.
     const idle = !staleRunning && !breakOverrun && !maxReached && idleTripped(parsed, now);
     if (idle) {
@@ -735,17 +813,21 @@ function loadActiveSnapshot(): { active: TimerState | null; pendingLog: PendingT
       savePendingLog(pendingLog);
       return { active: null, pendingLog };
     }
-    if (staleRunning || breakOverrun || maxReached) {
+    if (staleRunning || breakOverrun || maxReached || heldTooLong) {
       const stoppedAt = staleRunning
         ? parsed.lastSeenAt
         : breakOverrun
           ? parsed.startedAt + (MAX_BREAK_SECONDS * 1000 - parsed.accumulatedMs)
-          : now;
+          : heldTooLong
+            ? parsed.pausedAt ?? now
+            : now;
       const reason: PendingTimerLog['recoveryReason'] = staleRunning
         ? 'away'
         : breakOverrun
           ? 'break'
-          : 'max';
+          : heldTooLong
+            ? 'pause'
+            : 'max';
       const pendingLog = buildPendingLog(parsed, stoppedAt, reason);
       saveActive(null);
       savePendingLog(pendingLog);
@@ -896,21 +978,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Keep ticking, once a second, on the second.
-  useEffect(() => {
-    if (!active || active.isPaused) {
-      if (tickRef.current) {
-        window.clearTimeout(tickRef.current);
-        tickRef.current = null;
-      }
-      return;
-    }
-    let lastCheckpoint = Date.now();
-    const closeOut = (
-      current: TimerState,
-      stoppedAt: number,
-      reason: PendingTimerLog['recoveryReason'],
-    ) => {
+  /** End the sitting for the reader and hold it on the log sheet. */
+  const closeOut = useCallback(
+    (current: TimerState, stoppedAt: number, reason: PendingTimerLog['recoveryReason']) => {
       cancelChime();
       breakNoticeRef.current = null;
       const log = buildPendingLog(current, stoppedAt, reason);
@@ -923,7 +993,36 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         setPendingLog(log);
         savePendingLog(log);
       }
+    },
+    [],
+  );
+
+  // A held clock does not tick, so the pause ceiling is looked at on a slow
+  // timer of its own. Storage is looked at on every return to the page as
+  // well; this is for the tab that was open on it the whole time.
+  useEffect(() => {
+    if (!active || !active.isPaused) return;
+    const check = () => {
+      const current = activeRef.current;
+      if (current && pauseOverrun(current, Date.now())) {
+        closeOut(current, current.pausedAt ?? Date.now(), 'pause');
+      }
     };
+    check();
+    const id = window.setInterval(check, 30 * 1000);
+    return () => window.clearInterval(id);
+  }, [active, closeOut]);
+
+  // Keep ticking, once a second, on the second.
+  useEffect(() => {
+    if (!active || active.isPaused) {
+      if (tickRef.current) {
+        window.clearTimeout(tickRef.current);
+        tickRef.current = null;
+      }
+      return;
+    }
+    let lastCheckpoint = Date.now();
 
     const tick = () => {
       const now = Date.now();
@@ -1010,7 +1109,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       if (tickRef.current) window.clearTimeout(tickRef.current);
       tickRef.current = null;
     };
-  }, [active]);
+  }, [active, closeOut]);
 
   const start = useCallback(
     (courseId: string, taskId: string | null = null, targetSeconds: number | null = null) => {
@@ -1055,6 +1154,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       startedDate: plannerDate(new Date(now)),
       accumulatedMs: 0,
       isPaused: false,
+      pausedAt: null,
       lastSeenAt: now,
       lastInputAt: now,
       targetSeconds: sanitizeTarget(targetSeconds),
@@ -1147,10 +1247,12 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         running.breakSeconds ??
         preferredBreakSeconds() ??
         DEFAULT_BREAK_SECONDS;
+      const now = Date.now();
+      const from = breakStartsAt(running, now);
       primeChime();
-      announceBreak(breakSeconds);
+      announceBreak(breakSeconds, (now - from) / 1000);
       breakNoticeRef.current = null;
-      applyActive(toBreakState(running, Date.now(), breakSeconds));
+      applyActive(toBreakState(running, now, breakSeconds, from));
     },
     [applyActive],
   );
@@ -1255,6 +1357,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       ...current,
       accumulatedMs: Math.min(MAX_TIMER_MS, stretchMsAt(current, now)),
       isPaused: true,
+      pausedAt: now,
       lastSeenAt: now,
     });
   }, [applyActive, recoverStaleRunningTimer]);
@@ -1263,6 +1366,12 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     const current = activeRef.current;
     if (!current || !current.isPaused) return;
     const now = Date.now();
+    // Held past the ceiling in a tab whose check has not come round yet.
+    // Letting it go now would run yesterday's sitting on into today.
+    if (pauseOverrun(current, now)) {
+      closeOut(current, current.pausedAt ?? now, 'pause');
+      return;
+    }
     const next: TimerState = {
       ...current,
       startedAt: now,
@@ -1270,6 +1379,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       // when the break ended, so the chain and the finish time read true.
       stretchStartedAt: current.accumulatedMs === 0 ? now : current.stretchStartedAt,
       isPaused: false,
+      pausedAt: null,
       lastSeenAt: now,
     };
     // Put the break's closing note back where the break now ends.
@@ -1282,7 +1392,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     primeChime();
     playSound('start');
     applyActive(next);
-  }, [applyActive]);
+  }, [applyActive, closeOut]);
 
   const cancel = useCallback(() => {
     cancelChime();

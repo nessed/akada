@@ -732,12 +732,13 @@ The sheet follows the reader to every screen until it is answered, so it
 says why it is there, in the serif italic under the heading: "You stopped a
 1h 10m session on ECON 100 and haven't saved it", or why the clock was
 stopped for them (left running while the page was closed, a break past 45
-minutes, the 18 hour limit).
+minutes, a pause past two hours, the 18 hour limit).
 
 ### The blink on P
 
 `P` holds or lets go of the clock from any screen (`TimerHotkeys`), and it is
-pressed with the eyes on the book, not on the dock. So the page answers it:
+pressed with the eyes on the book, not on the dock. So the page answers it
+(and answers `B` the same way, for the same reason):
 it blinks once, like an eye. Two lids of `bg` (the app's own background, so
 cream in the day and the night paper after dark) come in from the top and
 bottom edges, deepest at the edge and gone by the middle, close in 130ms and
@@ -1239,8 +1240,11 @@ front of it.
 
 ### The break
 A block that runs out keeps running, shown as overrun rather than stopped for
-the reader. A **break** is a stretch taken by hand, from the timer, and the
-sitting carries on as a chain of blocks and the rests between them.
+the reader. A **break** is a stretch taken by hand, and the sitting carries on
+as a chain of blocks and the rests between them. It is taken from anywhere:
+the timer's **Break** button, the cup on the dock, or `B` on any screen. It
+used to be the timer's alone, so a reader resting from Tasks pressed the only
+key there was, `P`, and the rest went down as nothing.
 
 The break does not bring a screen of its own. It borrows the timer's: the same
 frame, the same deckle, the same two-line clock. Three things change and
@@ -1300,6 +1304,33 @@ and the solid button says **Start**. The block begins when that is pressed,
 and its stretch in the chain starts there, not when the break ended. A block
 that ran the moment rest stopped was counting the walk back to the desk as
 work.
+
+### The pause
+A pause and a break stay two things. Pause is "I have stepped away, count
+nothing"; a break is rest, kept and reported beside the hours. What the pause
+gets is a way to be told what it was afterwards, and a length on screen to
+tell it by.
+
+- **The pause says how long.** Held for a minute or more, the line under the
+  clock reads `· paused 12m`, the digits in mono. The number it is beside is
+  frozen, so it was the only way to tell five minutes away from fifty.
+- **Break on a held block counts the pause as the break.** Pressed while a
+  block is paused, Break starts the break where the pause began, not now: the
+  reader who paused, walked off and came back was resting the whole time.
+  The button says **Count as break** while it would do that, and the dock's
+  cup and the key hint say the same. It does not reach back for a block held
+  at zero after a break (no pause was taken), or for a hold so long the break
+  would have under five minutes before its 45-minute ceiling; those start
+  the break now, as before. Nothing is ever counted as rest without the press.
+- **A pause has a ceiling: two hours** (`MAX_PAUSE_MS` in
+  `lib/timer-context.tsx`). Past it the sitting is closed where the pause
+  began and the log sheet says why ("sat paused for over two hours… Nothing
+  paused was counted."). It had none, so a clock paused before dinner was
+  still on the dock the next afternoon, and resumed then, logged into
+  yesterday. Two hours leaves room for a lecture between two halves of a
+  chapter. Unlike the other ways a sitting is closed for the reader, this one
+  casts no doubt on the hours, so it is not written to the session as a
+  recovery and the recap still draws.
 
 ### One word for each thing
 Outside the Record, the app says **session** (never "sitting" or
@@ -1934,15 +1965,18 @@ the one screen that looked like a spreadsheet. It is now a planner spread.
   open it at the top of the list.
 
 ### Keys for the running clock
-Three more, and they work from every screen rather than from the timer. `R`
+Four more, and they work from every screen rather than from the timer. `R`
 resets the sitting: it opens the same `ConfirmSheet` every destructive
 question uses ("Reset this sitting? The time so far won't be saved."), and
 only the sheet's Reset button throws the clock away, so a stray key never
 does. The timer screen's key hint names it too ("R reset"), since that is
-where a reader looks for the keys. The rest of this section describes `P` and `K`.
+where a reader looks for the keys. `B` takes a break; on a held block it
+counts the pause as the break (see "The pause"), and on a break it does
+nothing, since ending one is `P`'s. It used to be the timer screen's own
+key. The rest of this section describes `P` and `K`.
 
 A sitting is started from a row on Today or Tasks and the reader then goes
-back to their book. The timer's own keys (Space, B, F) only exist on the
+back to their book. The timer's own keys (Space, F) only exist on the
 timer screen, which is the one screen a reader mid-chapter is least likely to
 be looking at, so stopping meant finding the dock with a mouse. `P` and `K`
 reach the clock from wherever they are: `P` holds it or lets it go, and means
@@ -1955,8 +1989,9 @@ instead, so the key never ends a sitting with nothing to show for it.
 unless a sitting is running**, which is the same rule the task list follows.
 It stands down for a held key, for anything typed into a field, and for any
 chord: `⌘P` is print and `⌘K` is the browser's, and a chord belongs to
-whoever the reader thinks they are talking to. The dock's two buttons name
-the keys in their tooltips, and the help sheet behind `?` lists them only
+whoever the reader thinks they are talking to. The dock's buttons name
+the keys in their tooltips (a third, the cup, is drawn while a block is on
+the clock and takes the break), and the help sheet behind `?` lists them only
 while a sitting is running, for the same reason it lists nothing else that
 is not bound.
 

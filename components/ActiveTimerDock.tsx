@@ -1,17 +1,27 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCourses } from '@/lib/data-hooks';
-import { useTimer } from '@/lib/timer-context';
+import { breakStartsAt, useTimer } from '@/lib/timer-context';
 import { formatHHMMSS, formatHM, resolveTint } from '@/lib/utils';
 import { hasEarlierBlock, stretchFace } from '@/lib/timer-face';
 
 export default function ActiveTimerDock() {
   const router = useRouter();
-  const { active, elapsedSeconds, focusSeconds, onBreak, breakTarget, endBreak, pause, resume, stop } =
+  const { active, elapsedSeconds, focusSeconds, onBreak, breakTarget, endBreak, startBreak, pause, resume, stop } =
     useTimer();
   const { courses } = useCourses();
+  /* A held clock publishes no seconds, so nothing redraws the dock while it
+     is held. What Break would do changes with the length of the hold, and
+     the button's label has to keep up with it. */
+  const [, setHeldRedraw] = useState(0);
+  const held = Boolean(active?.isPaused);
+  useEffect(() => {
+    if (!held) return;
+    const id = window.setInterval(() => setHeldRedraw((n) => n + 1), 15 * 1000);
+    return () => window.clearInterval(id);
+  }, [held]);
 
   const course = useMemo(
     () => (active ? courses.find((c) => c.id === active.courseId) ?? null : null),
@@ -33,6 +43,9 @@ export default function ActiveTimerDock() {
   const breakOver = onBreak && face.over;
   const overrun = !onBreak && face.over;
   const showTotal = hasEarlierBlock(active.segments);
+  /* Whether Break, pressed now, files the hold it ends as the rest it was. */
+  const now = Date.now();
+  const breakFromPause = !onBreak && breakStartsAt(active, now) < now;
 
   function openTimer() {
     router.push('/timer');
@@ -154,6 +167,29 @@ export default function ActiveTimerDock() {
                 </svg>
               )}
             </button>
+            {/* Break, from wherever the reader is. It was only on the timer
+                screen, so a reader resting from Tasks pressed pause instead,
+                and the rest went down as nothing. Not drawn on a break: the
+                left button is what ends one. */}
+            {!onBreak && (
+              <button
+                type="button"
+                onClick={() => startBreak()}
+                aria-label={breakFromPause ? 'Count the pause as a break' : 'Take a break'}
+                title={breakFromPause ? 'Count the pause as a break (B)' : 'Break (B)'}
+                className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-transparent text-ink-soft"
+              >
+                <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5V9zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3.5c-.6.9.6 1.6 0 2.5M12.5 3.5c-.6.9.6 1.6 0 2.5"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
             <button
               type="button"
               onClick={stopAndLog}

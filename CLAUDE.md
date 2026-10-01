@@ -82,9 +82,9 @@ the tokens there, not in `globals.css`.
 
 Saves searching. If one of these moves, fix the line here in the same commit.
 
-- **Timer keys** (`P`, `K`, `R`, from any screen) are in
+- **Timer keys** (`P`, `B`, `K`, `R`, from any screen) are in
   `components/TimerHotkeys.tsx`, mounted in the root layout. The timer
-  screen's own keys (Space, B, F, Esc) are in `app/timer/page.tsx`.
+  screen's own keys (Space, F, Esc) are in `app/timer/page.tsx`.
 - **The `?` help sheet** is buried in `app/tasks/page.tsx`, in a `k` / `l` list
   of keys. Keys that only work while a sitting runs are listed only while one
   does.
