@@ -1376,7 +1376,7 @@ not show and nothing is scored, as everywhere in the deep.
 | When it began | The light at the surface (`sunFor` in `light.ts`): the shafts lean one way in the morning and the other in the afternoon, white at noon, amber at dusk; after dark the window of sky holds the moon in that night's real phase. |
 | Which course | The water's tint and the course's own species among the cast, so a term of one course's pictures look like a set. |
 | Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Together they are the way down, read through them and a thin trail of rising bubbles, never a drawn line. |
-| Each break | A rock at that depth, near and fully inked, a longer break a longer rock. Rocks merely passed are drawn far, small and faint in the water's colour, so the near rocks still count the breaks. |
+| Each break | A rock at that depth, near and fully inked, a longer break a longer rock. A side of the page holds two rocks at most, the kelp's counted; breaks beyond that are ledges in a wall, a bench with its shadow under it, so every break still leaves its mark. Rocks merely passed are drawn far, small and faint in the water's colour, so the near rocks still count the breaks. |
 | What swam by | The species that really did, met where they were met, curated to a cast of twenty or thirty; the rarest gets the best place. |
 | Rare sightings | Drawn where they happened; the whale fall lies on the floor. |
 | What was passed | Kelp at the top if it began in kelp, rocks and their growths at their depths, the floor if the abyss was reached. |
@@ -1414,11 +1414,20 @@ the page or more (the depth's colour is eased down the page so no band of it
 darkens faster than about 2 L* a hundredth of the page), and the wash's
 glazes are each laid by a stroke across part of the page only, tilted a
 degree or three and ragged at the edge, so no edge runs side to side and
-nothing reads as a sea's surface seen side on. Every rock runs off its edge
-(0.08 of the width or more) and down past its foot into the water; no two
-face each other across the page at one depth; each has a build of its own
-(a heap, a slab, a spire, an overhang, a field of boulders); far ones keep
-a broken thread of pen. The cast keeps three planes, each its own scale and
+nothing reads as a sea's surface seen side on. Nothing floats: every rock
+stands out from a side wall, a cliff 0.04 to 0.09 of the width running from
+under it down into the floor, the trench or the page's foot, flaring into a
+buttress under the rock so no rock sits as a cap on a stem, and fading from
+whole to about a third as it goes down (`inkWall` in `outcrop-sprite.ts`,
+the rocks' own hand). Every rock runs off its edge (0.08 of the width or
+more); no two face each other across the page at one depth; each has a
+build of its own (a heap, a slab, a spire, an overhang, a field of
+boulders); far ones keep a broken thread of pen and a few strokes of
+shadow, and fade into a far wall of their own, never a near rock's. The
+kelp's far side is left out of a picture rather than drawn as a lone stalk.
+The floor is sediment, not a stage: level strata hatched across it,
+pebbles in small clusters, its crest a broken ink line with only a hair of
+light under it, and on either paper darker than the water above it. The cast keeps three planes, each its own scale and
 strength (near whole, middle 0.6 at 0.75, far 0.35 at 0.45), and kinds keep
 their real sizes against each other (a turtle three school fish long, a
 squid one or two). A trench's walls fall in ledges, each lip jutting over

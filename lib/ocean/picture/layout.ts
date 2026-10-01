@@ -652,6 +652,9 @@ function rockBox(k: Omit<PlacedRock, 'box'>, w: number): Box {
 
 /* ---- The walls ---- */
 
+/** The forest as the picture rolls it (paint.ts rolls it the same): its far side's stragglers left out, which read as a vine. */
+export const PICTURE_KELP = { farSide: 'none' } as const;
+
 /** Rocks a side, the kelp's own counted. */
 export const SIDE_ROCKS = 2;
 /** The widest a rock may stand over the wall it comes out of: its width on the page over its buttress's. */
@@ -756,7 +759,8 @@ function buildWalls(
     const plane: 0 | 1 | 2 = topRock && (!lg.length || buttressOf(topRock, w, h).y0 <= lg[0].y) ? topRock.plane : side.some((k) => k.plane > 0) ? 1 : side.length ? 0 : 1;
     // Into the ground: the floor's line (or the trench wall's top) a little in from the edge.
     const gx = edge < 0 ? base : w - base;
-    const bottom = Math.min(h + 4, e.groundY(gx) + h * 0.03);
+    // (And at least under each of its rocks, one resting low on the ground too.)
+    const bottom = Math.min(h + 4, Math.max(e.groundY(gx) + h * 0.03, ...side.map((k) => buttressOf(k, w, h).y1 + h * 0.02)));
     const n = Math.max(2, Math.ceil((bottom - top) / WALL_STEP) + 1);
     const ph = [r() * TAU, r() * TAU, r() * TAU];
     // Courses of stone, each standing a little in or out of the next, so
@@ -780,7 +784,7 @@ function buildWalls(
       // A cliff's face, never ruled: long bays and short ones.
       const jog = jogAt(y);
       let f = base * (1 + 0.1 * Math.sin(y / (h * 0.055) + ph[0]) + 0.03 * Math.sin(y / (h * 0.011) + ph[1]) + 0.015 * Math.sin(y / (h * 0.004) + ph[2])) + jog;
-      for (const k of side) f = Math.max(f, buttressAt(k, w, h, y, f) + jog * 0.6);
+      for (const k of side) f = Math.max(f, buttressAt(k, w, h, y, f) + Math.max(0, jog) * 0.6);
       for (const l of lg) {
         // A bench: out at once at its top, its underside going back into the wall.
         const t = (y - l.y) / (h * 0.032);
@@ -1052,7 +1056,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   const kelpTop = h * 0.03;
   const kelpBottom = s.kelp ? clamp(yOf(11.6 * 60) + h * 0.06, h * 0.3, h * 0.8) : 0;
   const kelpHf = (kelpBottom - kelpTop) / 2.45;
-  const forest = s.kelp ? rollKelp(s.biome.key) : null;
+  const forest = s.kelp ? rollKelp(s.biome.key, PICTURE_KELP) : null;
   // A side of the forest is three stalks or more in the picture, or none: a
   // lone straggler at the far wall reads as a vine, not kelp.
   const stalkSide = (x: number): -1 | 1 => (x < 0.5 ? -1 : 1);
@@ -1170,8 +1174,10 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
       x: 0,
       y: 0,
       r,
-      // The hero's trails reach 0.86 of the page down at least.
-      len: hero ? Math.max(r * (tall ? 2.9 : 2.5), Math.min(h * 0.86 - yEnd - 0.4 * r * body.aspect, r * 3.6)) : r * 2.5,
+      // The hero's trails reach 0.86 of the page down at least; with no
+      // floor to close the page, 0.9 (drawn, their tips curl up to about
+      // 0.85), so the lowest fifth is never empty water.
+      len: hero ? Math.max(r * (tall ? 2.9 : 2.5), Math.min(h * (s.floor ? 0.86 : 0.9) - yEnd - 0.4 * r * body.aspect, r * (s.floor ? 3.6 : 4.2))) : r * 2.5,
       aspect: body.aspect,
       hero,
       z: 0,
@@ -1336,7 +1342,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   const kelpBoxes: Box[] = kelp
     ? kelpSides(rocks).map((edge) => (edge < 0 ? { x0: 0, x1: Math.max(inL, w * 0.06), y0: 0, y1: kelp.bottom } : { x0: w - Math.max(inR, w * 0.06), x1: w, y0: 0, y1: kelp.bottom }))
     : [];
-  settleEvents(events, { w, h, M, jellies, rocks, winBox, floorTop: floor ? (trench ? trench.top : floor.y) : null, kelp: kelpBoxes, steepY: steepestFall(zStops, h) });
+  settleEvents(events, { w, h, M, jellies, rocks, winBox, floorTop: floor ? (trench ? trench.top : floor.y) : null, kelp: kelpBoxes, steepY: steepestFall(zStops, h), current: s.biome.env.current });
 
   // ---- The cast.
   const cast = solveCast(s, {
@@ -1359,6 +1365,10 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     winBox,
     tall,
   });
+
+  // ---- No floor closes a short sitting's page: one near animal comes
+  // down into its foot, so the lowest fifth is never an empty wash.
+  if (!floor) footAnimal(cast.cast, { w, h, jellies, rocks, events });
 
   // ---- The bubbles: a faint trail rising off the way down, never a line.
   const bubbles = trail(path, jellies, rocks, mulberry32(hash32(seed, 'bubbles')), h, w);
@@ -1403,6 +1413,53 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     contentBottom,
     fit: cast.score,
   };
+}
+
+/**
+ * With no floor, the foot of the page (0.8 to 0.92 of it down) holds one
+ * animal on the near plane, at full size and nearly full ink: the near
+ * animal nearest it, not a school and not the rare one, moved down there,
+ * as far across from the hero as it can be and clear of everything by
+ * 0.02 of the short side. If the foot has an animal already, or none fits,
+ * nothing moves.
+ */
+function footAnimal(cast: PlacedAnimal[], e: { w: number; h: number; jellies: PlacedJelly[]; rocks: PlacedRock[]; events: PlacedEvent[] }): void {
+  const { w, h } = e;
+  const band = { y0: h * 0.8, y1: h * 0.92 };
+  if (cast.some((a) => !a.floor && a.layer > 0 && (a.box.y0 + a.box.y1) / 2 > band.y0 && (a.box.y0 + a.box.y1) / 2 < band.y1)) return;
+  const hero = e.jellies[e.jellies.length - 1];
+  const pick = cast
+    .filter((a) => !a.rare && !a.members && !a.floor && a.layer > 0)
+    .sort((a, b) => b.layer - a.layer || b.y - a.y)[0];
+  if (!pick || !hero) return;
+  // At the near plane's size.
+  const k = pick.layer === 2 ? 1 : LAYER_SCALE[2] / LAYER_SCALE[pick.layer];
+  const hw = ((pick.box.x1 - pick.box.x0) / 2) * k;
+  const hh = ((pick.box.y1 - pick.box.y0) / 2) * k;
+  const fixed: Box[] = [...e.jellies.map((j) => j.box), ...e.events.filter((v) => v.box && !v.far).map((v) => v.box as Box), ...cast.filter((a) => a !== pick).map((a) => a.box)];
+  let best: { x: number; y: number; cost: number } | null = null;
+  const cy = Math.min((band.y0 + band.y1) / 2, h * (1 - MARGIN) - hh - 2);
+  for (let i = 0; i <= 40; i++) {
+    const x = w * MARGIN + hw + 2 + ((w * (1 - 2 * MARGIN) - 2 * hw - 4) * i) / 40;
+    for (const y of [cy, cy - h * 0.02, cy + h * 0.015]) {
+      const b = { x0: x - hw, x1: x + hw, y0: y - hh, y1: y + hh };
+      if (b.y1 > h * (1 - MARGIN) || b.y0 < band.y0 - hh) continue;
+      if (fixed.some((f) => boxGap(f, b) < CLEAR)) continue;
+      if (e.rocks.some((r) => rockTouches(r, w, b, CLEAR))) continue;
+      // Across from the hero, but not pressed to the edge.
+      const cost = -Math.min(Math.abs(x - hero.x), w * 0.35) + Math.abs(y - cy) * 0.5;
+      if (!best || cost < best.cost) best = { x, y, cost };
+    }
+  }
+  if (!best) return;
+  const mx = (pick.box.x0 + pick.box.x1) / 2;
+  const my = (pick.box.y0 + pick.box.y1) / 2;
+  pick.x = best.x + (pick.x - mx) * k;
+  pick.y = best.y + (pick.y - my) * k;
+  pick.len *= k;
+  pick.layer = 2;
+  pick.alpha = 0.9;
+  pick.box = { x0: best.x - hw, x1: best.x + hw, y0: best.y - hh, y1: best.y + hh };
 }
 
 function kelpSides(rocks: PlacedRock[]): (-1 | 1)[] {
@@ -1929,13 +1986,21 @@ export const WHALE_BLUR = 0.02;
 /** And how it pitches, head up, as it rises: so its back is never level across the page. */
 export const WHALE_PITCH = 0.07;
 
-/** The whale's measure, as drawWhale lays it in its region: its length, the middle of its body, and its hull (units). */
-export function whaleHull(e: PlacedEvent, S: number): { len: number; cx: number; cy: number; dorsal: number; box: Box } {
+/**
+ * The whale's measure, as drawWhale lays it in its region: its length, the
+ * middle of its body, the line of its back, and what it covers (units): its
+ * body, its flipper, and the two together. `current` is the way it swims
+ * (the region's own; mirrored with it).
+ */
+export function whaleHull(e: PlacedEvent, S: number, current: 1 | -1 = 1): { len: number; cx: number; cy: number; dorsal: number; body: Box; flipper: Box; box: Box } {
   // drawWhale (draw.ts): blurred by WHALE_BLUR of the page, its length
   // 0.6 of its region's width (if the region is deep enough), 0.11 of its
   // length above its middle and 0.228 below, and its middle down the region
   // where its seed puts it. Caught at the middle of its pass: across, the
-  // region's middle.
+  // region's middle. Its outline (WHALE_BODY): back 0.07 of its length
+  // above the middle (the fin 0.085), belly 0.09 below, flukes 0.105 either
+  // way, snout to flukes 0.5 ahead and 0.556 behind; the flipper hangs from
+  // 0.07 to 0.29 ahead, down to 0.22.
   const blur = WHALE_BLUR * S;
   const len = Math.max(20, Math.min(e.rw * 0.6, Math.max(e.rw, e.rh) * 0.62, (e.rh - blur * 4) / (0.11 + 0.228)));
   const top = 0.11 * len + blur * 2;
@@ -1943,9 +2008,14 @@ export function whaleHull(e: PlacedEvent, S: number): { len: number; cx: number;
   const want = e.rh * (0.1 + (((e.seed >>> 8) % 100) / 100) * 0.12);
   const cy = e.ry + (e.rh > top + bottom ? Math.max(top, Math.min(e.rh - bottom, want)) : top);
   const cx = e.rx + e.rw / 2;
+  const ahead = current * (e.mirror ? -1 : 1);
   // A little more for its pitch and its blur.
   const pad = 0.04 * len + blur;
-  return { len, cx, cy, dorsal: cy - 0.11 * len, box: { x0: cx - 0.57 * len - pad, x1: cx + 0.57 * len + pad, y0: cy - 0.11 * len - pad, y1: cy + 0.228 * len + pad } };
+  const body = { x0: cx - 0.556 * len - pad, x1: cx + 0.556 * len + pad, y0: cy - 0.105 * len - pad, y1: cy + 0.105 * len + pad };
+  const fx0 = cx + ahead * 0.07 * len;
+  const fx1 = cx + ahead * 0.29 * len;
+  const flipper = { x0: Math.min(fx0, fx1) - pad, x1: Math.max(fx0, fx1) + pad, y0: cy + 0.05 * len - pad, y1: cy + 0.22 * len + pad };
+  return { len, cx, cy, dorsal: cy - 0.07 * len, body, flipper, box: { x0: body.x0, x1: body.x1, y0: body.y0, y1: flipper.y1 } };
 }
 
 function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
@@ -2164,7 +2234,7 @@ const LONE: EventKind[] = ['lure', 'siphonophore', 'oarfish'];
  */
 function settleEvents(
   events: PlacedEvent[],
-  e: { w: number; h: number; M: number; jellies: PlacedJelly[]; rocks: PlacedRock[]; winBox: Box; floorTop: number | null; kelp: Box[]; steepY: number | null },
+  e: { w: number; h: number; M: number; jellies: PlacedJelly[]; rocks: PlacedRock[]; winBox: Box; floorTop: number | null; kelp: Box[]; steepY: number | null; current: 1 | -1 },
 ): void {
   const { w, h } = e;
   const hero = e.jellies[e.jellies.length - 1];
@@ -2264,40 +2334,55 @@ function settleEvents(
  * the fall into a false horizon. It moves up or down from where its depth
  * put it, then across: the least it takes.
  */
-function settleWhale(v: PlacedEvent, e: { w: number; h: number; M: number; jellies: PlacedJelly[]; winBox: Box; steepY: number | null }): void {
+function settleWhale(v: PlacedEvent, e: { w: number; h: number; M: number; jellies: PlacedJelly[]; winBox: Box; steepY: number | null; current: 1 | -1 }): void {
   const { w, h } = e;
   const S = Math.min(w, h);
-  const at0 = whaleHull(v, S);
-  const len = at0.len;
-  const xs = [v.x, w - v.x, w / 2].map((x) => clamp(x, len * 0.62 + w * 0.02, w - len * 0.62 - w * 0.02));
-  let best: { cost: number; dx: number; dy: number } | null = null;
-  for (let xi = 0; xi < xs.length; xi++) {
-    for (let k = 0; k <= 50; k++) {
-      const dy = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * h * 0.01;
-      const dx = xs[xi] - v.x;
-      const box = { x0: at0.box.x0 + dx, x1: at0.box.x1 + dx, y0: at0.box.y0 + dy, y1: at0.box.y1 + dy };
-      const dorsal = at0.dorsal + dy;
-      if (box.y0 < h * 0.05 || at0.cy + dy > h * 0.55) continue;
-      let cost = Math.abs(dy) / h + xi * 0.08;
-      if (inter(box, grow(e.winBox, 6)) > 0) cost += 10;
-      if (e.steepY != null) {
-        if (Math.abs(dorsal - e.steepY) < h * 0.045) cost += 3;
-        // Better still, its body (back to belly) clear of the steepest
-        // stretch: its dark laid on the fall steepens it.
-        const belly = at0.cy + dy + 0.12 * len;
-        if (belly > e.steepY - h * 0.05 && dorsal < e.steepY + h * 0.05) cost += 0.6;
+  type Fit = { cost: number; dx: number; dy: number; k: number };
+  let best = null as Fit | null;
+  // Its full size first; on a crowded page a little smaller (never under
+  // seven tenths), rather than over a jelly.
+  for (const k of [1, 0.9, 0.8, 0.7]) {
+    const cx = v.rx + v.rw / 2;
+    const sized: PlacedEvent = { ...v, rx: cx - (v.rw * k) / 2, rw: v.rw * k, rh: v.rh * k };
+    const at0 = whaleHull(sized, S, e.current);
+    const len = at0.len;
+    const lo = len * 0.62 + w * 0.02;
+    const hi = w - len * 0.62 - w * 0.02;
+    const xs = [v.x, w - v.x, ...Array.from({ length: 11 }, (_, i) => lo + ((hi - lo) * i) / 10)].map((x) => clamp(x, Math.min(lo, hi), Math.max(lo, hi)));
+    for (let xi = 0; xi < xs.length; xi++) {
+      for (let s2 = 0; s2 <= 50; s2++) {
+        const dy = (s2 % 2 ? 1 : -1) * Math.ceil(s2 / 2) * h * 0.01;
+        const dx = xs[xi] - cx;
+        const move = (b: Box) => ({ x0: b.x0 + dx, x1: b.x1 + dx, y0: b.y0 + dy, y1: b.y1 + dy });
+        const box = move(at0.box);
+        const parts = [move(at0.body), move(at0.flipper)];
+        const dorsal = at0.dorsal + dy;
+        if (box.y0 < h * 0.05 || at0.cy + dy > h * 0.55) continue;
+        let cost = Math.abs(dy) / h + (xi === 0 ? 0 : xi === 1 ? 0.08 : 0.1 + Math.abs(dx) / w * 0.2) + (1 - k) * 1.5;
+        if (inter(box, grow(e.winBox, 6)) > 0) cost += 10;
+        if (e.steepY != null) {
+          if (Math.abs(dorsal - e.steepY) < h * 0.045) cost += 3;
+          // Better still, its body (back to belly) clear of the steepest
+          // stretch: its dark laid on the fall steepens it.
+          const belly = at0.cy + dy + 0.12 * len;
+          if (belly > e.steepY - h * 0.05 && dorsal < e.steepY + h * 0.05) cost += 0.6;
+        }
+        for (const j of e.jellies) {
+          if (j.far) continue;
+          const o = parts.reduce((t, p) => t + inter(p, grow(j.box, CLEAR)), 0);
+          if (o > 0) cost += 4 + o / area(j.box);
+        }
+        if (!best || cost < best.cost) best = { cost, dx, dy, k };
       }
-      for (const j of e.jellies) {
-        if (j.far) continue;
-        const o = inter(box, grow(j.box, CLEAR));
-        if (o > 0) cost += 4 + o / area(j.box);
-      }
-      if (!best || cost < best.cost) best = { cost, dx, dy };
     }
+    if (best && best.cost < 4) break;
   }
   if (!best) return;
-  v.rx += best.dx;
-  v.x += best.dx;
+  const cx = v.rx + v.rw / 2;
+  v.rw *= best.k;
+  v.rh *= best.k;
+  v.rx = cx - v.rw / 2 + best.dx;
+  v.x = cx + best.dx;
   v.ry += best.dy;
   v.y += best.dy;
 }
@@ -2523,10 +2608,11 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
     }
     for (const p of water) {
       const sp = p.met.species;
-      // Jelly-like animals are kept few, far and small, so the jellies
-      // that are the blocks are the only jellies that read as the path.
+      // The jellies that are the blocks are the only jellies that read as
+      // the path: another bell only if it is the rare one. (Small and far in
+      // the haze, a bell is a soap bubble: a pale disc with a rim.)
       const bell = sp.genome.plan === 'bell';
-      if (bell && !p.rare && ++bells > 3) continue;
+      if (bell && !p.rare && (++bells > 3 || (layerOf.get(p) ?? 0) === 0)) continue;
       const layer = layerOf.get(p) ?? 0;
       const [a, b] = NEAR_LEN[sp.genome.plan] ?? NEAR_LEN.fish;
       const size = clamp(Math.sqrt(sp.genome.size), 0.85, 1.15);

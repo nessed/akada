@@ -5,7 +5,9 @@ import { depthAt } from '../depth';
 import { planPicture, type PictureInput } from './index';
 import { rollBiome } from '../biome';
 import { rollKelp } from '../kelp';
-import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, floorAt, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, STEM, wallAt, type Box, type Plan } from './layout';
+import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, floorAt, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, PICTURE_KELP, STEM, wallAt, type Box, type Plan } from './layout';
+import { EYE_R, steepestFall, whaleHull } from './layout';
+import { KELP_SHADE, kelpShadeAt } from './paint';
 
 /** A sitting from a start and a list of stretches in minutes. */
 function sitting(start: string, parts: ['focus' | 'break', number][]): SessionSegment[] {
@@ -314,14 +316,14 @@ test('no rock floats: each stands out from a wall that goes down into the ground
         if (!crowded) assert.ok((r.reach * plan.w) / Math.max(1e-6, f) <= STEM + 0.05, `${tag}: a cap ${(r.reach * plan.w).toFixed(0)} wide on a stem ${f.toFixed(0)}`);
       }
       for (const wl of plan.walls) {
-        // A narrow strip where nothing stands out from it.
+        // A narrow strip (0.04 to 0.09 W, rough) where nothing stands out from it.
         const sorted = [...wl.face].sort((a, b) => a - b);
-        const median = sorted[Math.floor(sorted.length / 2)];
-        assert.ok(median <= plan.w * 0.12 && sorted[0] >= Math.min(plan.w * 0.02, 10), `${tag}: a wall ${(median / plan.w).toFixed(3)} W wide`);
+        const narrow = sorted[Math.floor(sorted.length * 0.2)];
+        assert.ok(narrow <= plan.w * 0.1 && sorted[0] >= Math.min(plan.w * 0.02, 10), `${tag}: a wall ${(narrow / plan.w).toFixed(3)} W wide`);
       }
       // The kelp: three stalks a side or none.
       if (plan.kelp) {
-        const kelp = rollKelp(rollBiome(plan.key, plan.courseKey).key);
+        const kelp = rollKelp(rollBiome(plan.key, plan.courseKey).key, PICTURE_KELP);
         for (const edge of [-1, 1]) {
           const n = plan.kelp.keep.filter((i) => (kelp.stalks[i].x < 0.5 ? -1 : 1) === edge).length;
           assert.ok(n === 0 || n >= 3, `${tag}: ${n} kelp stalks on a side`);
@@ -397,5 +399,82 @@ test('the rarest animal met is in the picture, near and large', () => {
     // On the floor it is as large as the floor allows; in the water, larger than all but the near.
     if (rare[0].floor) assert.ok(rare[0].len >= Math.max(...plan.cast.filter((a) => a.floor).map((a) => a.len)) - 1e-9);
     else for (const a of plan.cast) if (!a.rare && !a.members && a.layer < 2) assert.ok(a.len <= rare[0].len, `${c.name}: ${a.id} bigger than the rarest`);
+  }
+});
+
+test('no lit rectangle: the kelp\'s shade in the light has no edge, no column step over 3/255 in 8 px', () => {
+  // The shade is what the rays are cut by: a step in it is a step in the
+  // light, carried down the shafts. Measured at print size, across the top
+  // half of the page and down the forest.
+  for (const c of CASES) {
+    for (const shape of SHAPES.slice(0, 2)) {
+      const plan = planOf(c, shape, 'night');
+      if (!plan.kelp) continue;
+      const px = shape.width / plan.w;
+      let worst = 0;
+      for (let dy = 0; dy <= shape.height * 0.5; dy += 6) {
+        for (let dx = 0; dx + 8 <= shape.width; dx += 2) {
+          const a = kelpShadeAt(plan, dx / px, dy / px);
+          const b = kelpShadeAt(plan, (dx + 8) / px, dy / px);
+          worst = Math.max(worst, Math.abs(a - b));
+        }
+      }
+      assert.ok(worst * 255 <= 3, `${c.name} ${shape.width}x${shape.height}: the kelp's shade steps ${(worst * 255).toFixed(1)}/255 in 8 px`);
+      // Feathered to nothing inside its reach, and whole at the wall.
+      const edge = plan.rocks.find((r) => r.kind === 'kelp')!.edge;
+      const at = (x: number) => kelpShadeAt(plan, edge < 0 ? x : plan.w - x, plan.kelp!.bottom * 0.3);
+      assert.ok(Math.abs(at(1) - KELP_SHADE) < 1e-9 && at(plan.w * 0.056 + 0.23 * Math.min(plan.w, plan.h) + 1) === 0);
+    }
+  }
+});
+
+test('siblings: each apart from the hero in two ways a print shows, none in another\'s trails, none at another\'s depth', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const J = plan.jellies;
+      const hero = J[J.length - 1].body;
+      for (const j of J.slice(0, -1)) {
+        const b = j.body;
+        const ways = [
+          Math.abs(b.aspect / hero.aspect - 1) >= 0.2 - 1e-9,
+          Math.abs(b.tentacles / hero.tentacles - 1) >= 0.4 - 1e-9,
+          Math.abs(b.armLength - hero.armLength) >= 0.3,
+          Math.abs(b.hueShift - hero.hueShift) >= 25,
+        ].filter(Boolean).length;
+        assert.ok(ways >= 2, `${tag}: jelly ${j.block} differs from the hero in ${ways} way(s)`);
+      }
+      for (let i = 0; i < J.length; i++) {
+        for (let k = i + 1; k < J.length; k++) {
+          assert.ok(boxGap(J[i].box, J[k].box) >= CLEAR - 1e-6, `${tag}: jellies ${i} and ${k} ${boxGap(J[i].box, J[k].box).toFixed(0)} apart`);
+          assert.ok(Math.abs(J[i].y - J[k].y) >= plan.h * 0.05 - 1e-6, `${tag}: jellies ${i} and ${k} at one depth`);
+        }
+      }
+    }
+  }
+});
+
+test('the rare things keep 0.02 S from rocks, jellies and each other; the whale\'s shadow off the jellies and off the steepest fall', () => {
+  assert.ok(EYE_R * 2 <= 0.05 * REF + 1e-9, 'the eye is more than 0.05 S across');
+  for (const c of CASES) {
+    for (const shape of SHAPES.slice(0, 2)) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const near = plan.events.filter((e) => e.box && !e.far && e.kind !== 'whalefall');
+      for (const e of near) {
+        const b = e.box as Box;
+        for (const r of plan.rocks) assert.ok(!rockTouches(r, plan.w, b, e.kind === 'eye' ? 40 - 1e-6 : CLEAR - 1e-6), `${tag}: the ${e.kind} by a ${r.kind} rock`);
+        for (const j of plan.jellies) assert.ok(boxGap(b, j.box) >= CLEAR - 1e-6, `${tag}: the ${e.kind} by jelly ${j.block}`);
+        for (const o of near) if (o !== e) assert.ok(boxGap(b, o.box as Box) >= CLEAR - 1e-6, `${tag}: the ${e.kind} by the ${o.kind}`);
+      }
+      const whale = plan.events.find((e) => e.kind === 'whale');
+      if (whale) {
+        const at = whaleHull(whale, Math.min(plan.w, plan.h), plan.current);
+        for (const j of plan.jellies) if (!j.far) assert.equal(inter(at.body, j.box) + inter(at.flipper, j.box), 0, `${tag}: jelly ${j.block} in the whale's shadow`);
+        const steep = steepestFall(plan.zStops, plan.h);
+        if (steep != null) assert.ok(Math.abs(at.dorsal - steep) >= plan.h * 0.04, `${tag}: the whale's back on the steepest fall`);
+      }
+    }
   }
 });
