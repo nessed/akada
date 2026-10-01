@@ -11,6 +11,7 @@ import { hash32, mulberry32 } from './random';
 import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type EventKind } from './events';
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
 import { outcropAtSlot, outcropsInView } from './outcrop';
+import { drained } from './palette';
 import { diveRecap } from './recap';
 import { populationAt, spawnAt, visitorsAt } from './schedule';
 
@@ -271,4 +272,18 @@ test('rocks slide up the page and leave it', () => {
       if (later) assert.ok(later.top < top, 'a rock went back down the page');
     }
   }
+});
+
+test('colour drains with depth, the reds first', () => {
+  const sat = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16);
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    return Math.max(...c) - Math.min(...c);
+  };
+  const red = '#D4A5A5';
+  const blue = '#A8BCC9';
+  assert.equal(drained(red, 0).toLowerCase(), red.toLowerCase());
+  assert.ok(sat(drained(red, 0.5)) < sat(red) * 0.4, 'red should be mostly grey by the twilight');
+  // Blue keeps more of itself at the same depth than red does.
+  assert.ok(sat(drained(blue, 0.4)) / sat(blue) > sat(drained(red, 0.4)) / sat(red));
 });

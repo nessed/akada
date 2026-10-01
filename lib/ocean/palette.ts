@@ -115,9 +115,29 @@ export function kelpInk(dark: boolean): KelpInk {
   };
 }
 
+/**
+ * A pastel as it looks at depth z. Water takes the warm end of the light
+ * first, so a red animal is grey by the twilight and the blues hold on
+ * longest; past the light everything is near grey. Its own lights are not
+ * drained, since they are made on the spot.
+ */
+export function drained(hex: string, z: number): string {
+  const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
+  if (!Number.isFinite(n)) return hex;
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  // The pastels are soft, so a little more red than blue is already warm.
+  const warmth = Math.max(0, Math.min(1, (r - b) / 45));
+  const lum = Math.round(0.3 * r + 0.59 * g + 0.11 * b);
+  const grey = `#${[lum, lum, lum].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+  const lost = Math.max(0, Math.min(1, (z - 0.1) / 0.45)) * (0.4 + 0.6 * warmth);
+  return mixHex(hex, grey, lost);
+}
+
 /** How a creature is inked, on dark water or light. */
 export function creatureInk(g: Genome, dark: boolean): CreatureInk {
-  const hue = HUES[Math.max(0, Math.min(9, Math.round(g.hue)))];
+  const hue = drained(HUES[Math.max(0, Math.min(9, Math.round(g.hue)))], g.z);
   const glow = GLOWS[Math.max(0, Math.min(3, Math.round(g.glow)))];
   const ink = dark ? mixHex(hue, '#FFFFFF', 0.45) : mixHex(hue, '#1A1714', 0.62);
   const water = dark ? '#1A1815' : '#FBF8EF';

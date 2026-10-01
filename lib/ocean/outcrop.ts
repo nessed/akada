@@ -50,6 +50,18 @@ export interface Outcrop {
   specks: { x: number; y: number; r: number }[];
   /** The top of the rock, in frame heights below the top of the page at focus 0. */
   worldY: number;
+  /** A sandy patch on its top with a colony of garden eels in it. */
+  eels?: EelPatch;
+}
+
+export interface EelPatch {
+  /** The patch's middle, 0 to 1 along the rock's top from its own edge (the crest, not the reach). */
+  at: number;
+  /** How wide it is, as a share of the rock's span. */
+  width: number;
+  /** How many eels live in it, 4 to 8. */
+  count: number;
+  seed: number;
 }
 
 /** Minutes of focus to a slot. */
@@ -89,6 +101,41 @@ function rollGrowths(r: Rand, zone: number): Growth[] {
   return out.sort((a, b) => b.at - a.at);
 }
 
+/** Where a growth stands as a share of the rock's span (the sprite pads the
+    rock 3% of the page out past the edge, so the two scales differ). */
+const spanAt = (reach: number, at: number) => (0.03 + at * reach) / (reach + 0.03);
+
+/**
+ * Garden eels live in sand on reefs in the lit water, so only rocks up there
+ * get a patch. It rolls on its own stream: the rock's own dice are left
+ * alone, and every rock and growth comes out as it did before eels.
+ */
+function rollEels(key: string, slot: number, o: Outcrop): EelPatch | undefined {
+  if (o.zone > 1) return undefined;
+  const r = mulberry32(hash32(key, 'eels', slot));
+  if (!chance(r, 0.35)) return undefined;
+  const width = range(r, 0.22, 0.32);
+  // Keep to the flat of the top: clear of the wall and short of the lip.
+  const lo = 0.1 + width / 2;
+  const hi = 0.74 - width / 2;
+  // In the widest gap between growths, so the sand isn't under the coral.
+  const stands = [0.1, ...o.growths.map((g) => spanAt(o.reach, g.at)).sort((a, b) => a - b), 0.74];
+  let at = (lo + hi) / 2;
+  let gap = -1;
+  for (let i = 1; i < stands.length; i++) {
+    if (stands[i] - stands[i - 1] > gap) {
+      gap = stands[i] - stands[i - 1];
+      at = (stands[i] + stands[i - 1]) / 2;
+    }
+  }
+  return {
+    at: Math.max(lo, Math.min(hi, at)),
+    width,
+    count: int(r, 4, 8),
+    seed: (r() * 4294967296) >>> 0,
+  };
+}
+
 function roll(key: string, slot: number): Outcrop | null {
   if (slot < 0 || !Number.isFinite(slot)) return null;
   const r = mulberry32(hash32(key, 'outcrop', slot));
@@ -100,7 +147,7 @@ function roll(key: string, slot: number): Outcrop | null {
   // Mid-screen is when its middle has risen to half the page.
   const mid = enter + (0.5 + thick / 2) / RATE;
   const zone = depthAt(mid * 60).zone;
-  return {
+  const o: Outcrop = {
     id: `oc${hash32(key, 'outcrop', slot).toString(36)}-${slot}`,
     slot,
     edge: chance(r, 0.5) ? -1 : 1,
@@ -112,6 +159,9 @@ function roll(key: string, slot: number): Outcrop | null {
     specks: Array.from({ length: 14 }, () => ({ x: r(), y: r(), r: range(r, 0.6, 1.4) })),
     worldY,
   };
+  const eels = rollEels(key, slot, o);
+  if (eels) o.eels = eels;
+  return o;
 }
 
 // The few slots on the page are asked for every frame; keep their rolls

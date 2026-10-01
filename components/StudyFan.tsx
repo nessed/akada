@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { buildFan, drawFan, fanShades, mixHex, seedFrom, type FanLayout, type FanTree } from '@/lib/fan';
 import { buildJelly, PLAIN_BODY, drawJelly, jellyBeat, jellyFrame, jellyInk, jellyStartle, type JellyBody, type JellyShape } from '@/lib/jelly';
+import { JellyAtContext } from '@/lib/ocean/jelly-at';
 import type { TimerDrawing } from '@/lib/preferences';
 import type { TreeGenome } from '@/lib/wood/tree';
 import { registerWallpaperLayer } from '@/lib/wallpaper';
@@ -231,6 +232,8 @@ export default function StudyFan({
   const stretchRef = useRef(strand());
   const foldRef = useRef(strand(FOLD_STIFFNESS, FOLD_DAMPING));
   const restingRef = useRef(resting);
+  // Where the bell is, for an ocean drawn round it (see lib/ocean/jelly-at).
+  const jellyAt = useContext(JellyAtContext);
   const overlayRef = useRef(overlay);
   const windRef = useRef(wind);
   const aliveRef = useRef(alive);
@@ -484,6 +487,15 @@ export default function StudyFan({
       closing.step(null, restingRef.current ? FOLD_REST : 0);
       for (let i = 0; i < TRAIL_SAMPLES; i++) drift[i] = bx.at(Math.round(i * TRAIL_LAG));
       riseNow = by.at(0);
+      const c = canvasRef.current;
+      if (jellyAt && c && c.clientWidth > 0 && c.clientHeight > 0) {
+        const f = jellyFrame(c.clientWidth, c.clientHeight, { padTop, widthFill, baseOffset, aspect: jellyRef.current?.aspect });
+        jellyAt.current = {
+          x: (f.cx + bx.at(0)) / c.clientWidth,
+          y: (f.y0 + f.R * 0.45 + by.at(0)) / c.clientHeight,
+          r: f.R / c.clientWidth,
+        };
+      }
       const lean = Math.max(-0.32, Math.min(0.32, bx.speed * 0.022));
       tiltNow += (lean - tiltNow) * 0.16;
       if (Math.abs(tiltNow) < 0.001 && !hand) tiltNow = 0;
@@ -575,7 +587,7 @@ export default function StudyFan({
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly, interactive, habitKey]);
+  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly, interactive, habitKey, jellyAt]);
 
   /* Where the jelly is in the canvas, for a hand to land on. The tree can be
      taken hold of anywhere in its frame; a jelly is a thing in the water, and
