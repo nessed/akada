@@ -17,13 +17,18 @@ import {
   drawStorm,
   drawSurface,
   drawVisitor,
-  drawWater,
   drawWhale,
   floorLine,
   rollSnow,
 } from '@/lib/ocean/draw';
 import { eventsAt, firstEventUpTo, type OceanEvent } from '@/lib/ocean/events';
+import { Caustics } from '@/lib/ocean/caustics';
+import { GardenEels } from '@/lib/ocean/garden-eels';
+import { darknessAt, drawDarkness, litBy } from '@/lib/ocean/glow';
+import { JellyAtContext, type JellyAt } from '@/lib/ocean/jelly-at';
 import { rollKelp } from '@/lib/ocean/kelp';
+import { Sparkles } from '@/lib/ocean/sparkle';
+import { Wash } from '@/lib/ocean/wash';
 import { outcropsInView } from '@/lib/ocean/outcrop';
 import { drawOutcrops, OutcropCache } from '@/lib/ocean/outcrop-sprite';
 import { drawDumbo, drawLure, drawWhaleFall } from '@/lib/ocean/sightings-deep';
@@ -108,6 +113,8 @@ export default function OceanScene({
   const biome = useMemo(() => rollBiome(sittingKey, courseKey), [sittingKey, courseKey]);
   const snow = useMemo(() => ({ back: rollSnow(sittingKey, 60), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
   const kelp = useMemo(() => (biome.env.kelp ? rollKelp(biome.key) : null), [biome]);
+  // Where the hero jelly is, written by StudyFan every frame it moves.
+  const jellyAt = useMemo(() => ({ current: null as JellyAt | null }), []);
 
   // Everything the loop reads, off a ref, so a per-second render of the page
   // never tears the loop down.
@@ -126,6 +133,16 @@ export default function OceanScene({
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const sprites = new SpriteCache();
     const outcrops = new OutcropCache();
+    const wash = new Wash();
+    const caustics = new Caustics();
+    const sparkles = new Sparkles();
+    const eels = new GardenEels();
+    const washSeed = hash32(sittingKey, 'wash');
+    /* Touch is the one thing here that is not a function of the sitting:
+       sparks and ducking eels die away on their own clock, so while any are
+       still going the loop keeps running even on a held clock. */
+    let transient = false;
+    let dark = false;
     /* The whale fall stays once it has come, so it is looked up a minute at a
        time rather than read off the events under way. */
     let fallMinute = -1;
@@ -211,11 +228,19 @@ export default function OceanScene({
       // The far water: the wash, the light, the snow, the floor.
       bctx.globalCompositeOperation = 'source-over';
       bctx.globalAlpha = 1;
-      drawWater(bctx, W, H, water);
+      wash.draw(bctx, W, H, water, px, washSeed);
+      dark = water.dark;
+      const now = performance.now();
+      const ja = jellyAt.current;
+      const jelly = ja ? { x: ja.x * W, y: ja.y * H, r: ja.r * W } : { x: W / 2, y: H * 0.22, r: W * 0.08 };
+      // Below the light, the jelly is what there is to see by.
+      const darkness = darknessAt(depth.z) * 0.8;
       if (L.rules) drawRules(bctx, W, H, depth.z, px, water.dark ? '#FFFFFF' : '#8C8576');
       // Under the paper's bleeds, so the corners still read through a forest.
       if (kelp) drawKelp(bctx, W, H, kelp, shown, water, ambient, biome.env.current, px, L.clear, quality > 0.7);
-      drawOutcrops(bctx, W, H, outcropsInView(biome.key, biome.env.kelp, shown), outcrops, water, px, L.clear);
+      const rocks = outcropsInView(biome.key, biome.env.kelp, shown);
+      drawOutcrops(bctx, W, H, rocks, outcrops, water, px, L.clear);
+      const eelsMoving = eels.draw(bctx, W, H, rocks, ambient, now, px, water.dark, L.clear);
       if (L.pools?.length) {
         // An oval bleed of bare paper, the way a wash stops short of a corner.
         const paper = getComputedStyle(box).getPropertyValue('--paper').trim() || '#FBF8EF';
@@ -244,10 +269,6 @@ export default function OceanScene({
       if (minute !== fallMinute) {
         fallMinute = minute;
         fall = firstEventUpTo(biome, 'whalefall', (minute + 1) * 60);
-      }
-      if (fall && fall.start <= shown && depth.zone >= 3) {
-        const appear = Math.min(1, (shown - fall.start) / fall.seconds);
-        drawWhaleFall(bctx, W, H, appear, fall.seed, px, ambient, water.dark, floorLine(depth, shown, H));
       }
 
       // The rare things, when one is under way: behind everything, the
@@ -293,8 +314,12 @@ export default function OceanScene({
         bctx.drawImage(b.canvas, x, y);
       }
       bctx.globalAlpha = 1;
-      // Roughly where the hero jelly hangs, for the turtle to come and look at.
-      const jelly = { x: W / 2, y: H * 0.22 };
+      drawDarkness(bctx, W, H, jelly, darkness, px, L.color);
+      // Found things stay findable: the whale fall is drawn over the dark, faint.
+      if (fall && fall.start <= shown && depth.zone >= 3) {
+        const appear = Math.min(1, (shown - fall.start) / fall.seconds);
+        drawWhaleFall(bctx, W, H, appear, fall.seed, px, ambient, water.dark, floorLine(depth, shown, H));
+      }
       for (const { event, age } of events) {
         if (event.kind === 'storm') drawStorm(bctx, W, H, age, event.seed, px, ambient);
         else if (event.kind === 'turtle') drawTurtle(bctx, W, H, age, event.seed, px, ambient, water.dark, jelly);
@@ -313,6 +338,8 @@ export default function OceanScene({
         const sprite = sprites.get(v.species, v.len, water.dark, px);
         if (!sprite) continue;
         let alpha = v.alpha;
+        // Out of the jelly's light, only the ones with lights of their own show.
+        if (darkness > 0 && !v.species.genome.lit) alpha *= litBy(v.x * px, v.y * px, jelly, darkness);
         if (L.clear) {
           for (const r of L.clear) {
             if (v.x > r.x * css.w && v.x < (r.x + r.w) * css.w && v.y > r.y * css.h && v.y < (r.y + r.h) * css.h) {
@@ -326,6 +353,10 @@ export default function OceanScene({
         if (event.kind === 'eye') drawEye(fctx, front.width, front.height, age, event.seed, px, water.dark);
       }
       drawSnow(fctx, front.width, front.height, snow.front, water.snow, ambient * 1.3, biome.env.current, px, 1.8);
+      // Light off the surface, playing over everything in the shallows.
+      if (!reduced) caustics.draw(fctx, front.width, front.height, ambient, water.light, px, water.dark);
+      const sparking = sparkles.draw(fctx, now, px);
+      transient = sparking || eelsMoving;
 
       // The crossing: the shimmer rises through for four seconds, and the
       // zone's name is written in the margin for six, then goes.
@@ -390,7 +421,7 @@ export default function OceanScene({
       held += ((L.paused ? 1 : 0) - held) * (1 - Math.exp(-dt / AMBIENT_TAU));
       ambient += dt * micro;
       paint();
-      const settled = L.paused && micro < 0.002 && held > 0.998 && Math.abs(target - shown) < 0.01;
+      const settled = L.paused && micro < 0.002 && held > 0.998 && Math.abs(target - shown) < 0.01 && !transient;
       if (L.still || settled) return;
       raf = requestAnimationFrame(step);
     };
@@ -414,6 +445,31 @@ export default function OceanScene({
       if (reduced || live.current.still || raf == null) paint();
     });
     ro.observe(box);
+    /* A hand in the water. The jelly takes its own pointer; these only
+       listen, so a touch on the jelly still reaches it. Plankton lights up
+       only where it is dark enough to see it; the eels duck at any depth. */
+    const toCanvas = (e: PointerEvent) => {
+      const rect = box.getBoundingClientRect();
+      return { x: (e.clientX - rect.left) * px, y: (e.clientY - rect.top) * px };
+    };
+    const onDown = (e: PointerEvent) => {
+      if (reduced || live.current.still) return;
+      const p = toCanvas(e);
+      const now = performance.now();
+      if (dark) sparkles.poke(p.x, p.y, now, px);
+      eels.duck(p.x, p.y, now, px);
+      transient = true;
+      kick();
+    };
+    const onMove = (e: PointerEvent) => {
+      if (reduced || live.current.still || !dark || e.buttons === 0) return;
+      const p = toCanvas(e);
+      sparkles.stroke(p.x, p.y, performance.now(), px);
+      transient = true;
+      kick();
+    };
+    box.addEventListener('pointerdown', onDown, { passive: true });
+    box.addEventListener('pointermove', onMove, { passive: true });
     kick();
     // Reduced motion gets a still that is brought up to date now and then,
     // so the water still deepens over a long sitting.
@@ -422,11 +478,13 @@ export default function OceanScene({
     return () => {
       disposed = true;
       ro.disconnect();
+      box.removeEventListener('pointerdown', onDown);
+      box.removeEventListener('pointermove', onMove);
       if (raf != null) cancelAnimationFrame(raf);
       if (interval != null) window.clearInterval(interval);
       kickRef.current = () => {};
     };
-  }, [biome, kelp, snow, sittingKey]);
+  }, [biome, kelp, snow, sittingKey, jellyAt]);
 
   // Every render hands the loop the page's latest, and wakes it if it had
   // parked (a pause settling, a still): a resume, a break or the sheet coming
@@ -439,7 +497,7 @@ export default function OceanScene({
   return (
     <div ref={boxRef} className={`relative ${className}`}>
       <canvas ref={backRef} aria-hidden data-no-doodle className="pointer-events-none absolute inset-0 h-full w-full" />
-      {children}
+      <JellyAtContext.Provider value={jellyAt}>{children}</JellyAtContext.Provider>
       <canvas ref={frontRef} aria-hidden data-no-doodle className="pointer-events-none absolute inset-0 h-full w-full" />
       {/* The zone's name, in the hand, for a few seconds after crossing into it. */}
       <span
