@@ -185,7 +185,7 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   const lit = litDepth(plan);
   const RH = lit * D;
   const rs = Math.max(1, Math.max(W, RH) / 2400);
-  const occluder = occluderOf(plan, c, lit);
+  const occluder = (globalThis as unknown as { __skip?: string }).__skip === 'occ' ? null : occluderOf(plan, c, lit);
   const rays = {
     source: { x: (plan.window.x * D) / rs, y: (plan.window.y * D) / rs },
     occluder,
@@ -202,6 +202,10 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     ctx.restore();
   }
   __t('rays');
+  if ((globalThis as unknown as { __skip?: string }).__skip === 'onlyrays') {
+    ctx.restore();
+    return;
+  }
 
   // ---- The sky, looking up: after the rays, so their fan does not pile up
   // in it, and before everything in the water, which passes in front of it.

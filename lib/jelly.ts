@@ -121,14 +121,17 @@ export interface JellyInk {
  * lift toward white and the jelly gives off light; in daylight the lines go
  * toward ink and the bell is the colour washed into the page.
  */
-export function jellyInk(color: string, paper: string, light: boolean): JellyInk {
+/* `pen`: the deep's one iron-gall ink for the outline and ribs, so the jelly
+   sits with everything else in that sea; the jellyfish drawing on its own
+   keeps the edge it has always had, in its own colour. */
+export function jellyInk(color: string, paper: string, light: boolean, pen = true): JellyInk {
   if (light) {
     return {
       bellTop: mixHex(color, paper, 0.62),
       bellRim: mixHex(color, paper, 0.3),
       // The pen's own off-white, with a breath of the jelly's colour in it.
-      edge: mixHex(IRON_GALL.dark, color, 0.15),
-      rib: mixHex(IRON_GALL.dark, color, 0.35),
+      edge: pen ? mixHex(IRON_GALL.dark, color, 0.15) : mixHex(color, '#FFFFFF', 0.35),
+      rib: pen ? mixHex(IRON_GALL.dark, color, 0.35) : mixHex(color, '#FFFFFF', 0.25),
       gonad: mixHex(color, '#FFFFFF', 0.45),
       tentacle: mixHex(color, '#FFFFFF', 0.2),
       sting: mixHex(color, '#FFFFFF', 0.6),
@@ -145,8 +148,8 @@ export function jellyInk(color: string, paper: string, light: boolean): JellyInk
     bellTop: mixHex(color, paper, 0.8),
     bellRim: mixHex(color, paper, 0.42),
     // The pen's iron-gall, with a breath of the jelly's colour in it.
-    edge: mixHex(IRON_GALL.light, color, 0.15),
-    rib: mixHex(IRON_GALL.light, color, 0.4),
+    edge: pen ? mixHex(IRON_GALL.light, color, 0.15) : mixHex(color, '#1A1714', 0.45),
+    rib: pen ? mixHex(IRON_GALL.light, color, 0.4) : mixHex(color, '#1A1714', 0.3),
     gonad: mixHex(color, '#1A1714', 0.18),
     tentacle: mixHex(color, '#1A1714', 0.28),
     sting: mixHex(color, '#1A1714', 0.4),
