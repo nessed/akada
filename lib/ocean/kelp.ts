@@ -167,7 +167,21 @@ export function rollKelp(key: string): Kelp {
       edge === main
         ? Array.from({ length: n }, (_, i) => (i === 0 ? 2 : i === 1 ? 1 : i === 2 ? 0 : ([0, 1, 2] as const)[int(r, 0, 2)]))
         : Array.from({ length: n }, () => 0 as KelpLayer);
-    sides.set(edge, layers.map((l) => rollStalk(r, edge, l)));
+    const mine = layers.map((l) => rollStalk(r, edge, l));
+    if (edge === main) {
+      // The forest's stalks spread out from the wall, each in a share of its
+      // own, so they never stand in one clump that reads as two.
+      const order = mine.map((_, i) => i);
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = int(r, 0, i);
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      order.forEach((k, i) => {
+        const off = 0.025 + (0.175 * (i + 0.5 + range(r, -0.3, 0.3))) / mine.length;
+        mine[k].x = edge < 0 ? off : 1 - off;
+      });
+    }
+    sides.set(edge, mine);
   }
   if (edges.length === 2) {
     const big = sides.get(main)!;
@@ -185,7 +199,8 @@ export function rollKelp(key: string): Kelp {
     const furthest = Math.max(...mine.map((s) => (edge < 0 ? s.x : 1 - s.x)));
     ledges.push({
       edge,
-      reach: Math.min(0.32, furthest + range(r, 0.06, 0.1) + (edge === main ? 0.03 : 0)),
+      // The stragglers' rock is a small one; the forest's runs further out.
+      reach: Math.min(edge === main ? 0.32 : 0.22, furthest + (edge === main ? range(r, 0.08, 0.12) : range(r, 0.04, 0.07))),
       top: LEDGE,
       seed: (r() * 4294967296) >>> 0,
     });

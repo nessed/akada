@@ -75,8 +75,10 @@ export interface PlacedJelly {
  * from the end that runs off the page (u = 0) to the lip (u = 1), 0 at the
  * box's top and 1 at its foot.
  */
+export type RockKind = 0 | 1 | 2 | 3 | 4;
+
 export interface RockShape {
-  kind: 0 | 1 | 2;
+  kind: RockKind;
   /** Height over width, the width counted off the page too. */
   ratio: number;
   top: number[];
@@ -290,9 +292,9 @@ const ROCK_N = 40;
  * (tall, leaning out to a broken peak). The top is never flat: a sum of
  * waves of a few lengths, its swing 0.15 to 0.3 of the height.
  */
-export function rollRockShape(seed: number, kind: 0 | 1 | 2, ratioMax = 1.2): RockShape {
+export function rollRockShape(seed: number, kind: RockKind, ratioMax = 1.2): RockShape {
   const r = mulberry32(hash32('rock-shape', seed));
-  const ratio = Math.min(ratioMax, kind === 0 ? range(r, 0.5, 0.64) : kind === 1 ? range(r, 0.66, 0.9) : range(r, 0.92, 1.2));
+  const ratio = Math.min(ratioMax, kind === 0 || kind === 4 ? range(r, 0.5, 0.64) : kind === 1 || kind === 3 ? range(r, 0.66, 0.9) : range(r, 0.92, 1.2));
   const amp = range(r, 0.16, 0.26);
   // Mostly long swells, a little broken: boulders along a crest, never a
   // ruled line and never a saw.
@@ -312,10 +314,15 @@ export function rollRockShape(seed: number, kind: 0 | 1 | 2, ratioMax = 1.2): Ro
   }
   // Scaled so the crest swings by just `amp` of the height, top to trough.
   const noise = (u: number) => ((raw(u) - lo) / Math.max(1e-6, hi - lo) - 0.5) * amp;
-  const peak = range(r, 0.35, 0.6);
+  const peak = range(r, 0.22, 0.78);
   const bite = range(r, 0.35, 0.7);
   const biteDepth = range(r, 0.04, 0.1);
   const ph = r() * TAU;
+  // Each kind leaves a different part of its box empty, and by a rolled
+  // amount, so no two rocks on a page share a silhouette.
+  const cut = range(r, 0.6, 0.85);
+  const curve = range(r, 0.6, 1.6);
+  const hang = range(r, 0.45, 0.7);
   const top: number[] = [];
   const under: number[] = [];
   for (let i = 0; i <= ROCK_N; i++) {
@@ -324,17 +331,27 @@ export function rollRockShape(seed: number, kind: 0 | 1 | 2, ratioMax = 1.2): Ro
     let b: number;
     if (kind === 0) {
       // A shelf: rolling gently down to the lip, cut away beneath it.
-      t = 0.08 + 0.12 * u;
-      b = 1 - 0.58 * Math.pow(u, 1.2);
+      t = 0.05 + 0.12 * u;
+      b = 1 - cut * Math.pow(u, curve);
     } else if (kind === 1) {
-      // A buttress: a dome over a belly, the belly cut back toward the wall.
-      t = 0.4 * (1 - Math.sin(Math.PI * (0.12 + 0.76 * u)));
-      b = 1 - 0.42 * Math.pow(u, 1.8);
-    } else {
+      // A boulder lodged in the wall: domed, its weight hanging out at the
+      // lip, cut back under toward the wall.
+      t = 0.42 * (1 - Math.sin(Math.PI * (0.1 + 0.8 * u)));
+      b = 1 - hang * Math.pow(1 - u, curve + 0.6);
+    } else if (kind === 2) {
       // A crag: up to a blunt summit, then down to a thick lip.
       const d = u < peak ? (peak - u) / peak : (u - peak) / (1 - peak);
-      t = (u < peak ? 0.5 : 0.36) * Math.pow(d, 1.25);
-      b = 1 - 0.38 * Math.pow(u, 1.5);
+      t = 0.78 * Math.pow(d, 0.9 + curve * 0.3);
+      b = 1 - 0.3 * Math.pow(u, 1.5);
+    } else if (kind === 3) {
+      // A stepped ledge: high by the wall, a drop, a lower shelf out to the lip.
+      const step = 1 / (1 + Math.exp(-(u - peak) * 18));
+      t = 0.05 + 0.5 * step * hang;
+      b = 1 - 0.35 * Math.pow(u, curve) * (1 - step * 0.4);
+    } else {
+      // A slab tilted up toward the lip, cut away beneath and above the wall.
+      t = 0.5 * (1 - u) * cut;
+      b = 1 - (0.25 + 0.5 * cut) * Math.pow(u, curve * 0.8);
     }
     t += noise(u);
     b -= biteDepth * Math.exp(-(((u - bite) / 0.12) ** 2)) + 0.025 * Math.sin(u * 9 + ph);
@@ -432,11 +449,11 @@ function rockBox(k: Omit<PlacedRock, 'box'>, w: number): Box {
 }
 
 /** A shape for a new rock unlike any already on the page. */
-function distinctShape(seed: number, kind: 0 | 1 | 2, others: RockShape[], ratioMax: number): RockShape {
+function distinctShape(seed: number, kind: RockKind, others: RockShape[], ratioMax: number): RockShape {
   let best: RockShape | null = null;
   let bestIoU = Infinity;
-  for (let t = 0; t < 18; t++) {
-    const s = rollRockShape(hash32(seed, 'try', t), ((kind + Math.floor(t / 6)) % 3) as 0 | 1 | 2, ratioMax);
+  for (let t = 0; t < 72; t++) {
+    const s = rollRockShape(hash32(seed, 'try', t), ((kind + Math.floor(t / 4)) % 5) as RockKind, ratioMax);
     const worst = others.reduce((a, o) => Math.max(a, rockIoU(s, o)), 0);
     if (worst < bestIoU) {
       best = s;
@@ -552,7 +569,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
 
   // Where the hero's bell hangs: the deepest point of the dive.
   const heroR = 0.0875 * S;
-  const yEnd = tall ? h * (0.62 + 0.06 * unit01(s.key, 'hero-y')) : h * (0.53 + 0.04 * unit01(s.key, 'hero-y'));
+  const yEnd = tall ? h * (0.62 + 0.06 * unit01(s.key, 'hero-y')) : h * (0.56 + 0.04 * unit01(s.key, 'hero-y'));
   const yTop = winY + winR * 0.46 + h * 0.03;
   const yOf = (f: number) => yTop + ((yEnd - yTop) * roomAt(Math.min(F, f))) / roomF;
 
@@ -646,11 +663,16 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   const jellies: PlacedJelly[] = [];
   const at: number[] = [];
   const jitter = (i: number) => (unit01(s.key, 'jelly-jitter', i) - 0.5) * 0.06 * w;
+  const lineK = tall ? 0.35 : 0.6;
   const place = (j: PlacedJelly, uu: number) => {
     const t = uu / U;
     const top = winBox.y1 + 0.4 * j.r * j.aspect + j.r * 0.2;
     j.x = clamp(xAt(t) + (j.hero ? 0 : jitter(j.block)), w * MARGIN + j.r * 1.15, w * (1 - MARGIN) - j.r * 1.15);
-    j.y = j.hero ? yEnd : clamp(yOf(focusAtU(uu)), top, h * (1 - MARGIN) - j.len - j.r * 0.45 * j.aspect);
+    // Down the page with depth, eased toward the path's own line so the
+    // blocks of a long sitting, all deep, do not line up along one row.
+    const lineY = h * 0.2 + (yEnd - h * 0.2) * t;
+    const y = yOf(focusAtU(uu)) * (1 - lineK) + lineY * lineK;
+    j.y = j.hero ? yEnd : clamp(y, top, h * (1 - MARGIN) - j.len - j.r * 0.45 * j.aspect);
     j.z = zAt(j.y);
     j.box = jellyHull(j);
   };
@@ -665,7 +687,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
       x: 0,
       y: 0,
       r,
-      len: r * (hero ? (tall ? 2.9 : 2.7) : 2.5),
+      len: r * (hero ? (tall ? 2.9 : 2.5) : 2.5),
       aspect: body.aspect,
       hero,
       z: 0,
@@ -718,7 +740,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   // ---- The floor and the trench under the hero.
   let trench: Trench | null = null;
   if (trenchOn && floorY != null) {
-    const gap = w * (tall ? 0.3 : 0.26) * (0.95 + 0.1 * unit01(s.key, 'trench-gap'));
+    const gap = w * (tall ? 0.3 : 0.27) * (0.97 + 0.08 * unit01(s.key, 'trench-gap'));
     const tx = clamp(hero.x, gap / 2 + w * 0.25, w - gap / 2 - w * 0.25);
     trench = { x: tx, gap, top: h * 0.7, fall: 2.3 };
   }
@@ -726,7 +748,8 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   const geo = { w, h, floor, trench };
   const groundY = (x: number) => floorAt(geo, x);
   // How low a rock may come: clear of the floor, or of the trench's walls.
-  const rockFoot = trench ? trench.top - h * 0.02 : floorY != null ? floorY - h * 0.03 : h * 0.95;
+  // A rock may come down to rest on the floor or on a trench wall's top, never below it.
+  const rockFoot = trench ? trench.top + h * 0.07 : floorY != null ? floorY + h * 0.02 : h * 0.95;
 
   // ---- The kelp at the top: one side the forest, the other (if any) a
   // few stalks; their rock is a real rock, holdfasts on its crest.
@@ -738,30 +761,39 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     // most a few stragglers), drawn from the top of the page down, its
     // canopy inside the page; its rocks are kelp-draw's. Here they only
     // hold their place, so no other rock crowds them.
-    kelp = { bottom: kelpBottom, top: kelpTop, keep: forest.stalks.map((_, i) => i) };
-    for (const ledge of forest.ledges) {
-      const off = 0.03;
-      const reach = clamp(ledge.reach, 0.1, 0.32);
-      const height = KELP_ROCK * kelpHf;
-      const sh = distinctShape(hash32(s.key, 'kelp-rock', ledge.edge), 0, shapes, 0.6);
-      shapes.push(sh);
-      const k: Omit<PlacedRock, 'box'> = {
-        kind: 'kelp',
-        rest: -1,
-        slot: -1,
-        edge: ledge.edge,
-        y: kelpTop + ledge.top * kelpHf - height * 0.15,
-        height: height * 1.15,
-        reach,
-        off,
-        plane: 2,
-        zone: 0,
-        seconds: 0,
-        seed: ledge.seed,
-        shape: sh,
-      };
-      rocks.push({ ...k, box: rockBox(k, w) });
+    const kelpRocks = (bottom: number): PlacedRock[] => {
+      const hf = (bottom - kelpTop) / 2.45;
+      return forest.ledges.map((ledge) => {
+        const height = KELP_ROCK * hf;
+        const k: Omit<PlacedRock, 'box'> = {
+          kind: 'kelp',
+          rest: -1,
+          slot: -1,
+          edge: ledge.edge,
+          y: kelpTop + ledge.top * hf - height * 0.15,
+          height: height * 1.15,
+          reach: clamp(ledge.reach, 0.1, 0.32),
+          off: 0.03,
+          plane: 2,
+          zone: 0,
+          seconds: 0,
+          seed: ledge.seed,
+          // Its silhouette is kelp-draw's; this one only reserves the room.
+          shape: rollRockShape(hash32(s.key, 'kelp-rock', ledge.edge), 0, 0.6),
+        };
+        return { ...k, box: rockBox(k, w) };
+      });
+    };
+    // The forest stands higher if its rock would crowd a jelly: the rock
+    // moves, never the way down.
+    let bottom = kelpBottom;
+    let made = kelpRocks(bottom);
+    while (bottom > h * 0.22 && made.some((k) => jellies.some((j) => rockTouches(k, w, j.box, CLEAR)))) {
+      bottom -= h * 0.02;
+      made = kelpRocks(bottom);
     }
+    kelp = { bottom, top: kelpTop, keep: forest.stalks.map((_, i) => i) };
+    rocks.push(...made);
   }
 
   // ---- The rocks: each break's near and inked, at the depth of its rest,
@@ -881,18 +913,19 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     const near = i >= nBreaks - 2;
     const vary = (unit01(s.key, 'rock-reach', rest.index) - 0.5) * 0.05;
     let reach = clamp(0.17 + 0.11 * Math.min(1, rest.seconds / 1800) + vary, 0.15, 0.32);
-    if (!near) reach = Math.max(0.15, reach * 0.86);
+    if (!near) reach = Math.max(0.15, reach * (nBreaks > 4 ? 0.75 : 0.86));
     const off = 0.065 + 0.03 * unit01(s.key, 'rock-off', rest.index);
-    const kind = ((hash32(s.key, 'rock-kind') + i) % 3) as 0 | 1 | 2;
+    const kind = ((hash32(s.key, 'rock-kind') + i * 2) % 5) as RockKind;
     const sh = distinctShape(hash32(s.key, 'break-rock', rest.index), kind, shapes, ratioMax);
     shapes.push(sh);
-    const cap0 = (near ? 0.2 : 0.15) * h;
+    const cap0 = (near ? (nBreaks > 4 ? 0.14 : 0.2) : nBreaks > 4 ? 0.1 : 0.15) * h;
     let height = sh.ratio * (reach + off) * w;
     if (height > cap0) {
-      // Too tall for the page: narrower, keeping its proportions.
+      // Too tall for the page: narrower, keeping its proportions; then, if
+      // it must, lower, never under half as tall as it is wide.
       const k = cap0 / height;
       reach = Math.max(0.15, (reach + off) * k - off);
-      height = sh.ratio * (reach + off) * w;
+      height = Math.max(0.5 * (reach + off) * w, Math.min(cap0, sh.ratio * (reach + off) * w));
     }
     const j = rest.after >= 0 ? jellies[rest.after] : null;
     return {
@@ -917,10 +950,11 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     if (rockTouches(k, w, e.winBox, 4)) return true;
     for (const j of jellies) if (rockTouches(k, w, j.box, CLEAR)) return true;
     const same = placed.filter((o) => o.edge === k.edge);
-    if (same.length >= cap) return true;
+    // The kelp's own rock is the forest's foot, not one of the page's rocks.
+    if (same.filter((o) => o.kind !== 'kelp').length >= cap) return true;
     for (const o of same) {
       const gap = Math.max(o.y - (k.y + k.height), k.y - (o.y + o.height));
-      if (gap < minGap) return true;
+      if (gap < (o.kind === 'kelp' ? h * 0.04 : minGap)) return true;
     }
     for (const o of placed) if (o.edge !== k.edge && rockTouches(k, w, o.box, 8)) return true;
     return false;
@@ -932,55 +966,126 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     return near >= 2 ? 0.6 : 0;
   };
 
-  let best: { placed: PlacedRock[]; cost: number } | null = null;
-  const K = 40;
-  for (let c = 0; c < K; c++) {
-    const r = mulberry32(hash32(e.seed, 'rocks', c));
-    const shrink = c >= 28 ? 0.85 : 1;
+  // A rock for a break, from where it is put: its wall, the depth of its
+  // middle, and how much smaller than it would be (smaller: less of it off
+  // the page, a little less reach, and lower, never under half as tall as
+  // it is wide; a wide page's long width lets it reach a little less of it,
+  // still a fifth of the short side).
+  type Pose = { edge: -1 | 1; centre: number; k: number };
+  const build = (sp: Spec, p: Pose): PlacedRock => {
+    const off = p.k < 1 ? 0.06 : sp.off;
+    const reach = Math.max(!tall && p.k <= 0.6 ? 0.12 : 0.15, (sp.reach + sp.off) * p.k - off);
+    const ratio = Math.max(0.5, (sp.height / ((sp.reach + sp.off) * w)) * p.k);
+    const height = ratio * (reach + off) * w;
+    const base: Omit<PlacedRock, 'box'> = { ...sp, edge: p.edge, height, reach, off, y: p.centre - height / 2 };
+    return { ...base, box: rockBox(base, w) };
+  };
+  const nearWallOf = (sp: Spec): -1 | 1 => (sp.nearX < w / 2 ? -1 : 1);
+  /** What a rock costs where it is: off its depth, far across from its jelly, in a row. */
+  const costOf = (sp: Spec, k: PlacedRock) => {
+    const lip = k.edge < 0 ? k.reach * w : w - k.reach * w;
+    const across = Math.max(0, Math.abs(lip - sp.nearX) - w * 0.22);
+    // The latest breaks' rocks are held closest to their depth.
+    const hold = sp.plane === 2 ? 9 : 3;
+    return (Math.abs(k.y + k.height / 2 - sp.anchor) / h) * hold + (across / w) * 2 + bandCost(k) + (k.edge !== nearWallOf(sp) ? 0.15 : 0) + (1 - (k.height / sp.height)) * 0.6;
+  };
+  const alternates = (placed: PlacedRock[]) => {
+    const order = placed.filter((k) => k.kind === 'break').sort((a, b) => a.y - b.y);
+    if (order.length < 3) return false;
+    for (let i = 1; i < order.length; i++) if (order[i].edge === order[i - 1].edge) return false;
+    return true;
+  };
+  /** A whole arrangement: its cost, and how many rocks in it break a rule (each heavily). */
+  const total = (poses: Pose[]) => {
     const placed: PlacedRock[] = fixed.slice();
     let cost = 0;
-    let ok = true;
-    // The latest breaks first: they matter most.
     for (let i = specs.length - 1; i >= 0; i--) {
-      const sp = specs[i];
-      let bestK: PlacedRock | null = null;
-      let bestCost = Infinity;
-      const nearWall: -1 | 1 = sp.nearX < w / 2 ? -1 : 1;
-      for (let t = 0; t < 30; t++) {
-        const edge: -1 | 1 = r() < (t < 15 ? 0.68 : 0.5) ? nearWall : ((-nearWall) as -1 | 1);
-        const height = sp.height * shrink;
-        const centre = sp.anchor + (gauss(r) * 0.07 + 0.03) * h * (1 + t / 15);
-        const base: Omit<PlacedRock, 'box'> = { ...sp, edge, height, reach: Math.max(0.15, sp.reach * shrink), y: centre - height / 2 };
-        const k: PlacedRock = { ...base, box: rockBox(base, w) };
-        if (blocked(k, placed)) continue;
-        // Near its jelly: at the depth of the rest, its lip not far across from it.
-        const lip = edge < 0 ? k.reach * w : w - k.reach * w;
-        const across = Math.max(0, Math.abs(lip - sp.nearX) - w * 0.22);
-        const kc = (Math.abs(centre - sp.anchor) / h) * 3 + (across / w) * 2 + bandCost(k) + (edge !== nearWall ? 0.15 : 0);
-        if (kc < bestCost) {
-          bestCost = kc;
-          bestK = k;
-        }
-      }
-      if (!bestK) {
-        ok = false;
-        cost += 50;
-        continue;
-      }
-      placed.push(bestK);
-      cost += bestCost;
+      const k = build(specs[i], poses[i]);
+      if (blocked(k, placed)) cost += 40;
+      cost += costOf(specs[i], k);
+      placed.push(k);
     }
     // Never strict left-right-left down the page: that is a diagram.
-    const order = placed.filter((k) => k.kind === 'break').sort((a, b) => a.y - b.y);
-    if (order.length >= 3) {
-      let alt = true;
-      for (let i = 1; i < order.length; i++) if (order[i].edge === order[i - 1].edge) alt = false;
-      if (alt) cost += 1.5;
+    if (alternates(placed)) cost += 1.5;
+    return { cost, placed };
+  };
+
+  // First, greedy: each rock where it fits best given those already put,
+  // the latest first (as they matter most), and in other orders too.
+  let bestPoses: Pose[] | null = null;
+  let bestCost = Infinity;
+  const K = 24;
+  for (let c = 0; c < K; c++) {
+    const r = mulberry32(hash32(e.seed, 'rocks', c));
+    const orderOf = specs.map((_, i) => i).reverse();
+    if (c % 2 === 1) for (let i = orderOf.length - 1; i > 1; i--) {
+      const k = 2 + Math.floor(r() * (i - 1));
+      [orderOf[i], orderOf[k]] = [orderOf[k], orderOf[i]];
     }
-    if (!ok) cost += 100;
-    if (!best || cost < best.cost) best = { placed, cost };
+    if (c % 4 === 2) orderOf.sort((a, b) => specs[a].anchor - specs[b].anchor);
+    const placed: PlacedRock[] = fixed.slice();
+    const poses: Pose[] = specs.map((sp) => ({ edge: nearWallOf(sp), centre: sp.anchor, k: 0.72 }));
+    for (const i of orderOf) {
+      const sp = specs[i];
+      const nearWall = nearWallOf(sp);
+      const tries: Pose[] = [];
+      for (let t = 0; t < 30; t++) tries.push({ edge: r() < (t < 15 ? 0.68 : 0.5) ? nearWall : ((-nearWall) as -1 | 1), centre: sp.anchor + (gauss(r) * 0.07 + 0.03) * h * (1 + t / 15), k: 1 });
+      for (const k of [1, 0.85, 0.72, 0.6]) for (let y = h * 0.1; y < h * 0.9; y += h * 0.025) for (const edge of [nearWall, -nearWall as -1 | 1]) tries.push({ edge, centre: y, k });
+      let pick: { pose: Pose; rock: PlacedRock; cost: number } | null = null;
+      for (let t = 0; t < tries.length; t++) {
+        // Found near where it belongs: done. Otherwise the whole scan, and the best of it.
+        if (pick && t === 30) break;
+        const rock = build(sp, tries[t]);
+        if (blocked(rock, placed)) continue;
+        const kc = costOf(sp, rock);
+        if (!pick || kc < pick.cost) pick = { pose: tries[t], rock, cost: kc };
+      }
+      if (pick) {
+        poses[i] = pick.pose;
+        placed.push(pick.rock);
+      }
+    }
+    const tc = total(poses).cost;
+    if (tc < bestCost) {
+      bestCost = tc;
+      bestPoses = poses;
+    }
   }
-  const chosen = (best as { placed: PlacedRock[] }).placed;
+  // Then a slow settling of the whole: one rock moved at a time, kept if
+  // the arrangement is better for it (now and then if a little worse, so it
+  // can get out of a corner), until nothing breaks a rule and each is as
+  // near its rest as the page allows.
+  let poses = (bestPoses as Pose[]).map((p) => ({ ...p }));
+  let cur = bestCost;
+  let best = { poses: poses.map((p) => ({ ...p })), cost: cur };
+  if (specs.length) {
+    const r = mulberry32(hash32(e.seed, 'settle'));
+    const steps = 900 + specs.length * 250;
+    for (let it = 0; it < steps; it++) {
+      const temp = 2 * (1 - it / steps) ** 2;
+      const i = Math.floor(r() * specs.length);
+      const p = { ...poses[i] };
+      const m = r();
+      if (m < 0.55) p.centre = clamp(p.centre + gauss(r) * h * (0.04 + 0.1 * temp), h * 0.05, h * 0.95);
+      else if (m < 0.75) p.edge = (-p.edge) as -1 | 1;
+      else if (m < 0.9) p.k = [1, 0.85, 0.72, 0.6][Math.floor(r() * 4)];
+      else p.centre = h * (0.1 + 0.8 * r());
+      const next = poses.map((q, k) => (k === i ? p : q));
+      const nc = total(next).cost;
+      if (nc < cur || r() < Math.exp(-(nc - cur) / Math.max(1e-3, temp))) {
+        poses = next;
+        cur = nc;
+        if (cur < best.cost) best = { poses: poses.map((q) => ({ ...q })), cost: cur };
+      }
+    }
+  }
+  // Whatever still breaks a rule is left out rather than crowd a jelly or
+  // the window: the plan's tests make sure that never happens.
+  const settled = total(best.poses).placed.filter((k) => k.kind === 'break');
+  const kept: PlacedRock[] = fixed.slice();
+  for (const k of settled) if (!blocked(k, kept)) kept.push(k);
+  const chosen = kept;
+
   const breaks = chosen.filter((k) => k.kind === 'break');
 
   // The rocks merely passed: far, small, faint, where room is left.
@@ -990,7 +1095,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     const y0 = e.yOf(at);
     if (e.kelpBottom != null && y0 < e.kelpBottom && o.zone === 0) continue;
     const r = mulberry32(hash32(s.key, 'passed', o.slot));
-    const sh = distinctShape(hash32(s.key, 'passed-rock', o.slot), (o.slot % 3) as 0 | 1 | 2, shapes, ratioMax);
+    const sh = distinctShape(hash32(s.key, 'passed-rock', o.slot), (o.slot % 5) as RockKind, shapes, ratioMax);
     const reach = clamp(o.reach, 0.15, 0.26) * 0.6;
     const off = 0.06 + 0.02 * r();
     const height = Math.min(h * 0.1, sh.ratio * (reach + off) * w);
@@ -1260,7 +1365,8 @@ function settleEvents(events: PlacedEvent[], e: { w: number; h: number; jellies:
     if (v.kind === 'turtle') return false;
     for (const j of e.jellies) if (!j.hero && v.kind !== 'eye' && inter(b, j.box) > 0) return true;
     if (LONE.includes(v.kind) || v.kind === 'eye' || v.kind === 'dumbo') {
-      for (const k of e.rocks) if (rockTouches(k, w, b, LONE.includes(v.kind) ? 6 : 0)) return true;
+      // The eye is padded by the dark it sits in.
+      for (const k of e.rocks) if (rockTouches(k, w, b, v.kind === 'eye' ? 40 : LONE.includes(v.kind) ? 6 : 0)) return true;
     }
     if (LONE.includes(v.kind)) {
       for (const o of done) if (o.box && LONE.includes(o.kind) && boxGap(o.box, b) < 6) return true;
@@ -1697,11 +1803,11 @@ function floorFauna(picks: Pick[], e: CastEnv, hero: PlacedJelly): PlacedAnimal[
   const out: PlacedAnimal[] = [];
   const gap = w * 0.08;
   const capLen = Math.min(0.06 * REF, 0.6 * hero.r * 2);
-  const avoid: Box[] = e.events.filter((v) => v.kind === 'whalefall' && v.box).map((v) => grow(v.box as Box, w * 0.02));
-  for (const p of picks.slice(0, most)) {
+  const avoid: Box[] = [...e.events.filter((v) => v.kind === 'whalefall' && v.box).map((v) => grow(v.box as Box, w * 0.02)), ...e.rocks.filter((k) => k.plane > 0).map((k) => grow(k.box, w * 0.02))];
+  for (const p of [...picks].sort((a, b) => Number(b.rare) - Number(a.rare)).slice(0, most)) {
     const sp = p.met.species;
     const prop = proportions(sp);
-    const len = Math.min(capLen, 50 * (0.6 + 0.6 * r()));
+    const len = p.rare ? capLen : Math.min(capLen, 50 * (0.6 + 0.6 * r()));
     const bw = len * prop.w;
     const bh = len * prop.h;
     for (let t = 0; t < 40; t++) {
@@ -1718,10 +1824,10 @@ function floorFauna(picks: Pick[], e: CastEnv, hero: PlacedJelly): PlacedAnimal[
         zone: p.met.zone,
         slot: p.met.slot,
         id: sp.id,
-        layer: 1,
+        layer: p.rare ? 2 : 1,
         x,
         y,
-        len,
+        len: p.rare ? capLen : len,
         dir: r() < 0.5 ? 1 : -1,
         alpha: 1,
         rare: p.rare,

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { SessionSegment } from '../../data/types';
 import { depthAt } from '../depth';
 import { planPicture, type PictureInput } from './index';
-import { MARGIN, overlapShare, type Box, type Plan } from './layout';
+import { BUBBLE_MAX, boxGap, CLEAR, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, type Box, type Plan } from './layout';
 
 /** A sitting from a start and a list of stretches in minutes. */
 function sitting(start: string, parts: ['focus' | 'break', number][]): SessionSegment[] {
@@ -17,12 +17,23 @@ function sitting(start: string, parts: ['focus' | 'break', number][]): SessionSe
 
 const CASES: { name: string; course: string; segs: SessionSegment[] }[] = [
   { name: '15 min morning', course: 'c-lang', segs: sitting('2026-09-06T08:00:00Z', [['focus', 15]]) },
+  { name: '25 min noon', course: 'c-art', segs: sitting('2026-09-09T12:00:00Z', [['focus', 25]]) },
   { name: '50 min with a break', course: 'c-hist', segs: sitting('2026-09-02T14:10:00Z', [['focus', 25], ['break', 5], ['focus', 25]]) },
   { name: '2 h, two breaks', course: 'c-bio', segs: sitting('2026-09-07T19:30:00Z', [['focus', 40], ['break', 10], ['focus', 40], ['break', 20], ['focus', 40]]) },
   {
     name: '3.5 h night',
     course: 'c-bio',
     segs: sitting('2026-09-04T00:36:00Z', [['focus', 60], ['break', 10], ['focus', 60], ['break', 15], ['focus', 60], ['break', 5], ['focus', 30]]),
+  },
+  {
+    name: '4.5 h to the trench',
+    course: 'c-math',
+    segs: sitting('2026-09-06T01:07:00Z', [['focus', 50], ['break', 10], ['focus', 50], ['break', 10], ['focus', 50], ['break', 30], ['focus', 60], ['break', 10], ['focus', 60]]),
+  },
+  {
+    name: '90 min at dawn',
+    course: 'c-hist',
+    segs: sitting('2026-09-04T05:46:00Z', [['focus', 45], ['break', 10], ['focus', 45]]),
   },
   {
     name: '2.5 h of short blocks',
@@ -73,7 +84,7 @@ test('the same sitting and shape always plan the same picture', () => {
 
 test('the picture goes as deep as the sitting did, and a longer sitting goes deeper', () => {
   let last = -1;
-  for (const c of [CASES[0], CASES[1], CASES[2], CASES[3]]) {
+  for (const c of [CASES[0], CASES[1], CASES[2], CASES[3], CASES[4]]) {
     const plan = planOf(c, SHAPES[0]);
     const d = depthAt(focusOf(c.segs));
     assert.equal(plan.meters, d.meters, c.name);
@@ -88,7 +99,11 @@ test('the picture goes as deep as the sitting did, and a longer sitting goes dee
   }
   // A short sitting stays in the light; three hours reach the floor.
   assert.ok(planOf(CASES[0], SHAPES[0]).floor === null);
-  assert.ok(planOf(CASES[3], SHAPES[0]).floor !== null);
+  assert.ok(planOf(CASES[4], SHAPES[0]).floor !== null);
+  // Past three hours, the trench.
+  assert.ok(planOf(CASES[4], SHAPES[0]).trench === null || CASES[4].segs.length > 0);
+  assert.ok(planOf(CASES[5], SHAPES[0]).trench !== null);
+  assert.ok(planOf(CASES[2], SHAPES[0]).trench === null);
 });
 
 test('one jelly per block, where it ended, the last the hero and the largest', () => {
@@ -108,23 +123,163 @@ test('one jelly per block, where it ended, the last the hero and the largest', (
   }
 });
 
-test('one ledge per break, a short outcrop just under the jelly that rested', () => {
+test('one rock per break, inked near; rocks merely passed far, small and faint', () => {
   for (const c of CASES) {
     for (const shape of SHAPES) {
       const plan = planOf(c, shape);
-      assert.equal(plan.ledges.length, count(c.segs, 'break'), c.name);
-      for (const l of plan.ledges) {
-        const j = plan.jellies[l.rest];
-        assert.ok(l.y > j.y, `${c.name}: ledge ${l.rest} is above its jelly`);
-        // A short outcrop, never a shelf across the page, and the jelly near its lip.
-        assert.ok(l.reach <= 0.3, `${c.name}: ledge ${l.rest} reaches ${l.reach.toFixed(2)} of the width`);
-        const lip = l.edge < 0 ? l.reach * plan.w : plan.w - l.reach * plan.w;
-        assert.ok(Math.abs(j.x - lip) <= plan.w * 0.32, `${c.name}: ledge ${l.rest} is far from its jelly`);
+      const breaks = plan.rocks.filter((r) => r.kind === 'break');
+      assert.equal(breaks.length, count(c.segs, 'break'), `${c.name} ${shape.width}x${shape.height}: ${breaks.length} break rocks`);
+      for (const r of breaks) {
+        assert.ok(r.plane >= 1, `${c.name}: a break's rock is far`);
+        assert.ok(r.reach >= (plan.tall ? 0.15 : 0.12) - 1e-9 && r.reach <= 0.32 + 1e-9, `${c.name}: break rock reaches ${r.reach.toFixed(3)}`);
+        assert.ok(r.off >= 0.06 - 1e-9, `${c.name}: break rock runs off the page by only ${r.off.toFixed(3)}`);
+        const ratio = r.height / ((r.reach + r.off) * plan.w);
+        assert.ok(ratio >= 0.5 - 1e-6 && ratio <= 1.2 + 1e-6, `${c.name}: break rock height/width ${ratio.toFixed(2)}`);
+        // Near its jelly: at the depth of its rest, give or take.
+        const j = plan.jellies[c.segs.length && r.rest >= 0 ? Math.min(plan.jellies.length - 1, r.rest) : 0];
+        // Six breaks on one page cannot all keep to their depth with room between them: the older give way.
+        const near = r.plane === 2 ? 0.2 : count(c.segs, 'break') > 4 ? 0.45 : 0.35;
+        assert.ok(Math.abs(r.y + r.height / 2 - j.y) < plan.h * near, `${c.name} ${shape.width}x${shape.height}: rock ${r.rest} is ${(Math.abs(r.y + r.height / 2 - j.y) / plan.h).toFixed(2)} H from the depth of its rest`);
       }
-      // A longer break, a wider ledge, for jellies the same distance from the edge.
-      const rests = c.segs.filter((s) => s.kind === 'break');
-      assert.equal(rests.length, plan.ledges.length);
+      for (const r of plan.rocks.filter((k) => k.kind === 'passed')) assert.equal(r.plane, 0, `${c.name}: a rock passed is not far`);
+      // No two silhouettes alike, and the top of each never flat.
+      // (The kelp's rocks are kelp-draw's own drawing: here only their room.)
+      const drawn = plan.rocks.filter((r) => r.kind !== 'kelp');
+      for (let i = 0; i < drawn.length; i++) {
+        const sh = drawn[i].shape;
+        const swing = Math.max(...sh.top) - Math.min(...sh.top);
+        assert.ok(swing >= 0.1, `${c.name}: a rock with a flat top (${swing.toFixed(2)})`);
+        for (let k = i + 1; k < drawn.length; k++) {
+          const iou = rockIoU(sh, drawn[k].shape);
+          assert.ok(iou <= 0.6, `${c.name} ${shape.width}x${shape.height}: two rocks alike (IoU ${iou.toFixed(2)})`);
+        }
+      }
+      // A side of the page takes few rocks, never a column of them.
+      for (const edge of [-1, 1] as const) {
+        const side = plan.rocks.filter((r) => r.edge === edge).sort((a, b) => a.y - b.y);
+        const most = plan.tall ? (count(c.segs, 'break') > 4 ? 3 : 2) : 3;
+        const counted = side.filter((r) => r.kind !== 'kelp').length;
+        assert.ok(counted <= most, `${c.name} ${shape.width}x${shape.height}: ${counted} rocks on one side`);
+        for (let i = 1; i < side.length; i++) {
+          const gap = side[i].y - (side[i - 1].y + side[i - 1].height);
+          const kelp = side[i].kind === 'kelp' || side[i - 1].kind === 'kelp';
+          assert.ok(gap >= plan.h * (kelp ? 0.04 : 0.12) - 1e-6, `${c.name} ${shape.width}x${shape.height}: rocks ${gap.toFixed(0)} apart on one side`);
+        }
+      }
     }
+  }
+});
+
+test('the jellies: the hero large and low, the one before half its size, older ones smaller, fainter and few inked', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const S = Math.min(plan.w, plan.h);
+      const hero = plan.jellies[plan.jellies.length - 1];
+      const bell = (hero.r * 2) / S;
+      assert.ok(bell >= 0.16 && bell <= 0.19, `${c.name}: hero bell ${bell.toFixed(3)} S`);
+      if (plan.tall) assert.ok(hero.y >= plan.h * 0.6 && hero.y <= plan.h * 0.7, `${c.name}: hero at ${(hero.y / plan.h).toFixed(2)} H`);
+      assert.equal(hero.weight, 1);
+      const inked = plan.jellies.filter((j) => !j.far);
+      assert.ok(inked.length <= 4, `${c.name}: ${inked.length} inked jellies`);
+      for (const j of plan.jellies.slice(0, -1)) {
+        assert.ok(j.weight <= 0.8, `${c.name}: jelly ${j.block} drawn at the hero's weight`);
+        if (j.far) assert.ok(Math.abs(j.alpha - 0.35) < 1e-9);
+      }
+      if (plan.jellies.length >= 2) {
+        const prev = plan.jellies[plan.jellies.length - 2];
+        assert.ok(prev.r <= hero.r * 0.55 + 1e-9, `${c.name}: the jelly before is ${(prev.r / hero.r).toFixed(2)} of the hero`);
+      }
+      // Siblings differ at a glance: the bell's shape, or its trails.
+      for (let i = 1; i < plan.jellies.length; i++) {
+        const a = plan.jellies[i - 1].body;
+        const b = plan.jellies[i].body;
+        assert.ok(Math.abs(a.aspect - b.aspect) * 0.4 >= 0.08 || Math.abs(a.tentacles - b.tentacles) >= 6, `${c.name}: jellies ${i - 1} and ${i} are alike`);
+        assert.ok(b.aspect * 0.4 >= 0.45 - 1e-9 && b.aspect * 0.4 <= 0.8 + 1e-9);
+        assert.ok(b.tentacles >= 8 && b.tentacles <= 32);
+      }
+    }
+  }
+});
+
+test('hard rules: the hero kept clear, jellies apart, the window bare, the big rare things touching nothing', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      for (const ground of ['paper', 'night'] as const) {
+        const plan = planOf(c, shape, ground);
+        const tag = `${c.name} ${shape.width}x${shape.height} ${ground}`;
+        const hero = plan.jellies[plan.jellies.length - 1];
+        // Jellies at least 1.4 times their radii summed apart.
+        for (let i = 0; i < plan.jellies.length; i++) {
+          for (let k = i + 1; k < plan.jellies.length; k++) {
+            const a = plan.jellies[i];
+            const b = plan.jellies[k];
+            const d = Math.hypot(a.x - b.x, a.y - b.y);
+            assert.ok(d >= 1.4 * (a.r + b.r) - 1e-6, `${tag}: jellies ${i} and ${k} ${d.toFixed(0)} apart`);
+          }
+        }
+        // The hero's margin: nothing near within 0.02 S of its bell and trails.
+        for (const r of plan.rocks) assert.ok(!rockTouches(r, plan.w, hero.box, CLEAR - 1e-6), `${tag}: a ${r.kind} rock in the hero's margin`);
+        for (const a of plan.cast) assert.ok(boxGap(a.box, hero.box) >= CLEAR - 1e-6, `${tag}: ${a.id} in the hero's margin`);
+        for (const e of plan.events) if (e.box && e.kind !== 'whalefall') assert.ok(boxGap(e.box, hero.box) >= CLEAR - 1e-6, `${tag}: the ${e.kind} in the hero's margin`);
+        for (const j of plan.jellies) if (!j.hero) assert.ok(boxGap(j.box, hero.box) >= CLEAR - 1e-6, `${tag}: jelly ${j.block} in the hero's margin`);
+        // No jelly sits on a rock.
+        for (const r of plan.rocks) for (const j of plan.jellies) assert.ok(!rockTouches(r, plan.w, j.box), `${tag}: jelly ${j.block} on a ${r.kind} rock`);
+        // Nothing over the window of sky, and the window wholly on the page.
+        const win = plan.windowBox;
+        assert.ok(plan.window.y - plan.window.r * 0.46 * 1.04 >= plan.h * 0.015 - 1e-6, `${tag}: the window is cut by the top of the page`);
+        for (const a of plan.cast) assert.equal(inter(a.box, win), 0, `${tag}: ${a.id} over the window`);
+        for (const e of plan.events) if (e.box) assert.equal(inter(e.box, win), 0, `${tag}: the ${e.kind} over the window`);
+        for (const r of plan.rocks) assert.ok(!rockTouches(r, plan.w, win), `${tag}: a rock over the window`);
+        for (const j of plan.jellies) assert.equal(inter(j.box, win), 0, `${tag}: jelly ${j.block} over the window`);
+        // The lure, the siphonophore and the oarfish touch nothing solid, nor each other.
+        const lone = plan.events.filter((e) => e.box && ['lure', 'siphonophore', 'oarfish'].includes(e.kind));
+        for (const e of lone) {
+          for (const r of plan.rocks) assert.ok(!rockTouches(r, plan.w, e.box as Box), `${tag}: the ${e.kind} on a rock`);
+          for (const o of lone) if (o !== e) assert.ok(boxGap(o.box as Box, e.box as Box) > 0, `${tag}: the ${e.kind} touches the ${o.kind}`);
+        }
+        // The eye never on a rock.
+        for (const e of plan.events.filter((v) => v.kind === 'eye' && v.box)) for (const r of plan.rocks) assert.ok(!rockTouches(r, plan.w, e.box as Box), `${tag}: the eye on a rock`);
+      }
+    }
+  }
+});
+
+test('the floor: a few things on it, spread out and small; the trench clear of clutter', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const floor = plan.cast.filter((a) => a.floor);
+      if (!plan.floor) {
+        assert.equal(floor.length, 0);
+        continue;
+      }
+      const band = plan.trench ? plan.h - plan.trench.top : plan.h - plan.floor.y;
+      assert.ok(plan.trench || (band >= plan.h * 0.1 - 1e-6 && band <= plan.h * 0.14 + 1e-6), `${c.name}: floor takes ${(band / plan.h).toFixed(3)} H`);
+      assert.ok(floor.length <= (plan.trench ? 2 : 4), `${c.name}: ${floor.length} on the floor`);
+      const hero = plan.jellies[plan.jellies.length - 1];
+      for (let i = 0; i < floor.length; i++) {
+        assert.ok(floor[i].len <= 0.06 * REF + 1e-9 && floor[i].len <= 0.6 * hero.r * 2 + 1e-9, `${c.name}: ${floor[i].id} too big for the floor`);
+        for (let k = i + 1; k < floor.length; k++) assert.ok(Math.abs(floor[i].x - floor[k].x) >= plan.w * 0.08 - 1e-6, `${c.name}: floor things bunched`);
+      }
+      if (plan.trench) {
+        const t = plan.trench;
+        const gap = (t.gap / plan.w);
+        assert.ok(gap >= 0.25 && gap <= 0.4, `${c.name}: the cleft is ${gap.toFixed(2)} W`);
+        assert.ok(Math.abs(t.top - plan.h * 0.7) < 1e-6);
+        assert.ok(Math.abs(hero.x - t.x) < t.gap / 2, `${c.name}: the hero is not over the cleft`);
+        const fall = plan.events.find((e) => e.kind === 'whalefall');
+        if (fall && fall.box) assert.ok(fall.box.x1 <= t.x - t.gap / 2 || fall.box.x0 >= t.x + t.gap / 2, `${c.name}: the whale fall is in the cleft`);
+      }
+    }
+  }
+});
+
+test('no lens: bubbles and specks stay small', () => {
+  for (const c of CASES) {
+    const plan = planOf(c, SHAPES[0]);
+    for (const b of plan.bubbles) assert.ok(b.r * 2 <= 0.004 * REF + 1e-9, `${c.name}: a bubble ${(b.r * 2).toFixed(1)} across`);
+    assert.ok(BUBBLE_MAX * 2 <= 0.004 * REF);
   }
 });
 
@@ -183,6 +338,8 @@ test('the rarest animal met is in the picture, near and large', () => {
     const rare = plan.cast.filter((a) => a.rare);
     assert.equal(rare.length, 1, c.name);
     assert.equal(rare[0].layer, 2);
-    for (const a of plan.cast) if (!a.rare && !a.members && a.layer < 2) assert.ok(a.len <= rare[0].len, `${c.name}: ${a.id} bigger than the rarest`);
+    // On the floor it is as large as the floor allows; in the water, larger than all but the near.
+    if (rare[0].floor) assert.ok(rare[0].len >= Math.max(...plan.cast.filter((a) => a.floor).map((a) => a.len)) - 1e-9);
+    else for (const a of plan.cast) if (!a.rare && !a.members && a.layer < 2) assert.ok(a.len <= rare[0].len, `${c.name}: ${a.id} bigger than the rarest`);
   }
 });

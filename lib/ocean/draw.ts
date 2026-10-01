@@ -738,20 +738,39 @@ export function drawVisitor(
       // Each strip is sheared, not shifted: its left edge sits at one join's
       // offset and its right edge at the next one's, so neighbouring strips
       // meet exactly and the body bends instead of breaking into stepped
-      // segments with daylight between them. A pixel of overlap covers the
-      // antialiased seam.
+      // segments with daylight between them. Each is clipped to its own
+      // column (sheared with it), so no pixel is drawn twice and a
+      // see-through body shows no seams. The joins are put on whole device
+      // pixels, so the clips meet without an antialiased edge between them;
+      // where the page is turned and they cannot be, the clip alone bleeds
+      // a fraction of a pixel to close the join.
+      const m = ctx.getTransform();
+      const square = Math.abs(m.b) < 1e-9 && Math.abs(m.c) < 1e-9 && Math.abs(m.a) > 1e-9;
+      const join = (i: number) => {
+        const x = -w / 2 + i * sw;
+        if (i === 0 || i === n || !square) return x;
+        return (Math.round(m.a * x + m.e) - m.e) / m.a;
+      };
+      const bleed = square ? 0 : 0.3;
       let prev = offAt(0);
+      let xa = join(0);
       for (let i = 0; i < n; i++) {
         const next = offAt(i + 1);
-        const x0 = -w / 2 + i * sw;
-        const k = (next - prev) / sw;
-        const sx = i * sw;
-        const span = Math.min(sw + 1, w - sx);
+        const xb = join(i + 1);
+        const lo = Math.min(xa, xb);
+        const hi = Math.max(xa, xb);
+        const k = (next - prev) / (xb - xa || 1);
+        const sx = Math.max(0, Math.floor(lo + w / 2) - 1);
+        const span = Math.min(w, Math.ceil(hi + w / 2) + 1) - sx;
         ctx.save();
-        ctx.transform(1, k, 0, 1, 0, prev - x0 * k);
-        ctx.drawImage(sprite.canvas, sx, 0, span, h, x0, -h / 2, span, h);
+        ctx.transform(1, k, 0, 1, 0, prev - xa * k);
+        ctx.beginPath();
+        ctx.rect(lo - (i > 0 ? bleed : 0), -h / 2 - 1, hi - lo + (i > 0 ? bleed : 0), h + 2);
+        ctx.clip();
+        ctx.drawImage(sprite.canvas, sx, 0, span, h, -w / 2 + sx, -h / 2, span, h);
         ctx.restore();
         prev = next;
+        xa = xb;
       }
     } else {
       ctx.drawImage(sprite.canvas, -w / 2, -h / 2);
@@ -1050,56 +1069,47 @@ export function drawStorm(ctx: CanvasRenderingContext2D, w: number, h: number, a
 }
 
 /** Squid skin and its chromatophores: rust and brown, drained by the depth. */
-const SQUID_SKIN = { light: '#B48A7A', dark: '#6E4A40' } as const;
+const SQUID_SKIN = { light: '#B08C80', dark: '#5E4A44' } as const;
 const CHROMATOPHORES = ['#9C4A2E', '#7A3B26', '#5C3324', '#8E5A3A'];
 
-/**
- * An eye at the edge of the page, bigger than anything else in the water,
- * that opens, looks, blinks once, and is gone. The rest of the animal is
- * never seen: only the patch of mantle the eye is set in, its skin stippled
- * with chromatophores, fading into the dark it came out of.
- *
- * It is drawn as a plate's eye, not a target: a silvery iris struck through
- * with fine radial lines, a crescent of pupil lying on its side, two
- * highlights, contour hatching round the ball where it turns from the light,
- * and the lids a pen line that closes over it for the blink. The eye is
- * about 7.5% of the page's short side, and at the page's edge most of it
- * (three quarters) is in.
- *
- * `page`, the page's short side, sizes it; without it the region is taken
- * to be the page, unless it is a band across it (as the picture gives it,
- * a fifth as tall as it is wide), when its width is.
- */
-export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, dark: boolean, page?: number) {
-  const env = envelope(age, 0.25, 0.25);
-  if (env <= 0) return;
-  const left = seed % 2 === 0;
-  const unit = Math.min(w, h);
-  const short = page ?? (h < w * 0.35 ? w : unit);
-  const re = Math.max(4 * px, Math.min(0.2 * unit, short * 0.0375));
-  const out = left ? -1 : 1;
-  // Three quarters in: the edge of the page crosses its outer rim.
-  const cx = left ? re * 0.4 : w - re * 0.4;
-  // High on the page, clear of the clock and the controls.
-  const cy = h * (0.18 + ((seed >>> 6) % 100) / 100 * 0.2);
-  // One slow blink, just past the middle.
-  const lid = age > 0.55 && age < 0.65 ? Math.sin(((age - 0.55) / 0.1) * Math.PI) : 0;
-  const open = 1 - lid * 0.96;
-  const d = detailFor(re * 5);
-  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
-  const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
-  const skin = dark ? SQUID_SKIN.dark : SQUID_SKIN.light;
-  const paper = dark ? '#E8E0CF' : '#FBF8EF';
-  const r = mulberry32(hash32('squid-eye', seed));
-  // The patch of mantle sits a little toward the edge, where the body is.
-  const px0 = cx + out * re * 0.7;
-  const py0 = cy + re * 0.15;
+/** The still parts of an eye, drawn once round its middle and placed each frame. */
+interface EyeLayer {
+  canvas: HTMLCanvasElement;
+  /** Where its top left sits from the eye's middle, and the size it is drawn at. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  const base = ctx.globalAlpha * env;
+interface EyeLayers {
+  key: string;
+  vignette: EyeLayer | null;
+  skin: EyeLayer | null;
+  ball: EyeLayer | null;
+}
 
+let eyeLayers: EyeLayers[] = [];
+
+/** A layer `w` by `h` with its origin `x`, `y` from the eye's middle, at `q` of the size, painted by `paint` round (0, 0). */
+function eyeLayer(x: number, y: number, w: number, h: number, q: number, paint: (g: CanvasRenderingContext2D) => void): EyeLayer | null {
+  const c = scratch(w * q, h * q);
+  const g = c?.getContext('2d');
+  if (!c || !g) return null;
+  g.scale(q, q);
+  g.translate(-x, -y);
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  paint(g);
+  return { canvas: c, x, y, w, h };
+}
+
+/** The water closing in round the eye: soft, so it is kept at a quarter of the size. */
+function paintEyeVignette(ctx: CanvasRenderingContext2D, re: number, seed: number, dark: boolean, out: number): void {
+  const r = mulberry32(hash32('squid-eye', seed, 'vignette'));
+  const px0 = out * re * 0.7;
+  const py0 = re * 0.15;
+  const base = 1;
   // The water closing in round it: a soft, uneven shadow, never a ring.
   const dim = dark ? '5, 6, 10' : '42, 35, 32';
   const vig = (x: number, y: number, rad: number, a: number) => {
@@ -1121,6 +1131,21 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
     vig(px0 + Math.cos(a) * dist + out * re * 0.6, py0 + Math.sin(a) * dist * 0.8, re * (1.2 + r() * 1.3), 0.045 * vk);
   }
 
+}
+
+/** The patch of mantle round the eye: its skin, chromatophores, the socket and the folds. */
+function paintEyeSkin(ctx: CanvasRenderingContext2D, re: number, seed: number, px: number, dark: boolean, out: number): void {
+  const r = mulberry32(hash32('squid-eye', seed, 'skin'));
+  const cx = 0;
+  const cy = 0;
+  const d = detailFor(re * 5);
+  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
+  const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
+  const skin = dark ? SQUID_SKIN.dark : SQUID_SKIN.light;
+  const px0 = out * re * 0.7;
+  const py0 = re * 0.15;
+  const base = 1;
+  const lidW = Math.max(0.7 * px, re * 0.035);
   // The mantle: an uneven patch of wash, thickest round the eye and thinning
   // to nothing, its edge ragged rather than stopped.
   // Laid out round the patch's middle, in a frame squashed to its ellipse.
@@ -1184,7 +1209,7 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
   ctx.fillStyle = dark ? '#A0603F' : '#9C4A2E';
   ctx.fill(halos);
   dotPaths.forEach((p, i) => {
-    ctx.globalAlpha = base * (dark ? 0.5 : 0.45) * (0.75 + 0.1 * i);
+    ctx.globalAlpha = base * (dark ? 0.4 : 0.45) * (0.75 + 0.1 * i);
     ctx.fillStyle = dark ? mixHex(CHROMATOPHORES[i], '#E8E0CF', 0.12) : CHROMATOPHORES[i];
     ctx.fill(p);
   });
@@ -1215,31 +1240,33 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
   ctx.arc(cx, cy, re * 1.45, 0, Math.PI * 2);
   ctx.fill();
 
-  // The aperture the lids leave: round when open, a slit at the blink.
-  const aperture = (k: number) => {
-    const top: number[] = [];
-    const bottom: number[] = [];
-    for (let i = 0; i <= 24; i++) {
-      const u = -1 + (i / 24) * 2;
-      const x = cx + u * re * 1.06;
-      const s = Math.sqrt(Math.max(0, 1 - u * u));
-      top.push(x, cy - re * 1.06 * s * k + re * 0.06 * (1 - k) * s);
-      bottom.push(x, cy + re * 1.06 * s * k + re * 0.06 * (1 - k) * s);
-    }
-    return { top, bottom };
-  };
-  const ap = aperture(open);
-  const apPath = new Path2D();
-  apPath.moveTo(ap.top[0], ap.top[1]);
-  for (let i = 2; i < ap.top.length; i += 2) apPath.lineTo(ap.top[i], ap.top[i + 1]);
-  for (let i = ap.bottom.length - 2; i >= 0; i -= 2) apPath.lineTo(ap.bottom[i], ap.bottom[i + 1]);
-  apPath.closePath();
+  // The fold of skin over the eye, off to the body's side, and a short
+  // crease under it: not rings, the skin's own lines.
+  const fold: number[] = [];
+  const crease: number[] = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    const a = -Math.PI / 2 + out * (-0.9 + t * 1.6);
+    const rr = re * (1.28 + 0.1 * Math.sin(t * Math.PI));
+    fold.push(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92);
+    const b = Math.PI / 2 - out * (-0.5 + t * 1.1);
+    const rc = re * (1.2 + 0.06 * Math.sin(t * Math.PI));
+    crease.push(cx + Math.cos(b) * rc, cy + Math.sin(b) * rc);
+  }
+  inkLine(ctx, fold, false, { width: lidW * 0.7, color: ink, alpha: base * 0.4, taper: [0.3, 0.4], seed: seed ^ 0xf01d, light, plate: true });
+  inkLine(ctx, crease, false, { width: lidW * 0.5, color: ink, alpha: base * 0.28, taper: [0.4, 0.4], seed: seed ^ 0xc4ea, light, plate: true });
+}
 
+/** The ball itself, round and open: the lids are laid over it each frame. */
+function paintEyeBall(ctx: CanvasRenderingContext2D, re: number, seed: number, px: number, dark: boolean): void {
+  const r = mulberry32(hash32('squid-eye', seed, 'ball'));
+  const cx = 0;
+  const cy = 0;
+  const d = detailFor(re * 5);
+  const base = 1;
   const ball = new Path2D();
   ball.arc(cx, cy, re, 0, Math.PI * 2);
   const ballBox = { x: cx - re, y: cy - re, w: re * 2, h: re * 2 };
-  ctx.save();
-  ctx.clip(apPath);
   // The ball: a silvery iris, pooled darker toward its rim.
   const iris = dark ? '#8C8878' : '#A49E88';
   ctx.globalAlpha = base;
@@ -1279,17 +1306,21 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
     coll.push(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.9 + re * 0.02);
   }
   inkLine(ctx, coll, true, { width: Math.max(0.5 * px, re * 0.014), color: '#2A2320', alpha: base * 0.4, seed: seed ^ 0xc011, light: LIGHT, plate: true });
-  // The pupil: a crescent lying on its side, horns up, both its edges
-  // sagging and the lower one more.
+  // The pupil: a broad crescent lying on its side, a bean more than a
+  // sickle: its ends blunt, its upper edge only just dipping, the lower
+  // one full. (Pointed horns would make it a smile.)
   const pup: number[] = [];
-  const pa = re * 0.56;
-  for (let i = 0; i <= 16; i++) {
-    const u = -1 + (i / 16) * 2;
-    pup.push(cx + u * pa, cy - re * 0.1 + re * 0.12 * (1 - u * u));
+  const pa = re * 0.6;
+  for (let i = 0; i <= 18; i++) {
+    const a = Math.PI + (i / 18) * Math.PI;
+    const u = Math.cos(a);
+    const top = -re * 0.1 + re * 0.05 * (1 - u * u);
+    pup.push(cx + u * pa, top + Math.sin(a) * re * 0.04 + cy);
   }
-  for (let i = 15; i >= 1; i--) {
-    const u = -1 + (i / 16) * 2;
-    pup.push(cx + u * pa, cy - re * 0.1 + re * 0.4 * (1 - u * u));
+  for (let i = 1; i < 18; i++) {
+    const a = (i / 18) * Math.PI;
+    const u = Math.cos(a);
+    pup.push(cx + u * pa * 0.98, cy - re * 0.06 + Math.sin(a) * re * 0.3);
   }
   const pupil = smoothPath(pup, true, 4);
   ctx.globalAlpha = base * 0.95;
@@ -1315,12 +1346,107 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
   ctx.globalAlpha = base * 0.85;
   ctx.fillStyle = '#FBF8EF';
   ctx.beginPath();
-  ctx.ellipse(cx - re * 0.24, cy - re * 0.16, re * 0.12, re * 0.075, -0.5, 0, Math.PI * 2);
+  ctx.ellipse(cx - re * 0.2, cy - re * 0.08, re * 0.13, re * 0.08, -0.45, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = base * 0.5;
   ctx.beginPath();
   ctx.ellipse(cx + re * 0.34, cy + re * 0.36, re * 0.05, re * 0.035, -0.5, 0, Math.PI * 2);
   ctx.fill();
+}
+
+/**
+ * An eye at the edge of the page, bigger than anything else in the water,
+ * that opens, looks, blinks once, and is gone. The rest of the animal is
+ * never seen: only the patch of mantle the eye is set in, its skin stippled
+ * with chromatophores, fading into the dark it came out of.
+ *
+ * It is drawn as a plate's eye, not a target: a silvery iris struck through
+ * with fine radial lines, a crescent of pupil lying on its side, two
+ * highlights, contour hatching round the ball where it turns from the light,
+ * and the lids a pen line that closes over it for the blink. The eye is
+ * about 7.5% of the page's short side, and at the page's edge most of it
+ * (three quarters) is in. All but the lids is drawn once and placed.
+ *
+ * `page`, the page's short side, sizes it; without it the region is taken
+ * to be the page, unless it is a band across it (as the picture gives it,
+ * a fifth as tall as it is wide), when its width is.
+ */
+export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, dark: boolean, page?: number) {
+  const env = envelope(age, 0.25, 0.25);
+  if (env <= 0) return;
+  const left = seed % 2 === 0;
+  const unit = Math.min(w, h);
+  const short = page ?? (h < w * 0.35 ? w : unit);
+  const re = Math.max(4 * px, Math.min(0.2 * unit, short * 0.0375));
+  const out = left ? -1 : 1;
+  // Three quarters in: the edge of the page crosses its outer rim.
+  const cx = left ? re * 0.4 : w - re * 0.4;
+  // High on the page, clear of the clock and the controls.
+  const cy = h * (0.18 + ((seed >>> 6) % 100) / 100 * 0.2);
+  // One slow blink, just past the middle.
+  const lid = age > 0.55 && age < 0.65 ? Math.sin(((age - 0.55) / 0.1) * Math.PI) : 0;
+  const open = 1 - lid * 0.96;
+  const d = detailFor(re * 5);
+  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
+  const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
+  const skin = dark ? SQUID_SKIN.dark : SQUID_SKIN.light;
+  const sc = mixHex(skin, dark ? '#000000' : '#2A2320', 0.4);
+
+  const key = `${seed}|${Math.round(re * 100)}|${px}|${dark ? 1 : 0}|${out}`;
+  let layers = eyeLayers.find((l) => l.key === key);
+  if (!layers) {
+    layers = {
+      key,
+      vignette: eyeLayer(-7 * re, -5.6 * re, 14 * re, 11.2 * re, 0.25, (g) => paintEyeVignette(g, re, seed, dark, out)),
+      skin: eyeLayer(-3.8 * re, -2.8 * re, 7.6 * re, 5.8 * re, 1, (g) => paintEyeSkin(g, re, seed, px, dark, out)),
+      ball: eyeLayer(-1.1 * re, -1.1 * re, 2.2 * re, 2.2 * re, 1, (g) => paintEyeBall(g, re, seed, px, dark)),
+    };
+    eyeLayers = [layers, ...eyeLayers].slice(0, 2);
+  }
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const base = ctx.globalAlpha * env;
+  ctx.globalAlpha = base;
+  const place = (l: EyeLayer | null, fallback: () => void) => {
+    if (l) ctx.drawImage(l.canvas, cx + l.x, cy + l.y, l.w, l.h);
+    else {
+      ctx.save();
+      ctx.translate(cx, cy);
+      fallback();
+      ctx.restore();
+    }
+  };
+  place(layers.vignette, () => paintEyeVignette(ctx, re, seed, dark, out));
+  place(layers.skin, () => paintEyeSkin(ctx, re, seed, px, dark, out));
+
+  // The aperture the lids leave: round when open, a slit at the blink.
+  const aperture = (k: number) => {
+    const top: number[] = [];
+    const bottom: number[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const u = -1 + (i / 24) * 2;
+      const x = cx + u * re * 1.06;
+      const s = Math.sqrt(Math.max(0, 1 - u * u));
+      top.push(x, cy - re * 1.06 * s * k + re * 0.06 * (1 - k) * s);
+      bottom.push(x, cy + re * 1.06 * s * k + re * 0.06 * (1 - k) * s);
+    }
+    return { top, bottom };
+  };
+  const ap = aperture(open);
+  const apPath = new Path2D();
+  apPath.moveTo(ap.top[0], ap.top[1]);
+  for (let i = 2; i < ap.top.length; i += 2) apPath.lineTo(ap.top[i], ap.top[i + 1]);
+  for (let i = ap.bottom.length - 2; i >= 0; i -= 2) apPath.lineTo(ap.bottom[i], ap.bottom[i + 1]);
+  apPath.closePath();
+
+  const ball = new Path2D();
+  ball.arc(cx, cy, re, 0, Math.PI * 2);
+  const ballBox = { x: cx - re, y: cy - re, w: re * 2, h: re * 2 };
+  ctx.save();
+  ctx.clip(apPath);
+  place(layers.ball, () => paintEyeBall(ctx, re, seed, px, dark));
   ctx.restore();
 
   // The lids: when the eye shuts, the skin comes over it, the socket's own
@@ -1366,21 +1492,6 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
   const lidW = Math.max(0.7 * px, re * 0.035);
   inkLine(ctx, ap.top, false, { width: lidW * 1.3, color: ink, alpha: base * 0.85, taper: [0.14, 0.14], seed: seed ^ 0x11d, light, plate: true });
   inkLine(ctx, ap.bottom, false, { width: lidW * 0.8, color: ink, alpha: base * 0.55, taper: [0.32, 0.32], seed: seed ^ 0x11e, light, plate: true });
-  // The fold of skin over the eye, off to the body's side, and a short
-  // crease under it: not rings, the skin's own lines.
-  const fold: number[] = [];
-  const crease: number[] = [];
-  for (let i = 0; i <= 10; i++) {
-    const t = i / 10;
-    const a = -Math.PI / 2 + out * (-0.9 + t * 1.6);
-    const rr = re * (1.28 + 0.1 * Math.sin(t * Math.PI));
-    fold.push(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92);
-    const b = Math.PI / 2 - out * (-0.5 + t * 1.1);
-    const rc = re * (1.2 + 0.06 * Math.sin(t * Math.PI));
-    crease.push(cx + Math.cos(b) * rc, cy + Math.sin(b) * rc);
-  }
-  inkLine(ctx, fold, false, { width: lidW * 0.7, color: ink, alpha: base * 0.4, taper: [0.3, 0.4], seed: seed ^ 0xf01d, light, plate: true });
-  inkLine(ctx, crease, false, { width: lidW * 0.5, color: ink, alpha: base * 0.28, taper: [0.4, 0.4], seed: seed ^ 0xc4ea, light, plate: true });
   ctx.restore();
 }
 

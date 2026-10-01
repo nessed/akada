@@ -52,6 +52,170 @@ function cubic(p: number[], t: number): [number, number] {
 const LURE = [191, 243, 230] as const;
 const lure = (a: number) => `rgba(${LURE[0]}, ${LURE[1]}, ${LURE[2]}, ${a})`;
 
+/** The anglerfish's outline, facing +x with its lure's rest at the origin. */
+function lureFish(L: number): { outline: number[]; body: Path2D; maw: Path2D; UL: Pt; CORNER: Pt; CHIN: Pt; UPPER: Pt; LOWER: Pt } {
+  // Facing +x, the lure's rest at the origin. Mostly head: a dome, a
+  // gape that runs back past the eye, a jaw slung out beyond the snout,
+  // and only a stub of a body and a small fan of tail behind.
+  const UL: Pt = [-0.06 * L, 0.08 * L];
+  const CORNER: Pt = [-0.27 * L, 0.24 * L];
+  const CHIN: Pt = [0.04 * L, 0.27 * L];
+  const UPPER: Pt = [-0.14 * L, 0.13 * L];
+  const LOWER: Pt = [-0.06 * L, 0.31 * L];
+  // The outline as points, for the pen, and as a path, for the fills.
+  const outline: number[] = [];
+  const cub = (p0: Pt, p1: Pt, p2: Pt, p3: Pt, n = 10) => {
+    for (let k = 1; k <= n; k++) outline.push(...cubic([p0[0], p0[1], p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]], k / n));
+  };
+  const qd = (p0: Pt, c: Pt, p1: Pt, n = 8) => {
+    for (let k = 1; k <= n; k++) outline.push(...quad(p0[0], p0[1], c[0], c[1], p1[0], p1[1], k / n));
+  };
+  const at = (u: number, v: number): Pt => [u * L, v * L];
+  outline.push(...UL);
+  cub(UL, at(-0.1, -0.12), at(-0.35, -0.2), at(-0.55, -0.12));
+  cub(at(-0.55, -0.12), at(-0.68, -0.07), at(-0.76, 0.05), at(-0.78, 0.15), 6);
+  outline.push(...at(-0.88, 0.08));
+  qd(at(-0.88, 0.08), at(-0.94, 0.19), at(-0.88, 0.3), 5);
+  outline.push(...at(-0.78, 0.22));
+  cub(at(-0.78, 0.22), at(-0.7, 0.42), at(-0.4, 0.5), at(-0.16, 0.44));
+  qd(at(-0.16, 0.44), at(0.02, 0.39), CHIN, 5);
+  qd(CHIN, LOWER, CORNER, 6);
+  qd(CORNER, UPPER, UL, 6);
+  const body = new Path2D();
+  body.moveTo(outline[0], outline[1]);
+  for (let k = 2; k < outline.length; k += 2) body.lineTo(outline[k], outline[k + 1]);
+  body.closePath();
+  // The open mouth: the dark between the jaws.
+  const maw = new Path2D();
+  maw.moveTo(UL[0], UL[1]);
+  maw.quadraticCurveTo(UPPER[0], UPPER[1], CORNER[0], CORNER[1]);
+  maw.quadraticCurveTo(LOWER[0], LOWER[1], CHIN[0], CHIN[1]);
+  maw.closePath();
+  return { outline, body, maw, UL, CORNER, CHIN, UPPER, LOWER };
+}
+
+/** The fish as the lure lights it from where it hangs at rest: drawn once and placed. */
+function paintLureFish(ctx: CanvasRenderingContext2D, L: number, seed: number, px: number, dark: boolean): void {
+  const { outline, body, maw, UL, CORNER, CHIN, UPPER, LOWER } = lureFish(L);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const box = { x: -0.95 * L, y: -0.22 * L, w: 1.0 * L, h: 0.74 * L };
+  // How near the lure's light a point is: all that can be seen of it.
+  const reach = 1.05 * L;
+  const near = (x: number, y: number) => Math.max(0, 1 - Math.hypot(x, y) / reach);
+
+  // A shape a little darker than the water, the mouth darker still.
+  ctx.globalAlpha = dark ? 0.5 : 0.3;
+  ctx.fillStyle = dark ? '#1C1A18' : '#2A2320';
+  ctx.fill(body);
+  ctx.globalAlpha = dark ? 0.55 : 0.35;
+  ctx.fill(maw);
+  // The ink, fading the same way: the far end of it is barely there.
+  // The one ink, iron-gall on light water and off-white on dark.
+  const inkTone = dark ? '232, 224, 207' : '42, 35, 32';
+  const line = ctx.createRadialGradient(0, 0, 0, 0, 0, reach);
+  line.addColorStop(0, `rgba(${inkTone}, 0.9)`);
+  line.addColorStop(1, `rgba(${inkTone}, 0.04)`);
+  // Engraved where the light falls on it: contour lines round the head
+  // and stipple over the skin, both thinning out into the dark.
+  const dd = detailFor(L);
+  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
+  ctx.globalAlpha = 1;
+  if (dd > 0.45) {
+    const sp = Math.max(1.3 * px, L * 0.014);
+    hatch(ctx, body, box, {
+      spacing: sp,
+      angle: 0.3,
+      // Bowed with the dome of the head, not ruled across it.
+      bow: (0.07 * L) / sp,
+      shade: (x, y) => Math.pow(near(x, y), 1.4),
+      from: 0.3,
+      color: ink,
+      width: Math.max(0.35 * px, L * 0.0028),
+      alpha: 0.6,
+      seed: seed ^ 0x4a7c,
+    });
+  }
+  stipple(ctx, body, box, {
+    spacing: Math.max(1.2 * px, L * (dd > 0.45 ? 0.008 : 0.016)),
+    radius: Math.max(0.3 * px, L * 0.0018),
+    shade: (x, y) => Math.pow(near(x, y), 1.2),
+    from: 0.12,
+    color: ink,
+    alpha: 0.6,
+    seed: seed ^ 0x5c1,
+  });
+  // The outline in the pen, its ink a gradient that dies into the dark.
+  inkLine(ctx, outline, true, { width: Math.max(0.8 * px, L * 0.006), color: line as unknown as string, alpha: 0.8, seed: seed ^ 0x0a, light: UNLIGHT, raw: true, plate: true, min: 0.3 * px });
+
+  // A small pectoral fan, the gill's edge, and rays in the tail.
+  const fins = new Path2D();
+  for (let k = 0; k < 5; k++) {
+    fins.moveTo(-0.46 * L, 0.24 * L);
+    fins.quadraticCurveTo(-0.5 * L - k * 0.008 * L, 0.27 * L + k * 0.01 * L, -0.55 * L - k * 0.015 * L, 0.3 * L + k * 0.022 * L);
+  }
+  for (let k = 0; k < 6; k++) {
+    fins.moveTo(-0.79 * L, 0.16 * L + k * 0.005 * L);
+    fins.lineTo(-0.9 * L, 0.09 * L + k * 0.04 * L);
+  }
+  fins.moveTo(-0.36 * L, 0.06 * L);
+  fins.quadraticCurveTo(-0.42 * L, 0.18 * L, -0.38 * L, 0.3 * L);
+  ctx.strokeStyle = line;
+  ctx.globalAlpha = 0.4;
+  ctx.lineWidth = Math.max(0.4 * px, L * 0.003);
+  ctx.stroke(fins);
+
+  // Needles, few and uneven, curving back into the mouth: short from the
+  // upper jaw, long from the lower; each one tapering to a point.
+  const teeth = mulberry32(seed ^ 0x7ee7);
+  const tooth = (x: number, y: number, cx: number, cy: number, ex: number, ey: number, k: number) => {
+    const pts: number[] = [];
+    for (let q = 0; q <= 6; q++) pts.push(...quad(x, y, cx, cy, ex, ey, q / 6));
+    inkLine(ctx, pts, false, { width: Math.max(0.6 * px, L * 0.007), color: ink, alpha: 0.8, taper: [0, 0.85], seed: seed ^ k, light: UNLIGHT, raw: true, plate: true, min: 0.25 * px });
+  };
+  for (let k = 0; k < 5; k++) {
+    const [x, y] = quad(UL[0], UL[1], UPPER[0], UPPER[1], CORNER[0], CORNER[1], (k + 0.4) / 6);
+    const len = (0.03 + teeth() * 0.035) * L;
+    tooth(x, y, x + 0.01 * L, y + len * 0.6, x - 0.004 * L, y + len, k + 1);
+  }
+  for (let k = 0; k < 6; k++) {
+    const t = (k + 0.3) / 7;
+    const [x, y] = quad(CHIN[0], CHIN[1], LOWER[0], LOWER[1], CORNER[0], CORNER[1], t);
+    const len = (0.05 + teeth() * 0.07) * L * (1 - t * 0.5);
+    tooth(x, y, x + len * 0.3, y - len * 0.6, x + len * 0.1, y - len, k + 11);
+  }
+
+  // A small eye, lit on its near rim, and the stalk arching from the brow
+  // out to the light.
+  const er = Math.max(1.1 * px, 0.016 * L);
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = '#16120F';
+  ctx.beginPath();
+  ctx.arc(-0.27 * L, 0, er, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = line;
+  ctx.globalAlpha = 0.7;
+  ctx.lineWidth = Math.max(0.5 * px, er * 0.25);
+  ctx.beginPath();
+  ctx.arc(-0.27 * L, 0, er, -1.2, 1.6);
+  ctx.stroke();
+  ctx.fillStyle = lure(0.9);
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.arc(-0.27 * L + er * 0.35, -er * 0.3, er * 0.25, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+interface LureSprite {
+  key: string;
+  canvas: HTMLCanvasElement | null;
+}
+
+let lureSprites: LureSprite[] = [];
+
+/** Where the fish's canvas sits in its own frame, as shares of L. */
+const LURE_BOX = { x: -1, y: -0.26, w: 1.14, h: 0.82 };
+
 /**
  * An anglerfish. For most of it there is only a bead of light bobbing in
  * the dark to one side; around the middle the light swells a little and,
@@ -93,55 +257,23 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
     ctx.translate(fx, fy);
     ctx.scale(dir, 1);
 
-    // Facing +x, the lure's rest at the origin. Mostly head: a dome, a
-    // gape that runs back past the eye, a jaw slung out beyond the snout,
-    // and only a stub of a body and a small fan of tail behind.
-    const UL: Pt = [-0.06 * L, 0.08 * L];
-    const CORNER: Pt = [-0.27 * L, 0.24 * L];
-    const CHIN: Pt = [0.04 * L, 0.27 * L];
-    const UPPER: Pt = [-0.14 * L, 0.13 * L];
-    const LOWER: Pt = [-0.06 * L, 0.31 * L];
-    // The outline as points, for the pen, and as a path, for the fills.
-    const outline: number[] = [];
-    const cub = (p0: Pt, p1: Pt, p2: Pt, p3: Pt, n = 10) => {
-      for (let k = 1; k <= n; k++) outline.push(...cubic([p0[0], p0[1], p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]], k / n));
-    };
-    const qd = (p0: Pt, c: Pt, p1: Pt, n = 8) => {
-      for (let k = 1; k <= n; k++) outline.push(...quad(p0[0], p0[1], c[0], c[1], p1[0], p1[1], k / n));
-    };
-    const at = (u: number, v: number): Pt => [u * L, v * L];
-    outline.push(...UL);
-    cub(UL, at(-0.1, -0.12), at(-0.35, -0.2), at(-0.55, -0.12));
-    cub(at(-0.55, -0.12), at(-0.68, -0.07), at(-0.76, 0.05), at(-0.78, 0.15), 6);
-    outline.push(...at(-0.88, 0.08));
-    qd(at(-0.88, 0.08), at(-0.94, 0.19), at(-0.88, 0.3), 5);
-    outline.push(...at(-0.78, 0.22));
-    cub(at(-0.78, 0.22), at(-0.7, 0.42), at(-0.4, 0.5), at(-0.16, 0.44));
-    qd(at(-0.16, 0.44), at(0.02, 0.39), CHIN, 5);
-    qd(CHIN, LOWER, CORNER, 6);
-    qd(CORNER, UPPER, UL, 6);
-    const body = new Path2D();
-    body.moveTo(outline[0], outline[1]);
-    for (let k = 2; k < outline.length; k += 2) body.lineTo(outline[k], outline[k + 1]);
-    body.closePath();
-    // The open mouth: the dark between the jaws.
-    const maw = new Path2D();
-    maw.moveTo(UL[0], UL[1]);
-    maw.quadraticCurveTo(UPPER[0], UPPER[1], CORNER[0], CORNER[1]);
-    maw.quadraticCurveTo(LOWER[0], LOWER[1], CHIN[0], CHIN[1]);
-    maw.closePath();
-    const box = { x: -0.95 * L, y: -0.22 * L, w: 1.0 * L, h: 0.74 * L };
-    // How near the lure's light a point is: all that can be seen of it.
-    const reach = 1.05 * L;
-    const near = (x: number, y: number) => Math.max(0, 1 - Math.hypot(x - ux, y - uy) / reach);
-
-    // A shape a little darker than the water, then the lure's light on it,
-    // strongest at the jaw and gone by the tail.
-    ctx.globalAlpha = seen * (dark ? 0.5 : 0.3);
-    ctx.fillStyle = dark ? '#1C1A18' : '#2A2320';
-    ctx.fill(body);
-    ctx.globalAlpha = seen * (dark ? 0.55 : 0.35);
-    ctx.fill(maw);
+    const { body } = lureFish(L);
+    const key = `${seed}|${Math.round(L * 10)}|${px}|${dark ? 1 : 0}`;
+    let sprite = lureSprites.find((sp) => sp.key === key);
+    if (!sprite) {
+      const c = scratch(LURE_BOX.w * L, LURE_BOX.h * L);
+      const g = c?.getContext('2d');
+      if (c && g) {
+        g.translate(-LURE_BOX.x * L, -LURE_BOX.y * L);
+        paintLureFish(g, L, seed, px, dark);
+      }
+      sprite = { key, canvas: c && g ? c : null };
+      lureSprites = [sprite, ...lureSprites].slice(0, 2);
+    }
+    ctx.globalAlpha = seen;
+    if (sprite.canvas) ctx.drawImage(sprite.canvas, LURE_BOX.x * L, LURE_BOX.y * L, LURE_BOX.w * L, LURE_BOX.h * L);
+    else paintLureFish(ctx, L, seed, px, dark);
+    // The lure's own light on it where it hangs now, strongest at the jaw.
     const lit = ctx.createRadialGradient(ux, uy, 0, ux, uy, 1.1 * L);
     lit.addColorStop(0, lure(dark ? 0.18 : 0.12));
     lit.addColorStop(0.5, lure(dark ? 0.04 : 0.03));
@@ -150,100 +282,11 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
     ctx.fillStyle = lit;
     ctx.fill(body);
 
-    // The ink, fading the same way: the far end of it is barely there.
-    // The one ink, iron-gall on light water and off-white on dark.
+    const reach = 1.05 * L;
     const inkTone = dark ? '232, 224, 207' : '42, 35, 32';
     const line = ctx.createRadialGradient(ux, uy, 0, ux, uy, reach);
     line.addColorStop(0, `rgba(${inkTone}, 0.9)`);
     line.addColorStop(1, `rgba(${inkTone}, 0.04)`);
-    // Engraved where the light falls on it: contour lines round the head
-    // and stipple over the skin, both thinning out into the dark.
-    const dd = detailFor(L);
-    const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
-    ctx.globalAlpha = seen;
-    if (dd > 0.45) {
-      const sp = Math.max(1.3 * px, L * 0.014);
-      hatch(ctx, body, box, {
-        spacing: sp,
-        angle: 0.3,
-        // Bowed with the dome of the head, not ruled across it.
-        bow: (0.07 * L) / sp,
-        shade: (x, y) => Math.pow(near(x, y), 1.4),
-        from: 0.3,
-        color: ink,
-        width: Math.max(0.35 * px, L * 0.0028),
-        alpha: 0.6,
-        seed: seed ^ 0x4a7c,
-      });
-    }
-    stipple(ctx, body, box, {
-      spacing: Math.max(1.2 * px, L * (dd > 0.45 ? 0.008 : 0.016)),
-      radius: Math.max(0.3 * px, L * 0.0018),
-      shade: (x, y) => Math.pow(near(x, y), 1.2),
-      from: 0.12,
-      color: ink,
-      alpha: 0.6,
-      seed: seed ^ 0x5c1,
-    });
-    // The outline in the pen, its ink a gradient that dies into the dark.
-    inkLine(ctx, outline, true, { width: Math.max(0.8 * px, L * 0.006), color: line as unknown as string, alpha: seen * 0.8, seed: seed ^ 0x0a, light: UNLIGHT, raw: true, plate: true, min: 0.3 * px });
-
-    // A small pectoral fan, the gill's edge, and rays in the tail.
-    const fins = new Path2D();
-    for (let k = 0; k < 5; k++) {
-      fins.moveTo(-0.46 * L, 0.24 * L);
-      fins.quadraticCurveTo(-0.5 * L - k * 0.008 * L, 0.27 * L + k * 0.01 * L, -0.55 * L - k * 0.015 * L, 0.3 * L + k * 0.022 * L);
-    }
-    for (let k = 0; k < 6; k++) {
-      fins.moveTo(-0.79 * L, 0.16 * L + k * 0.005 * L);
-      fins.lineTo(-0.9 * L, 0.09 * L + k * 0.04 * L);
-    }
-    fins.moveTo(-0.36 * L, 0.06 * L);
-    fins.quadraticCurveTo(-0.42 * L, 0.18 * L, -0.38 * L, 0.3 * L);
-    ctx.strokeStyle = line;
-    ctx.globalAlpha = seen * 0.4;
-    ctx.lineWidth = Math.max(0.4 * px, L * 0.003);
-    ctx.stroke(fins);
-
-    // Needles, few and uneven, curving back into the mouth: short from the
-    // upper jaw, long from the lower; each one tapering to a point.
-    const teeth = mulberry32(seed ^ 0x7ee7);
-    const tooth = (x: number, y: number, cx: number, cy: number, ex: number, ey: number, k: number) => {
-      const pts: number[] = [];
-      for (let q = 0; q <= 6; q++) pts.push(...quad(x, y, cx, cy, ex, ey, q / 6));
-      inkLine(ctx, pts, false, { width: Math.max(0.6 * px, L * 0.007), color: ink, alpha: seen * 0.8, taper: [0, 0.85], seed: seed ^ k, light: UNLIGHT, raw: true, plate: true, min: 0.25 * px });
-    };
-    for (let k = 0; k < 5; k++) {
-      const [x, y] = quad(UL[0], UL[1], UPPER[0], UPPER[1], CORNER[0], CORNER[1], (k + 0.4) / 6);
-      const len = (0.03 + teeth() * 0.035) * L;
-      tooth(x, y, x + 0.01 * L, y + len * 0.6, x - 0.004 * L, y + len, k + 1);
-    }
-    for (let k = 0; k < 6; k++) {
-      const t = (k + 0.3) / 7;
-      const [x, y] = quad(CHIN[0], CHIN[1], LOWER[0], LOWER[1], CORNER[0], CORNER[1], t);
-      const len = (0.05 + teeth() * 0.07) * L * (1 - t * 0.5);
-      tooth(x, y, x + len * 0.3, y - len * 0.6, x + len * 0.1, y - len, k + 11);
-    }
-
-    // A small eye, lit on its near rim, and the stalk arching from the brow
-    // out to the light.
-    const er = Math.max(1.1 * px, 0.016 * L);
-    ctx.globalAlpha = seen * 0.9;
-    ctx.fillStyle = '#16120F';
-    ctx.beginPath();
-    ctx.arc(-0.27 * L, 0, er, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = line;
-    ctx.globalAlpha = seen * 0.7;
-    ctx.lineWidth = Math.max(0.5 * px, er * 0.25);
-    ctx.beginPath();
-    ctx.arc(-0.27 * L, 0, er, -1.2, 1.6);
-    ctx.stroke();
-    ctx.fillStyle = lure(0.9);
-    ctx.globalAlpha = seen * 0.8;
-    ctx.beginPath();
-    ctx.arc(-0.27 * L + er * 0.35, -er * 0.3, er * 0.25, 0, Math.PI * 2);
-    ctx.fill();
     const stalk: number[] = [];
     for (let q = 0; q <= 12; q++) stalk.push(...quad(-0.2 * L, -0.11 * L, -0.12 * L, -0.34 * L, ux, uy, q / 12));
     inkLine(ctx, stalk, false, { width: Math.max(0.7 * px, L * 0.006), color: line as unknown as string, alpha: seen * 0.85, taper: [0.1, 0.3], seed: seed ^ 0x57a1, light: UNLIGHT, raw: true, plate: true, min: 0.3 * px });
@@ -410,9 +453,20 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     else farWeb.addPath(patch);
   }
 
+  // Big, each arm a tapering pen line; on a screen, one stroke for them all.
+  const pen = d > 0.85;
   const armLine = (A: Arm, alpha: number, salt: number) => {
-    const pts = along(A.pts, 0, 1, 16);
-    inkLine(ctx, pts, false, { width: pw * (A.near ? 1.1 : 0.8), color: ink, alpha: base * alpha, taper: [0.05, 0.45], seed: hash32(seed, salt), light, raw: true, plate: true, min: 0.25 * px });
+    if (pen) {
+      inkLine(ctx, along(A.pts, 0, 1, 16), false, { width: pw * (A.near ? 1.1 : 0.8), color: ink, alpha: base * alpha, taper: [0.05, 0.45], seed: hash32(seed, salt), light, raw: true, plate: true, min: 0.25 * px });
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(A.pts[0], A.pts[1]);
+    ctx.bezierCurveTo(A.pts[2], A.pts[3], A.pts[4], A.pts[5], A.pts[6], A.pts[7]);
+    ctx.strokeStyle = ink;
+    ctx.globalAlpha = base * alpha;
+    ctx.lineWidth = pw * (A.near ? 1 : 0.75);
+    ctx.stroke();
   };
   const cirri = (A: Arm, alpha: number) => {
     // Fine cirri in pairs down the arm, and the suckers between them.
@@ -461,7 +515,12 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     const path = smoothPath(outline, true, 4);
     const box = boundsOf(outline);
     ctx.globalAlpha = base * alpha;
-    washFill(ctx, path, box, { color: wash, alpha: 0.85, edge: 0.35, paper: dark ? null : water, highlight: 0.35, granulate: 0.3, light, px });
+    if (d > 0.85) washFill(ctx, path, box, { color: wash, alpha: 0.85, edge: 0.35, paper: dark ? null : water, highlight: 0.35, granulate: 0.3, light, px });
+    else {
+      ctx.globalAlpha = base * alpha * 0.85;
+      ctx.fillStyle = wash;
+      ctx.fill(path);
+    }
     // Rays: fine lines from the root to the paddle's rim.
     const rays = new Path2D();
     const nRays = d > 0.4 ? 9 : 4;
@@ -476,7 +535,13 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     ctx.globalAlpha = base * alpha * 0.35;
     ctx.lineWidth = Math.max(0.3 * px, pw * 0.3);
     ctx.stroke(rays);
-    inkLine(ctx, outline, true, { width: pw * 0.9, color: ink, alpha: base * alpha * 0.9, seed: hash32(seed, salt), light, plate: true, min: 0.25 * px });
+    if (pen) inkLine(ctx, outline, true, { width: pw * 0.9, color: ink, alpha: base * alpha * 0.9, seed: hash32(seed, salt), light, plate: true, min: 0.25 * px });
+    else {
+      ctx.strokeStyle = ink;
+      ctx.globalAlpha = base * alpha * 0.9;
+      ctx.lineWidth = pw * 0.8;
+      ctx.stroke(path);
+    }
   };
   // The fins row together, both swept back along the mantle: the far one
   // shows over its back, the near one lies over its side.
@@ -537,7 +602,7 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   ctx.globalAlpha = base;
   ctx.fillStyle = wg;
   ctx.fill(nearWeb);
-  if (d > 0.3) {
+  if (d > 0.85) {
     const wb = { x: -0.5 * S, y: -0.15 * S, w: S, h: 0.6 * S };
     stipple(ctx, nearWeb, wb, { spacing: Math.max(1.3 * px, S * 0.014), radius: Math.max(0.3 * px, S * 0.0022), shade: (_x, yy) => 0.3 + 0.7 * Math.max(0, (yy + 0.05 * S) / (0.4 * S)), from: 0.45, color: ink, alpha: base * 0.35, seed: seed ^ 0xeb });
   }
@@ -561,7 +626,16 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
       const cym = (py1 + qy1) / 2 - 0.06 * S;
       m.push(u * u * px1 + 2 * u * t * cxm + t * t * qx1, u * u * py1 + 2 * u * t * cym + t * t * qy1);
     }
-    inkLine(ctx, m, false, { width: pw * 0.6, color: ink, alpha: base * 0.6, taper: [0.15, 0.15], seed: hash32(seed, 'web', i), light, raw: true, plate: true, min: 0.25 * px });
+    if (pen) inkLine(ctx, m, false, { width: pw * 0.6, color: ink, alpha: base * 0.6, taper: [0.15, 0.15], seed: hash32(seed, 'web', i), light, raw: true, plate: true, min: 0.25 * px });
+    else {
+      ctx.beginPath();
+      ctx.moveTo(m[0], m[1]);
+      for (let q = 2; q < m.length; q += 2) ctx.lineTo(m[q], m[q + 1]);
+      ctx.strokeStyle = ink;
+      ctx.globalAlpha = base * 0.55;
+      ctx.lineWidth = pw * 0.5;
+      ctx.stroke();
+    }
   }
 
   // The near fin, standing out from the side.
@@ -842,7 +916,8 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   const lightBase: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
   const light: [number, number] = [lightBase[0] * dir, lightBase[1]];
   const b: Bones = { ctx, dark, px, d, ink, wash, pale, light, seed };
-  const silt = siltColor ?? (dark ? '#191714' : '#3A3F3B');
+  // Without the floor's own colour, a mid silt that reads on any floor.
+  const silt = siltColor ?? (dark ? '#2B2824' : '#4A5250');
   const crest = dark ? mixHex(silt, '#8C8576', 0.35) : mixHex(silt, '#C9C3B4', 0.3);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';

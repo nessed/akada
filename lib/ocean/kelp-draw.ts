@@ -21,8 +21,7 @@
 
 import { mixHex } from '../fan';
 import { zoneMid } from './depth';
-import { surfaceAt } from './draw';
-import { KELP_ROCK, KELP_SCALE, kelpDescent, kelpInView, type Kelp, type KelpLedge, type KelpStalk } from './kelp';
+import { KELP_ROCK, KELP_SCALE, KELP_SURFACE, kelpDescent, kelpInView, type Kelp, type KelpLedge, type KelpStalk } from './kelp';
 import { inkRock, rockShape, rockStyle, type RockShape } from './outcrop-sprite';
 import { waterAt, type Water } from './palette';
 import { detailFor, inkLine, LIGHT, stipple } from './pen';
@@ -38,8 +37,8 @@ const KELP_INK = '#5E4520';
     water, which marks where the light falls rather than where it doesn't. */
 const UNLIGHT: [number, number] = [-LIGHT[0], -LIGHT[1]];
 /** How much of each depth shows: the far ones lost in the haze. */
-const ALPHA = [0.42, 0.7, 0.95];
-const HAZE = [0.5, 0.25, 0];
+const ALPHA = [0.5, 0.75, 0.95];
+const HAZE = [0.45, 0.22, 0];
 
 /** A share of the page, 0 to 1 on each axis. */
 interface Rect {
@@ -98,7 +97,10 @@ export function drawKelp(
 ) {
   if (!kelpInView(focusSeconds)) return;
   const down = kelpDescent(focusSeconds);
-  const surface = surfaceAt(focusSeconds) * h;
+  // The surface as the forest knows it: where it was at the start, carried
+  // up the page with the forest, so the canopy lies on the same water
+  // however far down the page (or down a picture's frames) it is drawn.
+  const surface = (KELP_SURFACE - down) * h;
   // The blades are judged at their own size: about a twentieth of the page.
   const page = opts.page ?? h;
   const pen: Pen = {
@@ -142,9 +144,12 @@ export function drawKelp(
   ctx.restore();
 }
 
-/** The ledge's rock, the same shape however far down the page it is. */
+/** The ledge's rock, the same shape however far down the page it is: a
+    heap of boulders at least three quarters as tall as it is wide, however
+    wide the frame, so it is never a slab. */
 function ledgeRock(l: KelpLedge, w: number, h: number, px: number): RockShape {
-  return rockShape(l.seed, (l.reach + 0.03) * w, KELP_ROCK * h, px);
+  const span = (l.reach + 0.03) * w;
+  return rockShape(l.seed, span, Math.max(KELP_ROCK * h, 0.75 * span), px);
 }
 
 /* The ledge is drawn once to a canvas of its own and only placed after
@@ -172,7 +177,7 @@ function drawLedge(
   if (!s) {
     const pad = 4 * px;
     const cw = Math.min(4096, Math.ceil(shape.hi + pad * 2));
-    const ch = Math.min(4096, Math.ceil(shape.height * 1.1 - Math.min(0, shape.minY) + pad * 2));
+    const ch = Math.min(4096, Math.ceil(shape.height * 1.15 - Math.min(0, shape.minY) + pad * 2));
     const canvas = document.createElement('canvas');
     canvas.width = cw;
     canvas.height = ch;
@@ -182,7 +187,7 @@ function drawLedge(
     const oy = pad - Math.min(0, shape.minY);
     const x0 = dir > 0 ? pad : cw - pad;
     const zw = waterAt(zoneMid(0), water.dark ? 'night' : 'paper', '#A8BCC9');
-    inkRock(c, shape, { x0, y0: oy, dir }, { ...rockStyle(zw, water.dark, px, d, ledge.seed), barnacles: true });
+    inkRock(c, shape, { x0, y0: oy, dir }, { ...rockStyle(zw, water.dark, px, d, ledge.seed), barnacles: true, fade: [0.78, 1.12] });
     // The rock's wall is 3% of the page out past the edge.
     const left = dir > 0 ? -0.03 * w - pad : w + 0.03 * w + pad - cw;
     s = { canvas, left, oy };
@@ -388,7 +393,7 @@ function drawStalk(
   let sy0 = Infinity;
   let sx1 = -Infinity;
   let sy1 = -Infinity;
-  const SEG = big ? 28 : detail ? 12 : 7;
+  const SEG = big ? 28 : detail ? 10 : 7;
   const edgeA: [number, number][] = [];
   const edgeB: [number, number][] = [];
   const mid: [number, number][] = [];
@@ -405,7 +410,7 @@ function drawStalk(
     const p = at(b.t * len);
     const L = b.len * page;
     const W = b.width * page;
-    if (p.y < -L * 1.2 || p.y > h + L * 0.4) continue;
+    if (p.y < -L * 1.2 || p.y > h + L * 0.7) continue;
     const q = at(Math.min(len, b.t * len + 2 * px));
     let ux = q.x - p.x;
     let uy = q.y - p.y;

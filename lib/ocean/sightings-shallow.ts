@@ -498,6 +498,30 @@ export function drawTurtle(
   ctx.restore();
 }
 
+/** A soft point of glow in a colour, made once and placed at any size. */
+const glowDots = new Map<string, HTMLCanvasElement | null>();
+
+function glowDot(color: string): HTMLCanvasElement | null {
+  if (glowDots.has(color)) return glowDots.get(color) ?? null;
+  let c: HTMLCanvasElement | null = null;
+  if (typeof document !== 'undefined') {
+    c = document.createElement('canvas');
+    c.width = 32;
+    c.height = 32;
+    const g = c.getContext('2d');
+    if (g) {
+      const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+      grad.addColorStop(0, color);
+      grad.addColorStop(0.3, `${color}66`);
+      grad.addColorStop(1, `${color}00`);
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 32, 32);
+    } else c = null;
+  }
+  glowDots.set(color, c);
+  return c;
+}
+
 /* ---- The siphonophore ---- */
 
 /** The pale pastels a colony can be: rose, lavender, peach, sky, mint. */
@@ -591,7 +615,7 @@ export function drawSiphonophore(
   ctx.globalAlpha = alpha * 0.35;
   ctx.lineWidth = 2.6 * px;
   ctx.stroke(stem);
-  if (d > 0.4) {
+  if (d > 0.85) {
     // The stem in one pressure line, broken where the light is.
     const pts: number[] = [];
     for (let i = 0; i <= steps; i++) {
@@ -665,7 +689,7 @@ export function drawSiphonophore(
   ctx.fillStyle = wash;
   ctx.globalAlpha = alpha * (d > 0.4 ? 0.32 : 0.22);
   ctx.fill(bells);
-  if (d > 0.4) {
+  if (d > 0.85) {
     for (let k = 0; k < bellOutlines.length; k++) inkLine(ctx, bellOutlines[k], true, { width: 0.9 * px, color: ink, alpha: alpha * 0.75, seed: seed ^ (k * 977), light, plate: true, min: 0.25 * px });
   } else {
     ctx.strokeStyle = ink;
@@ -763,7 +787,9 @@ export function drawSiphonophore(
     const qy = y0 + len * 0.5;
     const ex = x0 + sway * len * 0.55;
     const ey = y0 + len;
-    if (d > 0.4) {
+    // Two hundred threads in the pen are for a print; a screen gets them as
+    // plain fine lines.
+    if (d > 0.85) {
       const pts: number[] = [];
       for (let k = 0; k <= 10; k++) {
         const t = k / 10;
@@ -811,21 +837,15 @@ export function drawSiphonophore(
   if (dark) {
     const glow = mixHex(mixHex(hue, '#FFFFFF', 0.5), '#9FE8FF', 0.25);
     ctx.globalCompositeOperation = 'lighter';
+    const dot = glowDot(glow);
     for (let i = 0, s = front - 0.03 * diag; s > back; i += 2, s -= step * 2) {
       at(s);
       if (!onPage(X, Y)) continue;
       const wave = 0.5 + 0.5 * Math.sin(ambient * 0.9 - i * 0.18);
       const pulse = wave * wave * wave;
       // A soft glow, faded to nothing at its rim: no hard discs in a row.
-      const g = ctx.createRadialGradient(X, Y, 0, X, Y, 8 * px);
-      g.addColorStop(0, glow);
-      g.addColorStop(0.3, `${glow}66`);
-      g.addColorStop(1, `${glow}00`);
-      ctx.fillStyle = g;
       ctx.globalAlpha = env * 0.12 * (0.2 + pulse);
-      ctx.beginPath();
-      ctx.arc(X, Y, 8 * px, 0, Math.PI * 2);
-      ctx.fill();
+      if (dot) ctx.drawImage(dot, X - 8 * px, Y - 8 * px, 16 * px, 16 * px);
     }
     ctx.globalCompositeOperation = 'source-over';
   }
@@ -957,17 +977,15 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
   }
   const rayStep = (d > 0.4 ? 3 : 5) * px;
   // Rays in three weights, so the fin is a run of drawn lines and not a
-  // comb: every few a heavier one, and each bowed a little.
+  // comb: every few a heavier one, unevenly spaced.
   const raysBy = [new Path2D(), new Path2D(), new Path2D()];
   for (let s = s0, i = 0; s < len; s += rayStep * (0.85 + 0.3 * unit(seed, i + 300)), i++) {
     const [bx, by, ex, ey] = tipAt(s);
     if (by > h + D * 2) break;
     const q = unit(seed, i + 700);
     const p = raysBy[i % 4 === 0 ? 2 : q < 0.5 ? 0 : 1];
-    const mx = (bx + ex) / 2 + (ey - by) * 0.06;
-    const my = (by + ey) / 2 - (ex - bx) * 0.06;
     p.moveTo(bx, by);
-    p.quadraticCurveTo(mx, my, ex, ey);
+    p.lineTo(ex, ey);
   }
   ctx.fillStyle = c.membrane;
   ctx.globalAlpha = alpha * 0.45;
@@ -978,7 +996,7 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
     ctx.lineWidth = (d > 0.4 ? 0.3 + 0.12 * k : 0.5 + 0.1 * k) * px;
     ctx.stroke(p);
   });
-  if (d > 0.4) {
+  if (d > 0.85) {
     // The membrane's edge, a broken pen line along the ray tips.
     const edge: number[] = [];
     for (let i = 0; i <= N; i++) {
@@ -1046,7 +1064,7 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
   // (On dark water the light ink marks the light, as everywhere.)
   const lt = dark ? UNLIGHT : LIGHT;
   const sg = NX * lt[0] + NY * lt[1] > 0 ? 1 : -1;
-  if (d > 0.4) {
+  if (d > 0.85) {
     // Laid down the body rather than clipped from a grid: each stroke runs
     // from the middle of the ribbon to its shadowed edge, a hair where it
     // starts and swelling into the dark, and in deep shadow a second set
@@ -1236,7 +1254,7 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
     plumeOf(bx, by, qx, qy, ex, ey);
     leaf(ex, ey, Math.atan2(ey - qy, ex - qx), D * 0.2, j + 10);
   }
-  if (d > 0.4) {
+  if (d > 0.85) {
     // Big, each plume a tapering stroke of the pen.
     for (const pl of plumeLines) inkLine(ctx, pl, false, { width: 1.1 * pw, color: c.fin, alpha: alpha * 0.85, taper: [0.05, 0.4], seed: seed ^ pl.length, light: dark ? UNLIGHT : LIGHT, raw: true, plate: true, min: 0.25 * px });
   } else {

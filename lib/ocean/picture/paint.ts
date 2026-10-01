@@ -63,7 +63,8 @@ function cachesOf(plan: Plan): Caches {
       value: {
         biome,
         kelp: plan.kelp ? rollKelp(biome.key) : null,
-        sprites: new SpriteCache(320e6),
+        // Line weights and hatching judged against the page (1000 units to its short side), as for print.
+        sprites: new SpriteCache(320e6, { page: 1000, print: true }),
         wash: new Wash(true),
         jellies: new Map(),
         shapes: new Map(),
@@ -204,8 +205,10 @@ function fallOf(plan: Plan, c: Caches): Fall {
   const paper = plan.ground === 'paper';
   const foot = tone(plan, zAt(plan, plan.h));
   const [, A, B] = labOf(foot);
+  // Toward the sea's own deep, a slate indigo, carrying a little of the water's hue.
+  const [, A2, B2] = labOf(paper ? '#3A4767' : '#141A26');
   const target = paper ? 41 : 9;
-  const deep = hexOfLab(paper ? 33 : 6, A * 1.15, B * 1.15);
+  const deep = hexOfLab(paper ? 32 : 6, A * 0.45 + A2 * 0.55, B * 0.45 + B2 * 0.55);
   // How much of the deep it takes for the foot to come down to the target.
   let most = 0.22;
   for (let lo = 0.22, hi = 1, i = 0; i < 18; i++) {
@@ -1051,14 +1054,24 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
     if (i === 0) crestPath.moveTo(X(u), topY(u));
     else crestPath.lineTo(X(u), topY(u));
   }
+  // The form: darker toward the wall and the foot, lighter toward the lip.
+  {
+    const xl = X(1);
+    const xw = X(0.1);
+    const fg = o.createLinearGradient(xl, k.y, xw, k.y + H);
+    const shadow = night ? '#000000' : deepWater ? '#2E2A25' : INK;
+    const [sr, sg, sb] = rgbOf(shadow);
+    fg.addColorStop(0, `rgba(${sr}, ${sg}, ${sb}, 0)`);
+    fg.addColorStop(0.5, `rgba(${sr}, ${sg}, ${sb}, 0.1)`);
+    fg.addColorStop(1, `rgba(${sr}, ${sg}, ${sb}, 0.32)`);
+    o.fillStyle = fg;
+    o.fillRect(Math.min(xl, xw) - H, k.y - 2, Math.abs(xl - xw) + 2 * H, H + 4);
+  }
+  // Soft, in many thin layers: no step shows.
   o.strokeStyle = lit;
-  for (const [wk, a] of [
-    [2.2, 0.35],
-    [1.4, 0.45],
-    [0.7, 0.6],
-  ] as const) {
-    o.globalAlpha = a;
-    o.lineWidth = band * wk;
+  for (let i = 0; i < 9; i++) {
+    o.globalAlpha = 0.13;
+    o.lineWidth = band * (0.25 + (1.75 * (i + 1)) / 9);
     o.stroke(crestPath);
   }
   o.globalAlpha = 1;
@@ -1157,8 +1170,8 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
   const lipFace: number[] = [];
   for (let i = Math.round(N * 0.7); i <= N; i++) lipFace.push(X(i / N), topY(i / N));
   for (let i = N; i >= Math.round(N * 0.45); i--) lipFace.push(X(i / N), underY(i / N));
-  inkLine(o, crest, false, { width: 1.15 * weight, color: ink, alpha: night ? 0.7 : 0.85, swell: 0.6, lost: 0.4, taper: [0.02, 0.12], seed: k.seed + 2, min: 0.2 });
-  inkLine(o, lipFace, false, { width: 0.9 * weight, color: ink, alpha: night ? 0.55 : 0.7, swell: 0.7, lost: 0.25, taper: [0.1, 0.4], seed: k.seed + 3, min: 0.2 });
+  inkLine(o, crest, false, { width: 1.15 * weight, color: ink, alpha: night ? 0.7 : 0.85, swell: 0.6, lost: 0.4, taper: [0.02, 0.12], seed: k.seed + 2, min: 0.2, plate: true });
+  inkLine(o, lipFace, false, { width: 0.9 * weight, color: ink, alpha: night ? 0.55 : 0.7, swell: 0.7, lost: 0.25, taper: [0.1, 0.4], seed: k.seed + 3, min: 0.2, plate: true });
 
   // What grows on it: on the near and middle rocks only, nothing in the haze.
   if (k.plane > 0) {
@@ -1172,7 +1185,8 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
       const u = visibleFrom + ((0.88 - visibleFrom) * (i + 0.2 + r() * 0.6)) / count;
       const kind = kit[Math.floor(r() * kit.length)];
       const size = plan.h * (0.015 + 0.015 * r()) * (k.plane === 2 ? 1 : 0.8);
-      const hue = drained(hues[i % 3], z);
+      // The palette's own colours, only a little drained by the depth.
+      const hue = mixHex(hues[i % 3], drained(hues[i % 3], z), 0.45);
       paintGrowth(o, kind, X(u), topY(u) + 1.2, size, hue, night, tier, mulberry32(k.seed + 10 + i), weight);
     }
   }
