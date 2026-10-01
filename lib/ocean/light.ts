@@ -1008,11 +1008,16 @@ export function drawSnowDeep(
     litBy?: (x: number, y: number) => number;
     /** The widest a speck may be, device px, tail and all. */
     maxSize?: number;
+    /** Only these rows are drawn (a strip of a bigger picture): the rest are rolled, so every speck lands where it would, but not drawn. */
+    rows?: { y0: number; y1: number };
   },
 ): void {
   if (w <= 0 || h <= 0 || !(o.density > 0)) return;
   const px = Math.max(0.5, o.px);
   const most = o.maxSize ?? Infinity;
+  const ry0 = (o.rows?.y0 ?? -Infinity) - 8 * px;
+  const ry1 = (o.rows?.y1 ?? Infinity) + 8 * px;
+  const shown = (y: number) => y >= ry0 && y <= ry1;
   const r = mulberry32(hash32('snow-deep', o.seed));
   const css = (w * h) / (px * px);
   const lit = (x: number, y: number) => (o.litBy ? 0.45 + 1.0 * clamp01(o.litBy(x, y)) : 1);
@@ -1036,7 +1041,9 @@ export function drawSnowDeep(
       const x = r() * w;
       const y = r() * h;
       const rad = Math.min(most / 2, px * (0.3 + 0.35 * r()));
-      const a = Math.min(1, (0.1 + 0.18 * r()) * lit(x, y));
+      const base = 0.1 + 0.18 * r();
+      if (!shown(y)) continue;
+      const a = Math.min(1, base * lit(x, y));
       const p = buckets[bucketOf(a)];
       p.moveTo(x + rad, y);
       p.arc(x, y, rad, 0, TAU);
@@ -1053,7 +1060,9 @@ export function drawSnowDeep(
       const x = r() * w;
       const y = r() * h;
       const size = Math.min(most / 3.4, px * (0.6 + 1.6 * Math.pow(r(), 2.2)));
-      const a = Math.min(1, (0.3 + 0.5 * r()) * lit(x, y));
+      const base = 0.3 + 0.5 * r();
+      const vis = shown(y);
+      const a = vis ? Math.min(1, base * lit(x, y)) : 0;
       const sides = 8 + Math.floor(r() * 3);
       const turn = r() * TAU;
       const stretch = 1 + r() * 0.6;
@@ -1062,6 +1071,14 @@ export function drawSnowDeep(
         const ang = turn + (k / sides) * TAU;
         const rad = size * (0.75 + 0.35 * r());
         pts.push(x + Math.cos(ang) * rad * stretch, y + Math.sin(ang) * rad);
+      }
+      if (!vis) {
+        // Rolled as it would be, and passed over.
+        if (r() < 0.15) {
+          r();
+          r();
+        }
+        continue;
       }
       const add = (p: Path2D, ox: number, oy: number) => {
         p.moveTo(pts[0] + ox, pts[1] + oy);
