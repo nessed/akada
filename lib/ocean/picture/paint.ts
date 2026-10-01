@@ -42,6 +42,7 @@ interface Caches {
   rayLight: { key: string; at: (x: number, y: number) => number } | null;
   wash2: { key: string; canvas: HTMLCanvasElement } | null;
   dither: HTMLCanvasElement | null;
+  rays: { key: string; canvas: HTMLCanvasElement } | null;
 }
 
 /** The plan's own store of what is slow to make, out of sight of a JSON of it. */
@@ -64,6 +65,7 @@ function cachesOf(plan: Plan): Caches {
         rayLight: null,
         wash2: null,
         dither: null,
+        rays: null,
       } satisfies Caches,
     });
   }
@@ -94,15 +96,6 @@ function tone(plan: Plan, z: number): string {
   if (plan.ground === 'paper') c = mixHex(c, INDIGO, 0.62 * Math.max(0, Math.min(1, (z - 0.32) / 0.45)));
   else c = mixHex(c, '#141A26', 0.3 * Math.max(0, Math.min(1, (z - 0.2) / 0.5)));
   return c;
-}
-
-// TEMP timing
-const __T: Record<string, number> = ((globalThis as unknown as { __picT?: Record<string, number> }).__picT ??= {});
-let __last = 0;
-function __t(name: string) {
-  const now = performance.now();
-  if (__last) __T[name] = (__T[name] ?? 0) + now - __last;
-  __last = now;
 }
 
 type InSight = (x0: number, y0: number, x1: number, y1: number, pad?: number) => boolean;
@@ -150,7 +143,6 @@ function sees(v: View, x0: number, y0: number, x1: number, y1: number): boolean 
 }
 
 export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): void {
-  __last = performance.now();
   const D = px * plan.unit;
   const W = plan.w * D;
   const H = plan.h * D;
@@ -176,16 +168,14 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   ctx.fillStyle = g;
   ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0);
   paintWash(ctx, plan, c, D, W, H, view);
-  __t('water');
 
   // ---- The light from above, carved by everything that stands in it. The
-  // shafts fade out by the end of the twilight, however far below that the
-  // picture goes. They are soft, so they are worked out at no more than a
-  // few thousand pixels and drawn back up.
+  // shafts are soft, so they are laid once into a layer of their own at no
+  // more than a few thousand pixels, faded out by the end of the twilight
+  // however far below that the picture goes, and each strip draws its slice.
   const lit = litDepth(plan);
-  const RH = lit * D;
-  const rs = Math.max(1, Math.max(W, RH) / 2400);
-  const occluder = (globalThis as unknown as { __skip?: string }).__skip === 'occ' ? null : occluderOf(plan, c, lit);
+  const rs = Math.max(1, Math.max(W, H) / 2400);
+  const occluder = occluderOf(plan, c);
   const rays = {
     source: { x: (plan.window.x * D) / rs, y: (plan.window.y * D) / rs },
     occluder,
@@ -193,18 +183,19 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     sun,
     px: D / rs,
     seed: plan.seed,
-    dark: night,
+    // Laid as light on a clear layer: the layer is then screened onto paper.
+    dark: true,
   };
-  if (sees(view, 0, 0, W, RH) && (globalThis as unknown as { __skip?: string }).__skip !== 'rays') {
+  const layer = rayLayer(plan, c, W, H, rs, lit * D, rays);
+  if (layer && sees(view, 0, 0, W, lit * D)) {
     ctx.save();
-    ctx.scale(rs, rs);
-    drawGodRays(ctx, W / rs, RH / rs, rays);
+    ctx.globalCompositeOperation = night ? 'lighter' : 'screen';
+    // A pale ray barely shows on pale water: on paper it is laid on harder.
+    for (const a of night ? [1] : [1, 0.75]) {
+      ctx.globalAlpha = a;
+      drawSlice(ctx, layer, W, H, view);
+    }
     ctx.restore();
-  }
-  __t('rays');
-  if ((globalThis as unknown as { __skip?: string }).__skip === 'onlyrays') {
-    ctx.restore();
-    return;
   }
 
   // ---- The sky, looking up: after the rays, so their fan does not pile up
@@ -218,16 +209,13 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     drawSnellWindow(ctx, W / k, H / k, { cx: (win.x * D) / k, cy: (win.y * D) / k, radius: (win.r * D) / k, sun, moon: plan.moon, dark: night, px: D / k, seed: plan.seed });
     ctx.restore();
   }
-  __t('snell');
 
   // ---- Far: the big shapes behind everything, then the far animals, hazy.
   for (const e of plan.events) if (e.far) paintEvent(ctx, plan, e, D, ambient, inSight);
   paintCast(ctx, plan, c, D, ambient, 0, inSight);
-  __t('far');
 
   // ---- The places passed: kelp, rocks, the ledges of the breaks, the floor.
   if (c.kelp && plan.kelp) paintKelp(ctx, plan, c.kelp, c, D, ambient, inSight);
-  __t('kelp');
   // A rock is inked once to a sprite no wider than 4096 px; on a poster it
   // is inked smaller and drawn back up, so a long ledge is never cut short.
   const rk = Math.max(1, W / 3600);
@@ -247,33 +235,27 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     if (!inSight(l.box.x0, l.box.y0, l.box.x1, l.y + l.thick, 90)) continue;
     rock(ledgeOutcrop(l, plan.h), l.y / plan.h, l.y);
   }
-  __t('rocks');
   if (plan.floor && inSight(0, plan.floor.y - 80, plan.w, plan.h)) paintFloor(ctx, plan, c, D, ambient);
-  __t('places');
 
   // ---- Middle: the rare things in the water, the middle animals.
   for (const e of plan.events) if (!e.far && e.kind !== 'eye') paintEvent(ctx, plan, e, D, ambient, inSight);
   paintCast(ctx, plan, c, D, ambient, 1, inSight);
-  __t('middle');
 
   // ---- The way down: bubbles rising off it, and the jellies, the hero last.
   paintBubbles(ctx, plan, D, inSight);
   for (const j of plan.jellies) if (inSight(j.box.x0, j.box.y0, j.box.x1, j.box.y1, j.r * 1.4)) paintJelly(ctx, plan, c, j, D);
-  __t('jellies');
 
   // ---- Near.
   paintCast(ctx, plan, c, D, ambient, 2, inSight);
   for (const e of plan.events) if (e.kind === 'eye') paintEvent(ctx, plan, e, D, ambient, inSight);
-  __t('near');
 
   // ---- Light: what glows lights what is near it.
   paintLights(ctx, plan, lightsOf(plan, c, D), view);
-  __t('lights');
 
   // ---- Snow, near to far, caught in the light.
   const rayKey = `${W}|${H}|${D}`;
   if (!c.rayLight || c.rayLight.key !== rayKey) {
-    const at = godRayLight(W / rs, RH / rs, rays);
+    const at = godRayLight(W / rs, H / rs, rays);
     c.rayLight = { key: rayKey, at: (x, y) => at(x / rs, y / rs) };
   }
   const rayAt = c.rayLight.at;
@@ -285,12 +267,10 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     dark: night || plan.zMax > 0.5,
     litBy: (x, y) => Math.max(rayAt(x, y), jellyLight(plan, x / D, y / D)),
   });
-  __t('snow');
 
   // ---- A whisper of noise, so no gradient bands.
   paintDither(ctx, c, plan.seed, view);
   ctx.restore();
-  __t('dither');
 }
 
 /** The net of light off the surface, on what faces up in the sunlit water. */
@@ -414,15 +394,7 @@ function paintWash(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: numb
       c.wash2 = { key, canvas };
     }
   }
-  if (c.wash2) {
-    // Only the slice in sight, a pixel wider each way so strips join.
-    const k = c.wash2.canvas.width / W;
-    const sx = Math.max(0, Math.floor(view.x0 * k) - 1);
-    const sy = Math.max(0, Math.floor(view.y0 * k) - 1);
-    const sw = Math.min(c.wash2.canvas.width, Math.ceil(view.x1 * k) + 1) - sx;
-    const sh = Math.min(c.wash2.canvas.height, Math.ceil(view.y1 * k) + 1) - sy;
-    if (sw > 0 && sh > 0) ctx.drawImage(c.wash2.canvas, sx, sy, sw, sh, sx / k, sy / k, sw / k, sh / k);
-  }
+  if (c.wash2) drawSlice(ctx, c.wash2.canvas, W, H, view);
   // Rich darks are never flat: a mottle of deeper pigment where the deep is.
   if (plan.zMax > 0.5) {
     const r = mulberry32(hash32(plan.seed, 'mottle'));
@@ -453,18 +425,65 @@ function deepFrom(plan: Plan): number {
 
 /* ---- What stands in the light ---- */
 
+/** A soft full-picture layer, drawn back up: only the slice in sight, a pixel wider each way so strips join. */
+function drawSlice(ctx: CanvasRenderingContext2D, layer: HTMLCanvasElement, W: number, H: number, view: View) {
+  const kx = layer.width / W;
+  const ky = layer.height / H;
+  const sx = Math.max(0, Math.floor(view.x0 * kx) - 1);
+  const sy = Math.max(0, Math.floor(view.y0 * ky) - 1);
+  const sw = Math.min(layer.width, Math.ceil(view.x1 * kx) + 1) - sx;
+  const sh = Math.min(layer.height, Math.ceil(view.y1 * ky) + 1) - sy;
+  if (sw > 0 && sh > 0) ctx.drawImage(layer, sx, sy, sw, sh, sx / kx, sy / ky, sw / kx, sh / ky);
+}
+
+/** The shafts, laid once on a clear layer and faded out below the light. */
+function rayLayer(
+  plan: Plan,
+  c: Caches,
+  W: number,
+  H: number,
+  rs: number,
+  litPx: number,
+  rays: Parameters<typeof drawGodRays>[3],
+): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const key = `${W}|${H}`;
+  if (c.rays?.key === key) return c.rays.canvas;
+  const lw = Math.max(1, Math.round(W / rs));
+  const lh = Math.max(1, Math.round(H / rs));
+  const canvas = document.createElement('canvas');
+  canvas.width = lw;
+  canvas.height = lh;
+  const o = canvas.getContext('2d');
+  if (!o) return null;
+  drawGodRays(o, W / rs, H / rs, rays);
+  // The water swallows the light: gone by the end of the twilight.
+  const fade = o.createLinearGradient(0, 0, 0, litPx / rs);
+  fade.addColorStop(0, 'rgba(0, 0, 0, 1)');
+  fade.addColorStop(0.55, 'rgba(0, 0, 0, 0.85)');
+  fade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  o.globalCompositeOperation = 'destination-in';
+  o.fillStyle = fade;
+  o.fillRect(0, 0, lw, lh);
+  c.rays = { key, canvas };
+  void plan;
+  return canvas;
+}
+
 /** How far down the page the light from above reaches, in units. */
 function litDepth(plan: Plan): number {
   for (const s of plan.zStops) if (s.z >= 0.62) return Math.max(plan.h * 0.35, s.y * 1.15);
   return plan.h;
 }
 
-function occluderOf(plan: Plan, c: Caches, lit: number): HTMLCanvasElement | null {
+function occluderOf(plan: Plan, c: Caches): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
+  const lit = plan.h;
   const key = `${plan.w}|${lit}`;
   if (c.occluder?.key === key) return c.occluder.canvas;
   // Soft shadows want no detail: a mask a few hundred pixels across,
-  // stretched over the lit part of the page the rays are drawn in.
+  // stretched over the picture (the same canvas every call, which keeps the
+  // rays' own cache warm).
   const k = 900 / Math.max(plan.w, lit);
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(plan.w * k));
@@ -758,30 +777,7 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
   const W = plan.w * D;
   const yF = plan.floor.y * D;
   const water = waterAtY(plan, plan.floor.y);
-  const deep = tone(plan, zAt(plan, plan.floor.y));
   const r = mulberry32(hash32(plan.seed, 'silt'));
-  // Far ridges first, hazy with the water between: the floor goes on.
-  for (let k = 0; k < 1; k++) {
-    const base = yF - (30 - k * 16) * D;
-    const amp = (26 - k * 8) * D;
-    const ph = r() * 10;
-    ctx.save();
-    // The far ridge hazed toward the water, the nearer one a shade darker.
-    ctx.fillStyle = mixHex(deep, '#9A9AA8', 0.2);
-    ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    ctx.moveTo(0, H);
-    for (let i = 0; i <= 64; i++) {
-      const x = (i / 64) * W;
-      const u = (i / 64) * Math.PI * 2;
-      const y = base - amp * (0.5 + 0.35 * Math.sin(u * (1.3 + k) + ph) + 0.15 * Math.sin(u * 4.1 + ph * 2));
-      ctx.lineTo(x, y);
-    }
-    ctx.lineTo(W, H);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
   // The live floor, lifted to where the picture's is: its silt line falls at
   // 94% of the height it is given, so it is given a taller page, shifted up.
   const hh = (H - yF) / 0.06;

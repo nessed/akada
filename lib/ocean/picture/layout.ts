@@ -526,12 +526,17 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       return { ...base, age: 0.5, rx: 0, ry: top, rw: w, rh: h - top + 20, x: w / 2, y: top + (h - top) * 0.5, far: true, box: null };
     }
     case 'storm': {
-      // A tall region, so the haze it lays fades out well inside it.
-      const rh = h * 1.4;
-      const nx = w * (0.25 + (((sd >>> 4) % 100) / 100) * 0.5);
-      const ny = rh * (0.35 + (((sd >>> 12) % 100) / 100) * 0.35);
+      // The haze is a gradient laid over the whole of the region it is
+      // given, so the region is made square and big enough that the haze has
+      // faded to nothing well inside it: its reach is a fixed share of the
+      // region early on (age 0.1), and its middle never nearer an edge than
+      // a quarter of it.
+      const reach = Math.min(w, h) * 0.32;
+      const R = reach / (0.2 + 0.35 * 0.1);
+      const nx = R * (0.25 + (((sd >>> 4) % 100) / 100) * 0.5);
+      const ny = R * (0.35 + (((sd >>> 12) % 100) / 100) * 0.35);
       const want = w * (side > 0 ? 0.68 : 0.32);
-      return { ...base, age: 0.15, rx: want - nx, ry: y - ny, rw: w, rh, x: want, y, far: true, box: null };
+      return { ...base, age: 0.1, rx: want - nx, ry: y - ny, rw: R, rh: R, x: want, y, far: true, box: null };
     }
     case 'siphonophore': {
       const rh = h * 0.5;
