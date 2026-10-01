@@ -20,7 +20,13 @@ import {
 import { PngStream } from './png';
 import { frameLayout, type FrameLayout, type Rect } from './sizes';
 
-export type DrawFn = (ctx: CanvasRenderingContext2D, width: number, height: number) => void;
+/**
+ * Paints the picture at `width` × `height` (supersampled px). `rows` is the
+ * band of it this strip covers, in the same px, so a drawing can skip what
+ * is out of sight: the canvas it is handed is reused and clipped, and a
+ * clip cannot be read back.
+ */
+export type DrawFn = (ctx: CanvasRenderingContext2D, width: number, height: number, rows: { top: number; bottom: number }) => void;
 
 export interface FrameStyle {
   paper: PaperName;
@@ -267,7 +273,7 @@ export async function renderPicturePng(options: RenderPictureOptions): Promise<B
             ctx.fillRect(0, 0, pictureRect.w * ss, pictureRect.h * ss);
           }
           ctx.save();
-          draw(ctx, pictureRect.w * ss, pictureRect.h * ss);
+          draw(ctx, pictureRect.w * ss, pictureRect.h * ss, { top: (top - pictureRect.y) * ss, bottom: (bottom - pictureRect.y) * ss });
           ctx.restore();
           ctx.restore();
 
@@ -313,7 +319,7 @@ export async function renderPicturePng(options: RenderPictureOptions): Promise<B
           ctx.beginPath();
           ctx.rect(0, 0, pictureRect.w * ss, pictureRect.h * ss);
           ctx.clip();
-          draw(ctx, pictureRect.w * ss, pictureRect.h * ss);
+          draw(ctx, pictureRect.w * ss, pictureRect.h * ss, { top: (top - pictureRect.y) * ss, bottom: (bottom - pictureRect.y) * ss });
           ctx.restore();
         }
       }

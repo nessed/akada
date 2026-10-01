@@ -58,8 +58,18 @@ export function planPicture(input: PictureInput, shape: { width: number; height:
  * in device px. The caller may translate and clip to draw it in strips; the
  * same picture drawn twice comes out the same.
  */
-export function drawPicture(ctx: CanvasRenderingContext2D, pic: Picture, px: number): void {
+export function drawPicture(
+  ctx: CanvasRenderingContext2D,
+  pic: Picture,
+  px: number,
+  /**
+   * Optional: the rows of the picture (device px, 0 at its top) this call
+   * has to cover, when the canvas is taller than the strip. Only what can
+   * touch them is drawn; the canvas's own size already bounds it otherwise.
+   */
+  rows?: { top: number; bottom: number },
+): void {
   const plan = pic.plan as Parameters<typeof paint>[1] | null;
   if (!plan || !(px > 0)) return;
-  paint(ctx, plan, px * (pic.width / (plan.w * plan.unit)));
+  paint(ctx, plan, px * (pic.width / (plan.w * plan.unit)), rows);
 }
