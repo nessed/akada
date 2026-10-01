@@ -13,8 +13,12 @@
  */
 
 import { mixHex } from '../fan';
-import { HUES } from './palette';
+import { HUES, IRON_GALL } from './palette';
+import { detailFor, hatch, inkLine, LIGHT, shadeAcross, stipple } from './pen';
 import { mulberry32, range } from './random';
+
+/** The light as the pen takes it: on dark water the light ink marks the light. */
+const UNLIGHT: [number, number] = [-LIGHT[0], -LIGHT[1]];
 
 const PAPER = '#FBF8EF';
 const NIGHT = '#1A1815';
@@ -33,9 +37,10 @@ function smooth(t: number): number {
   return k * k * (3 - 2 * k);
 }
 
-/** The animals' rule: the hue darkened toward the ink on light water, lifted toward white on dark. */
-function inkOf(hue: string, dark: boolean): string {
-  return dark ? mixHex(hue, '#FFFFFF', 0.45) : mixHex(hue, '#1A1714', 0.62);
+/** The animals' rule: every line in the one ink, iron-gall on light water and
+    a warm off-white on dark; the hue is all in the washes. */
+function inkOf(_hue: string, dark: boolean): string {
+  return dark ? IRON_GALL.dark : IRON_GALL.light;
 }
 
 /** And the wash under the line, laid over the water's own colour. */
@@ -215,6 +220,9 @@ export function drawTurtle(
   const c = dark ? TURTLE_DARK : TURTLE_LIGHT;
   // The animal is drawn in units of `u`, tail to beak a little under one.
   const u = L * 1.12;
+  // Big enough to show its scutes' growth rings and its skin's texture.
+  const d = detailFor(u);
+  const light = dark ? UNLIGHT : LIGHT;
 
   ctx.save();
   ctx.lineCap = 'round';
@@ -261,6 +269,17 @@ export function drawTurtle(
   ctx.globalAlpha = alpha * 0.9;
   ctx.fillStyle = c.skin;
   ctx.fill(head);
+  if (d > 0.4) {
+    stipple(ctx, head, { x: 0.2 * u, y: -0.09 * u, w: 0.3 * u, h: 0.16 * u }, {
+      spacing: 1.5 * px,
+      radius: 0.33 * px,
+      shade: shadeAcross({ x: 0.2 * u, y: -0.09 * u, w: 0.3 * u, h: 0.16 * u }, light),
+      from: 0.5,
+      color: c.ink,
+      alpha: alpha * 0.55,
+      seed: seed ^ 0x4ead,
+    });
+  }
   ctx.globalAlpha = alpha;
   ctx.lineWidth = 1.2 * px;
   ctx.stroke(head);
@@ -311,22 +330,41 @@ export function drawTurtle(
   ctx.stroke(belly);
 
   const shell = new Path2D();
+  const shellPts: number[] = [sxAt(0), rim(0)];
   shell.moveTo(sxAt(0), rim(0));
   for (let i = 1; i <= 24; i++) {
     const t = i / 24;
     shell.lineTo(sxAt(t), top(t));
+    shellPts.push(sxAt(t), top(t));
   }
   for (let i = 23; i >= 0; i--) {
     const t = i / 24;
     shell.lineTo(sxAt(t), rim(t) + 0.01 * u);
+    shellPts.push(sxAt(t), rim(t) + 0.01 * u);
   }
   shell.closePath();
   ctx.globalAlpha = alpha * 0.92;
   ctx.fillStyle = c.shell;
   ctx.fill(shell);
-  ctx.globalAlpha = alpha;
-  ctx.lineWidth = 1.3 * px;
-  ctx.stroke(shell);
+  const shellBox = { x: sxAt(0), y: top(0.5), w: 0.6 * u, h: rim(0.5) - top(0.5) + 0.02 * u };
+  if (d > 0.4) {
+    // Engraved shading over the dome, contour lines sagging with it, crossed
+    // where it turns furthest from the light.
+    const across = shadeAcross(shellBox, light);
+    hatch(ctx, shell, shellBox, {
+      spacing: 1.9 * px,
+      angle: 0.35,
+      bow: 0.6,
+      shade: (x, y) => across(x, y) * 0.75 + 0.35 * Math.max(0, (y - top(Math.max(0, Math.min(1, (x - sxAt(0)) / (0.6 * u))))) / (0.2 * u)),
+      from: dark ? 0.62 : 0.55,
+      cross: dark ? undefined : 0.85,
+      color: c.ink,
+      width: 0.45 * px,
+      alpha: alpha * 0.5,
+      seed: seed ^ 0x5e11,
+    });
+  }
+  inkLine(ctx, shellPts, true, { width: 1.25 * px, color: c.ink, alpha, swell: 0.8, lost: 0.25, seed, light, raw: true, min: 0.3 * px });
 
   // The scutes as plates: a band of vertebrals along the ridge, the costals
   // down the flank, the marginals round the rim, the joins staggered so the
@@ -355,15 +393,53 @@ export function drawTurtle(
   ctx.globalAlpha = alpha * 0.8;
   ctx.lineWidth = 0.9 * px;
   ctx.stroke(plates);
-  // A little hatching low on each costal, where the dome turns away from the light.
-  const hatch = new Path2D();
-  for (let t = 0.13; t < 0.86; t += 0.045) {
-    hatch.moveTo(sxAt(t), yAt(t, 0.58));
-    hatch.lineTo(sxAt(t + 0.025), yAt(t + 0.025, 0.78));
+  if (d > 0.4) {
+    // Each scute's growth rings, round the little first plate (the areola)
+    // it grew out from, as a turtle's shell keeps them like a tree.
+    const rings = new Path2D();
+    const scutes: [number, number, number, number][] = [
+      [0.06, 0.2, 0.03, 0.3],
+      [0.2, 0.38, 0.03, 0.3],
+      [0.38, 0.56, 0.03, 0.3],
+      [0.56, 0.74, 0.03, 0.3],
+      [0.74, 0.94, 0.03, 0.3],
+      [0.06, 0.29, 0.3, 0.82],
+      [0.29, 0.47, 0.3, 0.82],
+      [0.47, 0.65, 0.3, 0.82],
+      [0.65, 0.94, 0.3, 0.82],
+    ];
+    for (const [t0, t1, f0, f1] of scutes) {
+      // The areola sits toward the back and top of the scute.
+      const tc = t0 + (t1 - t0) * 0.42;
+      const fc = f0 + (f1 - f0) * 0.4;
+      for (const k of [0.25, 0.5, 0.72, 0.88]) {
+        for (let q = 0; q <= 20; q++) {
+          const th = (q / 20) * Math.PI * 2;
+          const ct = Math.cos(th);
+          const st = Math.sin(th);
+          // Squarish, the way the plates' rings follow their edges.
+          const sq = (v: number) => Math.sign(v) * Math.pow(Math.abs(v), 0.6);
+          const t = tc + (ct > 0 ? t1 - tc : tc - t0) * k * sq(ct) * 0.92;
+          const f = fc + (st > 0 ? f1 - fc : fc - f0) * k * sq(st) * 0.9;
+          if (q === 0) rings.moveTo(sxAt(t), yAt(t, f));
+          else rings.lineTo(sxAt(t), yAt(t, f));
+        }
+      }
+    }
+    ctx.globalAlpha = alpha * 0.35;
+    ctx.lineWidth = 0.45 * px;
+    ctx.stroke(rings);
+  } else {
+    // A little hatching low on each costal, where the dome turns away from the light.
+    const strokes = new Path2D();
+    for (let t = 0.13; t < 0.86; t += 0.045) {
+      strokes.moveTo(sxAt(t), yAt(t, 0.58));
+      strokes.lineTo(sxAt(t + 0.025), yAt(t + 0.025, 0.78));
+    }
+    ctx.globalAlpha = alpha * 0.3;
+    ctx.lineWidth = 0.7 * px;
+    ctx.stroke(strokes);
   }
-  ctx.globalAlpha = alpha * 0.3;
-  ctx.lineWidth = 0.7 * px;
-  ctx.stroke(hatch);
   // The outline inked twice, the second pass faint and just off the first.
   ctx.save();
   ctx.translate(0.9 * px, 0.4 * px);
@@ -383,6 +459,18 @@ export function drawTurtle(
   ctx.globalAlpha = alpha * 0.92;
   ctx.fillStyle = c.skin;
   ctx.fill(near);
+  if (d > 0.4) {
+    const fbox = { x: -0.5 * u, y: -0.15 * u, w: 0.85 * u, h: 0.5 * u };
+    stipple(ctx, near, fbox, {
+      spacing: 1.5 * px,
+      radius: 0.33 * px,
+      shade: (x, y) => Math.min(1, 0.25 + Math.max(0, y) / (0.25 * u)),
+      from: 0.45,
+      color: c.ink,
+      alpha: alpha * 0.5,
+      seed: seed ^ 0xf11,
+    });
+  }
   ctx.globalAlpha = alpha;
   ctx.lineWidth = 1.1 * px;
   ctx.stroke(near);

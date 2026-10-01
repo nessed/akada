@@ -15,6 +15,7 @@
  */
 
 import { mixHex } from '../fan';
+import { IRON_GALL } from './palette';
 import { inkLine } from './pen';
 import { hash32, mulberry32, type Rand } from './random';
 
@@ -324,7 +325,7 @@ export function drawSnellWindow(
     : dark
       ? mixHex('#ABA99F', sun.warmth, 0.4)
       : mixHex('#F8F5EA', sun.warmth, 0.3);
-  const ink = dark ? mixHex('#E8E6DC', sun.warmth, 0.25) : '#3C4846';
+  const ink = dark ? mixHex(IRON_GALL.dark, sun.warmth, 0.25) : IRON_GALL.light;
   const shadow = dark ? '#03050A' : '#3F4D4B';
   const lift = dark ? 'lighter' : 'screen';
 
@@ -594,7 +595,7 @@ export function drawSnellWindow(
           // Drawn round in slate, the pen lifting where the light is.
           const ring: number[] = [];
           for (let i = 0; i < 40; i++) ring.push(Math.cos((i / 40) * TAU) * d, Math.sin((i / 40) * TAU) * d);
-          inkLine(g, ring, true, { width: Math.max(px, d / 26), color: '#3C4846', alpha: 0.8, lost: 0.4, seed: 5 });
+          inkLine(g, ring, true, { width: Math.max(px, d / 26), color: IRON_GALL.light, alpha: 0.75, lost: 0.4, seed: 5 });
         }
       },
       0.1,

@@ -99,8 +99,8 @@ function buildTile(size = TILE): HTMLCanvasElement | null {
       const knot = Math.max(0, 1 - e3 / (width * 5));
       // The cells are not quite dark: a little light lies across them too,
       // thickest toward their rims.
-      const floor = 0.05 * Math.max(0, 1 - e / 0.35);
-      const a = Math.min(1, core * core * (0.5 + 0.5 * m) + glow * glow * 0.2 + knot * knot * 0.4 + floor);
+      const floor = 0.03 * Math.max(0, 1 - e / 0.35);
+      const a = Math.min(1, core * core * (0.5 + 0.5 * m) + glow * glow * 0.18 + knot * knot * 0.25 + floor);
       const o = (y * size + x) * 4;
       d[o] = 255;
       d[o + 1] = 252;

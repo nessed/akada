@@ -17,7 +17,7 @@ import { mixHex } from '../fan';
 import { zoneMid } from './depth';
 import type { EelPatch, Growth, Outcrop, outcropsInView } from './outcrop';
 import { HUES, IRON_GALL, waterAt, type Water } from './palette';
-import { detailFor, grain, hatch, inkLine, LIGHT, stipple } from './pen';
+import { detailFor, grain, hatch, inkLine, LIGHT, shadeAcross, stipple, washFill } from './pen';
 import { chance, hash32, int, mulberry32, range, type Rand } from './random';
 
 /** The light from the top left, and the other way for light ink on dark
@@ -647,28 +647,58 @@ function drawRock(
 
 // ---------------------------------------------------------------------------
 // The growths. Each is drawn at its base, standing up (-y), `H` device pixels tall.
+//
+// Every one is in the same pen as the rock and the animals: a wash of its
+// colour (watercolour, pooled at the edge with the paper left bare, when the
+// drawing is big enough to show it), shading laid in ink on its shadow side,
+// and its own anatomy finer the bigger it is drawn: polyps on the coral,
+// grooves in the brain, a lattice in the fan, pores in the sponge. Each
+// shape keeps the dice it was always rolled with; what the detail needs
+// comes off a second stream, so nothing that stood on a rock moves.
 
 interface Ink {
+  /** The pen: every line, in the one ink. */
   ink: string;
   body: string;
+  /** The wash on its shadow side. */
+  deep: string;
+  /** The wash where the light lands: toward the paper, or a faint lift on dark water. */
+  lit: string;
   /** The dark of an opening: a sponge's mouth. */
   hollow: string;
   /** A sea pen's light, in the dark. */
   glow: string | null;
 }
 
-/** The animals' ink rule, with the colour drained toward grey and then pale with depth. */
+/** The animals' rule, with the colour drained toward grey and then pale with
+    depth; the lines all in the one ink. */
 function inkFor(g: Growth, zone: number, dark: boolean): Ink {
   let c = HUES[Math.max(0, Math.min(HUES.length - 1, Math.round(g.hue)))];
   if (zone === 1) c = mixHex(c, '#9AA3AB', 0.5);
   else if (zone >= 2) c = mixHex(c, '#EFE9DC', 0.75);
   const water = dark ? '#1A1815' : '#FBF8EF';
+  const body = dark ? mixHex(c, water, 0.45) : mixHex(c, water, 0.2);
   return {
-    ink: dark ? mixHex(c, '#FFFFFF', 0.45) : mixHex(c, '#1A1714', 0.6),
-    body: dark ? mixHex(c, water, 0.45) : mixHex(c, water, 0.2),
+    ink: dark ? IRON_GALL.dark : IRON_GALL.light,
+    body,
+    deep: dark ? mixHex(body, '#000000', 0.32) : mixHex(body, '#3A2E26', 0.25),
+    lit: dark ? mixHex(body, IRON_GALL.dark, 0.35) : mixHex(body, '#FBF8EF', 0.6),
     hollow: dark ? '#0B0A09' : mixHex(c, '#1A1714', 0.75),
     glow: dark && zone >= 2 ? mixHex(c, '#FFFFFF', 0.55) : null,
   };
+}
+
+/** How a growth is being drawn. */
+interface GPen {
+  /** How much drawing it carries, 0 to 1. */
+  d: number;
+  dark: boolean;
+  /** The light as the pen takes it: reversed on dark water, where the light ink marks the light. */
+  light: [number, number];
+  /** A second stream of dice for the detail, so the shape keeps its own. */
+  r2: Rand;
+  px: number;
+  seed: number;
 }
 
 function drawGrowth(ctx: CanvasRenderingContext2D, g: Growth, zone: number, dark: boolean, px: number) {
@@ -679,10 +709,13 @@ function drawGrowth(ctx: CanvasRenderingContext2D, g: Growth, zone: number, dark
   ctx.fillStyle = ink.body;
   ctx.strokeStyle = ink.ink;
   ctx.lineWidth = 0.9 * px;
-  DRAW[g.kind](ctx, H, ink, r, px);
+  // A growth is small on its rock, so it is judged at three times its height:
+  // a reef seen on a wallpaper is near enough to show its polyps.
+  const pen: GPen = { d: detailFor(H * 3), dark, light: dark ? UNLIGHT : LIGHT, r2: mulberry32(g.seed ^ 0x6d2b79f5), px, seed: g.seed };
+  DRAW[g.kind](ctx, H, ink, r, px, pen);
 }
 
-type Drawer = (ctx: CanvasRenderingContext2D, H: number, ink: Ink, r: Rand, px: number) => void;
+type Drawer = (ctx: CanvasRenderingContext2D, H: number, ink: Ink, r: Rand, px: number, pen: GPen) => void;
 
 /** Stroke at a fraction of the current alpha, then put it back. */
 function faint(ctx: CanvasRenderingContext2D, k: number, draw: () => void) {
@@ -692,10 +725,124 @@ function faint(ctx: CanvasRenderingContext2D, k: number, draw: () => void) {
   ctx.globalAlpha = a;
 }
 
+/** A quadratic's points, appended to `out` (not its start). */
+function quadPts(out: number[], x0: number, y0: number, cx: number, cy: number, x1: number, y1: number, n: number) {
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const u = 1 - t;
+    out.push(u * u * x0 + 2 * u * t * cx + t * t * x1, u * u * y0 + 2 * u * t * cy + t * t * y1);
+  }
+}
+
+/** An elliptical arc's points from angle a0 to a1, appended to `out`. */
+function arcPts(out: number[], cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n: number) {
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    out.push(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry);
+  }
+}
+
+function boxOf(pts: number[]) {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (let i = 0; i < pts.length; i += 2) {
+    x0 = Math.min(x0, pts[i]);
+    x1 = Math.max(x1, pts[i]);
+    y0 = Math.min(y0, pts[i + 1]);
+    y1 = Math.max(y1, pts[i + 1]);
+  }
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+}
+
+function pathOf(pts: number[], closed = true): Path2D {
+  const p = new Path2D();
+  p.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) p.lineTo(pts[i], pts[i + 1]);
+  if (closed) p.closePath();
+  return p;
+}
+
+/** A wash in a shape: watercolour when the drawing is big enough to show it, else flat. */
+function wash(ctx: CanvasRenderingContext2D, path: Path2D, box: { x: number; y: number; w: number; h: number }, color: string, pen: GPen, k = 1) {
+  const a = ctx.globalAlpha;
+  if (pen.d > 0.3) {
+    ctx.globalAlpha = 1;
+    washFill(ctx, path, box, {
+      color,
+      alpha: a * k,
+      edge: 0.3,
+      paper: pen.dark ? null : '#FBF8EF',
+      highlight: 0.4,
+      granulate: 0.3,
+      px: pen.px,
+    });
+    ctx.globalAlpha = a;
+  } else {
+    ctx.globalAlpha = a * k;
+    ctx.fillStyle = color;
+    ctx.fill(path);
+    ctx.globalAlpha = a;
+  }
+}
+
+/** Engraved shading on a shape's shadow side (its lit side, on dark water). */
+function shadeIn(
+  ctx: CanvasRenderingContext2D,
+  path: Path2D,
+  box: { x: number; y: number; w: number; h: number },
+  ink: Ink,
+  pen: GPen,
+  o: { angle?: number; spacing?: number; from?: number; cross?: number | null; bow?: number; k?: number; dots?: boolean } = {},
+) {
+  if (pen.d <= 0.4) return;
+  const shade = shadeAcross(box, pen.light);
+  if (o.dots) {
+    stipple(ctx, path, box, {
+      spacing: (o.spacing ?? 1.6) * pen.px,
+      radius: 0.33 * pen.px,
+      shade,
+      from: o.from ?? 0.45,
+      color: ink.ink,
+      alpha: o.k ?? 0.6,
+      seed: pen.seed ^ 0x51,
+    });
+    return;
+  }
+  hatch(ctx, path, box, {
+    spacing: (o.spacing ?? 1.9) * pen.px,
+    angle: o.angle ?? 0.9,
+    shade,
+    from: o.from ?? (pen.dark ? 0.6 : 0.5),
+    cross: pen.dark || o.cross === null ? undefined : (o.cross ?? 0.84),
+    color: ink.ink,
+    width: 0.42 * pen.px,
+    alpha: o.k ?? 0.55,
+    bow: o.bow ?? 0.4,
+    seed: pen.seed ^ 0x77,
+  });
+}
+
+/** The pen's line round a shape, or along it. */
+function outline(ctx: CanvasRenderingContext2D, pts: number[], closed: boolean, ink: Ink, pen: GPen, width = 0.8, taper?: [number, number]) {
+  inkLine(ctx, pts, closed, {
+    width: width * pen.px,
+    color: ink.ink,
+    swell: 0.8,
+    lost: pen.d > 0.4 ? 0.3 : 0.1,
+    taper,
+    seed: pen.seed,
+    light: pen.light,
+    min: 0.25 * pen.px,
+  });
+}
+
 const DRAW: Record<Growth['kind'], Drawer> = {
-  // Antler coral: forking three or four times, the ink laid wide and the
-  // body narrower over it so each branch reads as outlined, ends round.
-  branch(ctx, H, ink, r, px) {
+  // Antler coral: forking three or four times, each branch a tube outlined
+  // in ink, shaded down its far side and lifted down its near one, and
+  // studded with polyp cups when drawn big.
+  branch(ctx, H, ink, r, px, pen) {
     const segs: number[][] = [];
     const grow = (x: number, y: number, a: number, len: number, wd: number, lvl: number) => {
       const x1 = x + Math.sin(a) * len;
@@ -711,53 +858,109 @@ const DRAW: Record<Growth['kind'], Drawer> = {
       }
     };
     grow(0, 0, range(r, -0.12, 0.12), H * 0.34, Math.max(1.8 * px, H * 0.1), H > 44 * px ? 3 : 2);
-    for (const [pass, extra, color] of [[0, 1.6, ink.ink], [1, 0, ink.body]] as const) {
+    const stroke = (color: string, width: (wd: number) => number, off: number) => {
       ctx.strokeStyle = color;
       for (const [x, y, cx, cy, x1, y1, wd] of segs) {
-        ctx.lineWidth = wd + extra * px;
+        // Across the branch, toward its shadow side.
+        const l = Math.hypot(x1 - x, y1 - y) || 1;
+        let nx = -(y1 - y) / l;
+        let ny = (x1 - x) / l;
+        if (nx * LIGHT[0] + ny * LIGHT[1] < 0) {
+          nx = -nx;
+          ny = -ny;
+        }
+        const o = off * wd;
+        ctx.lineWidth = width(wd);
         ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.quadraticCurveTo(cx, cy, x1, y1);
+        ctx.moveTo(x + nx * o, y + ny * o);
+        ctx.quadraticCurveTo(cx + nx * o, cy + ny * o, x1 + nx * o, y1 + ny * o);
         ctx.stroke();
       }
-      if (pass === 1) ctx.strokeStyle = ink.ink;
+    };
+    stroke(ink.ink, (wd) => wd + 1.3 * px, 0);
+    stroke(ink.body, (wd) => wd, 0);
+    // The far side in shadow, the near side catching the light.
+    faint(ctx, 0.7, () => stroke(ink.deep, (wd) => wd * 0.38, 0.24));
+    faint(ctx, 0.6, () => stroke(ink.lit, (wd) => wd * 0.2, -0.22));
+    if (pen.d > 0.3) {
+      // Polyps: small cups along every branch, set either side, the way
+      // antler coral is pitted all over.
+      const cups = new Path2D();
+      for (const [x, y, cx, cy, x1, y1, wd] of segs) {
+        const l = Math.hypot(x1 - x, y1 - y);
+        const steps = Math.max(2, Math.floor(l / (2.6 * px)));
+        for (let s = 1; s < steps; s++) {
+          const t = (s + (pen.r2() - 0.5) * 0.5) / steps;
+          const u = 1 - t;
+          const px0 = u * u * x + 2 * u * t * cx + t * t * x1;
+          const py0 = u * u * y + 2 * u * t * cy + t * t * y1;
+          const tx = 2 * u * (cx - x) + 2 * t * (x1 - cx);
+          const ty = 2 * u * (cy - y) + 2 * t * (y1 - cy);
+          const tl = Math.hypot(tx, ty) || 1;
+          const side = (s % 2 ? 1 : -1) * wd * (0.18 + 0.12 * pen.r2());
+          const qx = px0 - (ty / tl) * side;
+          const qy = py0 + (tx / tl) * side;
+          const cr = Math.max(0.35 * px, wd * 0.11);
+          cups.moveTo(qx + cr, qy);
+          cups.arc(qx, qy, cr, 0, Math.PI * 2);
+        }
+      }
+      ctx.strokeStyle = ink.ink;
+      ctx.lineWidth = 0.35 * px;
+      faint(ctx, 0.55, () => ctx.stroke(cups));
     }
   },
 
-  // Brain coral: a low dome, its meandering grooves following the curve.
-  brain(ctx, H, ink, r, px) {
+  // Brain coral: a low dome washed in its colour and shaded on its far side,
+  // its meandering grooves following the curve, each one a dark valley with a
+  // lit ridge beside it, finer and more of them the bigger it is drawn.
+  brain(ctx, H, ink, r, px, pen) {
     const rx = H * 0.8;
     const ry = H * 0.55;
-    const dome = new Path2D();
-    dome.moveTo(-rx, 0);
-    dome.ellipse(0, 0, rx, ry, 0, Math.PI, Math.PI * 2);
-    dome.closePath();
-    ctx.fill(dome);
-    ctx.stroke(dome);
+    const pts: number[] = [];
+    arcPts(pts, 0, 0, rx, ry, Math.PI, Math.PI * 2, 40);
+    const dome = pathOf(pts);
+    const box = { x: -rx, y: -ry, w: rx * 2, h: ry };
+    wash(ctx, dome, box, ink.body, pen);
+    shadeIn(ctx, dome, box, ink, pen, { angle: 1.2, bow: 0.9 });
     ctx.save();
     ctx.clip(dome);
-    ctx.beginPath();
-    for (let k = 1; k <= 5; k++) {
-      const rk = k / 6;
-      const freq = int(r, 7, 12);
-      const ph = range(r, 0, Math.PI * 2);
-      for (let s = 0; s <= 40; s++) {
-        const t = Math.PI + (Math.PI * s) / 40;
+    const rings: { rk: number; freq: number; ph: number }[] = [];
+    for (let k = 1; k <= 5; k++) rings.push({ rk: k / 6, freq: int(r, 7, 12), ph: range(r, 0, Math.PI * 2) });
+    if (pen.d > 0.3) {
+      for (let k = 0; k < 5; k++) rings.push({ rk: (k + 1.5) / 6, freq: int(pen.r2, 9, 15), ph: range(pen.r2, 0, Math.PI * 2) });
+    }
+    const groove = (rk: number, freq: number, ph: number, dx: number, dy: number) => {
+      for (let s = 0; s <= 48; s++) {
+        const t = Math.PI + (Math.PI * s) / 48;
         const rad = rk + 0.06 * Math.sin(t * freq + ph) + 0.03 * Math.sin(t * freq * 2.3 + ph * 1.7);
-        const x = Math.cos(t) * rx * rad;
-        const y = Math.sin(t) * ry * rad;
+        const x = Math.cos(t) * rx * rad + dx;
+        const y = Math.sin(t) * ry * rad + dy;
         if (s === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
+    };
+    if (pen.d > 0.3) {
+      // The ridges, lifted toward the light beside each valley.
+      ctx.beginPath();
+      for (const g of rings) groove(g.rk, g.freq, g.ph, -0.7 * px, -0.7 * px);
+      ctx.strokeStyle = ink.lit;
+      ctx.lineWidth = 0.7 * px;
+      faint(ctx, 0.7, () => ctx.stroke());
     }
-    ctx.lineWidth = 0.8 * px;
+    ctx.beginPath();
+    for (const g of rings) groove(g.rk, g.freq, g.ph, 0, 0);
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = (pen.d > 0.3 ? 0.55 : 0.8) * px;
     faint(ctx, 0.6, () => ctx.stroke());
     ctx.restore();
+    outline(ctx, pts, true, ink, pen);
   },
 
   // Sea fan: a short stem opening into a flat fan of ribs, crossed into a
-  // lattice, over a thin wash.
-  fan(ctx, H, ink, r, px) {
+  // lattice, over a thin wash; big, the lattice is a fine mesh and the ribs
+  // carry their polyps.
+  fan(ctx, H, ink, r, px, pen) {
     const sx = range(r, -0.04, 0.04) * H;
     const oy = -0.16 * H;
     const n = int(r, 7, 10);
@@ -774,50 +977,83 @@ const DRAW: Record<Growth['kind'], Drawer> = {
       }
       ribs.push(pts);
     }
-    const wash = new Path2D();
-    wash.moveTo(sx, oy);
-    for (const pts of ribs) wash.lineTo(pts[6][0], pts[6][1]);
-    wash.closePath();
-    faint(ctx, 0.3, () => ctx.fill(wash));
-    ctx.lineWidth = 1.6 * px;
+    const hull: number[] = [sx, oy];
+    for (const pts of ribs) hull.push(pts[6][0], pts[6][1]);
+    const fanPath = pathOf(hull);
+    wash(ctx, fanPath, boxOf(hull), ink.body, pen, 0.3);
+    // The stem, stout at the holdfast.
+    outline(ctx, [0, 0, sx * 0.5, oy * 0.5, sx, oy], false, ink, pen, 1.6, [0, 0.3]);
+    // The lattice: rows across the ribs, and big, rows between those and the
+    // little cross-links that make a fan a net.
+    const at = (i: number, k: number): [number, number] => {
+      const k0 = Math.floor(k);
+      const f = k - k0;
+      const a = ribs[i][Math.min(6, k0)];
+      const b = ribs[i][Math.min(6, k0 + 1)];
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    };
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(sx, oy);
-    ctx.stroke();
-    ctx.lineWidth = 0.8 * px;
+    const rows = pen.d > 0.3 ? [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5] : [1, 2, 3, 4, 5];
+    for (const k of rows) {
+      ctx.moveTo(...at(0, k));
+      for (let i = 1; i < n; i++) ctx.lineTo(...at(i, k));
+    }
+    if (pen.d > 0.3) {
+      for (let i = 0; i < n - 1; i++) {
+        for (const k of rows) {
+          if (k >= 5.5 || pen.r2() < 0.45) continue;
+          const [ax, ay] = at(i, k);
+          const [bx, by] = at(i + 1, k + 0.5);
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+        }
+      }
+    }
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = (pen.d > 0.3 ? 0.4 : 0.5) * px;
+    faint(ctx, 0.5, () => ctx.stroke());
+    // The ribs in the pen, each running out to a fork at its tip.
+    for (const pts of ribs) {
+      const flat: number[] = [];
+      for (const [x, y] of pts) flat.push(x, y);
+      outline(ctx, flat, false, ink, pen, 0.6, [0, 0.35]);
+    }
     ctx.beginPath();
     for (const pts of ribs) {
-      ctx.moveTo(pts[0][0], pts[0][1]);
-      for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k][0], pts[k][1]);
-      // A fork at the tip.
       const [ex, ey] = pts[6];
       const [px0, py0] = pts[5];
-      const dx = (ex - px0) * 0.5;
-      const dy = (ey - py0) * 0.5;
+      const dx = (ex - px0) * 0.35;
+      const dy = (ey - py0) * 0.35;
       ctx.moveTo(ex, ey);
       ctx.lineTo(ex + dx - dy * 0.6, ey + dy + dx * 0.6);
       ctx.moveTo(ex, ey);
       ctx.lineTo(ex + dx + dy * 0.6, ey + dy - dx * 0.6);
     }
-    ctx.stroke();
-    ctx.beginPath();
-    for (let k = 1; k <= 5; k++) {
-      ctx.moveTo(ribs[0][k][0], ribs[0][k][1]);
-      for (let i = 1; i < n; i++) ctx.lineTo(ribs[i][k][0], ribs[i][k][1]);
+    ctx.lineWidth = 0.45 * px;
+    faint(ctx, 0.7, () => ctx.stroke());
+    if (pen.d > 0.45) {
+      const dots = new Path2D();
+      for (const pts of ribs) {
+        for (let k = 1.3; k < 6; k += 0.55) {
+          const [x, y] = at(ribs.indexOf(pts), k);
+          dots.moveTo(x + 0.45 * px, y);
+          dots.arc(x, y, 0.45 * px, 0, Math.PI * 2);
+        }
+      }
+      ctx.fillStyle = ink.ink;
+      faint(ctx, 0.5, () => ctx.fill(dots));
+      ctx.fillStyle = ink.body;
     }
-    ctx.lineWidth = 0.5 * px;
-    faint(ctx, 0.5, () => ctx.stroke());
   },
 
-  // Anemone: a short column, its disc crowned with curving tentacles, each
-  // ending in a little knob.
-  anemone(ctx, H, ink, r, px) {
+  // Anemone: a short column, its disc crowned with curving tentacles that
+  // taper to fine tips, each ending in a little knob.
+  anemone(ctx, H, ink, r, px, pen) {
     const cw = H * 0.3;
     const tw = H * 0.38;
     const chh = H * 0.36;
     const n = int(r, 14, 20);
-    const tips: [number, number][] = [];
-    const tent = new Path2D();
+    const tents: number[][] = [];
     for (let i = 0; i < n; i++) {
       const u = i / (n - 1);
       const bx = (u - 0.5) * tw * 0.95;
@@ -829,43 +1065,88 @@ const DRAW: Record<Growth['kind'], Drawer> = {
       const a2 = a * 1.5 + range(r, -0.3, 0.3);
       const ex = cx + Math.sin(a2) * len * 0.5;
       const ey = cy - Math.cos(a2) * len * 0.5;
-      tent.moveTo(bx, by);
-      tent.quadraticCurveTo(cx, cy, ex, ey);
-      tips.push([ex, ey]);
+      const pts: number[] = [bx, by];
+      quadPts(pts, bx, by, cx, cy, ex, ey, 10);
+      tents.push(pts);
     }
-    ctx.lineWidth = 2.8 * px;
-    ctx.stroke(tent);
-    ctx.lineWidth = 1.5 * px;
-    ctx.strokeStyle = ink.body;
-    ctx.stroke(tent);
+    // Each tentacle a ribbon, full at the disc and fine at the tip.
+    const base = Math.max(1.4 * px, H * 0.045);
+    const tentPath = new Path2D();
+    const tips: [number, number][] = [];
+    for (const pts of tents) {
+      const m = pts.length / 2;
+      const left: number[] = [];
+      const right: number[] = [];
+      for (let j = 0; j < m; j++) {
+        const a0 = Math.max(0, j - 1);
+        const a1 = Math.min(m - 1, j + 1);
+        const tx = pts[a1 * 2] - pts[a0 * 2];
+        const ty = pts[a1 * 2 + 1] - pts[a0 * 2 + 1];
+        const tl = Math.hypot(tx, ty) || 1;
+        const hw = (base / 2) * (1 - 0.72 * (j / (m - 1))) ** 1.1;
+        left.push(pts[j * 2] - (ty / tl) * hw, pts[j * 2 + 1] + (tx / tl) * hw);
+        right.push(pts[j * 2] + (ty / tl) * hw, pts[j * 2 + 1] - (tx / tl) * hw);
+      }
+      tentPath.moveTo(left[0], left[1]);
+      for (let j = 2; j < left.length; j += 2) tentPath.lineTo(left[j], left[j + 1]);
+      for (let j = right.length - 2; j >= 0; j -= 2) tentPath.lineTo(right[j], right[j + 1]);
+      tentPath.closePath();
+      tips.push([pts[pts.length - 2], pts[pts.length - 1]]);
+    }
+    ctx.fillStyle = ink.body;
+    ctx.fill(tentPath);
     ctx.strokeStyle = ink.ink;
-    ctx.lineWidth = 0.7 * px;
+    ctx.lineWidth = (pen.d > 0.3 ? 0.5 : 0.7) * px;
+    ctx.stroke(tentPath);
+    if (pen.d > 0.3) {
+      // A shadow down the far side of each.
+      ctx.save();
+      ctx.clip(tentPath);
+      ctx.translate(base * 0.35, base * 0.2);
+      ctx.strokeStyle = ink.deep;
+      ctx.lineWidth = base * 0.35;
+      faint(ctx, 0.6, () => {
+        ctx.beginPath();
+        for (const pts of tents) {
+          ctx.moveTo(pts[0], pts[1]);
+          for (let j = 2; j < pts.length - 4; j += 2) ctx.lineTo(pts[j], pts[j + 1]);
+        }
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+    ctx.lineWidth = 0.4 * px;
+    ctx.fillStyle = ink.body;
     for (const [x, y] of tips) {
       ctx.beginPath();
-      ctx.arc(x, y, 1.7 * px, 0, Math.PI * 2);
+      ctx.arc(x, y, Math.max(0.7 * px, base * 0.24), 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
-    const col = new Path2D();
-    col.moveTo(-cw / 2, 0);
-    col.quadraticCurveTo(-cw * 0.42, -chh * 0.6, -tw / 2, -chh);
-    col.ellipse(0, -chh, tw / 2, H * 0.05, 0, Math.PI, 0, true);
-    col.quadraticCurveTo(cw * 0.42, -chh * 0.6, cw / 2, 0);
-    col.closePath();
-    ctx.fill(col);
-    ctx.lineWidth = 0.9 * px;
-    ctx.stroke(col);
+    ctx.fillStyle = ink.body;
+    // The column, washed and shaded, striped down its length.
+    const col: number[] = [-cw / 2, 0];
+    quadPts(col, -cw / 2, 0, -cw * 0.42, -chh * 0.6, -tw / 2, -chh, 10);
+    arcPts(col, 0, -chh, tw / 2, H * 0.05, Math.PI, 0, 16);
+    quadPts(col, tw / 2, -chh, cw * 0.42, -chh * 0.6, cw / 2, 0, 10);
+    const colPath = pathOf(col);
+    const box = boxOf(col);
+    wash(ctx, colPath, box, ink.body, pen);
+    shadeIn(ctx, colPath, box, ink, pen, { angle: Math.PI / 2 - 0.15, bow: 0, from: 0.55 });
     ctx.beginPath();
-    for (const f of [-0.22, 0, 0.22]) {
+    const stripes = pen.d > 0.3 ? [-0.36, -0.22, -0.08, 0.08, 0.22, 0.36] : [-0.22, 0, 0.22];
+    for (const f of stripes) {
       ctx.moveTo(f * cw, -2 * px);
       ctx.lineTo(f * tw, -chh + 3 * px);
     }
-    ctx.lineWidth = 0.6 * px;
+    ctx.lineWidth = 0.5 * px;
     faint(ctx, 0.4, () => ctx.stroke());
+    outline(ctx, col, true, ink, pen, 0.85);
   },
 
-  // Tube sponges: a few upright tubes, round-lipped, dark in the mouth.
-  tube(ctx, H, ink, r, px) {
+  // Tube sponges: a few upright tubes, round-lipped, dark in the mouth,
+  // shaded down their far side and pitted with pores when drawn big.
+  tube(ctx, H, ink, r, px, pen) {
     const n = int(r, 2, 4);
     for (let i = 0; i < n; i++) {
       const x = (i - (n - 1) / 2) * H * 0.2 + range(r, -0.03, 0.03) * H;
@@ -875,113 +1156,188 @@ const DRAW: Record<Growth['kind'], Drawer> = {
       ctx.save();
       ctx.translate(x, 0);
       ctx.rotate(range(r, -0.12, 0.12) + (i - (n - 1) / 2) * 0.06);
-      const p = new Path2D();
-      p.moveTo(-tw * 0.4, 0);
-      p.quadraticCurveTo(-tw * 0.56, -th * 0.5, -tw / 2, -th);
-      p.ellipse(0, -th, tw / 2, ry, 0, Math.PI, 0);
-      p.quadraticCurveTo(tw * 0.56, -th * 0.5, tw * 0.4, 0);
-      p.closePath();
-      ctx.fill(p);
-      ctx.stroke(p);
+      const pts: number[] = [-tw * 0.4, 0];
+      quadPts(pts, -tw * 0.4, 0, -tw * 0.56, -th * 0.5, -tw / 2, -th, 10);
+      arcPts(pts, 0, -th, tw / 2, ry, Math.PI, Math.PI * 2, 14);
+      quadPts(pts, tw / 2, -th, tw * 0.56, -th * 0.5, tw * 0.4, 0, 10);
+      const p = pathOf(pts);
+      const box = { x: -tw * 0.56, y: -th - ry, w: tw * 1.12, h: th + ry };
+      wash(ctx, p, box, ink.body, pen);
+      shadeIn(ctx, p, box, ink, pen, { angle: Math.PI / 2 - 0.05, bow: 0, from: 0.55, cross: 0.9 });
       ctx.beginPath();
       for (const f of [0.3, 0.55, 0.78]) {
         const y = -th * f;
         ctx.moveTo(-tw * 0.48, y);
         ctx.quadraticCurveTo(0, y + ry * 1.4, tw * 0.48, y);
       }
-      ctx.lineWidth = 0.6 * px;
+      ctx.lineWidth = 0.55 * px;
       faint(ctx, 0.35, () => ctx.stroke());
+      if (pen.d > 0.3) {
+        // Pores: small dark openings over the near face, each with a lit lower lip.
+        const pores = new Path2D();
+        const lips = new Path2D();
+        const count = Math.round(5 + 10 * pen.d * (th / H));
+        for (let k = 0; k < count; k++) {
+          const v = 0.1 + 0.78 * pen.r2();
+          const u = (pen.r2() - 0.5) * 0.75;
+          const prx = (0.5 + pen.r2() * 0.6) * px * (1 - Math.abs(u));
+          const qx = u * tw;
+          const qy = -th * v;
+          pores.moveTo(qx + prx, qy);
+          pores.ellipse(qx, qy, prx, prx * 0.7, 0, 0, Math.PI * 2);
+          lips.moveTo(qx + prx, qy + 0.3 * px);
+          lips.ellipse(qx, qy + 0.3 * px, prx, prx * 0.7, 0, 0.2, Math.PI - 0.2);
+        }
+        ctx.fillStyle = ink.hollow;
+        faint(ctx, 0.6, () => ctx.fill(pores));
+        ctx.strokeStyle = ink.lit;
+        ctx.lineWidth = 0.4 * px;
+        faint(ctx, 0.7, () => ctx.stroke(lips));
+        ctx.strokeStyle = ink.ink;
+      }
       ctx.beginPath();
       ctx.ellipse(0, -th, tw * 0.36, ry * 0.65, 0, 0, Math.PI * 2);
       ctx.fillStyle = ink.hollow;
       faint(ctx, 0.75, () => ctx.fill());
       ctx.fillStyle = ink.body;
-      ctx.lineWidth = 0.9 * px;
-      ctx.beginPath();
-      ctx.ellipse(0, -th, tw / 2, ry, 0, 0, Math.PI * 2);
-      ctx.stroke();
+      outline(ctx, pts, true, ink, pen, 0.9);
+      const rim: number[] = [];
+      arcPts(rim, 0, -th, tw / 2, ry, 0, Math.PI, 14);
+      outline(ctx, rim, false, ink, pen, 0.7, [0.1, 0.1]);
       ctx.restore();
     }
   },
 
-  // Urchin: a round test bristling with fine spines, none into the rock.
-  urchin(ctx, H, ink, r, px) {
+  // Urchin: a round test bristling with fine tapering spines, none into the
+  // rock, its tubercles in rows when drawn big.
+  urchin(ctx, H, ink, r, px, pen) {
     const R = H * 0.2;
     const cy = -R;
-    ctx.beginPath();
+    const spines = new Path2D();
     const n = int(r, 26, 34);
+    const sw = 0.32 * px;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + range(r, -0.08, 0.08);
       if (Math.sin(a) > 0.2) continue;
       const len = H * range(r, 0.3, 0.45);
-      ctx.moveTo(Math.cos(a) * R * 0.8, cy + Math.sin(a) * R * 0.8);
-      ctx.lineTo(Math.cos(a) * (R + len), cy + Math.sin(a) * (R + len));
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      // A long thin wedge: wide at the test, a point at the tip.
+      spines.moveTo(c * R * 0.8 - s * sw, cy + s * R * 0.8 + c * sw);
+      spines.lineTo(c * (R + len), cy + s * (R + len));
+      spines.lineTo(c * R * 0.8 + s * sw, cy + s * R * 0.8 - c * sw);
+      spines.closePath();
     }
-    ctx.lineWidth = 0.8 * px;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, cy, R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineWidth = 0.9 * px;
-    ctx.stroke();
+    ctx.fillStyle = mixHex(ink.ink, ink.body, 0.25);
+    faint(ctx, 0.85, () => ctx.fill(spines));
+    const test: number[] = [];
+    arcPts(test, 0, cy, R, R, 0, Math.PI * 2, 32);
+    const testPath = pathOf(test);
+    const box = { x: -R, y: cy - R, w: R * 2, h: R * 2 };
+    wash(ctx, testPath, box, ink.body, pen);
+    shadeIn(ctx, testPath, box, ink, pen, { dots: true, spacing: 1.3, from: 0.45 });
+    outline(ctx, test, true, ink, pen, 0.9);
     ctx.fillStyle = ink.ink;
     faint(ctx, 0.5, () => {
       for (let i = 0; i < 9; i++) {
         const a = range(r, 0, Math.PI * 2);
         const d = R * range(r, 0.2, 0.7);
         ctx.beginPath();
-        ctx.arc(Math.cos(a) * d, cy + Math.sin(a) * d * 0.8, 0.8 * px, 0, Math.PI * 2);
+        ctx.arc(Math.cos(a) * d, cy + Math.sin(a) * d * 0.8, (pen.d > 0.3 ? 0.5 : 0.8) * px, 0, Math.PI * 2);
         ctx.fill();
+      }
+      if (pen.d > 0.3) {
+        // The tubercles, in rows from crown to rim like a globe's meridians.
+        const dots = new Path2D();
+        for (let m = 0; m < 10; m++) {
+          const lon = -1.35 + (2.7 * m) / 9;
+          for (let k = 1; k < 7; k++) {
+            const lat = -1.3 + (2.6 * k) / 7;
+            const x = Math.sin(lon) * Math.cos(lat) * R * 0.92;
+            const y = cy + Math.sin(lat) * R * 0.92;
+            const dr = 0.35 * px * (0.6 + 0.4 * Math.cos(lon) * Math.cos(lat));
+            dots.moveTo(x + dr, y);
+            dots.arc(x, y, dr, 0, Math.PI * 2);
+          }
+        }
+        ctx.fill(dots);
       }
     });
     ctx.fillStyle = ink.body;
   },
 
-  // Plate coral: shelves stacked up a short stalk, each ringed with its growth.
-  plate(ctx, H, ink, r, px) {
+  // Plate coral: shelves stacked up a short stalk, each ringed with its
+  // growth, the underside of each in shadow.
+  plate(ctx, H, ink, r, px, pen) {
     const n = int(r, 2, 3);
     const shelves = Array.from({ length: n }, (_, k) => {
       const rx = H * range(r, 0.45, 0.62) * (1 - 0.15 * k);
       return { x: (k % 2 ? -1 : 1) * range(r, 0.05, 0.2) * H, y: -H * (0.25 + 0.28 * k), rx, ry: rx * 0.2 };
     });
-    ctx.lineWidth = 1.4 * px;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    for (const s of shelves) ctx.lineTo(s.x * 0.3, s.y);
-    ctx.stroke();
-    const under = mixHex(ink.body, ink.ink, 0.25);
+    const stalk: number[] = [0, 0];
+    for (const s of shelves) stalk.push(s.x * 0.3, s.y);
+    outline(ctx, stalk, false, ink, pen, 1.1, [0, 0.2]);
     // Top shelf first, so the lower ones lie over its stalk.
     for (let k = n - 1; k >= 0; k--) {
       const s = shelves[k];
       const lip = H * 0.045;
-      ctx.lineWidth = 0.9 * px;
-      ctx.beginPath();
-      ctx.ellipse(s.x, s.y + lip, s.rx, s.ry, 0, 0, Math.PI * 2);
-      ctx.fillStyle = under;
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.ellipse(s.x, s.y, s.rx, s.ry, 0, 0, Math.PI * 2);
-      ctx.fillStyle = ink.body;
-      ctx.fill();
-      ctx.stroke();
+      const under: number[] = [];
+      arcPts(under, s.x, s.y + lip, s.rx, s.ry, 0, Math.PI * 2, 36);
+      const underPath = pathOf(under);
+      const ubox = boxOf(under);
+      ctx.fillStyle = ink.deep;
+      ctx.fill(underPath);
+      if (pen.d > 0.4 && !pen.dark) {
+        hatch(ctx, underPath, ubox, {
+          spacing: 1.7 * px,
+          angle: 1.3,
+          shade: () => 0.8,
+          from: 0.5,
+          color: ink.ink,
+          width: 0.4 * px,
+          alpha: 0.5,
+          seed: pen.seed + k,
+        });
+      }
+      outline(ctx, under, true, ink, pen, 0.8);
+      const topPts: number[] = [];
+      arcPts(topPts, s.x, s.y, s.rx, s.ry, 0, Math.PI * 2, 36);
+      const top = pathOf(topPts);
+      wash(ctx, top, boxOf(topPts), ink.body, pen);
       ctx.save();
-      ctx.clip();
+      ctx.clip(top);
       ctx.beginPath();
-      for (const f of [0.35, 0.6, 0.82]) {
+      const rings = pen.d > 0.3 ? [0.3, 0.5, 0.66, 0.8, 0.91] : [0.35, 0.6, 0.82];
+      for (const f of rings) {
         ctx.moveTo(s.x * 0.3 + s.rx * f + (s.x - s.x * 0.3) * f, s.y);
         ctx.ellipse(s.x * 0.3 + (s.x - s.x * 0.3) * f, s.y, s.rx * f, s.ry * f, 0, 0, Math.PI * 2);
       }
-      ctx.lineWidth = 0.6 * px;
-      faint(ctx, 0.4, () => ctx.stroke());
+      ctx.strokeStyle = ink.ink;
+      ctx.lineWidth = (pen.d > 0.3 ? 0.45 : 0.6) * px;
+      faint(ctx, pen.dark ? 0.25 : 0.4, () => ctx.stroke());
+      if (pen.d > 0.4) {
+        // Fine radial ridges from the centre to the rim.
+        ctx.beginPath();
+        const cx0 = s.x * 0.3 + (s.x - s.x * 0.3) * 0.15;
+        for (let a = 0.1; a < Math.PI * 2; a += 0.28 + 0.1 * Math.sin(a * 5)) {
+          ctx.moveTo(cx0 + Math.cos(a) * s.rx * 0.18, s.y + Math.sin(a) * s.ry * 0.18);
+          ctx.lineTo(s.x + Math.cos(a) * s.rx * 0.97, s.y + Math.sin(a) * s.ry * 0.97);
+        }
+        ctx.lineWidth = 0.3 * px;
+        faint(ctx, pen.dark ? 0.15 : 0.25, () => ctx.stroke());
+      }
       ctx.restore();
+      outline(ctx, topPts, true, ink, pen, 0.85);
     }
+    ctx.fillStyle = ink.body;
   },
 
-  // Black coral: a few long whips, waving gently, in fine ink.
-  whip(ctx, H, ink, r, px) {
+  // Black coral: a few long whips, waving gently, each a pen line that
+  // tapers to its tip over a thin wash, set with polyps when drawn big.
+  whip(ctx, H, ink, r, px, pen) {
     const n = int(r, 2, 4);
     const p = new Path2D();
+    const whips: number[][] = [];
     for (let i = 0; i < n; i++) {
       const lean = range(r, -0.35, 0.35);
       const len = H * range(r, 0.75, 1.05);
@@ -989,6 +1345,7 @@ const DRAW: Record<Growth['kind'], Drawer> = {
       const freq = range(r, 1.5, 2.5);
       const ph = range(r, 0, Math.PI * 2);
       const bx = range(r, -0.08, 0.08) * H;
+      const pts: number[] = [];
       for (let k = 0; k <= 24; k++) {
         const t = k / 24;
         const wave = Math.sin(t * freq * Math.PI * 2 + ph) * amp * t;
@@ -996,22 +1353,47 @@ const DRAW: Record<Growth['kind'], Drawer> = {
         const y = -Math.cos(lean) * len * t + Math.sin(lean) * wave;
         if (k === 0) p.moveTo(x, y);
         else p.lineTo(x, y);
+        pts.push(x, y);
       }
+      whips.push(pts);
     }
     ctx.strokeStyle = ink.body;
     ctx.lineWidth = 2.2 * px;
     faint(ctx, 0.6, () => ctx.stroke(p));
-    ctx.strokeStyle = ink.ink;
-    ctx.lineWidth = 0.9 * px;
-    ctx.stroke(p);
+    for (const pts of whips) outline(ctx, pts, false, ink, pen, 1, [0, 0.45]);
+    if (pen.d > 0.3) {
+      const polyps = new Path2D();
+      for (const pts of whips) {
+        for (let k = 3; k < 23; k += 2) {
+          const x = pts[k * 2];
+          const y = pts[k * 2 + 1];
+          const tx = pts[k * 2 + 2] - pts[k * 2 - 2];
+          const ty = pts[k * 2 + 3] - pts[k * 2 - 1];
+          const tl = Math.hypot(tx, ty) || 1;
+          const side = k % 4 === 1 ? 1 : -1;
+          const ex = x - (ty / tl) * side * 1.6 * px;
+          const ey = y + (tx / tl) * side * 1.6 * px;
+          polyps.moveTo(x, y);
+          polyps.lineTo(ex, ey);
+          polyps.moveTo(ex + 0.45 * px, ey);
+          polyps.arc(ex, ey, 0.45 * px, 0, Math.PI * 2);
+        }
+      }
+      ctx.strokeStyle = ink.ink;
+      ctx.lineWidth = 0.35 * px;
+      faint(ctx, 0.6, () => ctx.stroke(polyps));
+    }
     ctx.beginPath();
     ctx.ellipse(0, -1 * px, H * 0.07, 2 * px, 0, 0, Math.PI * 2);
+    ctx.fillStyle = ink.body;
     ctx.fill();
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = 0.8 * px;
     ctx.stroke();
   },
 
   // Glass sponge: a tall pale vase of crossed lattice, barely there.
-  glass(ctx, H, ink, r, px) {
+  glass(ctx, H, ink, r, px, pen) {
     const b = H * 0.06;
     const tw = H * range(r, 0.17, 0.22);
     const lean = range(r, -0.05, 0.05) * H;
@@ -1021,11 +1403,15 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     vase.ellipse(lean, -H, tw, tw * 0.25, 0, Math.PI, 0);
     vase.bezierCurveTo(tw * 0.6 + lean, -H * 0.75, H * 0.2, -H * 0.35, b, 0);
     vase.closePath();
+    const pts: number[] = [-b, 0];
+    cubicPts(pts, [-b, 0, -H * 0.2, -H * 0.35, -tw * 0.6 + lean, -H * 0.75, -tw + lean, -H], 14);
+    arcPts(pts, lean, -H, tw, tw * 0.25, Math.PI, Math.PI * 2, 14);
+    cubicPts(pts, [tw + lean, -H, tw * 0.6 + lean, -H * 0.75, H * 0.2, -H * 0.35, b, 0], 14);
     faint(ctx, 0.3, () => ctx.fill(vase));
     ctx.save();
     ctx.clip(vase);
     ctx.beginPath();
-    const step = Math.max(3 * px, H * 0.07);
+    const step = Math.max((pen.d > 0.3 ? 2.2 : 3) * px, H * (pen.d > 0.3 ? 0.045 : 0.07));
     for (let c = -1.3 * H; c <= 0.3 * H; c += step) {
       ctx.moveTo(c, 0);
       ctx.lineTo(c + H, -H);
@@ -1034,21 +1420,30 @@ const DRAW: Record<Growth['kind'], Drawer> = {
       ctx.moveTo(c, 0);
       ctx.lineTo(c - H, -H);
     }
-    ctx.lineWidth = 0.5 * px;
+    if (pen.d > 0.3) {
+      // And the horizontal rings of the lattice, the way a Venus's flower basket is woven.
+      for (let y = -step; y > -H; y -= step * 1.4) {
+        ctx.moveTo(-H, y);
+        ctx.lineTo(H, y);
+      }
+    }
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = (pen.d > 0.3 ? 0.35 : 0.5) * px;
     faint(ctx, 0.4, () => ctx.stroke());
     ctx.restore();
-    ctx.lineWidth = 0.8 * px;
-    faint(ctx, 0.8, () => ctx.stroke(vase));
+    faint(ctx, 0.85, () => outline(ctx, pts, true, ink, pen, 0.8));
     ctx.beginPath();
     ctx.ellipse(lean, -H, tw * 0.85, tw * 0.2, 0, 0, Math.PI * 2);
     ctx.fillStyle = ink.hollow;
     faint(ctx, 0.45, () => ctx.fill());
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = 0.7 * px;
     faint(ctx, 0.8, () => ctx.stroke());
     ctx.fillStyle = ink.body;
   },
 
   // Sea pen: a feather on a short stalk; in the dark a few of its polyps glow.
-  seapen(ctx, H, ink, r, px) {
+  seapen(ctx, H, ink, r, px, pen) {
     const lean = range(r, -0.15, 0.15) * H;
     const sy = -0.22 * H;
     const at = (t: number): [number, number] => {
@@ -1058,6 +1453,7 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     const m = int(r, 9, 13);
     const tips: [number, number][] = [];
     const leaves = new Path2D();
+    const veins = new Path2D();
     for (let i = 0; i < m; i++) {
       const t = 0.08 + (0.87 * i) / (m - 1);
       const [x, y] = at(t);
@@ -1069,26 +1465,41 @@ const DRAW: Record<Growth['kind'], Drawer> = {
         leaves.moveTo(x, y);
         leaves.quadraticCurveTo(x + side * pl * 0.35, y - pl * 0.5 - wd, ex, ey);
         leaves.quadraticCurveTo(x + side * pl * 0.5, y - pl * 0.1 + wd, x, y + wd * 0.5);
+        veins.moveTo(x, y);
+        veins.quadraticCurveTo(x + side * pl * 0.42, y - pl * 0.3, ex, ey);
         tips.push([ex, ey]);
       }
     }
+    ctx.fillStyle = ink.body;
     ctx.fill(leaves);
-    ctx.lineWidth = 0.6 * px;
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = 0.55 * px;
     ctx.stroke(leaves);
+    if (pen.d > 0.3) {
+      ctx.lineWidth = 0.35 * px;
+      faint(ctx, 0.45, () => ctx.stroke(veins));
+      // The polyps along each leaf's edge: a row of tiny dots.
+      const dots = new Path2D();
+      for (const [ex, ey] of tips) {
+        for (let k = 0; k < 3; k++) {
+          const x = ex - (ex - (tips[0][0] + ex) / 2) * 0.12 * k;
+          const y = ey + 0.9 * px * k;
+          dots.moveTo(x + 0.35 * px, y);
+          dots.arc(x, y, 0.35 * px, 0, Math.PI * 2);
+        }
+      }
+      ctx.fillStyle = ink.ink;
+      faint(ctx, 0.5, () => ctx.fill(dots));
+      ctx.fillStyle = ink.body;
+    }
     ctx.beginPath();
     ctx.ellipse(0, sy * 0.4, H * 0.035, -sy * 0.45, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.lineWidth = 0.8 * px;
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(0, sy);
-    for (let k = 1; k <= 16; k++) {
-      const [x, y] = at(k / 16);
-      ctx.lineTo(x, y);
-    }
-    ctx.lineWidth = 1.2 * px;
-    ctx.stroke();
+    const rachis: number[] = [0, 0, 0, sy];
+    for (let k = 1; k <= 16; k++) rachis.push(...at(k / 16));
+    outline(ctx, rachis, false, ink, pen, 1.2, [0, 0.4]);
     if (!ink.glow) return;
     // A soft light at a few of the polyps: small, and no brighter than the snow.
     const a = ctx.globalAlpha;

@@ -233,7 +233,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
 
   const floorY = s.floor ? h * (tall ? 0.885 : 0.87) : null;
   // Where the hero's bell hangs: the deepest point of the dive.
-  const yEnd = h * (tall ? (s.floor ? 0.63 : 0.66) : s.floor ? 0.56 : 0.6);
+  const yEnd = h * (tall ? (s.floor ? 0.65 : 0.71) : s.floor ? 0.57 : 0.63);
   const yTop = h * 0.02;
   const yOf = (f: number) => yTop + ((yEnd - yTop) * roomAt(Math.min(F, f))) / roomF;
 
@@ -363,9 +363,9 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     const top = j ? j.box.y1 + h * 0.012 : h * 0.12;
     const edge: -1 | 1 = jx < w / 2 ? -1 : 1;
     const toJelly = edge < 0 ? jx / w : 1 - jx / w;
-    const reach = clamp(toJelly + 0.05 + 0.15 * Math.min(1, r.seconds / 1800), 0.16, 0.72);
+    const reach = clamp(toJelly + 0.03 + 0.12 * Math.min(1, r.seconds / 1800), 0.14, 0.7);
     const y = clamp(top, h * 0.1, h * 0.9);
-    const thick = h * (0.05 + 0.025 * Math.min(1, r.seconds / 1800));
+    const thick = h * (0.035 + 0.02 * Math.min(1, r.seconds / 1800));
     const zone = depthAt(r.at).zone;
     ledges.push({
       rest: r.index,
@@ -418,7 +418,29 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     if (seen.has(e.kind)) continue;
     seen.add(e.kind);
     const pe = placeEvent(e, yOf(e.start), { w, h, M, floorY, current: s.biome.env.current, awaySide, jellies });
-    if (pe) events.push(pe);
+    if (!pe) continue;
+    // Something seen in the water keeps clear of the rocks and the jellies:
+    // moved up or down the least it takes, which keeps it near its depth.
+    if (pe.box && pe.kind !== 'whalefall' && pe.kind !== 'turtle') {
+      const solid = [...ledges.map((l) => l.box), ...rocks.map((k) => k.box), ...jellies.map((j) => j.box), ...events.flatMap((v) => (v.box ? [v.box] : []))];
+      let best = 0;
+      let bestHit = Infinity;
+      for (let k = 0; k <= 30; k++) {
+        const dy = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * h * 0.012;
+        const b = { ...pe.box, y0: pe.box.y0 + dy, y1: pe.box.y1 + dy };
+        if (b.y0 < h * MARGIN * (pe.edge ? 0 : 1) || b.y1 > (floorY ?? h * (1 - MARGIN))) continue;
+        const hit = solid.reduce((a, o) => a + inter(o, b), 0);
+        if (hit < bestHit - 1e-6) {
+          bestHit = hit;
+          best = dy;
+        }
+        if (hit === 0) break;
+      }
+      pe.ry += best;
+      pe.y += best;
+      pe.box = { ...pe.box, y0: pe.box.y0 + best, y1: pe.box.y1 + best };
+    }
+    events.push(pe);
   }
 
   // ---- The cast.
@@ -503,11 +525,12 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       return { ...base, age: 0.5, rx: 0, ry: top, rw: w, rh: h - top + 20, x: w / 2, y: top + (h - top) * 0.5, far: true, box: null };
     }
     case 'storm': {
-      const rh = h * 0.5;
+      // A tall region, so the haze it lays fades out well inside it.
+      const rh = h * 1.4;
       const nx = w * (0.25 + (((sd >>> 4) % 100) / 100) * 0.5);
       const ny = rh * (0.35 + (((sd >>> 12) % 100) / 100) * 0.35);
       const want = w * (side > 0 ? 0.68 : 0.32);
-      return { ...base, age: 0.32, rx: want - nx, ry: y - ny, rw: w, rh, x: want, y, far: true, box: null };
+      return { ...base, age: 0.15, rx: want - nx, ry: y - ny, rw: w, rh, x: want, y, far: true, box: null };
     }
     case 'siphonophore': {
       const rh = h * 0.5;
@@ -646,7 +669,7 @@ function curate(s: Session): Pick[] {
     if (m.zone > rarest.zone || (m.zone === rarest.zone && m.species.abundance < rarest.species.abundance)) rarest = m;
   }
   const fmin = s.focus / 60;
-  const want = Math.min(met.length, Math.round(clamp(14 + fmin * 0.11, 14, 35)));
+  const want = Math.min(met.length, Math.round(clamp(18 + fmin * 0.12, 20, 35)));
   const scored = met.map((m) => {
     const rarity = clamp((1 / m.species.abundance - 2) / 11, 0, 1);
     const deep = (m.zone + 1) / (zoneMax + 1);
@@ -714,7 +737,7 @@ const LAYER_LEN: [number, number][] = [
   [66, 90],
   [110, 140],
 ];
-const LAYER_ALPHA = [0.5, 0.84, 1];
+const LAYER_ALPHA = [0.62, 0.88, 1];
 
 function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: number } {
   const picks = curate(s);
@@ -784,7 +807,13 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       let ya = e.yOf(p.met.first);
       let yb = e.yOf(p.met.last);
       let ty = e.yOf(p.met.mid);
-      if (p.met.zone >= depthAt(e.F).zone) yb = Math.max(yb, floorTop != null ? floorTop - bh : h * 0.92);
+      if (p.met.zone >= depthAt(e.F).zone) {
+        // The deepest water reached is the rest of the page: its animals
+        // spread down it, each given its own depth in it.
+        yb = Math.max(yb, floorTop != null ? floorTop - bh : h * 0.92);
+        const k = (hash32(sp.id, 'spread') % 1000) / 1000;
+        ty = ya + (yb - ya) * (0.15 + 0.85 * k);
+      }
       ya -= h * 0.05;
       yb += h * 0.05;
       if (floor && floorTop != null) {
@@ -989,6 +1018,16 @@ function layoutScore(items: Item[], fixed: { box: Box; weight: number }[], e: Ca
   for (const c of cells) filled += c;
   const open = 1 - filled / (G * G);
   if (open < 0.34) score += (0.34 - open) * 20;
+  // No great empty tract either: a third of the page left as water is
+  // breathing room, a whole ninth of it with nothing in it is a hole.
+  for (let by = 0; by < 3; by++) {
+    for (let bx = 0; bx < 3; bx++) {
+      let n = 0;
+      for (let gy = by * 4; gy < by * 4 + 4; gy++) for (let gx = bx * 4; gx < bx * 4 + 4; gx++) n += cells[gy * G + gx];
+      if (n === 0) score += 1.2;
+      else if (n === 1) score += 0.4;
+    }
+  }
   return score;
 }
 

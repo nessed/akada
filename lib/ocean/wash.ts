@@ -135,16 +135,17 @@ function glazesFor(cssW: number, cssH: number, seed: number): Glazes {
   const band = cssH / n;
   const base = [0];
   for (let k = 1; k < n; k++) base.push(band * (k + (r() - 0.5) * 0.4));
-  // Each edge a long slow swell, laid a little aslant, with a fine wobble
-  // where the brush dragged.
-  const slant = Array.from({ length: n }, () => (r() - 0.5) * 0.12);
+  // Each edge laid a little aslant, as a brush crosses a page, wandering
+  // and ragged rather than rolling: a wash's edge, not a horizon.
+  const slant = Array.from({ length: n }, () => (r() - 0.5) * 0.06);
   return {
     n,
     at: (k, X) =>
       base[k] +
       slant[k] * (X - cssW / 2) +
-      (fbm(l, X / 360 + k * 17.3, k * 5.1, 3) - 0.5) * band * 0.9 +
-      (noise(l, X / 30 + k * 31, k * 9.7) - 0.5) * 4,
+      (fbm(l, X / 260 + k * 17.3, k * 5.1, 4) - 0.5) * band * 0.32 +
+      (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 10 +
+      (noise(l, X / 9 + k * 7, k * 3.3) - 0.5) * 2.5,
   };
 }
 
@@ -270,7 +271,9 @@ export class Wash {
     const lum = (tone(water.top) + tone(water.bottom)) / 2;
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 0.27 + 0.28 * lum;
+    // The darkest water gets more, so it stays a wash and never goes flat:
+    // there only the lifts show, and they need the weight.
+    ctx.globalAlpha = 0.27 + 0.28 * lum + 0.25 * (1 - smooth(0.04, 0.3, lum));
     ctx.drawImage(tex, 0, 0, w, h);
     ctx.restore();
   }
@@ -347,8 +350,8 @@ export class Wash {
       t.stroke(dark[i]);
     }
     t.strokeStyle = '#FFFFFF';
-    t.globalAlpha = 0.06;
-    t.lineWidth = 7 * px;
+    t.globalAlpha = 0.035;
+    t.lineWidth = 9 * px;
     t.stroke(light);
     t.restore();
   }

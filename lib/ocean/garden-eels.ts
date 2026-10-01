@@ -19,7 +19,8 @@ import { mixHex } from '../fan';
 import { zoneMid } from './depth';
 import type { Outcrop } from './outcrop';
 import { eelHoles, rockTopAt } from './outcrop-sprite';
-import { waterAt } from './palette';
+import { IRON_GALL, waterAt } from './palette';
+import { detailFor, inkLine, LIGHT } from './pen';
 import { hash32, mulberry32, range } from './random';
 
 /** A share of the page, 0 to 1 on each axis. */
@@ -49,9 +50,12 @@ interface Duck {
 
 interface Look {
   body: string;
+  /** The body on its shadow side. */
+  shade: string;
   ink: string;
   spot: string;
   alpha: number;
+  dark: boolean;
 }
 
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
@@ -118,7 +122,7 @@ export class GardenEels {
         if (clear?.some((c) => c.x * w < x + 16 * px && (c.x + c.w) * w > x - 16 * px && c.y * h < y && (c.y + c.h) * h > y - len)) {
           alpha *= 0.3;
         }
-        drawEel(ctx, x, y, len, shown, bend, sway, r, look, alpha, px);
+        drawEel(ctx, x, y, len, shown, bend, sway, r, look, alpha, px, detailFor(len * 3));
       });
     }
     ctx.restore();
@@ -143,8 +147,8 @@ export class GardenEels {
     return t * t * (3 - 2 * t);
   }
 
-  /** The ink rule: pale cream with fine dark spots, outlined dark on light
-      water and light on dark, a little greyed in the twilight. */
+  /** The ink rule: pale cream with fine dark spots, outlined in the one ink,
+      dark on light water and light on dark, a little greyed in the twilight. */
   private look(zone: number, dark: boolean): Look {
     const k = `${zone}|${dark ? 1 : 0}`;
     let l = this.looks.get(k);
@@ -152,11 +156,14 @@ export class GardenEels {
       const zw = waterAt(zoneMid(zone), dark ? 'night' : 'paper', '#A8BCC9');
       let cream = '#F2EBD8';
       if (zone >= 1) cream = mixHex(cream, '#9AA3AB', 0.3);
+      const body = dark ? mixHex(cream, '#1A1815', 0.12) : cream;
       l = {
-        body: dark ? mixHex(cream, '#1A1815', 0.12) : cream,
-        ink: dark ? mixHex(cream, '#FFFFFF', 0.25) : mixHex(cream, '#1A1714', 0.78),
+        body,
+        shade: mixHex(body, dark ? '#1A1815' : '#8A7A62', dark ? 0.35 : 0.3),
+        ink: dark ? IRON_GALL.dark : IRON_GALL.light,
         spot: '#3A322A',
         alpha: 0.92 * (0.65 + 0.35 * zw.light),
+        dark,
       };
       this.looks.set(k, l);
     }
@@ -168,6 +175,9 @@ export class GardenEels {
  * One eel from its hole at (x, y), `len` long standing and `shown` of it out.
  * Its line is fixed along its length, so one going down slides back into the
  * hole along its own body rather than shrinking: the head follows the neck.
+ * It is inked in the pen the rest of the sea is: a pressure line round it,
+ * its far side washed a shade deeper, and big, a stipple of shadow down that
+ * side, the gill slit and the mouth.
  */
 function drawEel(
   ctx: CanvasRenderingContext2D,
@@ -181,6 +191,7 @@ function drawEel(
   look: Look,
   alpha: number,
   px: number,
+  d: number,
 ) {
   // The line, as an angle off upright along the body: a lean downstream at
   // the sand, then the upper part curled back into the current.
@@ -200,24 +211,79 @@ function drawEel(
     const v = (k * ds) / shown;
     return (1.1 + 0.45 * clamp01((v - 0.7) / 0.25)) * px;
   };
-  const outline = new Path2D();
   const side = (k: number, s: number) => {
     const p = pts[k];
     return [p.x + Math.cos(p.a) * half(k) * s, p.y + Math.sin(p.a) * half(k) * s] as const;
   };
-  outline.moveTo(...side(0, -1));
-  for (let k = 1; k <= SEGS; k++) outline.lineTo(...side(k, -1));
+  // Round it: up one side, over the head, down the other.
+  const ring: number[] = [];
+  for (let k = 0; k <= SEGS; k++) ring.push(...side(k, -1));
   const tip = pts[SEGS];
-  outline.arc(tip.x, tip.y, half(SEGS), tip.a + Math.PI, tip.a + Math.PI * 2);
-  for (let k = SEGS; k >= 0; k--) outline.lineTo(...side(k, 1));
+  for (let i = 1; i < 6; i++) {
+    const a = tip.a + Math.PI + (Math.PI * i) / 6;
+    ring.push(tip.x + Math.cos(a) * half(SEGS), tip.y + Math.sin(a) * half(SEGS));
+  }
+  for (let k = SEGS; k >= 0; k--) ring.push(...side(k, 1));
+  const outline = new Path2D();
+  outline.moveTo(ring[0], ring[1]);
+  for (let i = 2; i < ring.length; i += 2) outline.lineTo(ring[i], ring[i + 1]);
 
   ctx.globalAlpha = alpha;
   ctx.fillStyle = look.body;
   ctx.fill(outline);
-  ctx.globalAlpha = alpha * 0.85;
-  ctx.strokeStyle = look.ink;
-  // Left open at the sand, so the body runs on down into the hole.
-  ctx.stroke(outline);
+  // Which side of the body is away from the light, at the middle of it.
+  const mid = pts[SEGS >> 1];
+  const away = Math.cos(mid.a) * LIGHT[0] + Math.sin(mid.a) * LIGHT[1] > 0 ? 1 : -1;
+  // The far side a shade deeper: a stroke down the body, inside it.
+  ctx.save();
+  ctx.clip(outline);
+  ctx.beginPath();
+  for (let k = 0; k <= SEGS; k++) {
+    const p = pts[k];
+    const o = half(k) * 0.65 * away;
+    if (k) ctx.lineTo(p.x + Math.cos(p.a) * o, p.y + Math.sin(p.a) * o);
+    else ctx.moveTo(p.x + Math.cos(p.a) * o, p.y + Math.sin(p.a) * o);
+  }
+  ctx.strokeStyle = look.shade;
+  ctx.lineWidth = 1.1 * px;
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.stroke();
+  if (d > 0.4) {
+    // A stipple of shadow down the far side, finer toward the head.
+    ctx.fillStyle = look.ink;
+    ctx.globalAlpha = alpha * 0.35;
+    ctx.beginPath();
+    for (let k = 0; k < SEGS * 3; k++) {
+      // Scattered along it, never in step: a hash of the dot for its place.
+      const hsh = Math.sin(k * 12.9898 + len) * 43758.5453;
+      const jit = hsh - Math.floor(hsh);
+      if (jit < 0.35) continue;
+      const f = Math.max(0, Math.min(SEGS - 0.01, k / 3 + (jit - 0.5) * 0.6));
+      const i = Math.min(SEGS - 1, Math.floor(f));
+      const t = f - i;
+      const px0 = pts[i].x + (pts[i + 1].x - pts[i].x) * t;
+      const py0 = pts[i].y + (pts[i + 1].y - pts[i].y) * t;
+      const o = half(i) * (0.45 + 0.45 * ((jit * 7.3) % 1)) * away;
+      const sx = px0 + Math.cos(pts[i].a) * o;
+      const sy = py0 + Math.sin(pts[i].a) * o;
+      ctx.moveTo(sx + 0.22 * px, sy);
+      ctx.arc(sx, sy, 0.22 * px, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+  ctx.restore();
+  // The pen round it, left open at the sand, so the body runs on down into the hole.
+  inkLine(ctx, ring, false, {
+    width: (d > 0.4 ? 0.6 : 0.7) * px,
+    color: look.ink,
+    alpha: alpha * 0.85,
+    swell: 0.6,
+    taper: [0.04, 0.04],
+    lost: 0,
+    raw: true,
+    light: look.dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT,
+    min: 0.2 * px,
+  });
 
   // Spots, counted back from the head, so they go down with the skin.
   ctx.fillStyle = look.spot;
@@ -247,4 +313,21 @@ function drawEel(
   const ey = tip.y + Math.cos(tip.a) * 1.3 * px + Math.sin(tip.a) * 0.45 * half(SEGS);
   ctx.arc(ex, ey, 0.5 * px, 0, Math.PI * 2);
   ctx.fill();
+  if (d > 0.4 && shown > len * 0.5) {
+    // The mouth, and the gill slit behind the eye.
+    const h = half(SEGS);
+    const back = (k: number, along: number, across: number) => {
+      const p = pts[k];
+      return [p.x - Math.sin(p.a) * along + Math.cos(p.a) * across, p.y + Math.cos(p.a) * along + Math.sin(p.a) * across] as const;
+    };
+    ctx.beginPath();
+    ctx.moveTo(...back(SEGS, -0.2 * h, -0.55 * h));
+    ctx.quadraticCurveTo(...back(SEGS, 0.9 * px, -0.1 * h), ...back(SEGS, 1.6 * px, -0.05 * h));
+    ctx.moveTo(...back(SEGS - 1, 0.2 * px, -0.7 * h));
+    ctx.quadraticCurveTo(...back(SEGS - 1, -0.3 * px, 0), ...back(SEGS - 1, 0.1 * px, 0.6 * h));
+    ctx.strokeStyle = look.ink;
+    ctx.lineWidth = 0.35 * px;
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.stroke();
+  }
 }
