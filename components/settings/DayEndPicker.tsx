@@ -8,16 +8,16 @@ const HOURS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 /** A line in the margin for each hour, said back when it is picked. */
 const QUIPS: Record<number, string> = {
-  0: 'clean cut, midnight it is',
-  1: 'a session at 1am still counts as tonight',
-  2: 'ok night owl',
-  3: '3am, respect',
-  4: 'ambitious!',
-  5: 'sleep is optional i see',
-  6: 'all nighters are a lifestyle now',
-  7: 'sun is up and so are you',
-  8: 'bro the birds are loud, go to bed',
-  9: 'thats not a late night thats a whole other day',
+  0: 'normal',
+  1: '1am still counts as tonight',
+  2: 'fair enough',
+  3: 'ok lock in',
+  4: 'ambitious',
+  5: 'you good?',
+  6: 'so no sleep',
+  7: "sun's up bro",
+  8: 'thats just the morning',
+  9: 'at this point its breakfast',
 };
 
 /** How the chosen hour reads in a sentence. */
