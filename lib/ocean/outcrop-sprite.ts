@@ -15,7 +15,7 @@
 
 import { mixHex } from '../fan';
 import { zoneMid } from './depth';
-import type { Growth, Outcrop, outcropsInView } from './outcrop';
+import type { EelPatch, Growth, Outcrop, outcropsInView } from './outcrop';
 import { HUES, waterAt, type Water } from './palette';
 import { chance, int, mulberry32, range, type Rand } from './random';
 
@@ -140,6 +140,8 @@ function render(o: Outcrop, w: number, h: number, dark: boolean, px: number): Pl
   const ox = padL + 0.03 * w;
   const oy = padT;
   const crestY = drawRock(ctx, o, span, thick, padL, oy, dark, px);
+  // Under the growths, so a coral at its edge stands on the sand.
+  if (o.eels) drawSand(ctx, o, o.eels, (f) => padL + span * f, crestY, dark, px);
   for (const g of o.growths) {
     const x = ox + g.at * o.reach * w;
     const f = Math.min(0.88, (x - padL) / span);
@@ -150,6 +152,104 @@ function render(o: Outcrop, w: number, h: number, dark: boolean, px: number): Pl
     ctx.restore();
   }
   return { canvas, ox, oy };
+}
+
+/** How far the crest stands above the rock's top at `f` (0 to 1 along it from
+    its own edge), in device pixels: low boulders between the bumps, then the
+    lip. Shared by the sprite and `rockTopAt`, so what stands on the rock
+    from outside the sprite lands where the ink is. */
+function crestRise(o: Outcrop, f: number, px: number): number {
+  const n = o.bumps.length;
+  const u = (Math.max(0, Math.min(0.88, f)) / 0.88) * (n - 1);
+  const i = Math.min(n - 2, Math.floor(u));
+  const t = u - i;
+  const b = o.bumps[i] + (o.bumps[i + 1] - o.bumps[i]) * (1 - Math.cos(Math.PI * t)) * 0.5;
+  return (0.5 + 0.5 * b) * 7 * px + Math.sin(Math.PI * t) * 4 * px;
+}
+
+/** Where a point `f` (0..1 along the rock top from its own edge) sits on the page, in device px, for a rock in view: the top of the crest at f. */
+export function rockTopAt(o: Outcrop, top: number, f: number, w: number, h: number, px: number): { x: number; y: number } {
+  // The sprite's rock starts `padL` in and is placed `ox = padL + 0.03 w`
+  // back off the page, so the pad cancels out.
+  const x = (o.reach + 0.03) * w * f - 0.03 * w;
+  return { x: o.edge < 0 ? x : w - x, y: top * h - crestRise(o, f, px) };
+}
+
+/** How high the sand stands over the crest at `f`, in CSS pixels: a low
+    mound, highest in the middle and running out to nothing at its ends. */
+export function sandLift(p: EelPatch, f: number): number {
+  const u = (f - p.at) / (p.width / 2);
+  return Math.abs(u) >= 1 ? 0 : 3.5 * (0.5 + 0.5 * Math.cos(Math.PI * u));
+}
+
+/** The burrows in a patch, one per eel, each with `f` along the rock top and
+    how high the sand lifts it over the crest, in CSS pixels. Evenly spread
+    over the middle of the mound and nudged, the way a colony keeps its
+    distance. */
+export function eelHoles(p: EelPatch): { f: number; lift: number }[] {
+  const r = mulberry32(p.seed);
+  const spread = p.width * 0.78;
+  const step = spread / p.count;
+  return Array.from({ length: p.count }, (_, i) => {
+    const f = p.at - spread / 2 + step * (i + 0.5) + range(r, -0.22, 0.22) * step;
+    return { f, lift: sandLift(p, f) };
+  });
+}
+
+/** A garden eels' patch: a low mound of pale sand on the rock's top, stippled,
+    with a burrow for each eel. The eels are drawn live by `garden-eels.ts`. */
+function drawSand(
+  ctx: CanvasRenderingContext2D,
+  o: Outcrop,
+  p: EelPatch,
+  X: (f: number) => number,
+  crestY: (f: number) => number,
+  dark: boolean,
+  px: number,
+) {
+  const zw = waterAt(zoneMid(o.zone), dark ? 'night' : 'paper', '#A8BCC9');
+  const sand = dark ? mixHex(zw.bottom, '#D8CCB0', 0.42) : mixHex('#E9DFC6', zw.bottom, 0.22);
+  const line = dark ? mixHex(zw.bottom, '#FFFFFF', 0.3) : mixHex(zw.bottom, '#1A1714', 0.55);
+  const hole = dark ? '#0B0A09' : mixHex(zw.bottom, '#1A1714', 0.75);
+  const alpha = 0.92 * (0.65 + 0.35 * zw.light);
+  const f0 = p.at - p.width / 2;
+  const top = (f: number) => crestY(f) - sandLift(p, f) * px;
+  const crest = new Path2D();
+  crest.moveTo(X(f0), top(f0));
+  for (let k = 1; k <= 16; k++) crest.lineTo(X(f0 + (p.width * k) / 16), top(f0 + (p.width * k) / 16));
+  // Down into the rock a little, so the sand sits in it rather than on it.
+  const mound = new Path2D(crest);
+  for (let k = 16; k >= 0; k--) mound.lineTo(X(f0 + (p.width * k) / 16), crestY(f0 + (p.width * k) / 16) + 1.5 * px);
+  mound.closePath();
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.fillStyle = sand;
+  ctx.fill(mound);
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.strokeStyle = line;
+  ctx.lineWidth = 0.8 * px;
+  ctx.stroke(crest);
+  // Stipple, thicker toward the crest of the mound where the grains pile.
+  const r = mulberry32(p.seed ^ 0x5a17);
+  ctx.fillStyle = line;
+  for (let i = 0; i < 22; i++) {
+    const f = f0 + p.width * (0.08 + 0.84 * r());
+    const lift = sandLift(p, f);
+    if (lift < 0.6) continue;
+    ctx.globalAlpha = alpha * range(r, 0.25, 0.5);
+    ctx.beginPath();
+    ctx.arc(X(f), crestY(f) - lift * px * r() * 0.85 + 0.6 * px, range(r, 0.35, 0.6) * px, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // The burrows: small dark mouths, seen a little from above.
+  ctx.fillStyle = hole;
+  ctx.globalAlpha = alpha * 0.85;
+  for (const b of eelHoles(p)) {
+    ctx.beginPath();
+    ctx.ellipse(X(b.f), crestY(b.f) - b.lift * px + 0.5 * px, 1.9 * px, 0.75 * px, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 /** The rock, as the kelp's ledge is drawn: inked along its top and lip, and
@@ -175,15 +275,7 @@ function drawRock(
   // what the growths stand on, and it is mostly its ink that shows.
   const alpha = 0.92 * (0.65 + 0.35 * zw.light);
 
-  // Boulders along the top: low humps between the bumps, then the lip.
-  const n = o.bumps.length;
-  const crestY = (f: number) => {
-    const u = (Math.max(0, Math.min(0.88, f)) / 0.88) * (n - 1);
-    const i = Math.min(n - 2, Math.floor(u));
-    const t = u - i;
-    const b = o.bumps[i] + (o.bumps[i + 1] - o.bumps[i]) * (1 - Math.cos(Math.PI * t)) * 0.5;
-    return top - (0.5 + 0.5 * b) * 7 * px - Math.sin(Math.PI * t) * 4 * px;
-  };
+  const crestY = (f: number) => top - crestRise(o, f, px);
   const edge = new Path2D();
   edge.moveTo(X(0), crestY(0));
   for (let k = 1; k <= 48; k++) edge.lineTo(X((k / 48) * 0.88), crestY((k / 48) * 0.88));

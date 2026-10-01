@@ -1045,6 +1045,26 @@ only ever grows, it never runs backwards, and none of it touches progress.
   the page going from day to night. The course colour tints it while there is
   light, and light shafts come down, slanting and swaying, in the sunlit
   water only. Marine snow drifts up the whole way.
+- **It is painted, not filled** (`lib/ocean/wash.ts`): under the depth's
+  colour there is paper grain, and the pigment lies unevenly, pooling a
+  little darker at the page's edges and in a few soft blooms with the harder
+  rim a wash leaves as it dries. From a step back it is the same water; up
+  close it is a watercolour, like the animals in it are ink.
+- **Light off the surface** (`lib/ocean/caustics.ts`): in the sunlit water
+  the wobbling net of light a pool floor shows plays over everything, the
+  jelly included, strongest near the top and gone as the light is. Faint
+  enough never to cost the clock anything; reduced motion has none.
+- **Below the light, the jelly is the light** (`lib/ocean/glow.ts`). From the
+  midnight zone down the water closes in, and what can be seen is what is
+  near the jelly: a pool of its own faint glow that follows it when it is
+  taken hold of and moved. Animals out of it fade toward the dark, except the
+  ones with lights of their own, which go on blinking out there. Found
+  things (the whale fall) stay faintly seen.
+- **Colour goes as the light does.** Water takes the warm end of the light
+  first, so the animals are drawn as they would look at their depth: a pink
+  one is grey by the twilight and the blues hold on longest (`drained` in
+  `palette.ts`). Their own lights keep their colour, since they are made on
+  the spot.
 - **The animals are generated.** Every one is a genome rolled from the
   sitting (`lib/ocean/genome.ts`): nine body plans (jelly, comb jelly,
   siphonophore chain, fish, eel, ray, squid, and on the floor starfish and
@@ -1089,6 +1109,12 @@ only ever grows, it never runs backwards, and none of it touches progress.
   name and depth are written in the margin in the hand, `twilight · 200 m`,
   for six seconds, then go. Only a crossing actually watched is marked: a
   reload, a still or reduced motion never announces one.
+- **The water answers a hand, without taking it.** In the dark, a tap
+  lights a ring of plankton that spreads and dies away, and a finger dragged
+  through the water leaves a wake of it (`lib/ocean/sparkle.ts`), the way
+  real plankton lights when it is stirred. The scene only listens: the jelly
+  still takes its own pointer, and empty water still lets a hand through.
+  Reduced motion has none of it.
 - **Some of them behave.** A few species are curious: they come in from
   their side, circle the jelly once or twice, wide of the bell, turning edge-on
   as they come round rather than flipping, and leave the other way. Lit
@@ -1117,7 +1143,11 @@ only ever grows, it never runs backwards, and none of it touches progress.
   colour draining out of them, since the sea takes the reds first; from the
   midnight down, glass sponges, sea pens and black coral, pale as bone, the
   sea pens' few lights the only colour. A sitting that started in kelp has no
-  coral in the sunlit water, since the two never grow in the same sea. Each
+  coral in the sunlit water, since the two never grow in the same sea.
+  Some rocks in the light and the twilight carry a patch of sand with a
+  colony of garden eels standing up out of it, leaning into the current;
+  tap near them and they drop into their burrows, then come back up one at
+  a time a few seconds later (`lib/ocean/garden-eels.ts`). Each
   rock is inked once to a sprite and then only placed, and like everything
   written on the page it goes faint where it crosses the clock.
 - **Now and then, something rare.** One roll a minute against the zone's
@@ -1151,7 +1181,8 @@ only ever grows, it never runs backwards, and none of it touches progress.
   button (three bubbles) sits beside the ambient noise one and plays a tank
   heard from across a room: a low bed of water that swells slowly, a thin
   shimmer, the hum of a pump, and bubbles that rise now and then, sometimes
-  in a short string. Synthesised (`lib/use-aquarium-sound.ts`), so it works
+  in a short string, all of it pitched low (an octave under where it first
+  sat, which read as a little bright). Synthesised (`lib/use-aquarium-sound.ts`), so it works
   on iOS and offline, it muffles with the same depth the noise does, and it
   is independent of the pink noise: either, both or neither.
 
@@ -1174,7 +1205,7 @@ the frame's three corners (the course code, the time range, the tally), and
 animals keep out of them, so what is written there reads at any depth. The
 pencil sketch and the ground are the jellyfish's, unchanged. Geometry is in `lib/ocean/` (`depth`, `genome`,
 `anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`, `kelp`, `outcrop`), the drawing in
-`lib/ocean/draw.ts`, `sprites.ts`, `outcrop-sprite.ts` and the two `sightings` files, the scene in `components/OceanScene.tsx`,
+`lib/ocean/draw.ts`, `sprites.ts`, `outcrop-sprite.ts`, the two `sightings` files, `wash`, `caustics`, `glow`, `sparkle` and `garden-eels` (with `jelly-at`, through which `StudyFan` tells the scene where the bell is), the scene in `components/OceanScene.tsx`,
 which draws the far water behind the hero `StudyFan` and the near animals in
 front of it.
 

@@ -20,10 +20,13 @@ export function useAquariumSound() {
   const stopLayersRef = useRef<(() => void) | null>(null);
   const startingRef = useRef(false);
   const depthRef = useRef<number | null>(null);
+  // A tank still fading out after being turned off, and how to close it now.
+  const fadingRef = useRef<{ timer: number; close: () => void } | null>(null);
 
-  /** Lowpass for a depth: open near the surface, muffled on the floor. */
+  /** Lowpass for a depth: open near the surface, muffled on the floor. An
+      octave under where it first was, like everything else in the tank. */
   const cutoffFor = (z: number | null) =>
-    z == null ? 9000 : 9000 * Math.pow(600 / 9000, Math.max(0, Math.min(1, z)));
+    z == null ? 4500 : 4500 * Math.pow(300 / 4500, Math.max(0, Math.min(1, z)));
 
   const setDepth = useCallback((z: number | null) => {
     depthRef.current = z;
@@ -41,7 +44,17 @@ export function useAquariumSound() {
     contextRef.current = null;
   }, []);
 
-  useEffect(() => teardown, [teardown]);
+  useEffect(
+    () => () => {
+      const fading = fadingRef.current;
+      if (fading) {
+        window.clearTimeout(fading.timer);
+        fading.close();
+      }
+      teardown();
+    },
+    [teardown],
+  );
 
   const toggle = useCallback(async () => {
     if (startingRef.current) return;
@@ -49,11 +62,29 @@ export function useAquariumSound() {
     if (on) {
       const context = contextRef.current;
       const master = masterRef.current;
+      const stopLayers = stopLayersRef.current;
       if (context && master) {
         master.gain.cancelScheduledValues(context.currentTime);
         master.gain.setTargetAtTime(0, context.currentTime, 0.15);
       }
-      window.setTimeout(teardown, 600);
+      // Let go of this tank now and close it once it has faded, so a tap
+      // back on inside the fade starts a new one rather than the old one's
+      // teardown closing it.
+      stopLayersRef.current = null;
+      masterRef.current = null;
+      filterRef.current = null;
+      contextRef.current = null;
+      const close = () => {
+        stopLayers?.();
+        context?.close();
+      };
+      const fading = { timer: 0, close };
+      fading.timer = window.setTimeout(() => {
+        if (fadingRef.current === fading) fadingRef.current = null;
+        close();
+      }, 600);
+      fadingRef.current?.close();
+      fadingRef.current = fading;
       setOn(false);
       return;
     }
@@ -98,7 +129,7 @@ export function useAquariumSound() {
       bed.loop = true;
       const bedLow = context.createBiquadFilter();
       bedLow.type = 'lowpass';
-      bedLow.frequency.value = 420;
+      bedLow.frequency.value = 210;
       const bedGain = context.createGain();
       bedGain.gain.value = 0.55;
       const swell = context.createOscillator();
@@ -120,7 +151,7 @@ export function useAquariumSound() {
       shimmer.loop = true;
       const band = context.createBiquadFilter();
       band.type = 'bandpass';
-      band.frequency.value = 1400;
+      band.frequency.value = 700;
       band.Q.value = 0.8;
       const shimmerGain = context.createGain();
       shimmerGain.gain.value = 0.04;
@@ -138,7 +169,7 @@ export function useAquariumSound() {
       oscillators.push(shimmerLfo);
 
       // The pump, felt more than heard.
-      for (const [freq, level] of [[52, 0.05], [104, 0.02]] as const) {
+      for (const [freq, level] of [[26, 0.05], [52, 0.02]] as const) {
         const hum = context.createOscillator();
         hum.type = 'sine';
         hum.frequency.value = freq;
@@ -156,7 +187,7 @@ export function useAquariumSound() {
         const osc = context.createOscillator();
         const gain = context.createGain();
         const pan = context.createStereoPanner();
-        const base = 260 + Math.random() * 700;
+        const base = 130 + Math.random() * 350;
         const length = 0.05 + Math.random() * 0.1;
         osc.type = 'sine';
         osc.frequency.setValueAtTime(base, at);
