@@ -1735,7 +1735,7 @@ and "6.5/8" in mono.
 sits in quiet mono before the hours, since the hours are what those lists are.
 
 ### The reader's day, not the calendar's
-Settings lets a day end as late as 8am. `isoDate()` with no argument is that
+Settings lets a day end as late as 9am. `isoDate()` with no argument is that
 day, and anything that means "today" reads it; `new Date()` is only the wall
 clock. Arithmetic from today goes through `logicalToday()` and `addDays()` in
 `lib/utils.ts`: "tomorrow" worked out from the wall clock at 3am, for a day
@@ -1763,6 +1763,8 @@ late, and a Notification goes out alongside, which is the only thing that
 reaches a phone in a pocket.
 
 Both the chime and the break length are the reader's to set, in Settings.
+`DayEndPicker` answers each hour in the margin, in `HandNote`, with a line
+of its own ("ambitious!" at 4am); the hour is the only thing that changes it.
 `BreakLengthPicker` is written in `DayEndPicker`'s idiom: a sentence about
 their own habit, with the marks appearing only once the line is touched, so
 the panel stays a page of sentences until something is being changed.

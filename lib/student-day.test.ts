@@ -60,7 +60,7 @@ test('only a real zone and an hour in range are kept', () => {
   assert.equal(cleanTimeZone(42), '');
   assert.equal(cleanTimeZone('x'.repeat(80)), '');
   assert.equal(cleanDayEndingHour(3.4), 3);
-  assert.equal(cleanDayEndingHour(12), 8);
+  assert.equal(cleanDayEndingHour(12), 9);
   assert.equal(cleanDayEndingHour(-1), 0);
   assert.equal(cleanDayEndingHour('nope'), 0);
 });

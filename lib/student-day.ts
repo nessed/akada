@@ -15,7 +15,7 @@
  */
 
 export const TIME_ZONE_MAX = 64;
-export const DAY_ENDING_HOUR_MAX = 8;
+export const DAY_ENDING_HOUR_MAX = 9;
 
 /** A zone the runtime can actually format in, or '' for "not known". */
 export function cleanTimeZone(value: unknown): string {
@@ -30,7 +30,7 @@ export function cleanTimeZone(value: unknown): string {
   }
 }
 
-/** The hour a day ends at, 0 to 8, the same range Settings offers. */
+/** The hour a day ends at, 0 to 9, the same range Settings offers. */
 export function cleanDayEndingHour(value: unknown): number {
   const hour = Number(value);
   if (!Number.isFinite(hour)) return 0;
