@@ -67,7 +67,7 @@ Either way the screen draws a study fan, a single stem that branches as the
 session goes on, seeded off the session id so a saved session redraws the same
 shape it grew. It replaced a countdown ring, which told you what fraction of
 your session was gone, which is the one thing nobody in the middle of a chapter
-wants to be told. There is pink noise if you want it, and the session logs with
+wants to be told. In the deep there is a tank to listen to if you want it, and the session logs with
 a note when you stop.
 
 **Courses** hold the weekly goal, the colour, and how the course is marked. The

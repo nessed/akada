@@ -8,9 +8,8 @@ interface Channel {
 }
 
 interface Props {
-  /** The pink noise, on every screen. */
-  noise: Channel;
-  /** The tank, only while the deep is the chosen drawing. */
+  /** The tank, only while the deep is the chosen drawing. With no tank there
+      is nothing to play, and the button is not drawn. */
   tank?: Channel & { volume: number; setVolume: (v: number) => void };
   /** Open mode inverts, so its ink comes in as values and not tokens. */
   night: boolean;
@@ -19,14 +18,12 @@ interface Props {
 }
 
 /**
- * Both sounds behind one button that can be seen, in place of a pair of faint
- * icons nobody could tell apart. The tank has a volume; the noise has the
- * level it always had.
+ * The tank's sound behind one button that can be seen, with its volume.
  */
-export default function SoundMenu({ noise, tank, night, accent }: Props) {
+export default function SoundMenu({ tank, night, accent }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const playing = noise.on || !!tank?.on;
+  const playing = !!tank?.on;
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +85,8 @@ export default function SoundMenu({ noise, tank, night, accent }: Props) {
 
   const pct = tank ? Math.round(tank.volume * 100) : 0;
 
+  if (!tank) return null;
+
   return (
     <div ref={rootRef} className="relative">
       <button
@@ -124,45 +123,39 @@ export default function SoundMenu({ noise, tank, night, accent }: Props) {
           <p className="eyebrow m-0 px-2 pb-1 pt-1" style={{ color: faint }}>
             Sound
           </p>
-          {row('Pink noise', 'A steady hush', noise)}
-          {tank ? (
-            <>
-              <div className="mx-2 h-px" style={{ background: line }} />
-              {row('The tank', 'Water, a pump, bubbles', tank)}
-              <div
-                className="px-2 pb-2 pt-0.5 transition-opacity duration-200"
-                style={{ opacity: tank.on ? 1 : 0.45 }}
-              >
-                <div className="flex items-center gap-3">
-                  <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ color: faint }}>
-                    <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" />
-                  </svg>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={pct}
-                    onChange={(e) => tank.setVolume(Number(e.target.value) / 100)}
-                    aria-label="Tank volume"
-                    aria-valuetext={`${pct} percent`}
-                    className="pl-volume min-w-0 flex-1"
-                    style={
-                      {
-                        color: ink,
-                        '--fill': `${pct}%`,
-                        '--track': line,
-                        '--knob': panel,
-                      } as CSSProperties
-                    }
-                  />
-                  <span className="w-8 text-right font-mono text-[12px] tabular-nums" style={{ color: soft }}>
-                    {pct}
-                  </span>
-                </div>
-              </div>
-            </>
-          ) : null}
+          {row('The tank', 'Water, a pump, bubbles', tank)}
+          <div
+            className="px-2 pb-2 pt-0.5 transition-opacity duration-200"
+            style={{ opacity: tank.on ? 1 : 0.45 }}
+          >
+            <div className="flex items-center gap-3">
+              <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ color: faint }}>
+                <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" />
+              </svg>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={pct}
+                onChange={(e) => tank.setVolume(Number(e.target.value) / 100)}
+                aria-label="Tank volume"
+                aria-valuetext={`${pct} percent`}
+                className="pl-volume min-w-0 flex-1"
+                style={
+                  {
+                    color: ink,
+                    '--fill': `${pct}%`,
+                    '--track': line,
+                    '--knob': panel,
+                  } as CSSProperties
+                }
+              />
+              <span className="w-8 text-right font-mono text-[12px] tabular-nums" style={{ color: soft }}>
+                {pct}
+              </span>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

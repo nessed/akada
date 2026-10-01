@@ -107,7 +107,7 @@ page it would be hosted in no longer exists.
 | --- | --- |
 | Courses index | Replaced — `app/courses/page.tsx` |
 | Settings as a page | Replaced — `app/settings/*` |
-| Timer split into setup and desk | Replaced — the block/open timer, with `lib/use-ambient-noise.ts` |
+| Timer split into setup and desk | Replaced — the block/open timer |
 | Term / month calendar | **Not replaced.** `app/term/*`, `components/term/MonthGrid.tsx` at `7814ad4` |
 | Week review | **Not restored, deliberately.** `lib/review-prose.ts` generates the narrated weekly summary and is the source of the editorial voice the redesign was rejected for. Do not restore it as-is. |
 

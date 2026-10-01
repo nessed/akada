@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FADE_IN, FADE_OUT, fadeTo } from './audio-fade';
 
 /**
  * The sound of the deep, for the sea timer: a tank heard from across a room.
@@ -106,10 +107,7 @@ export function useAquariumSound() {
       const context = contextRef.current;
       const master = masterRef.current;
       const stopLayers = stopLayersRef.current;
-      if (context && master) {
-        master.gain.cancelScheduledValues(context.currentTime);
-        master.gain.setTargetAtTime(0, context.currentTime, 0.15);
-      }
+      if (context && master) fadeTo(master.gain, context, 0, FADE_OUT);
       // Let go of this tank now and close it once it has faded, so a tap
       // back on inside the fade starts a new one rather than the old one's
       // teardown closing it.
@@ -125,7 +123,7 @@ export function useAquariumSound() {
       fading.timer = window.setTimeout(() => {
         if (fadingRef.current === fading) fadingRef.current = null;
         close();
-      }, 600);
+      }, FADE_OUT * 1000 + 100);
       fadingRef.current?.close();
       fadingRef.current = fading;
       setOn(false);
@@ -148,7 +146,7 @@ export function useAquariumSound() {
 
       const master = context.createGain();
       master.gain.setValueAtTime(0, context.currentTime);
-      master.gain.linearRampToValueAtTime(0.5, context.currentTime + 1.5);
+      fadeTo(master.gain, context, 0.5, FADE_IN);
       const filter = context.createBiquadFilter();
       filter.type = 'lowpass';
       filter.Q.value = 0.5;

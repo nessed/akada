@@ -1018,9 +1018,6 @@ tree in the middle of it; the wood is what stands around it. Code in
   and was visible on any size of screen. No counts, no score, nothing to
   beat; a sitting the app closed for the reader gets no line, and nor does
   any drawing but the wood.
-- **Sound.** With ambient noise on, the noise closes in as the canopy does:
-  open in the meadow, most of the way muffled by old growth (a lowpass in
-  `useAmbientNoise`, eased so the change is never heard as a step).
 - **Cost.** The standing land is drawn once per step of growth into its own
   canvas, trees are cached sprites, the scene runs at thirty frames a second
   on at most one and a half device pixels, and the tree only puts its ink
@@ -1180,21 +1177,21 @@ only ever grows, it never runs backwards, and none of it touches progress.
   in the silt with crabs working along it, which stays for the rest of the
   sitting once it has come. The recap names whichever was rarest, as it does
   the others.
-- **The noise darkens.** With ambient noise on, a lowpass follows the depth:
-  open at the surface, a low hush on the floor.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
-  appears in the Sound menu under the pink noise and plays a tank heard from
+  appears in the Sound menu and plays a tank heard from
   across a room: a low bed of water that swells slowly, a thin shimmer, the
   hum of a pump, and bubbles that rise now and then, sometimes in a short
   string, all of it pitched low (an octave under where it first sat, which
   read as a little bright). Synthesised (`lib/use-aquarium-sound.ts`), so it works on iOS and
-  offline, it muffles with the same depth the noise does, and it is
-  independent of the pink noise: either, both or neither.
+  offline, and a lowpass follows the depth: open at the surface, a low hush on
+  the floor. It eases in over about a second and a half and out over a
+  little more than one (`lib/audio-fade.ts`, a cosine curve that picks up from
+  wherever the gain is, so a tap mid-fade turns around without a step).
 - **The Sound menu** (`components/SoundMenu.tsx`) is the one speaker button in
-  the timer's header, in the soft ink and not the faint one so it can be found
+  the timer's header, drawn only in the deep, in the soft ink and not the faint one so it can be found
   on either paper, with a dot in the course colour while anything plays. It
-  opens a small paper card under the button: a switch for each sound, and
-  under the tank's a volume line, a pencil rule that fills with ink as it
+  opens a small paper card under the button: a switch for the tank, and
+  under it a volume line, a pencil rule that fills with ink as it
   rises, a round paper knob, and the level as mono digits. The line is
   `.pl-volume` in `globals.css`; it takes the card's ink, track and knob as
   custom properties so the same rule serves day and night. The level is
@@ -1749,7 +1746,7 @@ day starts as an instant, `dayStartsAt(iso)`.
 
 ### The chime
 The one sound that announces something; the rest only answer a finger (see
-"Sounds under a finger"), and the ambient noise is one a reader turns on
+"Sounds under a finger"), and the tank is one a reader turns on
 themselves. It is a **struck glass**: three sine partials over a 1.5s
 exponential tail, two notes settling downward into a break and three opening
 upward out of one. Not an alarm, for the same reason nothing else in the app
