@@ -242,7 +242,7 @@ function rawTone(plan: Plan, c: Caches, y: number): string {
 /** Samples down the page of the water as it is laid. */
 const COLUMN = 240;
 /** The steepest the water may darken in the upper part of the page: L* per hundredth of its height. */
-const STEEPEST = 1.8;
+const STEEPEST = 1.3;
 
 /**
  * The water down the page as it is laid: the depth's colour, eased. The
@@ -283,7 +283,7 @@ function columnOf(plan: Plan, c: Caches): string[] {
   };
   // Never narrower than a smoothstep across nearly half the page.
   let out = blur(lab, N * 0.1);
-  for (let sigma = N * 0.11; sigma <= N * 0.18 + 1e-9 && steepest(out) > STEEPEST; sigma += N * 0.01) out = blur(lab, sigma);
+  for (let sigma = N * 0.11; sigma <= N * 0.26 + 1e-9 && steepest(out) > STEEPEST; sigma += N * 0.01) out = blur(lab, sigma);
   // The foot keeps the dark it was given: blurring would lift the very
   // bottom toward the water above it.
   for (let i = Math.round(N * 0.8); i < N; i++) {

@@ -3,7 +3,9 @@ import { test } from 'node:test';
 import type { SessionSegment } from '../../data/types';
 import { depthAt } from '../depth';
 import { planPicture, type PictureInput } from './index';
-import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, type Box, type Plan } from './layout';
+import { rollBiome } from '../biome';
+import { rollKelp } from '../kelp';
+import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, floorAt, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, STEM, wallAt, type Box, type Plan } from './layout';
 
 /** A sitting from a start and a list of stretches in minutes. */
 function sitting(start: string, parts: ['focus' | 'break', number][]): SessionSegment[] {
