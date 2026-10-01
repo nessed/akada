@@ -57,8 +57,8 @@ function buildTile(): HTMLCanvasElement | null {
     const v = y / TILE;
     for (let x = 0; x < TILE; x++) {
       const u = x / TILE;
-      const wu = u + 0.035 * Math.sin(TAU * (2 * v) + ph[0]) + 0.018 * Math.sin(TAU * (3 * u + 2 * v) + ph[1]);
-      const wv = v + 0.035 * Math.sin(TAU * (2 * u) + ph[2]) + 0.018 * Math.sin(TAU * (2 * u - 3 * v) + ph[3]);
+      const wu = u + 0.05 * Math.sin(TAU * (2 * v) + ph[0]) + 0.025 * Math.sin(TAU * (3 * u + 2 * v) + ph[1]);
+      const wv = v + 0.05 * Math.sin(TAU * (2 * u) + ph[2]) + 0.025 * Math.sin(TAU * (2 * u - 3 * v) + ph[3]);
       const cx = Math.floor(wu * CELLS);
       const cy = Math.floor(wv * CELLS);
       let f1 = 9;
@@ -83,7 +83,7 @@ function buildTile(): HTMLCanvasElement | null {
       const e = (Math.sqrt(f2) - Math.sqrt(f1)) * CELLS;
       // Real nets are uneven: some strands thick and bright, some all but gone.
       const m = 0.5 + 0.5 * Math.sin(TAU * (u + 2 * v) + ph[4]) * Math.sin(TAU * (2 * u - v) + ph[5]);
-      const width = 0.035 + 0.05 * m;
+      const width = 0.03 + 0.04 * m;
       const core = Math.max(0, 1 - e / width);
       const glow = Math.max(0, 1 - e / (width * 3.5));
       const a = Math.min(1, core * core * (0.55 + 0.45 * m) + glow * glow * 0.22);
@@ -126,7 +126,7 @@ export class Caustics {
     const base = (CELL_CSS * px * SHRINK * CELLS) / TILE;
     const layers = [
       { k: 1, turn: 0, vx: 7, vy: 4, breathe: 0.45, alpha: 0.62 },
-      { k: 1.37, turn: 0.55, vx: -5, vy: 6.5, breathe: 0.31, alpha: 0.5 },
+      { k: 0.71, turn: 0.55, vx: -5, vy: 6.5, breathe: 0.31, alpha: 0.38 },
     ];
     for (let i = 0; i < layers.length; i++) {
       const L = layers[i];
@@ -164,7 +164,7 @@ export class Caustics {
     // touch more to show at all; neither is enough to trouble the clock.
     ctx.save();
     ctx.globalCompositeOperation = dark ? 'lighter' : 'source-over';
-    ctx.globalAlpha = Math.min(1, strength) * (dark ? 0.2 : 0.42);
+    ctx.globalAlpha = Math.min(1, strength) * (dark ? 0.17 : 0.5);
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.scratch!, 0, 0, sw, sh, 0, 0, w, h * REACH);
     ctx.restore();
