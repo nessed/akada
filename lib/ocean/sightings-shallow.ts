@@ -220,8 +220,10 @@ export function drawTurtle(
   const c = dark ? TURTLE_DARK : TURTLE_LIGHT;
   // The animal is drawn in units of `u`, tail to beak a little under one.
   const u = L * 1.12;
-  // Big enough to show its scutes' growth rings and its skin's texture.
-  const d = detailFor(u);
+  // Big enough to show its scutes' growth rings and its skin's texture: a
+  // wallpaper's turtle is, a live screen's is kept just short of it, since
+  // it is drawn every frame it is on.
+  const d = detailFor(u * 0.8);
   const light = dark ? UNLIGHT : LIGHT;
   // The pen's weight: drawn big, the lines stay fine, as an engraver's do.
   const pw = px * (1 - 0.4 * d);

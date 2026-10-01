@@ -266,6 +266,40 @@ function blotch(x: number, y: number, k: number): number {
   );
 }
 
+/** A function of the page sampled once on a grid of `cell` px over `box`,
+    and read back by nearest cell. */
+function gridOf(box: { x: number; y: number; w: number; h: number }, cell: number, f: (x: number, y: number) => number): (x: number, y: number) => number {
+  const nx = Math.max(1, Math.ceil(box.w / cell) + 1);
+  const ny = Math.max(1, Math.ceil(box.h / cell) + 1);
+  const g = new Float32Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) g[j * nx + i] = f(box.x + i * cell, box.y + j * cell);
+  return (x, y) => {
+    const i = Math.max(0, Math.min(nx - 1, Math.round((x - box.x) / cell)));
+    const j = Math.max(0, Math.min(ny - 1, Math.round((y - box.y) / cell)));
+    return g[j * nx + i];
+  };
+}
+
+/** The part of `box` where `f` passes `from`, by the grid's cells: the only
+    part a hatch laid at that threshold can mark. */
+function activeBox(box: { x: number; y: number; w: number; h: number }, cell: number, f: (x: number, y: number) => number, from: number) {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (let y = box.y; y <= box.y + box.h; y += cell) {
+    for (let x = box.x; x <= box.x + box.w; x += cell) {
+      if (f(x, y) <= from) continue;
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x);
+      y1 = Math.max(y1, y);
+    }
+  }
+  if (x1 < x0) return null;
+  return { x: x0 - cell, y: y0 - cell, w: x1 - x0 + cell * 2, h: y1 - y0 + cell * 2 };
+}
+
 /** What `inkRock` needs to know about a rock: its crest, its body, and how
     its faces turn to the light. */
 export interface RockInk {
@@ -322,11 +356,20 @@ export function inkRock(ctx: CanvasRenderingContext2D, k: RockInk): void {
   ctx.lineWidth = 6 * px;
   ctx.stroke(crestPath);
   // How much a mark is wanted at a point: shadow on light water, light on dark.
-  const shade = k.dark
+  const shadeAt = k.dark
     ? (x: number, y: number) => (0.95 - 2.2 * k.v(x, y) - 0.45 * k.lip(x) * k.away + 0.12 * (blotch(x / px, y / px, 1) - 0.5)) * k.fade(y)
     : (x: number, y: number) =>
         (0.12 + 1.05 * Math.pow(k.v(x, y), 1.2) + 0.45 * k.lip(x) * k.away + 0.2 * (blotch(x / px, y / px, 1) - 0.5)) *
         (0.4 + 0.6 * k.fade(y));
+  // The hatching asks for the shade hundreds of thousands of times; it is
+  // worked out once on a coarse grid and looked up, which is what keeps a
+  // rock's sprite quick enough to draw as it comes on.
+  const fine0 = d > 0.35;
+  const shade = fine0 ? gridOf(k.box, 3 * px, shadeAt) : shadeAt;
+  const crust = fine0
+    ? gridOf(k.box, 3 * px, (x, y) => (0.2 + 0.8 * blotch(x / px, y / px, 1.7)) * (1 - 0.75 * k.v(x, y)) * k.fade(y))
+    : () => 0;
+  const lipG = fine0 ? gridOf(k.box, 3 * px, (x) => k.lip(x)) : (x: number) => k.lip(x);
   if (d > 0.35) {
     // Paper tooth, in bands that thin as the wash runs dry.
     const gr = grain(ctx);
@@ -416,22 +459,29 @@ export function inkRock(ctx: CanvasRenderingContext2D, k: RockInk): void {
   if (fine) {
     // Down the face, near-upright strokes where it is in shadow (or, on dark
     // water, in the light), heaviest on the lip.
-    hatch(ctx, k.body, k.box, {
-      spacing: 2.6 * px,
-      angle: Math.PI / 2 - 0.22 * k.dir,
-      shade: (x, y) => (k.dark ? shade(x, y) * (0.5 + 0.6 * k.lip(x)) : shade(x, y) * (0.75 + 0.35 * k.lip(x) * k.away)),
-      from: 0.55,
-      color: k.line,
-      width: 0.5 * px,
-      alpha: alpha * 0.5,
-      seed: k.seed ^ 5,
-    });
+    // Kept to the lip, where the face turns: elsewhere the contours model it.
+    const face = (x: number, y: number) =>
+      k.dark ? shade(x, y) * (0.25 + 0.85 * lipG(x, y)) : shade(x, y) * Math.min(1, 1.6 * lipG(x, y)) * (0.85 + 0.3 * k.away);
+    const faceBox = activeBox(k.box, 3 * px, face, 0.5);
+    if (faceBox) {
+      hatch(ctx, k.body, faceBox, {
+        spacing: 2.6 * px,
+        angle: Math.PI / 2 - 0.22 * k.dir,
+        shade: face,
+        from: 0.55,
+        color: k.line,
+        width: 0.5 * px,
+        alpha: alpha * 0.5,
+        seed: k.seed ^ 5,
+      });
+    }
     // And across them where it is darkest, a second set.
-    if (!k.dark) {
-      hatch(ctx, k.body, k.box, {
-        spacing: 2.9 * px,
+    const darkBox = k.dark ? null : activeBox(k.box, 3 * px, shade, 0.8);
+    if (darkBox) {
+      hatch(ctx, k.body, darkBox, {
+        spacing: 3.1 * px,
         angle: -0.6 * k.dir,
-        shade: (x, y) => shade(x, y),
+        shade,
         from: 0.85,
         color: k.line,
         width: 0.45 * px,
@@ -441,9 +491,9 @@ export function inkRock(ctx: CanvasRenderingContext2D, k: RockInk): void {
     }
     // A crust of stipple, gathered in blotches, thickest near the crest.
     stipple(ctx, k.body, k.box, {
-      spacing: 2.2 * px,
+      spacing: 2.6 * px,
       radius: 0.42 * px,
-      shade: (x, y) => (0.2 + 0.8 * blotch(x / px, y / px, 1.7)) * (1 - 0.75 * k.v(x, y)) * k.fade(y),
+      shade: crust,
       from: 0.32,
       color: k.line,
       alpha: alpha * 0.55,

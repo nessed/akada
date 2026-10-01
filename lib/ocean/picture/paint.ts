@@ -27,6 +27,7 @@ import { drawDumbo, drawLure, drawWhaleFall } from '../sightings-deep';
 import { drawOarfish, drawSiphonophore, drawTurtle } from '../sightings-shallow';
 import { SpriteCache } from '../sprites';
 import { Wash } from '../wash';
+import { causticsOn } from '../caustics';
 import type { PlacedEvent, PlacedJelly, Plan } from './layout';
 
 interface Caches {
@@ -167,7 +168,7 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingQuality = 'low';
 
   // ---- The water: the depth's colour down the page, then the paint.
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -194,13 +195,26 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
     seed: plan.seed,
     dark: night,
   };
-  if (sees(view, 0, 0, W, RH)) {
+  if (sees(view, 0, 0, W, RH) && (globalThis as unknown as { __skip?: string }).__skip !== 'rays') {
     ctx.save();
     ctx.scale(rs, rs);
     drawGodRays(ctx, W / rs, RH / rs, rays);
     ctx.restore();
   }
   __t('rays');
+
+  // ---- The sky, looking up: after the rays, so their fan does not pile up
+  // in it, and before everything in the water, which passes in front of it.
+  // Soft too, so on a poster it is drawn at a few thousand pixels and up.
+  const win = plan.window;
+  if (inSight(win.x - win.r, win.y - win.r, win.x + win.r, win.y + win.r, win.r * 1.7)) {
+    const k = Math.max(1, W / 3200);
+    ctx.save();
+    ctx.scale(k, k);
+    drawSnellWindow(ctx, W / k, H / k, { cx: (win.x * D) / k, cy: (win.y * D) / k, radius: (win.r * D) / k, sun, moon: plan.moon, dark: night, px: D / k, seed: plan.seed });
+    ctx.restore();
+  }
+  __t('snell');
 
   // ---- Far: the big shapes behind everything, then the far animals, hazy.
   for (const e of plan.events) if (e.far) paintEvent(ctx, plan, e, D, ambient, inSight);
@@ -210,15 +224,24 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   // ---- The places passed: kelp, rocks, the ledges of the breaks, the floor.
   if (c.kelp && plan.kelp) paintKelp(ctx, plan, c.kelp, c, D, ambient, inSight);
   __t('kelp');
+  // A rock is inked once to a sprite no wider than 4096 px; on a poster it
+  // is inked smaller and drawn back up, so a long ledge is never cut short.
+  const rk = Math.max(1, W / 3600);
+  const rock = (o: Outcrop, top: number, y: number) => {
+    ctx.save();
+    ctx.scale(rk, rk);
+    drawOutcrops(ctx, W / rk, H / rk, [{ outcrop: o, top }], c.rocks, waterAtY(plan, y), D / rk, undefined);
+    ctx.restore();
+    lightOnTop(ctx, plan, o.edge, o.reach, y, D);
+  };
   for (const r of plan.rocks) {
     if (!inSight(r.box.x0, r.box.y0, r.box.x1, r.y + r.thick, 90)) continue;
     const o = outcropAtSlot(plan.key, r.slot, !!plan.kelp);
-    if (!o) continue;
-    drawOutcrops(ctx, W, H, [{ outcrop: { ...o, thick: r.thick / plan.h }, top: r.y / plan.h }], c.rocks, waterAtY(plan, r.y), D, undefined);
+    if (o) rock({ ...o, thick: r.thick / plan.h }, r.y / plan.h, r.y);
   }
   for (const l of plan.ledges) {
     if (!inSight(l.box.x0, l.box.y0, l.box.x1, l.y + l.thick, 90)) continue;
-    drawOutcrops(ctx, W, H, [{ outcrop: ledgeOutcrop(l, plan.h), top: l.y / plan.h }], c.rocks, waterAtY(plan, l.y), D, undefined);
+    rock(ledgeOutcrop(l, plan.h), l.y / plan.h, l.y);
   }
   __t('rocks');
   if (plan.floor && inSight(0, plan.floor.y - 80, plan.w, plan.h)) paintFloor(ctx, plan, c, D, ambient);
@@ -260,17 +283,22 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number): vo
   });
   __t('snow');
 
-  // ---- The sky, looking up.
-  const win = plan.window;
-  if (inSight(win.x - win.r, win.y - win.r, win.x + win.r, win.y + win.r, win.r * 0.6)) {
-    drawSnellWindow(ctx, W, H, { cx: win.x * D, cy: win.y * D, radius: win.r * D, sun, moon: plan.moon, dark: night, px: D, seed: plan.seed });
-  }
-  __t('snell');
-
   // ---- A whisper of noise, so no gradient bands.
   paintDither(ctx, c, plan.seed, view);
   ctx.restore();
   __t('dither');
+}
+
+/** The net of light off the surface, on what faces up in the sunlit water. */
+function lightOnTop(ctx: CanvasRenderingContext2D, plan: Plan, edge: -1 | 1, reach: number, y: number, D: number) {
+  const z = zAt(plan, y);
+  const strength = 0.5 * Math.max(0, 1 - z / 0.32);
+  if (strength <= 0.02) return;
+  const x0 = (edge < 0 ? 0 : plan.w * (1 - reach)) * D;
+  const box = { x: x0, y: (y - 14) * D, w: reach * plan.w * D, h: 30 * D };
+  const region = new Path2D();
+  region.ellipse(box.x + box.w / 2, box.y + box.h / 2, box.w / 2, box.h / 2, 0, 0, Math.PI * 2);
+  causticsOn(ctx, region, box, strength, D, plan.seed);
 }
 
 /* ---- Light and noise, without reading the canvas back ---- */
@@ -533,6 +561,17 @@ function paintJelly(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, j: Pla
   ctx.globalAlpha = j.hero ? 1 : 0.92;
   ctx.drawImage(made.canvas, j.x * D - made.ox, j.y * D - made.oy);
   ctx.restore();
+  // In the sunlit water the light off the surface plays over the bell.
+  const strength = 0.55 * Math.max(0, 1 - zAt(plan, j.y) / 0.3);
+  if (strength > 0.02) {
+    const bw = j.r * D;
+    const bh = j.r * 0.42 * j.aspect * D;
+    const box = { x: j.x * D - bw, y: j.y * D - bh, w: bw * 2, h: bh * 2 };
+    const region = new Path2D();
+    region.ellipse(j.x * D, j.y * D, bw, bh, 0, Math.PI, Math.PI * 2);
+    region.closePath();
+    causticsOn(ctx, region, box, strength, D, hash32(plan.seed, 'jelly', j.block));
+  }
 }
 
 function renderJelly(plan: Plan, c: Caches, j: PlacedJelly, D: number): { canvas: HTMLCanvasElement; ox: number; oy: number } | null {
@@ -724,8 +763,8 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
     const ph = r() * 10;
     ctx.save();
     // The far ridge hazed toward the water, the nearer one a shade darker.
-    ctx.fillStyle = k === 0 ? mixHex(deep, '#9A9AA8', 0.1) : mixHex(deep, '#050508', 0.18);
-    ctx.globalAlpha = 0.7 + k * 0.2;
+    ctx.fillStyle = mixHex(deep, '#9A9AA8', 0.2);
+    ctx.globalAlpha = 0.35;
     ctx.beginPath();
     ctx.moveTo(0, H);
     for (let i = 0; i <= 64; i++) {

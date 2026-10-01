@@ -144,8 +144,8 @@ export interface Plan {
   events: PlacedEvent[];
   cast: PlacedAnimal[];
   bubbles: { x: number; y: number; r: number }[];
-  /** The winning layout's score, lower is better. */
-  score: number;
+  /** How well the winning layout fits (the solver's cost, lower is better): about the layout, never the sitting. */
+  fit: number;
 }
 
 /* ---- The depth on the page ---- */
@@ -451,7 +451,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
 
   const date = new Date(s.startMs);
   const sun = sunFor(s.hour);
-  const winR = tall ? w * 0.125 : w * 0.08;
+  const winR = tall ? w * 0.16 : w * 0.1;
   return {
     key: s.key,
     courseKey: s.courseKey,
@@ -471,7 +471,8 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     moon: sun.night ? moonPhase(date) : null,
     current: s.biome.env.current,
     zStops,
-    window: { x: clamp(startX, winR * 1.4, w - winR * 1.4), y: winR * 1.02 + h * 0.012, r: winR },
+    // Clear of the kelp at the sides, when the sitting began in it.
+    window: { x: clamp(startX, Math.max(winR * 1.4, s.kelp ? w * 0.26 : 0), Math.min(w - winR * 1.4, s.kelp ? w * 0.74 : w)), y: winR * 1.02 + h * 0.012, r: winR },
     path,
     jellies,
     ledges,
@@ -481,7 +482,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     events,
     cast: cast.cast,
     bubbles,
-    score: cast.score,
+    fit: cast.score,
   };
 }
 
@@ -765,8 +766,13 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
     const r = mulberry32(hash32(e.seed, 'layout', c));
     const items: Item[] = [];
     let near = 0;
+    let bells = 0;
     for (const p of picks) {
       const sp = p.met.species;
+      // Jelly-like animals are kept few, far and small, so the jellies
+      // that are the blocks are the only jellies that read as the path.
+      const bell = sp.genome.plan === 'bell';
+      if (bell && !p.rare && ++bells > 3) continue;
       const floor = sp.floor && floorTop != null;
       let layer: 0 | 1 | 2;
       if (p.rare) layer = 2;
@@ -774,15 +780,15 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       else {
         const rare = clamp((1 / sp.abundance - 2) / 11, 0, 1);
         const u = r();
-        layer = u < 0.08 + 0.12 * rare && near < 3 && !sp.school ? 2 : u < 0.55 ? 1 : 0;
+        layer = u < 0.08 + 0.12 * rare && near < 3 && !sp.school && !bell ? 2 : u < 0.55 && !bell ? 1 : 0;
         if (sp.school && layer === 2) layer = 1;
       }
       if (layer === 2 && !p.rare) near++;
       const [a, b] = LAYER_LEN[layer];
       const size = clamp(Math.sqrt(sp.genome.size), 0.8, 1.2);
       let len = (a + (b - a) * r()) * size;
-      if (p.rare) len = (150 + 30 * r()) * size;
-      if (floor) len = 40 + 20 * r();
+      if (p.rare) len = Math.max(125, (150 + 30 * r()) * size * (bell ? 0.85 : 1));
+      if (floor) len = p.rare ? 125 : 40 + 20 * r();
       const prop = proportions(sp);
       let bw = len * prop.w;
       let bh = len * prop.h;
@@ -947,7 +953,7 @@ function itemCost(it: Item, others: Item[], fixed: { box: Box; weight: number }[
   }
   if (it.pick.rare) {
     const d = distToPath(e.path, it.x, it.y);
-    cost += Math.abs(d - e.w * 0.2) / e.w;
+    cost += Math.abs(d - e.w * (it.sp.genome.plan === 'bell' ? 0.3 : 0.2)) / e.w;
   }
   if (placing) {
     // Spread across the page: a gentle pull away from the crowded side.

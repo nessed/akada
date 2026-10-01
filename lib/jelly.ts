@@ -24,6 +24,8 @@
  */
 
 import { mixHex, rng } from './fan';
+import { IRON_GALL } from './ocean/palette';
+import { detailFor, inkLine, LIGHT } from './ocean/pen';
 
 export interface JellyShape {
   /** One per tentacle: its share of the full length, its own wave, and
@@ -124,8 +126,9 @@ export function jellyInk(color: string, paper: string, light: boolean): JellyInk
     return {
       bellTop: mixHex(color, paper, 0.62),
       bellRim: mixHex(color, paper, 0.3),
-      edge: mixHex(color, '#FFFFFF', 0.35),
-      rib: mixHex(color, '#FFFFFF', 0.25),
+      // The pen's own off-white, with a breath of the jelly's colour in it.
+      edge: mixHex(IRON_GALL.dark, color, 0.15),
+      rib: mixHex(IRON_GALL.dark, color, 0.35),
       gonad: mixHex(color, '#FFFFFF', 0.45),
       tentacle: mixHex(color, '#FFFFFF', 0.2),
       sting: mixHex(color, '#FFFFFF', 0.6),
@@ -141,8 +144,9 @@ export function jellyInk(color: string, paper: string, light: boolean): JellyInk
   return {
     bellTop: mixHex(color, paper, 0.8),
     bellRim: mixHex(color, paper, 0.42),
-    edge: mixHex(color, '#1A1714', 0.45),
-    rib: mixHex(color, '#1A1714', 0.3),
+    // The pen's iron-gall, with a breath of the jelly's colour in it.
+    edge: mixHex(IRON_GALL.light, color, 0.15),
+    rib: mixHex(IRON_GALL.light, color, 0.4),
     gonad: mixHex(color, '#1A1714', 0.18),
     tentacle: mixHex(color, '#1A1714', 0.28),
     sting: mixHex(color, '#1A1714', 0.4),
@@ -439,7 +443,8 @@ export function drawJelly(
         (x0 - ox) * 0.3 * q.k * (st / reach) +
         (live ? lag(st) - (x0 - ox) * 0.04 * q.sq * ramp : 0);
       stripY[j] = yy + st - (live ? hold(st) : 0);
-      stripW[j] = Math.max(0.35 * px, 1.9 * line * (1 - 0.85 * (st / Math.max(1, maxL))));
+      // Full at the rim, running out to a hairline at its own tip.
+      stripW[j] = Math.max(0.22 * px, 1.9 * line * Math.pow(Math.max(0, 1 - 0.94 * (st / reach)), 1.15) * (1 - 0.3 * (st / Math.max(1, maxL))));
     }
     return n;
   };
@@ -539,9 +544,13 @@ export function drawJelly(
     const step = 3 * px;
     const n = Math.floor(armLen / step) + 1;
     const ribs: number[][] = [];
+    // Big, each twist is shaded with a few strokes across the ribbon where it turns edge-on.
+    const folds: number[] = [];
+    const armDetail = detailFor(R);
     ctx.fillStyle = ink.arm;
-    ctx.strokeStyle = ink.edge;
-    ctx.lineWidth = 0.8 * px;
+    // The pen, softened into the arm's wash: a frill inked hard reads as a scribble.
+    ctx.strokeStyle = mixHex(ink.edge, ink.arm, 0.4);
+    ctx.lineWidth = 0.8 * px * (1 - 0.3 * armDetail);
     for (const a of shape.arms) {
       const sx = bx + a.off * now.r;
       const sy = now.rimY - 2 * px;
@@ -559,6 +568,7 @@ export function drawJelly(
         const turn = 0.35 + 0.65 * Math.abs(Math.cos(st / (a.twist * line) + a.ph));
         stripW[j] = now.r * 0.16 * Math.pow(1 - tt, 0.9) * turn + 0.4 * px;
         if (j % 2 === 0) rib.push(stripX[j], stripY[j]);
+        if (armDetail > 0.4 && j % 2 === 1 && turn < 0.6 && tt < 0.85) folds.push(stripX[j], stripY[j], stripW[j]);
       }
       ribs.push(rib);
       ctx.beginPath();
@@ -578,6 +588,17 @@ export function drawJelly(
       for (let j = 2; j < rib.length; j += 2) ctx.lineTo(rib[j], rib[j + 1]);
     }
     ctx.stroke();
+    if (folds.length) {
+      ctx.beginPath();
+      for (let j = 0; j < folds.length; j += 3) {
+        const hw = folds[j + 2] * 0.45;
+        ctx.moveTo(folds[j] - hw, folds[j + 1] - hw * 0.25);
+        ctx.lineTo(folds[j] + hw, folds[j + 1] + hw * 0.25);
+      }
+      ctx.lineWidth = 0.4 * px;
+      ctx.globalAlpha = 0.4;
+      ctx.stroke();
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -641,11 +662,17 @@ export function drawJelly(
   ctx.fill();
   ctx.globalAlpha = 1;
 
+  // How much drawing the bell carries: a wallpaper's jelly is near enough
+  // to be stippled; the block frame's is not.
+  const detail = detailFor(R);
+  const dark = ink.glow != null;
+
   // Engraved shading down the right of the dome, the side away from the
-  // light, in concentric strokes that follow its curve.
+  // light, in concentric strokes that follow its curve; drawn big, finer,
+  // under a stipple that gathers into the shadow.
   ctx.strokeStyle = ink.rib;
-  ctx.lineWidth = 0.6 * px;
-  ctx.globalAlpha = 0.38;
+  ctx.lineWidth = (detail > 0.4 ? 0.45 : 0.6) * px;
+  ctx.globalAlpha = detail > 0.4 ? 0.26 : 0.38;
   ctx.beginPath();
   for (let j = 0; j < 9; j++) {
     const sc = 0.5 + j * 0.055;
@@ -656,6 +683,22 @@ export function drawJelly(
     }
   }
   ctx.stroke();
+  if (detail > 0.4) {
+    // The stipple, laid once in the bell's own frame (see `bellDots`) and
+    // only placed here, so a beating bell costs a fill and no dice.
+    const dots = bellDots(shape, dark);
+    const dr = 0.34 * px;
+    ctx.fillStyle = ink.rib;
+    ctx.globalAlpha = 0.55 * Math.min(1, (detail - 0.4) / 0.2);
+    ctx.beginPath();
+    for (let i = 0; i < dots.length; i += 3) {
+      const [x, y] = dome(dots[i], dots[i + 1]);
+      const rr = dr * dots[i + 2];
+      ctx.moveTo(x + rr, y);
+      ctx.arc(x, y, rr, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
 
   // The inner curve of the bell.
   ctx.lineWidth = 0.9 * px;
@@ -745,12 +788,32 @@ export function drawJelly(
   ctx.globalAlpha = 1;
 
   // The outline, and a fainter second pass just off it, the way a pen
-  // drawing goes over its own line.
+  // drawing goes over its own line. The first is a pressure line: heavier
+  // on the side away from the light and breaking where the light is
+  // hardest, as the bell's clear edge is lost in it. On dark water it is
+  // the lit side that carries the weight, over a soft rim of the jelly's
+  // own light.
+  const outline = bellPts(now, bx, y0, R, line, shape.scallops);
+  if (dark && ink.lamp) {
+    ctx.strokeStyle = ink.lamp;
+    ctx.lineWidth = 4 * line;
+    ctx.globalAlpha = 0.16 + 0.06 * pulse;
+    ctx.beginPath();
+    bellPath(ctx, now, bx, y0, R, line, shape.scallops);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  inkLine(ctx, outline, true, {
+    width: 1.5 * line * (1 - 0.3 * detail),
+    color: ink.edge,
+    swell: 0.8,
+    lost: 0.3,
+    seed: 7,
+    raw: true,
+    light: dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT,
+    min: 0.3 * px,
+  });
   ctx.strokeStyle = ink.edge;
-  ctx.lineWidth = 1.5 * line;
-  ctx.beginPath();
-  bellPath(ctx, now, bx, y0, R, line, shape.scallops);
-  ctx.stroke();
   ctx.save();
   ctx.translate(0.9 * line, 0.7 * line);
   ctx.lineWidth = 0.6 * px;
@@ -806,6 +869,77 @@ export function drawJelly(
     ctx.globalAlpha = 1;
   }
   ctx.restore();
+}
+
+/**
+ * The bell's outline as points, the same curve `bellPath` traces, for the
+ * pen's pressure line.
+ */
+function bellPts(q: Pose, bx: number, y0: number, R: number, line: number, n = 16): number[] {
+  const L = bx - q.rw;
+  const Rr = bx + q.rw;
+  const flare = q.rw * 0.05 * q.sq;
+  const out: number[] = [L - flare, q.rimY];
+  const cubic = (p: number[], k: number) => {
+    for (let i = 1; i <= k; i++) {
+      const t = i / k;
+      const u = 1 - t;
+      out.push(
+        u * u * u * p[0] + 3 * u * u * t * p[2] + 3 * u * t * t * p[4] + t * t * t * p[6],
+        u * u * u * p[1] + 3 * u * u * t * p[3] + 3 * u * t * t * p[5] + t * t * t * p[7],
+      );
+    }
+  };
+  cubic([L - flare, q.rimY, L, y0 + q.bh * 0.1, bx - q.rw * 0.58, y0, bx, y0], 18);
+  cubic([bx, y0, bx + q.rw * 0.58, y0, Rr, y0 + q.bh * 0.1, Rr + flare, q.rimY], 18);
+  const step = (2 * (q.rw + flare)) / n;
+  const dip = 2.6 * line * (q.r / R);
+  for (let i = 1; i <= n; i++) {
+    const xa = Rr + flare - (i - 1) * step;
+    const xb = Rr + flare - i * step;
+    const cx = (xa + xb) / 2;
+    for (let k = 1; k <= 4; k++) {
+      const t = k / 4;
+      const u = 1 - t;
+      out.push(u * u * xa + 2 * u * t * cx + t * t * xb, q.rimY + 2 * u * t * dip);
+    }
+  }
+  // Closed: the last point is the first again.
+  out.length -= 2;
+  return out;
+}
+
+/* The bell's stipple, in its own frame: each dot an angle round the dome
+   (0 at the right of the rim, pi at the left), how far out from the crown
+   toward the rim, and a size, so it beats and leans with the bell for free.
+   Rolled once per shape and paper. */
+const stipples = new WeakMap<JellyShape, { light?: number[]; dark?: number[] }>();
+
+function bellDots(shape: JellyShape, dark: boolean): number[] {
+  let entry = stipples.get(shape);
+  if (!entry) {
+    entry = {};
+    stipples.set(shape, entry);
+  }
+  const key = dark ? 'dark' : 'light';
+  const hit = entry[key];
+  if (hit) return hit;
+  const r = rng(0x5717);
+  const out: number[] = [];
+  for (let i = 0; i < 2600; i++) {
+    const a = r() * Math.PI;
+    // Even over the dome's area, not crowded at the crown.
+    const sc = 0.12 + 0.86 * Math.sqrt(r());
+    // Away from the light (the right, and down toward the rim) on light
+    // water; on dark water the light ink marks the lit left instead.
+    const side = dark ? -Math.cos(a) : Math.cos(a);
+    const shade = 0.5 + 0.38 * side + 0.3 * (sc - 0.6) + (dark ? 0.1 * (1 - sc) : 0);
+    const keep = Math.pow(Math.max(0, (shade - 0.42) / 0.58), 1.5);
+    if (r() < keep) out.push(a, sc, 0.7 + 0.6 * r());
+    else r();
+  }
+  entry[key] = out;
+  return out;
 }
 
 /**

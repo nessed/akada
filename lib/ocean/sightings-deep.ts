@@ -10,7 +10,7 @@
 
 import { mixHex } from '../fan';
 import { HUES, IRON_GALL } from './palette';
-import { detailFor, hatch, inkLine, LIGHT, shadeAcross, stipple } from './pen';
+import { detailFor, inkLine, LIGHT, shadeAcross, stipple } from './pen';
 import { mulberry32 } from './random';
 
 /** The light as the pen takes it: on dark water the light ink marks the light. */
@@ -506,6 +506,8 @@ export function drawWhaleFall(
 
   const centra = new Path2D();
   const spines = new Path2D();
+  // Each vertebra's shading, its lower half in short strokes that follow the drum.
+  const shading = new Path2D();
   const roots: [number, number, number][] = [];
   for (let k = 0; k < N; k++) {
     const t = k / (N - 1);
@@ -531,6 +533,15 @@ export function drawWhaleFall(
     centra.moveTo(...pinch[3]);
     for (let j = 0; j < 4; j++) centra.quadraticCurveTo(corners[j][0], corners[j][1], pinch[j][0], pinch[j][1]);
     centra.closePath();
+    const strokes = Math.max(2, Math.round(hw / (1.4 * px)));
+    for (let q = 0; q < strokes; q++) {
+      const u = -hw * 0.75 + (1.5 * hw * (q + 0.5)) / strokes;
+      // On light water the shadow is below; on dark, the light ink marks the top.
+      const v0 = dark ? -hh * 0.75 : hh * 0.1 - (q % 2) * hh * 0.15;
+      const v1 = dark ? -hh * 0.2 : hh * 0.78;
+      shading.moveTo(...at(u, v0));
+      shading.lineTo(...at(u + hw * 0.08, v1));
+    }
     if (t < 0.8) {
       spines.moveTo(x, y - hv / 2);
       spines.lineTo(x + hv * 0.5, y - hv / 2 - hv * 0.9 * (1 - t * 0.6));
@@ -637,39 +648,42 @@ export function drawWhaleFall(
     ctx.lineWidth = thick * 0.6;
     ctx.stroke(jaw);
     ctx.restore();
-    const under = (top: number, bottom: number) => (_x: number, y: number) => 0.15 + 1.05 * ((y - top) / Math.max(1, bottom - top));
-    hatch(ctx, skull, { x: 0, y: -0.052 * L, w: 0.22 * L, h: 0.066 * L }, {
-      spacing: 1.7 * px,
-      angle: 1.15,
-      shade: under(-0.05 * L, 0.012 * L),
-      from: 0.5,
-      cross: dark ? undefined : 0.85,
-      color: ink,
-      width: 0.4 * px,
-      alpha: a * 0.55,
-      seed: seed ^ 0x5c,
-    });
-    hatch(ctx, centra, { x: s0 - 4 * px, y: -0.05 * L, w: L - s0 + 8 * px, h: 0.05 * L + 2 * px }, {
-      spacing: 1.5 * px,
-      angle: 1.35,
-      shade: under(-0.04 * L, 0),
-      from: 0.5,
-      cross: dark ? undefined : 0.85,
-      color: ink,
-      width: 0.35 * px,
-      alpha: a * 0.5,
-      seed: seed ^ 0xce,
-    });
-    hatch(ctx, shoulder, { x: 0.25 * L, y: -0.06 * L, w: 0.08 * L, h: 0.064 * L }, {
-      spacing: 1.7 * px,
-      angle: 1.0,
-      shade: under(-0.055 * L, 0.002 * L),
-      from: 0.5,
-      color: ink,
-      width: 0.4 * px,
-      alpha: a * 0.5,
-      seed: seed ^ 0x5b,
-    });
+    // Strokes down a bone, clipped to it: under the bone's middle on light
+    // water, crossed along its bottom edge; on dark water, along its lit top.
+    const strokesIn = (region: Path2D, x0: number, x1: number, top: number, bottom: number) => {
+      const p = new Path2D();
+      const cross = new Path2D();
+      const step = 1.7 * px;
+      for (let x = x0, q = 0; x < x1; x += step, q++) {
+        const jit = (q % 3) * 0.06;
+        const y0 = dark ? top : top + (bottom - top) * (0.45 + jit);
+        const y1 = dark ? top + (bottom - top) * (0.4 - jit) : bottom;
+        p.moveTo(x, y0);
+        p.lineTo(x + step * 0.6, y1);
+        if (!dark && q % 2 === 0) {
+          cross.moveTo(x - step, bottom - (bottom - top) * 0.25);
+          cross.lineTo(x + step * 1.5, bottom);
+        }
+      }
+      ctx.save();
+      ctx.clip(region);
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 0.4 * px;
+      ctx.globalAlpha = a * 0.5;
+      ctx.stroke(p);
+      ctx.globalAlpha = a * 0.4;
+      ctx.stroke(cross);
+      ctx.restore();
+    };
+    strokesIn(skull, 0, 0.22 * L, -0.05 * L, 0.012 * L);
+    strokesIn(shoulder, 0.25 * L, 0.33 * L, -0.058 * L, 0.002 * L);
+    ctx.save();
+    ctx.clip(centra);
+    ctx.strokeStyle = ink;
+    ctx.globalAlpha = a * 0.45;
+    ctx.lineWidth = 0.4 * px;
+    ctx.stroke(shading);
+    ctx.restore();
     // Both edges of each long bone in the pen.
     ctx.strokeStyle = ink;
     ctx.globalAlpha = a * 0.75;
