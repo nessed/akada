@@ -80,6 +80,9 @@ export const CANVAS_LIMIT = 16_000_000;
 const DEFAULT_BUDGET = 8_000_000;
 /* Safari's longest side. */
 const MAX_SIDE = 16_384;
+/** What a strip should take on the main thread, in ms. */
+const STRIP_MS = 110;
+
 /* Rows of overlap each side of a strip, so the downscale never reads past the
    edge of what was drawn and the strips meet without a seam. */
 const PAD = 2;
@@ -152,6 +155,33 @@ function aborted(signal?: AbortSignal): DOMException {
   return signal?.reason instanceof DOMException ? signal.reason : new DOMException('The picture was put down', 'AbortError');
 }
 
+/**
+ * The next strip's height from the strips timed so far: a straight line,
+ * fixed cost plus cost per row, fitted to the last few, solved for the
+ * strip that takes `STRIP_MS`. With one sample, or rows all the same height,
+ * there is no telling the two apart, so the next strip is a different height
+ * to find out. Pure.
+ */
+export function nextRows(timed: { rows: number; ms: number }[], last: number, floor: number, cap: number): number {
+  const clamp = (n: number) => Math.max(floor, Math.min(cap, Math.round(n)));
+  const recent = timed.slice(-6);
+  if (recent.length === 0) return clamp(last);
+  const n = recent.length;
+  const mx = recent.reduce((a, t) => a + t.rows, 0) / n;
+  const my = recent.reduce((a, t) => a + t.ms, 0) / n;
+  const sxx = recent.reduce((a, t) => a + (t.rows - mx) ** 2, 0);
+  if (sxx < 1) {
+    // Only one height seen: try half or double, by which side of the
+    // budget it fell.
+    return clamp(my > STRIP_MS ? last / 2 : last * 2);
+  }
+  const slope = Math.max(0, recent.reduce((a, t) => a + (t.rows - mx) * (t.ms - my), 0) / sxx);
+  const fixed = Math.max(0, my - slope * mx);
+  if (fixed >= STRIP_MS * 0.8) return clamp(cap);
+  if (slope <= 1e-6) return clamp(cap);
+  return clamp((STRIP_MS - fixed) / slope);
+}
+
 function intersects(rect: Rect, y0: number, y1: number): boolean {
   return rect.y < y1 && rect.y + rect.h > y0;
 }
@@ -194,8 +224,20 @@ export async function renderPicturePng(options: RenderPictureOptions): Promise<B
   const out = ss === 1 ? work : ladder[ladder.length - 1];
 
   const png = new PngStream(W, H, { alpha: !opaque, dpi: options.dpi });
+  /* Strips are sized by the clock, not only by memory. A strip costs a fixed
+     amount (whatever the drawing does once a call) plus so much a row; both
+     are learnt from the strips so far, and the next strip is the height that
+     should take about a tenth of a second, so the page answers and the
+     preview moves several times a second. Where the fixed part alone is over
+     that, smaller strips would only mean more of it, so they go as tall as
+     memory allows. The plan's height is the most a strip can be. */
+  const floor = Math.min(plan.rows, Math.max(8, Math.floor(64 / ss)));
+  let rowsNext = Math.min(plan.rows, Math.max(floor, Math.floor(256 / ss)));
+  const timed: { rows: number; ms: number }[] = [];
   try {
-    for (const { y, h } of plan.strips) {
+    for (let y = 0; y < H; ) {
+      const h = Math.min(rowsNext, H - y);
+      const started = performance.now();
       if (signal?.aborted) throw aborted(signal);
       // Rows painted for this strip, the overlap included where there is
       // picture to overlap; the edge rows of the picture clamp, as they would
@@ -298,6 +340,11 @@ export async function renderPicturePng(options: RenderPictureOptions): Promise<B
       const rows = context(out, true).getImageData(0, sourceY, W, h);
       await png.pushRows(rows.data, h);
       onProgress?.((y + h) / H);
+      // The first strip pays for whatever the drawing builds once; it is
+      // left out of the estimate.
+      if (y > 0) timed.push({ rows: h, ms: Math.max(0.5, performance.now() - started) });
+      rowsNext = nextRows(timed, rowsNext, floor, plan.rows);
+      y += h;
       await yieldToMain();
     }
     if (signal?.aborted) throw aborted(signal);

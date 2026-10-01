@@ -148,6 +148,8 @@ export default function SavePicture({ open, onClose, initial = 'moment', momentR
     controller.current = ac;
     clearPreview();
     setPhase({ at: 'developing' });
+    // Let the sheet show it is developing before the first heavy strip.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
     const W = out.width;
     const H = out.height;
     const rect = layout?.picture ?? { x: 0, y: 0, w: W, h: H };

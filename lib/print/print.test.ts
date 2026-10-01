@@ -270,3 +270,16 @@ test('strips never ask for a canvas iOS would refuse, and cover every row once',
   assert.ok(2480 * 2 * (tall.rows + tall.pad * 2) * 2 <= CANVAS_LIMIT);
   assert.ok(planStrips(2480, 3508, 2, 1e9).rows * 2480 * 4 <= CANVAS_LIMIT, 'never past the limit');
 });
+
+test('strip heights: shrink when cost is per row, go tall when it is fixed', async () => {
+  const { nextRows } = await import('./engine');
+  // Cost all per row: 1 ms a row, so ~110 rows fit the budget.
+  const perRow = [{ rows: 64, ms: 64 }, { rows: 256, ms: 256 }];
+  const a = nextRows(perRow, 256, 16, 1024);
+  assert.ok(a > 90 && a < 130, `per-row cost gave ${a}`);
+  // Cost all fixed: 600 ms whatever the height, so smaller strips only add calls.
+  const fixed = [{ rows: 64, ms: 600 }, { rows: 512, ms: 605 }];
+  assert.equal(nextRows(fixed, 512, 16, 1024), 1024);
+  // One height seen so far: try another.
+  assert.notEqual(nextRows([{ rows: 256, ms: 400 }], 256, 16, 1024), 256);
+});
