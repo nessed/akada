@@ -7,13 +7,19 @@ import ConfirmSheet from './ConfirmSheet';
 import { isLogSheetMounted } from './PendingSessionLogSheet';
 
 /**
- * The keys the running clock answers to (P, K and R), from anywhere.
+ * The keys the running clock answers to (P, B, K and R), from anywhere.
  *
  * A sitting is started from a row on Today or Tasks and then the reader goes
  * back to their book. Stopping it meant finding the dock with a mouse, and
- * the timer's own keys (Space, B, F) only exist on the timer screen, which is
+ * the timer's own keys (Space, F) only exist on the timer screen, which is
  * the one screen a reader in the middle of a chapter is least likely to be
- * looking at. `P` and `K` reach the clock from whichever tab is open.
+ * looking at. `P`, `B` and `K` reach the clock from whichever tab is open.
+ *
+ * `B` takes a break, and it lives here rather than on the timer for the same
+ * reason: a reader who wanted to rest from Tasks reached for `P` instead,
+ * because it was the key there was, and the rest went down as nothing. On a
+ * held block it files the hold as the break it was (see breakStartsAt), so
+ * "paused, walked off, came back" can still be put right on the way back.
  *
  * `P` is the dock's left button and does exactly what it does: on a break it
  * ends it and sets out the next block held, otherwise it holds the clock or lets it go again. `K` is
@@ -45,7 +51,7 @@ function blinkPage() {
 
 export default function TimerHotkeys() {
   const router = useRouter();
-  const { active, onBreak, endBreak, pause, resume, stop, cancel } = useTimerState();
+  const { active, onBreak, endBreak, startBreak, pause, resume, stop, cancel } = useTimerState();
   const [confirmingReset, setConfirmingReset] = useState(false);
 
   useEffect(() => {
@@ -68,6 +74,13 @@ export default function TimerHotkeys() {
         if (onBreak) endBreak();
         else if (active?.isPaused) resume();
         else pause();
+      } else if (key === 'b') {
+        // Nothing to do on a break: a second one is not a thing, and ending
+        // this one is P's.
+        if (onBreak) return;
+        event.preventDefault();
+        blinkPage();
+        startBreak();
       } else if (key === 'k') {
         event.preventDefault();
         stop();
@@ -82,7 +95,7 @@ export default function TimerHotkeys() {
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, onBreak, endBreak, pause, resume, stop, router]);
+  }, [active, onBreak, endBreak, startBreak, pause, resume, stop, router]);
 
   return (
     <ConfirmSheet
