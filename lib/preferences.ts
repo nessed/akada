@@ -60,7 +60,7 @@ export interface Preferences {
    * still round-trips through the stored JSON older builds wrote.
    */
   darkMode: boolean;
-  /** Hour (0-6) at which "today" rolls over into tomorrow. */
+  /** Hour (0-9) at which "today" rolls over into tomorrow. */
   dayEndingHour: number;
   /**
    * Whether the log sheet opens with "Add a note" folded open. A layout
@@ -128,7 +128,7 @@ function sanitizePreferences(value: unknown): Preferences {
       : DEFAULTS.timerDrawing,
     darkMode: paperTone === 'night',
     dayEndingHour:
-      typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 8
+      typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 9
         ? Math.round(parsed.dayEndingHour)
         : DEFAULTS.dayEndingHour,
     logNotesOpen:
