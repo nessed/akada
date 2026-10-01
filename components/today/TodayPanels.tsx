@@ -314,6 +314,22 @@ function DayLedger({
       .filter((b) => (b.carried ? b.to > 0 && b.from < cutoff : b.to > 0 && b.from < 32));
   }, [sessions, carried, courses, now, dayStart, cutoff]);
 
+  // Today's time that no timed block accounts for: sittings logged by hand or
+  // through the connector carry a length and no clock. The figure above counts
+  // them; the strip cannot place them, so it says how much is missing rather
+  // than letting a 5h day draw as two.
+  const unplacedSeconds = useMemo(() => {
+    let sum = 0;
+    for (const s of sessions) {
+      if (s.id.startsWith(LIVE_SESSION_PREFIX)) continue;
+      const timed = (s.segments ?? [])
+        .filter((g) => g.kind === 'focus' && Number.isFinite(Date.parse(g.startedAt)))
+        .reduce((a, g) => a + g.seconds, 0);
+      sum += Math.max(0, s.durationSeconds - timed);
+    }
+    return sum;
+  }, [sessions]);
+
   const carriedSeconds = blocks
     .filter((b) => b.carried)
     .reduce((sum, b) => sum + (Math.min(b.to, cutoff) - Math.max(b.from, 0)) * 3600, 0);
@@ -388,6 +404,12 @@ function DayLedger({
           </span>
         ))}
       </div>
+      {unplacedSeconds >= 60 && (
+        <p className="m-0 mt-2.5 font-serif text-[12.5px] italic leading-snug text-muted">
+          <span className="font-mono not-italic tabular-nums text-ink-soft">{formatHM(unplacedSeconds)}</span>{' '}
+          logged without a start time, so not on the strip
+        </p>
+      )}
       {carriedSeconds >= 60 && (
         <p className="m-0 mt-2.5 font-serif text-[12.5px] italic leading-snug text-muted">
           <span className="font-mono not-italic tabular-nums text-ink-soft">{formatHM(carriedSeconds)}</span>{' '}

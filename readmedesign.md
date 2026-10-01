@@ -419,7 +419,9 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   or a late night) with each timed block laid where it happened in its course
   colour and a thin ink mark for now. Only a sitting the timer ran knows when
   it happened, from its segments; one logged by hand counts in the figure and
-  is not placed. With a day that ends after midnight (Settings, "day ends
+  is not placed, and whatever time that leaves off the strip is named under
+  it in a serif line ("2h 3m logged without a start time, so not on the
+  strip"), so the strip never silently under-draws the figure. With a day that ends after midnight (Settings, "day ends
   at"), the strip also carries **the small hours before today began**: the
   day before's blocks that ran past midnight, at 45% in their course
   colours, left of a dashed `ink-soft` line where the day started, and a
