@@ -153,7 +153,7 @@ function buildStain(cssW: number, cssH: number, seed: number): HTMLCanvasElement
       // More at the page's edges, and most at its foot.
       const edge = Math.min(X, cssW - X, Y);
       const run = Math.pow(1 - smooth(0, 120, edge), 2) * 0.07 + Math.pow(1 - smooth(0, 170, cssH - Y), 2) * 0.07 * foot;
-      const s = p * 0.2 + m * 0.06 - lift * 0.035 + rim * 0.055 + run;
+      const s = p * 0.2 + m * 0.06 - lift * 0.035 + rim * 0.03 + run;
       put(d, (j * sw + i) * 4, s);
     }
   }
@@ -192,7 +192,8 @@ export class Wash {
 
     const stain = this.stainFor(w / px, h / px, seed);
     if (stain) {
-      ctx.globalAlpha = 0.3 + 0.7 * lum;
+      // Held back on pale water, where a stain shows more than it should.
+      ctx.globalAlpha = 0.25 + 0.3 * lum;
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(stain, 0, 0, w, h);
     }

@@ -111,9 +111,9 @@ export class Caustics {
     if (strength <= 0.01 || w <= 0 || h <= 0 || this.failed) return;
     const sw = Math.max(1, Math.ceil(w * SHRINK));
     const sh = Math.max(1, Math.ceil(h * REACH * SHRINK));
-    if (!this.ready(sw, sh)) return;
-    const s = this.sctx!;
-    const pattern = this.pattern!;
+    const got = this.ready(sw, sh);
+    if (!got) return;
+    const { scratch, s, pattern } = got;
 
     // The two nets, summed, in the scratch canvas. Different sizes, angles
     // and drifts, and each breathing a little in scale, so where they cross
@@ -164,34 +164,34 @@ export class Caustics {
     // touch more to show at all; neither is enough to trouble the clock.
     ctx.save();
     ctx.globalCompositeOperation = dark ? 'lighter' : 'source-over';
-    ctx.globalAlpha = Math.min(1, strength) * (dark ? 0.17 : 0.5);
+    // Strong enough to be seen moving, still nothing the clock has to fight.
+    ctx.globalAlpha = Math.min(1, Math.min(1, strength) * (dark ? 0.6 : 1));
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.scratch!, 0, 0, sw, sh, 0, 0, w, h * REACH);
+    ctx.drawImage(scratch, 0, 0, sw, sh, 0, 0, w, h * REACH);
     ctx.restore();
   }
 
   /** The tile once, and a scratch canvas the size of the page's top. */
-  private ready(sw: number, sh: number): boolean {
+  private ready(sw: number, sh: number): { scratch: HTMLCanvasElement; s: CanvasRenderingContext2D; pattern: CanvasPattern } | null {
+    this.tile ??= buildTile();
     if (!this.tile) {
-      this.tile = buildTile();
-      if (!this.tile) {
-        this.failed = true;
-        return false;
-      }
+      this.failed = true;
+      return null;
     }
-    if (!this.scratch) {
+    if (!this.scratch || !this.sctx || !this.pattern) {
       this.scratch = canvas(sw, sh);
       this.sctx = this.scratch?.getContext('2d') ?? null;
       this.pattern = this.sctx?.createPattern(this.tile, 'repeat') ?? null;
-      if (!this.sctx || !this.pattern) {
-        this.failed = true;
-        return false;
-      }
     }
-    if (this.scratch.width !== sw || this.scratch.height !== sh) {
-      this.scratch.width = sw;
-      this.scratch.height = sh;
+    const { scratch, sctx: s, pattern } = this;
+    if (!scratch || !s || !pattern) {
+      this.failed = true;
+      return null;
     }
-    return true;
+    if (scratch.width !== sw || scratch.height !== sh) {
+      scratch.width = sw;
+      scratch.height = sh;
+    }
+    return { scratch, s, pattern };
   }
 }
