@@ -21,6 +21,7 @@ import type { Species } from '../biome';
 import { depthAt, ZONES } from '../depth';
 import type { EventKind, OceanEvent } from '../events';
 import { KELP_ROCK, rollKelp } from '../kelp';
+import { siphonophoreReach } from '../sightings-shallow';
 import { ROCK_GRAMMARS, rockShape, rollGrammar, type RockGrammar } from '../outcrop-sprite';
 import { moonPhase, sunFor } from '../light';
 import { jellyForBlock } from '../lineage';
@@ -1874,13 +1875,16 @@ export function steepestFall(zStops: { y: number; z: number }[], h: number): num
 
 /**
  * The squid's eye as drawEye (draw.ts) lays it in a picture: its radius
- * (EYE_PICTURE of the page's short side, so 0.05 S across), and how far its
- * patch of mantle reaches in radii, across from the eye's middle (PATCH_RX
- * ragged, and a little) and up and down (PATCH_RY ragged, and a little).
+ * (EYE_PICTURE of the page's short side, so 0.05 S across); how far in
+ * radii it keeps its middle from its band's top and foot (PATCH_RY ragged,
+ * and a little); and how far its patch of mantle reaches, in radii from the
+ * eye's middle, toward the page, up and down.
  */
 export const EYE_R = 0.025 * REF;
-const EYE_PATCH_X = 3.5 * 1.14 + 0.1 + 0.1;
-const EYE_PATCH_Y = 3.0 * 1.14 + 0.1 + 0.1;
+const EYE_REACH = 3.0 * 1.14 + 0.1;
+const EYE_PATCH_IN = 4.3;
+const EYE_PATCH_UP = 3.35;
+const EYE_PATCH_DOWN = 3.5;
 
 /**
  * The turtle come to look at a jelly, from its own side of it or (mirrored)
@@ -1985,9 +1989,12 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
     case 'siphonophore': {
       // Lying easy and mostly off one side, in a gentle curve: never a long
       // line across the page, and never along the way down.
+      // Its region deep enough for the colony to hang at the full tilt its
+      // seed gives it (15 to 40 degrees): drawSiphonophore eases the tilt
+      // down to fit a shallower one.
       const rw = w * 0.62;
-      const rh = Math.min(h * 0.28, rw * 0.62);
-      const ry = clamp(y - rh / 2, h * 0.08, h * 0.85 - rh);
+      const rh = Math.min(h * 0.55, rw * 0.5);
+      const ry = clamp(y - rh / 2, h * 0.04, h * 0.95 - rh);
       const rx = side > 0 ? w * 0.72 : w * 0.28 - rw;
       const pe: PlacedEvent = { ...base, age: 0.5, rx, ry, rw, rh, x: side > 0 ? w : 0, y: ry + rh / 2, far: false, box: null, lie: side * 0.1 };
       pe.box = eventHull(pe, w);
@@ -1999,8 +2006,8 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       // across), sets it 0.82 of a radius in from the edge, and keeps its
       // whole patch (EYE_PATCH_Y radii up and down) inside its band.
       const re = EYE_R;
-      const reach = re * EYE_PATCH_Y + 2;
-      const rh = Math.max(w * 0.2, 0.2 * M, reach * 2 + 8);
+      const reach = re * EYE_REACH + 2;
+      const rh = Math.max(w * 0.2, 0.2 * M, reach * 2 + 8, re * 7.2);
       const left = sd % 2 === 0;
       const want = rh * (0.18 + (((sd >>> 6) % 100) / 100) * 0.2);
       const ny = clamp(want, reach, rh - reach);
@@ -2096,18 +2103,23 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
 function eventHull(e: PlacedEvent, w: number): Box | null {
   switch (e.kind) {
     case 'siphonophore': {
-      const x0 = Math.max(0, e.rx);
-      const x1 = Math.min(w, e.rx + e.rw);
-      const cy = e.ry + e.rh / 2;
-      return { x0, x1, y0: cy - e.rw * 0.1, y1: cy + e.rw * 0.16 };
+      // Where the colony reaches, as sightings-shallow.ts measures it in
+      // its region (drawn mirrored when the region is), as far as the page.
+      const mir = e.mirror;
+      const p0 = mir ? e.rw - (w - e.rx) : -e.rx;
+      const p1 = mir ? e.rw + e.rx : w - e.rx;
+      const lie = e.lie ?? 0.1;
+      const r = siphonophoreReach(e.rw, e.rh, e.seed, lie, lie > 0 ? p1 : p0);
+      const X0 = mir ? e.rx + e.rw - r.x1 : e.rx + r.x0;
+      const X1 = mir ? e.rx + e.rw - r.x0 : e.rx + r.x1;
+      return { x0: Math.max(0, X0), x1: Math.min(w, X1), y0: e.ry + r.y0, y1: e.ry + r.y1 };
     }
     case 'eye': {
       // drawEye sizes itself to the page: an eye 5% of the short side
-      // across, 0.82 of a radius in from the edge, in its patch of mantle:
-      // EYE_PATCH_X radii in from the eye's middle, EYE_PATCH_Y up and down.
+      // across, 0.82 of a radius in from the edge, in its patch of mantle.
       const r = EYE_R;
       const onLeft = e.x < w / 2;
-      return onLeft ? { x0: 0, x1: e.x + r * EYE_PATCH_X, y0: e.y - r * EYE_PATCH_Y, y1: e.y + r * EYE_PATCH_Y } : { x0: e.x - r * EYE_PATCH_X, x1: w, y0: e.y - r * EYE_PATCH_Y, y1: e.y + r * EYE_PATCH_Y };
+      return onLeft ? { x0: 0, x1: e.x + r * EYE_PATCH_IN, y0: e.y - r * EYE_PATCH_UP, y1: e.y + r * EYE_PATCH_DOWN } : { x0: e.x - r * EYE_PATCH_IN, x1: w, y0: e.y - r * EYE_PATCH_UP, y1: e.y + r * EYE_PATCH_DOWN };
     }
     case 'oarfish': {
       const D = Math.min(w, e.rh) * 0.042;

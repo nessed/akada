@@ -7,12 +7,15 @@
  * what is written on the page). Each is drawn for the side of the page it
  * comes from, so the light stays on its top left whichever wall it leaves.
  *
- * The rock is drawn as an engraver draws one: a heap of boulders, each its
- * own rounded form with a broken top, shaded in contour lines that curve
- * with it and close up into its shadow, a stipple gathering where it turns
- * away, a strip of bare paper along its lit top, and the clefts between
- * them dark. Its foot runs back into the wall and the wash lets go of it,
- * so it hangs off the page edge rather than floating.
+ * The rock is drawn as a plate engraver draws stone: boulders washed flat
+ * along the light, hatched in short straight strokes all one way (15 to 25°
+ * off the vertical, as the light falls), dense where they turn from it and
+ * crossed where darkest, two to four broken bedding planes across it, a
+ * strip of bare paper inside its lit outline and nothing added for a
+ * highlight, and the clefts between them dark. Its foot runs back into the
+ * wall and the wash lets go of it, so it hangs off the page edge rather than
+ * floating; no rock is a cap on a stem (`MAX_CAP`). The picture's side
+ * walls are drawn in the same hand (`inkWall`).
  *
  * The growths are drawn as a natural-history plate would draw them: a wash
  * of colour under a line of ink. Colour goes with the light, as it does in
@@ -542,7 +545,8 @@ export interface RockStyle {
   rock: string;
   /** The pen. */
   line: string;
-  /** What the lit top is lifted toward: the bare paper, or on dark water a glint. */
+  /** What the wash is lifted toward on its lit side: the paper, or on dark
+      water the light ink (a tint in the wash, never a highlight). */
   paper: string;
   dark: boolean;
   /** How much drawing it carries, 0 to 1 (`detailFor`). */
@@ -585,15 +589,19 @@ const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
 const PAPER_GAP = 2.5;
 
 /**
- * A rock in pen and wash, into a context of its own (its foot is let go of
- * by erasing, so draw it on a layer and lay that down): each boulder washed
- * from a lifted top left to a deeper bottom right, the cleft behind it
- * darkened, a strip of bare paper along its lit top, contour lines that
- * follow its form and close up into the shadow (crossed only where it is
- * darkest), a stipple gathering into the shadow, a crack or two, and its
- * outline in one pressure line that swells in the shadow and breaks in the
- * light. On dark water the light ink marks where the light falls instead.
- * Shared by the outcrops and the kelp's ledge.
+ * A rock in pen and wash, into a context of its own (its foot is let go of,
+ * and its paper strip left, by erasing, so draw it on a layer and lay that
+ * down): each boulder washed along the light from a lifted top left to a
+ * deeper bottom right, the cleft behind it darkened, the wash stopped 2.5 px
+ * of pen short of its lit outline (bare paper, no white added), the
+ * engraver's hatch (`hatchStrokes`: one stroke to 80 px² of pen in shadow,
+ * hardly any on the lit face, crossed at 60° in the darkest fifth), a crack
+ * or two, and its outline in one pressure line that swells in the shadow
+ * and breaks in the light; then two to four broken bedding planes across
+ * the rock, each with its ledge's shadow under it. Far off, only the wash,
+ * a broken thread of pen and three to six strokes. On dark water the light
+ * ink marks where the light falls instead, and is never crossed. Shared by
+ * the outcrops, the kelp's ledge and the picture's rocks.
  */
 export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: RockPlace, k: RockStyle): void {
   const { px, d, dark } = k;
