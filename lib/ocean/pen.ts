@@ -129,7 +129,9 @@ export function inkLine(ctx: CanvasRenderingContext2D, pts: number[], closed: bo
     const j = (i + 1) % n;
     area += s[i * 2] * s[j * 2 + 1] - s[j * 2] * s[i * 2 + 1];
   }
-  const out = area > 0 ? -1 : 1;
+  // Positive area is clockwise on a y-down canvas, whose outward normal is
+  // the direction of travel turned left: (dy, -dx).
+  const out = area > 0 ? 1 : -1;
   // Length along the line, for the taper and the breaks.
   const len: number[] = [0];
   for (let i = 1; i < n; i++) len.push(len[i - 1] + Math.hypot(s[i * 2] - s[i * 2 - 2], s[i * 2 + 1] - s[i * 2 - 1]));
@@ -169,22 +171,30 @@ export function inkLine(ctx: CanvasRenderingContext2D, pts: number[], closed: bo
   ctx.fillStyle = o.color;
   ctx.globalAlpha *= o.alpha ?? 1;
   const ribbon = new Path2D();
-  // Runs of the line wide enough to draw, each its own ribbon.
+  // Runs of the line wide enough to draw, each its own ribbon. Counted
+  // along the line (a closed one goes once round and back to its start), so
+  // a run that crosses the seam is still one run.
   let start = -1;
+  const side = (k: number, sgn: number) => {
+    const i = k % n;
+    return [s[i * 2] + (sgn * nx[i] * widths[i]) / 2, s[i * 2 + 1] + (sgn * ny[i] * widths[i]) / 2] as const;
+  };
   const flush = (end: number) => {
     if (start < 0 || end - start < 1) return;
-    ribbon.moveTo(s[start * 2] + (nx[start] * widths[start]) / 2, s[start * 2 + 1] + (ny[start] * widths[start]) / 2);
-    for (let i = start + 1; i <= end; i++) ribbon.lineTo(s[i * 2] + (nx[i] * widths[i]) / 2, s[i * 2 + 1] + (ny[i] * widths[i]) / 2);
-    for (let i = end; i >= start; i--) ribbon.lineTo(s[i * 2] - (nx[i] * widths[i]) / 2, s[i * 2 + 1] - (ny[i] * widths[i]) / 2);
+    ribbon.moveTo(...side(start, 1));
+    for (let k = start + 1; k <= end; k++) ribbon.lineTo(...side(k, 1));
+    for (let k = end; k >= start; k--) ribbon.lineTo(...side(k, -1));
     ribbon.closePath();
   };
   const count = closed ? n + 1 : n;
   for (let k = 0; k < count; k++) {
-    const i = k % n;
-    const ok = widths[i] >= min;
-    if (ok && start < 0) start = i;
-    if ((!ok || k === count - 1) && start >= 0) {
-      flush(ok ? i : Math.max(start, (i - 1 + n) % n));
+    const ok = widths[k % n] >= min;
+    if (ok && start < 0) start = k;
+    if (!ok && start >= 0) {
+      flush(k - 1);
+      start = -1;
+    } else if (ok && k === count - 1) {
+      flush(k);
       start = -1;
     }
   }
@@ -239,13 +249,16 @@ export function hatch(ctx: CanvasRenderingContext2D, region: Path2D, box: { x: n
   if (o.cross != null) sets.push([o.angle + 1.15, o.cross]);
   const cx = box.x + box.w / 2;
   const cy = box.y + box.h / 2;
-  const radius = Math.hypot(box.w, box.h) / 2 + o.spacing;
   const step = Math.max(1, o.spacing * 0.5);
   const path = new Path2D();
   for (const [angle, from] of sets) {
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
-    for (let off = -radius; off <= radius; off += o.spacing) {
+    // Only as far along and across as the box reaches at this angle: a long
+    // thin shape is a few long lines, not a square's worth of short ones.
+    const radius = (Math.abs(dx) * box.w + Math.abs(dy) * box.h) / 2 + o.spacing;
+    const across = (Math.abs(dy) * box.w + Math.abs(dx) * box.h) / 2 + o.spacing;
+    for (let off = -across; off <= across; off += o.spacing) {
       const jit = (r() - 0.5) * o.spacing * 0.25;
       let run: number[] = [];
       const flush = () => {
@@ -266,7 +279,9 @@ export function hatch(ctx: CanvasRenderingContext2D, region: Path2D, box: { x: n
         run = [];
       };
       for (let t = -radius; t <= radius; t += step) {
-        const bow = Math.sin((t / radius) * Math.PI) * (o.bow ?? 0) * o.spacing;
+        // A hump, not an S: the line sags most in its middle, as a contour
+        // over a rounded form does.
+        const bow = Math.cos((t / radius) * (Math.PI / 2)) * (o.bow ?? 0) * o.spacing;
         const x = cx + dx * t - dy * (off + jit + bow);
         const y = cy + dy * t + dx * (off + jit + bow);
         const sh = o.shade(x, y);
@@ -332,6 +347,8 @@ export function stipple(ctx: CanvasRenderingContext2D, region: Path2D, box: { x:
 /* ---- The brush ---- */
 
 const grains = new WeakMap<object, CanvasPattern | null>();
+/** The noise tile itself, made once and shared by every context's pattern. */
+let grainTile: HTMLCanvasElement | OffscreenCanvas | null | undefined;
 
 function makeCanvas(w: number, h: number): HTMLCanvasElement | OffscreenCanvas | null {
   if (typeof document !== 'undefined') {
@@ -347,10 +364,16 @@ function makeCanvas(w: number, h: number): HTMLCanvasElement | OffscreenCanvas |
 /** Paper tooth: a small tile of noise, darker in its pits, made once. */
 export function grain(ctx: CanvasRenderingContext2D): CanvasPattern | null {
   if (grains.has(ctx)) return grains.get(ctx) ?? null;
+  if (grainTile === undefined) grainTile = makeGrainTile();
+  const pattern = grainTile ? ctx.createPattern(grainTile as CanvasImageSource, 'repeat') : null;
+  grains.set(ctx, pattern);
+  return pattern;
+}
+
+function makeGrainTile(): HTMLCanvasElement | OffscreenCanvas | null {
   const size = 96;
   const c = makeCanvas(size, size);
   const g = c?.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null | undefined;
-  let pattern: CanvasPattern | null = null;
   if (c && g) {
     const img = g.createImageData(size, size);
     const r = mulberry32(4242);
@@ -368,10 +391,9 @@ export function grain(ctx: CanvasRenderingContext2D): CanvasPattern | null {
       }
     }
     g.putImageData(img, 0, 0);
-    pattern = ctx.createPattern(c as CanvasImageSource, 'repeat');
+    return c;
   }
-  grains.set(ctx, pattern);
-  return pattern;
+  return null;
 }
 
 export interface WashOptions {

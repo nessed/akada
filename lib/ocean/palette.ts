@@ -80,8 +80,20 @@ export function waterAt(z: number, ground: Ground, courseColor: string): Water {
 export const HUES = ['#A8B89B', '#D4A5A5', '#B5A8C9', '#E2B594', '#A8BCC9', '#C99B7E', '#D9C58C', '#9FC1B0', '#9AA3AB', '#B89BAA'];
 const GLOWS = ['#9FE8FF', '#B8FFD9', '#FFD9A0', '#E3C2FF'];
 
+/**
+ * The one ink every animal's lines are drawn in, as a plate's are: iron-gall
+ * brown-black on light water, a warm off-white on dark. The colour is all in
+ * the washes, so it drains with depth while the line stays the same.
+ */
+export const IRON_GALL = { light: '#2A2320', dark: '#E8E0CF' } as const;
+
 export interface CreatureInk {
+  /** The animal's own tinted ink, kept for anything still drawn in it. */
   ink: string;
+  /** The pen: every line, outline, hatch and stipple, in one ink. */
+  pen: string;
+  /** The bare paper a wash leaves as its highlight, or null for none. */
+  paper: string | null;
   body: string;
   fin: string;
   tent: string;
@@ -145,6 +157,9 @@ export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureIn
   const water = dark ? '#1A1815' : '#FBF8EF';
   return {
     ink,
+    pen: dark ? IRON_GALL.dark : IRON_GALL.light,
+    // On dark water there is no paper to leave bare; only a faint lift.
+    paper: dark ? mixHex(hue, IRON_GALL.dark, 0.3) : '#FBF8EF',
     body: dark ? mixHex(hue, water, 0.45) : mixHex(hue, water, 0.2),
     fin: dark ? mixHex(hue, water, 0.25) : mixHex(hue, water, 0.45),
     tent: dark ? mixHex(hue, '#FFFFFF', 0.35) : mixHex(hue, '#1A1714', 0.45),

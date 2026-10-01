@@ -18,14 +18,18 @@ export type LayerName =
   | 'legs'
   | 'fin'
   | 'finRay'
+  | 'rays'
   | 'body'
   | 'guts'
   | 'gutFill'
   | 'pat'
   | 'patLine'
+  | 'scales'
+  | 'lines'
   | 'detail'
   | 'tentF'
   | 'beads'
+  | 'nodes'
   | 'dotGlow'
   | 'dots'
   | 'eye'
@@ -33,9 +37,19 @@ export type LayerName =
   | 'lure';
 
 export const LAYERS: LayerName[] = [
-  'glowBack', 'tentB', 'legs', 'fin', 'finRay', 'body', 'guts', 'gutFill', 'pat', 'patLine',
-  'detail', 'tentF', 'beads', 'dotGlow', 'dots', 'eye', 'pupil', 'lure',
+  'glowBack', 'tentB', 'legs', 'fin', 'finRay', 'rays', 'body', 'guts', 'gutFill', 'pat', 'patLine',
+  'scales', 'lines', 'detail', 'tentF', 'beads', 'nodes', 'dotGlow', 'dots', 'eye', 'pupil', 'lure',
 ];
+
+/**
+ * The fine work an engraver adds only when the drawing is big: the rays in
+ * a fin, the scales, the lateral line and the gill cover, the stinging
+ * cells along a tentacle and the suckers on an arm, the knobs on a star.
+ * They are made from the genome like everything else, but with dice of
+ * their own, so adding them never moves a line the animal already had, and
+ * they sit inside it, so they are left out of its bounds.
+ */
+export const FINE: ReadonlySet<LayerName> = new Set<LayerName>(['rays', 'scales', 'lines', 'nodes']);
 
 export type Shape =
   | { kind: 'path'; pts: number[]; close: boolean }
@@ -47,11 +61,18 @@ export interface Anatomy {
   minY: number;
   maxX: number;
   maxY: number;
+  /** How many of the first `finRay` lines are the tail's: the fine `rays`
+      draw those better, so a big drawing leaves them out. */
+  tailRays: number;
 }
 
 export function buildAnatomy(g: Genome, seed: number): Anatomy {
   const r = mulberry32(seed * 104729 + 7);
   const rr = (a: number, b: number) => range(r, a, b);
+  // The fine work's own dice: never drawn from `r`, so the body stays put.
+  const fr = mulberry32(seed * 7368787 + 101);
+  const fine = (a: number, b: number) => range(fr, a, b);
+  let tailRays = 0;
   const layers = Object.fromEntries(LAYERS.map((k) => [k, [] as Shape[]])) as Record<LayerName, Shape[]>;
   const P = (layer: LayerName, pts: [number, number][], close = false) => {
     if (pts.length < 2) return;
@@ -106,6 +127,12 @@ export function buildAnatomy(g: Genome, seed: number): Anatomy {
         line.push([x, y]);
       }
       P('tentB', line);
+      // Batteries of stinging cells, close at the root and thinning out.
+      const off = Math.floor(fine(0, 3));
+      for (let j = 2 + off; j < line.length - 1; j += 3) {
+        const k = j / line.length;
+        C('nodes', line[j][0], line[j][1], 0.25 + 0.55 * (1 - k));
+      }
       if (g.tentStyle === 'beaded') for (let j = 4; j < line.length; j += 5) C('beads', line[j][0], line[j][1], 1.2);
       if (g.lit && i % 2 === 0 && line.length) {
         const e = line[line.length - 1];
@@ -191,6 +218,10 @@ export function buildAnatomy(g: Genome, seed: number): Anatomy {
         side.push([px + nx * w, py + ny * w]);
         back.unshift([px - nx * w, py - ny * w]);
         if (g.feet && s > 0.1 && s < 0.9) C('pat', px, py, 0.9);
+        // Two rows of knobs down the arm, either side of the feet.
+        if (s > 0.06 && s < 0.86) {
+          for (const sd of [-0.55, 0.55]) C('nodes', px + nx * w * sd + fine(-0.3, 0.3), py + ny * w * sd + fine(-0.3, 0.3), w * (0.1 + fine(0, 0.05)));
+        }
         if (g.spines && s > 0.05) P('detail', [[px + nx * w, py + ny * w], [px + nx * (w + 3), py + ny * (w + 3)]]);
       }
       pts.push(...side, ...back);
@@ -222,7 +253,7 @@ export function buildAnatomy(g: Genome, seed: number): Anatomy {
       y += Math.sin(a) * u * 1.4;
     }
   } else {
-    bilateral(g, P, C, rr);
+    tailRays = bilateral(g, P, C, rr, fine);
   }
 
   let minX = Infinity;
@@ -230,7 +261,7 @@ export function buildAnatomy(g: Genome, seed: number): Anatomy {
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const k of LAYERS) {
-    if (k === 'glowBack' || k === 'dotGlow') continue;
+    if (k === 'glowBack' || k === 'dotGlow' || FINE.has(k)) continue;
     for (const s of layers[k]) {
       if (s.kind === 'disc') {
         minX = Math.min(minX, s.x - s.rx);
@@ -253,14 +284,58 @@ export function buildAnatomy(g: Genome, seed: number): Anatomy {
     maxX = 1;
     maxY = 1;
   }
-  return { layers, minX, minY, maxX, maxY };
+  return { layers, minX, minY, maxX, maxY, tailRays };
 }
 
 type PathFn = (layer: LayerName, pts: [number, number][], close?: boolean) => void;
 type DiscFn = (layer: LayerName, x: number, y: number, rx: number, ry?: number) => void;
 
-/** Fish, eels, rays, squid and crawlers: a spine with a width along it. */
-function bilateral(g: Genome, P: PathFn, C: DiscFn, rr: (a: number, b: number) => number) {
+type Pt = [number, number];
+
+/** A point a share `t` of the way along a polyline, by length. */
+function along(line: Pt[], t: number): Pt {
+  let total = 0;
+  for (let i = 1; i < line.length; i++) total += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
+  let want = Math.max(0, Math.min(1, t)) * total;
+  for (let i = 1; i < line.length; i++) {
+    const d = Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
+    if (want <= d || i === line.length - 1) {
+      const k = d > 0 ? Math.min(1, want / d) : 0;
+      return [line[i - 1][0] + (line[i][0] - line[i - 1][0]) * k, line[i - 1][1] + (line[i][1] - line[i - 1][1]) * k];
+    }
+    want -= d;
+  }
+  return line[line.length - 1];
+}
+
+/** Rays fanning from a root to an edge, stopping a little short of it. */
+function fanRays(P: PathFn, root: Pt, edge: Pt[], n: number) {
+  for (let k = 1; k < n; k++) {
+    const [ex, ey] = along(edge, k / n);
+    P('rays', [root, [root[0] + (ex - root[0]) * 0.35, root[1] + (ey - root[1]) * 0.35], [root[0] + (ex - root[0]) * 0.93, root[1] + (ey - root[1]) * 0.93]]);
+  }
+}
+
+/** Rays across a fin from its base to its edge, the two read in step. */
+function pairRays(P: PathFn, base: Pt[], edge: Pt[], n: number) {
+  for (let k = 0; k <= n; k++) {
+    const t = 0.04 + (k / n) * 0.92;
+    const [bx, by] = along(base, t);
+    const [ex, ey] = along(edge, t);
+    P('rays', [[bx, by], [bx + (ex - bx) * 0.5, by + (ey - by) * 0.5], [bx + (ex - bx) * 0.94, by + (ey - by) * 0.94]]);
+  }
+}
+
+/** A closed fin's flat points as pairs, split into its base and its edge. */
+function halves(pts: Pt[]): [Pt[], Pt[]] {
+  const m = Math.floor(pts.length / 2);
+  return [pts.slice(0, m), pts.slice(m).reverse()];
+}
+
+/** Fish, eels, rays, squid and crawlers: a spine with a width along it.
+    Returns how many tail rays it put first in `finRay`. */
+function bilateral(g: Genome, P: PathFn, C: DiscFn, rr: (a: number, b: number) => number, fine: (a: number, b: number) => number): number {
+  let tailRays = 0;
   const TAU = Math.PI * 2;
   const L = 100;
   const A = g.A!;
@@ -292,14 +367,21 @@ function bilateral(g: Genome, P: PathFn, C: DiscFn, rr: (a: number, b: number) =
   const at = (t: number) => spine[Math.max(0, Math.min(N, Math.round(t * N)))];
   const [tx, ty] = spine[0];
   const T = A * 0.75 * g.tailSize!;
-  if (g.tail === 'fork') P('fin', [[tx + 2, ty], [tx - T * 0.95, ty - T], [tx - T * 0.45, ty], [tx - T * 0.95, ty + T]], true);
+  if (g.tail === 'fork') {
+    const f: Pt[] = [[tx + 2, ty], [tx - T * 0.95, ty - T], [tx - T * 0.45, ty], [tx - T * 0.95, ty + T]];
+    P('fin', f, true);
+    fanRays(P, [tx + 1, ty], f.slice(1), 14);
+  }
   if (g.tail === 'round') {
     const f: [number, number][] = [[tx + 2, ty]];
     for (let a = 2.3; a <= 3.99; a += 0.12) f.push([tx + Math.cos(a) * T, ty + Math.sin(a) * T * 0.9]);
     P('fin', f, true);
+    fanRays(P, [tx + 1, ty], f.slice(1), 13);
   }
   if (g.tail === 'lunate') {
-    P('fin', [[tx + 2, ty], [tx - T * 0.5, ty - T * 1.05], [tx - T * 0.2, ty - T * 0.3], [tx - T * 0.28, ty], [tx - T * 0.2, ty + T * 0.3], [tx - T * 0.5, ty + T * 1.05]], true);
+    const f: Pt[] = [[tx + 2, ty], [tx - T * 0.5, ty - T * 1.05], [tx - T * 0.2, ty - T * 0.3], [tx - T * 0.28, ty], [tx - T * 0.2, ty + T * 0.3], [tx - T * 0.5, ty + T * 1.05]];
+    P('fin', f, true);
+    fanRays(P, [tx + 1, ty], f.slice(1), 14);
   }
   if (g.tail === 'filament') {
     const f: [number, number][] = [];
@@ -307,10 +389,15 @@ function bilateral(g: Genome, P: PathFn, C: DiscFn, rr: (a: number, b: number) =
     P('tentF', f);
   }
   if (g.tail === 'fan') {
-    for (let k = -2; k <= 2; k++) P('fin', [[tx + 2, ty], [tx - T * 0.8, ty + k * T * 0.28 - T * 0.12], [tx - T * 0.8, ty + k * T * 0.28 + T * 0.12]], true);
+    for (let k = -2; k <= 2; k++) {
+      const f: Pt[] = [[tx + 2, ty], [tx - T * 0.8, ty + k * T * 0.28 - T * 0.12], [tx - T * 0.8, ty + k * T * 0.28 + T * 0.12]];
+      P('fin', f, true);
+      fanRays(P, [tx, ty], f.slice(1), 3);
+    }
   }
   if (g.tail !== 'none' && g.tail !== 'filament') {
     for (let k = -3; k <= 3; k++) P('finRay', [[tx, ty], [tx - T * 0.7, ty + k * T * 0.22]]);
+    tailRays = 7;
   }
   for (let d = 0; d < g.dorsal!; d++) {
     const t0 = 0.3 + d * 0.28 + rr(-0.05, 0.05);
@@ -336,6 +423,7 @@ function bilateral(g: Genome, P: PathFn, C: DiscFn, rr: (a: number, b: number) =
       if (g.dorsalShape === 'spines') P('finRay', [[x, y - w * 0.46], [x, y - w * 0.46 - h * 1.25]]);
     }
     P('fin', f.concat(back), true);
+    if (g.dorsalShape !== 'spines') pairRays(P, f, back.slice().reverse(), Math.round(7 + (t1 - t0) * 30));
   }
   if (g.plan === 'eel') {
     for (const sgn of [-1, 1]) {
@@ -347,20 +435,29 @@ function bilateral(g: Genome, P: PathFn, C: DiscFn, rr: (a: number, b: number) =
         b.unshift([x, y + sgn * (w * 0.5 + 2.5 + Math.sin(i * 1.3) * 0.8)]);
       }
       P('fin', f.concat(b), true);
+      const [base, edge] = halves(f.concat(b));
+      pairRays(P, base, edge, base.length * 2);
     }
   }
   if (g.pectoral) {
     const [x, y, w] = at(0.72);
-    P('fin', [[x, y + w * 0.1], [x - A * 0.55, y + w * 0.35 + A * 0.25], [x - A * 0.35, y + w * 0.15]], true);
+    const f: Pt[] = [[x, y + w * 0.1], [x - A * 0.55, y + w * 0.35 + A * 0.25], [x - A * 0.35, y + w * 0.15]];
+    P('fin', f, true);
+    fanRays(P, [x - A * 0.12, y + w * 0.12], f, 7);
   }
   if (g.anal) {
     const [x, y, w] = at(0.26);
-    P('fin', [[x + 6, y + w * 0.54], [x - 6, y + w * 0.54 + A * 0.35], [x - 8, y + w * 0.5]], true);
+    const f: Pt[] = [[x + 6, y + w * 0.54], [x - 6, y + w * 0.54 + A * 0.35], [x - 8, y + w * 0.5]];
+    P('fin', f, true);
+    pairRays(P, [f[0], f[2]], [f[0], f[1], f[1]], 6);
   }
   if (g.plan === 'squid') {
     const [x, y, w] = at(0.12);
-    P('fin', [[x + 10, y - w * 0.4], [x - 6, y - w * 1.3], [x - 4, y - w * 0.3]], true);
-    P('fin', [[x + 10, y + w * 0.4], [x - 6, y + w * 1.3], [x - 4, y + w * 0.3]], true);
+    for (const sgn of [-1, 1]) {
+      const f: Pt[] = [[x + 10, y + sgn * w * 0.4], [x - 6, y + sgn * w * 1.3], [x - 4, y + sgn * w * 0.3]];
+      P('fin', f, true);
+      fanRays(P, [x + 2, y + sgn * w * 0.38], f, 9);
+    }
     const [hx, hy, hw] = spine[N];
     for (let k = 0; k < g.headArms!; k++) {
       const v = (k / Math.max(1, g.headArms! - 1)) * 2 - 1;
@@ -368,6 +465,11 @@ function bilateral(g: Genome, P: PathFn, C: DiscFn, rr: (a: number, b: number) =
       const line: [number, number][] = [];
       for (let s = 0; s <= len; s += 3) line.push([hx + s, hy + v * hw * 0.35 + v * s * 0.25 + Math.sin(s / 12 + k) * 3]);
       P('tentF', line);
+      // Suckers down the arm, shrinking toward its tip.
+      for (let j = 2; j < line.length - 1; j += 1) {
+        const q = j / line.length;
+        C('nodes', line[j][0], line[j][1] + 0.9 * (1 - q), 0.25 + 0.5 * (1 - q));
+      }
     }
   }
   if (g.legs) {
@@ -438,6 +540,54 @@ function bilateral(g: Genome, P: PathFn, C: DiscFn, rr: (a: number, b: number) =
       C('dots', x, y + w * 0.42, 1.1);
     }
   }
+  // Scales, in rows down the flank, each the free edge of one overlapping
+  // the next toward the tail, smaller as the body narrows.
+  if (g.plan === 'fish' && !g.clear && !g.armor) {
+    const S = A * 0.13;
+    let col = 0;
+    for (let t = 0.76; t > 0.12; col++) {
+      const [x, y, w] = at(t);
+      const s = Math.max(S * 0.45, S * Math.min(1, (w / A) * 1.4));
+      const rows = Math.max(2, Math.round(w / s));
+      for (let k = 0; k <= rows; k++) {
+        const v = -0.48 + ((k + (col % 2) * 0.5) / rows) * 1.02;
+        if (v > 0.5) continue;
+        const cx = x + fine(-0.06, 0.06) * s;
+        const cy = y + v * w;
+        const arc: Pt[] = [];
+        // The free edge only: the rest is under the scale in front.
+        for (let i = 0; i <= 6; i++) {
+          const a = Math.PI / 2 + 0.28 + (i / 6) * (Math.PI - 0.56);
+          arc.push([cx + Math.cos(a) * s * 0.7, cy + Math.sin(a) * s * 0.58]);
+        }
+        P('scales', arc);
+      }
+      t -= (s * 0.72) / 100;
+    }
+  }
+  if ((g.plan === 'fish' || g.plan === 'eel') && !g.lateral) {
+    const line: Pt[] = [];
+    for (let i = 5; i <= N - 7; i++) {
+      const [x, y, w] = spine[i];
+      line.push([x, y - w * (0.1 + 0.06 * Math.sin((i / N) * Math.PI))]);
+    }
+    P('lines', line);
+    // The pores of the line, a short tick at every other scale.
+    for (let i = 1; i < line.length - 1; i += 2) {
+      const [x, y] = line[i];
+      P('lines', [[x - 0.6, y - 0.9], [x + 0.6, y + 0.9]]);
+    }
+  }
+  if (g.plan === 'fish') {
+    // The gill cover's edge, in front of the gill slit.
+    const [x, y, w] = at(0.83);
+    const cover: Pt[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = -1.1 + (i / 8) * 2.1;
+      cover.push([x - Math.cos(a) * 3.2 + 3, y + Math.sin(a) * w * 0.42]);
+    }
+    P('lines', cover);
+  }
   const eyes = g.eyes!;
   for (let e = 0; e < eyes; e++) {
     const [x, y, w] = at(eyes > 1 ? 0.8 + (e / eyes) * 0.14 : 0.87);
@@ -467,4 +617,5 @@ function bilateral(g: Genome, P: PathFn, C: DiscFn, rr: (a: number, b: number) =
     C('dotGlow', tip[0], tip[1], A * 0.2);
     C('dots', tip[0], tip[1], A * 0.07);
   }
+  return tailRays;
 }
