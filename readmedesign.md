@@ -1764,7 +1764,7 @@ reaches a phone in a pocket.
 
 Both the chime and the break length are the reader's to set, in Settings.
 `DayEndPicker` answers each hour in the margin, in `HandNote`, with a line
-of its own ("ambitious!" at 4am); the hour is the only thing that changes it.
+of its own ("ambitious" at 4am); the hour is the only thing that changes it.
 `BreakLengthPicker` is written in `DayEndPicker`'s idiom: a sentence about
 their own habit, with the marks appearing only once the line is touched, so
 the panel stays a page of sentences until something is being changed.
