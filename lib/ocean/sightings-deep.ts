@@ -316,6 +316,9 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
 
 /* ---- The dumbo octopus ---- */
 
+/** The dumbo's mantle, drawn once a size and placed. */
+let dumboMantles: { key: string; canvas: HTMLCanvasElement | null }[] = [];
+
 /** A dumbo's pink, which the depth takes most of. */
 const DUMBO = '#D9A69A';
 
@@ -562,35 +565,55 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   for (const A of order) if (!A.near) armLine(A, 0.45, 10 + A.depth * 7);
 
   // The mantle: wash with its paper strip, stipple where it turns away,
-  // contour lines round its side, and a pressure line.
+  // contour lines round its side, and a pressure line. It does not change
+  // shape, so it is drawn once and placed.
+  const paintMantle = (g: CanvasRenderingContext2D) => {
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    washFill(g, mantlePath, mantleBox, { color: wash, edge: 0.4, paper: dark ? null : water, highlight: 0.55, granulate: 0.35, light, px });
+    const across = shadeAcross(mantleBox, light);
+    if (d > 0.15) {
+      hatch(g, mantlePath, mantleBox, {
+        spacing: Math.max(1.3 * px, S * 0.022),
+        angle: tilt + 0.15,
+        bow: 1.1,
+        shade: across,
+        from: 0.58,
+        color: ink,
+        width: Math.max(0.35 * px, S * 0.0045),
+        alpha: 0.32,
+        seed: seed ^ 0xd1,
+      });
+      stipple(g, mantlePath, mantleBox, { spacing: Math.max(1.2 * px, S * 0.012), radius: Math.max(0.3 * px, S * 0.0025), shade: across, from: 0.4, color: ink, alpha: 0.45, seed: seed ^ 0xd0 });
+    }
+    // Inked round the dome only: below, the mantle runs on into the web.
+    const dome: number[] = [];
+    for (let k = 0; k <= 40; k++) {
+      const t = Math.PI / 2 + 0.95 + (k / 40) * (Math.PI * 2 - 1.9);
+      const c = Math.cos(t);
+      const sn = Math.sin(t);
+      const u = (MW / 2) * c * (1 - 0.12 * sn);
+      const v = (MH / 2) * sn;
+      dome.push(mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt));
+    }
+    inkLine(g, dome, false, { width: pw * 1.15, color: ink, alpha: 1, seed, light, taper: [0.12, 0.12], plate: true, min: 0.25 * px });
+  };
+  const pad = pw * 3;
+  const mKey = `${seed}|${Math.round(S * 10)}|${px}|${dark ? 1 : 0}|${way}`;
+  let mantleSprite = dumboMantles.find((m) => m.key === mKey);
+  if (!mantleSprite) {
+    const c = scratch(mantleBox.w + pad * 2, mantleBox.h + pad * 2);
+    const g = c?.getContext('2d');
+    if (c && g) {
+      g.translate(pad - mantleBox.x, pad - mantleBox.y);
+      paintMantle(g);
+    }
+    mantleSprite = { key: mKey, canvas: c && g ? c : null };
+    dumboMantles = [mantleSprite, ...dumboMantles].slice(0, 2);
+  }
   ctx.globalAlpha = base;
-  washFill(ctx, mantlePath, mantleBox, { color: wash, edge: 0.4, paper: dark ? null : water, highlight: 0.55, granulate: 0.35, light, px });
-  const across = shadeAcross(mantleBox, light);
-  if (d > 0.15) {
-    hatch(ctx, mantlePath, mantleBox, {
-      spacing: Math.max(1.3 * px, S * 0.022),
-      angle: tilt + 0.15,
-      bow: 1.1,
-      shade: across,
-      from: 0.58,
-      color: ink,
-      width: Math.max(0.35 * px, S * 0.0045),
-      alpha: base * 0.32,
-      seed: seed ^ 0xd1,
-    });
-    stipple(ctx, mantlePath, mantleBox, { spacing: Math.max(1.2 * px, S * 0.012), radius: Math.max(0.3 * px, S * 0.0025), shade: across, from: 0.4, color: ink, alpha: base * 0.45, seed: seed ^ 0xd0 });
-  }
-  // Inked round the dome only: below, the mantle runs on into the web.
-  const dome: number[] = [];
-  for (let k = 0; k <= 40; k++) {
-    const t = Math.PI / 2 + 0.95 + (k / 40) * (Math.PI * 2 - 1.9);
-    const c = Math.cos(t);
-    const sn = Math.sin(t);
-    const u = (MW / 2) * c * (1 - 0.12 * sn);
-    const v = (MH / 2) * sn;
-    dome.push(mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt));
-  }
-  inkLine(ctx, dome, false, { width: pw * 1.15, color: ink, alpha: base, seed, light, taper: [0.12, 0.12], plate: true, min: 0.25 * px });
+  if (mantleSprite.canvas) ctx.drawImage(mantleSprite.canvas, mantleBox.x - pad, mantleBox.y - pad, mantleBox.w + pad * 2, mantleBox.h + pad * 2);
+  else paintMantle(ctx);
 
   // The near web over the mantle's foot, then the near arms in it.
   // Thick where it leaves the body, thinning to the margin, so the mantle

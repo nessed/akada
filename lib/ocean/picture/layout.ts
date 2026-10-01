@@ -21,6 +21,7 @@ import type { Species } from '../biome';
 import { depthAt, ZONES } from '../depth';
 import type { EventKind, OceanEvent } from '../events';
 import { KELP_ROCK, rollKelp } from '../kelp';
+import { rockShape } from '../outcrop-sprite';
 import { moonPhase, sunFor } from '../light';
 import { jellyForBlock } from '../lineage';
 import { hash32, mulberry32, type Rand } from '../random';
@@ -71,15 +72,18 @@ export interface PlacedJelly {
 }
 
 /**
- * A rock's silhouette, normalised to its box: `top` and `under` sampled
- * from the end that runs off the page (u = 0) to the lip (u = 1), 0 at the
- * box's top and 1 at its foot.
+ * A rock's silhouette, as the shared rock engine (`rockShape` in
+ * outcrop-sprite.ts) makes it, normalised to its box: `top` and `under`
+ * sampled from the end that runs off the page (u = 0) to the lip (u = 1),
+ * 0 at the box's top and 1 at its foot.
  */
-export type RockKind = 0 | 1 | 2 | 3 | 4;
-
 export interface RockShape {
-  kind: RockKind;
-  /** Height over width, the width counted off the page too. */
+  /** The engine's seed, and the depth asked of it as a share of the span. */
+  seed: number;
+  thick: number;
+  /** How far its highest point stands above the engine's nominal top, as a share of the span. */
+  lift: number;
+  /** Height over width, the width counted off the page too: as it shows, its foot let go of. */
   ratio: number;
   top: number[];
   under: number[];
@@ -285,94 +289,75 @@ function proportions(sp: Species): { w: number; h: number } {
 /* ---- Rock ---- */
 
 const ROCK_N = 40;
+/** Where the engine's wash has run dry at the foot, as a share of its height. */
+export const ROCK_FOOT = 0.88;
+
+const silhouettes = new Map<string, RockShape>();
 
 /**
- * A rock's silhouette from a seed: a shelf (low, thin at the lip, deeply
- * undercut), a buttress (domed, bellied, then cut back under), or a tooth
- * (tall, leaning out to a broken peak). The top is never flat: a sum of
- * waves of a few lengths, its swing 0.15 to 0.3 of the height.
+ * The silhouette the engine draws for a seed and a depth (`thick`, a share
+ * of the span): the top its boulders make, and their underside down to
+ * where the wash lets go of it.
  */
-export function rollRockShape(seed: number, kind: RockKind, ratioMax = 1.2): RockShape {
-  const r = mulberry32(hash32('rock-shape', seed));
-  const ratio = Math.min(ratioMax, kind === 0 || kind === 4 ? range(r, 0.5, 0.64) : kind === 1 || kind === 3 ? range(r, 0.66, 0.9) : range(r, 0.92, 1.2));
-  const amp = range(r, 0.16, 0.26);
-  // Mostly long swells, a little broken: boulders along a crest, never a
-  // ruled line and never a saw.
-  const waves = [
-    [range(r, 1.2, 2.2), r() * TAU, 1],
-    [range(r, 3, 5), r() * TAU, 0.45],
-    [range(r, 7, 10), r() * TAU, 0.16],
-    [range(r, 14, 20), r() * TAU, 0.05],
-  ];
-  const raw = (u: number) => waves.reduce((a, [f, ph, k]) => a + k * Math.sin(f * Math.PI * u + ph), 0);
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (let i = 0; i <= 64; i++) {
-    const v = raw(i / 64);
-    lo = Math.min(lo, v);
-    hi = Math.max(hi, v);
-  }
-  // Scaled so the crest swings by just `amp` of the height, top to trough.
-  const noise = (u: number) => ((raw(u) - lo) / Math.max(1e-6, hi - lo) - 0.5) * amp;
-  const peak = range(r, 0.22, 0.78);
-  const bite = range(r, 0.35, 0.7);
-  const biteDepth = range(r, 0.04, 0.1);
-  const ph = r() * TAU;
-  // Each kind leaves a different part of its box empty, and by a rolled
-  // amount, so no two rocks on a page share a silhouette.
-  const cut = range(r, 0.6, 0.85);
-  const curve = range(r, 0.6, 1.6);
-  const hang = range(r, 0.45, 0.7);
+export function rockSilhouette(seed: number, thick: number): RockShape {
+  const key = `${seed}|${thick.toFixed(3)}`;
+  const hit = silhouettes.get(key);
+  if (hit) return hit;
+  const S = 100;
+  const shape = rockShape(seed, S, thick * S, 1);
+  const foot = shape.height * ROCK_FOOT;
   const top: number[] = [];
   const under: number[] = [];
   for (let i = 0; i <= ROCK_N; i++) {
-    const u = i / ROCK_N;
-    let t: number;
-    let b: number;
-    if (kind === 0) {
-      // A shelf: rolling gently down to the lip, cut away beneath it.
-      t = 0.05 + 0.12 * u;
-      b = 1 - cut * Math.pow(u, curve);
-    } else if (kind === 1) {
-      // A boulder lodged in the wall: domed, its weight hanging out at the
-      // lip, cut back under toward the wall.
-      t = 0.42 * (1 - Math.sin(Math.PI * (0.1 + 0.8 * u)));
-      b = 1 - hang * Math.pow(1 - u, curve + 0.6);
-    } else if (kind === 2) {
-      // A crag: up to a blunt summit, then down to a thick lip.
-      const d = u < peak ? (peak - u) / peak : (u - peak) / (1 - peak);
-      t = 0.78 * Math.pow(d, 0.9 + curve * 0.3);
-      b = 1 - 0.3 * Math.pow(u, 1.5);
-    } else if (kind === 3) {
-      // A stepped ledge: high by the wall, a drop, a lower shelf out to the lip.
-      const step = 1 / (1 + Math.exp(-(u - peak) * 18));
-      t = 0.05 + 0.5 * step * hang;
-      b = 1 - 0.35 * Math.pow(u, curve) * (1 - step * 0.4);
-    } else {
-      // A slab tilted up toward the lip, cut away beneath and above the wall.
-      t = 0.5 * (1 - u) * cut;
-      b = 1 - (0.25 + 0.5 * cut) * Math.pow(u, curve * 0.8);
+    const x = (i / ROCK_N) * S;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const b of shape.boulders) {
+      const m = b.pts.length / 2;
+      for (let k = 0; k < m; k++) {
+        const j = (k + 1) % m;
+        const x0 = b.pts[k * 2];
+        const x1 = b.pts[j * 2];
+        if ((x0 - x) * (x1 - x) > 0 || x0 === x1) continue;
+        const y = b.pts[k * 2 + 1] + ((b.pts[j * 2 + 1] - b.pts[k * 2 + 1]) * (x - x0)) / (x1 - x0);
+        lo = Math.min(lo, y);
+        hi = Math.max(hi, y);
+      }
     }
-    t += noise(u);
-    b -= biteDepth * Math.exp(-(((u - bite) / 0.12) ** 2)) + 0.025 * Math.sin(u * 9 + ph);
-    top.push(t);
-    under.push(b);
+    if (!Number.isFinite(lo)) {
+      lo = shape.top(x);
+      hi = lo + 1;
+    }
+    top.push(lo);
+    under.push(Math.min(foot, hi));
   }
-  // A blunt, rounded nose: the last stretch narrows a little, never to a point.
-  for (let i = 0; i <= ROCK_N; i++) {
-    const u = i / ROCK_N;
-    if (u <= 0.88) continue;
-    const k = (u - 0.88) / 0.12;
-    const mid = (top[i] + under[i]) / 2;
-    const half = ((under[i] - top[i]) / 2) * (0.6 + 0.4 * Math.sqrt(Math.max(0, 1 - k * k)));
-    top[i] = mid - half;
-    under[i] = mid + half;
+  const minY = Math.min(...top);
+  const maxY = Math.max(...under);
+  const span = Math.max(1e-6, maxY - minY);
+  const made: RockShape = {
+    seed,
+    thick,
+    lift: -minY / S,
+    ratio: span / S,
+    top: top.map((v) => (v - minY) / span),
+    under: under.map((v) => Math.max((v - minY) / span, 0)),
+  };
+  for (let i = 0; i <= ROCK_N; i++) if (made.under[i] < made.top[i]) made.under[i] = made.top[i];
+  if (silhouettes.size > 600) silhouettes.clear();
+  silhouettes.set(key, made);
+  return made;
+}
+
+/** A silhouette standing `want` tall for its width (as near as the engine goes). */
+export function rockOfRatio(seed: number, want: number): RockShape {
+  let thick = want * 0.9;
+  let s = rockSilhouette(seed, thick);
+  for (let i = 0; i < 2; i++) {
+    thick = Math.max(0.3, Math.min(1.4, thick * (want / Math.max(0.05, s.ratio))));
+    thick = Math.round(thick * 50) / 50;
+    s = rockSilhouette(seed, thick);
   }
-  for (let i = 0; i <= ROCK_N; i++) if (under[i] - top[i] < 0.14) under[i] = top[i] + 0.14;
-  const lo2 = Math.min(...top);
-  const hi2 = Math.max(...under);
-  const sc = 1 / Math.max(1e-6, hi2 - lo2);
-  return { kind, ratio, top: top.map((v) => (v - lo2) * sc), under: under.map((v) => (v - lo2) * sc) };
+  return s;
 }
 
 /** How alike two silhouettes are, normalised to their boxes: intersection over union on a grid. */
@@ -449,11 +434,12 @@ function rockBox(k: Omit<PlacedRock, 'box'>, w: number): Box {
 }
 
 /** A shape for a new rock unlike any already on the page. */
-function distinctShape(seed: number, kind: RockKind, others: RockShape[], ratioMax: number): RockShape {
+function distinctShape(seed: number, want: number, others: RockShape[]): RockShape {
   let best: RockShape | null = null;
   let bestIoU = Infinity;
-  for (let t = 0; t < 72; t++) {
-    const s = rollRockShape(hash32(seed, 'try', t), ((kind + Math.floor(t / 4)) % 5) as RockKind, ratioMax);
+  for (let t = 0; t < 14; t++) {
+    const w = Math.max(0.55, Math.min(1.15, want * (1 + ((t % 5) - 2) * 0.08)));
+    const s = rockOfRatio(hash32(seed, 'try', t), w);
     const worst = others.reduce((a, o) => Math.max(a, rockIoU(s, o)), 0);
     if (worst < bestIoU) {
       best = s;
@@ -764,22 +750,24 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     const kelpRocks = (bottom: number): PlacedRock[] => {
       const hf = (bottom - kelpTop) / 2.45;
       return forest.ledges.map((ledge) => {
-        const height = KELP_ROCK * hf;
+        // kelp-draw stands the ledge on the same engine: (reach + 3%) of the
+        // width out from a wall 3% off the page, KELP_ROCK of a frame deep.
+        const span = (ledge.reach + 0.03) * w;
+        const sh = rockSilhouette(ledge.seed, (KELP_ROCK * hf) / span);
         const k: Omit<PlacedRock, 'box'> = {
           kind: 'kelp',
           rest: -1,
           slot: -1,
           edge: ledge.edge,
-          y: kelpTop + ledge.top * hf - height * 0.15,
-          height: height * 1.15,
-          reach: clamp(ledge.reach, 0.1, 0.32),
+          y: kelpTop + ledge.top * hf - sh.lift * span,
+          height: sh.ratio * span,
+          reach: ledge.reach,
           off: 0.03,
           plane: 2,
           zone: 0,
           seconds: 0,
           seed: ledge.seed,
-          // Its silhouette is kelp-draw's; this one only reserves the room.
-          shape: rollRockShape(hash32(s.key, 'kelp-rock', ledge.edge), 0, 0.6),
+          shape: sh,
         };
         return { ...k, box: rockBox(k, w) };
       });
@@ -905,7 +893,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
   const cap = tall ? (nBreaks > 4 ? 3 : 2) : 3;
   const minGap = h * 0.12;
   const fixed = rocks.slice();
-  const ratioMax = tall ? 1.2 : 0.8;
+  const ratioMax = tall ? 1.1 : 0.8;
 
   // Each break's rock: its size from how long the rest was.
   type Spec = Omit<PlacedRock, 'box' | 'y' | 'edge'> & { anchor: number; nearX: number };
@@ -915,9 +903,8 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     let reach = clamp(0.17 + 0.11 * Math.min(1, rest.seconds / 1800) + vary, 0.15, 0.32);
     if (!near) reach = Math.max(0.15, reach * (nBreaks > 4 ? 0.75 : 0.86));
     const off = 0.065 + 0.03 * unit01(s.key, 'rock-off', rest.index);
-    const kind = ((hash32(s.key, 'rock-kind') + i * 2) % 5) as RockKind;
-    const sh = distinctShape(hash32(s.key, 'break-rock', rest.index), kind, shapes, ratioMax);
-    shapes.push(sh);
+    const want = 0.55 + (ratioMax - 0.55) * unit01(s.key, 'rock-ratio', rest.index);
+    let sh = distinctShape(hash32(s.key, 'break-rock', rest.index), want, shapes);
     const cap0 = (near ? (nBreaks > 4 ? 0.14 : 0.2) : nBreaks > 4 ? 0.1 : 0.15) * h;
     let height = sh.ratio * (reach + off) * w;
     if (height > cap0) {
@@ -925,8 +912,11 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
       // it must, lower, never under half as tall as it is wide.
       const k = cap0 / height;
       reach = Math.max(0.15, (reach + off) * k - off);
-      height = Math.max(0.5 * (reach + off) * w, Math.min(cap0, sh.ratio * (reach + off) * w));
+      const lower = Math.max(0.55, Math.min(sh.ratio, cap0 / ((reach + off) * w)));
+      if (lower < sh.ratio - 0.01) sh = rockOfRatio(sh.seed, lower);
+      height = sh.ratio * (reach + off) * w;
     }
+    shapes.push(sh);
     const j = rest.after >= 0 ? jellies[rest.after] : null;
     return {
       kind: 'break',
@@ -975,9 +965,9 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
   const build = (sp: Spec, p: Pose): PlacedRock => {
     const off = p.k < 1 ? 0.06 : sp.off;
     const reach = Math.max(!tall && p.k <= 0.6 ? 0.12 : 0.15, (sp.reach + sp.off) * p.k - off);
-    const ratio = Math.max(0.5, (sp.height / ((sp.reach + sp.off) * w)) * p.k);
-    const height = ratio * (reach + off) * w;
-    const base: Omit<PlacedRock, 'box'> = { ...sp, edge: p.edge, height, reach, off, y: p.centre - height / 2 };
+    const shape = p.k < 1 ? rockOfRatio(sp.shape.seed, Math.max(0.55, sp.shape.ratio * p.k)) : sp.shape;
+    const height = shape.ratio * (reach + off) * w;
+    const base: Omit<PlacedRock, 'box'> = { ...sp, shape, edge: p.edge, height, reach, off, y: p.centre - height / 2 };
     return { ...base, box: rockBox(base, w) };
   };
   const nearWallOf = (sp: Spec): -1 | 1 => (sp.nearX < w / 2 ? -1 : 1);
@@ -1095,10 +1085,11 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
     const y0 = e.yOf(at);
     if (e.kelpBottom != null && y0 < e.kelpBottom && o.zone === 0) continue;
     const r = mulberry32(hash32(s.key, 'passed', o.slot));
-    const sh = distinctShape(hash32(s.key, 'passed-rock', o.slot), (o.slot % 5) as RockKind, shapes, ratioMax);
     const reach = clamp(o.reach, 0.15, 0.26) * 0.6;
     const off = 0.06 + 0.02 * r();
-    const height = Math.min(h * 0.1, sh.ratio * (reach + off) * w);
+    const want = Math.max(0.55, Math.min(ratioMax, (h * 0.1) / ((reach + off) * w)));
+    const sh = distinctShape(hash32(s.key, 'passed-rock', o.slot), want, shapes);
+    const height = sh.ratio * (reach + off) * w;
     for (let t = 0; t < 12; t++) {
       const centre = y0 + (t === 0 ? 0 : gauss(r) * h * 0.08);
       const base: Omit<PlacedRock, 'box'> = {
@@ -1114,7 +1105,7 @@ function placeRocks(s: Session, rocks: PlacedRock[], shapes: RockShape[], e: Roc
         zone: o.zone,
         seconds: 0,
         seed: hash32(s.key, 'passed-rock', o.slot),
-        shape: { ...sh, ratio: height / ((reach + off) * w) },
+        shape: sh,
       };
       const k: PlacedRock = { ...base, box: rockBox(base, w) };
       if (blocked(k, [...chosen, ...passed])) continue;
