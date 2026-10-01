@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useTimer } from '@/lib/timer-context';
 import { useAmbientNoise } from '@/lib/use-ambient-noise';
 import { useAquariumSound } from '@/lib/use-aquarium-sound';
+import { renderWallpaper, saveWallpaper } from '@/lib/wallpaper';
+import SoundMenu from '@/components/SoundMenu';
 import {
   BLOCK_NOTE_MAX,
   BREAK_LENGTHS,
@@ -145,6 +147,39 @@ export default function TimerPage() {
     if (aquarium.error) notify(aquarium.error);
   }, [aquarium.error, notify]);
   const [immersive, setImmersive] = useState(false);
+  /* Full screen is the browser's where it has one, and the page's own
+     (the header put away) where it doesn't, which is every iPhone. Whichever
+     way it was entered, the browser leaving it (Escape, the system gesture)
+     puts the header back. */
+  const nativeFull = useRef(false);
+  const toggleImmersive = useCallback(() => {
+    if (immersive) {
+      setImmersive(false);
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+      return;
+    }
+    setImmersive(true);
+    const root = document.documentElement;
+    if (root.requestFullscreen) {
+      nativeFull.current = true;
+      root.requestFullscreen().catch(() => {
+        nativeFull.current = false;
+      });
+    }
+  }, [immersive]);
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement && nativeFull.current) {
+        nativeFull.current = false;
+        setImmersive(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    };
+  }, []);
   /* The wood's margin note when the land turns a stage: "scrub, year 5",
      in the hand, for a few seconds, and then the margin is clear again. */
   const [stageNote, setStageNote] = useState<{ text: string; at: number } | null>(null);
@@ -335,13 +370,13 @@ export default function TimerPage() {
         e.preventDefault();
         handleStop();
       } else if (e.key === 'Escape') {
-        if (immersive) setImmersive(false);
+        if (immersive) toggleImmersive();
         else router.push('/dashboard');
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [endBreak, handleStop, immersive, liveActive, onBreak, pause, resume, router, startBreak]);
+  }, [endBreak, handleStop, immersive, liveActive, onBreak, pause, resume, router, startBreak, toggleImmersive]);
 
   if (!hydrated || (!course && !pendingLog)) {
     return (
@@ -421,6 +456,17 @@ export default function TimerPage() {
         // the Finish button there is no snapshot, and the log says how long.
         { frozen: held ? focusSeconds : pendingLog?.durationSeconds ?? focusSeconds };
   const oceanDepth = ocean ? depthAt(focusSeconds) : null;
+  /* The water as a picture, for a wallpaper: the scene and the jelly drawn
+     again at full size (lib/wallpaper), without the clock on top of them. */
+  const saveWater = async () => {
+    const box = document.querySelector<HTMLElement>('[data-ocean-scene]');
+    const wall = box ? await renderWallpaper(box) : null;
+    if (!wall) {
+      notify('Couldn’t draw the water just now.');
+      return;
+    }
+    await saveWallpaper(wall, `akada-deep-${oceanDepth?.meters ?? 0}m.png`);
+  };
   /* In the frame the deep is laid on the page itself: on the night paper it
      is night water from the start, on a daylight paper a wash that goes dark
      by the midnight zone, where the jelly's ink turns light with it. */
@@ -728,49 +774,60 @@ export default function TimerPage() {
         <span aria-hidden />
       )}
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         {timerDrawing === 'ocean' && (
           <button
             type="button"
-            onClick={aquarium.toggle}
-            aria-pressed={aquarium.on}
-            aria-label={aquarium.on ? 'Stop aquarium sounds' : 'Play aquarium sounds'}
-            title={aquarium.error || 'Aquarium sounds'}
-            style={{ color: aquarium.on ? ink : inkFaint }}
+            onClick={saveWater}
+            aria-label="Save the water as a wallpaper"
+            title="Save as wallpaper"
+            style={{ color: inkSoft }}
             className="grid h-10 w-10 place-items-center rounded-[10px] transition-colors"
           >
-            <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <circle cx="9" cy="16" r="3.5" />
-              <circle cx="16" cy="8.5" r="2.5" />
-              <circle cx="11" cy="4.5" r="1.2" />
+            <svg aria-hidden width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="3.5" width="16" height="17" rx="2" />
+              <path d="M4 15.5l4.5-4 3.5 3 3-2.5 5 4.5" />
             </svg>
           </button>
         )}
+        <SoundMenu
+          night={night}
+          accent={color}
+          noise={{ on: noise.on, toggle: noise.toggle }}
+          tank={timerDrawing === 'ocean' ? aquarium : undefined}
+        />
         <button
           type="button"
-          onClick={noise.toggle}
-          aria-pressed={noise.on}
-          aria-label={noise.on ? 'Stop ambient noise' : 'Play ambient noise'}
-          title={noise.error || 'Ambient noise'}
-          style={{ color: noise.on ? ink : inkFaint }}
-          className="grid h-10 w-10 place-items-center rounded-[10px] transition-colors"
-        >
-          <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M5 10v4M9 7v10M13 4v16M17 8v8M21 11v2" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onClick={() => setImmersive((v) => !v)}
+          onClick={toggleImmersive}
           aria-label={immersive ? 'Exit full screen' : 'Full screen'}
-          style={{ color: inkFaint }}
+          title={immersive ? 'Exit full screen' : 'Full screen'}
+          style={{ color: inkSoft }}
           className="grid h-10 w-10 place-items-center rounded-[10px] transition-colors"
         >
-          <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <svg aria-hidden width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
             <path d={immersive ? 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5' : 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'} />
           </svg>
         </button>
       </div>
+    </div>
+  );
+
+  /* With the header put away there is still a way back: one small mark in the
+     corner, since the header is where the full-screen button lives. */
+  const exitChip = (
+    <div className="flex justify-end px-5 pt-[max(env(safe-area-inset-top),16px)] md:pt-5">
+      <button
+        type="button"
+        onClick={toggleImmersive}
+        aria-label="Exit full screen"
+        title="Exit full screen"
+        style={{ color: inkSoft }}
+        className="grid h-10 w-10 place-items-center rounded-[10px] opacity-70 transition-[opacity,color] hover:opacity-100"
+      >
+        <svg aria-hidden width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+        </svg>
+      </button>
     </div>
   );
 
@@ -852,7 +909,7 @@ export default function TimerPage() {
             hand that reaches into it lands on a branch rather than on a sheet
             of glass laid over one. */}
         <div className="pointer-events-none relative flex min-h-[100dvh] flex-col">
-          <div className="pointer-events-auto">{header}</div>
+          <div className="pointer-events-auto">{immersive ? exitChip : header}</div>
           <div className="flex-1" />
           {stageNote ? <div className="absolute right-6 top-20 md:right-12">{stageMark('#C8C0B0')}</div> : null}
           <div
@@ -959,7 +1016,7 @@ export default function TimerPage() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-bg">
-      {!immersive && header}
+      {immersive ? exitChip : header}
 
       <div className="flex flex-1 flex-col items-center justify-center gap-8 px-5 pb-10">
         {/* The frame. The fan is scaled so it exactly fills this box at the

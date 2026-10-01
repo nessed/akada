@@ -11,8 +11,36 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * bubbles that rise now and then, alone or in a short string. It never loops
  * anything audible: the bed is noise, which has no seam to hear.
  */
+const VOLUME_KEY = 'akada.aquariumVolume';
+const DEFAULT_VOLUME = 0.6;
+
+/* The slider is a position, not a gain: squared, so the bottom half of it is
+   the quiet half the ear wants, and well past the old fixed level at the
+   top for a room with a fan going. */
+const gainFor = (v: number) => v * v * 2.4;
+
+const readVolume = () => {
+  try {
+    const n = Number(window.localStorage.getItem(VOLUME_KEY));
+    return window.localStorage.getItem(VOLUME_KEY) != null && Number.isFinite(n)
+      ? Math.max(0, Math.min(1, n))
+      : DEFAULT_VOLUME;
+  } catch {
+    return DEFAULT_VOLUME;
+  }
+};
+
 export function useAquariumSound() {
   const [on, setOn] = useState(false);
+  // 0 to 1. Read after mount, so the server and the first paint agree.
+  const [volume, setVolumeState] = useState(DEFAULT_VOLUME);
+  const volumeRef = useRef(DEFAULT_VOLUME);
+  const levelRef = useRef<GainNode | null>(null);
+  useEffect(() => {
+    const v = readVolume();
+    volumeRef.current = v;
+    setVolumeState(v);
+  }, []);
   const [error, setError] = useState('');
   const contextRef = useRef<AudioContext | null>(null);
   const masterRef = useRef<GainNode | null>(null);
@@ -32,9 +60,24 @@ export function useAquariumSound() {
     if (filter && context) filter.frequency.setTargetAtTime(cutoffFor(z), context.currentTime, 1.5);
   }, []);
 
+  const setVolume = useCallback((v: number) => {
+    const next = Math.max(0, Math.min(1, v));
+    volumeRef.current = next;
+    setVolumeState(next);
+    try {
+      window.localStorage.setItem(VOLUME_KEY, String(next));
+    } catch {
+      // Private mode: the level holds for this visit and no longer.
+    }
+    const level = levelRef.current;
+    const context = contextRef.current;
+    if (level && context) level.gain.setTargetAtTime(gainFor(next), context.currentTime, 0.05);
+  }, []);
+
   const teardown = useCallback(() => {
     stopLayersRef.current?.();
     stopLayersRef.current = null;
+    levelRef.current = null;
     masterRef.current = null;
     filterRef.current = null;
     contextRef.current?.close();
@@ -79,8 +122,14 @@ export function useAquariumSound() {
       filter.type = 'lowpass';
       filter.Q.value = 0.5;
       filter.frequency.value = cutoffFor(depthRef.current);
+      // The reader's volume sits after everything, so the fade in and out and
+      // the depth's muffling are untouched by it.
+      const level = context.createGain();
+      level.gain.value = gainFor(volumeRef.current);
       master.connect(filter);
-      filter.connect(context.destination);
+      filter.connect(level);
+      level.connect(context.destination);
+      levelRef.current = level;
       masterRef.current = master;
       filterRef.current = filter;
 
@@ -223,5 +272,8 @@ export function useAquariumSound() {
     toggle,
     /** Muffles the sound as the sitting sinks; null leaves it open. */
     setDepth,
+    /** How loud the tank is, 0 to 1, remembered between visits. */
+    volume,
+    setVolume,
   };
 }

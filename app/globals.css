@@ -1154,3 +1154,63 @@ input[type='date']::-webkit-calendar-picker-indicator {
 @media (prefers-reduced-motion: reduce) {
   .stage-note { animation: none; }
 }
+
+/* Volume, as a pencil line that fills in with ink as it goes up. The ink is
+   the element's own colour and the track and knob come in as custom
+   properties, so the same rule serves the daylight sheet and the night one. */
+input[type='range'].pl-volume {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+}
+input[type='range'].pl-volume::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(to right, currentColor 0 var(--fill, 50%), var(--track, var(--line)) var(--fill, 50%) 100%);
+}
+input[type='range'].pl-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7.5px;
+  border-radius: 50%;
+  background: var(--knob, var(--paper));
+  border: 1.5px solid currentColor;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 120ms ease;
+}
+input[type='range'].pl-volume:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+input[type='range'].pl-volume:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+input[type='range'].pl-volume::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--track, var(--line));
+}
+input[type='range'].pl-volume::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+}
+input[type='range'].pl-volume::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--knob, var(--paper));
+  border: 1.5px solid currentColor;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+input[type='range'].pl-volume:focus-visible::-moz-range-thumb {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}

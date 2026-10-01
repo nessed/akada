@@ -90,6 +90,10 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   does.
 - **Destructive actions** ask through `components/ConfirmSheet.tsx`. Never
   `window.confirm()` or `prompt()`.
+- **The Sound menu** (speaker button in the timer's header, with the tank's
+  volume) is `components/SoundMenu.tsx`. **Save as wallpaper** is
+  `lib/wallpaper.ts`; any canvas that should be in the picture registers a
+  layer there.
 - **Audio hooks** are `lib/use-*.ts` (`use-ambient-noise`,
   `use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
   files, so they work on iOS and offline.

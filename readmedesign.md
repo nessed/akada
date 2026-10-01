@@ -1147,13 +1147,37 @@ only ever grows, it never runs backwards, and none of it touches progress.
   the others.
 - **The noise darkens.** With ambient noise on, a lowpass follows the depth:
   open at the surface, a low hush on the floor.
-- **Aquarium sounds.** Only while the deep is the chosen drawing, a second
-  button (three bubbles) sits beside the ambient noise one and plays a tank
-  heard from across a room: a low bed of water that swells slowly, a thin
-  shimmer, the hum of a pump, and bubbles that rise now and then, sometimes
-  in a short string. Synthesised (`lib/use-aquarium-sound.ts`), so it works
-  on iOS and offline, it muffles with the same depth the noise does, and it
-  is independent of the pink noise: either, both or neither.
+- **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
+  appears in the Sound menu under the pink noise and plays a tank heard from
+  across a room: a low bed of water that swells slowly, a thin shimmer, the
+  hum of a pump, and bubbles that rise now and then, sometimes in a short
+  string. Synthesised (`lib/use-aquarium-sound.ts`), so it works on iOS and
+  offline, it muffles with the same depth the noise does, and it is
+  independent of the pink noise: either, both or neither.
+- **The Sound menu** (`components/SoundMenu.tsx`) is the one speaker button in
+  the timer's header, in the soft ink and not the faint one so it can be found
+  on either paper, with a dot in the course colour while anything plays. It
+  opens a small paper card under the button: a switch for each sound, and
+  under the tank's a volume line, a pencil rule that fills with ink as it
+  rises, a round paper knob, and the level as mono digits. The line is
+  `.pl-volume` in `globals.css`; it takes the card's ink, track and knob as
+  custom properties so the same rule serves day and night. The level is
+  squared into a gain, so the bottom half of the line is the quiet half, and
+  is kept in `localStorage` (`akada.aquariumVolume`). Escape closes the card
+  before it leaves the screen.
+- **Save as wallpaper.** Beside the speaker, only in the deep: a small picture
+  icon draws the water again, once, at the screen's own shape and at least 3x
+  (long side no more than 4096), and saves a PNG named for the depth. Soft
+  screenshots were the reason: the live canvases are held to 2x and a pixel
+  budget. The scene, the jelly and the near animals are laid down in order
+  (`lib/wallpaper.ts`; each canvas registers a layer), with none of the
+  chrome, none of the page's rules or paper bleeds, nothing faded out of the
+  clock's way, the bell open and the colour back if the sitting is held. On a
+  touch device the share sheet takes it, so it can go straight to Photos.
+- **Full screen** is the browser's where there is one (`requestFullscreen`),
+  and the header put away where there isn't, which is every iPhone. Either way
+  a small exit mark sits in the corner, since the header is where the button
+  lives, and the browser leaving full screen puts the header back.
 
 **The recap.** On the finish sheet, under the chain, one line of fact in the
 serif at 13px, lowercase, with a small ink drawing of the animal beside it:

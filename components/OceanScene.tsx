@@ -33,6 +33,7 @@ import { HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
 import { hash32 } from '@/lib/ocean/random';
 import { visitorsAt } from '@/lib/ocean/schedule';
 import { SpriteCache } from '@/lib/ocean/sprites';
+import { registerWallpaperLayer } from '@/lib/wallpaper';
 
 /**
  * The sitting's focus time, as the timer holds it: what the finished blocks
@@ -155,6 +156,11 @@ export default function OceanScene({
     let ema = 4;
     let water: Water = waterAt(depthAt(shown).z, live.current.ground, live.current.color);
     let waterZ = -1;
+    /* A wallpaper being drawn: a pixel density of its own, and none of the
+       page's chrome. Only ever true inside one synchronous render. */
+    let override: number | null = null;
+    let overrideSize: { w: number; h: number } | null = null;
+    let saved: { quality: number; held: number } | null = null;
     /* A zone crossing: when it happened on the ambient clock. The first
        paint only notes where the sitting already is, so a reload or a still
        never announces a crossing it did not see. */
@@ -163,10 +169,10 @@ export default function OceanScene({
     let crossedZone = 0;
 
     const fit = () => {
-      const rect = box.getBoundingClientRect();
+      const rect = overrideSize ? { width: overrideSize.w, height: overrideSize.h } : box.getBoundingClientRect();
       css = { w: Math.max(1, rect.width), h: Math.max(1, rect.height) };
       const want = Math.min(window.devicePixelRatio || 1, 2);
-      px = Math.max(0.6, Math.min(want, Math.sqrt((PIXEL_BUDGET * res) / (css.w * css.h))));
+      px = override ?? Math.max(0.6, Math.min(want, Math.sqrt((PIXEL_BUDGET * res) / (css.w * css.h))));
       for (const c of [back, front]) {
         const w = Math.round(css.w * px);
         const h = Math.round(css.h * px);
@@ -191,7 +197,7 @@ export default function OceanScene({
 
     const paint = () => {
       const t0 = performance.now();
-      const L = live.current;
+      const L = override != null ? { ...live.current, clear: undefined, rules: false, pools: undefined } : live.current;
       const W = back.width;
       const H = back.height;
       const depth = depthAt(shown);
@@ -360,6 +366,10 @@ export default function OceanScene({
       // and plainer swimming, and gets them back once it has recovered.
       const spent = performance.now() - t0;
       ema = ema * 0.94 + spent * 0.06;
+      if (override != null) {
+        frame++;
+        return;
+      }
       if (ema > 10 && quality > 0.4) quality = Math.max(0.4, quality - 0.02);
       else if (ema < 5 && quality < 1) quality = Math.min(1, quality + 0.005);
       // Still struggling with the far layer thinned: fewer pixels. Only ever
@@ -408,6 +418,37 @@ export default function OceanScene({
     };
     kickRef.current = kick;
 
+    const unregister = registerWallpaperLayer({
+      canvas: back,
+      render: (ratio, size) => {
+        overrideSize = size;
+        saved = { quality, held };
+        override = ratio;
+        quality = 1;
+        held = 0;
+        fit();
+        paint();
+      },
+      restore: () => {
+        override = null;
+        overrideSize = null;
+        if (saved) {
+          quality = saved.quality;
+          held = saved.held;
+          saved = null;
+        }
+        fit();
+        paint();
+      },
+    });
+    const unregisterFront = registerWallpaperLayer({
+      canvas: front,
+      // Painted with the back one: drawing it again here would be a second
+      // frame, and the animals would have moved on.
+      render: () => {},
+      restore: () => {},
+    });
+
     fit();
     const ro = new ResizeObserver(() => {
       fit();
@@ -425,6 +466,8 @@ export default function OceanScene({
       if (raf != null) cancelAnimationFrame(raf);
       if (interval != null) window.clearInterval(interval);
       kickRef.current = () => {};
+      unregister();
+      unregisterFront();
     };
   }, [biome, kelp, snow, sittingKey]);
 
@@ -437,7 +480,7 @@ export default function OceanScene({
   });
 
   return (
-    <div ref={boxRef} className={`relative ${className}`}>
+    <div ref={boxRef} data-ocean-scene className={`relative ${className}`}>
       <canvas ref={backRef} aria-hidden data-no-doodle className="pointer-events-none absolute inset-0 h-full w-full" />
       {children}
       <canvas ref={frontRef} aria-hidden data-no-doodle className="pointer-events-none absolute inset-0 h-full w-full" />
