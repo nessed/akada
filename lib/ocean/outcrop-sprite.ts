@@ -560,8 +560,9 @@ export interface RockStyle {
   /**
    * Far off in the water: the wash taken `mix` of the way to `water`, no
    * shading but the wash's own, and only a broken thread of the pen round
-   * it, 0.4 of its weight at 0.3, so it is a rock in the haze and never a
-   * lineless smoke.
+   * it (0.4 of its weight at 0.3, broken at least twice a boulder) and three
+   * to six strokes of the hatch where it is darkest, so it is a rock in the
+   * haze and never a lineless smoke.
    */
   far?: { water: string; mix: number };
 }

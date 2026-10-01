@@ -2274,10 +2274,11 @@ function eventLayer(plan: Plan, c: Caches, e: PlacedEvent, D: number, ambient: n
 
 /**
  * The whale's back lost in the water above it: the shadow comes in from
- * its back over a sixth of its length, so its long top is never a level
+ * its back over a quarter of its length, so its long top is never a level
  * dark edge across the page (that reads as the sea's surface seen side on,
  * a false horizon). Taken out along the pitched body's own up, on the
- * whale's own layer (the picture's device px).
+ * whale's own layer (the picture's device px). Lighter on its back,
+ * darkest at its belly, as a body lit from above.
  */
 function whaleBackInto(o: CanvasRenderingContext2D, plan: Plan, e: PlacedEvent, D: number) {
   const at = whaleHull(e, Math.min(plan.w, plan.h));
@@ -2287,11 +2288,11 @@ function whaleBackInto(o: CanvasRenderingContext2D, plan: Plan, e: PlacedEvent, 
   const ny = Math.cos(phi);
   const blur = WHALE_BLUR * Math.min(plan.w, plan.h);
   const from = -0.11 * at.len - blur * 2;
-  const to = -0.11 * at.len + 0.17 * at.len;
+  const to = -0.11 * at.len + 0.26 * at.len;
   const g = o.createLinearGradient((at.cx + nx * from) * D, (at.cy + ny * from) * D, (at.cx + nx * to) * D, (at.cy + ny * to) * D);
-  g.addColorStop(0, 'rgba(0, 0, 0, 0.8)');
-  g.addColorStop(0.35, 'rgba(0, 0, 0, 0.5)');
-  g.addColorStop(0.7, 'rgba(0, 0, 0, 0.16)');
+  g.addColorStop(0, 'rgba(0, 0, 0, 0.88)');
+  g.addColorStop(0.3, 'rgba(0, 0, 0, 0.62)');
+  g.addColorStop(0.6, 'rgba(0, 0, 0, 0.3)');
   g.addColorStop(1, 'rgba(0, 0, 0, 0)');
   o.save();
   o.globalCompositeOperation = 'destination-out';

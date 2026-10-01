@@ -2,8 +2,9 @@
  * The kelp forest, inked (see `kelp.ts`).
  *
  * Drawn as a natural-history plate draws a giant kelp: each stipe a long
- * winding line, washed and edged in the pen; each blade a long ruffled
- * frond that leaves the stipe on a little gas bladder and streams away
+ * winding line, washed and edged in the pen; each blade a strap six to ten
+ * times as long as it is wide, its margin ruffled 0.03 of its length deep,
+ * no midrib, leaving the stipe on a gas bladder 0.13 of its length, streaming away
  * downstream, hanging as it goes, washed from gold where the light comes
  * through to a deeper brown on its shadow half, with its margin crinkled
  * and, drawn big, its surface corrugated across and its edge in a pen line
@@ -608,8 +609,8 @@ function drawStalk(
         seed: seed + j * 7,
       });
     }
-    // The midrib and, here and there, a short soft crease across it from
-    // near the midrib, the way a giant kelp's blade is wrinkled, never a row.
+    // Here and there a short soft crease across it from near its middle,
+    // the way a giant kelp's blade is wrinkled, never a row.
     // No midrib (a kelp blade has none; a leaf's is what makes it a leaf):
     // two long corrugations down it instead, broken, off its middle.
     const veins = new Path2D();

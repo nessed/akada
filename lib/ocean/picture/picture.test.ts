@@ -128,7 +128,11 @@ test('one rock per break, inked near; rocks merely passed far, small and faint',
     for (const shape of SHAPES) {
       const plan = planOf(c, shape);
       const breaks = plan.rocks.filter((r) => r.kind === 'break');
-      assert.equal(breaks.length, count(c.segs, 'break'), `${c.name} ${shape.width}x${shape.height}: ${breaks.length} break rocks`);
+      // Each break a rock, or (when the walls have their two rocks a side) a ledge in a wall, at most one of each per break.
+      const ledges = plan.walls.flatMap((wl) => wl.ledges);
+      assert.equal(breaks.length + ledges.length, count(c.segs, 'break'), `${c.name} ${shape.width}x${shape.height}: ${breaks.length} break rocks and ${ledges.length} ledges`);
+      assert.equal(new Set([...breaks.map((r) => r.rest), ...ledges.map((l) => l.rest)]).size, count(c.segs, 'break'));
+      if (count(c.segs, 'break') <= 2) assert.equal(ledges.length, 0, `${c.name}: a ledge where a rock had room`);
       for (const r of breaks) {
         assert.ok(r.plane >= 1, `${c.name}: a break's rock is far`);
         // (A wide page's width is long: its rocks may reach a little less of it, a middle one of many least.)
@@ -164,9 +168,8 @@ test('one rock per break, inked near; rocks merely passed far, small and faint',
       // A side of the page takes few rocks, never a column of them.
       for (const edge of [-1, 1] as const) {
         const side = plan.rocks.filter((r) => r.edge === edge).sort((a, b) => a.y - b.y);
-        const most = plan.tall ? (count(c.segs, 'break') > 4 ? 3 : 2) : count(c.segs, 'break') > 4 ? 4 : 3;
-        const counted = side.filter((r) => r.kind !== 'kelp').length;
-        assert.ok(counted <= most, `${c.name} ${shape.width}x${shape.height}: ${counted} rocks on one side`);
+        // Two a side at most, the kelp's own counted: a wall with ledges, never an archipelago.
+        assert.ok(side.length <= 2, `${c.name} ${shape.width}x${shape.height}: ${side.length} rocks on one side`);
         for (let i = 1; i < side.length; i++) {
           const gap = side[i].y - (side[i - 1].y + side[i - 1].height);
           const kelp = side[i].kind === 'kelp' || side[i - 1].kind === 'kelp';
@@ -280,6 +283,47 @@ test('the floor: a few things on it, spread out and small; the trench clear of c
         assert.ok(Math.abs(hero.x - t.x) < t.gap / 2, `${c.name}: the hero is not over the cleft`);
         const fall = plan.events.find((e) => e.kind === 'whalefall');
         if (fall && fall.box) assert.ok(fall.box.x1 <= t.x - t.gap / 2 || fall.box.x0 >= t.x + t.gap / 2, `${c.name}: the whale fall is in the cleft`);
+      }
+    }
+  }
+});
+
+test('no rock floats: each stands out from a wall that goes down into the ground, never a cap on a stem', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      assert.ok(plan.walls.length <= 2 && new Set(plan.walls.map((wl) => wl.edge)).size === plan.walls.length, `${tag}: walls`);
+      for (const r of plan.rocks) {
+        // Runs off the page: never its whole outline on it.
+        assert.ok(r.off > 0, `${tag}: a ${r.kind} rock wholly on the page`);
+        const wl = r.wall;
+        assert.ok(wl && plan.walls.includes(wl) && wl.edge === r.edge, `${tag}: a ${r.kind} rock with no wall`);
+        assert.ok(wl.top <= r.y + r.height * 0.6, `${tag}: the wall starts under its rock`);
+        // Down into the floor, the trench's wall, or off the foot of the page.
+        const ground = plan.floor ? floorAt(plan, wl.edge < 0 ? 4 : plan.w - 4) : plan.h;
+        assert.ok(wl.bottom >= Math.min(plan.h, ground), `${tag}: the wall stops at ${(wl.bottom / plan.h).toFixed(2)} H`);
+        // Its buttress: under the rock's body the wall is at least the rock's width on the page over 1.6.
+        let low = 0;
+        for (const v of r.shape.solid) low = Math.max(low, v);
+        const y = r.y + low * r.height;
+        const f = wallAt(wl, y) ?? 0;
+        const crowded = plan.jellies.some((j) => j.box.y0 - CLEAR - 2 < y && j.box.y1 + CLEAR + 2 > y && (r.edge < 0 ? j.box.x0 : plan.w - j.box.x1) - CLEAR - 1 < (r.reach * plan.w) / STEM);
+        if (!crowded) assert.ok((r.reach * plan.w) / Math.max(1e-6, f) <= STEM + 0.05, `${tag}: a cap ${(r.reach * plan.w).toFixed(0)} wide on a stem ${f.toFixed(0)}`);
+      }
+      for (const wl of plan.walls) {
+        // A narrow strip where nothing stands out from it.
+        const sorted = [...wl.face].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        assert.ok(median <= plan.w * 0.12 && sorted[0] >= Math.min(plan.w * 0.02, 10), `${tag}: a wall ${(median / plan.w).toFixed(3)} W wide`);
+      }
+      // The kelp: three stalks a side or none.
+      if (plan.kelp) {
+        const kelp = rollKelp(rollBiome(plan.key, plan.courseKey).key);
+        for (const edge of [-1, 1]) {
+          const n = plan.kelp.keep.filter((i) => (kelp.stalks[i].x < 0.5 ? -1 : 1) === edge).length;
+          assert.ok(n === 0 || n >= 3, `${tag}: ${n} kelp stalks on a side`);
+        }
       }
     }
   }

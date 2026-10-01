@@ -1185,8 +1185,10 @@ only ever grows, it never runs backwards, and none of it touches progress.
   up to the surface, where the canopy bends over and lies a short way along
   it, sagging a little, then trails down past the edge of the clump on a
   slant, so the forest never ends in a straight cut. Each stalk leans a few
-  degrees out from its wall and winds as it goes. Each blade is a ruffled
-  strap on a gas bladder, streaming away from the wall, opaque, filled and
+  degrees out from its wall and winds as it goes. Each blade is a strap
+  six to ten times as long as it is wide, its margin ruffled, a small gas
+  bladder at its base and no midrib, since a midrib makes it a leaf;
+  streaming away from the wall, opaque, filled and
   inked one at a time from the back forward so blades never show through
   each other, in a golden-brown wash with its own darker ink, draining toward
   the water's colour as it goes down. It is the one plant in the sea
@@ -1219,9 +1221,17 @@ only ever grows, it never runs backwards, and none of it touches progress.
   after it on its own ragged line, never a hem or a square bottom; a far
   rock is a pale wash with a broken hairline, never lineless smoke
   (`rockShape`, `inkRock` in
-  `outcrop-sprite.ts`, shared by the kelp's ledge and the pictures): engraved
-  in curved contour lines in its shadow, crossed only in the darkest of it,
-  stippled into the shade, a strip of bare paper along its lit top. Sea fans
+  `outcrop-sprite.ts`, shared by the kelp's ledge and the pictures). Stone
+  is engraved, not modelled: short, near-straight strokes all one way, about
+  twenty degrees off vertical along the light, dense on the shadow side,
+  almost none on the lit face, crossed only in the darkest fifth, and never
+  contour lines wrapped round the form, which read as a shell. Every near
+  rock carries two to four broken, near-level bedding lines with a ledge of
+  shadow under each. No highlight is ever added: the lit edge is a hair of
+  bare paper left inside the outline. Nothing stands as a cap on a stem;
+  a rock is never more than about half again as wide as what holds it up.
+  At night the pale ink hatches the lit faces instead, and is never
+  crossed. Sea fans
   are a flat net, wider than tall; sponges are lopsided vases with a rolled
   lip. Each rock is inked once to a sprite and then only placed, and like
   everything written on the page it goes faint where it crosses the clock.

@@ -2280,7 +2280,13 @@ function settleWhale(v: PlacedEvent, e: { w: number; h: number; M: number; jelli
       if (box.y0 < h * 0.05 || at0.cy + dy > h * 0.55) continue;
       let cost = Math.abs(dy) / h + xi * 0.08;
       if (inter(box, grow(e.winBox, 6)) > 0) cost += 10;
-      if (e.steepY != null && Math.abs(dorsal - e.steepY) < h * 0.045) cost += 3;
+      if (e.steepY != null) {
+        if (Math.abs(dorsal - e.steepY) < h * 0.045) cost += 3;
+        // Better still, its body (back to belly) clear of the steepest
+        // stretch: its dark laid on the fall steepens it.
+        const belly = at0.cy + dy + 0.12 * len;
+        if (belly > e.steepY - h * 0.05 && dorsal < e.steepY + h * 0.05) cost += 0.6;
+      }
       for (const j of e.jellies) {
         if (j.far) continue;
         const o = inter(box, grow(j.box, CLEAR));
