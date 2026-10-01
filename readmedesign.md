@@ -880,7 +880,14 @@ natural-history plate draws one, in the course colour, never a cartoon.
   outline is a pen's (`inkLine` in `lib/ocean/pen.ts`): heavier on the side
   away from the light, breaking where the light is hardest. In the deep it is
   inked in that sea's one iron-gall ink, like everything else there; the
-  jellyfish drawing on its own keeps an edge in its own colour. Drawn big,
+  jellyfish drawing on its own keeps an edge in its own colour. The deep's
+  bell is drawn as a plate draws it, not as the lamp above: a dome with a
+  crown whose sides swell just above the rim and turn back in, so no wall
+  stands upright; the canals run down it like meridians; no white lick and
+  no doubled outline, the light only a soft strip of bare paper along the
+  lit shoulder (the jelly's own glow on the night paper) and one pressure
+  line, a hair where it faces the light, broken twice there, heavy in the
+  shadow; the four horseshoes soft pink washes with no pen at all. Drawn big,
   a stipple gathers on the bell's shadow side, and on dark water a soft rim
   of its own glow swells with the beat. The clover of horseshoes is a soft
   pink wash with only a broken thread along each curve, and the stinging
@@ -1167,8 +1174,12 @@ only ever grows, it never runs backwards, and none of it touches progress.
   one side of the page; if the other side has any, it is a straggler or two,
   never a second curtain. They root on a heap of boulders far below and reach
   up to the surface, where the canopy bends over and lies a short way along
-  it. Each blade is a ruffled strap on a gas bladder, streaming out with the
-  current, in a golden-brown wash with its own darker ink, draining toward
+  it, sagging a little, then trails down past the edge of the clump on a
+  slant, so the forest never ends in a straight cut. Each stalk leans a few
+  degrees out from its wall and winds as it goes. Each blade is a ruffled
+  strap on a gas bladder, streaming away from the wall, opaque, filled and
+  inked one at a time from the back forward so blades never show through
+  each other, in a golden-brown wash with its own darker ink, draining toward
   the water's colour as it goes down. It is the one plant in the sea
   and it stays in the sunlit water, since nothing grows where the light has
   gone. The reader starts among the tops and sinks past them: the stalks slide
@@ -1191,9 +1202,14 @@ only ever grows, it never runs backwards, and none of it touches progress.
   Some rocks in the light and the twilight carry a patch of sand with a
   colony of garden eels standing up out of it, leaning into the current;
   tap near them and they drop into their burrows, then come back up one at
-  a time a few seconds later (`lib/ocean/garden-eels.ts`). A rock is a heap
-  of lumpy boulders with a broken top, undercut lips and clefts, its foot
-  running back into the wall and fading (`rockShape`, `inkRock` in
+  a time a few seconds later (`lib/ocean/garden-eels.ts`). A rock is one of five
+  shapes, rolled per rock so the reef never repeats one vocabulary: a heap
+  of lumpy boulders with a broken top, undercut lips and clefts; a flat
+  slab; a spire; an overhang; or a field of loose boulders. Its foot runs
+  back into the wall and fades, the pen thinning out first and the wash
+  after it on its own ragged line, never a hem or a square bottom; a far
+  rock is a pale wash with a broken hairline, never lineless smoke
+  (`rockShape`, `inkRock` in
   `outcrop-sprite.ts`, shared by the kelp's ledge and the pictures): engraved
   in curved contour lines in its shadow, crossed only in the darkest of it,
   stippled into the shade, a strip of bare paper along its lit top. Sea fans
@@ -1207,7 +1223,11 @@ only ever grows, it never runs backwards, and none of it touches progress.
   in four that reaches the twilight). From the midnight zone down the water
   sometimes lights up, a cloud of tiny animals flashing that comes up over
   seconds and never at once; less often a giant squid's eye opens at the edge
-  of the page, high and clear of the clock, blinks once and goes. In the abyss,
+  of the page, high and clear of the clock, blinks once and goes: a striated
+  iris with a thin crescent pupil and two small highlights, set in a patch
+  of stippled, mottled skin, never haloed in colour. The whale is always the
+  whole animal, head, flipper and flukes, one soft grey shape a little over
+  half the page long. In the abyss,
   about one three-hour sitting in a hundred and fifty, something very large
   goes past behind everything, a dark flank with lights along it; no head, no
   tail. Nothing is announced and nothing is scored.
@@ -1221,8 +1241,10 @@ only ever grows, it never runs backwards, and none of it touches progress.
   nearly upright at one side, silver, its red crest running the whole length
   of it. From the midnight down, a single light bobs in the dark, and for a
   moment the teeth behind it show. In the abyss, a dumbo octopus hovers by
-  on its two ear fins, and a whale fall can arrive on the floor: a skeleton
-  in the silt with crabs working along it, which stays for the rest of the
+  on its two ear fins, an upright mantle rowing over a webbed skirt, no face;
+  and a whale fall can arrive on the floor: a skeleton half sunk in the silt,
+  seen a little from above, a spine of vertebrae on a gentle S with paired
+  ribs, some broken, the skull and its two jaws, and crabs working along it, which stays for the rest of the
   sitting once it has come. The recap names whichever was rarest, as it does
   the others.
 - **The noise darkens.** With ambient noise on, a lowpass follows the depth:

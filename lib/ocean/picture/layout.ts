@@ -1563,18 +1563,20 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       return pe;
     }
     case 'eye': {
-      // Small in a print, and half in the dark at the edge of the page.
-      const rh = w * 0.2;
-      const r = 0.2 * Math.min(w, rh);
+      // Small in a print, its patch of mantle cut by the edge of the page.
+      // drawEye sizes the eye to the page (7.5% of the short side across),
+      // sets it 0.82 of a radius in from the edge, and keeps its whole patch
+      // (2.3 radii up and down, and a little) inside its band.
+      const re = 0.0375 * REF;
+      const reach = re * (2.3 * 1.15 + 0.15) + 2;
+      const rh = Math.max(w * 0.2, 0.2 * M, reach * 2 + 8);
       const left = sd % 2 === 0;
-      const ny = rh * (0.18 + (((sd >>> 6) % 100) / 100) * 0.2);
+      const want = rh * (0.18 + (((sd >>> 6) % 100) / 100) * 0.2);
+      const ny = clamp(want, reach, rh - reach);
       const ry = clamp(y, h * 0.15, h * 0.85) - ny;
       const mirror = (left ? -1 : 1) !== side;
       const onLeft = left !== mirror;
-      void r;
-      // drawEye keeps three quarters of it in from the edge itself.
-      const re = 0.0375 * REF;
-      const pe: PlacedEvent = { ...base, age: 0.4, rx: 0, ry, rw: w, rh, mirror, x: onLeft ? re * 0.4 : w - re * 0.4, y: ry + ny, far: false, box: null, edge: true };
+      const pe: PlacedEvent = { ...base, age: 0.4, rx: 0, ry, rw: w, rh, mirror, x: onLeft ? re * 0.82 : w - re * 0.82, y: ry + ny, far: false, box: null, edge: true };
       pe.box = eventHull(pe, w);
       return pe;
     }
@@ -1673,7 +1675,8 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       }
       const rw = L / 0.45;
       const fy = o.groundY(cx) + 0.004 * h;
-      return { ...base, age: 1, rx: cx - rw * at, ry: 0, rw, rh: h, x: cx, y: fy, far: false, box: { x0: cx - L / 2, x1: cx + L / 2, y0: fy - L * 0.12, y1: fy + 4 } };
+      // It lies in front of the floor's line: the near ribs and the jaw reach 0.085 of its length below it.
+      return { ...base, age: 1, rx: cx - rw * at, ry: 0, rw, rh: h, x: cx, y: fy, far: false, box: { x0: cx - L / 2, x1: cx + L / 2, y0: fy - L * 0.12, y1: fy + L * 0.085 } };
     }
   }
   return null;
@@ -1691,9 +1694,11 @@ function eventHull(e: PlacedEvent, w: number): Box | null {
     case 'eye': {
       // drawEye sizes itself to the page: an eye 7.5% of the short side
       // across, three quarters in from the edge, in a soft dark of its own.
+      // With its stippled patch of mantle: 3.7 radii in from the eye's
+      // middle and 2.7 up and down.
       const r = 0.0375 * REF;
       const onLeft = e.x < w / 2;
-      return onLeft ? { x0: 0, x1: r * 1.8, y0: e.y - r * 1.5, y1: e.y + r * 1.5 } : { x0: w - r * 1.8, x1: w, y0: e.y - r * 1.5, y1: e.y + r * 1.5 };
+      return onLeft ? { x0: 0, x1: e.x + r * 3.7, y0: e.y - r * 2.7, y1: e.y + r * 2.7 } : { x0: e.x - r * 3.7, x1: w, y0: e.y - r * 2.7, y1: e.y + r * 2.7 };
     }
     case 'oarfish': {
       const D = Math.min(w, e.rh) * 0.042;

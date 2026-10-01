@@ -180,6 +180,13 @@ export function rollKelp(key: string): Kelp {
         const off = 0.025 + (0.175 * (i + 0.5 + range(r, -0.3, 0.3))) / mine.length;
         mine[k].x = edge < 0 ? off : 1 - off;
       });
+    } else {
+      // The stragglers stand close in by their wall, on a rock of their own
+      // that is never a match for the forest's.
+      for (const s of mine) {
+        const off = 0.03 + ((edge < 0 ? s.x : 1 - s.x) - 0.03) * 0.5;
+        s.x = edge < 0 ? off : 1 - off;
+      }
     }
     sides.set(edge, mine);
   }

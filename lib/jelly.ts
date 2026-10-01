@@ -195,8 +195,10 @@ export function jellyInk(color: string, paper: string, light: boolean, pen = tru
     };
   }
   return {
-    bellTop: mixHex(color, paper, 0.8),
-    bellRim: mixHex(color, paper, 0.42),
+    // On the plate a little more colour in the wash, so the strip of bare
+    // paper left in it reads as the light.
+    bellTop: mixHex(color, paper, pen ? 0.7 : 0.8),
+    bellRim: mixHex(color, paper, pen ? 0.38 : 0.42),
     // The pen's iron-gall, with a breath of the jelly's colour in it.
     edge: pen ? mixHex(IRON_GALL.light, color, 0.15) : mixHex(color, '#1A1714', 0.45),
     rib: pen ? mixHex(IRON_GALL.light, color, 0.4) : mixHex(color, '#1A1714', 0.3),
@@ -1147,7 +1149,7 @@ function plateLight(
   for (const [grow, a] of [
     [2.2, 0.1],
     [1.5, 0.22],
-    [1, night ? 0.35 : 0.62],
+    [1, night ? 0.35 : 0.85],
   ] as const) {
     for (let i = 0; i <= N; i++) stripW[i] = widths[i] * grow;
     ctx.globalAlpha = a;

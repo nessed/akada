@@ -370,7 +370,8 @@ function buildGrammar(
   // The mass it all stands in, back into the wall and down past where the wash runs dry.
   const foot = (cx: number, top: number, rx: number) => add(cx, top, rx, Math.max(0.5 * Hr, (Hr * 1.3 - top) / 2), [2.2, 2.6]);
   if (g === 'slab') {
-    foot(0.1 * S, Hr * 0.5, 0.62 * S);
+    // Set back under the beds, so they overhang it.
+    foot(-0.02 * S, Hr * 0.5, 0.5 * S);
     // Beds from the lowest up, each laid over the one under it, thick and
     // square-ended: one tabular mass whose bedding steps in and out.
     const beds = 2 + (r() < 0.6 ? 1 : 0);
@@ -598,8 +599,11 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       cy - 0.5 * b.ry,
       Math.max(b.rx, b.ry) * 1.9,
     );
-    const tint = mixHex(stone, bi % 2 ? deep : lift, 0.08 + 0.06 * r());
-    g.addColorStop(0, mixHex(tint, lift, 0.6));
+    // The mass the rest stand in is in their shadow, and darker for it: the
+    // rock goes down into the water through its deeper tones, never a pale hem.
+    const foot = bi === shape.foot;
+    const tint = mixHex(mixHex(stone, bi % 2 ? deep : lift, 0.08 + 0.06 * r()), deep, foot ? 0.3 : 0);
+    g.addColorStop(0, mixHex(tint, lift, foot ? 0.25 : 0.6));
     g.addColorStop(0.45, tint);
     g.addColorStop(1, mixHex(tint, deep, 0.7));
     ctx.fillStyle = g;

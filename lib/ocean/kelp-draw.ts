@@ -286,7 +286,7 @@ function drawStalk(
   // then trailing down and away past the clump's edge.
   const sag = (0.01 + 0.02 * dice(stalk, 3)) * page;
   const past = (0.05 + 0.07 * dice(stalk, 2)) * w * (far ? 0.6 : 1);
-  const dive = Math.tan(((25 + 12 * dice(stalk, 4)) * Math.PI) / 180);
+  const dive = Math.tan(((14 + 11 * dice(stalk, 4)) * Math.PI) / 180);
   // Only the stretch of it on the page (and a little over) is worth tracing.
   if (foot < -h * 0.3 || foot - upright - bendR - sag - h * 0.2 > h * 1.06) return;
 
@@ -342,7 +342,7 @@ function drawStalk(
     }
     // Out to past the clump's edge: floating, then diving.
     const span = Math.max(0.05 * w, inward * (edgeX + inward * past - bx));
-    const float = span * 0.58;
+    const float = span * (0.6 + 0.15 * dice(stalk, 6));
     const tail = span - float;
     for (let s = step; s <= span; s += step) {
       const x = bx + inward * s;
@@ -430,8 +430,9 @@ function drawStalk(
     let dex = downstream ? flow * (1 - 0.35 * b.droop) + flutter : b.side * 0.22 + flow * 0.2 + flutter;
     let dey = downstream ? 0.1 + 0.45 * b.droop : 0.75 + 0.25 * b.droop;
     if (onCanopy) {
-      dex = flow * (0.75 + 0.25 * b.droop) + flutter;
-      dey = 0.55 + 0.35 * b.droop;
+      // Each its own way: some trail out nearly flat, some hang.
+      dex = flow * (0.45 + 0.55 * (1 - b.droop) + 0.6 * (b.angle - 0.57)) + flutter * 2;
+      dey = 0.35 + 0.6 * b.droop;
     }
     const el = Math.hypot(dex, dey);
     dex /= el;
@@ -485,6 +486,9 @@ function drawStalk(
     const n0y = edgeA[SEG >> 1][1] - mid[SEG >> 1][1];
     return { bx, by, fx, fy, fr, d0x, d0y, aDark: n0x * lx + n0y * ly > 0, faint: inClear(p.x, p.y), front: onCanopy || b.side === inward };
   };
+  // The canopy keeps more of its blades than the stipe below: it is a mat.
+  const onTop = (b: KelpStalk['blades'][number]) => canopy && b.t * total > upright;
+  const topStride = Math.max(1, stride - 1);
   const trace = (target: Path2D, edge: [number, number][], back: boolean) => {
     if (!back) {
       for (let k = 1; k <= SEG; k++) {
@@ -512,7 +516,7 @@ function drawStalk(
     shadow.closePath();
   };
 
-  /* One blade, finished, over whatever is already down: drawn big. */
+  /* One blade, finished, over whatever is already down. */
   const finish = (g: NonNullable<ReturnType<typeof shapeOf>>, j: number) => {
     const a = g.faint ? 0.3 : 1;
     const path = new Path2D();
@@ -524,6 +528,21 @@ function drawStalk(
     ctx.fillStyle = ink.brown;
     ctx.globalAlpha = a * 0.75;
     ctx.fill(shadow);
+    if (!big) {
+      // Small: its midrib and one plain line round it.
+      ctx.beginPath();
+      ctx.moveTo(g.bx, g.by);
+      for (let k = 1; k < SEG; k++) ctx.lineTo(mid[k][0], mid[k][1]);
+      ctx.strokeStyle = ink.line;
+      ctx.lineWidth = 0.45 * px * scale;
+      ctx.globalAlpha = a * 0.55;
+      ctx.stroke();
+      ctx.lineWidth = (far ? 0.5 : 0.75) * px * scale;
+      ctx.globalAlpha = a * (far ? 0.6 : 0.85);
+      ctx.stroke(path);
+      floatOf(g, a);
+      return;
+    }
     // The pigment pooled at the margin as the wash dried.
     ctx.save();
     ctx.clip(path);
@@ -622,7 +641,7 @@ function drawStalk(
     const floats = new Path2D();
     let any = false;
     for (let j = 0; j < stalk.blades.length; j++) {
-      if (j % stride) continue;
+      if (j % (onTop(stalk.blades[j]) ? topStride : stride)) continue;
       const g = shapeOf(stalk.blades[j], j);
       if (!g || g.front !== front) continue;
       any = true;
@@ -668,13 +687,13 @@ function drawStalk(
     ctx.globalAlpha = 1;
   };
   const blades = (front: boolean) => {
-    if (!big) {
+    if (!detail) {
       batch(front);
       return;
     }
     // Lowest first, so each hangs over the one below it.
     for (let j = 0; j < stalk.blades.length; j++) {
-      if (j % stride) continue;
+      if (j % (onTop(stalk.blades[j]) ? topStride : stride)) continue;
       const g = shapeOf(stalk.blades[j], j);
       if (g && g.front === front) finish(g, j);
     }
