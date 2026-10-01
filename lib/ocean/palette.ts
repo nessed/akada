@@ -94,6 +94,27 @@ export interface CreatureInk {
   finAlpha: number;
 }
 
+/** Kelp's olive gold: the course pastels' ochre, greened with their sage and
+    browned with their clay. */
+const KELP = mixHex(mixHex('#D9C58C', '#A8B89B', 0.35), '#C99B7E', 0.25);
+
+export interface KelpInk {
+  ink: string;
+  body: string;
+  /** The little float at the foot of each blade. */
+  float: string;
+}
+
+/** How kelp is inked, on dark water or light: the same rule as the animals. */
+export function kelpInk(dark: boolean): KelpInk {
+  const water = dark ? '#1A1815' : '#FBF8EF';
+  return {
+    ink: dark ? mixHex(KELP, '#FFFFFF', 0.35) : mixHex(KELP, '#1A1714', 0.6),
+    body: dark ? mixHex(KELP, water, 0.5) : mixHex(KELP, '#8A7A4E', 0.12),
+    float: dark ? mixHex(KELP, '#FFFFFF', 0.15) : mixHex(KELP, water, 0.5),
+  };
+}
+
 /** How a creature is inked, on dark water or light. */
 export function creatureInk(g: Genome, dark: boolean): CreatureInk {
   const hue = HUES[Math.max(0, Math.min(9, Math.round(g.hue)))];

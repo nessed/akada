@@ -1094,6 +1094,20 @@ only ever grows, it never runs backwards, and none of it touches progress.
   as they come round rather than flipping, and leave the other way. Lit
   species blink, each in its own rhythm, a flash that dies away and then the
   wait.
+- **Kelp, where the light is.** About half of sittings start at the edge of
+  a kelp forest (`lib/ocean/kelp.ts`): a few olive-gold stalks at one side of
+  the page or both, rooted on a ledge of rock far below and reaching up to the
+  surface, where the longer ones lay their tops along it as canopy. Each blade
+  is a long ruffled ribbon on a little float, in the animals' ink, and the
+  stalks further back are finer and fainter. It is the one plant in the sea
+  and it stays in the sunlit water, since nothing grows where the light has
+  gone. The reader starts among the tops and sinks past them: the stalks slide
+  up the page, swaying on the slow clock with the sway travelling up them, and
+  lean with the current; the ledge rises into view about six minutes in, its
+  holdfasts gripping the rock and the rock bleeding away below like a wash
+  run dry; and by the end of the sunlit zone the reef has gone up and out of
+  sight and the water is open. Under the frame's paper bleeds, and faint
+  wherever the open screen is written on, like the animals.
 - **Now and then, something rare.** One roll a minute against the zone's
   rare events, never two within eight minutes, and the odds are flat per
   minute: a long sitting has more minutes to be lucky in and no more luck per
@@ -1133,7 +1147,7 @@ water from the start. The wash thins back to bare paper in oval bleeds under
 the frame's three corners (the course code, the time range, the tally), and
 animals keep out of them, so what is written there reads at any depth. The
 pencil sketch and the ground are the jellyfish's, unchanged. Geometry is in `lib/ocean/` (`depth`, `genome`,
-`anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`), the drawing in
+`anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`, `kelp`), the drawing in
 `lib/ocean/draw.ts` and `sprites.ts`, the scene in `components/OceanScene.tsx`,
 which draws the far water behind the hero `StudyFan` and the near animals in
 front of it.
