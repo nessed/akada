@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import type { SessionSegment } from '@/lib/data/types';
 import { drawPicture, planPicture, type PictureInput } from '@/lib/ocean/picture';
+import { drawGodRays, sunFor } from '@/lib/ocean/light';
 
 function segs(start: string, parts: [string, number][]): SessionSegment[] {
   let t = Date.parse(start);
@@ -35,6 +36,7 @@ declare global {
 export default function PictureProof() {
   useEffect(() => {
     window.__cases = CASES.map((c) => c.name);
+    (window as unknown as { __planOf: (i: number) => unknown }).__planOf = (i) => planPicture({ courseId: CASES[i].course, color: CASES[i].color, segments: CASES[i].segs, ground: 'paper', tzOffset: 0 }, { width: 1920, height: 1200 })?.plan;
     window.__pic = (i, w, h, ground, px, noUrl) => {
       const c = CASES[i];
       const input: PictureInput = { courseId: c.course, color: c.color, segments: c.segs, ground, tzOffset: 0 };
@@ -57,6 +59,16 @@ export default function PictureProof() {
     };
   }, []);
   useEffect(() => {
+    (window as unknown as { __rays: (h: number, sx: number, sy: number, seed: number, st: number) => string }).__rays = (hour, sx, sy, seed, st) => {
+      const c = document.createElement('canvas');
+      c.width = 1920;
+      c.height = 1200;
+      const x = c.getContext('2d')!;
+      x.fillStyle = '#333';
+      x.fillRect(0, 0, 1920, 1200);
+      drawGodRays(x, 1920, 1200, { source: { x: sx, y: sy }, occluder: null, strength: st, sun: sunFor(hour), px: 1.2, seed, dark: false });
+      return c.toDataURL('image/png');
+    };
     window.__strips = (i, w, h, ground, px, stripH, compare) => {
       const c = CASES[i];
       const input: PictureInput = { courseId: c.course, color: c.color, segments: c.segs, ground, tzOffset: 0 };
