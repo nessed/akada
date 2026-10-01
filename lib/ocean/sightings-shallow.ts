@@ -669,7 +669,7 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
   const sl = Math.sin(lean);
   const cl = Math.cos(lean);
   const phase = ((seed >>> 21) % 100) / 16;
-  const k = (Math.PI * 2) / (0.6 * h);
+  const k = (Math.PI * 2) / (0.75 * h);
   const len = (h - y0) / cl + 6 * D;
   // The back faces into the page, so the crest is seen.
   const back = left ? 1 : -1;
@@ -681,7 +681,7 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
   let Dd = 0;
   /** A point down the spine, its normal toward the back, and the depth of the body there. */
   const at = (s: number) => {
-    const amp = D * 0.9 * smooth(s / (0.4 * h)) * (1 + (s / h) * 0.5);
+    const amp = D * 0.6 * smooth(s / (0.4 * h)) * (1 + (s / h) * 0.5);
     const wave = amp * Math.sin(s * k - ambient * 0.7 + phase);
     const slope = amp * k * Math.cos(s * k - ambient * 0.7 + phase);
     X = x0 + sl * s + cl * wave;
@@ -834,8 +834,8 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
   ctx.stroke(body);
   ctx.restore();
 
-  // The plumes on its head: a few long rays rising off the crown and
-  // falling back along it, each with a little flag at the tip.
+  // The plumes on its head: the first rays of the crest, long and standing
+  // out from the crown, each with a little flag at the tip.
   const plumes = new Path2D();
   const flags = new Path2D();
   for (let j = 0; j < 6; j++) {
@@ -845,15 +845,15 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
     const by = Y + NY * Dd * 0.5;
     const tx = TX();
     const ty = TY();
-    const pl = D * (3.1 - j * 0.3);
-    const sway = Math.sin(ambient * 0.6 + j * 0.8) * 0.12 * pl;
-    const qx = bx + NX * pl * 0.7 - tx * pl * 0.2;
-    const qy = by + NY * pl * 0.7 - ty * pl * 0.2;
-    const ex = bx + NX * (pl * 0.6 + sway) + tx * pl * 0.75;
-    const ey = by + NY * (pl * 0.6 + sway) + ty * pl * 0.75;
+    const pl = D * (2.4 - j * 0.2);
+    const sway = Math.sin(ambient * 0.6 + j * 0.8) * 0.08 * pl;
+    const qx = bx + NX * pl * 0.55 - tx * pl * 0.3;
+    const qy = by + NY * pl * 0.55 - ty * pl * 0.3;
+    const ex = bx + NX * pl * 0.92 - tx * (pl * 0.05 + sway) + tx * j * D * 0.12;
+    const ey = by + NY * pl * 0.92 - ty * (pl * 0.05 + sway) + ty * j * D * 0.12;
     plumes.moveTo(bx, by);
     plumes.quadraticCurveTo(qx, qy, ex, ey);
-    const fr = D * 0.16;
+    const fr = D * 0.09;
     const fa = Math.atan2(ey - qy, ex - qx);
     flags.moveTo(ex + Math.cos(fa) * fr, ey + Math.sin(fa) * fr);
     flags.ellipse(ex, ey, fr, fr * 0.45, fa, 0, Math.PI * 2);
@@ -873,7 +873,7 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
     const ey = by - NY * (ol * 0.3 + sway) + ty * ol;
     plumes.moveTo(bx, by);
     plumes.quadraticCurveTo(qx, qy, ex, ey);
-    const fr = D * 0.24;
+    const fr = D * 0.17;
     const fa = Math.atan2(ey - qy, ex - qx);
     flags.moveTo(ex + Math.cos(fa) * fr, ey + Math.sin(fa) * fr);
     flags.ellipse(ex, ey, fr, fr * 0.4, fa, 0, Math.PI * 2);

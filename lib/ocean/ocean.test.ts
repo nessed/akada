@@ -10,6 +10,7 @@ import { speciesName } from './names';
 import { hash32, mulberry32 } from './random';
 import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type EventKind } from './events';
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
+import { outcropAtSlot, outcropsInView } from './outcrop';
 import { diveRecap } from './recap';
 import { populationAt, spawnAt, visitorsAt } from './schedule';
 
@@ -239,4 +240,35 @@ test('a whale fall stays on the floor once it has come', () => {
     return;
   }
   assert.fail('no whale fall in 400 sittings');
+});
+
+test('rocks: the same every time, at the edges, and what grows on them follows the light', () => {
+  const key = oceanKey('rock', 3);
+  assert.deepEqual(outcropsInView(key, false, 40 * 60), outcropsInView(key, false, 40 * 60));
+  let rocks = 0;
+  for (let k = 0; k < 60; k++) {
+    for (let slot = 0; slot < 30; slot++) {
+      const o = outcropAtSlot(oceanKey('rock', k), slot, false);
+      if (!o) continue;
+      rocks++;
+      assert.ok(o.reach <= 0.3, 'a rock reached into the middle of the page');
+      const kinds = o.growths.map((g) => g.kind);
+      if (o.zone === 0) assert.ok(!kinds.some((g) => g === 'glass' || g === 'seapen'), 'deep things in the light');
+      if (o.zone >= 2) assert.ok(kinds.every((g) => g === 'glass' || g === 'seapen' || g === 'whip'), `coral in the dark: ${kinds}`);
+      // Kelp and coral never share a sea.
+      if (o.zone === 0) assert.equal(outcropAtSlot(oceanKey('rock', k), slot, true), null);
+    }
+  }
+  // Most eight-minute stretches have one.
+  assert.ok(rocks > 60 * 30 * 0.55 && rocks < 60 * 30 * 0.85, `${rocks} rocks`);
+});
+
+test('rocks slide up the page and leave it', () => {
+  const key = oceanKey('rock', 9);
+  for (let s = 60; s < 4 * 3600; s += 30) {
+    for (const { outcrop, top } of outcropsInView(key, false, s)) {
+      const later = outcropsInView(key, false, s + 30).find((v) => v.outcrop.id === outcrop.id);
+      if (later) assert.ok(later.top < top, 'a rock went back down the page');
+    }
+  }
 });

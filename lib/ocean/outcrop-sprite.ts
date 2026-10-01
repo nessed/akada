@@ -152,7 +152,9 @@ function render(o: Outcrop, w: number, h: number, dark: boolean, px: number): Pl
   return { canvas, ox, oy };
 }
 
-/** The rock, as the kelp's ledge is drawn, but closed: an underside curving back to the page. */
+/** The rock, as the kelp's ledge is drawn: inked along its top and lip, and
+    bleeding away underneath toward the page edge it comes out of, so it reads
+    as rock jutting from a wall rather than a bowl floating in the water. */
 function drawRock(
   ctx: CanvasRenderingContext2D,
   o: Outcrop,
@@ -187,15 +189,16 @@ function drawRock(
   for (let k = 1; k <= 48; k++) edge.lineTo(X((k / 48) * 0.88), crestY((k / 48) * 0.88));
   const lipTop = crestY(0.88);
   edge.bezierCurveTo(X(0.96), lipTop, X(1.01), top + thick * 0.12, X(0.97), top + thick * 0.3);
-  edge.bezierCurveTo(X(0.92), top + thick * 0.75, X(0.45), top + thick * 1.06, X(0), top + thick);
-  // The fill closes along the page edge; the ink doesn't, as the page cuts it.
+  // The underside runs back to the wall and is never inked: the wash runs dry
+  // before it gets there.
   const body = new Path2D(edge);
+  body.bezierCurveTo(X(0.8), top + thick * 0.45, X(0.3), top + thick * 0.7, X(0), top + thick);
   body.closePath();
 
   const g = ctx.createLinearGradient(0, top, 0, top + thick);
   g.addColorStop(0, rock);
-  g.addColorStop(0.45, rock);
-  g.addColorStop(1, mixHex(rock, zw.bottom, 0.35));
+  g.addColorStop(0.4, rock);
+  g.addColorStop(1, `${rock}00`);
   ctx.save();
   ctx.globalAlpha = alpha * 0.9;
   ctx.fillStyle = g;
@@ -205,21 +208,12 @@ function drawRock(
   ctx.lineWidth = 1.2 * px;
   ctx.stroke(edge);
   ctx.clip(body);
-  // Engraved shading down the face of the lip, and along the underside.
+  // Engraved shading down the face of the lip.
   ctx.beginPath();
   for (let i = 0; i < 7; i++) {
     const f = 0.9 - i * 0.022;
     ctx.moveTo(X(f), top + thick * (0.12 + i * 0.015));
     ctx.lineTo(X(f - 0.01), top + thick * (0.34 + i * 0.03));
-  }
-  for (let i = 0; i < 9; i++) {
-    // Along the underside's own curve (the second bezier above), just inside it.
-    const t = 0.12 + i * 0.085;
-    const u = 1 - t;
-    const f = u * u * u * 0.97 + 3 * u * u * t * 0.92 + 3 * u * t * t * 0.45;
-    const v = u * u * u * 0.3 + 3 * u * u * t * 0.75 + 3 * u * t * t * 1.06 + t * t * t;
-    ctx.moveTo(X(f), top + thick * (v - 0.02));
-    ctx.lineTo(X(f - 0.012), top + thick * (v - 0.17));
   }
   ctx.globalAlpha = alpha * 0.35;
   ctx.lineWidth = 0.8 * px;

@@ -245,7 +245,8 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   const ink = dark ? mixHex(pale, '#FFFFFF', 0.45) : mixHex(pale, '#1A1714', 0.62);
   const wash = dark ? mixHex(pale, water, 0.12) : mixHex(pale, water, 0.2);
 
-  const S = Math.min(w, h) * 0.07;
+  // Small for an octopus, but big enough to be found.
+  const S = Math.min(w, h) * 0.11;
   const R = S * 0.3;
   const ph = (ambient / beat) * Math.PI * 2 + phase;
   const flap = Math.sin(ph);
