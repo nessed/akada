@@ -369,8 +369,7 @@ Tick each one:
 - [ ] Add a task with a due date
 - [ ] Start the timer, let it run a minute, **reload the page** → timer still
       running, elapsed time preserved
-- [ ] Toggle white noise **on an iPhone** → audio plays (this was completely
-      broken on iOS before)
+- [ ] Toggle the tank sound (Deep drawing) **on an iPhone** → audio plays
 - [ ] Stop the timer → log the session
 - [ ] `/stats` → hours, heatmap and session history all render
 - [ ] Sign out → land on `/auth`

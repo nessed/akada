@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { breakStartsAt, useTimer } from '@/lib/timer-context';
-import { useAmbientNoise } from '@/lib/use-ambient-noise';
 import { useAquariumSound } from '@/lib/use-aquarium-sound';
 import { renderWallpaper, saveWallpaper } from '@/lib/wallpaper';
 import SoundMenu from '@/components/SoundMenu';
@@ -20,7 +19,7 @@ import { useNotice } from '@/components/Notice';
 import StudyFan from '@/components/StudyFan';
 import WoodScene from '@/components/WoodScene';
 import HandNote from '@/components/notebook/HandNote';
-import { arrival, successionAt } from '@/lib/wood/succession';
+import { successionAt } from '@/lib/wood/succession';
 import dynamic from 'next/dynamic';
 import type { ClearRect, OceanClock } from '@/components/OceanScene';
 import { mixHex } from '@/lib/fan';
@@ -128,7 +127,6 @@ export default function TimerPage() {
   const { courses } = useCourses();
   const { tasks } = useTasks();
   const { notify } = useNotice();
-  const noise = useAmbientNoise();
   const aquarium = useAquariumSound();
   /* The record with this sitting folded in. The course's open page is drawn
      in the corner of the frame and fills as the reader sits; a mark that
@@ -140,9 +138,6 @@ export default function TimerPage() {
      and a phone has no cursor to hover with, so on the device most likely to
      have the audio blocked the reason reached nobody. It is said out loud
      once, each time the reason changes. */
-  useEffect(() => {
-    if (noise.error) notify(noise.error);
-  }, [noise.error, notify]);
   useEffect(() => {
     if (aquarium.error) notify(aquarium.error);
   }, [aquarium.error, notify]);
@@ -201,20 +196,11 @@ export default function TimerPage() {
   const active = liveActive ?? (pendingLog ? held?.active ?? null : null);
   const elapsedSeconds = liveActive ? liveElapsed : held?.elapsed ?? 0;
   const focusSeconds = liveActive ? liveFocus : held?.focus ?? 0;
-  // In the deep, the noise darkens as the water does. Stepped, so the
+  // In the deep, the tank darkens as the water does. Stepped, so the
   // filter is only touched a few dozen times over a whole descent.
-  // Under the wood's canopy it closes in the same way: open in the meadow,
-  // most of the way muffled by old growth.
-  const noiseDepth =
-    timerDrawing === 'ocean'
-      ? Math.round(depthAt(focusSeconds).z * 50) / 50
-      : timerDrawing === 'wood'
-        ? Math.round(arrival(successionAt(focusSeconds).z, 0.45, 0.45) * 0.85 * 50) / 50
-        : null;
-  const setNoiseDepth = noise.setDepth;
-  useEffect(() => setNoiseDepth(noiseDepth), [setNoiseDepth, noiseDepth]);
+  const tankDepth = timerDrawing === 'ocean' ? Math.round(depthAt(focusSeconds).z * 50) / 50 : null;
   const setAquariumDepth = aquarium.setDepth;
-  useEffect(() => setAquariumDepth(noiseDepth), [setAquariumDepth, noiseDepth]);
+  useEffect(() => setAquariumDepth(tankDepth), [setAquariumDepth, tankDepth]);
   const onBreak = liveActive ? liveOnBreak : held?.onBreak ?? false;
   const breakTarget = liveActive ? liveBreakTarget : held?.breakTarget ?? null;
   /* Whether anything on screen can still be acted on. A held frame is a
@@ -815,7 +801,6 @@ export default function TimerPage() {
         <SoundMenu
           night={night}
           accent={color}
-          noise={{ on: noise.on, toggle: noise.toggle }}
           tank={timerDrawing === 'ocean' ? aquarium : undefined}
         />
         <button
