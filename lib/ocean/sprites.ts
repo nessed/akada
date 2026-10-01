@@ -40,10 +40,10 @@ export class SpriteCache {
 
   constructor(private budget = 24e6) {}
 
-  get(species: Species, lenCss: number, dark: boolean, dpr: number): Sprite | null {
+  get(species: Species, lenCss: number, dark: boolean, dpr: number, vivid = false): Sprite | null {
     if (typeof document === 'undefined') return null;
     const bucket = Math.round(Math.log(Math.max(8, lenCss)) / Math.log(STEP));
-    const key = `${species.id}|${bucket}|${dark ? 1 : 0}|${dpr}`;
+    const key = `${species.id}|${bucket}|${dark ? 1 : 0}|${dpr}|${vivid ? 1 : 0}`;
     const hit = this.map.get(key);
     if (hit) {
       // Most recently used goes to the back of the line.
@@ -51,7 +51,7 @@ export class SpriteCache {
       this.map.set(key, hit);
       return hit;
     }
-    const sprite = render(species, Math.pow(STEP, bucket), dark, dpr);
+    const sprite = render(species, Math.pow(STEP, bucket), dark, dpr, vivid);
     if (!sprite) return null;
     this.map.set(key, sprite);
     this.bytes += sprite.w * sprite.h * 4;
@@ -64,7 +64,7 @@ export class SpriteCache {
   }
 }
 
-function render(species: Species, lenCss: number, dark: boolean, dpr: number): Sprite | null {
+function render(species: Species, lenCss: number, dark: boolean, dpr: number, vivid: boolean): Sprite | null {
   const a = anatomyOf(species);
   const w = a.maxX - a.minX;
   const h = a.maxY - a.minY;
@@ -89,7 +89,7 @@ function render(species: Species, lenCss: number, dark: boolean, dpr: number): S
   canvas.height = ch;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
-  const ink = creatureInk(species.genome, dark);
+  const ink = creatureInk(species.genome, dark, vivid);
   // Line weights in device pixels, heavier on a bigger animal.
   const lw = Math.max(0.6, Math.min(1.5, lenCss / 150)) * dpr;
   ctx.setTransform(scale, 0, 0, scale, padX - a.minX * scale, padY - a.minY * scale);

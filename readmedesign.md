@@ -1203,7 +1203,10 @@ only ever grows, it never runs backwards, and none of it touches progress.
   budget. The scene, the jelly and the near animals are laid down in order
   (`lib/wallpaper.ts`; each canvas registers a layer), with none of the
   chrome, none of the page's rules or paper bleeds, nothing faded out of the
-  clock's way, the bell open and the colour back if the sitting is held. On a
+  clock's way, the bell open and the colour back if the sitting is held. It is
+  the sea at its best at any depth: no dark closing in round the jelly's pool,
+  and every animal in the colour it has in the light, not drained by the
+  water (`creatureInk(..., vivid)`). The live screen keeps both. On a
   phone or tablet the share sheet takes it, so it can go straight to Photos;
   everywhere else, a touchscreen laptop included, it is a plain download.
 - **Full screen** is the browser's where there is one (`requestFullscreen`),

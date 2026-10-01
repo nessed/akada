@@ -135,9 +135,11 @@ export function drained(hex: string, z: number): string {
   return mixHex(hex, grey, lost);
 }
 
-/** How a creature is inked, on dark water or light. */
-export function creatureInk(g: Genome, dark: boolean): CreatureInk {
-  const hue = drained(HUES[Math.max(0, Math.min(9, Math.round(g.hue)))], g.z);
+/** How a creature is inked, on dark water or light. `vivid` keeps the colour
+    the depth would take, for a wallpaper, which is the animal at its best. */
+export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureInk {
+  const base = HUES[Math.max(0, Math.min(9, Math.round(g.hue)))];
+  const hue = vivid ? base : drained(base, g.z);
   const glow = GLOWS[Math.max(0, Math.min(3, Math.round(g.glow)))];
   const ink = dark ? mixHex(hue, '#FFFFFF', 0.45) : mixHex(hue, '#1A1714', 0.62);
   const water = dark ? '#1A1815' : '#FBF8EF';
