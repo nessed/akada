@@ -8,8 +8,9 @@ import { courseKey, oceanKey, oceanKeyFromSegments } from './key';
 import { childOf, DEFAULT_JELLY, jellyForBlock } from './lineage';
 import { speciesName } from './names';
 import { hash32, mulberry32 } from './random';
-import { EVENTS, eventAtMinute, eventsAt, eventsUpTo } from './events';
+import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type EventKind } from './events';
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
+import { outcropAtSlot, outcropsInView } from './outcrop';
 import { diveRecap } from './recap';
 import { populationAt, spawnAt, visitorsAt } from './schedule';
 
@@ -214,4 +215,60 @@ test('kelp only slides up the page, and is gone by the end of the sunlit water',
   assert.ok(kelpInView(8 * 60), 'the ledge should be in view mid-zone');
   assert.ok(!kelpInView(15 * 60), 'kelp was still on the page in the twilight');
   assert.ok(!kelpInView(6 * 3600));
+});
+
+test('the later sightings all turn up, and the first roll never hears of them', () => {
+  const seen = new Set<EventKind>();
+  for (let k = 0; k < 600 && seen.size < 9; k++) {
+    for (const e of eventsUpTo(rollBiome(oceanKey('later', k), courseKey('later')), 4 * 3600)) seen.add(e.kind);
+  }
+  for (const kind of ['turtle', 'siphonophore', 'lure', 'dumbo', 'whalefall'] as EventKind[]) assert.ok(seen.has(kind), `no ${kind} in 600 sittings`);
+  // Golden: a first-roll event that was there before the later roll existed is still there.
+  const biome = rollBiome(oceanKey('gold', 1), courseKey('gold'));
+  const first = eventsUpTo(biome, 4 * 3600).filter((e) => ['whale', 'storm', 'eye', 'leviathan'].includes(e.kind));
+  for (const e of first) assert.equal(eventAtMinute(biome, Math.floor(e.start / 60))?.kind, e.kind);
+});
+
+test('a whale fall stays on the floor once it has come', () => {
+  for (let k = 0; k < 400; k++) {
+    const biome = rollBiome(oceanKey('fall', k), courseKey('fall'));
+    const fall = eventsUpTo(biome, 4 * 3600).find((e) => e.kind === 'whalefall');
+    if (!fall) continue;
+    assert.equal(firstEventUpTo(biome, 'whalefall', fall.start - 1), null);
+    assert.equal(firstEventUpTo(biome, 'whalefall', fall.start)?.start, fall.start);
+    assert.equal(firstEventUpTo(biome, 'whalefall', 4 * 3600)?.start, fall.start);
+    return;
+  }
+  assert.fail('no whale fall in 400 sittings');
+});
+
+test('rocks: the same every time, at the edges, and what grows on them follows the light', () => {
+  const key = oceanKey('rock', 3);
+  assert.deepEqual(outcropsInView(key, false, 40 * 60), outcropsInView(key, false, 40 * 60));
+  let rocks = 0;
+  for (let k = 0; k < 60; k++) {
+    for (let slot = 0; slot < 30; slot++) {
+      const o = outcropAtSlot(oceanKey('rock', k), slot, false);
+      if (!o) continue;
+      rocks++;
+      assert.ok(o.reach <= 0.3, 'a rock reached into the middle of the page');
+      const kinds = o.growths.map((g) => g.kind);
+      if (o.zone === 0) assert.ok(!kinds.some((g) => g === 'glass' || g === 'seapen'), 'deep things in the light');
+      if (o.zone >= 2) assert.ok(kinds.every((g) => g === 'glass' || g === 'seapen' || g === 'whip'), `coral in the dark: ${kinds}`);
+      // Kelp and coral never share a sea.
+      if (o.zone === 0) assert.equal(outcropAtSlot(oceanKey('rock', k), slot, true), null);
+    }
+  }
+  // Most eight-minute stretches have one.
+  assert.ok(rocks > 60 * 30 * 0.55 && rocks < 60 * 30 * 0.85, `${rocks} rocks`);
+});
+
+test('rocks slide up the page and leave it', () => {
+  const key = oceanKey('rock', 9);
+  for (let s = 60; s < 4 * 3600; s += 30) {
+    for (const { outcrop, top } of outcropsInView(key, false, s)) {
+      const later = outcropsInView(key, false, s + 30).find((v) => v.outcrop.id === outcrop.id);
+      if (later) assert.ok(later.top < top, 'a rock went back down the page');
+    }
+  }
 });

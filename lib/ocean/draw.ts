@@ -105,6 +105,15 @@ export function drawSnow(
   ctx.globalAlpha = 1;
 }
 
+/** Where the floor's silt line sits, in device pixels: rising into view over
+    the first minutes of the abyss, then staying. Below the page before then. */
+export function floorLine(depth: Depth, focusSeconds: number, h: number): number {
+  if (depth.zone < 3) return h * 1.04;
+  const into = depth.zone === 3 ? Math.min(1, (focusSeconds / 60 - 110) / 6) : 1;
+  const ease = 1 - (1 - into) * (1 - into);
+  return h * (1.04 - 0.1 * ease);
+}
+
 /**
  * The floor, once the abyss is reached: it rises into view over the first
  * minutes of the zone and then stays, a dark line of silt with vents here
@@ -122,9 +131,7 @@ export function drawFloor(
   px: number,
 ) {
   if (depth.zone < 3) return;
-  const into = depth.zone === 3 ? Math.min(1, (focusSeconds / 60 - 110) / 6) : 1;
-  const ease = 1 - (1 - into) * (1 - into);
-  const base = h * (1.04 - 0.1 * ease);
+  const base = floorLine(depth, focusSeconds, h);
   const ground = mixHex(water.bottom, '#000000', 0.35);
   const edge = mixHex(water.bottom, '#FFFFFF', 0.12);
   ctx.save();

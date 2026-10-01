@@ -1108,6 +1108,18 @@ only ever grows, it never runs backwards, and none of it touches progress.
   run dry; and by the end of the sunlit zone the reef has gone up and out of
   sight and the water is open. Under the frame's paper bleeds, and faint
   wherever the open screen is written on, like the animals.
+- **Rock, and what grows on it.** Now and then, most eight-minute stretches
+  of focus, a rock juts in from one edge of the page and slides up past the reader
+  with the kelp's pace (`lib/ocean/outcrop.ts`). What grows on it is what grows
+  at that depth, because life follows the light: in the sunlit water,
+  branching coral, brain coral, sea fans, anemones, tube sponges and urchins
+  in the course pastels; in the twilight, plate coral, fans and whips with the
+  colour draining out of them, since the sea takes the reds first; from the
+  midnight down, glass sponges, sea pens and black coral, pale as bone, the
+  sea pens' few lights the only colour. A sitting that started in kelp has no
+  coral in the sunlit water, since the two never grow in the same sea. Each
+  rock is inked once to a sprite and then only placed, and like everything
+  written on the page it goes faint where it crosses the clock.
 - **Now and then, something rare.** One roll a minute against the zone's
   rare events, never two within eight minutes, and the odds are flat per
   minute: a long sitting has more minutes to be lucky in and no more luck per
@@ -1119,6 +1131,20 @@ only ever grows, it never runs backwards, and none of it touches progress.
   about one three-hour sitting in a hundred and fifty, something very large
   goes past behind everything, a dark flank with lights along it; no head, no
   tail. Nothing is announced and nothing is scored.
+- **And a second, later roll of them** (`lib/ocean/sightings-shallow.ts`,
+  `sightings-deep.ts`), which only lands in minutes the first roll left well
+  alone, so no sitting saved before it lost or moved anything. In the light,
+  a turtle comes in from the side, stops short of the jelly and looks it
+  over (turtles eat them), then thinks better of it and goes. From the
+  twilight down, a siphonophore longer than the page drifts across, so both
+  ends are never seen at once; and, rarest of anything, an oarfish hangs
+  nearly upright at one side, silver, its red crest running the whole length
+  of it. From the midnight down, a single light bobs in the dark, and for a
+  moment the teeth behind it show. In the abyss, a dumbo octopus hovers by
+  on its two ear fins, and a whale fall can arrive on the floor: a skeleton
+  in the silt with crabs working along it, which stays for the rest of the
+  sitting once it has come. The recap names whichever was rarest, as it does
+  the others.
 - **The noise darkens.** With ambient noise on, a lowpass follows the depth:
   open at the surface, a low hush on the floor.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, a second
@@ -1147,8 +1173,8 @@ water from the start. The wash thins back to bare paper in oval bleeds under
 the frame's three corners (the course code, the time range, the tally), and
 animals keep out of them, so what is written there reads at any depth. The
 pencil sketch and the ground are the jellyfish's, unchanged. Geometry is in `lib/ocean/` (`depth`, `genome`,
-`anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`, `kelp`), the drawing in
-`lib/ocean/draw.ts` and `sprites.ts`, the scene in `components/OceanScene.tsx`,
+`anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`, `kelp`, `outcrop`), the drawing in
+`lib/ocean/draw.ts`, `sprites.ts`, `outcrop-sprite.ts` and the two `sightings` files, the scene in `components/OceanScene.tsx`,
 which draws the far water behind the hero `StudyFan` and the near animals in
 front of it.
 

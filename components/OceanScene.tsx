@@ -19,10 +19,15 @@ import {
   drawVisitor,
   drawWater,
   drawWhale,
+  floorLine,
   rollSnow,
 } from '@/lib/ocean/draw';
-import { eventsAt } from '@/lib/ocean/events';
+import { eventsAt, firstEventUpTo, type OceanEvent } from '@/lib/ocean/events';
 import { rollKelp } from '@/lib/ocean/kelp';
+import { outcropsInView } from '@/lib/ocean/outcrop';
+import { drawOutcrops, OutcropCache } from '@/lib/ocean/outcrop-sprite';
+import { drawDumbo, drawLure, drawWhaleFall } from '@/lib/ocean/sightings-deep';
+import { drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/ocean/sightings-shallow';
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
 import { hash32 } from '@/lib/ocean/random';
@@ -120,6 +125,11 @@ export default function OceanScene({
 
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const sprites = new SpriteCache();
+    const outcrops = new OutcropCache();
+    /* The whale fall stays once it has come, so it is looked up a minute at a
+       time rather than read off the events under way. */
+    let fallMinute = -1;
+    let fall: OceanEvent | null = null;
     const blooms = new Map<number, { canvas: HTMLCanvasElement; shape: JellyShape; tint: string }>();
     let css = { w: 1, h: 1 };
     let px = 1;
@@ -205,6 +215,7 @@ export default function OceanScene({
       if (L.rules) drawRules(bctx, W, H, depth.z, px, water.dark ? '#FFFFFF' : '#8C8576');
       // Under the paper's bleeds, so the corners still read through a forest.
       if (kelp) drawKelp(bctx, W, H, kelp, shown, water, ambient, biome.env.current, px, L.clear, quality > 0.7);
+      drawOutcrops(bctx, W, H, outcropsInView(biome.key, biome.env.kelp, shown), outcrops, water, px, L.clear);
       if (L.pools?.length) {
         // An oval bleed of bare paper, the way a wash stops short of a corner.
         const paper = getComputedStyle(box).getPropertyValue('--paper').trim() || '#FBF8EF';
@@ -229,6 +240,15 @@ export default function OceanScene({
       drawShafts(bctx, W, H, biome.env, water, ambient);
       drawSnow(bctx, W, H, snow.back, water.snow, ambient, biome.env.current, px, biome.env.visibility);
       drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px);
+      const minute = Math.floor(shown / 60);
+      if (minute !== fallMinute) {
+        fallMinute = minute;
+        fall = firstEventUpTo(biome, 'whalefall', (minute + 1) * 60);
+      }
+      if (fall && fall.start <= shown && depth.zone >= 3) {
+        const appear = Math.min(1, (shown - fall.start) / fall.seconds);
+        drawWhaleFall(bctx, W, H, appear, fall.seed, px, ambient, water.dark, floorLine(depth, shown, H));
+      }
 
       // The rare things, when one is under way: behind everything, the
       // large and far; the eye goes on the front, at the edge.
@@ -273,8 +293,15 @@ export default function OceanScene({
         bctx.drawImage(b.canvas, x, y);
       }
       bctx.globalAlpha = 1;
+      // Roughly where the hero jelly hangs, for the turtle to come and look at.
+      const jelly = { x: W / 2, y: H * 0.22 };
       for (const { event, age } of events) {
         if (event.kind === 'storm') drawStorm(bctx, W, H, age, event.seed, px, ambient);
+        else if (event.kind === 'turtle') drawTurtle(bctx, W, H, age, event.seed, px, ambient, water.dark, jelly);
+        else if (event.kind === 'siphonophore') drawSiphonophore(bctx, W, H, age, event.seed, px, ambient, water.dark);
+        else if (event.kind === 'oarfish') drawOarfish(bctx, W, H, age, event.seed, px, ambient, water.dark);
+        else if (event.kind === 'lure') drawLure(bctx, W, H, age, event.seed, px, ambient, water.dark);
+        else if (event.kind === 'dumbo') drawDumbo(bctx, W, H, age, event.seed, px, ambient, water.dark);
       }
 
       // The animals. Anything that wanders over the clock goes faint there.
