@@ -876,7 +876,13 @@ natural-history plate draws one, in the course colour, never a cartoon.
   velum strokes, and the four horseshoes set in a ring like a clover, each
   open toward the middle. The rim is sixteen shallow scallops with eight dark
   sense organs along it, and the outline is inked twice, the second pass
-  fainter and just off the first, the way a pen goes over its own line.
+  fainter and just off the first, the way a pen goes over its own line. The
+  outline is a pen's (`inkLine` in `lib/ocean/pen.ts`): heavier on the side
+  away from the light, breaking where the light is hardest. In the deep it is
+  inked in that sea's one iron-gall ink, like everything else there; the
+  jellyfish drawing on its own keeps an edge in its own colour. Drawn big,
+  a stipple gathers on the bell's shadow side, and on dark water a soft rim
+  of its own glow swells with the beat.
 - **The trails.** Sixteen tentacles taper from the rim to hairline tips, a
   few of them strung with stinging cells; fifteen short fine hairs fill the
   fringe between them; and four oral arms hang in the middle as ribbons that
@@ -1045,11 +1051,15 @@ only ever grows, it never runs backwards, and none of it touches progress.
   the page going from day to night. The course colour tints it while there is
   light, and light shafts come down, slanting and swaying, in the sunlit
   water only. Marine snow drifts up the whole way.
-- **It is painted, not filled** (`lib/ocean/wash.ts`): under the depth's
-  colour there is paper grain, and the pigment lies unevenly, pooling a
-  little darker at the page's edges and in a few soft blooms with the harder
-  rim a wash leaves as it dries. From a step back it is the same water; up
-  close it is a watercolour, like the animals in it are ink.
+- **It is painted, not filled** (`lib/ocean/wash.ts`): the depth's colour is
+  laid as bands of glaze, one over the last, each stopping in a ragged edge
+  with the dried tide line a wash leaves, and under them pools, blooms,
+  brush strokes and paper grain. The darkest water carries the most of it, so
+  the deep is never a flat black. From a step back it is the same water; up
+  close it is a watercolour, like the animals in it are ink. It is painted
+  once to a sheet, and a frame only lays the sheet down.
+- **The shafts are sheaves, not stripes**: uneven soft rays painted once and
+  swayed, and the marine snow inside one comes up brighter, caught in it.
 - **Light off the surface** (`lib/ocean/caustics.ts`): in the sunlit water
   the wobbling net of light a pool floor shows plays over everything, the
   jelly included, strongest near the top and gone as the light is. Faint
@@ -1070,7 +1080,20 @@ only ever grows, it never runs backwards, and none of it touches progress.
   siphonophore chain, fish, eel, ray, squid, and on the floor starfish and
   crawlers) and dozens of traits, with the depth leaning on the dice, so the
   deep ones come out clear-bodied, big-eyed or blind, lit, lured. They are
-  drawn in the jellyfish's ink, course pastels for their colour.
+  drawn like a plate (`lib/ocean/pen.ts`, `sprites.ts`): one iron-gall ink
+  for every line in the sea (`IRON_GALL`, near-black on a light ground,
+  warm off-white on the night one), colour only in the washes; outlines are
+  a pen's, swelling on the side away from the light, thinning and breaking
+  where it is hardest, tapering to a hair at a tentacle's tip; bodies are
+  watercolour, pooled darker at their edge with a strip of bare paper left
+  along the back. Drawn big, the solid ones are shaded in engraved hatching
+  (crossed only in the deepest shadow) and the clear ones in stipple, and
+  the fine anatomy comes in: fin rays, scales, the lateral line, the gill
+  cover, beads on the tentacles, the lights as rings; eyes get an iris and
+  two highlights. Small, on the live timer, they stay line and wash, since a
+  speck has no room for engraving and a phone no time for it. The rocks,
+  coral, kelp, eels, the sightings and the jelly are drawn with the same pen
+  and the same ink, so the whole sea is one hand's.
 - **An ecosystem, not a zoo.** Each zone has a pool of species; half of every
   pool is rolled from the course and comes back every sitting of it (a
   course's sea has its regulars), half from the sitting and is never seen
@@ -1196,19 +1219,38 @@ only ever grows, it never runs backwards, and none of it touches progress.
   squared into a gain, so the bottom half of the line is the quiet half, and
   is kept in `localStorage` (`akada.aquariumVolume`). Escape closes the card
   before it leaves the screen.
-- **Save as wallpaper.** Beside the speaker, only in the deep: a small picture
-  icon draws the water again, once, at the screen's own shape and at least 3x
-  (long side no more than 4096), and saves a PNG named for the depth. Soft
-  screenshots were the reason: the live canvases are held to 2x and a pixel
-  budget. The scene, the jelly and the near animals are laid down in order
-  (`lib/wallpaper.ts`; each canvas registers a layer), with none of the
-  chrome, none of the page's rules or paper bleeds, nothing faded out of the
-  clock's way, the bell open and the colour back if the sitting is held. It is
-  the sea at its best at any depth: no dark closing in round the jelly's pool,
-  and every animal in the colour it has in the light, not drained by the
-  water (`creatureInk(..., vivid)`). The live screen keeps both. On a
-  phone or tablet the share sheet takes it, so it can go straight to Photos;
-  everywhere else, a touchscreen laptop included, it is a plain download.
+- **Keep the picture.** Beside the speaker, only in the deep: a small picture
+  icon opens a sheet (`components/SavePicture.tsx`) with three choices, as
+  eyebrow-labelled rows: **what** (this moment, or the whole sitting), **paper**
+  (cream or night) and **size** (this screen, or a print at 300 dpi in a
+  frame shape: A4/A3/A2, or 8×10/12×18/18×24 in where inches are the habit),
+  with the pixel size in mono under it.
+  - *This moment* is the water drawn again, once, at the screen's real shape
+    and resolution (a 5K screen gets 5K), with none of the chrome, none of the
+    page's rules or paper bleeds, nothing faded out of the clock's way, the
+    bell open and the colour back if the sitting is held: the sea at its best
+    at any depth, every animal in the colour it has in the light
+    (`creatureInk(..., vivid)`). Each canvas registers a layer
+    (`lib/wallpaper.ts`).
+  - *The whole sitting* is the sitting painted as one picture (see "The
+    sitting as a picture" below).
+  - A print sits on cream rag paper (or the night paper) with a margin a
+    little heavier at the foot, a soft deckle where the paint stops, and a
+    pressed plate mark round it, lit from the top left, like an etching. No
+    words, no mark of the app.
+  - Saving takes its time on purpose. There is no spinner: the picture's
+    shape is a pencil outline that fills in strip by strip, with "letting it
+    develop…" in the hand under it and a Stop. Pictures are drawn in strips
+    and written out as they go (`lib/print/`), so a print bigger than a phone
+    will hold as one canvas still saves on a phone.
+  - On a phone or tablet the share sheet takes it (after a second tap, since
+    the sheet needs a fresh one after a long wait), so it can go straight to
+    Photos; everywhere else, a touchscreen laptop included, it is a plain
+    download.
+  - The finish sheet has a quiet line under the recap to keep the sitting's
+    picture, and in Stats every logged sitting that kept its stretches has a
+    small picture mark that opens the same sheet for it, since the sea is
+    rebuilt from the log.
 - **Full screen** is the browser's where there is one (`requestFullscreen`),
   and the header put away where there isn't, which is every iPhone. Either way
   a small exit mark sits in the corner, since the header is where the button
