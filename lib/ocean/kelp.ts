@@ -199,8 +199,9 @@ export function rollKelp(key: string): Kelp {
     const furthest = Math.max(...mine.map((s) => (edge < 0 ? s.x : 1 - s.x)));
     ledges.push({
       edge,
-      // The stragglers' rock is a small one; the forest's runs further out.
-      reach: Math.min(edge === main ? 0.32 : 0.22, furthest + (edge === main ? range(r, 0.08, 0.12) : range(r, 0.04, 0.07))),
+      // The stragglers' rock is a small one, never a match for the forest's
+      // (no pair of curtains); the forest's runs further out.
+      reach: Math.min(edge === main ? 0.32 : 0.13, furthest + (edge === main ? range(r, 0.08, 0.12) : range(r, 0.04, 0.07))),
       top: LEDGE,
       seed: (r() * 4294967296) >>> 0,
     });

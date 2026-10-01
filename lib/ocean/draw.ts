@@ -580,16 +580,26 @@ function floorSprite(w: number, h: number, env: Env, water: Water, px: number): 
   }
   g.globalAlpha = 1;
 
-  // Stipple: silt grains, thicker toward the viewer.
+  // Stipple: silt grains, sparse, about one to every 600 square px, and
+  // gathered toward the lit edge along the top; never a static of dots.
+  // (Its own roll, and the floor's roll stepped on as the old, thick
+  // stipple stepped it, so the stones still lie where they always have.)
   const dots = [new Path2D(), new Path2D(), new Path2D()];
-  const count = Math.round((w * depth) / (px * px * 22));
-  for (let i = 0; i < count; i++) {
-    const x = r() * w;
+  for (let i = Math.round((w * depth) / (px * px * 22)); i > 0; i--) {
+    r();
     const t = Math.pow(r(), 0.7);
-    const y = yAt(x) - 2 * px + t * (depth + 6 * px);
     if (r() > 0.25 + 0.75 * t) continue;
-    const rad = (0.35 + 0.5 * r()) * px * (0.7 + 0.6 * t);
-    const d = dots[Math.min(2, Math.floor(r() * 3))];
+    r();
+    r();
+  }
+  const sr = mulberry32(hash32('floor-silt', env.shafts, env.shaftTilt));
+  const count = Math.round((w * depth) / (px * px * 600));
+  for (let i = 0; i < count; i++) {
+    const x = sr() * w;
+    const t = Math.pow(sr(), 1.8);
+    const y = yAt(x) + 1 * px + t * depth;
+    const rad = (0.35 + 0.45 * sr()) * px * (0.8 + 0.4 * t);
+    const d = dots[Math.min(2, Math.floor(sr() * 3))];
     d.moveTo(x + rad, y);
     d.arc(x, y, rad, 0, Math.PI * 2);
   }
@@ -978,25 +988,48 @@ function whaleShadow(len: number, blur: number, color: string): { canvas: HTMLCa
   const key = `${Math.round(len)}|${Math.round(blur * 10)}|${color}`;
   const hit = whaleShadows.find((s) => s.key === key);
   if (hit) return hit;
-  // Kept small, so the blur is a few of its own pixels: it is soft anyway,
-  // and scaled up it is softer.
-  const q = Math.max(0.06, Math.min(1, 3 / Math.max(1, blur)));
+  // Softened by drawing it small and letting it be scaled up, rather than
+  // by a filter (which not every browser has, and which some scale with
+  // the transform): drawn sharp at four pixels to the blur, then averaged
+  // down to about one, and scaled up again where it is placed.
   const pad = blur * 3;
   const x0 = -0.57 * len - pad;
   const y0 = -WHALE_TOP * len - pad;
-  const c = scratch((1.09 * len + pad * 2) * q, ((WHALE_TOP + WHALE_BOTTOM) * len + pad * 2) * q);
-  const g = c?.getContext('2d');
-  if (c && g) {
-    g.scale(q, q);
+  const bw = 1.09 * len + pad * 2;
+  const bh = (WHALE_TOP + WHALE_BOTTOM) * len + pad * 2;
+  const q0 = Math.min(1, 4 / Math.max(1, blur));
+  const q = Math.min(1, 1.1 / Math.max(1, blur));
+  const sharp = scratch(bw * q0, bh * q0);
+  const g = sharp?.getContext('2d');
+  let c: HTMLCanvasElement | null = null;
+  if (sharp && g) {
+    g.scale(q0, q0);
     g.translate(-x0, -y0);
-    g.filter = `blur(${(blur * q).toFixed(2)}px)`;
     g.scale(len, len);
-    const path = smoothPath(WHALE_BODY, true, 4);
-    path.addPath(smoothPath(WHALE_FLIPPER, true, 4));
+    // Body and flipper filled apart: wound opposite ways, one path would
+    // leave their overlap a hole.
     g.fillStyle = color;
-    g.fill(path);
+    g.fill(smoothPath(WHALE_BODY, true, 4));
+    g.fill(smoothPath(WHALE_FLIPPER, true, 4));
+    // Down in two halvings, each averaging, so no edge survives as a step.
+    let src: HTMLCanvasElement = sharp;
+    let k = q0;
+    while (k / 2 >= q * 0.99) {
+      const next = scratch(bw * k / 2, bh * k / 2);
+      const ng = next?.getContext('2d');
+      if (!next || !ng) break;
+      ng.imageSmoothingEnabled = true;
+      ng.imageSmoothingQuality = 'high';
+      ng.drawImage(src, 0, 0, next.width, next.height);
+      src = next;
+      k /= 2;
+    }
+    c = src;
+    const made = { key, canvas: c, q: c.width / bw, x0, y0 };
+    whaleShadows = [made, ...whaleShadows].slice(0, 2);
+    return made;
   }
-  const made = { key, canvas: c && g ? c : null, q, x0, y0 };
+  const made = { key, canvas: null, q: 1, x0, y0 };
   whaleShadows = [made, ...whaleShadows].slice(0, 2);
   return made;
 }
@@ -1004,7 +1037,8 @@ function whaleShadow(len: number, blur: number, color: string): { canvas: HTMLCa
 /**
  * A whale, far overhead: only its shadow against the light, going the way
  * the water goes, slowly, across the whole page. Always the whole animal,
- * head, flipper and flukes, about half the page's width long; soft, its
+ * head, flipper and flukes, 0.6 of the region's width long (or 0.62 of its
+ * longer side, if that is less), which is about half the page's; soft, its
  * edge blurred a hundredth of the page's short side; and faint, an eighth
  * darker than the paper, or a seventh darker than the night's water.
  *
@@ -1017,7 +1051,7 @@ export function drawWhale(ctx: CanvasRenderingContext2D, w: number, h: number, a
   const a = envelope(age, 0.15, 0.15) * (dark ? 0.15 : 0.12);
   if (a <= 0) return;
   const blur = Math.max(1.5 * px, 0.01 * (page ?? Math.min(w, h)));
-  const len = Math.max(20 * px, Math.min(w * 0.52, (h - blur * 4) / (WHALE_TOP + WHALE_BOTTOM)));
+  const len = Math.max(20 * px, Math.min(w * 0.6, Math.max(w, h) * 0.62, (h - blur * 4) / (WHALE_TOP + WHALE_BOTTOM)));
   const travel = w + len * 2;
   const x = dir > 0 ? -len + age * travel : w + len - age * travel;
   const top = WHALE_TOP * len + blur * 2;
@@ -1032,13 +1066,14 @@ export function drawWhale(ctx: CanvasRenderingContext2D, w: number, h: number, a
   // Gliding: the faintest pitch, as it rises and settles.
   ctx.rotate(Math.sin(ambient * 0.21 + (seed % 13)) * 0.012);
   if (shadow.canvas) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(shadow.canvas, shadow.x0, shadow.y0, shadow.canvas.width / shadow.q, shadow.canvas.height / shadow.q);
   } else {
     ctx.scale(len, len);
-    const path = smoothPath(WHALE_BODY, true, 4);
-    path.addPath(smoothPath(WHALE_FLIPPER, true, 4));
     ctx.fillStyle = dark ? '#000000' : '#2A3438';
-    ctx.fill(path);
+    ctx.fill(smoothPath(WHALE_BODY, true, 4));
+    ctx.fill(smoothPath(WHALE_FLIPPER, true, 4));
   }
   ctx.restore();
 }
@@ -1279,20 +1314,16 @@ function paintEyeSkin(ctx: CanvasRenderingContext2D, re: number, seed: number, p
     });
   }
 
-  // The fold of skin over the eye, flatter than the ball and off toward the
-  // body, and a short crease under it: the skin's own lines, not rings.
+  // A single fold of skin over the eye, short, flatter than the ball and
+  // off toward the body: the skin's own line, never a ring round it.
   const fold: number[] = [];
-  const crease: number[] = [];
   for (let i = 0; i <= 10; i++) {
     const t = i / 10;
-    const a = -Math.PI / 2 + out * (-0.75 + t * 1.25);
-    fold.push(cx + out * re * 0.25 + Math.cos(a) * re * 1.55, cy + re * 0.25 + Math.sin(a) * re * 1.5);
-    const b = Math.PI / 2 - out * (-0.25 + t * 0.8);
-    crease.push(cx + out * re * 0.2 + Math.cos(b) * re * 1.35, cy - re * 0.1 + Math.sin(b) * re * 1.35);
+    const a = -Math.PI / 2 + out * (0.05 + t * 0.75);
+    fold.push(cx + out * re * 0.3 + Math.cos(a) * re * 1.6, cy + re * 0.3 + Math.sin(a) * re * 1.55);
   }
   ctx.globalAlpha = 1;
-  inkLine(ctx, fold, false, { width: lidW * 0.75, color: ink, alpha: 0.5, taper: [0.3, 0.4], seed: seed ^ 0xf01d, light, plate: true });
-  inkLine(ctx, crease, false, { width: lidW * 0.55, color: ink, alpha: 0.35, taper: [0.4, 0.4], seed: seed ^ 0xc4ea, light, plate: true });
+  inkLine(ctx, fold, false, { width: lidW * 0.7, color: ink, alpha: 0.4, taper: [0.35, 0.45], seed: seed ^ 0xf01d, light, plate: true });
 }
 
 /** The ball itself, round and open: the lids are laid over it each frame. */
@@ -1350,13 +1381,13 @@ function paintEyeBall(ctx: CanvasRenderingContext2D, re: number, seed: number, p
   // thickest in the middle.
   const pupTop: number[] = [];
   const pupBottom: number[] = [];
-  const pw = re * 0.6;
-  const sag = re * 0.085;
-  const thick = re * 0.2;
+  const pw = re * 0.62;
+  const sag = re * 0.055;
+  const thick = re * 0.17;
   for (let i = 0; i <= 24; i++) {
     const u = -1 + (i / 24) * 2;
-    const yc = cy + re * 0.02 + sag * u * u;
-    const th = thick * Math.pow(1 - u * u, 0.85);
+    const yc = cy + re * 0.06 + sag * u * u;
+    const th = thick * Math.pow(1 - u * u, 0.75);
     pupTop.push(cx + u * pw, yc - th);
     pupBottom.push(cx + u * pw, yc);
   }

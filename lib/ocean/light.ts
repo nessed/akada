@@ -323,6 +323,13 @@ export function drawSnellWindow(
     ripples?: number;
     /** Drawn after the sun or the moon, in the window's own (unsquashed) space: what passes over it. */
     over?: (ctx: CanvasRenderingContext2D) => void;
+    /**
+     * For a print: no darker water ringing the window (by night it reads as
+     * a hard rim), the window's light fading to nothing over the outer
+     * quarter of its radius, and the moon a soft-edged face with no pen
+     * round half of it.
+     */
+    print?: boolean;
   },
 ): void {
   const { cx, cy, sun, moon, dark, seed } = o;
@@ -370,7 +377,7 @@ export function drawSnellWindow(
     const outer = R * 2.6;
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, outer);
     const at = (k: number) => Math.min(1, (R * k) / outer);
-    const top = dark ? 0.16 : 0.05;
+    const top = o.print ? (dark ? 0 : 0.03) : dark ? 0.16 : 0.05;
     g.addColorStop(0, rgba(shadow, 0));
     g.addColorStop(at(0.95), rgba(shadow, 0));
     g.addColorStop(at(1.03), rgba(shadow, top));
@@ -412,8 +419,16 @@ export function drawSnellWindow(
     const rimLift = sun.night ? 0 : 0.35;
     // Luminous at the heart and thinning to nothing at the edge.
     fill.addColorStop(0, rgba(sky, a * 0.9));
-    fill.addColorStop(0.4, rgba(sky, a * 0.72));
-    fill.addColorStop(0.75, rgba(mixHex(sky, '#FFFFFF', rimLift), a * (sun.night ? 0.3 : 0.38)));
+    if (o.print && dark) {
+      // By night in a print: no rim at all, only the light thinning away
+      // over the outer quarter.
+      fill.addColorStop(0.5, rgba(sky, a * 0.78));
+      fill.addColorStop(0.75, rgba(sky, a * 0.55));
+      fill.addColorStop(0.88, rgba(sky, a * 0.2));
+    } else {
+      fill.addColorStop(0.4, rgba(sky, a * 0.72));
+      fill.addColorStop(0.75, rgba(mixHex(sky, '#FFFFFF', rimLift), a * (sun.night ? 0.3 : 0.38)));
+    }
     fill.addColorStop(1, rgba(sky, 0));
     g.fillStyle = fill;
     g.fill(windowPath);
@@ -616,22 +631,60 @@ export function drawSnellWindow(
       ctx.fill();
     }
     const face = moonLitPath(rm, moon);
-    ctx.save();
-    ctx.clip(face);
-    ctx.fillStyle = dark ? '#EEF0EA' : '#F6F1E4';
-    ctx.fillRect(-rm, -rm, rm * 2, rm * 2);
-    // The seas: soft blots, run together, more of them up and to one side.
-    const seas = mulberry32(hash32('moon', 'seas'));
-    ctx.fillStyle = dark ? 'rgba(120, 130, 140, 0.12)' : 'rgba(150, 140, 120, 0.12)';
-    for (let i = 0; i < 16; i++) {
-      const ang = -2.2 + seas() * 2.6;
-      const dist = rm * (0.15 + 0.55 * seas());
+    const seasIn = () => {
+      // The seas: soft blots, run together, more of them up and to one side.
+      const seas = mulberry32(hash32('moon', 'seas'));
+      ctx.fillStyle = dark ? 'rgba(120, 130, 140, 0.12)' : 'rgba(150, 140, 120, 0.12)';
+      for (let i = 0; i < 16; i++) {
+        const ang = -2.2 + seas() * 2.6;
+        const dist = rm * (0.15 + 0.55 * seas());
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(ang) * dist, Math.sin(ang) * dist, rm * (0.08 + seas() * 0.16), rm * (0.06 + seas() * 0.12), seas() * 3, 0, TAU);
+        ctx.fill();
+      }
+    };
+    if (o.print) {
+      // The whole disc, barely there, so the face reads round and never as
+      // a letter; the lit part with its terminator soft, as it is seen
+      // through moving water; the seas inside it.
+      ctx.fillStyle = dark ? 'rgba(200, 210, 225, 0.07)' : 'rgba(120, 130, 140, 0.07)';
       ctx.beginPath();
-      ctx.ellipse(Math.cos(ang) * dist, Math.sin(ang) * dist, rm * (0.08 + seas() * 0.16), rm * (0.06 + seas() * 0.12), seas() * 3, 0, TAU);
+      ctx.arc(0, 0, rm, 0, TAU);
       ctx.fill();
+      ctx.filter = `blur(${Math.max(0.6 * px, rm * 0.1).toFixed(2)}px)`;
+      ctx.fillStyle = dark ? '#EEF0EA' : '#FBF7EC';
+      ctx.fill(face);
+      ctx.filter = 'none';
+      ctx.save();
+      ctx.clip(face);
+      seasIn();
+      ctx.restore();
+      // The pen once round the whole of it, fine and broken, only a little
+      // firmer on the lit side.
+      const rim: number[] = [];
+      for (let i = 0; i <= 60; i++) {
+        const a = (i / 60) * TAU;
+        rim.push(rm * Math.cos(a), rm * Math.sin(a));
+      }
+      inkLine(ctx, rim, true, {
+        width: Math.max(px * 0.5, rm * 0.035),
+        color: dark ? '#F4F0E6' : IRON_GALL.light,
+        alpha: dark ? 0.22 : 0.28,
+        lost: 0.5,
+        swell: 0.3,
+        taper: [0.1, 0.1],
+        seed: hash32('snell', seed, 'rim'),
+        min: px * 0.3,
+      });
+    } else {
+      ctx.save();
+      ctx.clip(face);
+      ctx.fillStyle = dark ? '#EEF0EA' : '#F6F1E4';
+      ctx.fillRect(-rm, -rm, rm * 2, rm * 2);
+      seasIn();
+      ctx.restore();
     }
-    ctx.restore();
-    if (lit > 0.02) {
+    if (lit > 0.02 && !o.print) {
       // The lit limb: the half of the rim on the lit side, in a broken line.
       const waning = moon > 0.5;
       const s = waning ? -1 : 1;

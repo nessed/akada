@@ -514,7 +514,7 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     const P = (u: number, v: number) => [rootX + c * u - sn * v, rootY + sn * u + c * v] as const;
     const outline: number[] = [];
     const prof: [number, number][] = [
-      [0, -0.12], [0.25, -0.22], [0.55, -0.5], [0.8, -0.52], [0.97, -0.25], [1, 0.05], [0.9, 0.4], [0.65, 0.5], [0.4, 0.3], [0.2, 0.18], [0, 0.12],
+      [0, -0.1], [0.25, -0.16], [0.55, -0.48], [0.8, -0.52], [0.97, -0.25], [1, 0.05], [0.9, 0.4], [0.65, 0.48], [0.4, 0.24], [0.2, 0.13], [0, 0.1],
     ];
     for (const [u, v] of prof) outline.push(...P(u * len, v * wid));
     const path = smoothPath(outline, true, 4);
@@ -552,7 +552,7 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   // o'clock, standing out and up; they row together, down and back up.
   const row = 0.42 * flap;
   const finLen = 0.27 * S;
-  const finWid = 0.105 * S;
+  const finWid = 0.095 * S;
 
   // Far side first: its fin, its arms and the web behind.
   // A point on the mantle's surface, from its own frame (u across, v down).
@@ -671,6 +671,12 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   // face looking out.
   const er = Math.max(0.8 * px, MW * 0.036);
   const [ex, ey] = onMantle(MW * 0.3, MH * 0.1);
+  // Too small to show as an eye, it would only be a dot under two ears:
+  // left out.
+  if (er < 1.8 * px) {
+    ctx.restore();
+    return;
+  }
   const bulge: number[] = [];
   for (let k = 0; k <= 10; k++) {
     const a = Math.PI * (1.1 + (k / 10) * 0.8);
@@ -912,8 +918,8 @@ function topOf(tops: Pt[], x: number): number {
   return best[1];
 }
 
-/** How much the floor is foreshortened: we look down on it at about 25°. */
-const FORE = 0.42;
+/** How much the floor is foreshortened: we look down on it at about 20°. */
+const FORE = 0.35;
 
 /**
  * The bones, in the drawing's own frame: the skull's tip at the origin on
@@ -951,11 +957,13 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   // to the tail.
   const X0 = 0.275;
   const X1 = 0.975;
-  const bend = 0.06 + r() * 0.025;
+  // It lies just in front of the floor's line, so the far ribs reach back
+  // to about the line and the near ones come forward over the floor.
+  const bend = 0.055 + r() * 0.02;
   const ph0 = (r() - 0.5) * 0.6;
   const zs = (X: number) => {
     const u = (X - X0) / (X1 - X0);
-    return -0.03 + bend * (Math.sin(Math.PI * 1.15 * u + ph0) - Math.sin(ph0));
+    return 0.05 + bend * (Math.sin(Math.PI * 1.15 * u + ph0) - Math.sin(ph0) - 0.3);
   };
   const slope = (X: number) => (zs(X + 0.005) - zs(X - 0.005)) / 0.01;
   const ZS = zs(X0);
@@ -1010,7 +1018,7 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
       const where = q();
       const sway = (q() - 0.5) * 0.25;
       if (v.gone || missing) continue;
-      const length = (0.085 + 0.065 * Math.sin((Math.PI * (i + 1)) / 11)) * (0.92 + where * 0.16);
+      const length = (0.08 + 0.05 * Math.sin((Math.PI * (i + 1)) / 11)) * (0.92 + where * 0.16);
       // Across the spine and back along it, in the floor's plane.
       const s = slope(v.X);
       const nn = Math.hypot(s, 1);
@@ -1018,22 +1026,22 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
       const nz = (1 / nn) * side;
       const tx = 1 / nn;
       const tz = s / nn;
-      const stand = !near && fate < 0.3 ? 1 : 0;
-      const sweep = 0.32 + sway;
-      const along = (u: number, w: number): [number, number] => [v.X + nx * u + tx * w, v.Z + nz * u + tz * w];
+      const stand = !near && fate < 0.22 ? 1 : 0;
+      const sweep = 0.55 + sway;
+      const out = (u: number, w: number): [number, number] => [v.X + nx * u + tx * w, v.Z + nz * u + tz * w];
       const h0 = v.hv * 0.7 - v.sink;
       const pts: [number, number, number][] = stand
         ? [
-            [...along(0.012, 0), h0],
-            [...along(length * 0.25, length * 0.05), 0.075],
-            [...along(length * 0.8, length * sweep * 0.6), 0.07],
-            [...along(length, length * sweep), 0.012],
+            [...out(0.012, 0), h0],
+            [...out(length * 0.3, -length * 0.02), 0.06],
+            [...out(length * 0.85, length * sweep * 0.4), 0.05],
+            [...out(length * 0.9, length * sweep), 0.008],
           ]
         : [
-            [...along(0.012, 0), h0],
-            [...along(length * 0.35, length * 0.03), h0 * 0.6 + 0.01],
-            [...along(length * 0.8, length * sweep * 0.55), 0.004],
-            [...along(length, length * sweep), 0],
+            [...out(0.012, 0), h0],
+            [...out(length * 0.5, -length * 0.03), h0 * 0.5 + 0.006],
+            [...out(length * 0.98, length * sweep * 0.4), 0.003],
+            [...out(length * 0.9, length * sweep), 0],
           ];
       const cp = C(pts);
       const broken = snap < (stand ? 0.6 : 0.3);
@@ -1044,7 +1052,7 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
       if (stand && !broken) tops.push(cubic(cp, 0.45));
       if (broken) {
         // The piece that fell, lying on the floor just past the break.
-        const [ex, ez] = along(length * (0.6 + end * 0.35), length * sweep * end + 0.015);
+        const [ex, ez] = out(length * (0.6 + end * 0.35), length * sweep * end + 0.015);
         const fa = (q() - 0.5) * 1.2 + Math.atan2(nz, nx);
         const fl = length * (1 - end) * (0.8 + q() * 0.3);
         const frag = C([
@@ -1120,7 +1128,10 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
     const bb = (v.hv / 2) * L;
     const rot = angleAt(v);
     const t = k / (N - 1);
-    const proc = t < 0.8;
+    // Processes either side only on the lumbar vertebrae: on the ribbed ones
+    // the ribs stand for them, and the tail's have none.
+    const proc = k > 10 && t < 0.85;
+    const spine = t < 0.85;
     const salt = 300 + k * 17;
     if (proc) {
       bone(b, [x - a * 0.1, y - bb * 0.2, x - a * 0.05, y - bb * 0.7, x + a * 0.05, y - bb * 1.2], a * 0.42, a * 0.22, salt + 3);
@@ -1137,17 +1148,17 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
     ctx.fill(facePath);
     if (d > 0.3) stipple(ctx, facePath, boundsOf(face), { spacing: Math.max(1.2 * px, bb * 0.12), radius: Math.max(0.3 * px, bb * 0.02), shade: () => 0.55, from: 0.2, color: ink, alpha: 0.35, seed: hash32(seed, salt, 'f') });
     inkLine(ctx, face, true, { width: Math.max(0.5 * px, bb * 0.05), color: ink, alpha: 0.75, seed: hash32(seed, salt, 'fi'), light, plate: true });
-    if (proc) {
+    if (spine) {
       const lean = 0.5 + r() * 0.3 + rot;
-      const len = bb * 1.9 * (0.9 + r() * 0.3) * (1 - t * 0.6) * (r() < 0.2 ? 0.45 : 1);
+      const len = bb * 1.45 * (0.9 + r() * 0.3) * (1 - t * 0.6) * (r() < 0.2 ? 0.45 : 1);
       const sx = x + a * 0.05;
       const sy = y - bb * 0.85;
       const tx = sx + Math.sin(lean) * len;
       const ty = sy - Math.cos(lean) * len;
-      bone(b, [sx, sy, (sx + tx) / 2 - len * 0.05, (sy + ty) / 2, tx, ty], a * 0.55, a * 0.28, salt + 7);
+      bone(b, [sx, sy, (sx + tx) / 2 - len * 0.05, (sy + ty) / 2, tx, ty], a * 0.42, a * 0.22, salt + 7);
       tops.push([tx, ty]);
-      bone(b, [x + a * 0.05, y + bb * 0.3, x + a * 0.12, y + bb * 0.7, x + a * 0.2, y + bb * 1.05], a * 0.42, a * 0.24, salt + 9);
     }
+    if (proc) bone(b, [x + a * 0.05, y + bb * 0.3, x + a * 0.12, y + bb * 0.7, x + a * 0.2, y + bb * 1.05], a * 0.42, a * 0.24, salt + 9);
     tops.push([x, y - bb]);
   };
 
@@ -1171,6 +1182,7 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   // grains on it and a lit crest.
   const hp = mulberry32(hash32('silt-heap', seed));
   const heap: number[] = [];
+  const depthOf: number[] = [];
   const M = 60;
   const p1 = hp() * 6.28;
   const p2 = hp() * 6.28;
@@ -1178,15 +1190,16 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   for (let i = 0; i <= M; i++) {
     const u = (i / M);
     const Xq = X0 - 0.01 + u * (X1 - X0 + 0.04);
-    const bump = 0.003 + 0.004 * Math.max(0, Math.sin(u * 23 + p1)) + 0.003 * Math.max(0, Math.sin(u * 61 + p2)) + 0.012 * u + hp() * 0.002;
-    const edge = Math.min(1, u / 0.06, (1 - u) / 0.06);
+    const bump = 0.003 + 0.003 * Math.max(0, Math.sin(u * 23 + p1)) + 0.002 * Math.max(0, Math.sin(u * 61 + p2)) + 0.006 * u + hp() * 0.002;
+    const edge = Math.min(1, u / 0.06, (1 - u) / 0.2);
     const base = zs(Xq) * FORE + hvAt(Xq) * 0.5 + 0.004;
     heap.push(Xq * L, (base - bump * Math.max(0, edge)) * L);
+    depthOf.push(0.022 * L * Math.max(0.1, edge));
   }
   const heapPath = new Path2D();
   heapPath.moveTo(heap[0], heap[1]);
   for (let i = 2; i < heap.length; i += 2) heapPath.lineTo(heap[i], heap[i + 1]);
-  for (let i = heap.length - 2; i >= 0; i -= 2) heapPath.lineTo(heap[i], heap[i + 1] + 0.022 * L);
+  for (let i = heap.length - 2; i >= 0; i -= 2) heapPath.lineTo(heap[i], heap[i + 1] + depthOf[i / 2]);
   heapPath.closePath();
   const hbox = boundsOf(heap);
   hbox.h += 0.022 * L;
@@ -1194,7 +1207,7 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   fill.addColorStop(0, mixHex(silt, crest, 0.5));
   fill.addColorStop(0.45, silt);
   fill.addColorStop(1, `${silt}00`);
-  ctx.globalAlpha = 0.92;
+  ctx.globalAlpha = 0.8;
   ctx.fillStyle = fill;
   ctx.fill(heapPath);
   ctx.globalAlpha = 1;
@@ -1304,8 +1317,8 @@ export function drawWhaleFall(
     // past the tail, and from above the tallest rib to into the near silt.
     const left = -0.07 * L;
     const right = 1.08 * L;
-    const top = -0.13 * L;
-    const bottom = 0.045 * L;
+    const top = -0.15 * L;
+    const bottom = 0.085 * L;
     const canvas = scratch(right - left, bottom - top);
     const g = canvas?.getContext('2d');
     const tops: Pt[] = [];

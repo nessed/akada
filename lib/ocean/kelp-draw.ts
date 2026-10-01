@@ -22,7 +22,7 @@
 import { mixHex } from '../fan';
 import { zoneMid } from './depth';
 import { KELP_ROCK, KELP_SCALE, KELP_SURFACE, kelpDescent, kelpInView, type Kelp, type KelpLedge, type KelpStalk } from './kelp';
-import { inkRock, rockShape, rockStyle, type RockShape } from './outcrop-sprite';
+import { inkRock, rockFoot, rockShape, rockStyle, type RockShape } from './outcrop-sprite';
 import { waterAt, type Water } from './palette';
 import { detailFor, inkLine, LIGHT, stipple } from './pen';
 
@@ -76,10 +76,15 @@ export interface KelpOptions {
 /**
  * The kelp forest at the edges of the sunlit water (see `kelp.ts`): the far
  * stalks, then the ledge, then the nearer stalks standing on it. Each stalk
- * sways on the slow clock, the sway travelling up it and growing toward the
- * top, and leans with the current; each blade flutters a little on its own.
- * `detail` is the governor's say: without it the blades lose their ruffle
- * and the rock its shading.
+ * leans a few degrees out from its wall and winds as it goes up, sways on
+ * the slow clock, the sway travelling up it and growing toward the top, and
+ * where it reaches the surface it bends over and lies along it, sagging a
+ * little, its tip trailing down and away past the rest of the clump. Its
+ * blades are opaque, laid back to front: those behind the stipe, the stipe,
+ * then those in front and the canopy's. `detail` is the governor's say:
+ * without it the blades lose their ruffle and the rock its shading.
+ * `current` is kept for the callers; at a forest's edge the water runs out
+ * from the wall, so the whole clump streams that way.
  */
 export function drawKelp(
   ctx: CanvasRenderingContext2D,
@@ -95,6 +100,7 @@ export function drawKelp(
   detail: boolean,
   opts: KelpOptions = {},
 ) {
+  void current;
   if (!kelpInView(focusSeconds)) return;
   const down = kelpDescent(focusSeconds);
   // The surface as the forest knows it: where it was at the start, carried
@@ -112,20 +118,41 @@ export function drawKelp(
   // The light goes, and the colour with it: drained toward the water.
   const fade = 0.45 + 0.55 * water.light;
   const drain = (1 - water.light) * 0.45;
+  // What is behind the kelp, for laying it opaque: a stalk further back is
+  // its colours taken toward the water, never the water seen through it.
+  const behind = mixHex(water.top, water.bottom, 0.5);
   const inksAt = (layer: number): Inks => {
+    const thin = 1 - ALPHA[layer] * fade;
     const into = (c: string) => {
       let v = mixHex(c, water.bottom, drain + HAZE[layer] * 0.6);
       if (water.dark) v = mixHex(v, water.bottom, 0.3);
-      return v;
+      return mixHex(v, behind, thin);
     };
     return {
       gold: into(GOLD),
       brown: into(BROWN),
-      line: mixHex(pen.line, water.bottom, HAZE[layer] * 0.7),
+      line: mixHex(mixHex(pen.line, water.bottom, HAZE[layer] * 0.7), behind, thin * 0.8),
       float: into(mixHex(GOLD, '#EAD9A6', 0.3)),
     };
   };
   const rocks = kelp.ledges.map((l) => ledgeRock(l, w, h, px));
+  // The side with fewer stalks is a few stragglers back in the haze; its rock is too.
+  const count = (e: -1 | 1) => kelp.stalks.filter((s) => (s.x < 0.5 ? -1 : 1) === e).length;
+  const main = kelp.ledges.length > 1 ? (count(-1) >= count(1) ? -1 : 1) : kelp.ledges[0]?.edge;
+  // Where each side's clump ends toward the open water: its stalks' tops,
+  // leaned. The canopies trail on past it.
+  const edgeOf = (e: -1 | 1) => {
+    let far = 0;
+    for (const s of kelp.stalks) {
+      if ((s.x < 0.5 ? -1 : 1) !== e || s.layer === 0) continue;
+      far = Math.max(far, (e < 0 ? s.x : 1 - s.x) * w + leanOf(s, w, h));
+    }
+    return e < 0 ? far : w - far;
+  };
+  const edges = new Map<number, number>([
+    [-1, edgeOf(-1)],
+    [1, edgeOf(1)],
+  ]);
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -137,12 +164,31 @@ export function drawKelp(
     return (ledge.top - down) * h + rock.top(u) + 2 * px;
   };
   const draw = (s: KelpStalk) =>
-    drawStalk(ctx, w, h, s, stalkAt(s), surface, inksAt(s.layer), ambient, current, px, ALPHA[s.layer] * fade, clear, detail, pen, page);
+    drawStalk(ctx, w, h, s, stalkAt(s), surface, inksAt(s.layer), ambient, px, clear, detail, pen, page, edges.get(s.x < 0.5 ? -1 : 1)!);
   for (const s of kelp.stalks) if (s.layer === 0) draw(s);
-  kelp.ledges.forEach((l, i) => drawLedge(ctx, w, h, l, rocks[i], down, water, px, 0.92 * fade, detail));
+  kelp.ledges.forEach((l, i) => drawLedge(ctx, w, h, l, rocks[i], down, water, px, (l.edge === main ? 0.92 : 0.55) * fade, detail));
   for (const s of kelp.stalks) if (s.layer > 0) draw(s);
   ctx.restore();
 }
+
+/** A stalk's own dice, off its phase, so the forest's rolls stay as they were. */
+const dice = (s: KelpStalk, k: number) => {
+  const v = Math.sin(s.phase * 91.7 + k * 12.9898) * 43758.5453;
+  return v - Math.floor(v);
+};
+
+/** How far a stalk leans out from its wall by the time it reaches the
+    surface, in device px: 3 to 10 degrees, but never more than about a
+    seventh of the frame's width, so a tall phone's forest stays at its wall. */
+function leanOf(s: KelpStalk, w: number, h: number): number {
+  const rise = Math.max(0, (s.base - KELP_SURFACE - 0.05) * h);
+  const reach = Math.min(rise, s.height * h);
+  const deg = 3 + 7 * dice(s, 1);
+  return Math.min(Math.tan((deg * Math.PI) / 180) * reach, 0.14 * w);
+}
+
+/** Where the ledge's wash runs dry, as shares of its height: low, since the forest stands on it. */
+const LEDGE_FADE: [number, number] = [0.78, 1.12];
 
 /** The ledge's rock, the same shape however far down the page it is: a
     heap of boulders at least three quarters as tall as it is wide, however
@@ -177,7 +223,7 @@ function drawLedge(
   if (!s) {
     const pad = 4 * px;
     const cw = Math.min(4096, Math.ceil(shape.hi + pad * 2));
-    const ch = Math.min(4096, Math.ceil(shape.height * 1.15 - Math.min(0, shape.minY) + pad * 2));
+    const ch = Math.min(4096, Math.ceil(rockFoot(shape, { fade: LEDGE_FADE }) - Math.min(0, shape.minY) + pad * 2));
     const canvas = document.createElement('canvas');
     canvas.width = cw;
     canvas.height = ch;
@@ -187,7 +233,7 @@ function drawLedge(
     const oy = pad - Math.min(0, shape.minY);
     const x0 = dir > 0 ? pad : cw - pad;
     const zw = waterAt(zoneMid(0), water.dark ? 'night' : 'paper', '#A8BCC9');
-    inkRock(c, shape, { x0, y0: oy, dir }, { ...rockStyle(zw, water.dark, px, d, ledge.seed), barnacles: true, fade: [0.78, 1.12] });
+    inkRock(c, shape, { x0, y0: oy, dir }, { ...rockStyle(zw, water.dark, px, d, ledge.seed), barnacles: true, fade: LEDGE_FADE });
     // The rock's wall is 3% of the page out past the edge.
     const left = dir > 0 ? -0.03 * w - pad : w + 0.03 * w + pad - cw;
     s = { canvas, left, oy };
@@ -200,6 +246,11 @@ function drawLedge(
   ctx.restore();
 }
 
+/* A stalk's centreline for one frame, reused across stalks and frames. */
+let lineX = new Float64Array(0);
+let lineY = new Float64Array(0);
+let lineS = new Float64Array(0);
+
 function drawStalk(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -209,55 +260,115 @@ function drawStalk(
   surface: number,
   ink: Inks,
   ambient: number,
-  current: number,
   px: number,
-  alpha: number,
   clear: Rect[] | undefined,
   detail: boolean,
   pen: Pen,
   page: number,
+  edgeX: number,
 ) {
   const len = stalk.height * h;
-  // Only the part of the stalk that is on the page.
-  if (foot - len > h * 1.06 || foot < -h * 0.3) return;
   const scale = KELP_SCALE[stalk.layer];
   const near = stalk.layer === 2;
   const far = stalk.layer === 0;
-  // Its canopy lies along the surface into the page, away from its own wall.
+  // It leans out from its wall, and its canopy and blades stream that way.
   const inward = stalk.x < 0.5 ? 1 : -1;
   const x0 = stalk.x * w;
   const [wa, wf, wp] = stalk.wave;
-  // Where it bends over at the surface, and how tight the bend is.
-  const bendR = 0.05 * h;
+  // Where it bends over at the surface, and how wide the bend is: never a hook.
+  const bendR = Math.max(0.05 * h, 0.035 * page) * (0.75 + 0.7 * dice(stalk, 5));
   const rise = foot - (surface + bendR);
-  const arc = (Math.PI / 2) * bendR;
-  // The canopy lies a little way along the surface, never across the page.
-  const reachOut = Math.min(len, rise < 0 ? len : rise + arc + (0.07 + 0.1 * ((stalk.phase * 7) % 1)) * w * (far ? 0.6 : 1));
-  /** A point d device px up the stipe, and the way it is going. */
-  const at = (dd: number) => {
+  // Long enough to reach the surface, it lies along it as canopy.
+  const canopy = rise > 0 && len > rise;
+  const upright = canopy ? rise : len;
+  const tanLean = upright > 0 ? (inward * leanOf(stalk, w, h)) / Math.max(1, rise > 0 ? Math.min(rise, len) : len) : 0;
+  // The canopy: from the bend out along the surface, sagging as it goes,
+  // then trailing down and away past the clump's edge.
+  const sag = (0.01 + 0.02 * dice(stalk, 3)) * page;
+  const past = (0.05 + 0.07 * dice(stalk, 2)) * w * (far ? 0.6 : 1);
+  const dive = Math.tan(((25 + 12 * dice(stalk, 4)) * Math.PI) / 180);
+  // Only the stretch of it on the page (and a little over) is worth tracing.
+  if (foot < -h * 0.3 || foot - upright - bendR - sag - h * 0.2 > h * 1.06) return;
+
+  /* The centreline, foot to tip, a point every few device px. */
+  const step = 3 * px;
+  const cap = Math.ceil((upright + bendR * 2 + w) / step) + 8;
+  if (lineX.length < cap) {
+    lineX = new Float64Array(cap * 2);
+    lineY = new Float64Array(cap * 2);
+    lineS = new Float64Array(cap * 2);
+  }
+  // Each point's place along it: up the upright stretch, its height over the
+  // holdfast; from the bend on, that plus the way it has come. The same
+  // point of the stalk has the same place in every frame it is drawn in,
+  // however much of it below is traced, so a blade never jumps at a seam.
+  let n = 0;
+  const push = (x: number, y: number, at?: number) => {
+    if (n >= lineX.length) return;
+    lineS[n] = at ?? (n ? lineS[n - 1] + Math.hypot(x - lineX[n - 1], y - lineY[n - 1]) : 0);
+    lineX[n] = x;
+    lineY[n] = y;
+    n++;
+  };
+  const stemAt = (dd: number) => {
     const d = dd / h;
     const give = Math.min(1, d / 1.1);
-    // The stipe winds as it goes up, and the slow sway runs up it.
+    // The stipe winds as it goes up, drifts on a longer swing, and the slow sway runs up it.
     const sway =
       (Math.sin(ambient * 0.42 + stalk.phase - d * 2.4) * 0.02 + Math.sin(ambient * 0.9 + stalk.phase * 1.7 - d * 5) * 0.006) * h * give;
     const wind = wa * h * Math.sin(d * wf + wp) * Math.min(1, d / 0.15);
-    const lean = current * 0.04 * w * give * give;
-    if (dd <= rise || rise < 0) {
-      const x = x0 + sway + wind + lean;
-      return { x, y: foot - dd };
+    const drift = 0.022 * h * Math.sin(d * 1.7 + stalk.phase * 2.3) * Math.min(1, d / 0.3);
+    return x0 + sway + wind + drift + tanLean * dd;
+  };
+  // Below the page it need not be traced point by point.
+  const from = Math.max(0, foot - h * 1.1);
+  for (let dd = from; dd < upright; dd += step) {
+    if (foot - dd < -h * 0.15 && !canopy) break;
+    push(stemAt(dd), foot - dd, dd);
+  }
+  push(stemAt(upright), foot - upright, upright);
+  if (canopy) {
+    // Over the bend: from going up to going out along the surface.
+    const ax = lineX[n - 1];
+    const ay = lineY[n - 1];
+    const cx = ax + inward * 0.12 * bendR;
+    const cy = surface + 0.05 * bendR;
+    const bx = ax + inward * bendR;
+    const by = surface + 0.15 * sag;
+    for (let k = 1; k <= 8; k++) {
+      const t = k / 8;
+      const u = 1 - t;
+      push(u * u * ax + 2 * u * t * cx + t * t * bx, u * u * ay + 2 * u * t * cy + t * t * by);
     }
-    // Over the bend and out along the surface, the winding dying away into it.
-    const keep = Math.max(0, 1 - (dd - rise) / (bendR * 2));
-    const bx = x0 + (sway + lean) + wind * keep;
-    if (dd <= rise + arc) {
-      const phi = (dd - rise) / bendR;
-      return { x: bx + inward * bendR * (1 - Math.cos(phi)), y: surface + bendR - bendR * Math.sin(phi) };
+    // Out to past the clump's edge: floating, then diving.
+    const span = Math.max(0.05 * w, inward * (edgeX + inward * past - bx));
+    const float = span * 0.58;
+    const tail = span - float;
+    for (let s = step; s <= span; s += step) {
+      const x = bx + inward * s;
+      const ripple = Math.sin(ambient * 1.3 + s / (0.03 * h) + stalk.phase) * 0.003 * h;
+      const y =
+        s <= float
+          ? by + (sag - 0.15 * sag) * Math.sin((Math.PI / 2) * (s / float)) + ripple * (1 - s / span)
+          : by + 0.85 * sag + dive * tail * Math.pow((s - float) / tail, 1.35);
+      push(x, y);
     }
-    const along = dd - rise - arc;
-    return {
-      x: bx + inward * (bendR + along),
-      y: surface + Math.sin(ambient * 1.3 + along / (0.03 * h) + stalk.phase) * 0.004 * h + Math.min(1, along / (0.1 * h)) * 0.006 * h,
-    };
+  }
+  if (n < 2) return;
+  const total = lineS[n - 1];
+  const s0 = lineS[0];
+  /** A point d device px along the centreline, and the way it is going. */
+  let hint = 0;
+  const at = (d: number) => {
+    const s = Math.max(s0, Math.min(total, d));
+    if (lineS[hint] > s) hint = 0;
+    while (hint < n - 2 && lineS[hint + 1] < s) hint++;
+    const seg = lineS[hint + 1] - lineS[hint] || 1;
+    const f = (s - lineS[hint]) / seg;
+    const tx = lineX[hint + 1] - lineX[hint];
+    const ty = lineY[hint + 1] - lineY[hint];
+    const tl = Math.hypot(tx, ty) || 1;
+    return { x: lineX[hint] + tx * f, y: lineY[hint] + ty * f, ux: tx / tl, uy: ty / tl };
   };
   const big = pen.d > 0.4 && !far;
   const inClear = (x: number, y: number) => {
@@ -266,36 +377,373 @@ function drawStalk(
     const v = y / h;
     return clear.some((r) => u > r.x && u < r.x + r.w && v > r.y && v < r.y + r.h);
   };
+  const seed = Math.floor(stalk.phase * 1000);
+
+  /* The blades: geometry for one, into the scratch edges. */
+  const SEG = big ? 28 : detail ? 10 : 7;
+  const edgeA: [number, number][] = [];
+  const edgeB: [number, number][] = [];
+  const mid: [number, number][] = [];
+  for (let k = 0; k <= SEG; k++) {
+    edgeA.push([0, 0]);
+    edgeB.push([0, 0]);
+    mid.push([0, 0]);
+  }
+  // Measured against the page, a picture drawn a frame at a time has blades
+  // bigger against its frame than the live screen's; it draws fewer of them.
+  const ratio = page / h;
+  const stride = ratio > 1.5 ? 2 * Math.floor(ratio / 2) + 1 : 1;
+  const [lx, ly] = LIGHT;
+  const flow = inward;
+  const shapeOf = (b: KelpStalk['blades'][number], j: number) => {
+    // Spread over the whole of it from the holdfast, canopy and all.
+    const sAt = b.t * total;
+    if (sAt < s0) return null;
+    const p = at(sAt);
+    const L = b.len * page;
+    const W = b.width * page;
+    if (p.y < -L * 1.2 || p.y > h + L * 0.7 || p.x < -L * 1.2 || p.x > w + L * 1.2) return null;
+    const { ux, uy } = p;
+    const onCanopy = canopy && p.y < surface + sag + 0.04 * h && uy > -0.6;
+    // Off the stipe at an angle, then taken by the current: streaming away
+    // downstream and hanging as it goes. Off the canopy they trail down and away.
+    const flutter = Math.sin(ambient * 1.1 + stalk.phase + j * 1.3) * 0.08;
+    const off = b.side * b.angle;
+    let d0x = ux * Math.cos(off) - uy * Math.sin(off);
+    let d0y = ux * Math.sin(off) + uy * Math.cos(off);
+    const downstream = b.side * flow > 0 || onCanopy;
+    if (onCanopy) {
+      d0x = flow * 0.4 + d0x * 0.15;
+      d0y = 1;
+    } else if (downstream) {
+      // Out from the stipe and a little up, leaning already the way it will stream.
+      d0x = d0x * 0.9 + flow * 0.15;
+      d0y = Math.min(-0.3, d0y * 0.8);
+    } else {
+      // Upstream, it leaves level and hangs.
+      d0x = b.side * 0.85;
+      d0y = -0.05 + 0.15 * b.droop;
+    }
+    const dl = Math.hypot(d0x, d0y) || 1;
+    d0x /= dl;
+    d0y /= dl;
+    let dex = downstream ? flow * (1 - 0.35 * b.droop) + flutter : b.side * 0.22 + flow * 0.2 + flutter;
+    let dey = downstream ? 0.1 + 0.45 * b.droop : 0.75 + 0.25 * b.droop;
+    if (onCanopy) {
+      dex = flow * (0.75 + 0.25 * b.droop) + flutter;
+      dey = 0.55 + 0.35 * b.droop;
+    }
+    const el = Math.hypot(dex, dey);
+    dex /= el;
+    dey /= el;
+    // The bladder, an ellipse along the way the blade leaves.
+    const fr = Math.max(1.1 * px, L * 0.06);
+    const fx = p.x + d0x * fr * 0.9;
+    const fy = p.y + d0y * fr * 0.9;
+    const bx = fx + d0x * fr * 0.95;
+    const by = fy + d0y * fr * 0.95;
+    // The blade's line: a quadratic out along the first way and round into the second.
+    const cx = bx + d0x * L * 0.35;
+    const cy = by + d0y * L * 0.35;
+    const ex = bx + d0x * L * 0.25 + dex * L * 0.82;
+    const ey = by + d0y * L * 0.25 + dey * L * 0.82;
+    const curl = b.curl * L;
+    for (let k = 0; k <= SEG; k++) {
+      const u = k / SEG;
+      const v = 1 - u;
+      let mx = v * v * bx + 2 * v * u * cx + u * u * ex;
+      let my = v * v * by + 2 * v * u * cy + u * u * ey;
+      const tx = 2 * v * (cx - bx) + 2 * u * (ex - cx);
+      const ty = 2 * v * (cy - by) + 2 * u * (ey - cy);
+      const tl = Math.hypot(tx, ty) || 1;
+      const nx = -ty / tl;
+      const ny = tx / tl;
+      mx += nx * curl * u * u;
+      my += ny * curl * u * u;
+      // A strap: out quickly from the bladder, near enough even down its
+      // length, then drawn in to a blunt point over its last third.
+      const body = (W / 2) * Math.pow(Math.min(1, u / 0.14), 0.6) * (u > 0.66 ? Math.pow(Math.cos(((u - 0.66) / 0.34) * (Math.PI / 2)), 0.65) : 1) * (0.9 + 0.1 * Math.sin(u * 3));
+      let ra = 0;
+      let rb = 0;
+      if (k > 0 && k < SEG && (big || detail)) {
+        // The ruffled margin: a quick frill riding a slower one, each edge its own.
+        // Uneven: the frills bunch and spread along it, never a saw's teeth.
+        const f = (u * L) / (0.01 * page);
+        const g = f + 0.6 * Math.sin(f * 0.9 + b.ph);
+        ra = (0.2 * Math.sin(g * 6.28 + b.ph) + 0.08 * Math.sin(f * 11.3 + b.ph * 1.7)) * body;
+        rb = (0.17 * Math.sin(g * 5.1 + b.ph + 2.1) + 0.07 * Math.sin(f * 9.7 + b.ph)) * body;
+      }
+      edgeA[k][0] = mx + nx * (body + ra);
+      edgeA[k][1] = my + ny * (body + ra);
+      edgeB[k][0] = mx - nx * (body + rb);
+      edgeB[k][1] = my - ny * (body + rb);
+      mid[k][0] = mx;
+      mid[k][1] = my;
+    }
+    // Which half faces away from the light: that half is the shadow.
+    const n0x = edgeA[SEG >> 1][0] - mid[SEG >> 1][0];
+    const n0y = edgeA[SEG >> 1][1] - mid[SEG >> 1][1];
+    return { bx, by, fx, fy, fr, d0x, d0y, aDark: n0x * lx + n0y * ly > 0, faint: inClear(p.x, p.y), front: onCanopy || b.side === inward };
+  };
+  const trace = (target: Path2D, edge: [number, number][], back: boolean) => {
+    if (!back) {
+      for (let k = 1; k <= SEG; k++) {
+        const [ax, ay] = edge[k - 1];
+        const [qx, qy] = edge[k];
+        target.quadraticCurveTo(ax, ay, (ax + qx) / 2, (ay + qy) / 2);
+      }
+      target.lineTo(edge[SEG][0], edge[SEG][1]);
+    } else {
+      for (let k = SEG - 1; k >= 0; k--) {
+        const [ax, ay] = edge[k + 1];
+        const [qx, qy] = edge[k];
+        target.quadraticCurveTo(ax, ay, (ax + qx) / 2, (ay + qy) / 2);
+      }
+    }
+  };
+  const outlineOf = (g: { bx: number; by: number }, path: Path2D, shadow: Path2D, aDark: boolean) => {
+    path.moveTo(g.bx, g.by);
+    trace(path, edgeA, false);
+    trace(path, edgeB, true);
+    path.closePath();
+    shadow.moveTo(g.bx, g.by);
+    trace(shadow, aDark ? edgeA : edgeB, false);
+    for (let k = SEG; k >= 0; k--) shadow.lineTo(mid[k][0], mid[k][1]);
+    shadow.closePath();
+  };
+
+  /* One blade, finished, over whatever is already down: drawn big. */
+  const finish = (g: NonNullable<ReturnType<typeof shapeOf>>, j: number) => {
+    const a = g.faint ? 0.3 : 1;
+    const path = new Path2D();
+    const shadow = new Path2D();
+    outlineOf(g, path, shadow, g.aDark);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = ink.gold;
+    ctx.fill(path);
+    ctx.fillStyle = ink.brown;
+    ctx.globalAlpha = a * 0.75;
+    ctx.fill(shadow);
+    // The pigment pooled at the margin as the wash dried.
+    ctx.save();
+    ctx.clip(path);
+    ctx.strokeStyle = ink.brown;
+    ctx.globalAlpha = a * 0.5;
+    ctx.lineWidth = 2 * px * scale;
+    ctx.stroke(path);
+    // A stipple in the shadow half, thickest toward the margin.
+    let sx0 = Infinity;
+    let sy0 = Infinity;
+    let sx1 = -Infinity;
+    let sy1 = -Infinity;
+    for (const [x, y] of g.aDark ? edgeA : edgeB) {
+      sx0 = Math.min(sx0, x);
+      sy0 = Math.min(sy0, y);
+      sx1 = Math.max(sx1, x);
+      sy1 = Math.max(sy1, y);
+    }
+    for (const [x, y] of mid) {
+      sx0 = Math.min(sx0, x);
+      sy0 = Math.min(sy0, y);
+      sx1 = Math.max(sx1, x);
+      sy1 = Math.max(sy1, y);
+    }
+    ctx.restore();
+    if (!g.faint && sx1 > sx0 && sy1 > sy0) {
+      stipple(ctx, shadow, { x: sx0, y: sy0, w: sx1 - sx0, h: sy1 - sy0 }, {
+        spacing: 1.9 * px,
+        radius: 0.36 * px,
+        shade: () => 0.6,
+        color: pen.dark ? mixHex(ink.brown, '#000000', 0.5) : ink.line,
+        alpha: pen.dark ? 0.6 : 0.45,
+        seed: seed + j * 7,
+      });
+    }
+    // The midrib and, here and there, a short soft crease across it from
+    // near the midrib, the way a giant kelp's blade is wrinkled, never a row.
+    const veins = new Path2D();
+    veins.moveTo(g.bx, g.by);
+    for (let k = 1; k < SEG; k++) veins.lineTo(mid[k][0], mid[k][1]);
+    const folds = new Path2D();
+    for (let k = 3; k < SEG - 3; k++) {
+      const hsh = Math.sin(k * 12.9898 + j * 78.233 + stalk.blades[j].ph) * 43758.5453;
+      const v = hsh - Math.floor(hsh);
+      if (v > 0.38) continue;
+      const edge = v < 0.19 ? edgeA : edgeB;
+      const [mx, my] = mid[k];
+      const [qx, qy] = edge[Math.min(SEG, k + 1)];
+      const f0 = 0.2 + v;
+      folds.moveTo(mx + (qx - mx) * f0, my + (qy - my) * f0);
+      folds.quadraticCurveTo(mx + (qx - mx) * (f0 + 0.25) + (mid[k + 1][0] - mx) * 0.3, my + (qy - my) * (f0 + 0.25) + (mid[k + 1][1] - my) * 0.3, mx + (qx - mx) * 0.85, my + (qy - my) * 0.85);
+    }
+    ctx.strokeStyle = ink.line;
+    ctx.lineWidth = 0.55 * px * scale;
+    ctx.globalAlpha = a * 0.55;
+    ctx.stroke(veins);
+    ctx.lineWidth = 0.4 * px;
+    ctx.globalAlpha = a * 0.3;
+    ctx.stroke(folds);
+    ctx.globalAlpha = 1;
+    const o: number[] = [g.bx, g.by];
+    for (const [x, y] of edgeA) o.push(x, y);
+    for (let k = SEG - 1; k >= 1; k--) o.push(edgeB[k][0], edgeB[k][1]);
+    inkLine(ctx, o, true, {
+      width: 0.9 * px * scale,
+      color: ink.line,
+      alpha: a * 0.95,
+      plate: true,
+      seed: j + 3 + Math.floor(stalk.phase * 100),
+      light: pen.light,
+      min: 0.25 * px,
+    });
+    floatOf(g, a);
+  };
+  /* Its bladder: a little bead of gas, lit on top. */
+  const floatOf = (g: { fx: number; fy: number; fr: number; d0x: number; d0y: number }, a: number) => {
+    ctx.beginPath();
+    ctx.ellipse(g.fx, g.fy, g.fr, g.fr * 0.6, Math.atan2(g.d0y, g.d0x), 0, Math.PI * 2);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = ink.float;
+    ctx.fill();
+    ctx.strokeStyle = ink.line;
+    ctx.lineWidth = (near ? 0.6 : 0.45) * px;
+    ctx.globalAlpha = a * 0.85;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  /* Small, a side's blades are laid in one pass each, opaque: the wash,
+     the shadow half, then the pen. */
+  const batch = (front: boolean) => {
+    const plain = new Path2D();
+    const faint = new Path2D();
+    const shPlain = new Path2D();
+    const shFaint = new Path2D();
+    const veins = new Path2D();
+    const floats = new Path2D();
+    let any = false;
+    for (let j = 0; j < stalk.blades.length; j++) {
+      if (j % stride) continue;
+      const g = shapeOf(stalk.blades[j], j);
+      if (!g || g.front !== front) continue;
+      any = true;
+      outlineOf(g, g.faint ? faint : plain, g.faint ? shFaint : shPlain, g.aDark);
+      if (detail) {
+        veins.moveTo(g.bx, g.by);
+        for (let k = 1; k < SEG; k++) veins.lineTo(mid[k][0], mid[k][1]);
+      }
+      floats.moveTo(g.fx + g.d0x * g.fr, g.fy + g.d0y * g.fr);
+      floats.ellipse(g.fx, g.fy, g.fr, g.fr * 0.6, Math.atan2(g.d0y, g.d0x), 0, Math.PI * 2);
+    }
+    if (!any) return;
+    for (const [path, shadow, a] of [
+      [plain, shPlain, 1],
+      [faint, shFaint, 0.3],
+    ] as const) {
+      ctx.globalAlpha = a;
+      ctx.fillStyle = ink.gold;
+      ctx.fill(path);
+      ctx.fillStyle = ink.brown;
+      ctx.globalAlpha = a * 0.75;
+      ctx.fill(shadow);
+    }
+    if (detail) {
+      ctx.strokeStyle = ink.line;
+      ctx.lineWidth = 0.45 * px * scale;
+      ctx.globalAlpha = 0.55;
+      ctx.stroke(veins);
+    }
+    ctx.lineWidth = (far ? 0.5 : 0.75) * px * scale;
+    ctx.strokeStyle = ink.line;
+    ctx.globalAlpha = far ? 0.6 : 0.85;
+    ctx.stroke(plain);
+    ctx.globalAlpha = 0.3;
+    ctx.stroke(faint);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = ink.float;
+    ctx.fill(floats);
+    ctx.strokeStyle = ink.line;
+    ctx.lineWidth = (near ? 0.6 : 0.45) * px;
+    ctx.globalAlpha = 0.85;
+    ctx.stroke(floats);
+    ctx.globalAlpha = 1;
+  };
+  const blades = (front: boolean) => {
+    if (!big) {
+      batch(front);
+      return;
+    }
+    // Lowest first, so each hangs over the one below it.
+    for (let j = 0; j < stalk.blades.length; j++) {
+      if (j % stride) continue;
+      const g = shapeOf(stalk.blades[j], j);
+      if (g && g.front === front) finish(g, j);
+    }
+  };
+
+  /* The holdfast, when the foot of the stalk is on the page: a low cone of
+     fine branching roots gripping the boulder's top, spreading over it. */
+  if (foot > -0.08 * h && foot < h * 1.08) {
+    const fx = stemAt(0);
+    const k = scale * Math.max(0.6, page / (900 * px));
+    const roots = new Path2D();
+    const fine = new Path2D();
+    stalk.roots.forEach((a, i) => {
+      const spread = (9 + 6 * Math.abs(a)) * k * px;
+      const dx = Math.sin(a) * spread;
+      const ex = fx + dx;
+      const ey = foot + (1 + Math.abs(a) * 2.5) * k * px;
+      const sy = foot - (5 + (i % 3) * 1.5) * k * px;
+      roots.moveTo(fx + dx * 0.08, sy);
+      roots.bezierCurveTo(fx + dx * 0.3, sy + 1.5 * k * px, fx + dx * 0.75, foot - 1.5 * k * px, ex, ey);
+      // Each root forks twice as it takes hold, the forks finer.
+      for (const f of [0.55, 0.8]) {
+        const ax = fx + dx * f;
+        const ay = foot + (Math.abs(a) * f * 1.6 - 1.2) * k * px;
+        const side = (i + (f > 0.6 ? 1 : 0)) % 2 ? 1 : -1;
+        fine.moveTo(ax, ay);
+        fine.quadraticCurveTo(ax + dx * 0.15 + side * 2 * k * px, ay + 1.2 * k * px, ax + dx * 0.22 + side * 3 * k * px, ay + (2.5 + (i % 2)) * k * px);
+      }
+    });
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = ink.brown;
+    ctx.lineWidth = 1.3 * k * px;
+    ctx.stroke(roots);
+    ctx.strokeStyle = ink.line;
+    ctx.lineWidth = Math.max(0.45 * px, 0.6 * k * px);
+    ctx.globalAlpha = 0.9;
+    ctx.stroke(roots);
+    ctx.lineWidth = Math.max(0.35 * px, 0.4 * k * px);
+    ctx.stroke(fine);
+    ctx.globalAlpha = 1;
+  }
+
+  // Behind the stipe first.
+  blades(false);
 
   // The stipe: a wash under one pen line that swells on its shadow side,
   // stout at the holdfast and running out at the tip. Like the blades, it
   // goes faint where it crosses what is written: each run of it is its own.
-  const steps = Math.max(8, Math.ceil(reachOut / (3 * px)));
   const visible = (y: number) => y > -0.08 * h && y < h * 1.08;
   const runs: { pts: number[]; faint: boolean; from: number; to: number }[] = [];
   let run: { pts: number[]; faint: boolean; from: number; to: number } | null = null;
-  let prev = at(0);
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps;
-    const p = at(t * reachOut);
-    if (!visible(p.y) && !visible(prev.y)) {
+  for (let i = 1; i < n; i++) {
+    const t = lineS[i] / total;
+    if (!visible(lineY[i]) && !visible(lineY[i - 1])) {
       run = null;
-      prev = p;
       continue;
     }
-    const inside = inClear((p.x + prev.x) / 2, (p.y + prev.y) / 2);
+    const inside = inClear((lineX[i] + lineX[i - 1]) / 2, (lineY[i] + lineY[i - 1]) / 2);
     if (!run || run.faint !== inside) {
-      run = { pts: [prev.x, prev.y], faint: inside, from: (i - 1) / steps, to: t };
+      run = { pts: [lineX[i - 1], lineY[i - 1]], faint: inside, from: lineS[i - 1] / total, to: t };
       runs.push(run);
     }
-    run.pts.push(p.x, p.y);
+    run.pts.push(lineX[i], lineY[i]);
     run.to = t;
-    prev = p;
   }
   // Stipe width, device px: stout at the foot, thin at the growing tip.
   const stipe = (t: number) => Math.max(0.6 * px, 0.0042 * page * scale * (1 - 0.5 * t));
   for (const rn of runs) {
-    const a = rn.faint ? alpha * 0.3 : alpha;
+    const a = rn.faint ? 0.3 : 1;
     const m = rn.pts.length / 2;
     const left: number[] = [];
     const right: number[] = [];
@@ -317,12 +765,11 @@ function drawStalk(
     for (let i = 2; i < left.length; i += 2) rib.lineTo(left[i], left[i + 1]);
     for (let i = right.length - 2; i >= 0; i -= 2) rib.lineTo(right[i], right[i + 1]);
     rib.closePath();
-    ctx.globalAlpha = a * 0.95;
+    ctx.globalAlpha = a;
     ctx.fillStyle = ink.brown;
     ctx.fill(rib);
     ctx.globalAlpha = 1;
-    const seed = Math.floor(stalk.phase * 1000);
-    const tip: [number, number] = [0, rn.to >= 1 - 1e-6 && reachOut >= len ? 0.15 : 0];
+    const tip: [number, number] = [0, rn.to >= 1 - 1e-6 ? 0.15 : 0];
     if (big) {
       // Big, two pen edges, the one away from the light the heavier.
       inkLine(ctx, left, false, { width: 0.5 * px, color: ink.line, alpha: a * 0.85, taper: tip, seed, raw: true, light: pen.light, min: 0.2 * px });
@@ -343,296 +790,6 @@ function drawStalk(
     }
   }
 
-  // The holdfast, when the foot of the stalk is on the page: a low cone of
-  // fine branching roots gripping the boulder's top, spreading over it.
-  if (visible(foot)) {
-    const fx = at(0).x;
-    const k = scale * Math.max(0.6, page / (900 * px));
-    const roots = new Path2D();
-    const fine = new Path2D();
-    stalk.roots.forEach((a, i) => {
-      const spread = (9 + 6 * Math.abs(a)) * k * px;
-      const dx = Math.sin(a) * spread;
-      const ex = fx + dx;
-      const ey = foot + (1 + Math.abs(a) * 2.5) * k * px;
-      const sy = foot - (5 + (i % 3) * 1.5) * k * px;
-      roots.moveTo(fx + dx * 0.08, sy);
-      roots.bezierCurveTo(fx + dx * 0.3, sy + 1.5 * k * px, fx + dx * 0.75, foot - 1.5 * k * px, ex, ey);
-      // Each root forks twice as it takes hold, the forks finer.
-      for (const f of [0.55, 0.8]) {
-        const ax = fx + dx * f;
-        const ay = foot + (Math.abs(a) * f * 1.6 - 1.2) * k * px;
-        const side = (i + (f > 0.6 ? 1 : 0)) % 2 ? 1 : -1;
-        fine.moveTo(ax, ay);
-        fine.quadraticCurveTo(ax + dx * 0.15 + side * 2 * k * px, ay + 1.2 * k * px, ax + dx * 0.22 + side * 3 * k * px, ay + (2.5 + i % 2) * k * px);
-      }
-    });
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = ink.brown;
-    ctx.lineWidth = 1.3 * k * px;
-    ctx.stroke(roots);
-    ctx.strokeStyle = ink.line;
-    ctx.lineWidth = Math.max(0.45 * px, 0.6 * k * px);
-    ctx.globalAlpha = alpha * 0.9;
-    ctx.stroke(roots);
-    ctx.lineWidth = Math.max(0.35 * px, 0.4 * k * px);
-    ctx.stroke(fine);
-  }
-
-  // The blades, each off its gas bladder, in two batches: plain, and faint
-  // where they cross what is written on the page.
-  const plain = new Path2D();
-  const faint = new Path2D();
-  const shadowPlain = new Path2D();
-  const shadowFaint = new Path2D();
-  const veins = new Path2D();
-  const folds = new Path2D();
-  const floats = new Path2D();
-  const outlines: number[][] = [];
-  let sx0 = Infinity;
-  let sy0 = Infinity;
-  let sx1 = -Infinity;
-  let sy1 = -Infinity;
-  const SEG = big ? 28 : detail ? 10 : 7;
-  const edgeA: [number, number][] = [];
-  const edgeB: [number, number][] = [];
-  const mid: [number, number][] = [];
-  // Measured against the page, a picture drawn a frame at a time has blades
-  // bigger against its frame than the live screen's; it draws fewer of them.
-  const ratio = page / h;
-  const stride = ratio > 1.5 ? 2 * Math.floor(ratio / 2) + 1 : 1;
-  const [lx, ly] = LIGHT;
-  const flow = current >= 0 ? 1 : -1;
-  for (let j = 0; j < stalk.blades.length; j++) {
-    if (j % stride) continue;
-    const b = stalk.blades[j];
-    if (b.t * len > reachOut) continue;
-    const p = at(b.t * len);
-    const L = b.len * page;
-    const W = b.width * page;
-    if (p.y < -L * 1.2 || p.y > h + L * 0.7) continue;
-    const q = at(Math.min(len, b.t * len + 2 * px));
-    let ux = q.x - p.x;
-    let uy = q.y - p.y;
-    const ul = Math.hypot(ux, uy) || 1;
-    ux /= ul;
-    uy /= ul;
-    const canopy = p.y < surface + 0.06 * h;
-    // Off the stipe at an angle, then taken by the current: streaming away
-    // downstream and hanging as it goes. On the canopy they hang straight down.
-    const flutter = Math.sin(ambient * 1.1 + stalk.phase + j * 1.3) * 0.08;
-    const off = b.side * b.angle;
-    let d0x = ux * Math.cos(off) - uy * Math.sin(off);
-    let d0y = ux * Math.sin(off) + uy * Math.cos(off);
-    const downstream = b.side * flow > 0 || canopy;
-    if (canopy) {
-      d0x = flow * 0.35 + d0x * 0.2;
-      d0y = 1;
-    } else if (downstream) {
-      // Out from the stipe and a little up, leaning already the way it will stream.
-      d0x = d0x * 0.9 + flow * 0.15;
-      d0y = Math.min(-0.3, d0y * 0.8);
-    } else {
-      // Upstream, it leaves level and hangs.
-      d0x = b.side * 0.85;
-      d0y = -0.05 + 0.15 * b.droop;
-    }
-    const dl = Math.hypot(d0x, d0y) || 1;
-    d0x /= dl;
-    d0y /= dl;
-    // Downstream of the stipe a blade streams out with the current; on the
-    // upstream side it hangs down by the stipe, swung a little across.
-    let dex = downstream ? flow * (1 - 0.35 * b.droop) + flutter : b.side * 0.22 + flow * 0.2 + flutter;
-    let dey = downstream ? 0.1 + 0.45 * b.droop : 0.75 + 0.25 * b.droop;
-    if (canopy) {
-      dex *= 0.4;
-      dey = 1;
-    }
-    const el = Math.hypot(dex, dey);
-    dex /= el;
-    dey /= el;
-    // The bladder, an ellipse along the way the blade leaves.
-    const fr = Math.max(1.1 * px, L * 0.06);
-    const fx = p.x + d0x * fr * 0.9;
-    const fy = p.y + d0y * fr * 0.9;
-    floats.moveTo(fx + d0x * fr, fy + d0y * fr);
-    floats.ellipse(fx, fy, fr, fr * 0.6, Math.atan2(d0y, d0x), 0, Math.PI * 2);
-    const bx = fx + d0x * fr * 0.95;
-    const by = fy + d0y * fr * 0.95;
-    // The blade's line: a quadratic out along the first way and round into the second.
-    const cx = bx + d0x * L * 0.35;
-    const cy = by + d0y * L * 0.35;
-    const ex = bx + d0x * L * 0.25 + dex * L * 0.82;
-    const ey = by + d0y * L * 0.25 + dey * L * 0.82;
-    edgeA.length = 0;
-    edgeB.length = 0;
-    mid.length = 0;
-    const curl = b.curl * L;
-    for (let k = 0; k <= SEG; k++) {
-      const u = k / SEG;
-      const v = 1 - u;
-      let mx = v * v * bx + 2 * v * u * cx + u * u * ex;
-      let my = v * v * by + 2 * v * u * cy + u * u * ey;
-      const tx = 2 * v * (cx - bx) + 2 * u * (ex - cx);
-      const ty = 2 * v * (cy - by) + 2 * u * (ey - cy);
-      const tl = Math.hypot(tx, ty) || 1;
-      const nx = -ty / tl;
-      const ny = tx / tl;
-      mx += nx * curl * u * u;
-      my += ny * curl * u * u;
-      // A strap: out quickly from the bladder, near enough even down its
-      // length, then drawn in to a blunt point over its last third.
-      const body = (W / 2) * Math.pow(Math.min(1, u / 0.14), 0.6) * (u > 0.66 ? Math.pow(Math.cos(((u - 0.66) / 0.34) * (Math.PI / 2)), 0.65) : 1) * (0.9 + 0.1 * Math.sin(u * 3));
-      let ra = 0;
-      let rb = 0;
-      if (k > 0 && k < SEG) {
-        if (big || detail) {
-          // The ruffled margin: a quick frill riding a slower one, each edge its own.
-          // Uneven: the frills bunch and spread along it, never a saw's teeth.
-          const f = (u * L) / (0.01 * page);
-          const g = f + 0.6 * Math.sin(f * 0.9 + b.ph);
-          ra = (0.2 * Math.sin(g * 6.28 + b.ph) + 0.08 * Math.sin(f * 11.3 + b.ph * 1.7)) * body;
-          rb = (0.17 * Math.sin(g * 5.1 + b.ph + 2.1) + 0.07 * Math.sin(f * 9.7 + b.ph)) * body;
-        }
-      }
-      edgeA.push([mx + nx * (body + ra), my + ny * (body + ra)]);
-      edgeB.push([mx - nx * (body + rb), my - ny * (body + rb)]);
-      mid.push([mx, my]);
-    }
-    const isFaint = inClear(p.x, p.y);
-    const path = isFaint ? faint : plain;
-    // Which half faces away from the light: that half is the shadow.
-    const [n0x, n0y] = [edgeA[SEG >> 1][0] - mid[SEG >> 1][0], edgeA[SEG >> 1][1] - mid[SEG >> 1][1]];
-    const aDark = n0x * lx + n0y * ly > 0;
-    const trace = (target: Path2D, edge: [number, number][], back: boolean) => {
-      if (!back) {
-        for (let k = 1; k <= SEG; k++) {
-          const [ax, ay] = edge[k - 1];
-          const [qx, qy] = edge[k];
-          target.quadraticCurveTo(ax, ay, (ax + qx) / 2, (ay + qy) / 2);
-        }
-        target.lineTo(edge[SEG][0], edge[SEG][1]);
-      } else {
-        for (let k = SEG - 1; k >= 0; k--) {
-          const [ax, ay] = edge[k + 1];
-          const [qx, qy] = edge[k];
-          target.quadraticCurveTo(ax, ay, (ax + qx) / 2, (ay + qy) / 2);
-        }
-      }
-    };
-    path.moveTo(bx, by);
-    trace(path, edgeA, false);
-    trace(path, edgeB, true);
-    path.closePath();
-    const sh = isFaint ? shadowFaint : shadowPlain;
-    sh.moveTo(bx, by);
-    trace(sh, aDark ? edgeA : edgeB, false);
-    for (let k = SEG; k >= 0; k--) sh.lineTo(mid[k][0], mid[k][1]);
-    sh.closePath();
-    if (detail || big) {
-      veins.moveTo(bx, by);
-      for (let k = 1; k < SEG; k++) veins.lineTo(mid[k][0], mid[k][1]);
-    }
-    if (big && !isFaint) {
-      for (const [x, y] of aDark ? edgeA : edgeB) {
-        sx0 = Math.min(sx0, Math.max(0, x));
-        sy0 = Math.min(sy0, Math.max(0, y));
-        sx1 = Math.max(sx1, Math.min(w, x));
-        sy1 = Math.max(sy1, Math.min(h, y));
-      }
-      // Puckered: here and there a short soft crease across it from near
-      // the midrib, the way a giant kelp's blade is wrinkled, never a row.
-      for (let k = 3; k < SEG - 3; k++) {
-        const hsh = Math.sin(k * 12.9898 + j * 78.233 + b.ph) * 43758.5453;
-        const v = hsh - Math.floor(hsh);
-        if (v > 0.38) continue;
-        const edge = v < 0.19 ? edgeA : edgeB;
-        const [mx, my] = mid[k];
-        const [qx, qy] = edge[Math.min(SEG, k + 1)];
-        const f0 = 0.2 + v;
-        folds.moveTo(mx + (qx - mx) * f0, my + (qy - my) * f0);
-        folds.quadraticCurveTo(mx + (qx - mx) * (f0 + 0.25) + (mid[k + 1][0] - mx) * 0.3, my + (qy - my) * (f0 + 0.25) + (mid[k + 1][1] - my) * 0.3, mx + (qx - mx) * 0.85, my + (qy - my) * 0.85);
-      }
-      const o: number[] = [bx, by];
-      for (const [x, y] of edgeA) o.push(x, y);
-      for (let k = SEG - 1; k >= 1; k--) o.push(edgeB[k][0], edgeB[k][1]);
-      outlines.push(o);
-    }
-  }
-  for (const [path, shadow, k] of [
-    [plain, shadowPlain, 1],
-    [faint, shadowFaint, 0.3],
-  ] as const) {
-    // Gold where the light comes through, deeper on the half away from it.
-    ctx.fillStyle = ink.gold;
-    ctx.globalAlpha = alpha * 0.9 * k;
-    ctx.fill(path);
-    ctx.fillStyle = ink.brown;
-    ctx.globalAlpha = alpha * 0.75 * k;
-    ctx.fill(shadow);
-    if (detail || big) {
-      // The pigment pooled at the margin as the wash dried.
-      ctx.save();
-      ctx.clip(path);
-      ctx.strokeStyle = ink.brown;
-      ctx.globalAlpha = alpha * 0.5 * k;
-      ctx.lineWidth = 2 * px * scale;
-      ctx.stroke(path);
-      ctx.restore();
-    }
-  }
-  // Big, a stipple in the shadow halves, thickest toward the margin.
-  if (big && sx1 > sx0 && sy1 > sy0) {
-    stipple(ctx, shadowPlain, { x: sx0, y: sy0, w: sx1 - sx0, h: sy1 - sy0 }, {
-      spacing: 1.9 * px,
-      radius: 0.36 * px,
-      shade: () => 0.6,
-      color: pen.dark ? mixHex(ink.brown, '#000000', 0.5) : ink.line,
-      alpha: alpha * (pen.dark ? 0.6 : 0.45),
-      seed: Math.floor(stalk.phase * 997),
-    });
-  }
-  if (detail || big) {
-    ctx.strokeStyle = ink.line;
-    ctx.lineWidth = (big ? 0.55 : 0.45) * px * scale;
-    ctx.globalAlpha = alpha * 0.55;
-    ctx.stroke(veins);
-  }
-  if (big) {
-    ctx.strokeStyle = ink.line;
-    ctx.lineWidth = 0.4 * px;
-    ctx.globalAlpha = alpha * 0.3;
-    ctx.stroke(folds);
-    ctx.globalAlpha = 1;
-    outlines.forEach((o, i) =>
-      inkLine(ctx, o, true, {
-        width: 0.9 * px * scale,
-        color: ink.line,
-        alpha: alpha * 0.95,
-        plate: true,
-        seed: i + 3 + Math.floor(stalk.phase * 100),
-        light: pen.light,
-        min: 0.25 * px,
-      }),
-    );
-    ctx.strokeStyle = ink.line;
-    ctx.lineWidth = 0.6 * px * scale;
-    ctx.globalAlpha = alpha * 0.3;
-    ctx.stroke(faint);
-  } else {
-    ctx.lineWidth = (far ? 0.5 : 0.75) * px * scale;
-    ctx.strokeStyle = ink.line;
-    ctx.globalAlpha = alpha * (far ? 0.6 : 0.85);
-    ctx.stroke(plain);
-    ctx.globalAlpha = alpha * 0.3;
-    ctx.stroke(faint);
-  }
-  // The bladders: a little bead of gas, lit on top.
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = ink.float;
-  ctx.fill(floats);
-  ctx.strokeStyle = ink.line;
-  ctx.lineWidth = (near ? 0.6 : 0.45) * px;
-  ctx.globalAlpha = alpha * 0.85;
-  ctx.stroke(floats);
+  // Then those in front of it, and the canopy's.
+  blades(true);
 }

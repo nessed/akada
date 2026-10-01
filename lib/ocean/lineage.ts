@@ -23,6 +23,10 @@ export interface JellyGenome {
   /** Which pastel the course colour leans toward, and how far. */
   hue: number;
   hueMix: number;
+  /** The oral arms' length against the plain jelly's (`JellyBody.armLength`). */
+  armLength: number;
+  /** How deep the rim's lobes are cut against the plain jelly's (`JellyBody.lobeDepth`). */
+  lobeDepth: number;
 }
 
 /** Exactly the jelly the plain "jellyfish" option has always drawn. */
@@ -35,12 +39,19 @@ export const DEFAULT_JELLY: JellyGenome = {
   stingP: 0.4,
   hue: 0,
   hueMix: 0,
+  armLength: 1,
+  lobeDepth: 1,
 };
 
 export function rollJellyGenome(seed: number): JellyGenome {
   const r = mulberry32(seed);
+  // The traits added later roll off a stream of their own, so every jelly
+  // rolled before them keeps the rest of its body.
+  const r2 = mulberry32(seed ^ 0x6a09e667);
   const tentacles = int(r, 8, 26);
   return {
+    armLength: range(r2, 0.6, 1.6),
+    lobeDepth: range(r2, 0.5, 2.2),
     tentacles,
     hairs: Math.max(0, tentacles - 1 + int(r, -4, 4)),
     arms: int(r, 2, 6),
@@ -57,6 +68,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 /** One generation on: counts step by one now and then, shapes drift a little. */
 export function childOf(parent: JellyGenome, seed: number): JellyGenome {
   const r = mulberry32(seed);
+  const r2 = mulberry32(seed ^ 0x6a09e667);
   const step = (v: number, lo: number, hi: number) =>
     r() < 0.4 ? clamp(v + (r() < 0.5 ? -1 : 1) * int(r, 1, 2), lo, hi) : v;
   return {
@@ -68,6 +80,8 @@ export function childOf(parent: JellyGenome, seed: number): JellyGenome {
     stingP: clamp(parent.stingP + range(r, -0.08, 0.08), 0, 0.9),
     hue: r() < 0.15 ? int(r, 0, 9) : parent.hue,
     hueMix: clamp(parent.hueMix + range(r, -0.05, 0.05), 0, 0.4),
+    armLength: clamp((parent.armLength ?? 1) * range(r2, 0.88, 1.12), 0.5, 2),
+    lobeDepth: clamp((parent.lobeDepth ?? 1) * range(r2, 0.85, 1.15), 0.3, 3),
   };
 }
 

@@ -158,6 +158,9 @@ export interface RockShape {
   minY: number;
   /** Where the rock's top is at `u`: the crest growths and holdfasts stand on. */
   top: (u: number) => number;
+  /** Which of `boulders` is the mass the rest stand in, the wash let go of. */
+  foot: number;
+  grammar: RockGrammar;
 }
 
 /** Points round a boulder. */
@@ -190,6 +193,54 @@ function lumps(b: Boulder, th: number, s = 1): number {
 const shapes = new Map<string, RockShape>();
 
 /**
+ * The silhouette a rock is built to, so the rocks of a page are not all one
+ * heap of pebbles:
+ *
+ * - `heap`: two to four rounded boulders out from the wall, the ones by the
+ *   wall highest, on a broad foot (every rock before the others existed).
+ * - `slab`: two or three flat beds stacked off the wall, each running out
+ *   its own way, the bedding lines along them.
+ * - `spire`: a pinnacle of stacked blocks narrowing to a blunt point,
+ *   standing up off a low shoulder by the wall, taller than the rest.
+ * - `overhang`: a broad cap jutting out over open water off a narrower
+ *   support set back by the wall, its underside in shadow.
+ * - `field`: a spill of five or so separate rounded boulders down a slope,
+ *   lower and wider than a heap.
+ */
+export type RockGrammar = 'heap' | 'slab' | 'spire' | 'overhang' | 'field';
+export const ROCK_GRAMMARS: readonly RockGrammar[] = ['heap', 'slab', 'spire', 'overhang', 'field'];
+
+/**
+ * A grammar off a seed, by weight (by default a heap or a slab more often
+ * than the rest). Pass `allow` to keep to some: a rock with garden eels on
+ * its top wants a flat one.
+ */
+export function rollGrammar(seed: number, allow: readonly RockGrammar[] = ROCK_GRAMMARS): RockGrammar {
+  const weight: Record<RockGrammar, number> = { heap: 3, slab: 2.5, overhang: 2, field: 2, spire: 1.2 };
+  const pool = allow.length ? allow : ROCK_GRAMMARS;
+  const total = pool.reduce((a, g) => a + weight[g], 0);
+  let v = mulberry32(seed ^ 0x9e3779b9)() * total;
+  for (const g of pool) {
+    v -= weight[g];
+    if (v <= 0) return g;
+  }
+  return pool[pool.length - 1];
+}
+
+/** The grammar a live outcrop's rock is built to: off its own id, and only
+    the flat-topped ones where garden eels live in sand on its top. */
+export function outcropGrammar(o: Outcrop): RockGrammar {
+  return rollGrammar(hash32(o.id, 'grammar'), o.eels ? ['heap', 'slab'] : ROCK_GRAMMARS);
+}
+
+/** A superellipse's radius at angle `th` against a circle's: exponent 2 is
+    the ellipse itself, more is squarer, less comes to points. */
+function squareness(th: number, p: number): number {
+  if (p === 2) return 1;
+  return Math.pow(Math.pow(Math.abs(Math.cos(th)), p) + Math.pow(Math.abs(Math.sin(th)), p), -1 / p);
+}
+
+/**
  * The rock a seed makes, `span` device px out from its wall and about
  * `thick` deep. It stands between half and a little more than its width
  * tall, a foot that runs back into the wall and two to four boulders out
@@ -197,62 +248,68 @@ const shapes = new Map<string, RockShape>();
  * so it rises and dips over them and the clefts between, and the lip
  * boulder's underside curves back in under it. Made once a size.
  */
-export function rockShape(seed: number, span: number, thick: number, px: number): RockShape {
-  const key = `${seed}|${span}|${thick}|${px}`;
+export function rockShape(seed: number, span: number, thick: number, px: number, grammar: RockGrammar = 'heap'): RockShape {
+  const key = `${seed}|${span}|${thick}|${px}|${grammar}`;
   const hit = shapes.get(key);
   if (hit) return hit;
   const r = mulberry32(seed ^ 0x51ab0c);
   const S = Math.max(8 * px, span);
   const Hr = Math.max(0.5 * S, Math.min(1.2 * S, thick));
   const boulders: Boulder[] = [];
-  const add = (cx: number, top: number, rx: number, ry: number) => {
+  // `sq` is how square it is above and below its middle (`squareness`).
+  const add = (cx: number, top: number, rx: number, ry: number, sq: [number, number] = [2, 2]) => {
     // Lumps at a few scales, coarse to fine, so the top breaks into knuckles.
     const n: number[] = [];
     const ks = [2, 3, 5, 7, 11, 17];
     const amps = [0.09, 0.07, 0.045, 0.028, 0.016, 0.009];
     for (let i = 0; i < ks.length; i++) n.push(amps[i] * range(r, 0.5, 1.35), ks[i], range(r, 0, Math.PI * 2));
     const cy = top + ry;
+    const sqAt = (th: number) => squareness(th, Math.sin(th) < 0 ? sq[0] : sq[1]);
     const pts: number[] = [];
     for (let i = 0; i < BN; i++) {
       const th = (i / BN) * Math.PI * 2;
-      const rr = lumpsOf(n, th);
+      const rr = lumpsOf(n, th) * sqAt(th);
       pts.push(cx + rx * rr * Math.cos(th), cy + ry * rr * Math.sin(th));
     }
     const full = new Float32Array(LUT);
     const coarse = new Float32Array(LUT);
     for (let i = 0; i < LUT; i++) {
       const th = (i / LUT) * Math.PI * 2;
-      full[i] = lumpsOf(n, th);
-      coarse[i] = lumpsOf(n, th, 3);
+      const k = sqAt(th);
+      full[i] = lumpsOf(n, th) * k;
+      coarse[i] = lumpsOf(n, th, 3) * k;
     }
     boulders.push({ cx, cy, rx, ry, n, pts, full, coarse });
   };
-  // Boulders out from the wall to the lip, each over the last by about a
-  // third of itself, so the top is one broken crest; the ones by the wall
-  // stand highest. Where the rock is tall for its width they stand taller.
-  const tall = Math.max(0.92, Math.min(1.35, Hr / S));
-  const ups: [number, number, number, number][] = [];
-  let u = 0;
-  for (let i = 0; i < 6; i++) {
-    const t = Math.min(1, u / S);
-    let rx = S * (0.27 - 0.08 * t) * range(r, 0.85, 1.15);
-    let cx = u + rx * (i === 0 ? 0.25 : 0.62);
-    const last = cx + rx * 1.25 > S;
-    if (last) {
-      rx = Math.max(rx, (S - u) * 0.6);
-      cx = S - rx * 0.98;
+  if (grammar !== 'heap') buildGrammar(grammar, r, S, Hr, add);
+  else {
+    // Boulders out from the wall to the lip, each over the last by about a
+    // third of itself, so the top is one broken crest; the ones by the wall
+    // stand highest. Where the rock is tall for its width they stand taller.
+    const tall = Math.max(0.92, Math.min(1.35, Hr / S));
+    const ups: [number, number, number, number][] = [];
+    let u = 0;
+    for (let i = 0; i < 6; i++) {
+      const t = Math.min(1, u / S);
+      let rx = S * (0.27 - 0.08 * t) * range(r, 0.85, 1.15);
+      let cx = u + rx * (i === 0 ? 0.25 : 0.62);
+      const last = cx + rx * 1.25 > S;
+      if (last) {
+        rx = Math.max(rx, (S - u) * 0.6);
+        cx = S - rx * 0.98;
+      }
+      const top = Hr * (-0.12 + 0.2 * t + range(r, -0.06, 0.06));
+      const ry = Math.min(rx * range(r, 0.75, 1) * tall, Hr * (0.44 - 0.1 * t) * range(r, 0.88, 1.1));
+      ups.push([cx, top, rx, ry]);
+      u = cx + rx * 0.62;
+      if (last) break;
     }
-    const top = Hr * (-0.12 + 0.2 * t + range(r, -0.06, 0.06));
-    const ry = Math.min(rx * range(r, 0.75, 1) * tall, Hr * (0.44 - 0.1 * t) * range(r, 0.88, 1.1));
-    ups.push([cx, top, rx, ry]);
-    u = cx + rx * 0.62;
-    if (last) break;
+    for (const [cx, top, rx, ry] of ups) add(cx, top, rx, ry);
+    // And in front of their feet, the mass they stand in: broad, back into the
+    // wall and down, which the wash lets go of. Its top crosses their lower halves.
+    const feet = Math.min(...ups.slice(0, -1).map(([, top, , ry]) => top + ry * 1.25), Hr * 0.4);
+    add(0.12 * S, Math.max(Hr * 0.12, feet) * range(r, 0.92, 1.04), 0.66 * S, Math.max(0.42 * Hr, (Hr * 1.05 - feet) / 2));
   }
-  for (const [cx, top, rx, ry] of ups) add(cx, top, rx, ry);
-  // And in front of their feet, the mass they stand in: broad, back into the
-  // wall and down, which the wash lets go of. Its top crosses their lower halves.
-  const feet = Math.min(...ups.slice(0, -1).map(([, top, , ry]) => top + ry * 1.25), Hr * 0.4);
-  add(0.12 * S, Math.max(Hr * 0.12, feet) * range(r, 0.92, 1.04), 0.66 * S, Math.max(0.42 * Hr, (Hr * 1.05 - feet) / 2));
   let lo = Infinity;
   let hi = -Infinity;
   let minY = Infinity;
@@ -291,10 +348,91 @@ export function rockShape(seed: number, span: number, thick: number, px: number)
     const i = Math.floor(f);
     return tops[i] + (tops[i + 1] - tops[i]) * (f - i);
   };
-  const made: RockShape = { span: S, height: Hr, boulders, lo, hi, minY, top };
+  const made: RockShape = { span: S, height: Hr, boulders, lo, hi, minY, top, foot: grammar === 'heap' ? boulders.length - 1 : 0, grammar };
   shapes.set(key, made);
   if (shapes.size > 24) shapes.delete(shapes.keys().next().value as string);
   return made;
+}
+
+/**
+ * The boulders of the grammars past the heap, back to front, in the rock's
+ * frame: `u` out from the wall, `y` down from its nominal top. Each one's
+ * foot is deep enough that the wash lets go of it before its underside
+ * shows, so no rock stands on a hem of its own.
+ */
+function buildGrammar(
+  g: RockGrammar,
+  r: Rand,
+  S: number,
+  Hr: number,
+  add: (cx: number, top: number, rx: number, ry: number, sq?: [number, number]) => void,
+) {
+  // The mass it all stands in, back into the wall and down past where the wash runs dry.
+  const foot = (cx: number, top: number, rx: number) => add(cx, top, rx, Math.max(0.5 * Hr, (Hr * 1.3 - top) / 2), [2.2, 2.6]);
+  if (g === 'slab') {
+    foot(0.1 * S, Hr * 0.5, 0.62 * S);
+    // Beds from the lowest up, each laid over the one under it, thick and
+    // square-ended: one tabular mass whose bedding steps in and out.
+    const beds = 2 + (r() < 0.6 ? 1 : 0);
+    const ys: number[] = [];
+    let y = -0.05 * Hr;
+    for (let i = 0; i < beds; i++) {
+      const thick = Hr * range(r, 0.26, 0.36) * (i === 0 ? 1.1 : 1);
+      ys.push(y, thick);
+      y += thick * range(r, 0.62, 0.78);
+    }
+    for (let i = beds - 1; i >= 0; i--) {
+      // How far each bed runs out: one of the lower ones often furthest, a ledge.
+      const out = S * (i === 0 ? range(r, 0.6, 0.85) : range(r, 0.72, 1.02));
+      const rx = out * 0.5 + 0.12 * S;
+      add(out - rx * 0.96, ys[i * 2], rx, ys[i * 2 + 1] / 2, [3.2, 4.2]);
+    }
+    return;
+  }
+  if (g === 'spire') {
+    foot(0.2 * S, Hr * 0.45, 0.55 * S);
+    // A low shoulder by the wall.
+    add(0.04 * S, Hr * range(r, 0.12, 0.24), 0.28 * S, Hr * 0.34, [2.4, 2.4]);
+    // A buttress against its outer foot, now and then.
+    const at = S * range(r, 0.5, 0.66);
+    const rx = S * range(r, 0.17, 0.22);
+    if (r() < 0.6) add(at + rx * 0.7, Hr * range(r, 0.25, 0.38), rx * 0.8, Hr * 0.3, [2.3, 2.3]);
+    // The pinnacle: one tall column, squared at the sides and coming up to a
+    // blunt point.
+    const top = -Hr * range(r, 0.4, 0.65);
+    const tall = Hr * 0.75 - top;
+    add(at, top, rx, tall / 2, [1.45, 2.7]);
+    return;
+  }
+  if (g === 'overhang') {
+    foot(0.02 * S, Hr * 0.5, 0.42 * S);
+    // The support, set back by the wall and narrower than what it holds up.
+    add(0.08 * S, Hr * 0.12, S * range(r, 0.26, 0.32), Hr * 0.46, [2.4, 2.6]);
+    // A block on top by the wall, now and then.
+    if (r() < 0.5) add(0.1 * S, -Hr * range(r, 0.2, 0.28), S * 0.22, Hr * 0.17, [3, 3]);
+    // The cap, jutting out over open water, its underside turned from the light.
+    const ry = Hr * range(r, 0.2, 0.27);
+    add(S * range(r, 0.5, 0.56), -Hr * range(r, 0.02, 0.1), S * range(r, 0.46, 0.52), ry, [2.6, 3.4]);
+    return;
+  }
+  // A field of boulders down a slope: lower and wider than a heap, the far
+  // ones (higher up the slope) laid first.
+  // The slope they lie on: low and wide, the whole of the rock's reach.
+  add(0.38 * S, Hr * 0.48, 0.72 * S, Hr * 0.5, [2.8, 2.6]);
+  const stones: [number, number, number, number][] = [];
+  let u = -0.06 * S;
+  for (let i = 0; i < 9 && u < S * 0.9; i++) {
+    const t = Math.max(0, u / S);
+    const rx = S * range(r, 0.12, 0.2) * (1.25 - 0.5 * t);
+    const ry = rx * range(r, 0.6, 0.85) * Math.max(0.8, Math.min(1.2, Hr / S));
+    const cx = Math.min(S - rx * 0.9, u + rx * 0.8);
+    // Half sunk in the slope, lower toward the lip.
+    const bottom = Hr * (0.62 + 0.18 * t + range(r, -0.05, 0.05));
+    stones.push([cx, bottom - 2 * ry * 0.92, rx, ry]);
+    u = cx + rx * range(r, 0.5, 0.85);
+  }
+  stones.sort((a, b) => a[1] + a[3] - (b[1] + b[3]));
+  for (const [cx, top, rx, ry] of stones) add(cx, top, rx, ry, [2.1, 2.5]);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,7 +455,24 @@ export interface RockStyle {
   barnacles?: boolean;
   /** Where the wash runs dry toward its foot, as shares of its height: from, to. */
   fade?: [number, number];
+  /**
+   * Far off in the water: the wash taken `mix` of the way to `water`, no
+   * shading but the wash's own, and only a broken thread of the pen round
+   * it, 0.4 of its weight at 0.3, so it is a rock in the haze and never a
+   * lineless smoke.
+   */
+  far?: { water: string; mix: number };
 }
+
+/** How far down its own frame (y, from its nominal top) a rock drawn in
+    `style` is gone into the water altogether: a canvas it is drawn on must
+    reach this far, or its foot is cut off square. */
+export function rockFoot(shape: RockShape, style?: Pick<RockStyle, 'fade'>): number {
+  return shape.height * ((style?.fade ?? FADE)[1] + 0.06);
+}
+
+/** Where the wash runs dry by default, as shares of the rock's height. */
+const FADE: [number, number] = [0.62, 1.04];
 
 /** Where a rock goes in the context: its wall at `x0`, running `dir` across, its nominal top at `y0`. */
 export interface RockPlace {
@@ -344,10 +499,40 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
   const r = mulberry32(k.seed);
   const X = (u: number) => at.x0 + at.dir * u;
   const Y = (y: number) => at.y0 + y;
-  const fine = d > 0.35;
-  const deep = mixHex(k.rock, dark ? '#000000' : '#2A2320', dark ? 0.45 : 0.32);
-  const lift = mixHex(k.rock, k.paper, dark ? 0.22 : 0.42);
+  const far = k.far;
+  const fine = d > 0.35 && !far;
+  const stone = far ? mixHex(k.rock, far.water, far.mix) : k.rock;
+  const deep = mixHex(stone, dark ? '#000000' : '#2A2320', (dark ? 0.45 : 0.32) * (far ? 1 - 0.6 * far.mix : 1));
+  const lift = mixHex(stone, k.paper, dark ? 0.22 : 0.42);
   const union = new Path2D();
+  // The foot let go of. The pen lets go first: its lines thin out from a
+  // little above where the wash starts to run dry and are gone a little
+  // below, along a ragged line, so the rock goes down into the water and
+  // never stands on a hem of its own. Its own dice, so the rest roll as before.
+  const H = shape.height;
+  const [fa, fb] = k.fade ?? FADE;
+  const rf = mulberry32(k.seed ^ 0x7f4a7c15);
+  const ph1 = rf() * 6.28;
+  const ph2 = rf() * 6.28;
+  const ragged = (x: number) => {
+    const u = (x - at.x0) * at.dir;
+    return 0.6 * Math.sin(u / (0.13 * shape.span) + ph1) + 0.4 * Math.sin(u / (0.045 * shape.span) + ph2);
+  };
+  const penFrom = fa - 0.16;
+  const penTo = fa + 0.12;
+  const lf = (x: number, y: number) => {
+    const n0 = ragged(x);
+    const a = Y((penFrom + 0.04 * n0) * H);
+    const b = Y((penTo + 0.05 * n0) * H);
+    if (y <= a) return 1;
+    if (y >= b) return 0;
+    const t = (y - a) / (b - a);
+    return 1 - t * t * (3 - 2 * t);
+  };
+  // A stroke laid all at once lets go the same way, down a gradient.
+  const deepFade = ctx.createLinearGradient(0, Y(penFrom * H), 0, Y(penTo * H));
+  deepFade.addColorStop(0, rgba(deep, 1));
+  deepFade.addColorStop(1, rgba(deep, 0));
   const [lx, ly] = LIGHT;
   // Toward the light, for a rounded form: from the top left and a little in front.
   const LV = [-0.55, -0.7, 0.36].map((v) => v / Math.hypot(0.55, 0.7, 0.36));
@@ -397,7 +582,7 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       ctx.save();
       ctx.clip(union);
       ctx.translate(lx * 0.06 * b.ry, ly * 0.06 * b.ry);
-      ctx.strokeStyle = deep;
+      ctx.strokeStyle = deepFade;
       ctx.globalAlpha = dark ? 0.7 : 0.55;
       ctx.lineWidth = Math.max(2 * px, 0.16 * Math.min(b.rx, b.ry));
       ctx.stroke(path);
@@ -413,7 +598,7 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       cy - 0.5 * b.ry,
       Math.max(b.rx, b.ry) * 1.9,
     );
-    const tint = mixHex(k.rock, bi % 2 ? deep : lift, 0.08 + 0.06 * r());
+    const tint = mixHex(stone, bi % 2 ? deep : lift, 0.08 + 0.06 * r());
     g.addColorStop(0, mixHex(tint, lift, 0.6));
     g.addColorStop(0.45, tint);
     g.addColorStop(1, mixHex(tint, deep, 0.7));
@@ -422,8 +607,8 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
     ctx.fill(path);
     // Where the pigment ran to the edge and dried there: a darker line along
     // it, half under the pen (no clip: it costs more than the line).
-    ctx.strokeStyle = deep;
-    ctx.globalAlpha = dark ? 0.3 : 0.35;
+    ctx.strokeStyle = deepFade;
+    ctx.globalAlpha = (dark ? 0.3 : 0.35) * (far ? 0.6 : 1);
     ctx.lineWidth = Math.max(2 * px, 0.04 * Math.min(b.rx, b.ry));
     ctx.stroke(path);
     ctx.globalAlpha = 1;
@@ -445,7 +630,7 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       const rr = lumps(b, th) * 0.86;
       const x = cx + at.dir * b.rx * rr * Math.cos(th);
       const y = cy + b.ry * rr * Math.sin(th);
-      if (!lit || bi === shape.boulders.length - 1 || covered(x, y)) {
+      if (!lit || bi === shape.foot || lf(x, y) < 0.6 || covered(x, y)) {
         on = false;
         continue;
       }
@@ -460,9 +645,42 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       [0.13, 0.2],
       [0.07, 0.26],
     ]) {
-      ctx.globalAlpha = a * (dark ? 0.6 : 1);
+      ctx.globalAlpha = a * (dark ? 0.6 : 1) * (far ? 0.5 : 1);
       ctx.lineWidth = wd * sw;
       ctx.stroke(strip);
+    }
+    if (far) {
+      // Far off, only a broken thread of the pen round its silhouette.
+      ctx.globalAlpha = 1;
+      const m = pts.length / 2;
+      let dash: number[] = [];
+      let on = rf() < 0.7;
+      let left = b.rx * (on ? range(rf, 0.35, 1) : range(rf, 0.08, 0.3));
+      const flush = () => {
+        if (dash.length >= 6) {
+          inkLine(ctx, dash, false, { width: 0.4 * px, color: k.line, alpha: 0.3, swell: 0.3, lost: 0, taper: [0.2, 0.2], raw: true, light: dark ? UNLIGHT : LIGHT, min: 0.25 * px });
+        }
+        dash = [];
+      };
+      for (let q = 0; q <= m; q++) {
+        const i = q % m;
+        const j = (q + 1) % m;
+        const x = pts[i * 2];
+        const y = pts[i * 2 + 1];
+        if (covered(x, y) || lf(x, y) < 0.15) {
+          flush();
+          continue;
+        }
+        if (on) dash.push(x, y);
+        left -= Math.hypot(pts[j * 2] - x, pts[j * 2 + 1] - y);
+        if (left <= 0) {
+          if (on) flush();
+          on = !on;
+          left = b.rx * (on ? range(rf, 0.35, 1) : range(rf, 0.08, 0.3));
+        }
+      }
+      flush();
+      return;
     }
     // Contour hatching, the way an engraver models a round thing: lines
     // that run across the boulder as if wrapped round it, seen a little from
@@ -533,12 +751,13 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
         const want = p ? (dark ? 1 - p[2] : p[2]) : 0;
         // The engraver's line lifts now and then.
         const gap = Math.sin(g1 + q * 0.31) * Math.sin(g2 + q * 0.83);
-        if (!p || want <= from || gap > 0.75) {
+        const fl = p && want > from ? lf(p[0], p[1]) : 0;
+        if (!p || want <= from || gap > 0.75 || fl < 0.06) {
           ribbon(run);
           run = [];
           continue;
         }
-        run.push(p[0], p[1], wmax * Math.min(1.25, 0.15 + ((want - from) / (1 - from)) * 1.2));
+        run.push(p[0], p[1], wmax * Math.min(1.25, 0.15 + ((want - from) / (1 - from)) * 1.2) * fl);
       }
       ribbon(run);
     }
@@ -555,12 +774,13 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
           const sl = -1 + (2 * q) / 30;
           const p = onForm(sl, cp, sp0, deepFrom);
           const want = p ? p[2] : 0;
-          if (!p || want <= deepFrom) {
+          const fl = p && want > deepFrom ? lf(p[0], p[1]) : 0;
+          if (!p || want <= deepFrom || fl < 0.06) {
             ribbon(run);
             run = [];
             continue;
           }
-          run.push(p[0], p[1], wmax * 0.8 * Math.min(1, (want - deepFrom) / 0.12));
+          run.push(p[0], p[1], wmax * 0.8 * Math.min(1, (want - deepFrom) / 0.12) * fl);
         }
         ribbon(run);
       }
@@ -599,7 +819,7 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
           }
           const sh0 = shadeXY(qx, qy);
           const sh = dark ? 1 - sh0 : sh0;
-          if (sh <= dFrom || r() > Math.pow((sh - dFrom) / (1 - dFrom), 1.4)) continue;
+          if (sh <= dFrom || r() > Math.pow((sh - dFrom) / (1 - dFrom), 1.4) || rf() > lf(qx, qy)) continue;
           const rr = rad * (0.7 + 0.6 * r());
           if (round) {
             dots.moveTo(qx + rr, qy);
@@ -628,6 +848,13 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
           th += (r() - 0.5) * 0.35;
           if (s < 0.35) break;
         }
+        for (let q = 0; q < crack.length; q += 2) {
+          if (lf(crack[q], crack[q + 1]) < 0.3) {
+            crack.length = q;
+            break;
+          }
+        }
+        if (crack.length < 6) continue;
         inkLine(ctx, crack, false, { width: 0.8 * px, color: k.line, alpha: dark ? 0.5 : 0.7, taper: [0.05, 0.7], seed: c * 7 + bi, raw: true, min: 0.2 * px });
       }
       ctx.restore();
@@ -648,7 +875,29 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
         light: dark ? UNLIGHT : LIGHT,
         min: 0.25 * px,
       });
-    if (!flags.some(Boolean)) pen(pts, false, true);
+    // Where the pen has let go toward the foot, the line is broken off
+    // there and runs out thin into it.
+    const fading = (run: number[], cleft: boolean, closed: boolean) => {
+      const mm = run.length / 2;
+      const keep: boolean[] = [];
+      for (let i = 0; i < mm; i++) keep.push(lf(run[i * 2], run[i * 2 + 1]) >= 0.12);
+      if (keep.every(Boolean)) {
+        pen(run, cleft, closed);
+        return;
+      }
+      const start = closed ? keep.findIndex((v) => !v) : 0;
+      let sub: number[] = [];
+      for (let q = 0; q < mm + (closed ? 1 : 0); q++) {
+        const i = (start + q) % mm;
+        if (keep[i]) sub.push(run[i * 2], run[i * 2 + 1]);
+        else {
+          if (sub.length >= 6) pen(sub, cleft, false);
+          sub = [];
+        }
+      }
+      if (sub.length >= 6) pen(sub, cleft, false);
+    };
+    if (!flags.some(Boolean)) fading(pts, false, true);
     else {
       // Runs round the ring, starting where one begins so none is cut at the seam.
       const s0 = flags.findIndex((f, i) => f !== flags[(i - 1 + m) % m]);
@@ -658,7 +907,7 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
         const i = (s0 + q) % m;
         if (q === m || flags[i] !== kind) {
           run.push(pts[i * 2], pts[i * 2 + 1]);
-          if (run.length >= 6) pen(run, kind, false);
+          if (run.length >= 6) fading(run, kind, false);
           run = [];
           kind = flags[i];
         }
@@ -681,7 +930,7 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       ctx.fill(union);
     }
   }
-  if (k.barnacles && d > 0.3 && r() < 0.7) {
+  if (k.barnacles && !far && d > 0.3 && r() < 0.7) {
     // A few barnacles on a boulder's top: a low cone, its plates, the slit on top.
     const nb = 2 + Math.floor(r() * 4);
     const u0 = shape.span * (0.25 + 0.4 * r());
@@ -716,19 +965,32 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       ctx.stroke();
     }
   }
-  // The foot let go of: the wash running dry down toward the wall.
-  const [fa, fb] = k.fade ?? [0.62, 1.04];
-  const fy0 = Y(shape.height * fa);
-  const fy1 = Y(shape.height * fb);
-  const fade = ctx.createLinearGradient(0, fy0, 0, fy1);
+  // The foot let go of: the wash running dry down into the water, along a
+  // ragged line rather than a level one, laid in narrow columns that meet
+  // without overlapping (an overlap would erase twice).
+  const fade = ctx.createLinearGradient(0, 0, 0, (fb - fa) * H);
   fade.addColorStop(0, 'rgba(0,0,0,0)');
-  fade.addColorStop(0.6, 'rgba(0,0,0,0.75)');
+  fade.addColorStop(0.3, 'rgba(0,0,0,0.22)');
+  fade.addColorStop(0.65, 'rgba(0,0,0,0.7)');
   fade.addColorStop(1, 'rgba(0,0,0,1)');
   ctx.globalCompositeOperation = 'destination-out';
   ctx.globalAlpha = 1;
   ctx.fillStyle = fade;
-  ctx.fillRect(Math.min(X(shape.lo), X(shape.hi)) - 4 * px, fy0, Math.abs(X(shape.hi) - X(shape.lo)) + 8 * px, ctx.canvas.height);
+  const cw = Math.max(2, Math.round(3 * px));
+  const xa = Math.floor(Math.min(X(shape.lo), X(shape.hi)) - 6 * px);
+  const xb = Math.ceil(Math.max(X(shape.lo), X(shape.hi)) + 6 * px);
+  const base = ctx.getTransform();
+  for (let x = xa; x < xb; x += cw) {
+    ctx.setTransform(base.translate(0, Y((fa + 0.05 * ragged(x + cw / 2)) * H)));
+    ctx.fillRect(x, 0, cw, ctx.canvas.height);
+  }
   ctx.restore();
+}
+
+/** `#rrggbb` as rgba() at `a`. */
+function rgba(hex: string, a: number): string {
+  const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
 /** The colours a rock is washed and lined in at a depth: the zone's water,
@@ -750,14 +1012,14 @@ export function rockStyle(zoneWater: Water, dark: boolean, px: number, d: number
 
 function render(o: Outcrop, w: number, h: number, dark: boolean, px: number): Placed | null {
   const span = (o.reach + 0.03) * w;
-  const shape = rockShape(hash32(o.id, 'rock'), span, o.thick * h, px);
+  const shape = rockShape(hash32(o.id, 'rock'), span, o.thick * h, px, outcropGrammar(o));
   const tallest = Math.max(0, ...o.growths.map((g) => g.size)) * px;
   // Room out past the lip for what grows there, a fan being wider than tall.
   const padIn = Math.max(24 * px, tallest * 0.95);
   const padT = Math.ceil(tallest * 1.15 + 16 * px - Math.min(0, shape.minY));
   const uLo = -2 * px;
   const cw = Math.min(4096, Math.ceil(Math.max(shape.hi, span) - uLo + padIn));
-  const ch = Math.min(4096, Math.ceil(padT + shape.height * 1.08 + 8 * px));
+  const ch = Math.min(4096, Math.ceil(padT + rockFoot(shape) + 8 * px));
   const canvas = document.createElement('canvas');
   canvas.width = cw;
   canvas.height = ch;
@@ -805,7 +1067,7 @@ function render(o: Outcrop, w: number, h: number, dark: boolean, px: number): Pl
 /** Where a point `f` (0..1 along the rock top from its own edge) sits on the page, in device px, for a rock in view: the top of the rock at f. */
 export function rockTopAt(o: Outcrop, top: number, f: number, w: number, h: number, px: number): { x: number; y: number } {
   const span = (o.reach + 0.03) * w;
-  const shape = rockShape(hash32(o.id, 'rock'), span, o.thick * h, px);
+  const shape = rockShape(hash32(o.id, 'rock'), span, o.thick * h, px, outcropGrammar(o));
   // The rock's wall is 3% of the page out past the edge.
   const x = span * f - 0.03 * w;
   return { x: o.edge < 0 ? x : w - x, y: top * h + shape.top(f * span) };
