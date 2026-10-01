@@ -108,7 +108,7 @@ test('one jelly per block, where it ended, the last the hero and the largest', (
   }
 });
 
-test('one ledge per break, at the depth it was taken, under the jelly that rested', () => {
+test('one ledge per break, a short outcrop just under the jelly that rested', () => {
   for (const c of CASES) {
     for (const shape of SHAPES) {
       const plan = planOf(c, shape);
@@ -116,8 +116,10 @@ test('one ledge per break, at the depth it was taken, under the jelly that reste
       for (const l of plan.ledges) {
         const j = plan.jellies[l.rest];
         assert.ok(l.y > j.y, `${c.name}: ledge ${l.rest} is above its jelly`);
-        const reaches = l.edge < 0 ? l.reach * plan.w >= j.x : plan.w - l.reach * plan.w <= j.x;
-        assert.ok(reaches, `${c.name}: ledge ${l.rest} does not reach under its jelly`);
+        // A short outcrop, never a shelf across the page, and the jelly near its lip.
+        assert.ok(l.reach <= 0.3, `${c.name}: ledge ${l.rest} reaches ${l.reach.toFixed(2)} of the width`);
+        const lip = l.edge < 0 ? l.reach * plan.w : plan.w - l.reach * plan.w;
+        assert.ok(Math.abs(j.x - lip) <= plan.w * 0.32, `${c.name}: ledge ${l.rest} is far from its jelly`);
       }
       // A longer break, a wider ledge, for jellies the same distance from the edge.
       const rests = c.segs.filter((s) => s.kind === 'break');

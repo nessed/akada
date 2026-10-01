@@ -137,13 +137,13 @@ function glazesFor(cssW: number, cssH: number, seed: number): Glazes {
   for (let k = 1; k < n; k++) base.push(band * (k + (r() - 0.5) * 0.4));
   // Each edge laid a little aslant, as a brush crosses a page, wandering
   // and ragged rather than rolling: a wash's edge, not a horizon.
-  const slant = Array.from({ length: n }, () => (r() - 0.5) * 0.06);
+  const slant = Array.from({ length: n }, () => (r() - 0.5) * 0.14);
   return {
     n,
     at: (k, X) =>
       base[k] +
       slant[k] * (X - cssW / 2) +
-      (fbm(l, X / 260 + k * 17.3, k * 5.1, 4) - 0.5) * band * 0.32 +
+      (fbm(l, X / 260 + k * 17.3, k * 5.1, 4) - 0.5) * band * 0.5 +
       (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 10 +
       (noise(l, X / 9 + k * 7, k * 3.3) - 0.5) * 2.5,
   };
@@ -325,7 +325,8 @@ export class Wash {
         const y = glazes.at(k, X);
         // The line comes and goes along its length, as a dried edge does.
         const v = noise(l, X / 90 + k * 13, k * 7.3);
-        const lv = v < 0.38 ? -1 : Math.min(LEVELS - 1, Math.floor(((v - 0.38) / 0.62) * LEVELS));
+        // Mostly gone: a dried edge shows in short broken runs, never a rule.
+        const lv = v < 0.56 ? -1 : Math.min(LEVELS - 1, Math.floor(((v - 0.56) / 0.44) * LEVELS));
         const x = X * sx;
         const yy = (y + 1.5) * sy;
         if (lv !== level) {
@@ -342,11 +343,11 @@ export class Wash {
     t.strokeStyle = '#000000';
     for (let i = 0; i < LEVELS; i++) {
       const a = (i + 1) / LEVELS;
-      t.globalAlpha = 0.1 * a;
-      t.lineWidth = 3.5 * px;
+      t.globalAlpha = 0.07 * a;
+      t.lineWidth = 4.5 * px;
       t.stroke(dark[i]);
-      t.globalAlpha = 0.26 * a;
-      t.lineWidth = Math.max(1, 0.9 * px);
+      t.globalAlpha = 0.13 * a;
+      t.lineWidth = Math.max(1, 0.8 * px);
       t.stroke(dark[i]);
     }
     t.strokeStyle = '#FFFFFF';

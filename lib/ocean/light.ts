@@ -189,6 +189,9 @@ function loop(pts: number[]): Path2D {
 
 /* ---- Snell's window ---- */
 
+/** How much shallower than wide the window is seen. */
+const SNELL_SQUASH = 0.46;
+
 /** The rim's ripple: a few waves of different lengths round the circle. */
 function rimRipple(r: Rand): (a: number) => number {
   const waves = [
@@ -340,6 +343,11 @@ export function drawSnellWindow(
   const windowPath = loop(rim);
 
   ctx.save();
+  // Seen from below and a little to one side the window is a wide, low
+  // ellipse rather than a disc, and soft all round: no line drawn at its edge.
+  ctx.translate(cx, cy);
+  ctx.scale(1, SNELL_SQUASH);
+  ctx.translate(-cx, -cy);
 
   // The water beyond the window: the depths reflected back down off the
   // underside of the surface, darkest just past the rim.
@@ -347,7 +355,7 @@ export function drawSnellWindow(
     const outer = R * 2.6;
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, outer);
     const at = (k: number) => Math.min(1, (R * k) / outer);
-    const top = dark ? 0.55 : 0.2;
+    const top = dark ? 0.16 : 0.05;
     g.addColorStop(0, rgba(shadow, 0));
     g.addColorStop(at(0.95), rgba(shadow, 0));
     g.addColorStop(at(1.03), rgba(shadow, top));
@@ -359,16 +367,19 @@ export function drawSnellWindow(
     ctx.fillRect(cx - outer, cy - outer, outer * 2, outer * 2);
   }
 
-  // The light the window throws into the water round it.
+  // The light the window throws into the water round it: a long, soft
+  // glow, so the window reads as a source of light, not a shape.
   {
-    const g = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 1.6);
-    const a = (dark ? (sun.night ? 0.25 : 0.2) : 0.4) * glow;
+    const reach = R * 2.8;
+    const g = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, reach);
+    const a = (dark ? (sun.night ? 0.3 : 0.28) : 0.5) * glow;
     g.addColorStop(0, rgba(sky, a));
-    g.addColorStop(0.5, rgba(sky, a * 0.55));
+    g.addColorStop(0.3, rgba(sky, a * 0.55));
+    g.addColorStop(0.6, rgba(sky, a * 0.18));
     g.addColorStop(1, rgba(sky, 0));
     ctx.globalCompositeOperation = lift;
     ctx.fillStyle = g;
-    ctx.fillRect(cx - R * 1.6, cy - R * 1.6, R * 3.2, R * 3.2);
+    ctx.fillRect(cx - reach, cy - reach, reach * 2, reach * 2);
   }
 
   // The window itself: a wash of sky inside the rippled rim, the rim then
@@ -384,13 +395,14 @@ export function drawSnellWindow(
     // By day the horizon squeezed into the rim is a touch brighter; by
     // night it is not, or the window turns into a glass ball.
     const rimLift = sun.night ? 0 : 0.35;
-    fill.addColorStop(0, rgba(sky, a * 0.92));
-    fill.addColorStop(0.7, rgba(sky, a * 0.86));
-    fill.addColorStop(0.92, rgba(mixHex(sky, '#FFFFFF', rimLift), a * (sun.night ? 0.8 : 1)));
-    fill.addColorStop(1, rgba(sky, a * 0.7));
+    // Luminous at the heart and thinning to nothing at the edge.
+    fill.addColorStop(0, rgba(sky, a * 0.9));
+    fill.addColorStop(0.4, rgba(sky, a * 0.72));
+    fill.addColorStop(0.75, rgba(mixHex(sky, '#FFFFFF', rimLift), a * (sun.night ? 0.3 : 0.38)));
+    fill.addColorStop(1, rgba(sky, 0));
     g.fillStyle = fill;
     g.fill(windowPath);
-    const soft = soften(S, Math.max(2, R / 70));
+    const soft = soften(S, Math.max(2, R / 7));
     ctx.globalCompositeOperation = dark ? 'source-over' : 'source-over';
     ctx.drawImage(soft.canvas, 0, 0, soft.w, soft.h, cx - o2, cy - o2, S.w, S.h);
   }
@@ -463,7 +475,7 @@ export function drawSnellWindow(
         inkLine(ctx, piece, false, {
           width: pen * (bright ? 1.2 + rr() * 1.6 : 0.8 + rr()),
           color: col,
-          alpha: dark ? (bright ? 0.24 : 0.12) * (0.6 + 0.4 * glow) : bright ? 0.12 : 0.07,
+          alpha: dark ? (bright ? 0.2 : 0.1) * (0.6 + 0.4 * glow) : bright ? 0.07 : 0.04,
           lost: 0.75,
           swell: 0.5,
           taper: [0.3, 0.3],
@@ -528,7 +540,12 @@ export function drawSnellWindow(
       const soft = soften(disc, Math.max(1.5, rd / 18));
       ctx.globalCompositeOperation = dark ? 'lighter' : 'source-over';
       ctx.globalAlpha = Math.min(1, 0.6 + 0.5 * sun.strength) * (dark ? 1 : 0.95);
-      ctx.drawImage(soft.canvas, 0, 0, soft.w, soft.h, body.x - disc.w / 2, body.y - disc.h / 2, disc.w, disc.h);
+      // The disc is round however the window is seen.
+      ctx.save();
+      ctx.translate(body.x, body.y);
+      ctx.scale(1, 1 / SNELL_SQUASH);
+      ctx.drawImage(soft.canvas, 0, 0, soft.w, soft.h, -disc.w / 2, -disc.h / 2, disc.w, disc.h);
+      ctx.restore();
       ctx.globalAlpha = 1;
     }
     // Glints: the sun caught again on the faces of the ripples round it,
@@ -604,39 +621,11 @@ export function drawSnellWindow(
     if (disc) {
       const soft = soften(disc, Math.max(1, rm / 40));
       ctx.globalCompositeOperation = 'source-over';
-      ctx.drawImage(soft.canvas, 0, 0, soft.w, soft.h, body.x - disc.w / 2, body.y - disc.h / 2, disc.w, disc.h);
-    }
-  }
-
-  // The rim: broken strokes round the edge of the window, light caught on
-  // the bend inside it and a darker refracted band just outside, the pen
-  // never quite closing the circle.
-  {
-    const rr = mulberry32(hash32('snell', seed, 'rim'));
-    ctx.globalCompositeOperation = 'source-over';
-    const strokes = 110;
-    for (let i = 0; i < strokes; i++) {
-      const inside = rr() < 0.62;
-      const a0 = rr() * TAU;
-      const span = 0.04 + rr() * 0.26;
-      const k = inside ? 0.955 + rr() * 0.04 : 1.004 + rr() * 0.035;
-      const pts: number[] = [];
-      for (let t = 0; t <= 1.0001; t += 1 / 14) {
-        const a = a0 + span * t;
-        const rad = R * ripple(a) * (k + Math.sin(t * 5 + i) * 0.003);
-        pts.push(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
-      }
-      const col = inside ? (dark ? mixHex(sky, '#FFFFFF', 0.7) : ink) : dark ? shadow : ink;
-      inkLine(ctx, pts, false, {
-        width: pen * (inside ? 1.2 + rr() * 2.2 : 0.8 + rr() * 1.4),
-        color: col,
-        alpha: inside ? (dark ? 0.5 : 0.42) * (0.4 + 0.6 * rr()) * (0.6 + 0.4 * glow) : (dark ? 0.5 : 0.22) * (0.4 + 0.6 * rr()),
-        lost: 0.6,
-        swell: 0.6,
-        taper: [0.3, 0.3],
-        seed: hash32('snell', seed, 'rim', i),
-        min: px * 0.4,
-      });
+      ctx.save();
+      ctx.translate(body.x, body.y);
+      ctx.scale(1, 1 / SNELL_SQUASH);
+      ctx.drawImage(soft.canvas, 0, 0, soft.w, soft.h, -disc.w / 2, -disc.h / 2, disc.w, disc.h);
+      ctx.restore();
     }
   }
 
@@ -695,6 +684,8 @@ function paintRays(w: number, h: number, o: RayOptions): Surface | null {
     const w0 = size * (0.0015 + 0.009 * r() * r());
     const w1 = w0 * (2.2 + 3.5 * r());
     const bright = (0.18 + 0.82 * Math.pow(r(), 1.8)) * (0.35 + 0.65 * bunch);
+    // The fan thins out at its sides, so it has no edge, only less light.
+    const sideFade = Math.pow(Math.max(0, 1 - along * along), 1.1);
     const nx = dy;
     const ny = -dx;
     const ex = x0 + dx * len;
@@ -706,7 +697,7 @@ function paintRays(w: number, h: number, o: RayOptions): Surface | null {
     for (let k = 0; k < breaks.length; k++) {
       // The water swallows it: light falls off with distance.
       const fade = Math.exp(-breaks[k] * 1.6);
-      grad.addColorStop(Math.min(1, breaks[k]), `rgba(${cr}, ${cg}, ${cb}, ${(bright * level[k] * fade * 0.22).toFixed(4)})`);
+      grad.addColorStop(Math.min(1, breaks[k]), `rgba(${cr}, ${cg}, ${cb}, ${(bright * sideFade * level[k] * fade * 0.22).toFixed(4)})`);
     }
     g.fillStyle = grad;
     // Twice: a wide faint sheath, then the core.

@@ -351,17 +351,20 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     ctx.stroke(cirri);
   }
 
-  // The fins, high on each side of the crown like ears, rowing.
-  const raise = 0.35 + 0.55 * flap;
+  // The fins: a pair of thin paddles out from the sides of the mantle,
+  // a little above its middle, held nearly flat and rowing through a small
+  // arc, the far edge drooping as it comes down.
+  const raise = 0.02 + 0.22 * flap;
   for (const side of [-1, 1]) {
     ctx.save();
-    ctx.translate(side * 0.55 * R, -1.15 * R);
+    ctx.translate(side * 0.8 * R, -0.95 * R);
     ctx.scale(side, 1);
     ctx.rotate(-raise);
     const fin = new Path2D();
-    fin.moveTo(0, -0.14 * R);
-    fin.bezierCurveTo(0.45 * R, -0.42 * R, 1.05 * R, -0.36 * R, 1.05 * R, -0.02 * R);
-    fin.bezierCurveTo(1.05 * R, 0.28 * R, 0.45 * R, 0.3 * R, 0, 0.14 * R);
+    fin.moveTo(0, -0.1 * R);
+    fin.bezierCurveTo(0.3 * R, -0.2 * R, 0.68 * R, -0.16 * R, 0.8 * R, 0.0 * R);
+    fin.bezierCurveTo(0.84 * R, 0.1 * R, 0.6 * R, 0.17 * R, 0.3 * R, 0.13 * R);
+    fin.quadraticCurveTo(0.12 * R, 0.11 * R, 0, 0.1 * R);
     ctx.fillStyle = wash;
     ctx.globalAlpha = env * 0.7;
     ctx.fill(fin);
@@ -371,8 +374,8 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
     // A couple of strokes of shading along the fin, more of them big.
     ctx.beginPath();
     for (const o of d > 0.4 ? [-0.12, -0.04, 0.04, 0.12, 0.19] : [0]) {
-      ctx.moveTo(0.2 * R, (0.02 + o) * R);
-      ctx.quadraticCurveTo(0.55 * R, (-0.04 + o * 1.3) * R, (0.85 - Math.abs(o)) * R, o * R);
+      ctx.moveTo(0.12 * R, (0.0 + o * 0.6) * R);
+      ctx.quadraticCurveTo(0.42 * R, (-0.03 + o * 0.7) * R, (0.7 - Math.abs(o)) * R, o * 0.6 * R);
     }
     ctx.globalAlpha = env * 0.35;
     ctx.lineWidth = 0.5 * pw;

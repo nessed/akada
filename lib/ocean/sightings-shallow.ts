@@ -500,14 +500,26 @@ const SIPHON_HUES = [HUES[1], HUES[2], HUES[3], HUES[4], HUES[7]];
  * drifts across over the minute and a half, swimming forward a little as it
  * goes. On dark water it glows, faintly, in a wave that travels down it.
  */
-export function drawSiphonophore(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean) {
+export function drawSiphonophore(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  age: number,
+  seed: number,
+  px: number,
+  ambient: number,
+  dark: boolean,
+  /** How it lies, radians from level, in place of corner to corner: a still that wants it lying easy. */
+  lie?: number,
+) {
   const env = envelope(age, 0.12, 0.12);
   if (env <= 0) return;
   const r = mulberry32(seed);
   const diag = Math.hypot(w, h);
   const m = Math.min(w, h);
   // Corner to corner, more or less, down either diagonal, front at either end.
-  const slope = Math.atan2(h, w) * range(r, 0.6, 1.1) * (r() < 0.5 ? 1 : -1);
+  const rolled = Math.atan2(h, w) * range(r, 0.6, 1.1) * (r() < 0.5 ? 1 : -1);
+  const slope = lie ?? rolled;
   const ahead = r() < 0.5 ? 1 : -1;
   const tx = Math.cos(slope) * ahead;
   const ty = Math.sin(slope) * ahead;
