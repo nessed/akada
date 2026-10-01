@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildAnatomy, LAYERS } from './anatomy';
+import { buildAnatomy, LAYERS, lureKind } from './anatomy';
 import { rollBiome } from './biome';
 import { depthAt, ZONES } from './depth';
 import { mutate, rollGenome } from './genome';
@@ -286,4 +286,42 @@ test('colour drains with depth, the reds first', () => {
   assert.ok(sat(drained(red, 0.5)) < sat(red) * 0.4, 'red should be mostly grey by the twilight');
   // Blue keeps more of itself at the same depth than red does.
   assert.ok(sat(drained(blue, 0.4)) / sat(blue) > sat(drained(red, 0.4)) / sat(red));
+});
+
+test('every fish has a tail, an angler is a globe, and a chain never lies level', () => {
+  let minFin = Infinity;
+  let minHW = Infinity;
+  const tilts: number[] = [];
+  for (let seed = 1; seed <= 600; seed++) {
+    for (const z of [0.1, 0.4, 0.7, 0.95]) {
+      const g = mutate(rollGenome(seed, z, 'fish'), seed, seed % 3);
+      const a = buildAnatomy(g, seed);
+      // The fins reaching back past the tail end (x < 0, on a body 100 long).
+      let fx = 0;
+      for (const s of a.layers.fin) {
+        if (s.kind !== 'path') continue;
+        for (let i = 0; i < s.pts.length; i += 2) if (s.pts[i + 1] > -100 && s.pts[i] < 5) fx = Math.min(fx, s.pts[i]);
+      }
+      minFin = Math.min(minFin, -fx / 100);
+      if (lureKind(g) === 'angler') {
+        const b = a.layers.body[0];
+        let y0 = Infinity;
+        let y1 = -Infinity;
+        if (b.kind === 'path') for (let i = 1; i < b.pts.length; i += 2) {
+          y0 = Math.min(y0, b.pts[i]);
+          y1 = Math.max(y1, b.pts[i]);
+        }
+        minHW = Math.min(minHW, (y1 - y0) / 100);
+      }
+      const stem = buildAnatomy(rollGenome(seed, z, 'chain'), seed).layers.tentF[0];
+      if (stem && stem.kind === 'path') {
+        const p = stem.pts;
+        tilts.push((Math.atan2(Math.abs(p[p.length - 1] - p[1]), Math.abs(p[p.length - 2] - p[0])) * 180) / Math.PI);
+      }
+    }
+  }
+  assert.ok(minFin >= 0.18, `shortest tail fin ${minFin.toFixed(3)} of the body`);
+  if (Number.isFinite(minHW)) assert.ok(minHW >= 0.6, `flattest angler ${minHW.toFixed(2)}`);
+  assert.ok(tilts.length > 0);
+  assert.ok(Math.min(...tilts) >= 12 && Math.max(...tilts) <= 42, `chain tilt ${Math.min(...tilts).toFixed(1)}–${Math.max(...tilts).toFixed(1)}°`);
 });
