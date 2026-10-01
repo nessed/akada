@@ -463,9 +463,11 @@ export function rockOfKind(seed: number, kind: number, want: number, exact = tru
   // Scaled to stand as tall as asked, as near as the engine goes.
   let k = want;
   const dressed = (parts: RockPart[]) => parts.map((p) => (grammar === 'heap' ? p : { ...p, grammar }));
+  // A slab or an overhang is one rock: stacked, they read as tables.
+  if ((grammar === 'slab' || grammar === 'overhang') && kind !== 0) kind = 0;
   let s = rockSilhouette(dressed(build(k)));
-  for (let i = 0; i < (exact ? 1 : 0); i++) {
-    k = Math.max(0.35, Math.min(1.3, k * (want / Math.max(0.05, s.ratio))));
+  for (let i = 0; i < (exact ? 3 : 0) && Math.abs(s.ratio - want) > 0.02; i++) {
+    k = Math.max(0.35, Math.min(1.6, k * (want / Math.max(0.05, s.ratio))));
     k = Math.round(k * 50) / 50;
     s = rockSilhouette(dressed(build(k)));
   }
@@ -623,7 +625,7 @@ export function floorAt(plan: { w: number; h: number; floor: Plan['floor']; tren
   const f = plan.floor;
   if (!f) return plan.h;
   const k = plan.w / 1000;
-  const swell = f.amp * (0.62 * Math.sin(x / (140 * k) + f.phase) + 0.28 * Math.sin(x / (37 * k) + f.phase * 2) + 0.1 * Math.sin(x / (9 * k) + f.phase));
+  const swell = f.amp * (0.62 * Math.sin(x / (140 * k) + f.phase) + 0.28 * Math.sin(x / (37 * k) + f.phase * 2) + 0.04 * Math.sin(x / (9 * k) + f.phase));
   const t = plan.trench;
   if (!t) return f.y + swell;
   // The walls of the trench: from their top at the page's edges, falling
@@ -634,10 +636,10 @@ export function floorAt(plan: { w: number; h: number; floor: Plan['floor']; tren
   const left = x <= l;
   const s = clamp(left ? x / Math.max(1, l) : (plan.w - x) / Math.max(1, plan.w - r), 0, 1);
   // A wall in ledges: benches falling gently, then a steep drop to the next.
-  let fl = 0.3 * Math.pow(s, t.fall);
+  let fl = 0.42 * Math.pow(s, t.fall);
   for (const [at, d, wd] of t.ledges?.[left ? 0 : 1] ?? []) {
     const q = clamp((s - (at - wd)) / (2 * wd), 0, 1);
-    fl += 0.7 * d * q * q * (3 - 2 * q);
+    fl += 0.58 * d * q * q * (3 - 2 * q);
   }
   // Rough as rock is, a little, all along.
   const rough = plan.h * 0.006 * (Math.sin(x / (23 * k) + fl * 9) * 0.6 + Math.sin(x / (7.3 * k) + 1.7) * 0.4) * Math.min(1, s * 6);
@@ -847,13 +849,18 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     const top = winBox.y1 + 0.4 * j.r * j.aspect + j.r * 0.2;
     j.x = clamp(xAt(t) + (j.hero ? 0 : jitter(j.block)), w * MARGIN + j.r * 1.15, w * (1 - MARGIN) - j.r * 1.15);
     if (!j.hero) {
-      // Never stacked in a column with the one before it: stepped aside.
-      const prev = jellies[j.block - 1];
-      if (prev && Math.abs(prev.x - j.x) < w * 0.05) {
-        const away = j.x >= prev.x ? 1 : -1;
-        const x = prev.x + away * w * 0.07;
-        j.x = x > w * MARGIN + j.r * 1.15 && x < w * (1 - MARGIN) - j.r * 1.15 ? x : prev.x - away * w * 0.07;
-        j.x = clamp(j.x, w * MARGIN + j.r * 1.15, w * (1 - MARGIN) - j.r * 1.15);
+      // Never stacked in a column with the one before or after it: stepped aside.
+      const lo = w * MARGIN + j.r * 1.15;
+      const hi = w * (1 - MARGIN) - j.r * 1.15;
+      const near = [jellies[j.block - 1], jellies[j.block + 1]].filter((o): o is PlacedJelly => !!o && o !== j && o.box.x1 > o.box.x0);
+      const stacked = () => near.some((o) => Math.abs(o.x - j.x) < w * 0.05);
+      if (stacked()) {
+        const x0 = j.x;
+        for (const step of [0.07, -0.07, 0.1, -0.1, 0.13, -0.13]) {
+          j.x = clamp(x0 + step * w * (x0 < w / 2 ? -1 : 1), lo, hi);
+          if (!stacked()) break;
+        }
+        if (stacked()) j.x = x0;
       }
     }
     // Down the page with depth, eased toward the path's own line so the
@@ -861,7 +868,9 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     // On a wide page the way down steepens toward its end, so the last
     // blocks, which matter most, stand apart in depth as well as across.
     const lineY = tall ? h * 0.2 + (yEnd - h * 0.2) * t : h * 0.16 + (yEnd - h * 0.16) * Math.pow(t, 1.7);
-    const y = yOf(focusAtU(uu)) * (1 - lineK) + lineY * lineK;
+    // And a little off the line, up or down, so no three stand in a row.
+    const off = j.hero ? 0 : (unit01(s.key, 'jelly-drop', j.block) - 0.5) * h * (tall ? 0.04 : 0.07);
+    const y = yOf(focusAtU(uu)) * (1 - lineK) + lineY * lineK + off;
     j.y = j.hero ? yEnd : clamp(y, top, h * (1 - MARGIN) - j.len - j.r * 0.45 * j.aspect);
     j.z = zAt(j.y);
     j.box = jellyHull(j);
@@ -925,7 +934,18 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   for (let i = n - 2; i >= 0; i--) {
     const j = jellies[i];
     for (let tries = 0; tries < 120; tries++) {
-      const bad = j.y > jellies[i + 1].y || jellies.slice(i + 1).some((o) => Math.hypot(o.x - j.x, o.y - j.y) < 1.4 * (o.r + j.r) || (o.hero && boxGap(o.box, j.box) < CLEAR) || inter(o.box, j.box) > 0);
+      // Never touching (a clear gap of 0.015 of the page), nor hung one
+      // straight under the next.
+      const bad =
+        j.y > jellies[i + 1].y ||
+        jellies
+          .slice(i + 1)
+          .some(
+            (o) =>
+              Math.hypot(o.x - j.x, o.y - j.y) < 1.4 * (o.r + j.r) ||
+              (o.hero && boxGap(o.box, j.box) < CLEAR) ||
+              (at[i] > U * 0.03 && boxGap(o.box, j.box) < h * 0.015),
+          );
       if (!bad) break;
       if (at[i] > U * 0.004) at[i] = Math.max(0, at[i] - U * 0.012);
       else if (j.r > heroR * 0.22) {
@@ -968,7 +988,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
         // Drops spread along the wall, closer and deeper toward the cleft.
         const at = 0.12 + (0.84 * (i + 0.3 + lr() * 0.4)) / n;
         const d = (0.6 + lr() * 0.8) * (0.6 + at);
-        out.push([at, d, 0.012 + lr() * 0.02]);
+        out.push([at, d, 0.02 + lr() * 0.035]);
         total += d;
       }
       return out.map(([a, d, wd]) => [a, d / total, wd]);
@@ -2196,7 +2216,7 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
     phase: it.phase,
     box: boxOf(it),
   }));
-  out.push(...floorFauna(onFloor, e, hero));
+  out.push(...floorFauna(onFloor, e, hero, out.map((a) => a.box)));
   // Far first, near last: the order they are painted in.
   out.sort((a, b) => a.layer - b.layer || a.y - b.y);
   return { cast: out, score: (best as { score: number }).score };
@@ -2207,7 +2227,7 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
  * Poisson disc at least 0.08 of the width apart, each at its own depth on the
  * floor, none big: no more than 0.06 S, nor more than 0.6 of the hero's bell.
  */
-function floorFauna(picks: Pick[], e: CastEnv, hero: PlacedJelly): PlacedAnimal[] {
+function floorFauna(picks: Pick[], e: CastEnv, hero: PlacedJelly, cast: Box[]): PlacedAnimal[] {
   if (!picks.length || e.floorY == null) return [];
   const { w, h } = e;
   const most = e.trench ? 2 : 4;
@@ -2230,7 +2250,7 @@ function floorFauna(picks: Pick[], e: CastEnv, hero: PlacedJelly): PlacedAnimal[
       if (e.trench && (Math.abs(x - e.trench.x) < e.trench.gap / 2 + bw || g > e.trench.top + (h - e.trench.top) * 0.45)) continue;
       const y = clamp(g + (r() - 0.35) * h * 0.04 - bh * 0.35, 0, h * (1 - MARGIN) - bh / 2);
       const box = { x0: x - bw / 2, x1: x + bw / 2, y0: y - bh / 2, y1: y + bh / 2 };
-      if (avoid.some((b) => inter(b, box) > 0)) continue;
+      if (avoid.some((b) => inter(b, box) > 0) || cast.some((b) => boxGap(b, box) < 3)) continue;
       if (boxGap(box, hero.box) < CLEAR) continue;
       out.push({
         zone: p.met.zone,

@@ -1381,6 +1381,23 @@ timer, the finish sheet or Stats.
 that keep their grain and never go to black. Night: the dark water with the
 pen's light ink.
 
+**No horizon, no stage.** The water deepens as one smooth fall over half
+the page or more (the depth's colour is eased down the page so no band of it
+darkens faster than about 2 L* a hundredth of the page), and the wash's
+glazes are each laid by a stroke across part of the page only, tilted a
+degree or three and ragged at the edge, so no edge runs side to side and
+nothing reads as a sea's surface seen side on. Every rock runs off its edge
+(0.08 of the width or more) and down past its foot into the water; no two
+face each other across the page at one depth; each has a build of its own
+(a heap, a slab, a spire, an overhang, a field of boulders); far ones keep
+a broken thread of pen. The cast keeps three planes, each its own scale and
+strength (near whole, middle 0.6 at 0.75, far 0.35 at 0.45), and kinds keep
+their real sizes against each other (a turtle three school fish long, a
+squid one or two). A trench's walls fall in ledges, each lip jutting over
+the drop with its shadow under it, the beds of rock lying level across
+them, lit only on the wall that faces the window. A passing whale is always
+its whole shadow, half the page long.
+
 **Drawn for the wall.** At print size everything is inked at its full
 detail; things far off are hazier and take the water's colour; the pictures
 are drawn in strips sized to the clock, so the page keeps answering while it

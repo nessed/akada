@@ -33,7 +33,7 @@ import { SpriteCache, type Sprite } from '../sprites';
 import { Wash } from '../wash';
 import { causticsOn } from '../caustics';
 import type { Growth, GrowthKind } from '../outcrop';
-import { drawGrowth, inkRock, rockShape, rockStyle } from '../outcrop-sprite';
+import { drawGrowth, inkRock, rockFoot, rockShape, rockStyle } from '../outcrop-sprite';
 import { floorAt, REF, rockOutline, rockX, type PlacedEvent, type PlacedJelly, type PlacedRock, type Plan } from './layout';
 
 interface Caches {
@@ -94,11 +94,12 @@ const NIGHT = '#1A1815';
 /** The near plane's ink, on paper and on the night ground. */
 const INK = '#2B2620';
 const INK_NIGHT = '#E8E0CF';
-/** The far plane: faint, and mostly the water. */
-const FAR_ALPHA = 0.35;
+/** The far plane: mostly the water. */
 const FAR_MIX = 0.6;
 /** The middle plane: a step back into the water. */
 const MID_MIX = 0.3;
+/** How far the water takes a far rock. */
+const FAR_ROCK_MIX = 0.78;
 /** The bottom of the trench. */
 const ABYSS = '#110F0D';
 
@@ -451,6 +452,9 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number, row
   }
   for (const e of plan.events) if (!e.far && e.kind !== 'eye') paintEvent(ctx, plan, c, e, D, ambient, inSight, view);
   paintCast(ctx, plan, c, D, ambient, 1, inSight);
+  // ---- Light: what glows lights the water round it, laid behind the near
+  // plane so the near animals keep their full ink and are never paled by it.
+  paintLights(ctx, lightsOf(plan, c, D), view);
   // ---- Near: the rocks of the breaks, the way down (bubbles rising off
   // it, the jellies, the hero last), the near animals, the eye.
   for (const r of plan.rocks) if (r.plane === 2 && r.kind !== 'kelp') paintRock(ctx, plan, c, r, D, inSight, view);
@@ -469,8 +473,6 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number, row
     const wl = windowLayer(plan, c, D, sun, night, wx0, wx1, wy1);
     if (wl) ctx.drawImage(wl.canvas, wx0 * D, 0, (wx1 - wx0) * D, wy1 * D);
   }
-  // ---- Light: what glows lights what is near it.
-  paintLights(ctx, lightsOf(plan, c, D), view);
   // ---- Snow, caught in the light: specks and dust, nothing bigger.
   const rayKey = `${W}|${H}|${D}`;
   if (!c.rayLight || c.rayLight.key !== rayKey) {
@@ -1195,7 +1197,7 @@ function paintRock(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, k: Plac
     c.rocks.set(key, made);
   }
   ctx.save();
-  ctx.globalAlpha = k.plane === 0 ? FAR_ALPHA : 1;
+  ctx.globalAlpha = 1;
   blit(ctx, made.canvas, made.x, made.y, view);
   ctx.restore();
 }
@@ -1216,8 +1218,17 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
   const bx0 = Math.max(-10, k.box.x0 - 30);
   const bx1 = Math.min(w + 10, k.box.x1 + 30);
   const by0 = k.box.y0 - room;
-  // Room under it for its foot to go on down into the water.
-  const by1 = k.box.y1 + Math.max(span * 0.25, plan.h * 0.09);
+  // Each part as the engine builds it, and room under the lowest for its
+  // foot to go on down into the water: to where the engine has let go of
+  // it, and the foot's wash below that.
+  const parts = k.shape.parts.map((part) => {
+    const ps = part.span * span;
+    const shape = rockShape(part.seed, ps * D, part.thick * ps * D, D, part.grammar ?? 'heap');
+    return { part, shape, top: k.y + (k.shape.lift + part.dy) * span };
+  });
+  let foot = k.box.y1 + plan.h * 0.07;
+  for (const p of parts) foot = Math.max(foot, p.top + rockFoot(p.shape) / D);
+  const by1 = Math.max(k.box.y1 + span * 0.25, foot + 4);
   const cw = Math.max(1, Math.ceil((bx1 - bx0) * D));
   const chh = Math.max(1, Math.ceil((by1 - by0) * D));
   const canvas = document.createElement('canvas');
@@ -1241,17 +1252,18 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
   layer.width = cw;
   layer.height = chh;
   const lo = layer.getContext('2d');
-  k.shape.parts.forEach((part, i) => {
+  parts.forEach(({ part, shape }, i) => {
     const target = i === 0 ? o : lo;
     if (!target) return;
     if (i > 0) target.clearRect(0, 0, cw, chh);
-    const ps = part.span * S;
-    const shape = rockShape(part.seed, ps, part.thick * ps, D, part.grammar ?? 'heap');
     const x0 = rockX(k, w, part.at) * D - ox;
     const y0 = (k.y + (k.shape.lift + part.dy) * span) * D - oy;
     target.lineCap = 'round';
     target.lineJoin = 'round';
-    inkRock(target, shape, { x0, y0, dir }, { ...rockStyle(water, night, pen, detail, hash32(k.seed, 'part', i)), barnacles: k.zone < 2 && k.plane === 2 && i === k.shape.parts.length - 1 });
+    const style = rockStyle(water, night, pen, detail, hash32(k.seed, 'part', i));
+    // Far off: the engine's own haze, a broken thread of pen round it.
+    if (k.plane === 0) style.far = { water: water.top, mix: FAR_ROCK_MIX };
+    inkRock(target, shape, { x0, y0, dir }, { ...style, barnacles: k.zone < 2 && k.plane === 2 && i === k.shape.parts.length - 1 });
     if (i > 0) o.drawImage(layer, 0, 0);
   });
   const N = k.shape.top.length - 1;
@@ -1287,14 +1299,14 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
     }
   }
   footInto(o, plan, k, D, ox, oy, cw, chh, water, night);
-  // The water between: the middle a little taken by it, the far mostly.
-  if (k.plane < 2) {
+  // The water between: the middle a little taken by it (the far is the
+  // engine's own haze).
+  if (k.plane === 1) {
     o.globalCompositeOperation = 'source-atop';
-    o.globalAlpha = k.plane === 0 ? FAR_MIX : MID_MIX;
+    o.globalAlpha = MID_MIX;
     o.fillStyle = water.top;
     o.fillRect(0, 0, cw, chh);
   }
-  if (k.plane === 0) farOutline(o, k, D, cw, chh, night);
   return { canvas, x: ox, y: oy };
 }
 
@@ -1384,51 +1396,6 @@ function footInto(o: CanvasRenderingContext2D, plan: Plan, k: PlacedRock, D: num
   o.globalAlpha = 0.5;
   o.drawImage(body, 0, 0);
   o.restore();
-}
-
-/**
- * A far rock's edge: a fine broken line (0.4 of the pen) along the top it
- * really drew, so in the haze it is still a rock and never a lineless
- * smoke. Laid strong enough that, the far plane's faintness taken off, it
- * shows at 0.3.
- */
-function farOutline(o: CanvasRenderingContext2D, k: PlacedRock, D: number, cw: number, chh: number, night: boolean) {
-  let data: Uint8ClampedArray;
-  try {
-    data = o.getImageData(0, 0, cw, chh).data;
-  } catch {
-    return;
-  }
-  const step = Math.max(1, Math.round(2 * D));
-  const runs: number[][] = [];
-  let run: number[] = [];
-  for (let x = 0; x < cw; x += step) {
-    let top = -1;
-    for (let y = 0; y < chh; y++) {
-      if (data[(y * cw + x) * 4 + 3] > 140) {
-        top = y;
-        break;
-      }
-    }
-    if (top < 0) {
-      if (run.length >= 8) runs.push(run);
-      run = [];
-      continue;
-    }
-    run.push(x, top + 0.5 * D);
-  }
-  if (run.length >= 8) runs.push(run);
-  runs.forEach((pts, i) => {
-    inkLine(o, pts, false, {
-      width: 0.4 * D,
-      color: night ? INK_NIGHT : INK,
-      alpha: Math.min(1, 0.3 / FAR_ALPHA),
-      lost: 0.45,
-      swell: 0.35,
-      taper: [0.06, 0.12],
-      seed: hash32(k.seed, 'far-line', i),
-    });
-  });
 }
 
 /* ---- Against the light ---- */
@@ -1781,7 +1748,7 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
     // The crest in one pen line, broken where the light is: lit only on
     // the wall that faces the window of sky (the light comes from it).
     const facing = !t || (plan.window.x < t.x ? side > 0 : side < 0);
-    if (facing) inkLine(ctx, crest, false, { width: 0.9 * D, color: night ? '#E8E0CF' : '#F1ECDF', alpha: 0.45, lost: 0.75, swell: 0.4, taper: [0.02, 0.05], seed: plan.seed + bi, raw: true });
+    if (facing) inkLine(ctx, crest, false, { width: 0.9 * D, color: night ? '#E8E0CF' : '#F1ECDF', alpha: t ? 0.45 : 0.3, lost: 0.75, swell: 0.4, taper: [0.02, 0.05], seed: plan.seed + bi, raw: true });
     else inkLine(ctx, crest, false, { width: 0.8 * D, color: ink, alpha: 0.4, lost: 0.5, swell: 0.4, taper: [0.02, 0.05], seed: plan.seed + bi, raw: true });
     if (t && side !== 0) ledgeLips(ctx, plan, t, side, D, ink, facing, night);
     if (t) {
@@ -1896,8 +1863,12 @@ function paintEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: Pla
     return;
   }
   if (!sees(view, layer.x, layer.y, layer.x + layer.w, layer.y + layer.h)) return;
+  ctx.save();
+  // By night a shadow is barely darker than the dark water: a tenth or so.
+  if (e.kind === 'whale' && plan.ground === 'night') ctx.globalAlpha *= 0.72;
   if (layer.k === 1) {
     blit(ctx, layer.canvas, layer.x, layer.y, view);
+    ctx.restore();
     return;
   }
   const k = layer.k;
@@ -1905,8 +1876,12 @@ function paintEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: Pla
   const sy0 = Math.max(0, Math.floor((view.y0 - layer.y) * k) - 1);
   const sx1 = Math.min(layer.canvas.width, Math.ceil((view.x1 - layer.x) * k) + 1);
   const sy1 = Math.min(layer.canvas.height, Math.ceil((view.y1 - layer.y) * k) + 1);
-  if (sx1 <= sx0 || sy1 <= sy0) return;
+  if (sx1 <= sx0 || sy1 <= sy0) {
+    ctx.restore();
+    return;
+  }
   ctx.drawImage(layer.canvas, sx0, sy0, sx1 - sx0, sy1 - sy0, layer.x + sx0 / k, layer.y + sy0 / k, (sx1 - sx0) / k, (sy1 - sy0) / k);
+  ctx.restore();
 }
 
 interface EventLayer {

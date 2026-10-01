@@ -346,7 +346,9 @@ export function drawSnellWindow(
   // night ground: the light is light, and the ink is pale.
   const sky = sun.night
     ? dark
-      ? mixHex('#222B37', sun.warmth, 0.18)
+      ? // A print's night window is the moonlit sky, a little lighter than
+        // the water round it, never a hole darker than it.
+        mixHex(o.print ? '#5A6878' : '#222B37', sun.warmth, 0.18)
       : mixHex('#F7F5EC', sun.warmth, 0.12)
     : dark
       ? mixHex('#ABA99F', sun.warmth, 0.4)
@@ -646,7 +648,7 @@ export function drawSnellWindow(
     if (o.print) {
       // The whole disc, barely there, so the face reads round and never as
       // a letter; the lit part with its terminator soft, as it is seen
-      // through moving water; the seas inside it.
+      // through moving water.
       ctx.fillStyle = dark ? 'rgba(200, 210, 225, 0.07)' : 'rgba(120, 130, 140, 0.07)';
       ctx.beginPath();
       ctx.arc(0, 0, rm, 0, TAU);
@@ -654,11 +656,10 @@ export function drawSnellWindow(
       ctx.filter = `blur(${Math.max(0.6 * px, rm * 0.1).toFixed(2)}px)`;
       ctx.fillStyle = dark ? '#EEF0EA' : '#FBF7EC';
       ctx.fill(face);
-      ctx.filter = 'none';
-      ctx.save();
-      ctx.clip(face);
+      // The seas, as soft as the terminator (a clip would cut them square
+      // along it).
       seasIn();
-      ctx.restore();
+      ctx.filter = 'none';
       // The pen once round the whole of it, fine and broken, only a little
       // firmer on the lit side.
       const rim: number[] = [];
