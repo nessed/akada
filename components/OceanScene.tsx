@@ -239,8 +239,9 @@ export default function OceanScene({
       const now = performance.now();
       const ja = jellyAt.current;
       const jelly = ja ? { x: ja.x * W, y: ja.y * H, r: ja.r * W } : { x: W / 2, y: H * 0.22, r: W * 0.08 };
-      // Below the light, the jelly is what there is to see by.
-      const darkness = darknessAt(depth.z) * 0.8;
+      // Below the light, the jelly is what there is to see by. Not in a
+      // wallpaper: that is the sea with every animal in it lit and in colour.
+      const darkness = override != null ? 0 : darknessAt(depth.z) * 0.8;
       if (L.rules) drawRules(bctx, W, H, depth.z, px, water.dark ? '#FFFFFF' : '#8C8576');
       // Under the paper's bleeds, so the corners still read through a forest.
       if (kelp) drawKelp(bctx, W, H, kelp, shown, water, ambient, biome.env.current, px, L.clear, quality > 0.7);
@@ -341,7 +342,7 @@ export default function OceanScene({
       fctx.clearRect(0, 0, front.width, front.height);
       for (const v of visitors) {
         const ctx = v.layer === 2 ? fctx : bctx;
-        const sprite = sprites.get(v.species, v.len, water.dark, px);
+        const sprite = sprites.get(v.species, v.len, water.dark, px, override != null);
         if (!sprite) continue;
         let alpha = v.alpha;
         // Out of the jelly's light, only the ones with lights of their own show.
