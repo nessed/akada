@@ -1277,7 +1277,47 @@ pencil sketch and the ground are the jellyfish's, unchanged. Geometry is in `lib
 `anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`, `kelp`, `outcrop`), the drawing in
 `lib/ocean/draw.ts`, `sprites.ts`, `outcrop-sprite.ts`, the two `sightings` files, `wash`, `caustics`, `glow`, `sparkle` and `garden-eels` (with `jelly-at`, through which `StudyFan` tells the scene where the bell is), the scene in `components/OceanScene.tsx`,
 which draws the far water behind the hero `StudyFan` and the near animals in
-front of it.
+front of it. The kelp is drawn by `kelp-draw.ts`, the still-only light (the
+sky seen from below, the shafts with their shadows, things that glow
+lighting their neighbours, snow at three distances, the dither) by
+`light.ts`, all of it with the pen in `pen.ts`.
+
+### The sitting as a picture
+"Keep the picture" can paint a whole sitting as one cutaway of the sea
+(`lib/ocean/picture/`): the top is where it began, the bottom as deep as it
+went, and between them what happened, in order. **There are no words in it
+anywhere**: no date, no course, no length. A stranger sees a deep-sea plate;
+the reader who sat it can read their evening in it, the way a map of a walk
+reads to the person who walked it. It describes and never grades: pauses do
+not show and nothing is scored, as everywhere in the deep.
+
+| What happened | How it shows |
+|---|---|
+| How long the reader focused | How deep the picture goes. Each zone gets its share of the page, not its metres, so a short sitting is an airy, sunlit picture and a long one falls through the dark to the floor. |
+| When it began | The light at the surface (`sunFor` in `light.ts`): the shafts lean one way in the morning and the other in the afternoon, white at noon, amber at dusk; after dark the window of sky holds the moon in that night's real phase. |
+| Which course | The water's tint and the course's own species among the cast, so a term of one course's pictures look like a set. |
+| Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Together they are the way down, read through them and a thin trail of rising bubbles, never a drawn line. |
+| Each break | A rock outcrop at that depth, a longer break a longer rock. |
+| What swam by | The species that really did, met where they were met, curated to a cast of twenty or thirty; the rarest gets the best place. |
+| Rare sightings | Drawn where they happened; the whale fall lies on the floor. |
+| What was passed | Kelp at the top if it began in kelp, rocks and their growths at their depths, the floor if the abyss was reached. |
+
+**Composed, not cropped.** Each shape is laid out on its own: tall for a
+phone or a print (the way down a gentle S), wide for a laptop (a diagonal).
+A layout solver tries many arrangements from the sitting's own key, scores
+them (nothing overlapping, nothing cut by the edge, a third of the water
+left open, near, middle and far each its own), and keeps the best, so the
+same sitting always makes the same picture, today or in a year, from the
+timer, the finish sheet or Stats.
+
+**Two papers.** Cream: watercolour on rag, the deep laid in indigo washes
+that keep their grain and never go to black. Night: the dark water with the
+pen's light ink.
+
+**Drawn for the wall.** At print size everything is inked at its full
+detail; things far off are hazier and take the water's colour; the pictures
+are drawn in strips sized to the clock, so the page keeps answering while it
+develops (`lib/print/`).
 
 ### The break
 A block that runs out keeps running, shown as overrun rather than stopped for
