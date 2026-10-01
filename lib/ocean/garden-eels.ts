@@ -20,7 +20,7 @@ import { zoneMid } from './depth';
 import type { Outcrop } from './outcrop';
 import { eelHoles, rockTopAt } from './outcrop-sprite';
 import { IRON_GALL, waterAt } from './palette';
-import { detailFor, inkLine, LIGHT } from './pen';
+import { detailFor, inkLine, LIGHT, poolEdge } from './pen';
 import { hash32, mulberry32, range } from './random';
 
 /** A share of the page, 0 to 1 on each axis. */
@@ -231,6 +231,8 @@ function drawEel(
   ctx.globalAlpha = alpha;
   ctx.fillStyle = look.body;
   ctx.fill(outline);
+  // The wash pooled at its edge as it dried, as the rock's does.
+  if (d > 0.3) poolEdge(ctx, outline, look.shade, alpha * 0.5, 1.2 * px, 0.3 * px);
   // Which side of the body is away from the light, at the middle of it.
   const mid = pts[SEGS >> 1];
   const away = Math.cos(mid.a) * LIGHT[0] + Math.sin(mid.a) * LIGHT[1] > 0 ? 1 : -1;
@@ -272,17 +274,19 @@ function drawEel(
     ctx.fill();
   }
   ctx.restore();
-  // The pen round it, left open at the sand, so the body runs on down into the hole.
+  // The pen round it, left open at the sand, so the body runs on down into
+  // the hole: the rock's pen, heavier where it turns from the light and
+  // lifting where the light is on it.
+  ctx.globalAlpha = 1;
   inkLine(ctx, ring, false, {
-    width: (d > 0.4 ? 0.6 : 0.7) * px,
+    width: (d > 0.4 ? 0.75 : 0.8) * px,
     color: look.ink,
-    alpha: alpha * 0.85,
-    swell: 0.6,
-    taper: [0.04, 0.04],
-    lost: 0,
+    alpha: alpha * 0.9,
+    plate: true,
+    taper: [0.06, 0.06],
     raw: true,
     light: look.dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT,
-    min: 0.2 * px,
+    min: 0.25 * px,
   });
 
   // Spots, counted back from the head, so they go down with the skin.

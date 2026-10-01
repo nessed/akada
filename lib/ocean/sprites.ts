@@ -17,10 +17,10 @@
  */
 
 import { mixHex } from '../fan';
-import { buildAnatomy, type Anatomy, type LayerName, type Shape } from './anatomy';
+import { buildAnatomy, type Anatomy, type LayerName, type Shape, type Tube } from './anatomy';
 import type { Species } from './biome';
 import { creatureInk, type CreatureInk } from './palette';
-import { bounds, detailFor, grain, hatch, inkLine, LIGHT, smooth, stipple, washFill } from './pen';
+import { bounds, contourHatch, detailFor, grain, inkLine, LIGHT, mottle, poolEdge, smooth, stipple, tubeWash, washFill } from './pen';
 import { mulberry32 } from './random';
 
 const anatomies = new WeakMap<Species, Anatomy>();
@@ -49,11 +49,32 @@ const MAX_AREA = 16e6;
 /** How far past its disc a glow's light reaches. */
 const REACH = 1.5;
 
+/** How heavy the pen is against the page: a print's line is finer than a screen's. */
+export interface PenScale {
+  /** The page's short side, in the units `get` is given lengths in (CSS px
+      for the live clock, the picture's own units for a picture). Defaults to
+      the window's short side. */
+  page?: number;
+  /** A print: the finer line. */
+  print?: boolean;
+}
+
+function screenPage(): number {
+  if (typeof window === 'undefined' || !(window.innerWidth > 0)) return 800;
+  return Math.max(360, Math.min(1400, Math.min(window.innerWidth, window.innerHeight)));
+}
+
 export class SpriteCache {
   private map = new Map<string, Sprite>();
   private bytes = 0;
+  private pen: { page: number; print: boolean };
 
-  constructor(private budget = 24e6) {}
+  constructor(
+    private budget = 24e6,
+    pen: PenScale = {},
+  ) {
+    this.pen = { page: pen.page ?? screenPage(), print: pen.print ?? false };
+  }
 
   get(species: Species, lenCss: number, dark: boolean, dpr: number, vivid = false): Sprite | null {
     if (typeof document === 'undefined') return null;
@@ -66,7 +87,7 @@ export class SpriteCache {
       this.map.set(key, hit);
       return hit;
     }
-    const sprite = render(species, Math.pow(STEP, bucket), dark, dpr, vivid);
+    const sprite = render(species, Math.pow(STEP, bucket), dark, dpr, vivid, this.pen);
     if (!sprite) return null;
     this.map.set(key, sprite);
     this.bytes += sprite.w * sprite.h * 4;
@@ -79,7 +100,7 @@ export class SpriteCache {
   }
 }
 
-function render(species: Species, lenCss: number, dark: boolean, dpr: number, vivid: boolean): Sprite | null {
+function render(species: Species, lenCss: number, dark: boolean, dpr: number, vivid: boolean, pen: { page: number; print: boolean }): Sprite | null {
   const a = anatomyOf(species);
   const g = species.genome;
   const w = a.maxX - a.minX;
@@ -116,22 +137,24 @@ function render(species: Species, lenCss: number, dark: boolean, dpr: number, vi
   if (!ctx) return null;
   const ink = creatureInk(g, dark, vivid);
   const devicePx = Math.max(w, h) * scale;
-  // Line weights in device pixels, heavier on a bigger animal, and more
-  // slowly so past the size of the live clock's nearest.
-  const css = devicePx / dpr;
-  const lw = (css <= 225 ? Math.max(0.6, Math.min(1.5, css / 150)) : 1.5 * Math.pow(css / 225, 0.35)) * dpr;
+  // The pen is the page's, not the animal's: one weight for every animal on
+  // a plate, as one burin cut them all. A sprite drawn smaller than asked
+  // (the canvas limit) keeps its lines in step with it.
+  const shrink = scale / ((lenCss * dpr) / Math.max(w, h));
+  const base = Math.max(0.25, (pen.print ? 0.0009 : 0.0012) * pen.page * dpr * shrink);
+  const spacing = 0.0025 * pen.page * dpr * shrink;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   paint(ctx, a, ink, {
     scale,
     tx: box.padX - a.minX * scale,
     ty: box.padY - a.minY * scale,
-    lw,
+    base,
+    spacing,
     dpr,
     detail: detailFor(devicePx),
     dark,
     clear: g.clear || g.plan === 'bell' || g.plan === 'comb' || g.plan === 'chain',
-    bands: g.pattern === 'bands',
     plan: g.plan,
     lit: g.lit,
     seed: species.seed,
@@ -333,27 +356,35 @@ interface Paint {
   scale: number;
   tx: number;
   ty: number;
-  /** One line weight, device px. */
-  lw: number;
+  /** The pen's base weight, device px: the page's, the same for every animal on it. */
+  base: number;
+  /** Device px between two lines of hatching: the page's, too. */
+  spacing: number;
   dpr: number;
   /** 0 a speck, 1 a poster: how much drawing the size carries. */
   detail: number;
   dark: boolean;
   /** See-through: stippled rather than hatched, with a lit rim on dark water. */
   clear: boolean;
-  bands: boolean;
   plan: string;
   lit: boolean;
   seed: number;
 }
 
 const ramp = (v: number, a: number, b: number) => Math.max(0, Math.min(1, (v - a) / (b - a)));
+const PAPER = '#FBF8EF';
+const DARK = '#1A1714';
+/** The gonads' wash, through a clear bell: a soft rose. */
+const GONAD = '#E8C9D4';
+/** The play of light down a comb row, on dark water. */
+const IRIDESCENT = ['#8FE3FF', '#B9F7C4', '#FFE79A', '#FFB0D6', '#BBA6FF', '#8FE3FF'];
 
 function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: Paint) {
-  const { lw, dpr, detail, dark } = o;
+  const { base, dpr, detail, dark } = o;
   const steps = detail < 0.15 ? 3 : detail < 0.5 ? 4 : 6;
   const L = {} as Record<LayerName, Shape[]>;
   for (const k of Object.keys(a.layers) as LayerName[]) L[k] = a.layers[k].map((s) => place(s, o.scale, o.tx, o.ty));
+  const tubes: Tube[] = a.tubes.map((t) => ({ a: t.a.map((v, i) => v * o.scale + (i % 2 ? o.ty : o.tx)), b: t.b.map((v, i) => v * o.scale + (i % 2 ? o.ty : o.tx)) }));
   const lines = (k: LayerName) => L[k].map((s) => ({ pts: lineOf(s, steps), close: s.kind === 'disc' || s.close }));
   /** A layer as one path to fill or stroke: discs as true ellipses. */
   const shapes = (k: LayerName) => {
@@ -374,18 +405,13 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
   };
   /** How strongly the fine work shows: none small, all of it by poster size. */
   const fine = ramp(detail, 0.45, 0.7);
-  // The live clock's animals are mostly below this: only its nearest few,
-  // and anything drawn for a picture, carry shading.
-  const shaded = detail > 0.58;
   const pen = ink.pen;
-  // The wash's pooled edge and bare strip go with the animal's size; its
-  // grain with the paper's.
-  const edgePx = Math.max(0.5, lw / 1.2);
-  const lost = 0.12 + 0.28 * detail;
   // A light line on dark water reads heavier than the same line dark on light.
-  const weight = dark ? 0.78 : 1;
-  /** Too small for the pen's pressure or the wash's bare strip to show. */
+  const weight = dark ? 0.85 : 1;
+  /** Too small for the pen's pressure or the wash's bare strip to show: plain strokes, and cheap. */
   const tiny = detail < 0.12;
+  /** Big enough for the graded wash and the hatching: below this the live clock's sprites stay cheap. */
+  const heavy = detail > 0.58;
   let seed = o.seed;
   const nextSeed = () => (seed = (seed * 1103515245 + 12345) >>> 0);
 
@@ -394,9 +420,26 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(0.35, width * lw);
+    ctx.lineWidth = Math.max(0.25, width * base * weight);
     ctx.stroke(shapes(k));
     ctx.restore();
+  };
+  /** The pen round shapes, or along them: the plate's law, or one plain stroke for a speck. */
+  const penLines = (ls: { pts: number[]; close: boolean }[], width: number, alpha = 1, color = pen, taper: [number, number] = [0, 0.12]) => {
+    if (!ls.length || alpha <= 0) return;
+    if (tiny) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(0.25, width * weight * base * 0.85);
+      ctx.stroke(pathOf(ls));
+      ctx.restore();
+      return;
+    }
+    for (const f of ls) {
+      if (f.pts.length < 4) continue;
+      inkLine(ctx, f.pts, f.close, { width: width * weight * base, color, alpha, taper: f.close ? undefined : taper, raw: true, plate: true, seed: nextSeed() });
+    }
   };
   const grainOver = (region: Path2D, box: Box, amount: number) => {
     if (detail < 0.3 || amount <= 0) return;
@@ -409,6 +452,16 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     ctx.fillStyle = gr;
     ctx.fillRect(box.x, box.y, box.w, box.h);
     ctx.restore();
+  };
+  /** A watercolour wash: laid, pooled at its edge, uneven, grained. */
+  const wash = (region: Path2D, box: Box, color: string, alpha: number, edge: number, highlight: number, grainAmt: number) => {
+    const cheap = detail < 0.3;
+    washFill(ctx, region, box, { color, alpha, edge: cheap ? edge * 0.8 : 0, paper: tiny ? null : ink.paper, highlight, granulate: 0, px: Math.max(0.5, base * 0.5) });
+    if (cheap) return;
+    const m = Math.min(box.w, box.h);
+    poolEdge(ctx, region, mixHex(color, DARK, 0.4), alpha * edge, Math.max(1, Math.min(m * 0.07, base * 6)), base * 0.45);
+    if (heavy) mottle(ctx, region, box, mixHex(color, DARK, 0.18), ink.paper ?? PAPER, alpha * 0.16 * ramp(detail, 0.3, 0.55), o.seed ^ 0x6d1);
+    grainOver(region, box, grainAmt);
   };
   const glows = (shapes: Shape[], color: string, alpha: number, reach: number) => {
     // Light, not a smudge: bright at its heart and falling away fast, then
@@ -433,56 +486,34 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
   if (ink.glow) glows(L.glowBack, ink.glow, o.lit ? 0.4 : 0.22, 1);
 
   // Tentacles and legs: pen lines that taper to a hair.
-  /** The pen round a shape; a speck gets one plain stroke, the same to the eye. */
-  const outline = (shapes: { pts: number[]; close: boolean }[], width: number) => {
-    if (!shapes.length) return;
-    if (tiny) {
-      ctx.save();
-      ctx.strokeStyle = pen;
-      ctx.lineWidth = Math.max(0.35, width * weight * lw * 0.85);
-      ctx.stroke(pathOf(shapes));
-      ctx.restore();
-      return;
-    }
-    for (const f of shapes) inkLine(ctx, f.pts, true, { width: width * weight * lw, color: pen, swell: 0.7, lost, raw: true, seed: nextSeed() });
-  };
   const strand = (k: LayerName, width: number, alpha: number, taper: [number, number]) => {
-    if (tiny) {
-      // Too small for a taper to show: one plain stroke for all of them.
-      plain(k, width * weight * 0.8, alpha);
-      return;
-    }
-    for (const s of L[k]) {
-      if (s.kind !== 'path') continue;
-      inkLine(ctx, lineOf(s, steps), false, {
-        width: width * weight * lw,
-        color: pen,
-        alpha,
-        swell: 0.5,
-        taper,
-        lost: 0,
-        min: 0.25,
-        raw: true,
-        seed: nextSeed(),
-      });
-    }
+    const ls = L[k].filter((s) => s.kind === 'path').map((s) => ({ pts: lineOf(s, steps), close: false }));
+    penLines(ls, width, alpha, pen, taper);
   };
-  strand('tentB', o.clear ? 0.85 : 1, dark ? 0.6 : 0.7, [0.03, 0.8]);
-  strand('legs', 1.3, 1, [0.04, 0.45]);
+  strand('tentB', o.clear ? 0.62 : 0.75, dark ? 0.62 : 0.72, [0.03, 0.75]);
+  strand('legs', 0.95, 1, [0.04, 0.45]);
+
+  // A squid's arms: the body's wash, under the head.
+  const limbLines = lines('limb');
+  if (limbLines.length) {
+    const region = pathOf(limbLines);
+    const box = boxOf(limbLines);
+    wash(region, box, mixHex(ink.body, ink.fin, 0.3), ink.bodyAlpha, 0.3, 0, 0.25);
+    penLines(limbLines, 0.7);
+  }
 
   // Fins: a paler wash, the rays and their membrane, then the line.
   const finLines = lines('fin');
   if (finLines.length) {
     const region = pathOf(finLines);
     const box = boxOf(finLines);
-    washFill(ctx, region, box, { color: ink.fin, alpha: ink.finAlpha, edge: 0.3, paper: null, granulate: 0, px: edgePx });
-    grainOver(region, box, 0.22);
+    wash(region, box, ink.fin, ink.finAlpha, 0.28, 0, 0.22);
     if (fine > 0 && L.rays.length) {
       ctx.save();
       ctx.clip(region);
       // The membrane between the rays: pigment gathered along each ray.
-      plain('rays', 2.2, 0.18 * fine, mixHex(ink.fin, pen, 0.35));
-      plain('rays', 0.42, 0.5 * fine);
+      plain('rays', 2.4, 0.16 * fine, mixHex(ink.fin, pen, 0.35));
+      plain('rays', 0.38, 0.55 * fine);
       ctx.restore();
     }
   }
@@ -491,74 +522,121 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     const keep = fine > 0.5 ? L.finRay.slice(a.tailRays) : L.finRay;
     const saved = L.finRay;
     L.finRay = keep;
-    plain('finRay', 0.5, 0.5 * (fine > 0.5 ? 1 : 1 - fine * 0.6));
+    plain('finRay', 0.45, 0.5 * (fine > 0.5 ? 1 : 1 - fine * 0.6));
     L.finRay = saved;
   }
-  outline(finLines, 0.85);
+  penLines(finLines, 0.72);
 
   // The body: the wash, its markings, the shading, then the line round it.
   const bodyLines = lines('body');
   const body = bodyLines.length ? pathOf(bodyLines) : null;
   const bodyBox = bodyLines.length ? boxOf(bodyLines) : null;
+  const solidTubes = !o.clear && tubes.length > 0;
   if (body && bodyBox) {
-    washFill(ctx, body, bodyBox, {
-      color: ink.body,
-      alpha: ink.bodyAlpha,
-      edge: o.clear ? 0.45 : 0.35,
-      paper: ink.paper,
-      highlight: tiny ? 0 : dark ? 0.45 : 0.85,
-      granulate: 0,
-      px: edgePx,
-    });
-    grainOver(body, bodyBox, o.clear ? 0.18 : 0.3);
+    if (heavy && solidTubes && !tiny) {
+      // Graded across the body: for a swimmer, darker along the back, a
+      // strip of bare paper down the flank, the belly paler; for a star's
+      // arm, lighter on its lit side and down into its shadow.
+      const paperTone = ink.paper ?? PAPER;
+      const back = o.plan === 'fish' || o.plan === 'eel' || o.plan === 'squid' || o.plan === 'crawler';
+      const stops: [number, string][] = back
+        ? [
+            [0, mixHex(ink.body, DARK, dark ? 0.3 : 0.22)],
+            [0.2, ink.body],
+            [0.33, mixHex(ink.body, paperTone, dark ? 0.35 : 0.62)],
+            [0.47, ink.body],
+            [0.82, mixHex(ink.body, paperTone, dark ? 0.12 : 0.28)],
+            [1, mixHex(ink.body, DARK, 0.08)],
+          ]
+        : [
+            [0, mixHex(ink.body, paperTone, dark ? 0.2 : 0.4)],
+            [0.3, mixHex(ink.body, paperTone, dark ? 0.1 : 0.15)],
+            [0.6, ink.body],
+            [1, mixHex(ink.body, DARK, 0.18)],
+          ];
+      tubeWash(ctx, body, tubes, bodyBox, { stops, alpha: ink.bodyAlpha, fade: back ? 0 : 0.35 });
+      const m = Math.min(bodyBox.w, bodyBox.h);
+      poolEdge(ctx, body, mixHex(ink.body, DARK, 0.4), ink.bodyAlpha * 0.32, Math.max(1, Math.min(m * 0.07, base * 6)), base * 0.45);
+      mottle(ctx, body, bodyBox, mixHex(ink.body, DARK, 0.2), paperTone, ink.bodyAlpha * 0.14, o.seed ^ 0x6d1);
+      grainOver(body, bodyBox, 0.3);
+    } else {
+      wash(body, bodyBox, ink.body, ink.bodyAlpha, o.clear ? 0.45 : 0.32, tiny ? 0 : dark ? 0.45 : 0.85, o.clear ? 0.18 : 0.3);
+    }
   }
-  plain('guts', 0.7, 0.45);
   const inBody = (draw: () => void) => {
     ctx.save();
     if (body) ctx.clip(body);
     draw();
     ctx.restore();
   };
+  // The gonads: a soft rose wash, with at most a broken line about them.
+  if (L.gonad.length) {
+    const p = shapes('gonad');
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = GONAD;
+    ctx.fill(p);
+    ctx.restore();
+    if (detail >= 0.3) broken(ctx, lines('gonad'), 0.5 * base * weight, pen, 0.55, nextSeed());
+  }
+  plain('guts', 0.55, 0.45);
   inBody(() => {
     if (L.gutFill.length) {
-      ctx.globalAlpha = 0.5;
+      ctx.globalAlpha = 0.4;
       ctx.fillStyle = ink.pat;
       ctx.fill(shapes('gutFill'));
     }
-    if (L.pat.length) {
+    if (L.pat.length && bodyBox) {
+      // Markings in wash, stronger on the back than the belly.
       const p = shapes('pat');
+      const gr = ctx.createLinearGradient(0, bodyBox.y, 0, bodyBox.y + bodyBox.h);
+      gr.addColorStop(0, ink.pat);
+      gr.addColorStop(0.5, `${ink.pat.slice(0, 7)}cc`);
+      gr.addColorStop(1, `${ink.pat.slice(0, 7)}44`);
       ctx.globalAlpha = 0.72;
-      ctx.fillStyle = ink.pat;
+      ctx.fillStyle = gr;
       ctx.fill(p);
-      if (detail > 0.3) {
-        // Each spot dried with a darker rim, as a dropped wash does.
-        ctx.globalAlpha = 0.35;
-        ctx.strokeStyle = mixHex(ink.pat, '#1A1714', 0.35);
-        ctx.lineWidth = Math.max(0.5, 0.5 * lw);
+      if (!tiny) {
+        // Each mark dried with a darker rim, as a dropped wash does.
+        ctx.globalAlpha = 0.2;
+        ctx.strokeStyle = mixHex(ink.pat, DARK, 0.35);
+        ctx.lineWidth = Math.max(0.25, 0.4 * base);
         ctx.stroke(p);
       }
     }
     ctx.globalAlpha = 1;
-    plain('patLine', o.bands ? 4 : 1.4, 0.75, ink.pat);
-    if (fine > 0 && L.scales.length && bodyBox) {
-      // Scales, fading out toward the belly.
-      const gr = ctx.createLinearGradient(0, bodyBox.y, 0, bodyBox.y + bodyBox.h);
-      gr.addColorStop(0, pen);
-      gr.addColorStop(0.55, `${pen}99`);
-      gr.addColorStop(0.9, `${pen}00`);
-      ctx.save();
-      ctx.globalAlpha = 0.42 * fine;
-      ctx.strokeStyle = gr;
-      ctx.lineWidth = Math.max(0.35, 0.36 * lw);
-      ctx.stroke(shapes('scales'));
-      ctx.restore();
-    }
-    if (shaded && body && bodyBox) shade(ctx, body, bodyBox, ink, o);
+    if (L.patLine.length) penLines(lines('patLine'), 1.15, 0.75, ink.pat, [0.1, 0.35]);
+    if (body && bodyBox && heavy) shade(ctx, body, bodyBox, tubes, ink, o);
   });
-  plain('lines', 0.45, 0.6 * fine);
-  plain('detail', 0.6, 0.55);
-  outline(bodyLines, 1.2);
-  strand('tentF', 1.3, 1, [0.04, 0.6]);
+  // The fine lines: the lateral line's pores, a gill cover, a ray's radials.
+  if (fine > 0 && L.lines.length) {
+    const long = L.lines.filter((s) => s.kind === 'path' && s.pts.length >= 8);
+    const short = L.lines.filter((s) => !(s.kind === 'path' && s.pts.length >= 8));
+    penLines(long.map((s) => ({ pts: lineOf(s, steps), close: false })), 0.42, 0.65 * fine);
+    if (short.length) {
+      const saved = L.lines;
+      L.lines = short;
+      plain('lines', 0.32, 0.55 * fine);
+      L.lines = saved;
+    }
+  }
+  // Detail: open marks in the pen, small rings as rings.
+  // Short ticks, and everything below the size a pen's pressure shows at,
+  // go down as one plain stroke.
+  const worked = detail >= 0.3;
+  const penned = L.detail.filter((s) => worked && s.kind === 'path' && s.pts.length >= 6);
+  penLines(penned.map((s) => ({ pts: lineOf(s, steps), close: s.kind === 'path' && s.close })), 0.55, 0.8, pen, [0.05, 0.25]);
+  const rest = L.detail.filter((s) => !penned.includes(s));
+  if (rest.length) {
+    const saved = L.detail;
+    L.detail = rest;
+    plain('detail', 0.5, 0.75);
+    L.detail = saved;
+  }
+  penLines(bodyLines, o.plan === 'comb' ? 0.5 : o.plan === 'chain' ? 0.6 : o.clear ? 0.85 : 1);
+  combRows(ctx, L.rowB, L.rowF, o, ink, tiny, steps);
+  strand('tentF', 0.95, 1, [0.04, 0.6]);
+  strand('barbel', 0.55, 1, [0.02, 0.7]);
 
   // Beads, and the fine nodes: stinging cells, suckers, knobs.
   if (L.beads.length) {
@@ -568,19 +646,19 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     if (detail > 0.3) {
       ctx.strokeStyle = pen;
       ctx.globalAlpha = 0.6;
-      ctx.lineWidth = Math.max(0.35, 0.4 * lw);
+      ctx.lineWidth = Math.max(0.25, 0.4 * base);
       ctx.stroke(p);
       ctx.globalAlpha = 1;
     }
   }
   if (fine > 0 && L.nodes.length) {
     const p = shapes('nodes');
-    ctx.globalAlpha = 0.55 * fine;
+    ctx.globalAlpha = 0.5 * fine;
     ctx.fillStyle = mixHex(ink.pat, pen, 0.25);
     ctx.fill(p);
     ctx.globalAlpha = 0.6 * fine;
     ctx.strokeStyle = pen;
-    ctx.lineWidth = Math.max(0.3, 0.3 * lw);
+    ctx.lineWidth = Math.max(0.25, 0.3 * base);
     ctx.stroke(p);
     ctx.globalAlpha = 1;
   }
@@ -595,7 +673,7 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
       // A photophore, big: a ring of its lens round a bright point.
       ctx.globalAlpha = 0.7 * fine;
       ctx.strokeStyle = mixHex(ink.dot, pen, dark ? 0.2 : 0.55);
-      ctx.lineWidth = Math.max(0.35, 0.35 * lw);
+      ctx.lineWidth = Math.max(0.25, 0.35 * base);
       ctx.stroke(p);
       ctx.fillStyle = '#FFFDF6';
       for (const s of L.dots) {
@@ -613,22 +691,143 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     const p = L.pupil[i];
     if (e.kind === 'disc') eye(ctx, e, p && p.kind === 'disc' ? p : null, ink, o, nextSeed());
   });
-  strand('lure', 0.9, 1, [0, 0.15]);
+  strand('lure', 0.8, 1, [0, 0.15]);
   ctx.globalAlpha = 1;
 }
 
-/** The engraver's tone: hatching for a solid animal, stipple for a clear one. */
-function shade(ctx: CanvasRenderingContext2D, body: Path2D, box: Box, ink: CreatureInk, o: Paint) {
-  const { detail, dark, lw } = o;
-  const field = shadeField(body, box, (4 - 1.2 * detail) * 0.75);
-  const k = ramp(detail, 0.58, 0.75);
+/** A closed outline drawn as a few arcs with the pen lifted between them: never a ring. */
+function broken(ctx: CanvasRenderingContext2D, ls: { pts: number[]; close: boolean }[], width: number, color: string, alpha: number, seed: number) {
+  const r = mulberry32(seed);
+  for (const l of ls) {
+    const n = l.pts.length / 2;
+    if (n < 6) continue;
+    const pieces = 2 + Math.floor(r() * 2);
+    let at = Math.floor(r() * n);
+    for (let k = 0; k < pieces; k++) {
+      const len = Math.max(3, Math.floor((n / pieces) * (0.45 + r() * 0.3)));
+      const seg: number[] = [];
+      for (let i = 0; i <= len; i++) {
+        const j = (at + i) % n;
+        seg.push(l.pts[j * 2], l.pts[j * 2 + 1]);
+      }
+      inkLine(ctx, seg, false, { width, color, alpha, taper: [0.2, 0.2], raw: true, plate: true, seed: seed + k });
+      at = (at + Math.floor(n / pieces)) % n;
+    }
+  }
+}
+
+/**
+ * A comb jelly's rows: the plates as a dotted line down each, the far rows
+ * faint through the body, and on dark water the light they break into
+ * colours, a tint along them.
+ */
+function combRows(ctx: CanvasRenderingContext2D, back: Shape[], front: Shape[], o: Paint, ink: CreatureInk, tiny: boolean, steps: number) {
+  if (!back.length && !front.length) return;
+  const { base, dark } = o;
+  const pen = ink.pen;
+  const rows = (list: Shape[]) => list.filter((s) => s.kind === 'path').map((s) => lineOf(s, steps));
+  const draw = (ls: number[][], alpha: number) => {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = pen;
+    ctx.fillStyle = pen;
+    if (tiny) {
+      ctx.lineWidth = Math.max(0.25, base * 0.45);
+      ctx.setLineDash([Math.max(0.6, base * 0.8), Math.max(0.8, base * 1.1)]);
+      for (const l of ls) {
+        ctx.beginPath();
+        ctx.moveTo(l[0], l[1]);
+        for (let i = 2; i < l.length; i += 2) ctx.lineTo(l[i], l[i + 1]);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+    const dots = new Path2D();
+    for (const l of ls) {
+      let total = 0;
+      for (let i = 2; i < l.length; i += 2) total += Math.hypot(l[i] - l[i - 2], l[i + 1] - l[i - 1]);
+      const gap = Math.max(base * 2.2, total / 28);
+      let next = gap * 0.5;
+      let run = 0;
+      for (let i = 2; i < l.length; i += 2) {
+        const d = Math.hypot(l[i] - l[i - 2], l[i + 1] - l[i - 1]);
+        while (next <= run + d && d > 0) {
+          const t = (next - run) / d;
+          const x = l[i - 2] + (l[i] - l[i - 2]) * t;
+          const y = l[i - 1] + (l[i + 1] - l[i - 1]) * t;
+          // The plates shrink toward each end of the row.
+          const k = Math.sin(Math.PI * Math.min(1, next / total)) * 0.6 + 0.4;
+          const rad = Math.max(0.3, base * 0.55 * k);
+          dots.moveTo(x + rad, y);
+          dots.ellipse(x, y, rad, rad * 0.75, 0, 0, Math.PI * 2);
+          next += gap;
+        }
+        run += d;
+      }
+      // The canal under the plates, a hair.
+      ctx.lineWidth = Math.max(0.25, base * 0.3);
+      ctx.globalAlpha = alpha * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(l[0], l[1]);
+      for (let i = 2; i < l.length; i += 2) ctx.lineTo(l[i], l[i + 1]);
+      ctx.stroke();
+      ctx.globalAlpha = alpha;
+    }
+    ctx.fill(dots);
+    ctx.restore();
+  };
+  const b = rows(back);
+  const f = rows(front);
+  if (dark) {
+    // The combs break the light into colour as they beat.
+    const all = [...b, ...f];
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const l of all) for (let i = 1; i < l.length; i += 2) {
+      y0 = Math.min(y0, l[i]);
+      y1 = Math.max(y1, l[i]);
+    }
+    if (Number.isFinite(y0) && y1 > y0) {
+      const gr = ctx.createLinearGradient(0, y0, 0, y1);
+      IRIDESCENT.forEach((c, i) => gr.addColorStop(i / (IRIDESCENT.length - 1), c));
+      ctx.save();
+      ctx.strokeStyle = gr;
+      ctx.lineWidth = Math.max(0.8, base * 3.2);
+      for (const [ls, k] of [[b, 0.4], [f, 1]] as const) {
+        ctx.globalAlpha = 0.3 * k;
+        for (const l of ls) {
+          ctx.beginPath();
+          ctx.moveTo(l[0], l[1]);
+          for (let i = 2; i < l.length; i += 2) ctx.lineTo(l[i], l[i + 1]);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+  }
+  draw(b, 0.32);
+  draw(f, 0.9);
+}
+
+/**
+ * The engraver's tone: contour hatching along a solid body's spine, in its
+ * shadowed lower part only, crossed only in the darkest; stipple for a clear
+ * one.
+ */
+function shade(ctx: CanvasRenderingContext2D, body: Path2D, box: Box, tubes: Tube[], ink: CreatureInk, o: Paint) {
+  const { detail, dark, base, spacing } = o;
+  const k = ramp(detail, 0.55, 0.72);
+  if (k <= 0) return;
   if (o.clear) {
-    const spacing = 4.2 - 1.6 * detail;
+    const sp = Math.max(1.6, spacing * 0.85);
+    if (Math.min(box.w, box.h) < sp * 6) return;
+    const field = shadeField(body, box, sp * 0.75);
     stipple(ctx, body, box, {
-      spacing,
+      spacing: sp,
       shade: field,
       color: dark ? mixHex(ink.body, '#000000', 0.5) : ink.pen,
-      radius: Math.max(0.45, spacing * 0.16),
+      radius: Math.max(0.3, Math.min(sp * 0.16, base * 0.4)),
       alpha: (dark ? 0.55 : 0.5) * k,
       from: 0.42,
       seed: o.seed ^ 0x5f3,
@@ -639,67 +838,42 @@ function shade(ctx: CanvasRenderingContext2D, body: Path2D, box: Box, ink: Creat
       ctx.save();
       ctx.strokeStyle = ink.pen;
       ctx.globalAlpha = 0.1 * k;
-      ctx.lineWidth = lw * 7;
+      ctx.lineWidth = base * 7;
       ctx.stroke(body);
       ctx.globalAlpha = 0.16 * k;
-      ctx.lineWidth = lw * 3;
+      ctx.lineWidth = base * 3;
       ctx.stroke(body);
       ctx.restore();
     }
     return;
   }
-  // Lines along the body for a swimmer, across the arms for a star.
-  const angle = o.plan === 'star' ? 0.55 : o.plan === 'ray' ? 0.35 : -0.08;
-  const spacing = 4 - 1.2 * detail;
-  const bow = (Math.min(box.w, box.h) * 0.12) / spacing;
-  if (dark) {
-    // On dark water the line is light, so it draws the light as well as
-    // the shadow: as on scratchboard, fine light lines along the lit back,
-    // and the belly worked darker than the wash.
-    hatch(ctx, body, box, {
-      spacing,
-      angle,
-      shade: field,
-      from: 0.55,
-      cross: 0.85,
-      color: mixHex(ink.body, '#000000', 0.65),
-      width: spacing * 0.4,
-      alpha: 0.7 * k,
-      bow,
-      seed: o.seed ^ 0x2c1,
-    });
-    hatch(ctx, body, box, {
-      spacing: spacing * 1.3,
-      angle,
-      shade: (x, y) => 1 - field(x, y),
-      from: 0.6,
-      color: ink.pen,
-      width: spacing * 0.3,
-      alpha: 0.4 * k,
-      bow,
-      seed: o.seed ^ 0x1b7,
-    });
-    return;
-  }
-  hatch(ctx, body, box, {
+  if (!tubes.length || spacing < 1.4) return;
+  // Room for a few lines across the body's shadowed part, or none at all.
+  let thick = 0;
+  for (const t of tubes) for (let i = 0; i < t.a.length; i += 2) thick = Math.max(thick, Math.hypot(t.b[i] - t.a[i], t.b[i + 1] - t.a[i + 1]));
+  if (thick * 0.45 < spacing * 2.5) return;
+  const field = shadeField(body, box, spacing * 0.6);
+  contourHatch(ctx, body, tubes, {
     spacing,
-    angle,
     shade: field,
-    from: 0.52,
-    cross: 0.8,
-    color: ink.pen,
-    width: spacing * 0.36,
-    alpha: 0.62 * k,
-    bow,
+    reach: 0.45,
+    width: base,
+    k: 0.62,
+    // On dark water the pen is light: the shadow is worked in the wash's own dark instead.
+    color: dark ? mixHex(ink.body, '#000000', 0.62) : ink.pen,
+    alpha: (dark ? 0.75 : 0.7) * k,
+    cross: 0.75,
+    crossAngle: (35 * Math.PI) / 180,
     seed: o.seed ^ 0x2c1,
   });
 }
 
 /**
- * An eye as a plate draws it, when there is room: the iris with fine lines
- * running in to the pupil, a darker ring at its edge, the shadow the top of
- * the socket throws, and two points of light. Small, only the white, the
- * pupil and the ring.
+ * An eye as a plate draws it: set in the head, the iris filling it (no
+ * white to it, which is what makes an eye a cartoon's), fine lines running
+ * in to the pupil, a darker ring at its rim, the shadow the top of the
+ * socket throws, one point of light and its small echo. Small, only the
+ * iris, the pupil and a fine ring.
  */
 function eye(
   ctx: CanvasRenderingContext2D,
@@ -709,28 +883,30 @@ function eye(
   o: Paint,
   seed: number,
 ) {
-  const { lw, detail, dark } = o;
+  const { base, detail, dark } = o;
   const r = e.rx;
-  const ring = Math.max(0.35, 0.8 * lw);
   const disc = (x: number, y: number, rad: number) => {
     ctx.beginPath();
     ctx.ellipse(x, y, rad, rad, 0, 0, Math.PI * 2);
   };
-  if (detail < 0.3 || r < 6) {
+  const iris = dark ? mixHex(ink.eyeW, '#1A1815', 0.45) : mixHex(mixHex(ink.body, '#B08A3E', 0.5), '#6B5A3A', 0.25);
+  if (detail < 0.3 || r < 5) {
     disc(e.x, e.y, r);
-    ctx.fillStyle = ink.eyeW;
+    ctx.fillStyle = iris;
     ctx.fill();
     ctx.strokeStyle = ink.pen;
-    ctx.lineWidth = Math.min(ring, r * 0.4);
+    ctx.lineWidth = Math.min(Math.max(0.25, base * 0.55), r * 0.35);
     ctx.stroke();
     if (p) {
       disc(p.x, p.y, p.rx);
       ctx.fillStyle = ink.pupil;
       ctx.fill();
       if (p.rx > 2.2) {
-        disc(p.x - p.rx * 0.3, p.y - p.rx * 0.35, p.rx * 0.28);
+        disc(p.x - p.rx * 0.3, p.y - p.rx * 0.35, p.rx * 0.24);
         ctx.fillStyle = '#FFFDF6';
+        ctx.globalAlpha = 0.9;
         ctx.fill();
+        ctx.globalAlpha = 1;
       }
     }
     return;
@@ -738,60 +914,59 @@ function eye(
   const px = p?.x ?? e.x;
   const py = p?.y ?? e.y;
   const pr = p?.rx ?? r * 0.5;
-  const ir = Math.min(r * 0.9, pr * 1.55);
   ctx.save();
   disc(e.x, e.y, r);
-  ctx.fillStyle = ink.eyeW;
-  ctx.fill();
   ctx.clip();
-  // The iris: lighter in to the pupil, a ring of darker at its rim.
-  const iris = dark ? mixHex(ink.eyeW, '#1A1815', 0.35) : mixHex(ink.body, '#B08A3E', 0.45);
-  const g = ctx.createRadialGradient(px, py, pr * 0.8, px, py, ir);
-  g.addColorStop(0, mixHex(iris, '#FBF8EF', 0.25));
-  g.addColorStop(0.75, iris);
-  g.addColorStop(1, mixHex(iris, '#1A1714', 0.45));
-  disc(px, py, ir);
+  const g = ctx.createRadialGradient(px, py, pr * 0.8, e.x, e.y, r);
+  g.addColorStop(0, mixHex(iris, '#FBF8EF', 0.22));
+  g.addColorStop(0.7, iris);
+  g.addColorStop(1, mixHex(iris, '#1A1714', 0.5));
   ctx.fillStyle = g;
-  ctx.fill();
+  ctx.fillRect(e.x - r, e.y - r, r * 2, r * 2);
   const rand = mulberry32(seed);
-  const n = Math.round(24 + 20 * detail);
+  const n = Math.round(22 + 18 * detail);
   ctx.beginPath();
   for (let i = 0; i < n; i++) {
     const t = (i / n) * Math.PI * 2 + rand() * 0.08;
     const r0 = pr * (1.02 + rand() * 0.1);
-    const r1 = ir * (0.82 + rand() * 0.15);
+    const r1 = r * (0.8 + rand() * 0.15);
     ctx.moveTo(px + Math.cos(t) * r0, py + Math.sin(t) * r0);
-    ctx.lineTo(px + Math.cos(t + 0.06) * r1, py + Math.sin(t + 0.06) * r1);
+    ctx.lineTo(e.x + Math.cos(t + 0.06) * r1, e.y + Math.sin(t + 0.06) * r1);
   }
   ctx.strokeStyle = mixHex(iris, '#1A1714', 0.6);
-  ctx.globalAlpha = 0.55;
-  ctx.lineWidth = Math.max(0.3, 0.28 * lw);
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = Math.max(0.25, 0.25 * base);
   ctx.stroke();
   ctx.globalAlpha = 1;
-  disc(px, py, ir);
-  ctx.strokeStyle = mixHex(iris, '#1A1714', 0.7);
-  ctx.lineWidth = Math.max(0.5, ir * 0.12);
-  ctx.stroke();
   disc(px, py, pr);
   ctx.fillStyle = ink.pupil;
   ctx.fill();
   // The shadow under the top of the socket.
   const lid = ctx.createLinearGradient(0, e.y - r, 0, e.y + r * 0.1);
-  lid.addColorStop(0, 'rgba(26,23,20,0.45)');
+  lid.addColorStop(0, 'rgba(26,23,20,0.5)');
   lid.addColorStop(1, 'rgba(26,23,20,0)');
   ctx.fillStyle = lid;
   ctx.fillRect(e.x - r, e.y - r, r * 2, r * 1.1);
-  // Two points of light: the window, and its small echo.
+  // The window's light, small, and its echo.
   ctx.fillStyle = '#FFFDF6';
-  disc(px - pr * 0.32, py - pr * 0.38, pr * 0.3);
-  ctx.globalAlpha = 0.95;
+  disc(px - pr * 0.34, py - pr * 0.36, pr * 0.22);
+  ctx.globalAlpha = 0.9;
   ctx.fill();
-  disc(px + pr * 0.38, py + pr * 0.3, pr * 0.12);
-  ctx.globalAlpha = 0.7;
+  disc(px + pr * 0.4, py + pr * 0.3, pr * 0.09);
+  ctx.globalAlpha = 0.6;
   ctx.fill();
   ctx.restore();
   const circle: number[] = [];
-  const m = 36;
+  const m = 40;
   for (let i = 0; i < m; i++) circle.push(e.x + Math.cos((i / m) * Math.PI * 2) * r, e.y + Math.sin((i / m) * Math.PI * 2) * r);
-  inkLine(ctx, circle, true, { width: ring, color: ink.pen, swell: 0.6, lost: 0, raw: true, seed });
+  inkLine(ctx, circle, true, { width: base * 0.6, color: ink.pen, raw: true, plate: true, seed });
+  // The socket: a fine arc above and behind, the head's bone round the eye.
+  if (detail > 0.5) {
+    const arc: number[] = [];
+    for (let i = 0; i <= 14; i++) {
+      const t = Math.PI * (0.95 + (i / 14) * 0.85);
+      arc.push(e.x + Math.cos(t) * r * 1.45, e.y + Math.sin(t) * r * 1.35);
+    }
+    inkLine(ctx, arc, false, { width: base * 0.45, color: ink.pen, alpha: 0.7, taper: [0.3, 0.3], raw: true, plate: true, seed: seed + 1 });
+  }
 }

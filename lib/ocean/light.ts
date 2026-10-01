@@ -308,7 +308,22 @@ export function drawSnellWindow(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  o: { cx: number; cy: number; radius: number; sun: SunLight; moon: number | null; dark: boolean; px: number; seed: number },
+  o: {
+    cx: number;
+    cy: number;
+    radius: number;
+    sun: SunLight;
+    moon: number | null;
+    dark: boolean;
+    px: number;
+    seed: number;
+    /** The moon's radius, device px; by default an eighth of the window's. */
+    moonRadius?: number;
+    /** How many ripple lines cross the window; by default eight to twelve. */
+    ripples?: number;
+    /** Drawn after the sun or the moon, in the window's own (unsquashed) space: what passes over it. */
+    over?: (ctx: CanvasRenderingContext2D) => void;
+  },
 ): void {
   const { cx, cy, sun, moon, dark, seed } = o;
   const R = o.radius;
@@ -410,9 +425,10 @@ export function drawSnellWindow(
   // The sky's own light, gathered round the sun or the moon.
   const body = bodyAt(cx, cy, R, sun.tilt);
   {
-    const reach = R * (sun.night ? 0.55 : 0.85);
+    const reach = sun.night ? (o.moonRadius ?? R * 0.12) * 2.2 : R * 0.85;
     const g = ctx.createRadialGradient(body.x, body.y, 0, body.x, body.y, reach);
-    const a = sun.night ? (dark ? 0.3 : 0.15) * glow : (dark ? 0.4 : 0.55) * (0.5 + 0.5 * sun.strength);
+    // By night the moon's own glow is all: nothing gathered round it squashed.
+    const a = sun.night ? 0 : (dark ? 0.4 : 0.55) * (0.5 + 0.5 * sun.strength);
     g.addColorStop(0, rgba(sun.warmth, a));
     g.addColorStop(0.3, rgba(sun.warmth, a * 0.5));
     g.addColorStop(1, rgba(sun.warmth, 0));
@@ -440,16 +456,17 @@ export function drawSnellWindow(
     const angle = (rr() - 0.5) * 0.7;
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
-    const lines = 22 + Math.floor(rr() * 8);
+    const lines = o.ripples ?? 8 + Math.floor(rr() * 5);
     ctx.save();
     ctx.clip(windowPath);
     ctx.globalCompositeOperation = 'source-over';
     for (let i = 0; i < lines; i++) {
       const off = (-1 + (2 * (i + 0.5 + (rr() - 0.5) * 0.7)) / lines) * R * 1.05;
       const pts: number[] = [];
-      const amp = R * (0.012 + rr() * 0.03);
+      // Few, and bent by the swell: the backs of waves, never a ruled grid.
+      const amp = R * (0.025 + rr() * 0.045);
       const f1 = (2 + rr() * 4) / R;
-      const f2 = (7 + rr() * 9) / R;
+      const f2 = (6 + rr() * 8) / R;
       const p1 = rr() * TAU;
       const p2 = rr() * TAU;
       const half = Math.sqrt(Math.max(0, R * R * 1.1 - off * off));
@@ -475,7 +492,7 @@ export function drawSnellWindow(
         inkLine(ctx, piece, false, {
           width: pen * (bright ? 1.2 + rr() * 1.6 : 0.8 + rr()),
           color: col,
-          alpha: dark ? (bright ? 0.2 : 0.1) * (0.6 + 0.4 * glow) : bright ? 0.07 : 0.04,
+          alpha: dark ? (bright ? 0.24 : 0.12) * (0.6 + 0.4 * glow) : bright ? 0.12 : 0.07,
           lost: 0.75,
           swell: 0.5,
           taper: [0.3, 0.3],
@@ -568,65 +585,85 @@ export function drawSnellWindow(
     ctx.restore();
     ctx.globalAlpha = 1;
   } else if (sun.night && moon != null) {
-    const rm = R * 0.12;
+    // The moon, round however the window is seen, and only its lit part
+    // painted: on paper the dark of it is the sky itself, never a disc
+    // darker than the sky (that reads as a shadow). The pen goes round the
+    // lit limb only, broken; the glow sits exactly on it and dies away.
+    const rm = o.moonRadius ?? R * 0.12;
     const lit = moonLit(moon);
-    const rs = mulberry32(hash32('snell', seed, 'moon'));
-    const pale = dark ? '#EEF0EA' : '#FBF8EF';
-    if (dark) {
-      const halo = rm * 6;
-      const g = ctx.createRadialGradient(body.x, body.y, rm * 0.6, body.x, body.y, halo);
-      g.addColorStop(0, rgba(sun.warmth, 0.35 * (0.2 + 0.8 * lit)));
-      g.addColorStop(0.35, rgba(sun.warmth, 0.1 * (0.2 + 0.8 * lit)));
-      g.addColorStop(1, rgba(sun.warmth, 0));
-      ctx.globalCompositeOperation = 'lighter';
+    ctx.save();
+    ctx.translate(body.x, body.y);
+    ctx.scale(1, 1 / SNELL_SQUASH);
+    {
+      const halo = rm * 2.2;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, halo);
+      const col = dark ? mixHex(sun.warmth, '#FFFFFF', 0.3) : '#FFFFFF';
+      const a = (dark ? 0.32 : 0.5) * (0.25 + 0.75 * lit);
+      g.addColorStop(0, rgba(col, a));
+      g.addColorStop(0.45, rgba(col, a * 0.55));
+      g.addColorStop(0.75, rgba(col, a * 0.18));
+      g.addColorStop(1, rgba(col, 0));
+      ctx.globalCompositeOperation = dark ? 'lighter' : 'screen';
       ctx.fillStyle = g;
-      ctx.fillRect(body.x - halo, body.y - halo, halo * 2, halo * 2);
+      ctx.fillRect(-halo, -halo, halo * 2, halo * 2);
     }
-    const disc = brokenDisc(
-      rm,
-      rs,
-      (g, d) => {
-        // The dark of the moon, faintly there by earthshine (on paper, a
-        // slate wash), then the lit face, a few seas on it.
-        g.fillStyle = dark ? 'rgba(200, 210, 225, 0.13)' : 'rgba(63, 77, 75, 0.38)';
-        g.beginPath();
-        g.arc(0, 0, d, 0, TAU);
-        g.fill();
-        const face = moonLitPath(d, moon);
-        g.save();
-        g.clip(face);
-        g.fillStyle = pale;
-        g.fillRect(-d, -d, d * 2, d * 2);
-        // The seas: soft grey blots, run together, more of them up and to
-        // one side as on the real face.
-        const seas = mulberry32(hash32('moon', 'seas'));
-        g.fillStyle = dark ? 'rgba(120, 130, 140, 0.12)' : 'rgba(63, 77, 75, 0.07)';
-        for (let i = 0; i < 16; i++) {
-          const ang = -2.2 + seas() * 2.6;
-          const dist = d * (0.15 + 0.55 * seas());
-          g.beginPath();
-          g.ellipse(Math.cos(ang) * dist, Math.sin(ang) * dist, d * (0.08 + seas() * 0.16), d * (0.06 + seas() * 0.12), seas() * 3, 0, TAU);
-          g.fill();
-        }
-        g.restore();
-        if (!dark) {
-          // Drawn round in slate, the pen lifting where the light is.
-          const ring: number[] = [];
-          for (let i = 0; i < 40; i++) ring.push(Math.cos((i / 40) * TAU) * d, Math.sin((i / 40) * TAU) * d);
-          inkLine(g, ring, true, { width: Math.max(px, d / 26), color: IRON_GALL.light, alpha: 0.75, lost: 0.4, seed: 5 });
-        }
-      },
-      0.1,
-    );
-    if (disc) {
-      const soft = soften(disc, Math.max(1, rm / 40));
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.save();
-      ctx.translate(body.x, body.y);
-      ctx.scale(1, 1 / SNELL_SQUASH);
-      ctx.drawImage(soft.canvas, 0, 0, soft.w, soft.h, -disc.w / 2, -disc.h / 2, disc.w, disc.h);
-      ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
+    if (dark) {
+      // By night the dark of the moon is faintly there by earthshine.
+      ctx.fillStyle = 'rgba(200, 210, 225, 0.08)';
+      ctx.beginPath();
+      ctx.arc(0, 0, rm, 0, TAU);
+      ctx.fill();
     }
+    const face = moonLitPath(rm, moon);
+    ctx.save();
+    ctx.clip(face);
+    ctx.fillStyle = dark ? '#EEF0EA' : '#F6F1E4';
+    ctx.fillRect(-rm, -rm, rm * 2, rm * 2);
+    // The seas: soft blots, run together, more of them up and to one side.
+    const seas = mulberry32(hash32('moon', 'seas'));
+    ctx.fillStyle = dark ? 'rgba(120, 130, 140, 0.12)' : 'rgba(150, 140, 120, 0.12)';
+    for (let i = 0; i < 16; i++) {
+      const ang = -2.2 + seas() * 2.6;
+      const dist = rm * (0.15 + 0.55 * seas());
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(ang) * dist, Math.sin(ang) * dist, rm * (0.08 + seas() * 0.16), rm * (0.06 + seas() * 0.12), seas() * 3, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+    if (lit > 0.02) {
+      // The lit limb: the half of the rim on the lit side, in a broken line.
+      const waning = moon > 0.5;
+      const s = waning ? -1 : 1;
+      const limb: number[] = [];
+      const N = 30;
+      for (let i = 0; i <= N; i++) {
+        const a = -Math.PI / 2 + (Math.PI * i) / N;
+        limb.push(s * rm * Math.cos(a), rm * Math.sin(a));
+      }
+      inkLine(ctx, limb, false, {
+        width: Math.max(px * 0.6, rm * 0.06),
+        color: dark ? '#F4F0E6' : IRON_GALL.light,
+        alpha: dark ? 0.55 : 0.6,
+        lost: 0.55,
+        swell: 0.3,
+        taper: [0.15, 0.15],
+        seed: hash32('snell', seed, 'limb'),
+        min: px * 0.3,
+      });
+    }
+    ctx.restore();
+  }
+
+  if (o.over) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(1, 1 / SNELL_SQUASH);
+    ctx.translate(-cx, -cy);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    o.over(ctx);
+    ctx.restore();
   }
 
   ctx.restore();
@@ -949,9 +986,9 @@ export function drawLightPass(
 /* ---- Marine snow ---- */
 
 /**
- * Marine snow at three distances, for a still: near, a few large soft
- * discs out of focus (bokeh), each with the faint brighter rim a lens gives
- * them; between, crisp specks, each a small ragged flake; far, fine dust.
+ * Marine snow at two distances, for a still: crisp specks, each a small
+ * ragged flake, and far off fine dust. No soft discs out of focus: there is
+ * no lens in a drawing. `maxSize` caps a speck's size.
  * Specks in a light come up brighter: `litBy(x, y)` says how lit a point is,
  * 0 to 1 (`godRayLight`, a glow's falloff, or both), and without it all are
  * as lit as each other. `density` scales the counts (1 is a sitting's
@@ -962,10 +999,20 @@ export function drawSnowDeep(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  o: { seed: number; density: number; color: string; px: number; dark: boolean; litBy?: (x: number, y: number) => number },
+  o: {
+    seed: number;
+    density: number;
+    color: string;
+    px: number;
+    dark: boolean;
+    litBy?: (x: number, y: number) => number;
+    /** The widest a speck may be, device px, tail and all. */
+    maxSize?: number;
+  },
 ): void {
   if (w <= 0 || h <= 0 || !(o.density > 0)) return;
   const px = Math.max(0.5, o.px);
+  const most = o.maxSize ?? Infinity;
   const r = mulberry32(hash32('snow-deep', o.seed));
   const css = (w * h) / (px * px);
   const lit = (x: number, y: number) => (o.litBy ? 0.45 + 1.0 * clamp01(o.litBy(x, y)) : 1);
@@ -988,7 +1035,7 @@ export function drawSnowDeep(
     for (let i = 0; i < n; i++) {
       const x = r() * w;
       const y = r() * h;
-      const rad = px * (0.3 + 0.35 * r());
+      const rad = Math.min(most / 2, px * (0.3 + 0.35 * r()));
       const a = Math.min(1, (0.1 + 0.18 * r()) * lit(x, y));
       const p = buckets[bucketOf(a)];
       p.moveTo(x + rad, y);
@@ -1005,7 +1052,7 @@ export function drawSnowDeep(
     for (let i = 0; i < n; i++) {
       const x = r() * w;
       const y = r() * h;
-      const size = px * (0.6 + 1.6 * Math.pow(r(), 2.2));
+      const size = Math.min(most / 3.4, px * (0.6 + 1.6 * Math.pow(r(), 2.2)));
       const a = Math.min(1, (0.3 + 0.5 * r()) * lit(x, y));
       const sides = 8 + Math.floor(r() * 3);
       const turn = r() * TAU;
@@ -1025,7 +1072,7 @@ export function drawSnowDeep(
       if (!o.dark) add(under[bucketOf(a)], px * 0.5, px * 0.6);
       if (r() < 0.15) {
         // A trailing wisp: snow is clumped stuff, mucus and all.
-        const tail = size * (2 + r() * 3);
+        const tail = Math.min(most * 0.6, size * (2 + r() * 3));
         const ang = -Math.PI / 2 + (r() - 0.5) * 1.2;
         const p = over[bucketOf(a * 0.5)];
         p.moveTo(x, y);
@@ -1038,27 +1085,8 @@ export function drawSnowDeep(
     fillBuckets(over, (a) => `rgba(${cr}, ${cg}, ${cb}, ${a})`);
   }
 
-  // Near: a few big soft discs, out of focus, drifting past the lens.
-  {
-    const n = Math.max(1, Math.round((css / 150000) * o.density * (0.7 + 0.6 * r())));
-    for (let i = 0; i < n; i++) {
-      const x = r() * w;
-      const y = r() * h;
-      const rad = px * (10 + 34 * Math.pow(r(), 1.5));
-      const a = Math.min(0.3, (0.03 + 0.05 * r()) * lit(x, y) * (o.dark ? 1 : 1.5));
-      const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-      const c = o.dark ? `${cr}, ${cg}, ${cb}` : '255, 255, 252';
-      g.addColorStop(0, `rgba(${c}, ${a * 0.75})`);
-      g.addColorStop(0.7, `rgba(${c}, ${a * 0.9})`);
-      g.addColorStop(0.86, `rgba(${c}, ${a})`);
-      g.addColorStop(1, `rgba(${c}, 0)`);
-      ctx.fillStyle = g;
-      ctx.globalCompositeOperation = o.dark ? 'lighter' : 'screen';
-      ctx.beginPath();
-      ctx.arc(x, y, rad, 0, TAU);
-      ctx.fill();
-    }
-  }
+  // Nothing nearer: no soft discs drifting past a lens. This is a drawing,
+  // not a photograph, and there is no lens.
   ctx.restore();
 }
 

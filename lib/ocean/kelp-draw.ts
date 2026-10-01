@@ -1,33 +1,45 @@
 /**
  * The kelp forest, inked (see `kelp.ts`).
  *
- * Drawn as a natural-history plate draws a seaweed: the stalks in one pen
- * line that swells on its shadow side and runs out to a point, each blade a
- * watercolour wash pooled darker at its edge, with a vein down the middle
- * and, drawn big, a ruffled margin, a little stipple on the side away from
- * the light, and the half that faces it lifted toward gold, the sun coming
- * through the frond. The ledge the forest stands on is a pen-lined crest
- * over a wash that runs dry below it, hatched in its shadow when there is
- * the size for it.
+ * Drawn as a natural-history plate draws a giant kelp: each stipe a long
+ * winding line, washed and edged in the pen; each blade a long ruffled
+ * frond that leaves the stipe on a little gas bladder and streams away
+ * downstream, hanging as it goes, washed from gold where the light comes
+ * through to a deeper brown on its shadow half, with its margin crinkled
+ * and, drawn big, its surface corrugated across and its edge in a pen line
+ * that swells into the shadow and breaks in the light. Where a stalk is
+ * longer than the water is deep it bends over at the surface and its top
+ * lies along it, in the page, as canopy, its blades hanging down from it.
+ * The forest stands at three depths, the far ones smaller, paler and lost
+ * in the water's haze. It stands on a ledge of boulders (`inkRock`), its
+ * holdfasts gripping their tops.
  *
- * It is drawn every frame, so everything slow is kept for when the drawing
+ * It is drawn every frame, so the slow parts are kept for when the drawing
  * is big (`detailFor`, which a live screen never reaches and a wallpaper
- * always does): live it costs a few paths a stalk, as it always did.
+ * always does), and the rock is drawn once and only placed.
  */
 
 import { mixHex } from '../fan';
+import { zoneMid } from './depth';
 import { surfaceAt } from './draw';
-import { KELP_ROCK, kelpDescent, kelpInView, type Kelp, type KelpLedge, type KelpStalk } from './kelp';
-import { kelpInk, type KelpInk, type Water } from './palette';
-import { inkRock } from './outcrop-sprite';
-import { detailFor, grain, inkLine, LIGHT, stipple } from './pen';
+import { KELP_ROCK, KELP_SCALE, kelpDescent, kelpInView, type Kelp, type KelpLedge, type KelpStalk } from './kelp';
+import { inkRock, rockShape, rockStyle, type RockShape } from './outcrop-sprite';
+import { waterAt, type Water } from './palette';
+import { detailFor, inkLine, LIGHT, stipple } from './pen';
 
-/** The one ink everything in the deep is lined in, on light water and on dark. */
-const INK_LIGHT = '#2A2320';
+/** The light ink on dark water. */
 const INK_DARK = '#E8E0CF';
+/** The kelp's own colours: the wash from where the light comes through to
+    its shadow, and the ink it is lined in on light water. */
+const GOLD = '#B08A3E';
+const BROWN = '#8A6A2E';
+const KELP_INK = '#5E4520';
 /** The light from the top left, and the other way for light ink on dark
     water, which marks where the light falls rather than where it doesn't. */
 const UNLIGHT: [number, number] = [-LIGHT[0], -LIGHT[1]];
+/** How much of each depth shows: the far ones lost in the haze. */
+const ALPHA = [0.42, 0.7, 0.95];
+const HAZE = [0.5, 0.25, 0];
 
 /** A share of the page, 0 to 1 on each axis. */
 interface Rect {
@@ -47,13 +59,28 @@ interface Pen {
   light: [number, number];
 }
 
+interface Inks {
+  gold: string;
+  brown: string;
+  line: string;
+  float: string;
+}
+
+export interface KelpOptions {
+  /** The height the blades are measured against, in the same units as `h`:
+      the whole page's, where the forest is drawn a frame at a time down a
+      taller picture. The live screen leaves it out and measures them
+      against its own frame. */
+  page?: number;
+}
+
 /**
- * The kelp forest at the edges of the sunlit water (see `kelp.ts`): the
- * ledges, then the stalks standing on them, the ones further back first.
- * Each stalk sways on the slow clock, the sway travelling up it and growing
- * toward the top, and leans with the current; each blade flutters a little
- * on its own. `detail` is the governor's say: without it the blades lose
- * their ruffle and vein and the rock its shading.
+ * The kelp forest at the edges of the sunlit water (see `kelp.ts`): the far
+ * stalks, then the ledge, then the nearer stalks standing on it. Each stalk
+ * sways on the slow clock, the sway travelling up it and growing toward the
+ * top, and leans with the current; each blade flutters a little on its own.
+ * `detail` is the governor's say: without it the blades lose their ruffle
+ * and the rock its shading.
  */
 export function drawKelp(
   ctx: CanvasRenderingContext2D,
@@ -67,141 +94,104 @@ export function drawKelp(
   px: number,
   clear: Rect[] | undefined,
   detail: boolean,
+  opts: KelpOptions = {},
 ) {
   if (!kelpInView(focusSeconds)) return;
   const down = kelpDescent(focusSeconds);
   const surface = surfaceAt(focusSeconds) * h;
-  const ink = kelpInk(water.dark);
-  // A blade is about sixty CSS px long: that is the size the detail is judged at.
+  // The blades are judged at their own size: about a twentieth of the page.
+  const page = opts.page ?? h;
   const pen: Pen = {
-    line: water.dark ? INK_DARK : INK_LIGHT,
+    line: water.dark ? mixHex(INK_DARK, GOLD, 0.25) : KELP_INK,
     dark: water.dark,
-    d: detail ? detailFor(60 * px) : 0,
+    d: detail ? detailFor(0.055 * page * 1.4) : 0,
     light: water.dark ? UNLIGHT : LIGHT,
   };
-  // The light goes, and the colour with it.
+  // The light goes, and the colour with it: drained toward the water.
   const fade = 0.45 + 0.55 * water.light;
+  const drain = (1 - water.light) * 0.45;
+  const inksAt = (layer: number): Inks => {
+    const into = (c: string) => {
+      let v = mixHex(c, water.bottom, drain + HAZE[layer] * 0.6);
+      if (water.dark) v = mixHex(v, water.bottom, 0.3);
+      return v;
+    };
+    return {
+      gold: into(GOLD),
+      brown: into(BROWN),
+      line: mixHex(pen.line, water.bottom, HAZE[layer] * 0.7),
+      float: into(mixHex(GOLD, '#EAD9A6', 0.3)),
+    };
+  };
+  const rocks = kelp.ledges.map((l) => ledgeRock(l, w, h, px));
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  for (const ledge of kelp.ledges) drawLedge(ctx, w, h, ledge, down, water, px, 0.92 * fade, detail, pen);
-  for (const stalk of kelp.stalks) {
-    const alpha = (stalk.layer === 1 ? 0.92 : 0.45) * fade;
-    drawStalk(ctx, w, h, stalk, down, surface, ink, ambient, current, px, alpha, clear, detail, pen);
-  }
+  const stalkAt = (s: KelpStalk) => {
+    const ledge = kelp.ledges.find((l) => (l.edge < 0 ? s.x < 0.5 : s.x >= 0.5)) ?? kelp.ledges[0];
+    const rock = rocks[kelp.ledges.indexOf(ledge)];
+    // Rooted on the top of the boulder under it, a little into it.
+    const u = (ledge.edge < 0 ? s.x : 1 - s.x) * w + 0.03 * w;
+    return (ledge.top - down) * h + rock.top(u) + 2 * px;
+  };
+  const draw = (s: KelpStalk) =>
+    drawStalk(ctx, w, h, s, stalkAt(s), surface, inksAt(s.layer), ambient, current, px, ALPHA[s.layer] * fade, clear, detail, pen, page);
+  for (const s of kelp.stalks) if (s.layer === 0) draw(s);
+  kelp.ledges.forEach((l, i) => drawLedge(ctx, w, h, l, rocks[i], down, water, px, 0.92 * fade, detail));
+  for (const s of kelp.stalks) if (s.layer > 0) draw(s);
   ctx.restore();
 }
 
-/** A quadratic's points, appended to `out` (not its start). */
-function quadPts(out: number[], x0: number, y0: number, cx: number, cy: number, x1: number, y1: number, n: number) {
-  for (let i = 1; i <= n; i++) {
-    const t = i / n;
-    const u = 1 - t;
-    out.push(u * u * x0 + 2 * u * t * cx + t * t * x1, u * u * y0 + 2 * u * t * cy + t * t * y1);
-  }
+/** The ledge's rock, the same shape however far down the page it is. */
+function ledgeRock(l: KelpLedge, w: number, h: number, px: number): RockShape {
+  return rockShape(l.seed, (l.reach + 0.03) * w, KELP_ROCK * h, px);
 }
 
-/** A cubic's points, appended to `out` (not its start). */
-function cubicPts(out: number[], p: number[], n: number) {
-  for (let i = 1; i <= n; i++) {
-    const t = i / n;
-    const u = 1 - t;
-    const a = u * u * u;
-    const b = 3 * u * u * t;
-    const c = 3 * u * t * t;
-    const d = t * t * t;
-    out.push(a * p[0] + b * p[2] + c * p[4] + d * p[6], a * p[1] + b * p[3] + c * p[5] + d * p[7]);
-  }
-}
+/* The ledge is drawn once to a canvas of its own and only placed after
+   that: it is the same rock all the way up the page. */
+const ledges = new Map<string, { canvas: HTMLCanvasElement; left: number; oy: number }>();
 
 function drawLedge(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   ledge: KelpLedge,
+  shape: RockShape,
   down: number,
   water: Water,
   px: number,
   alpha: number,
   detail: boolean,
-  pen: Pen,
 ) {
   const top = (ledge.top - down) * h;
-  const thick = KELP_ROCK * h;
-  if (top > h * 1.05 || top + thick < 0) return;
-  // Inward from its own edge of the page.
-  const s = ledge.edge < 0 ? 1 : -1;
-  const x0 = ledge.edge < 0 ? -0.03 * w : 1.03 * w;
-  const span = (ledge.reach + 0.03) * w;
-  const X = (f: number) => x0 + s * span * f;
-  const rock = water.dark ? mixHex(water.bottom, '#000000', 0.28) : mixHex(water.bottom, '#6B6459', 0.42);
-  // Boulders along the top: a run of low humps, then the lip rolling over.
-  const n = ledge.bumps.length;
-  const topAt = (i: number) => top - (0.5 + 0.5 * ledge.bumps[i]) * 7 * px;
-  const crest = new Path2D();
-  const pts: number[] = [X(0), topAt(0)];
-  crest.moveTo(X(0), topAt(0));
-  for (let i = 0; i < n - 1; i++) {
-    const fa = (i / (n - 1)) * 0.88;
-    const fb = ((i + 1) / (n - 1)) * 0.88;
-    const cy = Math.min(topAt(i), topAt(i + 1)) - 5 * px;
-    crest.quadraticCurveTo(X((fa + fb) / 2), cy, X(fb), topAt(i + 1));
-    quadPts(pts, X(fa), topAt(i), X((fa + fb) / 2), cy, X(fb), topAt(i + 1), 8);
+  if (top + shape.minY > h * 1.05 || top + shape.height < 0) return;
+  if (typeof document === 'undefined') return;
+  const d = detail ? detailFor(Math.min(shape.span, shape.height * 2.5)) : 0.2;
+  const key = `${ledge.seed}|${ledge.edge}|${w}|${h}|${px}|${water.dark ? 1 : 0}|${d.toFixed(2)}`;
+  let s = ledges.get(key);
+  if (!s) {
+    const pad = 4 * px;
+    const cw = Math.min(4096, Math.ceil(shape.hi + pad * 2));
+    const ch = Math.min(4096, Math.ceil(shape.height * 1.1 - Math.min(0, shape.minY) + pad * 2));
+    const canvas = document.createElement('canvas');
+    canvas.width = cw;
+    canvas.height = ch;
+    const c = canvas.getContext('2d');
+    if (!c) return;
+    const dir: 1 | -1 = ledge.edge < 0 ? 1 : -1;
+    const oy = pad - Math.min(0, shape.minY);
+    const x0 = dir > 0 ? pad : cw - pad;
+    const zw = waterAt(zoneMid(0), water.dark ? 'night' : 'paper', '#A8BCC9');
+    inkRock(c, shape, { x0, y0: oy, dir }, { ...rockStyle(zw, water.dark, px, d, ledge.seed), barnacles: true });
+    // The rock's wall is 3% of the page out past the edge.
+    const left = dir > 0 ? -0.03 * w - pad : w + 0.03 * w + pad - cw;
+    s = { canvas, left, oy };
+    ledges.set(key, s);
+    if (ledges.size > 6) ledges.delete(ledges.keys().next().value as string);
   }
-  const lip = [X(0.88), topAt(n - 1), X(0.97), top, X(1.01), top + thick * 0.12, X(0.97), top + thick * 0.3];
-  crest.bezierCurveTo(lip[2], lip[3], lip[4], lip[5], lip[6], lip[7]);
-  cubicPts(pts, lip, 12);
-  // On down the lip a little way, where the pen lifts and the wash runs on.
-  const under = [X(0.97), top + thick * 0.3, X(0.95), top + thick * 0.55, X(0.9), top + thick * 0.8, X(0.86), top + thick];
-  cubicPts(pts, [...under.slice(0, 6), X(0.93), top + thick * 0.62], 6);
-  // The rock under it is a wash that bleeds away into the water, the way a
-  // brush runs dry: no underside, so the reef has no bottom to draw.
-  const body = new Path2D(crest);
-  body.bezierCurveTo(under[2], under[3], under[4], under[5], under[6], under[7]);
-  body.lineTo(X(0), top + thick);
-  body.closePath();
-  const g = ctx.createLinearGradient(0, top, 0, top + thick);
-  g.addColorStop(0, rock);
-  g.addColorStop(0.35, rock);
-  g.addColorStop(1, `${rock}00`);
   ctx.save();
-  ctx.globalAlpha = alpha * 0.9;
-  ctx.fillStyle = g;
-  ctx.fill(body);
-  ctx.restore();
-  // The crest and its contours always; the rest when the drawing is big
-  // enough to carry it, which a live screen never is.
-  const left = Math.min(X(0), X(1.02));
-  inkRock(ctx, {
-    crest: pts,
-    body,
-    box: { x: Math.max(0, left), y: Math.max(0, top - 12 * px), w: Math.min(w, left + span * 1.04) - Math.max(0, left), h: Math.min(h, top + thick) - Math.max(0, top - 12 * px) },
-    v: (_x, y) => Math.max(0, Math.min(1, (y - top) / (thick * 0.7))),
-    lip: (x) => Math.max(0, 1 - Math.abs(x - X(0.95)) / (0.12 * span)),
-    away: s > 0 ? 1 : -0.6,
-    dir: s > 0 ? 1 : -1,
-    fade: (y) => Math.max(0, Math.min(1, 1.2 - (y - top) / thick)),
-    line: pen.line,
-    rock,
-    dark: pen.dark,
-    alpha,
-    px,
-    d: detail ? pen.d : 0,
-    seed: Math.floor((ledge.bumps[0] + 2) * 1e6) ^ (ledge.edge > 0 ? 0x5a5a : 0),
-  });
-  // Stipple near the top, where there is still rock to see.
-  ctx.save();
-  ctx.fillStyle = pen.line;
-  ctx.beginPath();
-  for (const d of ledge.specks) {
-    const depth = 0.04 + d.y * 0.4;
-    const x = X(d.x * 0.88);
-    const y = top + thick * depth;
-    ctx.moveTo(x + d.r * px * 0.8, y);
-    ctx.arc(x, y, d.r * px * 0.8, 0, Math.PI * 2);
-  }
-  ctx.globalAlpha = alpha * 0.3;
-  ctx.fill();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(s.canvas, s.left, top - s.oy);
   ctx.restore();
 }
 
@@ -210,9 +200,9 @@ function drawStalk(
   w: number,
   h: number,
   stalk: KelpStalk,
-  down: number,
+  foot: number,
   surface: number,
-  ink: KelpInk,
+  ink: Inks,
   ambient: number,
   current: number,
   px: number,
@@ -220,33 +210,51 @@ function drawStalk(
   clear: Rect[] | undefined,
   detail: boolean,
   pen: Pen,
+  page: number,
 ) {
+  const len = stalk.height * h;
   // Only the part of the stalk that is on the page.
-  const t0 = Math.max(0, (stalk.base - down - 1.06) / stalk.height);
-  const t1 = Math.min(1, (stalk.base - down + 0.06) / stalk.height);
-  if (t0 >= t1) return;
-  const at = (t: number) => {
-    const d = t * stalk.height;
+  if (foot - len > h * 1.06 || foot < -h * 0.3) return;
+  const scale = KELP_SCALE[stalk.layer];
+  const near = stalk.layer === 2;
+  const far = stalk.layer === 0;
+  // Its canopy lies along the surface into the page, away from its own wall.
+  const inward = stalk.x < 0.5 ? 1 : -1;
+  const x0 = stalk.x * w;
+  const [wa, wf, wp] = stalk.wave;
+  // Where it bends over at the surface, and how tight the bend is.
+  const bendR = 0.05 * h;
+  const rise = foot - (surface + bendR);
+  const arc = (Math.PI / 2) * bendR;
+  // The canopy lies a little way along the surface, never across the page.
+  const reachOut = Math.min(len, rise < 0 ? len : rise + arc + (0.07 + 0.1 * ((stalk.phase * 7) % 1)) * w * (far ? 0.6 : 1));
+  /** A point d device px up the stipe, and the way it is going. */
+  const at = (dd: number) => {
+    const d = dd / h;
     const give = Math.min(1, d / 1.1);
+    // The stipe winds as it goes up, and the slow sway runs up it.
     const sway =
-      (Math.sin(ambient * 0.42 + stalk.phase - d * 2.4) * 0.026 +
-        Math.sin(ambient * 0.9 + stalk.phase * 1.7 - d * 5) * 0.008) *
-      h *
-      give;
-    const x = stalk.x * w + sway + current * 0.05 * w * give * give;
-    const y = (stalk.base - d - down) * h;
-    // Longer than the water is deep: the rest lies along the surface as
-    // canopy, going the way the current does.
-    if (y >= surface) return { x, y };
-    return { x: x + current * (surface - y), y: surface + 2 * px + Math.sin(ambient * 1.3 + d * 9) * 1.5 * px };
+      (Math.sin(ambient * 0.42 + stalk.phase - d * 2.4) * 0.02 + Math.sin(ambient * 0.9 + stalk.phase * 1.7 - d * 5) * 0.006) * h * give;
+    const wind = wa * h * Math.sin(d * wf + wp) * Math.min(1, d / 0.15);
+    const lean = current * 0.04 * w * give * give;
+    if (dd <= rise || rise < 0) {
+      const x = x0 + sway + wind + lean;
+      return { x, y: foot - dd };
+    }
+    // Over the bend and out along the surface, the winding dying away into it.
+    const keep = Math.max(0, 1 - (dd - rise) / (bendR * 2));
+    const bx = x0 + (sway + lean) + wind * keep;
+    if (dd <= rise + arc) {
+      const phi = (dd - rise) / bendR;
+      return { x: bx + inward * bendR * (1 - Math.cos(phi)), y: surface + bendR - bendR * Math.sin(phi) };
+    }
+    const along = dd - rise - arc;
+    return {
+      x: bx + inward * (bendR + along),
+      y: surface + Math.sin(ambient * 1.3 + along / (0.03 * h) + stalk.phase) * 0.004 * h + Math.min(1, along / (0.1 * h)) * 0.006 * h,
+    };
   };
-  const near = stalk.layer === 1;
-  const scale = near ? 1 : 0.75;
-  const big = pen.d > 0.4;
-  // Toward the light, for which side of a stalk is lit.
-  const lxs = -LIGHT[0];
-  const lys = -LIGHT[1];
-
+  const big = pen.d > 0.4 && !far;
   const inClear = (x: number, y: number) => {
     if (!clear) return false;
     const u = x / w;
@@ -254,330 +262,372 @@ function drawStalk(
     return clear.some((r) => u > r.x && u < r.x + r.w && v > r.y && v < r.y + r.h);
   };
 
-  // The stalk: a wash under one pen line, thickest at the holdfast and
-  // running out to a point at the tip. Like the blades, it goes faint where
-  // it crosses what is written: each run of it is its own line.
-  const steps = Math.max(2, Math.ceil((t1 - t0) * stalk.height * 40));
+  // The stipe: a wash under one pen line that swells on its shadow side,
+  // stout at the holdfast and running out at the tip. Like the blades, it
+  // goes faint where it crosses what is written: each run of it is its own.
+  const steps = Math.max(8, Math.ceil(reachOut / (3 * px)));
+  const visible = (y: number) => y > -0.08 * h && y < h * 1.08;
   const runs: { pts: number[]; faint: boolean; from: number; to: number }[] = [];
-  let prev = at(t0);
   let run: { pts: number[]; faint: boolean; from: number; to: number } | null = null;
+  let prev = at(0);
   for (let i = 1; i <= steps; i++) {
-    const t = t0 + ((t1 - t0) * i) / steps;
-    const p = at(t);
+    const t = i / steps;
+    const p = at(t * reachOut);
+    if (!visible(p.y) && !visible(prev.y)) {
+      run = null;
+      prev = p;
+      continue;
+    }
     const inside = inClear((p.x + prev.x) / 2, (p.y + prev.y) / 2);
     if (!run || run.faint !== inside) {
-      run = { pts: [prev.x, prev.y], faint: inside, from: t - (t1 - t0) / steps, to: t };
+      run = { pts: [prev.x, prev.y], faint: inside, from: (i - 1) / steps, to: t };
       runs.push(run);
     }
     run.pts.push(p.x, p.y);
     run.to = t;
     prev = p;
   }
-  // Stipe width, CSS px: stout at the foot, thin at the growing tip.
-  const stipe = (t: number) => (near ? 2.4 : 1.6) * (1 - 0.55 * t);
+  // Stipe width, device px: stout at the foot, thin at the growing tip.
+  const stipe = (t: number) => Math.max(0.6 * px, 0.0042 * page * scale * (1 - 0.5 * t));
   for (const rn of runs) {
     const a = rn.faint ? alpha * 0.3 : alpha;
-    if (big) {
-      // Big, the stipe is a washed cylinder: two pen edges, the one away
-      // from the light the heavier.
-      const m = rn.pts.length / 2;
-      const left: number[] = [];
-      const right: number[] = [];
-      const rib = new Path2D();
-      for (let i = 0; i < m; i++) {
-        const a0 = Math.max(0, i - 1);
-        const a1 = Math.min(m - 1, i + 1);
-        let tx = rn.pts[a1 * 2] - rn.pts[a0 * 2];
-        let ty = rn.pts[a1 * 2 + 1] - rn.pts[a0 * 2 + 1];
-        const tl = Math.hypot(tx, ty) || 1;
-        tx /= tl;
-        ty /= tl;
-        const t = rn.from + ((rn.to - rn.from) * i) / Math.max(1, m - 1);
-        const hw = stipe(t) * 0.5 * px * scale * 1.15;
-        // The normal that points toward the light's side of the page.
-        const sx = ty * lxs < -tx * lys ? -1 : 1;
-        left.push(rn.pts[i * 2] - ty * hw * sx, rn.pts[i * 2 + 1] + tx * hw * sx);
-        right.push(rn.pts[i * 2] + ty * hw * sx, rn.pts[i * 2 + 1] - tx * hw * sx);
-      }
-      rib.moveTo(left[0], left[1]);
-      for (let i = 2; i < left.length; i += 2) rib.lineTo(left[i], left[i + 1]);
-      for (let i = right.length - 2; i >= 0; i -= 2) rib.lineTo(right[i], right[i + 1]);
-      rib.closePath();
-      ctx.globalAlpha = a * 0.9;
-      ctx.fillStyle = ink.body;
-      ctx.fill(rib);
-      const seed = Math.floor(stalk.phase * 1000);
-      const tip: [number, number] = [0, rn.to >= 1 - 1e-6 ? 0.2 : 0];
-      inkLine(ctx, left, false, { width: 0.45 * px, color: pen.line, alpha: a * 0.8, swell: 0.3, taper: tip, lost: 0.4, seed, raw: true, min: 0.2 * px });
-      inkLine(ctx, right, false, { width: 0.95 * px, color: pen.line, alpha: a * 0.9, swell: 0.3, taper: tip, lost: 0, seed: seed + 1, raw: true, min: 0.2 * px });
-      continue;
+    const m = rn.pts.length / 2;
+    const left: number[] = [];
+    const right: number[] = [];
+    for (let i = 0; i < m; i++) {
+      const a0 = Math.max(0, i - 1);
+      const a1 = Math.min(m - 1, i + 1);
+      let tx = rn.pts[a1 * 2] - rn.pts[a0 * 2];
+      let ty = rn.pts[a1 * 2 + 1] - rn.pts[a0 * 2 + 1];
+      const tl = Math.hypot(tx, ty) || 1;
+      tx /= tl;
+      ty /= tl;
+      const t = rn.from + ((rn.to - rn.from) * i) / Math.max(1, m - 1);
+      const hw = stipe(t) * 0.5;
+      left.push(rn.pts[i * 2] - ty * hw, rn.pts[i * 2 + 1] + tx * hw);
+      right.push(rn.pts[i * 2] + ty * hw, rn.pts[i * 2 + 1] - tx * hw);
     }
-    const path = new Path2D();
-    path.moveTo(rn.pts[0], rn.pts[1]);
-    for (let i = 2; i < rn.pts.length; i += 2) path.lineTo(rn.pts[i], rn.pts[i + 1]);
-    ctx.globalAlpha = a * 0.8;
-    ctx.strokeStyle = ink.body;
-    ctx.lineWidth = 3 * px * scale;
-    ctx.stroke(path);
-    // The pen: the whole stalk's taper, so a run cut by the clock keeps its weight.
-    const tm = (rn.from + rn.to) / 2;
-    inkLine(ctx, rn.pts, false, {
-      width: stipe(tm) * 0.55 * px * (big ? 1.1 : 1),
-      color: pen.line,
-      alpha: a * (near ? 0.9 : 0.75),
-      swell: 0.75,
-      taper: [0, rn.to >= 1 - 1e-6 ? 0.25 : 0],
-      lost: big ? 0.3 : 0,
-      seed: Math.floor(stalk.phase * 1000),
-      raw: true,
-      light: pen.light,
-      min: 0.3 * px,
-    });
-  }
-
-  // The holdfast, when the foot of the stalk is on the page: roots gripping
-  // the top of the ledge.
-  if (t0 === 0) {
-    const foot = at(0);
+    const rib = new Path2D();
+    rib.moveTo(left[0], left[1]);
+    for (let i = 2; i < left.length; i += 2) rib.lineTo(left[i], left[i + 1]);
+    for (let i = right.length - 2; i >= 0; i -= 2) rib.lineTo(right[i], right[i + 1]);
+    rib.closePath();
+    ctx.globalAlpha = a * 0.95;
+    ctx.fillStyle = ink.brown;
+    ctx.fill(rib);
+    ctx.globalAlpha = 1;
+    const seed = Math.floor(stalk.phase * 1000);
+    const tip: [number, number] = [0, rn.to >= 1 - 1e-6 && reachOut >= len ? 0.15 : 0];
     if (big) {
-      stalk.roots.forEach((a, k) => {
-        const dx = Math.sin(a) * 13 * px * scale;
-        const root: number[] = [foot.x, foot.y - 2 * px];
-        quadPts(root, foot.x, foot.y - 2 * px, foot.x + dx * 0.4, foot.y + 1 * px, foot.x + dx, foot.y + (3 + Math.abs(a) * 3) * px, 6);
-        inkLine(ctx, root, false, { width: 1.3 * px * scale, color: pen.line, alpha, taper: [0, 0.7], seed: k + 11, light: pen.light });
-      });
+      // Big, two pen edges, the one away from the light the heavier.
+      inkLine(ctx, left, false, { width: 0.5 * px, color: ink.line, alpha: a * 0.85, taper: tip, seed, raw: true, light: pen.light, min: 0.2 * px });
+      inkLine(ctx, right, false, { width: 0.9 * px, color: ink.line, alpha: a * 0.9, taper: tip, seed: seed + 1, raw: true, light: pen.light, min: 0.2 * px });
     } else {
-      ctx.beginPath();
-      for (const a of stalk.roots) {
-        const dx = Math.sin(a) * 13 * px * scale;
-        ctx.moveTo(foot.x, foot.y - 2 * px);
-        ctx.quadraticCurveTo(foot.x + dx * 0.4, foot.y + 1 * px, foot.x + dx, foot.y + (3 + Math.abs(a) * 3) * px);
-      }
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = pen.line;
-      ctx.lineWidth = 1 * px * scale;
-      ctx.stroke();
+      inkLine(ctx, rn.pts, false, {
+        width: (far ? 0.5 : 0.7) * px,
+        color: ink.line,
+        alpha: a * 0.85,
+        swell: 0.6,
+        taper: tip,
+        lost: 0,
+        seed,
+        raw: true,
+        light: pen.light,
+        min: 0.3 * px,
+      });
     }
   }
 
-  // The blades, each off a little float, in two batches: plain, and faint
-  // where they cross what is written on the page. A blade is a long ribbon,
-  // curled along its length, crinkled down its fuller edge when there is the
-  // time to draw it. The half of each blade that faces the light is lifted
-  // toward gold, the sun coming through it; the other half is the shadow.
+  // The holdfast, when the foot of the stalk is on the page: a low cone of
+  // fine branching roots gripping the boulder's top, spreading over it.
+  if (visible(foot)) {
+    const fx = at(0).x;
+    const k = scale * Math.max(0.6, page / (900 * px));
+    const roots = new Path2D();
+    const fine = new Path2D();
+    stalk.roots.forEach((a, i) => {
+      const spread = (9 + 6 * Math.abs(a)) * k * px;
+      const dx = Math.sin(a) * spread;
+      const ex = fx + dx;
+      const ey = foot + (1 + Math.abs(a) * 2.5) * k * px;
+      const sy = foot - (5 + (i % 3) * 1.5) * k * px;
+      roots.moveTo(fx + dx * 0.08, sy);
+      roots.bezierCurveTo(fx + dx * 0.3, sy + 1.5 * k * px, fx + dx * 0.75, foot - 1.5 * k * px, ex, ey);
+      // Each root forks twice as it takes hold, the forks finer.
+      for (const f of [0.55, 0.8]) {
+        const ax = fx + dx * f;
+        const ay = foot + (Math.abs(a) * f * 1.6 - 1.2) * k * px;
+        const side = (i + (f > 0.6 ? 1 : 0)) % 2 ? 1 : -1;
+        fine.moveTo(ax, ay);
+        fine.quadraticCurveTo(ax + dx * 0.15 + side * 2 * k * px, ay + 1.2 * k * px, ax + dx * 0.22 + side * 3 * k * px, ay + (2.5 + i % 2) * k * px);
+      }
+    });
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = ink.brown;
+    ctx.lineWidth = 1.3 * k * px;
+    ctx.stroke(roots);
+    ctx.strokeStyle = ink.line;
+    ctx.lineWidth = Math.max(0.45 * px, 0.6 * k * px);
+    ctx.globalAlpha = alpha * 0.9;
+    ctx.stroke(roots);
+    ctx.lineWidth = Math.max(0.35 * px, 0.4 * k * px);
+    ctx.stroke(fine);
+  }
+
+  // The blades, each off its gas bladder, in two batches: plain, and faint
+  // where they cross what is written on the page.
   const plain = new Path2D();
   const faint = new Path2D();
-  const litPlain = new Path2D();
-  const litFaint = new Path2D();
-  const shadow = new Path2D();
+  const shadowPlain = new Path2D();
+  const shadowFaint = new Path2D();
   const veins = new Path2D();
-  const pleats = new Path2D();
+  const folds = new Path2D();
   const floats = new Path2D();
   const outlines: number[][] = [];
   let sx0 = Infinity;
   let sy0 = Infinity;
   let sx1 = -Infinity;
   let sy1 = -Infinity;
-  const SEG = big ? 24 : detail ? 8 : 4;
+  const SEG = big ? 28 : detail ? 12 : 7;
   const edgeA: [number, number][] = [];
   const edgeB: [number, number][] = [];
   const mid: [number, number][] = [];
+  // Measured against the page, a picture drawn a frame at a time has blades
+  // bigger against its frame than the live screen's; it draws fewer of them.
+  const ratio = page / h;
+  const stride = ratio > 1.5 ? 2 * Math.floor(ratio / 2) + 1 : 1;
   const [lx, ly] = LIGHT;
+  const flow = current >= 0 ? 1 : -1;
   for (let j = 0; j < stalk.blades.length; j++) {
+    if (j % stride) continue;
     const b = stalk.blades[j];
-    if (b.t < t0 || b.t > t1) continue;
-    const p = at(b.t);
-    if (p.y < -60 * px || p.y > h + 60 * px) continue;
-    const q = at(Math.min(1, b.t + 0.01));
-    const up = Math.atan2(q.y - p.y, q.x - p.x);
-    const flutter = Math.sin(ambient * 1.1 + stalk.phase + j * 1.3) * 0.1;
-    const a = up + b.side * b.angle + current * 0.15 + flutter;
-    const dx = Math.cos(a);
-    const dy = Math.sin(a);
-    // Across the blade, toward its fuller side.
-    const nx = -dy * b.side;
-    const ny = dx * b.side;
-    const len = b.len * px * scale;
-    const wid = b.width * px * scale;
-    const fx = p.x + dx * 3 * px * scale;
-    const fy = p.y + dy * 3 * px * scale;
-    const rx = 2.2 * px * scale;
-    floats.moveTo(fx + dx * rx, fy + dy * rx);
-    floats.ellipse(fx, fy, rx, 1.6 * px * scale, a, 0, Math.PI * 2);
-    const bx = p.x + dx * 5 * px * scale;
-    const by = p.y + dy * 5 * px * scale;
-    const curl = (b.curl + Math.sin(ambient * 0.7 + j) * 0.05) * len;
+    if (b.t * len > reachOut) continue;
+    const p = at(b.t * len);
+    const L = b.len * page;
+    const W = b.width * page;
+    if (p.y < -L * 1.2 || p.y > h + L * 0.4) continue;
+    const q = at(Math.min(len, b.t * len + 2 * px));
+    let ux = q.x - p.x;
+    let uy = q.y - p.y;
+    const ul = Math.hypot(ux, uy) || 1;
+    ux /= ul;
+    uy /= ul;
+    const canopy = p.y < surface + 0.06 * h;
+    // Off the stipe at an angle, then taken by the current: streaming away
+    // downstream and hanging as it goes. On the canopy they hang straight down.
+    const flutter = Math.sin(ambient * 1.1 + stalk.phase + j * 1.3) * 0.08;
+    const off = b.side * b.angle;
+    let d0x = ux * Math.cos(off) - uy * Math.sin(off);
+    let d0y = ux * Math.sin(off) + uy * Math.cos(off);
+    const downstream = b.side * flow > 0 || canopy;
+    if (canopy) {
+      d0x = flow * 0.35 + d0x * 0.2;
+      d0y = 1;
+    } else if (downstream) {
+      // Out from the stipe and a little up, leaning already the way it will stream.
+      d0x = d0x * 0.9 + flow * 0.15;
+      d0y = Math.min(-0.3, d0y * 0.8);
+    } else {
+      // Upstream, it leaves level and hangs.
+      d0x = b.side * 0.85;
+      d0y = -0.05 + 0.15 * b.droop;
+    }
+    const dl = Math.hypot(d0x, d0y) || 1;
+    d0x /= dl;
+    d0y /= dl;
+    // Downstream of the stipe a blade streams out with the current; on the
+    // upstream side it hangs down by the stipe, swung a little across.
+    let dex = downstream ? flow * (1 - 0.35 * b.droop) + flutter : b.side * 0.22 + flow * 0.2 + flutter;
+    let dey = downstream ? 0.1 + 0.45 * b.droop : 0.75 + 0.25 * b.droop;
+    if (canopy) {
+      dex *= 0.4;
+      dey = 1;
+    }
+    const el = Math.hypot(dex, dey);
+    dex /= el;
+    dey /= el;
+    // The bladder, an ellipse along the way the blade leaves.
+    const fr = Math.max(1.1 * px, L * 0.06);
+    const fx = p.x + d0x * fr * 0.9;
+    const fy = p.y + d0y * fr * 0.9;
+    floats.moveTo(fx + d0x * fr, fy + d0y * fr);
+    floats.ellipse(fx, fy, fr, fr * 0.6, Math.atan2(d0y, d0x), 0, Math.PI * 2);
+    const bx = fx + d0x * fr * 0.95;
+    const by = fy + d0y * fr * 0.95;
+    // The blade's line: a quadratic out along the first way and round into the second.
+    const cx = bx + d0x * L * 0.35;
+    const cy = by + d0y * L * 0.35;
+    const ex = bx + d0x * L * 0.25 + dex * L * 0.82;
+    const ey = by + d0y * L * 0.25 + dey * L * 0.82;
     edgeA.length = 0;
     edgeB.length = 0;
     mid.length = 0;
+    const curl = b.curl * L;
     for (let k = 0; k <= SEG; k++) {
       const u = k / SEG;
-      const cx = bx + dx * len * u + nx * curl * u * u;
-      const cy = by + dy * len * u + ny * curl * u * u;
-      // Widest a third of the way along, tapering long to the tip.
-      const body = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.7)), 0.8) * wid;
-      let crinkle = 0;
-      if (big && k > 0 && k < SEG) {
-        // A ruffled margin: a quick frill riding a slower one, as a frond's edge does.
-        crinkle = (0.14 * Math.sin(k * 1.7 + j) + 0.05 * Math.sin(k * 4.4 + j * 1.7)) * body;
-      } else if (detail && k > 0 && k < SEG) crinkle = (k % 2 ? 0.3 : -0.12) * body;
-      edgeA.push([cx + nx * (body * 1.15 + crinkle), cy + ny * (body * 1.15 + crinkle)]);
-      edgeB.push([cx - nx * body * 0.85, cy - ny * body * 0.85]);
-      mid.push([cx + nx * body * 0.12, cy + ny * body * 0.12]);
+      const v = 1 - u;
+      let mx = v * v * bx + 2 * v * u * cx + u * u * ex;
+      let my = v * v * by + 2 * v * u * cy + u * u * ey;
+      const tx = 2 * v * (cx - bx) + 2 * u * (ex - cx);
+      const ty = 2 * v * (cy - by) + 2 * u * (ey - cy);
+      const tl = Math.hypot(tx, ty) || 1;
+      const nx = -ty / tl;
+      const ny = tx / tl;
+      mx += nx * curl * u * u;
+      my += ny * curl * u * u;
+      // A strap: out quickly from the bladder, near enough even down its
+      // length, then drawn in to a blunt point over its last third.
+      const body = (W / 2) * Math.pow(Math.min(1, u / 0.14), 0.6) * (u > 0.66 ? Math.pow(Math.cos(((u - 0.66) / 0.34) * (Math.PI / 2)), 0.65) : 1) * (0.9 + 0.1 * Math.sin(u * 3));
+      let ra = 0;
+      let rb = 0;
+      if (k > 0 && k < SEG) {
+        if (big || detail) {
+          // The ruffled margin: a quick frill riding a slower one, each edge its own.
+          // Uneven: the frills bunch and spread along it, never a saw's teeth.
+          const f = (u * L) / (0.01 * page);
+          const g = f + 0.6 * Math.sin(f * 0.9 + b.ph);
+          ra = (0.2 * Math.sin(g * 6.28 + b.ph) + 0.08 * Math.sin(f * 11.3 + b.ph * 1.7)) * body;
+          rb = (0.17 * Math.sin(g * 5.1 + b.ph + 2.1) + 0.07 * Math.sin(f * 9.7 + b.ph)) * body;
+        }
+      }
+      edgeA.push([mx + nx * (body + ra), my + ny * (body + ra)]);
+      edgeB.push([mx - nx * (body + rb), my - ny * (body + rb)]);
+      mid.push([mx, my]);
     }
     const isFaint = inClear(p.x, p.y);
     const path = isFaint ? faint : plain;
-    const lit = isFaint ? litFaint : litPlain;
-    // Which half faces the light: the fuller edge, or the other.
-    const aLit = nx * -lx + ny * -ly > 0;
-    const traceEdge = (target: Path2D, edge: [number, number][], back: boolean) => {
+    // Which half faces away from the light: that half is the shadow.
+    const [n0x, n0y] = [edgeA[SEG >> 1][0] - mid[SEG >> 1][0], edgeA[SEG >> 1][1] - mid[SEG >> 1][1]];
+    const aDark = n0x * lx + n0y * ly > 0;
+    const trace = (target: Path2D, edge: [number, number][], back: boolean) => {
       if (!back) {
         for (let k = 1; k <= SEG; k++) {
           const [ax, ay] = edge[k - 1];
-          const [cx, cy] = edge[k];
-          target.quadraticCurveTo(ax, ay, (ax + cx) / 2, (ay + cy) / 2);
+          const [qx, qy] = edge[k];
+          target.quadraticCurveTo(ax, ay, (ax + qx) / 2, (ay + qy) / 2);
         }
         target.lineTo(edge[SEG][0], edge[SEG][1]);
       } else {
         for (let k = SEG - 1; k >= 0; k--) {
           const [ax, ay] = edge[k + 1];
-          const [cx, cy] = edge[k];
-          target.quadraticCurveTo(ax, ay, (ax + cx) / 2, (ay + cy) / 2);
+          const [qx, qy] = edge[k];
+          target.quadraticCurveTo(ax, ay, (ax + qx) / 2, (ay + qy) / 2);
         }
       }
     };
     path.moveTo(bx, by);
-    traceEdge(path, edgeA, false);
-    traceEdge(path, edgeB, true);
+    trace(path, edgeA, false);
+    trace(path, edgeB, true);
     path.closePath();
-    // The lit half: from the base up the lit edge and back down the vein.
+    const sh = isFaint ? shadowFaint : shadowPlain;
+    sh.moveTo(bx, by);
+    trace(sh, aDark ? edgeA : edgeB, false);
+    for (let k = SEG; k >= 0; k--) sh.lineTo(mid[k][0], mid[k][1]);
+    sh.closePath();
     if (detail || big) {
-      lit.moveTo(bx, by);
-      traceEdge(lit, aLit ? edgeA : edgeB, false);
-      for (let k = SEG; k >= 0; k--) lit.lineTo(mid[k][0], mid[k][1]);
-      lit.closePath();
       veins.moveTo(bx, by);
       for (let k = 1; k < SEG; k++) veins.lineTo(mid[k][0], mid[k][1]);
     }
     if (big && !isFaint) {
-      shadow.moveTo(bx, by);
-      traceEdge(shadow, aLit ? edgeB : edgeA, false);
-      for (let k = SEG; k >= 0; k--) shadow.lineTo(mid[k][0], mid[k][1]);
-      shadow.closePath();
-      for (const [x, y] of aLit ? edgeB : edgeA) {
-        sx0 = Math.min(sx0, x);
-        sy0 = Math.min(sy0, y);
-        sx1 = Math.max(sx1, x);
-        sy1 = Math.max(sy1, y);
+      for (const [x, y] of aDark ? edgeA : edgeB) {
+        sx0 = Math.min(sx0, Math.max(0, x));
+        sy0 = Math.min(sy0, Math.max(0, y));
+        sx1 = Math.max(sx1, Math.min(w, x));
+        sy1 = Math.max(sy1, Math.min(h, y));
       }
-      // The blade's surface is wrinkled lengthwise: a few faint lines
-      // either side of the vein, following it, each starting and stopping
-      // somewhere of its own.
-      for (const [edge, f, k0, k1] of [
-        [edgeA, 0.5, 2 + (j % 3), SEG - 5],
-        [edgeA, 0.78, 4, SEG - 4 - (j % 4)],
-        [edgeB, 0.55, 3 + (j % 2), SEG - 6],
-      ] as const) {
-        pleats.moveTo(mid[k0][0] + (edge[k0][0] - mid[k0][0]) * f, mid[k0][1] + (edge[k0][1] - mid[k0][1]) * f);
-        for (let k = k0 + 1; k <= k1; k++) {
-          const g = f * (1 + 0.08 * Math.sin(k * 1.9 + j));
-          pleats.lineTo(mid[k][0] + (edge[k][0] - mid[k][0]) * g, mid[k][1] + (edge[k][1] - mid[k][1]) * g);
-        }
+      // Puckered: here and there a short soft crease across it from near
+      // the midrib, the way a giant kelp's blade is wrinkled, never a row.
+      for (let k = 3; k < SEG - 3; k++) {
+        const hsh = Math.sin(k * 12.9898 + j * 78.233 + b.ph) * 43758.5453;
+        const v = hsh - Math.floor(hsh);
+        if (v > 0.38) continue;
+        const edge = v < 0.19 ? edgeA : edgeB;
+        const [mx, my] = mid[k];
+        const [qx, qy] = edge[Math.min(SEG, k + 1)];
+        const f0 = 0.2 + v;
+        folds.moveTo(mx + (qx - mx) * f0, my + (qy - my) * f0);
+        folds.quadraticCurveTo(mx + (qx - mx) * (f0 + 0.25) + (mid[k + 1][0] - mx) * 0.3, my + (qy - my) * (f0 + 0.25) + (mid[k + 1][1] - my) * 0.3, mx + (qx - mx) * 0.85, my + (qy - my) * 0.85);
       }
-      // The outline for the pen: round the blade from its base.
       const o: number[] = [bx, by];
       for (const [x, y] of edgeA) o.push(x, y);
       for (let k = SEG - 1; k >= 1; k--) o.push(edgeB[k][0], edgeB[k][1]);
       outlines.push(o);
     }
   }
-  const glow = mixHex(ink.body, pen.dark ? '#F2DE9C' : '#F6E3A2', pen.dark ? 0.3 : 0.45);
-  const pool = mixHex(ink.body, pen.dark ? '#000000' : '#3A3018', 0.3);
-  for (const [path, lit, k] of [[plain, litPlain, 1], [faint, litFaint, 0.3]] as const) {
-    ctx.fillStyle = ink.body;
-    ctx.globalAlpha = alpha * 0.85 * k;
+  for (const [path, shadow, k] of [
+    [plain, shadowPlain, 1],
+    [faint, shadowFaint, 0.3],
+  ] as const) {
+    // Gold where the light comes through, deeper on the half away from it.
+    ctx.fillStyle = ink.gold;
+    ctx.globalAlpha = alpha * 0.9 * k;
     ctx.fill(path);
+    ctx.fillStyle = ink.brown;
+    ctx.globalAlpha = alpha * 0.75 * k;
+    ctx.fill(shadow);
     if (detail || big) {
-      // The sun through the frond, on the half that faces it.
-      ctx.fillStyle = glow;
-      ctx.globalAlpha = alpha * 0.55 * k;
-      ctx.fill(lit);
       // The pigment pooled at the margin as the wash dried.
       ctx.save();
       ctx.clip(path);
-      ctx.strokeStyle = pool;
-      ctx.globalAlpha = alpha * 0.4 * k;
-      ctx.lineWidth = 2.2 * px * scale;
+      ctx.strokeStyle = ink.brown;
+      ctx.globalAlpha = alpha * 0.5 * k;
+      ctx.lineWidth = 2 * px * scale;
       ctx.stroke(path);
       ctx.restore();
     }
   }
-  // Only what is on the page: a canopy can run far off the side of it.
-  sx0 = Math.max(0, sx0);
-  sy0 = Math.max(0, sy0);
-  sx1 = Math.min(w, sx1);
-  sy1 = Math.min(h, sy1);
+  // Big, a stipple in the shadow halves, thickest toward the margin.
   if (big && sx1 > sx0 && sy1 > sy0) {
-    const box = { x: sx0, y: sy0, w: sx1 - sx0, h: sy1 - sy0 };
-    const gr = grain(ctx);
-    if (gr) {
-      ctx.save();
-      ctx.clip(plain);
-      gr.setTransform?.(new DOMMatrix([px, 0, 0, px, 0, 0]));
-      ctx.globalAlpha = alpha * 0.3;
-      ctx.fillStyle = gr;
-      ctx.fillRect(box.x, box.y, box.w, box.h);
-      ctx.restore();
-    }
-    stipple(ctx, shadow, box, {
+    stipple(ctx, shadowPlain, { x: sx0, y: sy0, w: sx1 - sx0, h: sy1 - sy0 }, {
       spacing: 1.9 * px,
       radius: 0.36 * px,
-      shade: () => 0.62,
-      color: pen.dark ? mixHex(ink.body, '#000000', 0.5) : pen.line,
-      alpha: alpha * (pen.dark ? 0.7 : 0.5),
+      shade: () => 0.6,
+      color: pen.dark ? mixHex(ink.brown, '#000000', 0.5) : ink.line,
+      alpha: alpha * (pen.dark ? 0.6 : 0.45),
       seed: Math.floor(stalk.phase * 997),
     });
   }
   if (detail || big) {
-    ctx.strokeStyle = pen.dark ? mixHex(ink.body, '#FFF4D6', 0.45) : mixHex(ink.body, pen.line, 0.55);
-    ctx.lineWidth = (big ? 0.6 : 0.5) * px * scale;
-    ctx.globalAlpha = alpha * 0.7;
+    ctx.strokeStyle = ink.line;
+    ctx.lineWidth = (big ? 0.55 : 0.45) * px * scale;
+    ctx.globalAlpha = alpha * 0.55;
     ctx.stroke(veins);
   }
   if (big) {
-    ctx.strokeStyle = pen.dark ? mixHex(ink.body, '#FFF4D6', 0.3) : mixHex(ink.body, pen.line, 0.45);
-    ctx.lineWidth = 0.45 * px;
-    ctx.globalAlpha = alpha * 0.45;
-    ctx.stroke(pleats);
-    outlines.forEach((o, k) =>
+    ctx.strokeStyle = ink.line;
+    ctx.lineWidth = 0.4 * px;
+    ctx.globalAlpha = alpha * 0.3;
+    ctx.stroke(folds);
+    ctx.globalAlpha = 1;
+    outlines.forEach((o, i) =>
       inkLine(ctx, o, true, {
-        width: 0.75 * px * scale,
-        color: pen.line,
-        alpha: alpha * 0.9,
-        swell: 0.85,
-        lost: 0.4,
-        seed: k + 3,
+        width: 0.9 * px * scale,
+        color: ink.line,
+        alpha: alpha * 0.95,
+        plate: true,
+        seed: i + 3 + Math.floor(stalk.phase * 100),
         light: pen.light,
         min: 0.25 * px,
       }),
     );
-    ctx.strokeStyle = pen.line;
+    ctx.strokeStyle = ink.line;
     ctx.lineWidth = 0.6 * px * scale;
     ctx.globalAlpha = alpha * 0.3;
     ctx.stroke(faint);
   } else {
-    ctx.lineWidth = 0.8 * px * scale;
-    ctx.strokeStyle = pen.line;
-    ctx.globalAlpha = alpha * 0.85;
+    ctx.lineWidth = (far ? 0.5 : 0.75) * px * scale;
+    ctx.strokeStyle = ink.line;
+    ctx.globalAlpha = alpha * (far ? 0.6 : 0.85);
     ctx.stroke(plain);
     ctx.globalAlpha = alpha * 0.3;
     ctx.stroke(faint);
   }
+  // The bladders: a little bead of gas, lit on top.
   ctx.globalAlpha = alpha;
   ctx.fillStyle = ink.float;
   ctx.fill(floats);
-  ctx.strokeStyle = pen.line;
-  ctx.lineWidth = 0.55 * px * scale;
-  ctx.globalAlpha = alpha * 0.7;
+  ctx.strokeStyle = ink.line;
+  ctx.lineWidth = (near ? 0.6 : 0.45) * px;
+  ctx.globalAlpha = alpha * 0.85;
   ctx.stroke(floats);
 }

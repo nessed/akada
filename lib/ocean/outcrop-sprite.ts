@@ -4,20 +4,27 @@
  * A rock and everything on it is drawn once, to a canvas of its own, and
  * after that only placed: coral doesn't move, so there is nothing to
  * redraw, and a frame pays one image copy per rock (two where it crosses
- * what is written on the page). It is drawn as if it jutted from the left
- * edge, and mirrored when it comes from the right.
+ * what is written on the page). Each is drawn for the side of the page it
+ * comes from, so the light stays on its top left whichever wall it leaves.
+ *
+ * The rock is drawn as an engraver draws one: a heap of boulders, each its
+ * own rounded form with a broken top, shaded in contour lines that curve
+ * with it and close up into its shadow, a stipple gathering where it turns
+ * away, a strip of bare paper along its lit top, and the clefts between
+ * them dark. Its foot runs back into the wall and the wash lets go of it,
+ * so it hangs off the page edge rather than floating.
  *
  * The growths are drawn as a natural-history plate would draw them: a wash
  * of colour under a line of ink. Colour goes with the light, as it does in
  * real water, which takes the reds first: full pastels on the sunlit reef,
- * greyed in the twilight, and in the dark only pale ghosts.
+ * dulled in the twilight, and in the dark only pale ghosts.
  */
 
 import { mixHex } from '../fan';
 import { zoneMid } from './depth';
 import type { EelPatch, Growth, Outcrop, outcropsInView } from './outcrop';
 import { HUES, IRON_GALL, waterAt, type Water } from './palette';
-import { detailFor, grain, hatch, inkLine, LIGHT, shadeAcross, stipple, washFill } from './pen';
+import { detailFor, grain, hatch, inkLine, LIGHT, mottle, poolEdge, shadeAcross, stipple, washFill } from './pen';
 import { chance, hash32, int, mulberry32, range, type Rand } from './random';
 
 /** The light from the top left, and the other way for light ink on dark
@@ -26,8 +33,9 @@ const UNLIGHT: [number, number] = [-LIGHT[0], -LIGHT[1]];
 
 interface Placed {
   canvas: HTMLCanvasElement;
-  /** Where the rock top's page-edge corner sits in the canvas, in device pixels. */
-  ox: number;
+  /** Where the canvas's left edge sits on the page, in device pixels. */
+  left: number;
+  /** Where the rock's nominal top sits in the canvas, in device pixels. */
   oy: number;
 }
 
@@ -47,7 +55,7 @@ export class OutcropCache {
 
   get(o: Outcrop, w: number, h: number, dark: boolean, px: number): Placed | null {
     if (typeof document === 'undefined' || w <= 0 || h <= 0) return null;
-    const key = `${o.id}|${w}|${h}|${dark ? 1 : 0}|${px}`;
+    const key = `${o.id}|${o.edge}|${w}|${h}|${dark ? 1 : 0}|${px}`;
     const hit = this.map.get(key);
     if (hit) {
       // Most recently used goes to the back of the line.
@@ -84,24 +92,15 @@ export function drawOutcrops(
     const cw = s.canvas.width;
     const ch = s.canvas.height;
     const y = top * h - s.oy;
-    const left = outcrop.edge < 0 ? -s.ox : w - (cw - s.ox);
+    const left = s.left;
     if (y > h || y + ch < 0) continue;
-    const place = () => {
-      if (outcrop.edge < 0) {
-        ctx.drawImage(s.canvas, -s.ox, y);
-      } else {
-        ctx.translate(w, 0);
-        ctx.scale(-1, 1);
-        ctx.drawImage(s.canvas, -s.ox, y);
-      }
-    };
     const hits = (clear ?? []).filter(
       (r) => r.x * w < left + cw && (r.x + r.w) * w > left && r.y * h < y + ch && (r.y + r.h) * h > y,
     );
     ctx.save();
     ctx.globalAlpha = 1;
     if (!hits.length) {
-      place();
+      ctx.drawImage(s.canvas, left, y);
       ctx.restore();
       continue;
     }
@@ -113,14 +112,565 @@ export function drawOutcrops(
       inside.rect(r.x * w, r.y * h, r.w * w, r.h * h);
     }
     ctx.clip(outside, 'evenodd');
-    place();
+    ctx.drawImage(s.canvas, left, y);
     ctx.restore();
     ctx.save();
     ctx.clip(inside);
     ctx.globalAlpha = 0.3;
-    place();
+    ctx.drawImage(s.canvas, left, y);
     ctx.restore();
   }
+}
+
+// ---------------------------------------------------------------------------
+// The rock's shape
+
+/** One boulder: a lumpy round form, its outline a ring of points. */
+export interface Boulder {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  /** Its lumps, as [amplitude, frequency, phase] triples round the ring. */
+  n: number[];
+  /** The outline, closed, in the rock's own frame. */
+  pts: number[];
+}
+
+/**
+ * A rock in its own frame: `u` runs from its wall (0, a little way inside
+ * the page edge) out to its lip (`span`), and `y` down from its nominal top.
+ */
+export interface RockShape {
+  span: number;
+  /** How tall it stands before the wash lets go of it. */
+  height: number;
+  /** Back to front: each one drawn over the last. */
+  boulders: Boulder[];
+  /** How far it reaches either side, in u. */
+  lo: number;
+  hi: number;
+  /** The highest point of it, as y (negative: above the nominal top). */
+  minY: number;
+  /** Where the rock's top is at `u`: the crest growths and holdfasts stand on. */
+  top: (u: number) => number;
+}
+
+/** Points round a boulder. */
+const BN = 96;
+
+/** A boulder's radius at angle `th`, as a share of its own. Inside it (`s`
+    below 1) the fine lumps die away, so a contour line further in follows
+    the form and not every knuckle of its outline. */
+function lumps(n: number[], th: number, s = 1): number {
+  let r = 1;
+  for (let i = 0; i < n.length; i += 3) r += n[i] * Math.sin(n[i + 1] * th + n[i + 2]) * (s >= 1 ? 1 : Math.pow(s, (n[i + 1] - 1) * 0.6));
+  return r;
+}
+
+const shapes = new Map<string, RockShape>();
+
+/**
+ * The rock a seed makes, `span` device px out from its wall and about
+ * `thick` deep. It stands between half and a little more than its width
+ * tall, a foot that runs back into the wall and two to four boulders out
+ * from it to the lip, the ones by the wall highest; the top is their tops,
+ * so it rises and dips over them and the clefts between, and the lip
+ * boulder's underside curves back in under it. Made once a size.
+ */
+export function rockShape(seed: number, span: number, thick: number, px: number): RockShape {
+  const key = `${seed}|${span}|${thick}|${px}`;
+  const hit = shapes.get(key);
+  if (hit) return hit;
+  const r = mulberry32(seed ^ 0x51ab0c);
+  const S = Math.max(8 * px, span);
+  const Hr = Math.max(0.5 * S, Math.min(1.2 * S, thick));
+  const boulders: Boulder[] = [];
+  const add = (cx: number, top: number, rx: number, ry: number) => {
+    // Lumps at a few scales, coarse to fine, so the top breaks into knuckles.
+    const n: number[] = [];
+    const ks = [2, 3, 5, 7, 11, 17];
+    const amps = [0.09, 0.07, 0.045, 0.028, 0.016, 0.009];
+    for (let i = 0; i < ks.length; i++) n.push(amps[i] * range(r, 0.5, 1.35), ks[i], range(r, 0, Math.PI * 2));
+    const cy = top + ry;
+    const pts: number[] = [];
+    for (let i = 0; i < BN; i++) {
+      const th = (i / BN) * Math.PI * 2;
+      const rr = lumps(n, th);
+      pts.push(cx + rx * rr * Math.cos(th), cy + ry * rr * Math.sin(th));
+    }
+    boulders.push({ cx, cy, rx, ry, n, pts });
+  };
+  // Boulders out from the wall to the lip, each over the last by about a
+  // third of itself, so the top is one broken crest; the ones by the wall
+  // stand highest. Where the rock is tall for its width they stand taller.
+  const tall = Math.max(0.8, Math.min(1.35, Hr / S));
+  const ups: [number, number, number, number][] = [];
+  let u = 0;
+  for (let i = 0; i < 6; i++) {
+    const t = Math.min(1, u / S);
+    let rx = S * (0.27 - 0.08 * t) * range(r, 0.85, 1.15);
+    let cx = u + rx * (i === 0 ? 0.25 : 0.62);
+    const last = cx + rx * 1.25 > S;
+    if (last) {
+      rx = Math.max(rx, (S - u) * 0.6);
+      cx = S - rx * 0.98;
+    }
+    const top = Hr * (-0.12 + 0.2 * t + range(r, -0.06, 0.06));
+    const ry = Math.min(rx * range(r, 0.7, 0.95) * tall, Hr * (0.42 - 0.1 * t) * range(r, 0.88, 1.1));
+    ups.push([cx, top, rx, ry]);
+    u = cx + rx * 0.62;
+    if (last) break;
+  }
+  for (const [cx, top, rx, ry] of ups) add(cx, top, rx, ry);
+  // And in front of their feet, the mass they stand in: broad, back into the
+  // wall and down, which the wash lets go of. Its top crosses their lower halves.
+  const feet = Math.min(...ups.slice(0, -1).map(([, top, , ry]) => top + ry * 1.25), Hr * 0.4);
+  add(0.12 * S, Math.max(Hr * 0.12, feet) * range(r, 0.92, 1.04), 0.66 * S, Math.max(0.42 * Hr, (Hr * 1.05 - feet) / 2));
+  let lo = Infinity;
+  let hi = -Infinity;
+  let minY = Infinity;
+  for (const b of boulders) {
+    for (let i = 0; i < b.pts.length; i += 2) {
+      lo = Math.min(lo, b.pts[i]);
+      hi = Math.max(hi, b.pts[i]);
+      minY = Math.min(minY, b.pts[i + 1]);
+    }
+  }
+  // The top, a bin to a CSS pixel: the highest edge of any boulder over it.
+  const step = Math.max(0.5, px);
+  const nbins = Math.ceil((hi - lo) / step) + 1;
+  const tops = new Float32Array(nbins).fill(Infinity);
+  for (const b of boulders) {
+    const m = b.pts.length / 2;
+    for (let i = 0; i < m; i++) {
+      const j = (i + 1) % m;
+      const x0 = b.pts[i * 2];
+      const y0 = b.pts[i * 2 + 1];
+      const x1 = b.pts[j * 2];
+      const y1 = b.pts[j * 2 + 1];
+      const b0 = Math.ceil((Math.min(x0, x1) - lo) / step);
+      const b1 = Math.floor((Math.max(x0, x1) - lo) / step);
+      for (let k = Math.max(0, b0); k <= Math.min(nbins - 1, b1); k++) {
+        const x = lo + k * step;
+        const y = x1 === x0 ? Math.min(y0, y1) : y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+        if (y < tops[k]) tops[k] = y;
+      }
+    }
+  }
+  for (let k = 1; k < nbins; k++) if (!Number.isFinite(tops[k])) tops[k] = tops[k - 1];
+  for (let k = nbins - 2; k >= 0; k--) if (!Number.isFinite(tops[k])) tops[k] = tops[k + 1];
+  const top = (u: number) => {
+    const f = Math.max(0, Math.min(nbins - 1.001, (u - lo) / step));
+    const i = Math.floor(f);
+    return tops[i] + (tops[i + 1] - tops[i]) * (f - i);
+  };
+  const made: RockShape = { span: S, height: Hr, boulders, lo, hi, minY, top };
+  shapes.set(key, made);
+  if (shapes.size > 24) shapes.delete(shapes.keys().next().value as string);
+  return made;
+}
+
+// ---------------------------------------------------------------------------
+// The rock, inked
+
+/** How a rock is coloured and how much drawing it carries. */
+export interface RockStyle {
+  /** The wash. */
+  rock: string;
+  /** The pen. */
+  line: string;
+  /** What the lit top is lifted toward: the bare paper, or on dark water a glint. */
+  paper: string;
+  dark: boolean;
+  /** How much drawing it carries, 0 to 1 (`detailFor`). */
+  d: number;
+  px: number;
+  seed: number;
+  /** A few barnacles along its top. */
+  barnacles?: boolean;
+}
+
+/** Where a rock goes in the context: its wall at `x0`, running `dir` across, its nominal top at `y0`. */
+export interface RockPlace {
+  x0: number;
+  y0: number;
+  dir: 1 | -1;
+}
+
+const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
+
+/**
+ * A rock in pen and wash, into a context of its own (its foot is let go of
+ * by erasing, so draw it on a layer and lay that down): each boulder washed
+ * from a lifted top left to a deeper bottom right, the cleft behind it
+ * darkened, a strip of bare paper along its lit top, contour lines that
+ * follow its form and close up into the shadow (crossed only where it is
+ * darkest), a stipple gathering into the shadow, a crack or two, and its
+ * outline in one pressure line that swells in the shadow and breaks in the
+ * light. On dark water the light ink marks where the light falls instead.
+ * Shared by the outcrops and the kelp's ledge.
+ */
+export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: RockPlace, k: RockStyle): void {
+  const { px, d, dark } = k;
+  const r = mulberry32(k.seed);
+  const X = (u: number) => at.x0 + at.dir * u;
+  const Y = (y: number) => at.y0 + y;
+  const fine = d > 0.35;
+  const deep = mixHex(k.rock, dark ? '#000000' : '#2A2320', dark ? 0.45 : 0.32);
+  const lift = mixHex(k.rock, k.paper, dark ? 0.22 : 0.42);
+  const union = new Path2D();
+  const [lx, ly] = LIGHT;
+  // Toward the light, for a rounded form: from the top left and a little in front.
+  const LV = [-0.55, -0.7, 0.36].map((v) => v / Math.hypot(0.55, 0.7, 0.36));
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  shape.boulders.forEach((b, bi) => {
+    const pts: number[] = [];
+    for (let i = 0; i < b.pts.length; i += 2) pts.push(X(b.pts[i]), Y(b.pts[i + 1]));
+    const path = new Path2D();
+    path.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
+    path.closePath();
+    let bx0 = Infinity;
+    let by0 = Infinity;
+    let bx1 = -Infinity;
+    let by1 = -Infinity;
+    for (let i = 0; i < pts.length; i += 2) {
+      bx0 = Math.min(bx0, pts[i]);
+      bx1 = Math.max(bx1, pts[i]);
+      by0 = Math.min(by0, pts[i + 1]);
+      by1 = Math.max(by1, pts[i + 1]);
+    }
+    const box = { x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 };
+    const cx = X(b.cx);
+    const cy = Y(b.cy);
+    // Each boulder is shaded as the rounded form it is: a point's facing is
+    // read off where it sits in the boulder (out at the rim it turns edge-on,
+    // in the middle it faces us), against a light from the top left and a
+    // little in front. 0 is lit, 1 the darkest shadow.
+    const shadeN = (nx: number, ny: number, nz: number) => clamp01(0.5 - 0.62 * (nx * LV[0] + ny * LV[1] + nz * LV[2]) + 0.1 * ny);
+    const shadeAt = (th: number, s: number) => {
+      const z = Math.sqrt(Math.max(0, 1 - s * s));
+      return shadeN(at.dir * s * Math.cos(th), s * Math.sin(th), z);
+    };
+    // The same for a point of the page, for the stipple.
+    const shadeXY = (x: number, y: number) => {
+      const ex = (at.dir * (x - cx)) / b.rx;
+      const ey = (y - cy) / b.ry;
+      const th = Math.atan2(ey, ex);
+      const s = Math.hypot(ex, ey) / lumps(b.n, th < 0 ? th + Math.PI * 2 : th);
+      return shadeAt(th < 0 ? th + Math.PI * 2 : th, Math.min(1, s));
+    };
+    // The cleft behind it: the boulders already down darken where this one
+    // meets them, the shadow falling away from the light.
+    if (bi > 0) {
+      ctx.save();
+      ctx.clip(union);
+      ctx.translate(lx * 0.06 * b.ry, ly * 0.06 * b.ry);
+      ctx.strokeStyle = deep;
+      ctx.globalAlpha = dark ? 0.7 : 0.55;
+      ctx.lineWidth = Math.max(2 * px, 0.16 * Math.min(b.rx, b.ry));
+      ctx.stroke(path);
+      ctx.restore();
+    }
+    union.addPath(path);
+    // The wash, lifted where the light lands and deeper where it doesn't.
+    const g = ctx.createRadialGradient(
+      cx - at.dir * 0.4 * b.rx,
+      cy - 0.5 * b.ry,
+      0,
+      cx - at.dir * 0.4 * b.rx,
+      cy - 0.5 * b.ry,
+      Math.max(b.rx, b.ry) * 1.9,
+    );
+    const tint = mixHex(k.rock, bi % 2 ? deep : lift, 0.08 + 0.06 * r());
+    g.addColorStop(0, mixHex(tint, lift, 0.6));
+    g.addColorStop(0.45, tint);
+    g.addColorStop(1, mixHex(tint, deep, 0.7));
+    ctx.fillStyle = g;
+    ctx.globalAlpha = 1;
+    ctx.fill(path);
+    // Where the pigment settled unevenly, and ran to the edge and dried there.
+    mottle(ctx, path, box, deep, lift, dark ? 0.18 : 0.22, k.seed ^ (bi * 131 + 7));
+    poolEdge(ctx, path, deep, dark ? 0.3 : 0.35, Math.max(2 * px, 0.06 * Math.min(b.rx, b.ry)), 0.5 * px);
+    ctx.save();
+    ctx.clip(path);
+    // A strip of bare paper along its lit top, where the brush never went;
+    // not where its top runs in under a boulder already down.
+    const covered = (x: number, y: number) =>
+      shape.boulders.some((e, j) => {
+        if (j >= bi) return false;
+        const ex = (at.dir * (x - X(e.cx))) / e.rx;
+        const ey = (y - Y(e.cy)) / e.ry;
+        const th = Math.atan2(ey, ex);
+        return Math.hypot(ex, ey) < 0.985 * lumps(e.n, th < 0 ? th + Math.PI * 2 : th);
+      });
+    const strip = new Path2D();
+    let on = false;
+    for (let i = 0; i <= BN; i++) {
+      const th = ((i % BN) / BN) * Math.PI * 2;
+      const lit = shadeAt(th, 1) < 0.22 && Math.sin(th) < 0.35;
+      const rr = lumps(b.n, th) * 0.95;
+      const x = cx + at.dir * b.rx * rr * Math.cos(th);
+      const y = cy + b.ry * rr * Math.sin(th);
+      if (!lit || bi === shape.boulders.length - 1 || covered(x, y)) {
+        on = false;
+        continue;
+      }
+      if (on) strip.lineTo(x, y);
+      else strip.moveTo(x, y);
+      on = true;
+    }
+    const sw = Math.min(b.rx, b.ry);
+    ctx.strokeStyle = k.paper;
+    for (const [wd, a] of [
+      [0.24, 0.16],
+      [0.15, 0.2],
+      [0.08, 0.26],
+    ]) {
+      ctx.globalAlpha = a * (dark ? 0.6 : 1);
+      ctx.lineWidth = wd * sw;
+      ctx.stroke(strip);
+    }
+    // Contour hatching, the way an engraver models a round thing: lines
+    // that run across the boulder as if wrapped round it, seen a little from
+    // above, so they bow as the form does and crowd together where it turns
+    // away. Laid only where it is in shadow (in the light, on dark water),
+    // each line thickening into the dark; crossed by a second set that runs
+    // down the form only where it is darkest.
+    const lines = new Path2D();
+    const sp = (fine ? 2.4 : 3.4) * px;
+    const from = dark ? 0.6 : 0.3;
+    const wmax = (fine ? 1.05 : 0.85) * px;
+    const ribbon = (run: number[]) => {
+      const m = run.length / 3;
+      if (m < 3) return;
+      const side = (j: number, sg: number) => {
+        const q = Math.max(0, j - 1);
+        const e = Math.min(m - 1, j + 1);
+        const tx = run[e * 3] - run[q * 3];
+        const ty = run[e * 3 + 1] - run[q * 3 + 1];
+        const tl = Math.hypot(tx, ty) || 1;
+        // Each line runs out to a point at both ends.
+        const hw = (run[j * 3 + 2] / 2) * Math.min(1, (j + 0.5) / 3, (m - j - 0.5) / 3);
+        return [run[j * 3] - (ty / tl) * hw * sg, run[j * 3 + 1] + (tx / tl) * hw * sg] as const;
+      };
+      lines.moveTo(...side(0, 1));
+      for (let j = 1; j < m; j++) lines.lineTo(...side(j, 1));
+      for (let j = m - 1; j >= 0; j--) lines.lineTo(...side(j, -1));
+      lines.closePath();
+    };
+    // A point on the boulder's surface at latitude (sin sl) and longitude ph
+    // round its front, to the page, with its shade; null round the back.
+    const tilt = 0.42;
+    const ct = Math.cos(tilt);
+    const st = Math.sin(tilt);
+    const onForm = (sl: number, ph: number): [number, number, number] | null => {
+      const cl = Math.sqrt(Math.max(0, 1 - sl * sl));
+      const x = cl * Math.cos(ph);
+      const z0 = cl * Math.sin(ph);
+      const y = sl * ct + z0 * st;
+      const z = z0 * ct - sl * st;
+      if (z <= 0.02) return null;
+      const s = Math.min(1, Math.hypot(x, y));
+      const th = Math.atan2(y, x);
+      const rr = lumps(b.n, th < 0 ? th + Math.PI * 2 : th, s);
+      return [cx + at.dir * b.rx * x * rr, cy + b.ry * y * rr, shadeN(at.dir * x, y, z)];
+    };
+    const nLat = Math.max(3, Math.round((2 * b.ry) / sp));
+    const Q = 64;
+    for (let i = 0; i < nLat; i++) {
+      const sl = -1 + (2 * (i + 0.5 + (r() - 0.5) * 0.35)) / nLat;
+      const g1 = r() * 6.28;
+      const g2 = r() * 6.28;
+      let run: number[] = [];
+      for (let q = 0; q <= Q; q++) {
+        const ph = (q / Q) * Math.PI;
+        const p = onForm(sl, ph);
+        const want = p ? (dark ? 1 - p[2] : p[2]) : 0;
+        // The engraver's line lifts now and then.
+        const gap = Math.sin(g1 + q * 0.31) * Math.sin(g2 + q * 0.83);
+        if (!p || want <= from || gap > 0.75) {
+          ribbon(run);
+          run = [];
+          continue;
+        }
+        run.push(p[0], p[1], wmax * Math.min(1.25, 0.15 + ((want - from) / (1 - from)) * 1.2));
+      }
+      ribbon(run);
+    }
+    if (fine && !dark) {
+      // Down the form, in the deepest shadow only.
+      const deepFrom = 0.74;
+      const nLon = Math.max(3, Math.round((Math.PI * b.rx) / (sp * 1.5)));
+      for (let i = 0; i < nLon; i++) {
+        const ph = (Math.PI * (i + 0.5 + (r() - 0.5) * 0.4)) / nLon;
+        let run: number[] = [];
+        for (let q = 0; q <= 40; q++) {
+          const sl = -1 + (2 * q) / 40;
+          const p = onForm(sl, ph);
+          const want = p ? (dark ? 1 - p[2] : p[2]) : 0;
+          if (!p || want <= deepFrom) {
+            ribbon(run);
+            run = [];
+            continue;
+          }
+          run.push(p[0], p[1], wmax * 0.8 * Math.min(1, (want - deepFrom) / 0.12));
+        }
+        ribbon(run);
+      }
+    }
+    ctx.fillStyle = k.line;
+    ctx.globalAlpha = dark ? 0.5 : 0.85;
+    ctx.fill(lines);
+    // A stipple gathering into the shadow.
+    if (fine) {
+      ctx.restore();
+      stipple(ctx, path, box, {
+        spacing: 2.3 * px,
+        radius: 0.42 * px,
+        shade: dark ? (x, y) => 1 - shadeXY(x, y) : shadeXY,
+        from: dark ? 0.55 : 0.42,
+        color: k.line,
+        alpha: dark ? 0.4 : 0.55,
+        seed: k.seed ^ (bi * 977 + 13),
+      });
+      ctx.save();
+      ctx.clip(path);
+    }
+    // A crack or two, in from the top and down the face.
+    if (d > 0.25 && r() < 0.8) {
+      const count = 1 + Math.floor(r() * 2);
+      ctx.restore();
+      ctx.save();
+      ctx.clip(path);
+      for (let c = 0; c < count; c++) {
+        let th = Math.PI * (1.25 + 0.6 * r());
+        let s = 1.02;
+        const crack: number[] = [];
+        const segs = 4 + Math.floor(r() * 4);
+        for (let q = 0; q <= segs; q++) {
+          const rr = lumps(b.n, th) * s;
+          crack.push(cx + at.dir * b.rx * rr * Math.cos(th), cy + b.ry * rr * Math.sin(th));
+          s -= (0.06 + 0.08 * r()) * (b.ry > b.rx ? 1 : b.rx / b.ry) * 0.7;
+          th += (r() - 0.5) * 0.35;
+          if (s < 0.35) break;
+        }
+        inkLine(ctx, crack, false, { width: 0.8 * px, color: k.line, alpha: dark ? 0.5 : 0.7, taper: [0.05, 0.7], seed: c * 7 + bi, raw: true, min: 0.2 * px });
+      }
+    }
+    ctx.restore();
+    // Its outline, heavy where it turns from the light and lost where it is
+    // lit. Where it crosses a boulder already down it is a cleft inside the
+    // rock, not its edge, and the pen goes lighter there.
+    const m = pts.length / 2;
+    const flags: boolean[] = [];
+    for (let i = 0; i < m; i++) flags.push(covered(pts[i * 2], pts[i * 2 + 1]));
+    const pen = (run: number[], cleft: boolean, closed: boolean) =>
+      inkLine(ctx, run, closed, {
+        width: (cleft ? 0.75 : fine ? 1.15 : 1) * px,
+        color: k.line,
+        alpha: (dark ? 0.8 : 0.9) * (cleft ? 0.75 : 1),
+        plate: true,
+        seed: k.seed ^ (bi * 31 + run.length),
+        light: dark ? UNLIGHT : LIGHT,
+        min: 0.25 * px,
+      });
+    if (!flags.some(Boolean)) pen(pts, false, true);
+    else {
+      // Runs round the ring, starting where one begins so none is cut at the seam.
+      const s0 = flags.findIndex((f, i) => f !== flags[(i - 1 + m) % m]);
+      let run: number[] = [];
+      let kind = flags[s0];
+      for (let q = 0; q <= m; q++) {
+        const i = (s0 + q) % m;
+        if (q === m || flags[i] !== kind) {
+          run.push(pts[i * 2], pts[i * 2 + 1]);
+          if (run.length >= 6) pen(run, kind, false);
+          run = [];
+          kind = flags[i];
+        }
+        run.push(pts[i * 2], pts[i * 2 + 1]);
+      }
+    }
+  });
+  // Paper tooth over the whole of it.
+  if (fine) {
+    const gr = grain(ctx);
+    if (gr) {
+      ctx.save();
+      ctx.clip(union);
+      gr.setTransform?.(new DOMMatrix([px, 0, 0, px, 0, 0]));
+      ctx.fillStyle = gr;
+      ctx.globalAlpha = dark ? 0.3 : 0.22;
+      const x0 = Math.min(X(shape.lo), X(shape.hi));
+      ctx.fillRect(x0, Y(shape.minY), Math.abs(X(shape.hi) - X(shape.lo)), shape.height * 1.4);
+      ctx.restore();
+    }
+  }
+  if (k.barnacles && d > 0.3 && r() < 0.7) {
+    // A few barnacles on a boulder's top: a low cone, its plates, the slit on top.
+    const nb = 2 + Math.floor(r() * 4);
+    const u0 = shape.span * (0.25 + 0.4 * r());
+    const shell = dark ? mixHex(k.rock, '#E8E0CF', 0.35) : mixHex(k.rock, '#FBF8EF', 0.55);
+    for (let q = 0; q < nb; q++) {
+      const u = u0 + q * (4 + r() * 6) * px;
+      const bw = (2.2 + r() * 1.6) * px;
+      const x = X(u);
+      const y = Y(shape.top(u)) + (2 + r() * 4) * px;
+      const cone = new Path2D();
+      cone.moveTo(x - bw, y + bw * 0.35);
+      cone.quadraticCurveTo(x - bw * 0.7, y - bw * 0.6, x - bw * 0.3, y - bw * 0.7);
+      cone.lineTo(x + bw * 0.3, y - bw * 0.7);
+      cone.quadraticCurveTo(x + bw * 0.7, y - bw * 0.6, x + bw, y + bw * 0.35);
+      cone.closePath();
+      ctx.fillStyle = shell;
+      ctx.globalAlpha = 0.9;
+      ctx.fill(cone);
+      ctx.strokeStyle = k.line;
+      ctx.lineWidth = 0.5 * px;
+      ctx.globalAlpha = 0.8;
+      ctx.stroke(cone);
+      ctx.beginPath();
+      ctx.moveTo(x - bw * 0.25, y - bw * 0.62);
+      ctx.lineTo(x + bw * 0.25, y - bw * 0.62);
+      for (const f of [-0.55, 0, 0.55]) {
+        ctx.moveTo(x + f * bw * 0.5, y - bw * 0.55);
+        ctx.lineTo(x + f * bw, y + bw * 0.25);
+      }
+      ctx.lineWidth = 0.4 * px;
+      ctx.globalAlpha = 0.6;
+      ctx.stroke();
+    }
+  }
+  // The foot let go of: the wash running dry down toward the wall.
+  const fy0 = Y(shape.height * 0.62);
+  const fy1 = Y(shape.height * 1.04);
+  const fade = ctx.createLinearGradient(0, fy0, 0, fy1);
+  fade.addColorStop(0, 'rgba(0,0,0,0)');
+  fade.addColorStop(0.6, 'rgba(0,0,0,0.75)');
+  fade.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = fade;
+  ctx.fillRect(Math.min(X(shape.lo), X(shape.hi)) - 4 * px, fy0, Math.abs(X(shape.hi) - X(shape.lo)) + 8 * px, ctx.canvas.height);
+  ctx.restore();
+}
+
+/** The colours a rock is washed and lined in at a depth: the zone's water,
+    browned toward stone on light water and darkened on dark. */
+export function rockStyle(zoneWater: Water, dark: boolean, px: number, d: number, seed: number): RockStyle {
+  return {
+    rock: dark ? mixHex(zoneWater.bottom, '#000000', 0.22) : mixHex(zoneWater.bottom, '#7D6E5A', 0.5),
+    line: dark ? IRON_GALL.dark : IRON_GALL.light,
+    paper: dark ? mixHex(zoneWater.top, IRON_GALL.dark, 0.35) : mixHex(zoneWater.top, '#FBF8EF', 0.7),
+    dark,
+    d,
+    px,
+    seed,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -128,13 +678,14 @@ export function drawOutcrops(
 
 function render(o: Outcrop, w: number, h: number, dark: boolean, px: number): Placed | null {
   const span = (o.reach + 0.03) * w;
-  const thick = o.thick * h;
+  const shape = rockShape(hash32(o.id, 'rock'), span, o.thick * h, px);
   const tallest = Math.max(0, ...o.growths.map((g) => g.size)) * px;
-  const padL = 2 * px;
-  const padR = Math.max(24, ...o.growths.map((g) => g.size * 0.75)) * px;
-  const padT = Math.ceil(tallest * 1.15 + 16 * px);
-  const cw = Math.min(4096, Math.ceil(padL + span * 1.03 + padR));
-  const ch = Math.min(4096, Math.ceil(padT + thick + 8 * px));
+  // Room out past the lip for what grows there, a fan being wider than tall.
+  const padIn = Math.max(24 * px, tallest * 0.95);
+  const padT = Math.ceil(tallest * 1.15 + 16 * px - Math.min(0, shape.minY));
+  const uLo = -2 * px;
+  const cw = Math.min(4096, Math.ceil(Math.max(shape.hi, span) - uLo + padIn));
+  const ch = Math.min(4096, Math.ceil(padT + shape.height * 1.08 + 8 * px));
   const canvas = document.createElement('canvas');
   canvas.width = cw;
   canvas.height = ch;
@@ -142,42 +693,51 @@ function render(o: Outcrop, w: number, h: number, dark: boolean, px: number): Pl
   if (!ctx) return null;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  const ox = padL + 0.03 * w;
+  // Drawn for its own wall, so the light stays top left either way.
+  const dir: 1 | -1 = o.edge < 0 ? 1 : -1;
+  const x0 = dir > 0 ? -uLo : cw + uLo;
+  const X = (u: number) => x0 + dir * u;
   const oy = padT;
-  const crestY = drawRock(ctx, o, span, thick, padL, oy, dark, px);
+  const zw = waterAt(zoneMid(o.zone), dark ? 'night' : 'paper', '#A8BCC9');
+  // Fainter as the light goes, but never lost: in the dark the rock is
+  // what the growths stand on, and it is mostly its ink that shows.
+  const alpha = 0.92 * (0.65 + 0.35 * zw.light);
+  const layer = document.createElement('canvas');
+  layer.width = cw;
+  layer.height = ch;
+  const lctx = layer.getContext('2d');
+  if (lctx) {
+    inkRock(lctx, shape, { x0, y0: oy, dir }, {
+      ...rockStyle(zw, dark, px, detailFor(Math.min(span, shape.height * 2.5)), hash32(o.id, 'rock')),
+      barnacles: o.zone < 2,
+    });
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(layer, 0, 0);
+    ctx.globalAlpha = 1;
+  }
+  const crestY = (f: number) => oy + shape.top(f * span);
   // Under the growths, so a coral at its edge stands on the sand.
-  if (o.eels) drawSand(ctx, o, o.eels, (f) => padL + span * f, crestY, dark, px);
+  if (o.eels) drawSand(ctx, o, o.eels, (f) => X(f * span), crestY, dark, px);
   for (const g of o.growths) {
-    const x = ox + g.at * o.reach * w;
-    const f = Math.min(0.88, (x - padL) / span);
+    const u = 0.03 * w + g.at * o.reach * w;
     ctx.save();
     // Sunk a little into the rock, so it stands on it rather than floats.
-    ctx.translate(x, crestY(f) + 1.5 * px);
+    ctx.translate(X(u), crestY(u / span) + 2 * px);
     drawGrowth(ctx, g, o.zone, dark, px);
     ctx.restore();
   }
-  return { canvas, ox, oy };
+  // Where the canvas's left edge falls on the page: the wall is 3% of the page off it.
+  const left = dir > 0 ? uLo - 0.03 * w : w + 0.03 * w - cw - uLo;
+  return { canvas, left, oy };
 }
 
-/** How far the crest stands above the rock's top at `f` (0 to 1 along it from
-    its own edge), in device pixels: low boulders between the bumps, then the
-    lip. Shared by the sprite and `rockTopAt`, so what stands on the rock
-    from outside the sprite lands where the ink is. */
-function crestRise(o: Outcrop, f: number, px: number): number {
-  const n = o.bumps.length;
-  const u = (Math.max(0, Math.min(0.88, f)) / 0.88) * (n - 1);
-  const i = Math.min(n - 2, Math.floor(u));
-  const t = u - i;
-  const b = o.bumps[i] + (o.bumps[i + 1] - o.bumps[i]) * (1 - Math.cos(Math.PI * t)) * 0.5;
-  return (0.5 + 0.5 * b) * 7 * px + Math.sin(Math.PI * t) * 4 * px;
-}
-
-/** Where a point `f` (0..1 along the rock top from its own edge) sits on the page, in device px, for a rock in view: the top of the crest at f. */
+/** Where a point `f` (0..1 along the rock top from its own edge) sits on the page, in device px, for a rock in view: the top of the rock at f. */
 export function rockTopAt(o: Outcrop, top: number, f: number, w: number, h: number, px: number): { x: number; y: number } {
-  // The sprite's rock starts `padL` in and is placed `ox = padL + 0.03 w`
-  // back off the page, so the pad cancels out.
-  const x = (o.reach + 0.03) * w * f - 0.03 * w;
-  return { x: o.edge < 0 ? x : w - x, y: top * h - crestRise(o, f, px) };
+  const span = (o.reach + 0.03) * w;
+  const shape = rockShape(hash32(o.id, 'rock'), span, o.thick * h, px);
+  // The rock's wall is 3% of the page out past the edge.
+  const x = span * f - 0.03 * w;
+  return { x: o.edge < 0 ? x : w - x, y: top * h + shape.top(f * span) };
 }
 
 /** How high the sand stands over the crest at `f`, in CSS pixels: a low
@@ -201,8 +761,10 @@ export function eelHoles(p: EelPatch): { f: number; lift: number }[] {
   });
 }
 
-/** A garden eels' patch: a low mound of pale sand on the rock's top, stippled,
-    with a burrow for each eel. The eels are drawn live by `garden-eels.ts`. */
+/** A garden eels' patch: a low mound of pale sand on the rock's top, in the
+    rock's pen: a crest line that breaks in the light, a wash, stipple
+    gathered toward its shaded foot, and a burrow for each eel. The eels are
+    drawn live by `garden-eels.ts`. */
 function drawSand(
   ctx: CanvasRenderingContext2D,
   o: Outcrop,
@@ -214,375 +776,71 @@ function drawSand(
 ) {
   const zw = waterAt(zoneMid(o.zone), dark ? 'night' : 'paper', '#A8BCC9');
   const sand = dark ? mixHex(zw.bottom, '#D8CCB0', 0.42) : mixHex('#E9DFC6', zw.bottom, 0.22);
-  const line = dark ? mixHex(zw.bottom, '#FFFFFF', 0.3) : mixHex(zw.bottom, '#1A1714', 0.55);
+  const line = dark ? IRON_GALL.dark : IRON_GALL.light;
   const hole = dark ? '#0B0A09' : mixHex(zw.bottom, '#1A1714', 0.75);
   const alpha = 0.92 * (0.65 + 0.35 * zw.light);
   const f0 = p.at - p.width / 2;
   const top = (f: number) => crestY(f) - sandLift(p, f) * px;
-  const crest = new Path2D();
-  crest.moveTo(X(f0), top(f0));
-  for (let k = 1; k <= 16; k++) crest.lineTo(X(f0 + (p.width * k) / 16), top(f0 + (p.width * k) / 16));
+  const crest: number[] = [];
+  for (let k = 0; k <= 24; k++) crest.push(X(f0 + (p.width * k) / 24), top(f0 + (p.width * k) / 24));
   // Down into the rock a little, so the sand sits in it rather than on it.
-  const mound = new Path2D(crest);
-  for (let k = 16; k >= 0; k--) mound.lineTo(X(f0 + (p.width * k) / 16), crestY(f0 + (p.width * k) / 16) + 1.5 * px);
+  const mound = new Path2D();
+  mound.moveTo(crest[0], crest[1]);
+  for (let i = 2; i < crest.length; i += 2) mound.lineTo(crest[i], crest[i + 1]);
+  for (let k = 24; k >= 0; k--) mound.lineTo(X(f0 + (p.width * k) / 24), crestY(f0 + (p.width * k) / 24) + 2 * px);
   mound.closePath();
   ctx.save();
-  ctx.globalAlpha = alpha * 0.9;
+  ctx.globalAlpha = alpha * 0.92;
   ctx.fillStyle = sand;
   ctx.fill(mound);
-  ctx.globalAlpha = alpha * 0.5;
-  ctx.strokeStyle = line;
-  ctx.lineWidth = 0.8 * px;
-  ctx.stroke(crest);
-  // Stipple, thicker toward the crest of the mound where the grains pile.
+  // Stipple, thicker toward the foot of the mound, where it is in shadow.
   const r = mulberry32(p.seed ^ 0x5a17);
   ctx.fillStyle = line;
-  for (let i = 0; i < 22; i++) {
-    const f = f0 + p.width * (0.08 + 0.84 * r());
+  const dots = new Path2D();
+  for (let i = 0; i < 40; i++) {
+    const f = f0 + p.width * (0.04 + 0.92 * r());
     const lift = sandLift(p, f);
-    if (lift < 0.6) continue;
-    ctx.globalAlpha = alpha * range(r, 0.25, 0.5);
-    ctx.beginPath();
-    ctx.arc(X(f), crestY(f) - lift * px * r() * 0.85 + 0.6 * px, range(r, 0.35, 0.6) * px, 0, Math.PI * 2);
-    ctx.fill();
+    const down = Math.pow(r(), 0.6);
+    if (lift < 0.4) continue;
+    const x = X(f);
+    const y = crestY(f) - lift * px * (1 - down) + 1.2 * px;
+    const rad = range(r, 0.3, 0.5) * px;
+    dots.moveTo(x + rad, y);
+    dots.arc(x, y, rad, 0, Math.PI * 2);
   }
-  // The burrows: small dark mouths, seen a little from above.
-  ctx.fillStyle = hole;
-  ctx.globalAlpha = alpha * 0.85;
-  for (const b of eelHoles(p)) {
-    ctx.beginPath();
-    ctx.ellipse(X(b.f), crestY(b.f) - b.lift * px + 0.5 * px, 1.9 * px, 0.75 * px, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  ctx.globalAlpha = alpha * (dark ? 0.4 : 0.5);
+  ctx.fill(dots);
   ctx.restore();
-}
-
-/** Soft blotches, 0 to 1, for where crust gathers on rock: no grid shows. */
-function blotch(x: number, y: number, k: number): number {
-  return (
-    0.5 +
-    0.28 * Math.sin(x * 0.021 * k + 1.3) * Math.sin(y * 0.027 * k + 0.4) +
-    0.22 * Math.sin((x + y) * 0.047 * k + 2.1) * Math.sin((x - y) * 0.039 * k + 0.7)
-  );
-}
-
-/** A function of the page sampled once on a grid of `cell` px over `box`,
-    and read back by nearest cell. */
-function gridOf(box: { x: number; y: number; w: number; h: number }, cell: number, f: (x: number, y: number) => number): (x: number, y: number) => number {
-  const nx = Math.max(1, Math.ceil(box.w / cell) + 1);
-  const ny = Math.max(1, Math.ceil(box.h / cell) + 1);
-  const g = new Float32Array(nx * ny);
-  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) g[j * nx + i] = f(box.x + i * cell, box.y + j * cell);
-  return (x, y) => {
-    const i = Math.max(0, Math.min(nx - 1, Math.round((x - box.x) / cell)));
-    const j = Math.max(0, Math.min(ny - 1, Math.round((y - box.y) / cell)));
-    return g[j * nx + i];
-  };
-}
-
-/** The part of `box` where `f` passes `from`, by the grid's cells: the only
-    part a hatch laid at that threshold can mark. */
-function activeBox(box: { x: number; y: number; w: number; h: number }, cell: number, f: (x: number, y: number) => number, from: number) {
-  let x0 = Infinity;
-  let y0 = Infinity;
-  let x1 = -Infinity;
-  let y1 = -Infinity;
-  for (let y = box.y; y <= box.y + box.h; y += cell) {
-    for (let x = box.x; x <= box.x + box.w; x += cell) {
-      if (f(x, y) <= from) continue;
-      x0 = Math.min(x0, x);
-      y0 = Math.min(y0, y);
-      x1 = Math.max(x1, x);
-      y1 = Math.max(y1, y);
-    }
-  }
-  if (x1 < x0) return null;
-  return { x: x0 - cell, y: y0 - cell, w: x1 - x0 + cell * 2, h: y1 - y0 + cell * 2 };
-}
-
-/** What `inkRock` needs to know about a rock: its crest, its body, and how
-    its faces turn to the light. */
-export interface RockInk {
-  /** Points along the crest from the wall to the lip and a little way down it. */
-  crest: number[];
-  /** The rock's region: the wash is already laid in it. */
-  body: Path2D;
-  box: { x: number; y: number; w: number; h: number };
-  /** How far down the rock a point is, 0 at the crest to 1 at its foot. */
-  v: (x: number, y: number) => number;
-  /** How much a point is on the face of the lip, 0 to 1. */
-  lip: (x: number) => number;
-  /** 1 when the lip faces away from the light (into shadow), -1 toward it. */
-  away: number;
-  /** Which way the rock runs from the wall, across the page: 1 right, -1 left. */
-  dir: 1 | -1;
-  /** Where the wash runs dry, so the marks thin out with it: 1 full to 0 gone. */
-  fade: (y: number) => number;
-  line: string;
-  rock: string;
-  dark: boolean;
-  alpha: number;
-  px: number;
-  /** How much drawing the rock carries, 0 to 1. */
-  d: number;
-  seed: number;
-  /** A few barnacles on its face. */
-  barnacles?: boolean;
-  /** Points along the underside, from the lip back to the wall, where it has one. */
-  under?: number[];
-}
-
-/**
- * A rock in pen and wash, over a wash already laid: the pigment pooled at
- * the crest, paper grain, contour hatching that follows the crest down the
- * face and thickens into the shadow, strokes down the lip, cross-hatching
- * where it is darkest, a crust of stipple gathered in blotches, a few
- * cracks and barnacles, and the crest in one pressure line over it all. On
- * dark water the light ink marks where the light falls instead. Shared by
- * the outcrops and the kelp's ledge; small or live it is only the crest and
- * a few contours, which cost a handful of strokes.
- */
-export function inkRock(ctx: CanvasRenderingContext2D, k: RockInk): void {
-  const { px, alpha, d } = k;
-  const r = mulberry32(k.seed);
-  ctx.save();
-  ctx.clip(k.body);
-  // The pigment that ran to the crest and dried darker there.
-  const crestPath = new Path2D();
-  crestPath.moveTo(k.crest[0], k.crest[1]);
-  for (let i = 2; i < k.crest.length; i += 2) crestPath.lineTo(k.crest[i], k.crest[i + 1]);
-  ctx.strokeStyle = mixHex(k.rock, k.dark ? '#000000' : '#1A1714', 0.3);
-  ctx.globalAlpha = alpha * 0.35;
-  ctx.lineWidth = 6 * px;
-  ctx.stroke(crestPath);
-  // How much a mark is wanted at a point: shadow on light water, light on dark.
-  const shadeAt = k.dark
-    ? (x: number, y: number) => (0.95 - 2.2 * k.v(x, y) - 0.45 * k.lip(x) * k.away + 0.12 * (blotch(x / px, y / px, 1) - 0.5)) * k.fade(y)
-    : (x: number, y: number) =>
-        (0.12 + 1.05 * Math.pow(k.v(x, y), 1.2) + 0.45 * k.lip(x) * k.away + 0.2 * (blotch(x / px, y / px, 1) - 0.5)) *
-        (0.4 + 0.6 * k.fade(y));
-  // The hatching asks for the shade hundreds of thousands of times; it is
-  // worked out once on a coarse grid and looked up, which is what keeps a
-  // rock's sprite quick enough to draw as it comes on.
-  const fine0 = d > 0.35;
-  const shade = fine0 ? gridOf(k.box, 3 * px, shadeAt) : shadeAt;
-  const crust = fine0
-    ? gridOf(k.box, 3 * px, (x, y) => (0.2 + 0.8 * blotch(x / px, y / px, 1.7)) * (1 - 0.75 * k.v(x, y)) * k.fade(y))
-    : () => 0;
-  const lipG = fine0 ? gridOf(k.box, 3 * px, (x) => k.lip(x)) : (x: number) => k.lip(x);
-  if (d > 0.35) {
-    // Paper tooth, in bands that thin as the wash runs dry.
-    const gr = grain(ctx);
-    if (gr) {
-      gr.setTransform?.(new DOMMatrix([px, 0, 0, px, 0, 0]));
-      ctx.fillStyle = gr;
-      const bands = 6;
-      for (let b = 0; b < bands; b++) {
-        const y = k.box.y + (k.box.h * b) / bands;
-        ctx.globalAlpha = alpha * (k.dark ? 0.35 : 0.28) * k.fade(y + k.box.h / bands / 2);
-        ctx.fillRect(k.box.x, y, k.box.w, k.box.h / bands + 1);
-      }
-    }
-  }
-  // The pen strokes that model it, as wavering ribbons that break now and
-  // then the way an engraver's lines do, so no run of them reads as a pattern.
-  const strokes = new Path2D();
-  const ribbon = (pts: number[], weight: (x: number, y: number, i: number) => number, ph: number) => {
-    const run: number[] = [];
-    let along = 0;
-    const flush = () => {
-      const m = run.length / 3;
-      if (m >= 3) {
-        strokes.moveTo(run[0], run[1] - run[2] / 2);
-        for (let j = 1; j < m; j++) strokes.lineTo(run[j * 3], run[j * 3 + 1] - run[j * 3 + 2] / 2);
-        for (let j = m - 1; j >= 0; j--) strokes.lineTo(run[j * 3], run[j * 3 + 1] + run[j * 3 + 2] / 2);
-        strokes.closePath();
-      }
-      run.length = 0;
-    };
-    for (let j = 0; j < pts.length; j += 2) {
-      if (j) along += Math.hypot(pts[j] - pts[j - 2], pts[j + 1] - pts[j - 1]);
-      const gap = Math.sin(ph + along / (19 * px)) * Math.sin(ph * 1.7 + along / (7.3 * px));
-      const wd = weight(pts[j], pts[j + 1], j / 2);
-      if (gap < 0.55 && wd > 0.15 * px) run.push(pts[j], pts[j + 1], wd);
-      else flush();
-    }
-    flush();
-  };
-  const fine = d > 0.35;
-  const sp = (fine ? 2.6 : 3.4) * px;
-  // Under the crest: the crest again a little way down, its boulders easing
-  // out as it goes, so the top reads as rolling over.
-  const m = k.crest.length / 2;
-  const base: number[] = [];
-  for (let j = 0; j < m; j++) {
-    let sum = 0;
-    let c = 0;
-    for (let q = Math.max(0, j - 6); q <= Math.min(m - 1, j + 6); q++, c++) sum += k.crest[q * 2 + 1];
-    base.push(sum / c);
-  }
-  const n1 = fine ? 6 : 3;
-  for (let i = 1; i <= n1; i++) {
-    const damp = 1 - i / (n1 + 2);
-    const pts: number[] = [];
-    const ph = r() * 6.28;
-    for (let j = 0; j < m; j++) {
-      const x = k.crest[j * 2];
-      pts.push(x, base[j] + (k.crest[j * 2 + 1] - base[j]) * damp + i * sp + Math.sin(ph + x / (29 * px)) * sp * 0.25);
-    }
-    const t = i / n1;
-    ribbon(
-      pts,
-      (x, y) =>
-        (fine ? 0.6 : 0.5) * px * k.fade(y) * (k.dark ? 1.2 * (1 - 0.7 * t) : 0.45 + 0.9 * t) * (0.55 + 0.9 * (blotch(x / px, y / px, 1) - 0.2)),
-      ph,
-    );
-  }
-  // Up from the underside, where the rock turns away into its own shadow:
-  // lines that follow it, heaviest at the edge.
-  if (k.under && k.under.length >= 4) {
-    const n2 = fine ? 9 : 4;
-    for (let i = 0; i < n2; i++) {
-      const pts: number[] = [];
-      const ph = r() * 6.28;
-      for (let j = 0; j < k.under.length; j += 2) {
-        const x = k.under[j];
-        pts.push(x, k.under[j + 1] - (i + 0.6) * sp + Math.sin(ph + x / (31 * px)) * sp * 0.2);
-      }
-      const t = i / n2;
-      ribbon(pts, (x, y) => (k.dark ? 0 : (fine ? 0.75 : 0.55) * px * (1.25 - t) * Math.sqrt(k.fade(y)) * (0.6 + 0.8 * (blotch(x / px, y / px, 1) - 0.2))), ph);
-    }
-  }
-  ctx.fillStyle = k.line;
-  ctx.globalAlpha = alpha * (fine ? 0.6 : 0.32);
-  ctx.fill(strokes);
-  if (fine) {
-    // Down the face, near-upright strokes where it is in shadow (or, on dark
-    // water, in the light), heaviest on the lip.
-    // Kept to the lip, where the face turns: elsewhere the contours model it.
-    const face = (x: number, y: number) =>
-      k.dark ? shade(x, y) * (0.25 + 0.85 * lipG(x, y)) : shade(x, y) * Math.min(1, 1.6 * lipG(x, y)) * (0.85 + 0.3 * k.away);
-    const faceBox = activeBox(k.box, 3 * px, face, 0.5);
-    if (faceBox) {
-      hatch(ctx, k.body, faceBox, {
-        spacing: 2.6 * px,
-        angle: Math.PI / 2 - 0.22 * k.dir,
-        shade: face,
-        from: 0.55,
-        color: k.line,
-        width: 0.5 * px,
-        alpha: alpha * 0.5,
-        seed: k.seed ^ 5,
-      });
-    }
-    // And across them where it is darkest, a second set.
-    const darkBox = k.dark ? null : activeBox(k.box, 3 * px, shade, 0.8);
-    if (darkBox) {
-      hatch(ctx, k.body, darkBox, {
-        spacing: 3.1 * px,
-        angle: -0.6 * k.dir,
-        shade,
-        from: 0.85,
-        color: k.line,
-        width: 0.45 * px,
-        alpha: alpha * 0.4,
-        seed: k.seed ^ 9,
-      });
-    }
-    // A crust of stipple, gathered in blotches, thickest near the crest.
-    stipple(ctx, k.body, k.box, {
-      spacing: 2.6 * px,
-      radius: 0.42 * px,
-      shade: crust,
-      from: 0.32,
-      color: k.line,
-      alpha: alpha * 0.55,
-      seed: k.seed ^ 13,
-    });
-  }
-  ctx.restore();
-  if (d > 0.25) {
-    // Cracks: short jagged lines in from the crest and across the lip,
-    // now and then forking.
-    const count = 2 + Math.floor(r() * 3);
-    for (let c = 0; c < count; c++) {
-      const j = 2 * Math.floor((0.15 + r() * 0.75) * (k.crest.length / 2 - 1));
-      let cx = k.crest[j];
-      let cy = k.crest[j + 1] + (2 + r() * 5) * px;
-      let a = Math.PI / 2 + (r() - 0.5) * 0.9;
-      const crack: number[] = [cx, cy];
-      const segs = 3 + Math.floor(r() * 4);
-      for (let s = 0; s < segs; s++) {
-        a += (r() - 0.5) * 1.3;
-        a = Math.max(0.4, Math.min(Math.PI - 0.4, a));
-        const len = (3 + r() * 5) * px;
-        cx += Math.cos(a) * len;
-        cy += Math.sin(a) * len;
-        crack.push(cx, cy);
-        if (s === 1 && r() < 0.5) {
-          const fa = a + (r() < 0.5 ? 0.8 : -0.8);
-          inkLine(ctx, [cx, cy, cx + Math.cos(fa) * 4 * px, cy + Math.sin(fa) * 4 * px, cx + Math.cos(fa + 0.3) * 8 * px, cy + Math.sin(fa + 0.3) * 8 * px], false, {
-            width: 0.5 * px,
-            color: k.line,
-            alpha: alpha * 0.5 * k.fade(cy),
-            taper: [0, 0.8],
-            seed: c * 7 + 1,
-            raw: true,
-            min: 0.2 * px,
-          });
-        }
-      }
-      inkLine(ctx, crack, false, { width: 0.8 * px, color: k.line, alpha: alpha * 0.7 * k.fade(cy), taper: [0.05, 0.7], seed: c * 7 + 3, raw: true, min: 0.2 * px });
-    }
-  }
-  if (k.barnacles && d > 0.3 && r() < 0.65) {
-    // A few barnacles just under the crest: a low cone, its plates, the slit on top.
-    const nb = 2 + Math.floor(r() * 4);
-    const j0 = 2 * Math.floor((0.2 + r() * 0.5) * (k.crest.length / 2 - 1));
-    const shell = k.dark ? mixHex(k.rock, '#E8E0CF', 0.35) : mixHex(k.rock, '#FBF8EF', 0.55);
-    for (let b = 0; b < nb; b++) {
-      const j = Math.min(k.crest.length - 2, j0 + 2 * Math.floor(b * (1.5 + r() * 2)));
-      const bw = (2.2 + r() * 1.6) * px;
-      const x = k.crest[j] + (r() - 0.5) * 4 * px;
-      const y = k.crest[j + 1] + (2.5 + r() * 6) * px;
-      const cone = new Path2D();
-      cone.moveTo(x - bw, y + bw * 0.35);
-      cone.quadraticCurveTo(x - bw * 0.7, y - bw * 0.6, x - bw * 0.3, y - bw * 0.7);
-      cone.lineTo(x + bw * 0.3, y - bw * 0.7);
-      cone.quadraticCurveTo(x + bw * 0.7, y - bw * 0.6, x + bw, y + bw * 0.35);
-      cone.closePath();
-      ctx.fillStyle = shell;
-      ctx.globalAlpha = alpha * 0.9;
-      ctx.fill(cone);
-      ctx.strokeStyle = k.line;
-      ctx.lineWidth = 0.5 * px;
-      ctx.globalAlpha = alpha * 0.8;
-      ctx.stroke(cone);
-      ctx.beginPath();
-      ctx.moveTo(x - bw * 0.25, y - bw * 0.62);
-      ctx.lineTo(x + bw * 0.25, y - bw * 0.62);
-      for (const f of [-0.55, 0, 0.55]) {
-        ctx.moveTo(x + f * bw * 0.5, y - bw * 0.55);
-        ctx.lineTo(x + f * bw, y + bw * 0.25);
-      }
-      ctx.lineWidth = 0.4 * px;
-      ctx.globalAlpha = alpha * 0.6;
-      ctx.stroke();
-    }
-  }
-  // The crest, in one pressure line that runs on down the lip and lifts.
-  inkLine(ctx, k.crest, false, {
-    width: (d > 0.35 ? 1.5 : 1.25) * px,
-    color: k.line,
-    alpha: alpha * 0.85,
+  inkLine(ctx, crest, false, {
+    width: 0.8 * px,
+    color: line,
+    alpha: alpha * 0.75,
     swell: 0.8,
-    taper: [0, 0.16],
-    lost: d > 0.35 ? 0.3 : 0.15,
-    seed: k.seed ^ 3,
+    lost: 0.5,
+    taper: [0.15, 0.15],
+    seed: p.seed,
+    light: dark ? UNLIGHT : LIGHT,
     raw: true,
-    light: k.dark ? UNLIGHT : LIGHT,
-    min: 0.3 * px,
+    min: 0.2 * px,
   });
+  // The burrows: small dark mouths, seen a little from above, each with a lit lip.
+  ctx.save();
+  for (const b of eelHoles(p)) {
+    const x = X(b.f);
+    const y = crestY(b.f) - b.lift * px + 0.5 * px;
+    ctx.fillStyle = hole;
+    ctx.globalAlpha = alpha * 0.85;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 1.9 * px, 0.75 * px, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 0.4 * px;
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 0.2 * px, 2.1 * px, 0.9 * px, 0, 0.15, Math.PI - 0.15);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** A cubic's points, appended to `out` (not its start). */
@@ -595,104 +853,6 @@ function cubicPts(out: number[], p: number[], n: number) {
       u * u * u * p[1] + 3 * u * u * t * p[3] + 3 * u * t * t * p[5] + t * t * t * p[7],
     );
   }
-}
-
-/** The rock, as the kelp's ledge is drawn: inked along its top and lip, and
-    bleeding away underneath toward the page edge it comes out of, so it reads
-    as rock jutting from a wall rather than a bowl floating in the water. */
-function drawRock(
-  ctx: CanvasRenderingContext2D,
-  o: Outcrop,
-  span: number,
-  thick: number,
-  x0: number,
-  top: number,
-  dark: boolean,
-  px: number,
-): (f: number) => number {
-  const X = (f: number) => x0 + span * f;
-  // Coloured from its own zone's water, not the live water, so the sprite
-  // holds still while the sea darkens around it.
-  const zw = waterAt(zoneMid(o.zone), dark ? 'night' : 'paper', '#A8BCC9');
-  const rock = dark ? mixHex(zw.bottom, '#000000', 0.28) : mixHex(zw.bottom, '#6B6459', 0.42);
-  const line = dark ? IRON_GALL.dark : IRON_GALL.light;
-  // Fainter as the light goes, but never lost: in the dark the rock is
-  // what the growths stand on, and it is mostly its ink that shows.
-  const alpha = 0.92 * (0.65 + 0.35 * zw.light);
-
-  const crestY = (f: number) => top - crestRise(o, f, px);
-  const edge = new Path2D();
-  const crest: number[] = [X(0), crestY(0)];
-  edge.moveTo(X(0), crestY(0));
-  for (let k = 1; k <= 48; k++) {
-    edge.lineTo(X((k / 48) * 0.88), crestY((k / 48) * 0.88));
-    crest.push(X((k / 48) * 0.88), crestY((k / 48) * 0.88));
-  }
-  const lipTop = crestY(0.88);
-  const lip = [X(0.88), lipTop, X(0.96), lipTop, X(1.01), top + thick * 0.12, X(0.97), top + thick * 0.3];
-  edge.bezierCurveTo(lip[2], lip[3], lip[4], lip[5], lip[6], lip[7]);
-  cubicPts(crest, lip, 10);
-  // The underside runs back to the wall and is never inked: the wash runs dry
-  // before it gets there.
-  const under = [X(0.97), top + thick * 0.3, X(0.8), top + thick * 0.45, X(0.3), top + thick * 0.7, X(0), top + thick];
-  const body = new Path2D(edge);
-  body.bezierCurveTo(under[2], under[3], under[4], under[5], under[6], under[7]);
-  body.closePath();
-  // A little way on round the lip, where the pen lifts.
-  cubicPts(crest, [under[0], under[1], X(0.93), top + thick * 0.35, X(0.88), top + thick * 0.4, X(0.84), top + thick * 0.42], 4);
-
-  const g = ctx.createLinearGradient(0, top, 0, top + thick);
-  g.addColorStop(0, rock);
-  g.addColorStop(0.4, rock);
-  g.addColorStop(1, `${rock}00`);
-  ctx.save();
-  ctx.globalAlpha = alpha * 0.9;
-  ctx.fillStyle = g;
-  ctx.fill(body);
-  // The underside as a lookup by x, for how far down the rock a point is.
-  const ux: number[] = [];
-  const uy: number[] = [];
-  const tmp: number[] = [under[0], under[1]];
-  cubicPts(tmp, under, 24);
-  for (let i = 0; i < tmp.length; i += 2) {
-    ux.push(tmp[i]);
-    uy.push(tmp[i + 1]);
-  }
-  const underAt = (x: number) => {
-    if (x >= ux[0]) return uy[0];
-    for (let i = 1; i < ux.length; i++) {
-      if (x >= ux[i]) {
-        const t = (x - ux[i]) / (ux[i - 1] - ux[i] || 1);
-        return uy[i] + (uy[i - 1] - uy[i]) * t;
-      }
-    }
-    return uy[uy.length - 1];
-  };
-  const f0 = (x: number) => Math.max(0, Math.min(0.88, (x - x0) / span));
-  ctx.restore();
-  inkRock(ctx, {
-    crest,
-    body,
-    box: { x: x0, y: top - 14 * px, w: span * 1.03, h: thick + 14 * px },
-    v: (x, y) => {
-      const c = crestY(f0(x));
-      return Math.max(0, Math.min(1, (y - c) / Math.max(4 * px, underAt(x) - c)));
-    },
-    lip: (x) => Math.max(0, 1 - Math.abs(x - X(0.95)) / (0.12 * span)),
-    away: 1,
-    dir: 1,
-    fade: (y) => Math.max(0, Math.min(1, 1.25 - (y - top) / thick)),
-    line,
-    rock,
-    dark,
-    alpha,
-    px,
-    d: detailFor(Math.min(span, thick * 2.5)),
-    seed: hash32(o.id, 'rock'),
-    barnacles: o.zone < 2,
-    under: tmp,
-  });
-  return crestY;
 }
 
 // ---------------------------------------------------------------------------
@@ -724,7 +884,7 @@ interface Ink {
     depth; the lines all in the one ink. */
 function inkFor(g: Growth, zone: number, dark: boolean): Ink {
   let c = HUES[Math.max(0, Math.min(HUES.length - 1, Math.round(g.hue)))];
-  if (zone === 1) c = mixHex(c, '#9AA3AB', 0.5);
+  if (zone === 1) c = mixHex(c, '#9AA3AB', 0.35);
   else if (zone >= 2) c = mixHex(c, '#EFE9DC', 0.75);
   const water = dark ? '#1A1815' : '#FBF8EF';
   const body = dark ? mixHex(c, water, 0.45) : mixHex(c, water, 0.2);
@@ -1007,97 +1167,95 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     outline(ctx, pts, true, ink, pen);
   },
 
-  // Sea fan: a short stem opening into a flat fan of ribs, crossed into a
-  // lattice, over a thin wash; big, the lattice is a fine mesh and the ribs
-  // carry their polyps.
+  // Sea fan: a gorgonian, grown in one plane across the current, so it is
+  // wider than it is tall. A short stout stem opens into ribs that run out
+  // from it like a hand fan's, forking as they spread so they stay about as
+  // close together all the way out, joined to their neighbours by fine
+  // cross-links into a net. No wash behind it: the colour is in the
+  // branches, and the water shows through the mesh.
   fan(ctx, H, ink, r, px, pen) {
-    const sx = range(r, -0.04, 0.04) * H;
-    const oy = -0.16 * H;
-    const n = int(r, 7, 10);
-    const ribs: [number, number][][] = [];
-    for (let i = 0; i < n; i++) {
-      const a = -0.95 + (1.9 * i) / (n - 1) + range(r, -0.06, 0.06);
-      const len = H * 0.84 * (0.72 + 0.28 * Math.cos(a)) * range(r, 0.92, 1.04);
-      const ph = range(r, 0, Math.PI * 2);
-      const pts: [number, number][] = [];
-      for (let k = 0; k <= 6; k++) {
-        const t = k / 6;
-        const wob = Math.sin(t * 5 + ph) * 0.03 * H * t;
-        pts.push([sx + Math.sin(a) * len * t + Math.cos(a) * wob, oy - Math.cos(a) * len * t + Math.sin(a) * wob]);
-      }
-      ribs.push(pts);
-    }
-    const hull: number[] = [sx, oy];
-    for (const pts of ribs) hull.push(pts[6][0], pts[6][1]);
-    const fanPath = pathOf(hull);
-    wash(ctx, fanPath, boxOf(hull), ink.body, pen, 0.3);
-    // The stem, stout at the holdfast.
-    outline(ctx, [0, 0, sx * 0.5, oy * 0.5, sx, oy], false, ink, pen, 1.6, [0, 0.3]);
-    // The lattice: rows across the ribs, and big, rows between those and the
-    // little cross-links that make a fan a net.
-    const at = (i: number, k: number): [number, number] => {
-      const k0 = Math.floor(k);
-      const f = k - k0;
-      const a = ribs[i][Math.min(6, k0)];
-      const b = ribs[i][Math.min(6, k0 + 1)];
-      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
-    };
-    ctx.beginPath();
-    const rows = pen.d > 0.3 ? [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5] : [1, 2, 3, 4, 5];
-    for (const k of rows) {
-      ctx.moveTo(...at(0, k));
-      for (let i = 1; i < n; i++) ctx.lineTo(...at(i, k));
-    }
-    if (pen.d > 0.3) {
-      for (let i = 0; i < n - 1; i++) {
-        for (const k of rows) {
-          if (k >= 5.5 || pen.r2() < 0.45) continue;
-          const [ax, ay] = at(i, k);
-          const [bx, by] = at(i + 1, k + 0.5);
-          ctx.moveTo(ax, ay);
-          ctx.lineTo(bx, by);
+    const stem = H * range(r, 0.1, 0.15);
+    const R = H - stem;
+    const half = range(r, 1.1, 1.3);
+    const lean = range(r, -0.12, 0.12);
+    const big = pen.d > 0.3;
+    const sx = lean * stem;
+    const sy = -stem;
+    // The rim of the fan, a little scalloped.
+    const ph = [range(r, 0, 6.28), range(r, 0, 6.28)];
+    const rim = (a: number) => R * (0.94 + 0.05 * Math.sin(a * 5 + ph[0]) + 0.03 * Math.sin(a * 11 + ph[1])) * (1 - 0.12 * Math.abs(a / half) ** 3);
+    const gapPx = Math.max(2.4 * px, H * (big ? 0.055 : 0.09));
+    const rings = big ? 9 : 6;
+    type Rib = { a: number; x: number; y: number; wd: number };
+    let ribs: Rib[] = [];
+    const n0 = int(r, 3, 5);
+    for (let i = 0; i < n0; i++) ribs.push({ a: lean + (i / (n0 - 1) - 0.5) * 2 * half * 0.55, x: sx, y: sy, wd: Math.max(1.2 * px, H * 0.035) });
+    const segs: number[][] = [];
+    const net = new Path2D();
+    for (let k = 1; k <= rings; k++) {
+      const rad = (R * k) / rings;
+      const next: Rib[] = [];
+      ribs.forEach((rb, i) => {
+        // Its share of the fan, out to the neighbours either side.
+        const left = i > 0 ? (ribs[i - 1].a + rb.a) / 2 : rb.a - (half - Math.abs(rb.a - lean)) * 0.5;
+        const right = i < ribs.length - 1 ? (ribs[i + 1].a + rb.a) / 2 : rb.a + (half - Math.abs(rb.a - lean)) * 0.5;
+        const share = (right - left) * rad;
+        const kids = share > gapPx * 2.1 && k < rings ? [rb.a - (right - left) * 0.22, rb.a + (right - left) * 0.22] : [rb.a];
+        for (const a0 of kids) {
+          const a = Math.max(lean - half, Math.min(lean + half, a0 + range(r, -0.04, 0.04)));
+          const reach = Math.min(rad, rim(a - lean));
+          const x = sx + Math.sin(a) * reach;
+          const y = sy - Math.cos(a) * reach;
+          if (Math.hypot(x - rb.x, y - rb.y) < 0.5 * px) continue;
+          segs.push([rb.x, rb.y, (rb.x + x) / 2 + range(r, -0.3, 0.3) * gapPx * 0.3, (rb.y + y) / 2, x, y, rb.wd]);
+          next.push({ a, x, y, wd: Math.max(0.35 * px, rb.wd * (kids.length > 1 ? 0.72 : 0.86)) });
+        }
+      });
+      next.sort((p, q) => p.a - q.a);
+      // Cross-links between neighbours at this ring, the mesh.
+      if (k > 1 && k < rings + 1) {
+        for (let i = 0; i < next.length - 1; i++) {
+          if (r() < (big ? 0.25 : 0.55)) continue;
+          const p = next[i];
+          const q = next[i + 1];
+          const back = range(r, 0.2, 0.7);
+          const ax = p.x + (sx - p.x) * back * (1 / rings);
+          const ay = p.y + (sy - p.y) * back * (1 / rings);
+          const bx = q.x + (sx - q.x) * (back + range(r, -0.15, 0.15)) * (1 / rings);
+          const by = q.y + (sy - q.y) * (back + range(r, -0.15, 0.15)) * (1 / rings);
+          net.moveTo(ax, ay);
+          net.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 - gapPx * 0.12, bx, by);
         }
       }
+      ribs = next;
+    }
+    const segPath = (sg: number[]) => {
+      const p = new Path2D();
+      p.moveTo(sg[0], sg[1]);
+      p.quadraticCurveTo(sg[2], sg[3], sg[4], sg[5]);
+      return p;
+    };
+    const trunk = [0, 0, sx * 0.5, sy * 0.55, sx, sy];
+    // Colour first, the net and the branches, then the pen over them.
+    ctx.strokeStyle = ink.body;
+    ctx.lineWidth = (big ? 1.2 : 1) * px;
+    faint(ctx, 0.85, () => ctx.stroke(net));
+    for (const sg of segs) {
+      ctx.lineWidth = sg[6] + 0.9 * px;
+      ctx.stroke(segPath(sg));
     }
     ctx.strokeStyle = ink.ink;
-    ctx.lineWidth = (pen.d > 0.3 ? 0.4 : 0.5) * px;
-    faint(ctx, 0.5, () => ctx.stroke());
-    // The ribs in the pen, each running out to a fork at its tip.
-    for (const pts of ribs) {
-      const flat: number[] = [];
-      for (const [x, y] of pts) flat.push(x, y);
-      outline(ctx, flat, false, ink, pen, 0.6, [0, 0.35]);
+    ctx.lineWidth = 0.35 * px;
+    faint(ctx, 0.75, () => ctx.stroke(net));
+    for (const sg of segs) {
+      ctx.lineWidth = Math.max(0.35 * px, sg[6] * 0.4);
+      faint(ctx, 0.85, () => ctx.stroke(segPath(sg)));
     }
-    ctx.beginPath();
-    for (const pts of ribs) {
-      const [ex, ey] = pts[6];
-      const [px0, py0] = pts[5];
-      const dx = (ex - px0) * 0.35;
-      const dy = (ey - py0) * 0.35;
-      ctx.moveTo(ex, ey);
-      ctx.lineTo(ex + dx - dy * 0.6, ey + dy + dx * 0.6);
-      ctx.moveTo(ex, ey);
-      ctx.lineTo(ex + dx + dy * 0.6, ey + dy - dx * 0.6);
-    }
-    ctx.lineWidth = 0.45 * px;
-    faint(ctx, 0.7, () => ctx.stroke());
-    if (pen.d > 0.45) {
-      const dots = new Path2D();
-      for (const pts of ribs) {
-        for (let k = 1.3; k < 6; k += 0.55) {
-          const [x, y] = at(ribs.indexOf(pts), k);
-          dots.moveTo(x + 0.45 * px, y);
-          dots.arc(x, y, 0.45 * px, 0, Math.PI * 2);
-        }
-      }
-      ctx.fillStyle = ink.ink;
-      faint(ctx, 0.5, () => ctx.fill(dots));
-      ctx.fillStyle = ink.body;
-    }
+    outline(ctx, trunk, false, ink, pen, Math.max(1.4, (H * 0.05) / px), [0, 0.3]);
   },
 
-  // Anemone: a short column, its disc crowned with curving tentacles that
-  // taper to fine tips, each ending in a little knob.
+  // Anemone: a short column, its disc crowned with curving tentacles, each
+  // tapering from the disc to a fine point that curls over at its end.
   anemone(ctx, H, ink, r, px, pen) {
     const cw = H * 0.3;
     const tw = H * 0.38;
@@ -1117,6 +1275,17 @@ const DRAW: Record<Growth['kind'], Drawer> = {
       const ey = cy - Math.cos(a2) * len * 0.5;
       const pts: number[] = [bx, by];
       quadPts(pts, bx, by, cx, cy, ex, ey, 10);
+      // The last of it curls over, outward, the way a tentacle hangs in a current.
+      let px0 = ex;
+      let py0 = ey;
+      let ca = a2;
+      const curl = (a >= 0 ? 1 : -1) * range(pen.r2, 0.25, 0.45);
+      for (let k = 0; k < 4; k++) {
+        ca += curl;
+        px0 += Math.sin(ca) * len * 0.07;
+        py0 -= Math.cos(ca) * len * 0.07;
+        pts.push(px0, py0);
+      }
       tents.push(pts);
     }
     // Each tentacle a ribbon, full at the disc and fine at the tip.
@@ -1133,7 +1302,7 @@ const DRAW: Record<Growth['kind'], Drawer> = {
         const tx = pts[a1 * 2] - pts[a0 * 2];
         const ty = pts[a1 * 2 + 1] - pts[a0 * 2 + 1];
         const tl = Math.hypot(tx, ty) || 1;
-        const hw = (base / 2) * (1 - 0.72 * (j / (m - 1))) ** 1.1;
+        const hw = Math.max(0.12 * px, (base / 2) * (1 - 0.94 * (j / (m - 1))) ** 1.2);
         left.push(pts[j * 2] - (ty / tl) * hw, pts[j * 2 + 1] + (tx / tl) * hw);
         right.push(pts[j * 2] + (ty / tl) * hw, pts[j * 2 + 1] - (tx / tl) * hw);
       }
@@ -1165,14 +1334,6 @@ const DRAW: Record<Growth['kind'], Drawer> = {
       });
       ctx.restore();
     }
-    ctx.lineWidth = 0.4 * px;
-    ctx.fillStyle = ink.body;
-    for (const [x, y] of tips) {
-      ctx.beginPath();
-      ctx.arc(x, y, Math.max(0.7 * px, base * 0.24), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
     ctx.fillStyle = ink.body;
     // The column, washed and shaded, striped down its length.
     const col: number[] = [-cw / 2, 0];
@@ -1194,67 +1355,126 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     outline(ctx, col, true, ink, pen, 0.85);
   },
 
-  // Tube sponges: a few upright tubes, round-lipped, dark in the mouth,
-  // shaded down their far side and pitted with pores when drawn big.
+  // Vase sponges: one to three irregular vases, narrow at the foot and
+  // swelling to a thick rolled lip, each a little lopsided, dark in the
+  // mouth, shaded in lines that wrap round the form on its shadow side and
+  // pitted with pores when drawn big. In the reef's colours, never grey.
   tube(ctx, H, ink, r, px, pen) {
-    const n = int(r, 2, 4);
-    for (let i = 0; i < n; i++) {
-      const x = (i - (n - 1) / 2) * H * 0.2 + range(r, -0.03, 0.03) * H;
-      const tw = H * range(r, 0.16, 0.22);
-      const th = H * (i === Math.floor(n / 2) ? range(r, 0.85, 1) : range(r, 0.5, 0.85));
-      const ry = tw * 0.22;
-      ctx.save();
-      ctx.translate(x, 0);
-      ctx.rotate(range(r, -0.12, 0.12) + (i - (n - 1) / 2) * 0.06);
-      const pts: number[] = [-tw * 0.4, 0];
-      quadPts(pts, -tw * 0.4, 0, -tw * 0.56, -th * 0.5, -tw / 2, -th, 10);
-      arcPts(pts, 0, -th, tw / 2, ry, Math.PI, Math.PI * 2, 14);
-      quadPts(pts, tw / 2, -th, tw * 0.56, -th * 0.5, tw * 0.4, 0, 10);
-      const p = pathOf(pts);
-      const box = { x: -tw * 0.56, y: -th - ry, w: tw * 1.12, h: th + ry };
-      wash(ctx, p, box, ink.body, pen);
-      shadeIn(ctx, p, box, ink, pen, { angle: Math.PI / 2 - 0.05, bow: 0, from: 0.55, cross: 0.9 });
-      ctx.beginPath();
-      for (const f of [0.3, 0.55, 0.78]) {
-        const y = -th * f;
-        ctx.moveTo(-tw * 0.48, y);
-        ctx.quadraticCurveTo(0, y + ry * 1.4, tw * 0.48, y);
+    const n = int(r, 1, 3);
+    const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => Math.abs(b - (n - 1) / 2) - Math.abs(a - (n - 1) / 2));
+    for (const i of order) {
+      const main = i === Math.floor(n / 2);
+      const x0 = (i - (n - 1) / 2) * H * 0.26 + range(r, -0.03, 0.03) * H;
+      const th = H * (main ? range(r, 0.8, 1) : range(r, 0.5, 0.75));
+      const foot = H * range(r, 0.05, 0.08);
+      const belly = H * range(r, 0.15, 0.22) * (main ? 1 : 0.85);
+      const lip = belly * range(r, 0.9, 1.1);
+      const lean = range(r, -0.12, 0.12) + (i - (n - 1) / 2) * 0.1;
+      // Two sides of their own, lumpy, so it is never a turned pot.
+      const wob = [range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28)];
+      const half = (t: number, side: number) => {
+        const shape = foot + (belly - foot) * Math.pow(Math.sin(Math.min(1, t / 0.75) * (Math.PI / 2)), 1.3) + (lip - belly) * Math.max(0, (t - 0.75) / 0.25);
+        const k = side < 0 ? 0 : 2;
+        return shape * (1 + 0.09 * Math.sin(t * 7 + wob[k]) + 0.05 * Math.sin(t * 17 + wob[k + 1]));
+      };
+      const ry = lip * 0.3;
+      const spine = (t: number): [number, number] => [x0 + Math.sin(lean) * th * t + Math.sin(t * 3 + wob[0]) * H * 0.015, -th * t];
+      const pts: number[] = [];
+      const N = 18;
+      for (let k = 0; k <= N; k++) {
+        const t = k / N;
+        const [sx, sy] = spine(t);
+        pts.push(sx - half(t, -1), sy);
       }
-      ctx.lineWidth = 0.55 * px;
-      faint(ctx, 0.35, () => ctx.stroke());
+      const [tx, ty] = spine(1);
+      // Over the back of the lip, then down the other side.
+      for (let k = 1; k < 12; k++) {
+        const a = Math.PI + (Math.PI * k) / 12;
+        pts.push(tx + Math.cos(a) * (half(1, -1) + half(1, 1)) * 0.5 + (half(1, 1) - half(1, -1)) * 0.5, ty + Math.sin(a) * ry);
+      }
+      for (let k = N; k >= 0; k--) {
+        const t = k / N;
+        const [sx, sy] = spine(t);
+        pts.push(sx + half(t, 1), sy);
+      }
+      const body = pathOf(pts);
+      const box = boxOf(pts);
+      wash(ctx, body, box, ink.body, pen);
+      // Lines round the form, bowed as a ring is seen from a little above,
+      // only on its shadow side and heavier into it.
+      ctx.save();
+      ctx.clip(body);
+      const rings = new Path2D();
+      const rows = Math.max(3, Math.round(th / ((pen.d > 0.3 ? 2.2 : 3.2) * px)));
+      for (let q = 1; q < rows; q++) {
+        const t = q / rows;
+        const [sx, sy] = spine(t);
+        const hl = half(t, -1);
+        const hr = half(t, 1);
+        const rr = ((hl + hr) / 2) * 0.3;
+        let on = false;
+        for (let k = 0; k <= 16; k++) {
+          const ph = (Math.PI * k) / 16;
+          const c = Math.cos(ph);
+          // Facing: the right of the front, away from the light, is the shade.
+          const sh = 0.45 + 0.45 * c + 0.12 * (1 - Math.sin(ph));
+          const want = pen.dark ? 1 - sh : sh;
+          const x = sx + (c >= 0 ? c * hr : c * hl);
+          const y = sy + Math.sin(ph) * rr;
+          if (want < 0.62) {
+            on = false;
+            continue;
+          }
+          if (on) rings.lineTo(x, y);
+          else rings.moveTo(x, y);
+          on = true;
+        }
+      }
+      ctx.strokeStyle = ink.ink;
+      ctx.lineWidth = (pen.d > 0.3 ? 0.45 : 0.55) * px;
+      faint(ctx, pen.dark ? 0.35 : 0.55, () => ctx.stroke(rings));
+      ctx.restore();
       if (pen.d > 0.3) {
         // Pores: small dark openings over the near face, each with a lit lower lip.
         const pores = new Path2D();
         const lips = new Path2D();
-        const count = Math.round(5 + 10 * pen.d * (th / H));
+        const count = Math.round(6 + 14 * pen.d * (th / H));
         for (let k = 0; k < count; k++) {
-          const v = 0.1 + 0.78 * pen.r2();
-          const u = (pen.r2() - 0.5) * 0.75;
-          const prx = (0.5 + pen.r2() * 0.6) * px * (1 - Math.abs(u));
-          const qx = u * tw;
-          const qy = -th * v;
+          const t = 0.12 + 0.72 * pen.r2();
+          const u = (pen.r2() - 0.5) * 1.3;
+          const [sx, sy] = spine(t);
+          const hw = u < 0 ? half(t, -1) : half(t, 1);
+          const prx = (0.5 + pen.r2() * 0.6) * px * (1 - Math.abs(u) * 0.6);
+          const qx = sx + u * hw * 0.85;
+          const qy = sy;
           pores.moveTo(qx + prx, qy);
           pores.ellipse(qx, qy, prx, prx * 0.7, 0, 0, Math.PI * 2);
           lips.moveTo(qx + prx, qy + 0.3 * px);
           lips.ellipse(qx, qy + 0.3 * px, prx, prx * 0.7, 0, 0.2, Math.PI - 0.2);
         }
         ctx.fillStyle = ink.hollow;
-        faint(ctx, 0.6, () => ctx.fill(pores));
+        faint(ctx, 0.55, () => ctx.fill(pores));
         ctx.strokeStyle = ink.lit;
         ctx.lineWidth = 0.4 * px;
         faint(ctx, 0.7, () => ctx.stroke(lips));
-        ctx.strokeStyle = ink.ink;
       }
-      ctx.beginPath();
-      ctx.ellipse(0, -th, tw * 0.36, ry * 0.65, 0, 0, Math.PI * 2);
+      // The mouth: a rolled lip round a dark hollow, the far inside wall catching the light.
+      const lx = tx + (half(1, 1) - half(1, -1)) * 0.5;
+      const lw = (half(1, -1) + half(1, 1)) * 0.5;
+      const mouth = new Path2D();
+      mouth.ellipse(lx, ty + ry * 0.12, lw * 0.8, ry * 0.62, 0, 0, Math.PI * 2);
       ctx.fillStyle = ink.hollow;
-      faint(ctx, 0.75, () => ctx.fill());
+      faint(ctx, 0.85, () => ctx.fill(mouth));
+      const wall = new Path2D();
+      wall.ellipse(lx, ty + ry * 0.12, lw * 0.8, ry * 0.62, 0, Math.PI, Math.PI * 2);
+      wall.ellipse(lx, ty + ry * 0.5, lw * 0.7, ry * 0.4, 0, Math.PI * 2, Math.PI, true);
+      ctx.fillStyle = ink.deep;
+      faint(ctx, 0.6, () => ctx.fill(wall));
       ctx.fillStyle = ink.body;
       outline(ctx, pts, true, ink, pen, 0.9);
       const rim: number[] = [];
-      arcPts(rim, 0, -th, tw / 2, ry, 0, Math.PI, 14);
-      outline(ctx, rim, false, ink, pen, 0.7, [0.1, 0.1]);
-      ctx.restore();
+      arcPts(rim, lx, ty + ry * 0.12, lw * 0.8, ry * 0.62, 0, Math.PI * 2, 24);
+      outline(ctx, rim, true, ink, pen, 0.6);
     }
   },
 

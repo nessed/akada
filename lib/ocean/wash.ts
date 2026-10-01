@@ -128,8 +128,12 @@ interface Glazes {
   at: (k: number, X: number) => number;
 }
 
-function glazesFor(cssW: number, cssH: number, seed: number): Glazes {
+function glazesFor(cssW: number, cssH: number, seed: number, soft = false): Glazes {
   const n = Math.max(3, Math.min(7, Math.round(cssH / 230)));
+  // Soft: a print's glazes, laid flatter, so their edges read as washes
+  // drying and never as a range of hills on the horizon.
+  const lean = soft ? 0.35 : 1;
+  const sway = soft ? 0.3 : 1;
   const l = lattice(hash32('wash', seed, 'glaze'));
   const r = mulberry32(hash32('wash', seed, 'glazes'));
   const band = cssH / n;
@@ -137,14 +141,14 @@ function glazesFor(cssW: number, cssH: number, seed: number): Glazes {
   for (let k = 1; k < n; k++) base.push(band * (k + (r() - 0.5) * 0.4));
   // Each edge laid a little aslant, as a brush crosses a page, wandering
   // and ragged rather than rolling: a wash's edge, not a horizon.
-  const slant = Array.from({ length: n }, () => (r() - 0.5) * 0.14);
+  const slant = Array.from({ length: n }, () => (r() - 0.5) * 0.14 * lean);
   return {
     n,
     at: (k, X) =>
       base[k] +
       slant[k] * (X - cssW / 2) +
-      (fbm(l, X / 260 + k * 17.3, k * 5.1, 4) - 0.5) * band * 0.5 +
-      (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 10 +
+      (fbm(l, X / (soft ? 520 : 260) + k * 17.3, k * 5.1, soft ? 2 : 4) - 0.5) * band * 0.5 * sway +
+      (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 10 * sway +
       (noise(l, X / 9 + k * 7, k * 3.3) - 0.5) * 2.5,
   };
 }
@@ -158,7 +162,7 @@ function glazesFor(cssW: number, cssH: number, seed: number): Glazes {
  * the colour holds, and drops at the next band's soft edge. Taking the ramp
  * off keeps the average where the depth's colours put it.
  */
-function buildStain(cssW: number, cssH: number, seed: number): HTMLCanvasElement | null {
+function buildStain(cssW: number, cssH: number, seed: number, soft = false): HTMLCanvasElement | null {
   const step = Math.max(1.5, Math.sqrt((cssW * cssH) / STAIN_SAMPLES));
   const sw = Math.max(1, Math.ceil(cssW / step));
   const sh = Math.max(1, Math.ceil(cssH / step));
@@ -172,8 +176,11 @@ function buildStain(cssW: number, cssH: number, seed: number): HTMLCanvasElement
   const oy = r() * 256;
   // Pigment runs to the foot of a tilted page: a little more pools there.
   const foot = 0.6 + r() * 0.5;
-  const glazes = glazesFor(cssW, cssH, seed);
+  const glazes = glazesFor(cssW, cssH, seed, soft);
   const n = glazes.n;
+  // A soft glaze's edge is wide and its pooling faint.
+  const edgeW = soft ? 70 : 9;
+  const poolK = soft ? 0.018 : 0.035;
   // The glaze edges are a function of X alone: worked out a column at a time.
   const edges = new Float32Array(sw * n);
   for (let i = 0; i < sw; i++) {
@@ -206,13 +213,13 @@ function buildStain(cssW: number, cssH: number, seed: number): HTMLCanvasElement
       let pooled = 0;
       for (let k = 1; k < n; k++) {
         const e = edges[i * n + k];
-        laid += smooth(e - 9, e + 9, Y);
+        laid += smooth(e - edgeW, e + edgeW, Y);
         // Pigment gathered just inside each glaze's edge as it dried.
         const below = Y - e;
         if (below > -10 && below < 60) pooled += Math.exp(-(((below - 6) / 16) ** 2));
       }
       const stair = (laid + 0.5) / n - Y / cssH;
-      const s = stair * 0.55 + pooled * 0.035 + p * 0.17 + m * 0.05 + stroke * 0.05 - lift * 0.035 + rim * 0.03 + run;
+      const s = stair * (soft ? 0.32 : 0.55) + pooled * poolK + p * 0.17 + m * 0.05 + stroke * 0.05 - lift * 0.035 + rim * 0.03 + run;
       put(d, (j * sw + i) * 4, s);
     }
   }
@@ -246,6 +253,9 @@ interface Baked {
 const GRAIN_SHARE = 0.21;
 
 export class Wash {
+  /** `soft`: flatter, wider glaze edges and fainter tide lines, for a picture on a wall. */
+  constructor(private readonly soft = false) {}
+
   private grain: HTMLCanvasElement | null = null;
   /** The last two of each, so a wallpaper drawn at another size and then
       put back does not rebuild the page's on the way out. */
@@ -311,7 +321,7 @@ export class Wash {
    * carry anything this fine.
    */
   private tideLines(t: CanvasRenderingContext2D, w: number, h: number, px: number, stain: Stain): void {
-    const glazes = glazesFor(stain.w, stain.h, stain.seed);
+    const glazes = glazesFor(stain.w, stain.h, stain.seed, this.soft);
     const sx = w / stain.w;
     const sy = h / stain.h;
     const l = lattice(hash32('wash', stain.seed, 'tide'));
@@ -342,7 +352,7 @@ export class Wash {
     t.lineJoin = 'round';
     t.strokeStyle = '#000000';
     for (let i = 0; i < LEVELS; i++) {
-      const a = (i + 1) / LEVELS;
+      const a = ((i + 1) / LEVELS) * (this.soft ? 0.45 : 1);
       t.globalAlpha = 0.07 * a;
       t.lineWidth = 4.5 * px;
       t.stroke(dark[i]);
@@ -360,7 +370,7 @@ export class Wash {
   private stainFor(cssW: number, cssH: number, seed: number): Stain | null {
     const s = this.stains.find((s) => s.seed === seed && Math.abs(s.w - cssW) <= s.w * SLACK && Math.abs(s.h - cssH) <= s.h * SLACK);
     if (s) return s;
-    const c = buildStain(cssW, cssH, seed);
+    const c = buildStain(cssW, cssH, seed, this.soft);
     if (!c) return null;
     const made = { canvas: c, seed, w: cssW, h: cssH };
     this.stains = [made, ...this.stains].slice(0, 2);

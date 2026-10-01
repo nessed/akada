@@ -9,9 +9,9 @@
  */
 
 import { mixHex } from '../fan';
-import { HUES, IRON_GALL } from './palette';
-import { detailFor, inkLine, LIGHT, shadeAcross, stipple } from './pen';
-import { mulberry32 } from './random';
+import { drained, IRON_GALL } from './palette';
+import { detailFor, hatch, inkLine, LIGHT, shadeAcross, smoothPath, stipple, washFill } from './pen';
+import { hash32, mulberry32 } from './random';
 
 /** The light as the pen takes it: on dark water the light ink marks the light. */
 const UNLIGHT: [number, number] = [-LIGHT[0], -LIGHT[1]];
@@ -96,22 +96,33 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
     // Facing +x, the lure's rest at the origin. Mostly head: a dome, a
     // gape that runs back past the eye, a jaw slung out beyond the snout,
     // and only a stub of a body and a small fan of tail behind.
-    const UL = [-0.06 * L, 0.08 * L];
-    const CORNER = [-0.27 * L, 0.24 * L];
-    const CHIN = [0.04 * L, 0.27 * L];
-    const UPPER = [-0.14 * L, 0.13 * L];
-    const LOWER = [-0.06 * L, 0.31 * L];
+    const UL: Pt = [-0.06 * L, 0.08 * L];
+    const CORNER: Pt = [-0.27 * L, 0.24 * L];
+    const CHIN: Pt = [0.04 * L, 0.27 * L];
+    const UPPER: Pt = [-0.14 * L, 0.13 * L];
+    const LOWER: Pt = [-0.06 * L, 0.31 * L];
+    // The outline as points, for the pen, and as a path, for the fills.
+    const outline: number[] = [];
+    const cub = (p0: Pt, p1: Pt, p2: Pt, p3: Pt, n = 10) => {
+      for (let k = 1; k <= n; k++) outline.push(...cubic([p0[0], p0[1], p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]], k / n));
+    };
+    const qd = (p0: Pt, c: Pt, p1: Pt, n = 8) => {
+      for (let k = 1; k <= n; k++) outline.push(...quad(p0[0], p0[1], c[0], c[1], p1[0], p1[1], k / n));
+    };
+    const at = (u: number, v: number): Pt => [u * L, v * L];
+    outline.push(...UL);
+    cub(UL, at(-0.1, -0.12), at(-0.35, -0.2), at(-0.55, -0.12));
+    cub(at(-0.55, -0.12), at(-0.68, -0.07), at(-0.76, 0.05), at(-0.78, 0.15), 6);
+    outline.push(...at(-0.88, 0.08));
+    qd(at(-0.88, 0.08), at(-0.94, 0.19), at(-0.88, 0.3), 5);
+    outline.push(...at(-0.78, 0.22));
+    cub(at(-0.78, 0.22), at(-0.7, 0.42), at(-0.4, 0.5), at(-0.16, 0.44));
+    qd(at(-0.16, 0.44), at(0.02, 0.39), CHIN, 5);
+    qd(CHIN, LOWER, CORNER, 6);
+    qd(CORNER, UPPER, UL, 6);
     const body = new Path2D();
-    body.moveTo(UL[0], UL[1]);
-    body.bezierCurveTo(-0.1 * L, -0.12 * L, -0.35 * L, -0.2 * L, -0.55 * L, -0.12 * L);
-    body.bezierCurveTo(-0.68 * L, -0.07 * L, -0.76 * L, 0.05 * L, -0.78 * L, 0.15 * L);
-    body.lineTo(-0.88 * L, 0.08 * L);
-    body.quadraticCurveTo(-0.94 * L, 0.19 * L, -0.88 * L, 0.3 * L);
-    body.lineTo(-0.78 * L, 0.22 * L);
-    body.bezierCurveTo(-0.7 * L, 0.42 * L, -0.4 * L, 0.5 * L, -0.16 * L, 0.44 * L);
-    body.quadraticCurveTo(0.02 * L, 0.39 * L, CHIN[0], CHIN[1]);
-    body.quadraticCurveTo(LOWER[0], LOWER[1], CORNER[0], CORNER[1]);
-    body.quadraticCurveTo(UPPER[0], UPPER[1], UL[0], UL[1]);
+    body.moveTo(outline[0], outline[1]);
+    for (let k = 2; k < outline.length; k += 2) body.lineTo(outline[k], outline[k + 1]);
     body.closePath();
     // The open mouth: the dark between the jaws.
     const maw = new Path2D();
@@ -119,13 +130,17 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
     maw.quadraticCurveTo(UPPER[0], UPPER[1], CORNER[0], CORNER[1]);
     maw.quadraticCurveTo(LOWER[0], LOWER[1], CHIN[0], CHIN[1]);
     maw.closePath();
+    const box = { x: -0.95 * L, y: -0.22 * L, w: 1.0 * L, h: 0.74 * L };
+    // How near the lure's light a point is: all that can be seen of it.
+    const reach = 1.05 * L;
+    const near = (x: number, y: number) => Math.max(0, 1 - Math.hypot(x - ux, y - uy) / reach);
 
-    // A shape darker than the water, then the lure's light on it, strongest
-    // at the jaw and gone by the tail.
-    ctx.globalAlpha = seen * (dark ? 0.6 : 0.35);
-    ctx.fillStyle = dark ? '#050505' : '#1A1714';
+    // A shape a little darker than the water, then the lure's light on it,
+    // strongest at the jaw and gone by the tail.
+    ctx.globalAlpha = seen * (dark ? 0.5 : 0.3);
+    ctx.fillStyle = dark ? '#1C1A18' : '#2A2320';
     ctx.fill(body);
-    ctx.globalAlpha = seen * (dark ? 0.7 : 0.4);
+    ctx.globalAlpha = seen * (dark ? 0.55 : 0.35);
     ctx.fill(maw);
     const lit = ctx.createRadialGradient(ux, uy, 0, ux, uy, 1.1 * L);
     lit.addColorStop(0, lure(dark ? 0.18 : 0.12));
@@ -138,70 +153,100 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
     // The ink, fading the same way: the far end of it is barely there.
     // The one ink, iron-gall on light water and off-white on dark.
     const inkTone = dark ? '232, 224, 207' : '42, 35, 32';
-    const line = ctx.createRadialGradient(ux, uy, 0, ux, uy, 1.0 * L);
-    line.addColorStop(0, `rgba(${inkTone}, 0.85)`);
+    const line = ctx.createRadialGradient(ux, uy, 0, ux, uy, reach);
+    line.addColorStop(0, `rgba(${inkTone}, 0.9)`);
     line.addColorStop(1, `rgba(${inkTone}, 0.04)`);
-    ctx.strokeStyle = line;
-    ctx.globalAlpha = seen * 0.55;
-    ctx.lineWidth = 1.1 * px;
-    ctx.stroke(body);
+    // Engraved where the light falls on it: contour lines round the head
+    // and stipple over the skin, both thinning out into the dark.
+    const dd = detailFor(L);
+    const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
+    ctx.globalAlpha = seen;
+    if (dd > 0.45) {
+      const sp = Math.max(1.3 * px, L * 0.014);
+      hatch(ctx, body, box, {
+        spacing: sp,
+        angle: 0.3,
+        // Bowed with the dome of the head, not ruled across it.
+        bow: (0.07 * L) / sp,
+        shade: (x, y) => Math.pow(near(x, y), 1.4),
+        from: 0.3,
+        color: ink,
+        width: Math.max(0.35 * px, L * 0.0028),
+        alpha: 0.6,
+        seed: seed ^ 0x4a7c,
+      });
+    }
+    stipple(ctx, body, box, {
+      spacing: Math.max(1.2 * px, L * (dd > 0.45 ? 0.008 : 0.016)),
+      radius: Math.max(0.3 * px, L * 0.0018),
+      shade: (x, y) => Math.pow(near(x, y), 1.2),
+      from: 0.12,
+      color: ink,
+      alpha: 0.6,
+      seed: seed ^ 0x5c1,
+    });
+    // The outline in the pen, its ink a gradient that dies into the dark.
+    inkLine(ctx, outline, true, { width: Math.max(0.8 * px, L * 0.006), color: line as unknown as string, alpha: seen * 0.8, seed: seed ^ 0x0a, light: UNLIGHT, raw: true, plate: true, min: 0.3 * px });
 
-    // A small pectoral fan, the gill's edge, and a little stipple on the
-    // skin where the light is: the plate's shading.
-    ctx.beginPath();
-    for (let k = 0; k < 4; k++) {
-      ctx.moveTo(-0.46 * L, 0.24 * L);
-      ctx.lineTo(-0.54 * L - k * 0.015 * L, 0.3 * L + k * 0.022 * L);
+    // A small pectoral fan, the gill's edge, and rays in the tail.
+    const fins = new Path2D();
+    for (let k = 0; k < 5; k++) {
+      fins.moveTo(-0.46 * L, 0.24 * L);
+      fins.quadraticCurveTo(-0.5 * L - k * 0.008 * L, 0.27 * L + k * 0.01 * L, -0.55 * L - k * 0.015 * L, 0.3 * L + k * 0.022 * L);
     }
-    ctx.moveTo(-0.36 * L, 0.06 * L);
-    ctx.quadraticCurveTo(-0.42 * L, 0.18 * L, -0.38 * L, 0.3 * L);
-    ctx.globalAlpha = seen * 0.3;
-    ctx.lineWidth = 0.8 * px;
-    ctx.stroke();
-    const skin = mulberry32(seed ^ 0x5c1);
-    ctx.fillStyle = line;
-    // Big, the stipple goes on over the whole of the lit head.
-    for (let k = 0, n = detailFor(L) > 0.4 ? 160 : 26; k < n; k++) {
-      const sx = -0.08 * L - skin() * 0.45 * L;
-      const sy = -0.08 * L + skin() * 0.18 * L + (sx + 0.08 * L) * -0.1;
-      ctx.globalAlpha = seen * (0.2 + skin() * 0.3);
-      ctx.fillRect(sx, sy, 0.9 * px, 0.9 * px);
+    for (let k = 0; k < 6; k++) {
+      fins.moveTo(-0.79 * L, 0.16 * L + k * 0.005 * L);
+      fins.lineTo(-0.9 * L, 0.09 * L + k * 0.04 * L);
     }
+    fins.moveTo(-0.36 * L, 0.06 * L);
+    fins.quadraticCurveTo(-0.42 * L, 0.18 * L, -0.38 * L, 0.3 * L);
+    ctx.strokeStyle = line;
+    ctx.globalAlpha = seen * 0.4;
+    ctx.lineWidth = Math.max(0.4 * px, L * 0.003);
+    ctx.stroke(fins);
 
     // Needles, few and uneven, curving back into the mouth: short from the
-    // upper jaw, long from the lower.
-    ctx.beginPath();
+    // upper jaw, long from the lower; each one tapering to a point.
     const teeth = mulberry32(seed ^ 0x7ee7);
+    const tooth = (x: number, y: number, cx: number, cy: number, ex: number, ey: number, k: number) => {
+      const pts: number[] = [];
+      for (let q = 0; q <= 6; q++) pts.push(...quad(x, y, cx, cy, ex, ey, q / 6));
+      inkLine(ctx, pts, false, { width: Math.max(0.6 * px, L * 0.007), color: ink, alpha: seen * 0.8, taper: [0, 0.85], seed: seed ^ k, light: UNLIGHT, raw: true, plate: true, min: 0.25 * px });
+    };
     for (let k = 0; k < 5; k++) {
       const [x, y] = quad(UL[0], UL[1], UPPER[0], UPPER[1], CORNER[0], CORNER[1], (k + 0.4) / 6);
       const len = (0.03 + teeth() * 0.035) * L;
-      ctx.moveTo(x, y);
-      ctx.quadraticCurveTo(x + 0.01 * L, y + len * 0.6, x - 0.004 * L, y + len);
+      tooth(x, y, x + 0.01 * L, y + len * 0.6, x - 0.004 * L, y + len, k + 1);
     }
     for (let k = 0; k < 6; k++) {
       const t = (k + 0.3) / 7;
       const [x, y] = quad(CHIN[0], CHIN[1], LOWER[0], LOWER[1], CORNER[0], CORNER[1], t);
       const len = (0.05 + teeth() * 0.07) * L * (1 - t * 0.5);
-      ctx.moveTo(x, y);
-      ctx.quadraticCurveTo(x + len * 0.3, y - len * 0.6, x + len * 0.1, y - len);
+      tooth(x, y, x + len * 0.3, y - len * 0.6, x + len * 0.1, y - len, k + 11);
     }
-    ctx.strokeStyle = dark ? IRON_GALL.dark : IRON_GALL.light;
-    ctx.globalAlpha = seen * 0.75;
-    ctx.lineWidth = 0.7 * px;
-    ctx.stroke();
 
-    // A small eye, and the stalk arching from the brow out to the light.
+    // A small eye, lit on its near rim, and the stalk arching from the brow
+    // out to the light.
+    const er = Math.max(1.1 * px, 0.016 * L);
+    ctx.globalAlpha = seen * 0.9;
+    ctx.fillStyle = '#16120F';
     ctx.beginPath();
-    ctx.arc(-0.27 * L, 0.0 * L, Math.max(1.1 * px, 0.016 * L), 0, Math.PI * 2);
+    ctx.arc(-0.27 * L, 0, er, 0, Math.PI * 2);
+    ctx.fill();
     ctx.strokeStyle = line;
-    ctx.globalAlpha = seen * 0.75;
-    ctx.lineWidth = 0.9 * px;
-    ctx.stroke();
+    ctx.globalAlpha = seen * 0.7;
+    ctx.lineWidth = Math.max(0.5 * px, er * 0.25);
     ctx.beginPath();
-    ctx.moveTo(-0.2 * L, -0.11 * L);
-    ctx.quadraticCurveTo(-0.12 * L, -0.34 * L, ux, uy);
-    ctx.lineWidth = 1 * px;
+    ctx.arc(-0.27 * L, 0, er, -1.2, 1.6);
     ctx.stroke();
+    ctx.fillStyle = lure(0.9);
+    ctx.globalAlpha = seen * 0.8;
+    ctx.beginPath();
+    ctx.arc(-0.27 * L + er * 0.35, -er * 0.3, er * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    const stalk: number[] = [];
+    for (let q = 0; q <= 12; q++) stalk.push(...quad(-0.2 * L, -0.11 * L, -0.12 * L, -0.34 * L, ux, uy, q / 12));
+    inkLine(ctx, stalk, false, { width: Math.max(0.7 * px, L * 0.006), color: line as unknown as string, alpha: seen * 0.85, taper: [0.1, 0.3], seed: seed ^ 0x57a1, light: UNLIGHT, raw: true, plate: true, min: 0.3 * px });
     ctx.restore();
   }
 
@@ -228,17 +273,24 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
 
 /* ---- The dumbo octopus ---- */
 
+/** A dumbo's pink, which the depth takes most of. */
+const DUMBO = '#D9A69A';
+
 /**
- * A dumbo octopus, small and pale, hanging in the water above the floor.
- * Its ear fins row slowly and it lifts a little after each stroke, then
- * settles, drifting across the lower page the while. Its arms are joined
- * by a web, which is the faintest wash; the arms are the ink.
+ * A dumbo octopus, small and pale, hanging in the water above the floor,
+ * seen from the side and a little from the front as a plate would show it:
+ * a soft mantle taller than it is wide, leaning back; a small eye low on
+ * its side; the two ear fins, thin paddles with fine rays, rowing slowly so
+ * that it lifts a little after each stroke and settles; and under it the
+ * arms in their web, an umbrella of wash with the cirri fringing each arm.
+ * It drifts across the lower page the while.
  */
 export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean): void {
   const env = envelope(age, 0.12, 0.12);
   if (env <= 0) return;
   const rand = mulberry32(seed ^ 0xd0b0);
-  const hue = HUES[[1, 3, 9][Math.floor(rand() * 3)]];
+  // Rolled in this order, so the picture can place it the same way.
+  rand();
   const startX = 0.28 + rand() * 0.44;
   const drift = 0.1 + rand() * 0.12;
   const way = rand() < 0.5 ? -1 : 1;
@@ -246,215 +298,854 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   const beat = 2.6 + rand() * 0.8;
   const phase = rand() * Math.PI * 2;
 
-  const pale = mixHex(hue, '#EFE9DC', 0.55);
+  // Its colour as the deep leaves it: most of the pink gone.
+  const hue = drained(DUMBO, 0.32);
   const water = dark ? '#1A1815' : '#FBF8EF';
   const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
-  const wash = dark ? mixHex(pale, water, 0.12) : mixHex(pale, water, 0.2);
-  const light = dark ? UNLIGHT : LIGHT;
+  const wash = dark ? mixHex(hue, water, 0.35) : mixHex(hue, water, 0.12);
+  const web = dark ? mixHex(hue, water, 0.55) : mixHex(hue, water, 0.35);
+  const baseLight = dark ? UNLIGHT : LIGHT;
+  // Drawn facing +x and mirrored to face `way`: the light turns with it so
+  // it still comes from the page's top left.
+  const light: [number, number] = [baseLight[0] * way, baseLight[1]];
 
   // Small for an octopus, but big enough to be found.
   const S = Math.min(w, h) * 0.11;
-  const R = S * 0.3;
-  const d = detailFor(R * 5);
-  const pw = px * (1 - 0.35 * d);
+  const d = detailFor(S * 1.6);
+  const pw = Math.max(0.6 * px, S * 0.012) * (1 - 0.3 * d);
   const ph = (ambient / beat) * Math.PI * 2 + phase;
   const flap = Math.sin(ph);
   // The body rises just after the fins come down.
   const lift = Math.sin(ph - 1.1);
   const x = w * Math.max(0.12, Math.min(0.88, startX + way * (age - 0.5) * 2 * drift)) + Math.sin(ambient * 0.17 + phase) * S * 0.4;
   const y = h * baseY - lift * S * 0.12 + Math.sin(ambient * 0.09 + phase) * S * 0.35;
+  const r = mulberry32(hash32('dumbo', seed));
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(way * 0.1 + lift * 0.04);
+  ctx.scale(way, 1);
+  ctx.rotate(lift * 0.04);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.globalAlpha = env;
+  const base = ctx.globalAlpha * env;
 
-  // The arms and the web between them, a skirt that opens a little on the
-  // upstroke. Seen from the side, the near arms hang lowest.
-  const spread = 1 + 0.12 * Math.sin(ph + 0.6);
-  const angles: number[] = [];
-  const tips: [number, number][] = [];
-  for (let i = 0; i < 8; i++) {
-    const a = Math.PI * (0.1 + (0.8 * i) / 7);
-    angles.push(a);
-    tips.push([-Math.cos(a) * R * 1.45 * spread, R * (0.55 + 0.6 * Math.sin(a)) * (1.1 - 0.1 * spread)]);
+  // The mantle: 1.2 times as tall as wide, an egg fuller at the crown,
+  // leaning back.
+  const MW = 0.46 * S;
+  const MH = MW * 1.2;
+  const mcx = 0.06 * S;
+  const mcy = -0.34 * S;
+  // Leaning into the way it goes, crown first, as it swims.
+  const tilt = 0.28;
+  const mantle: number[] = [];
+  for (let k = 0; k < 28; k++) {
+    const t = (k / 28) * Math.PI * 2;
+    const c = Math.cos(t);
+    const sn = Math.sin(t);
+    // Fuller at the crown (sn < 0), drawn in at the neck.
+    const full = 1 - 0.12 * sn;
+    const u = (MW / 2) * c * full * (0.97 + 0.06 * unitOf(seed, k));
+    const v = (MH / 2) * sn;
+    mantle.push(mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt));
   }
-  const web = new Path2D();
-  web.moveTo(-R * 0.85, -R * 0.05);
-  web.quadraticCurveTo(-R * 1.1, R * 0.15, tips[0][0], tips[0][1]);
-  for (let i = 1; i < 8; i++) {
-    const [ax, ay] = tips[i - 1];
-    const [bx, by] = tips[i];
-    // The web's margin dips up a little between arms.
-    web.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 - R * 0.12, bx, by);
-  }
-  web.quadraticCurveTo(R * 1.1, R * 0.15, R * 0.85, -R * 0.05);
-  web.closePath();
-  ctx.fillStyle = wash;
-  ctx.globalAlpha = env * 0.35;
-  ctx.fill(web);
-  ctx.strokeStyle = ink;
-  ctx.globalAlpha = env * 0.55;
-  ctx.lineWidth = 0.8 * px;
-  ctx.stroke(web);
+  const mantleBox = boundsOf(mantle);
+  const mantlePath = smoothPath(mantle, true, 4);
 
-  // The arms run inside the web, faint, and their tips curl out past it.
-  ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const [tx, ty] = tips[i];
-    const rx = -Math.cos(angles[i]) * R * 0.4;
-    ctx.moveTo(rx, R * 0.05);
-    ctx.quadraticCurveTo(tx * 0.8, ty * 0.45, tx, ty);
+  // The arms: eight round a crown under the mantle, seen a little from the
+  // front, so the near four hang in front of the web and the far four
+  // behind it. The web opens and closes with the stroke.
+  const spread = 1 + 0.1 * Math.sin(ph + 0.6);
+  // Under the mantle, toward its back.
+  // Inside the mantle's lower half: the arms grow out of the body itself,
+  // with no neck between, and the web runs on from the mantle.
+  const crown = { x: mcx - Math.sin(tilt) * MH * 0.3, y: mcy + Math.cos(tilt) * MH * 0.3 };
+  interface Arm {
+    pts: number[];
+    near: boolean;
+    depth: number;
   }
-  ctx.globalAlpha = env * 0.3;
-  ctx.lineWidth = 0.7 * px;
-  ctx.stroke();
-  ctx.beginPath();
+  const arms: Arm[] = [];
   for (let i = 0; i < 8; i++) {
-    const [tx, ty] = tips[i];
-    const out = -Math.cos(angles[i]);
-    const curl = Math.sin(ambient * 0.6 + i * 1.3) * R * 0.05;
-    ctx.moveTo(tx, ty);
-    ctx.quadraticCurveTo(tx + out * R * 0.14, ty + R * 0.14, tx + out * R * 0.24 + curl, ty + R * 0.04);
+    const a = (i / 8) * Math.PI * 2 + 0.2;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const rx0 = crown.x + ca * 0.17 * S;
+    const ry0 = crown.y + sa * 0.05 * S;
+    const reach = (0.34 + 0.06 * unitOf(seed, i + 40)) * S * spread;
+    // The skirt trails back from the way it swims.
+    const tx = crown.x + ca * reach - 0.14 * S;
+    const ty = crown.y + 0.36 * S + sa * 0.08 * S - (spread - 1) * 0.6 * S;
+    const curl = Math.sin(ambient * 0.6 + i * 1.3) * 0.04 * S;
+    // Each arm bows out and its tip curls back in, never a straight spoke.
+    arms.push({
+      pts: [rx0, ry0, rx0 + ca * 0.24 * S, ry0 + 0.1 * S, tx + ca * 0.06 * S + curl, ty - 0.08 * S, tx - ca * 0.04 * S + curl, ty + 0.03 * S],
+      near: sa > 0,
+      depth: sa,
+    });
   }
-  ctx.globalAlpha = env * 0.75;
-  ctx.lineWidth = 0.8 * pw;
-  ctx.stroke();
-  if (d > 0.4) {
-    // Big: the suckers down each arm in a row, each with a fine cirrus
-    // beside it, the way a dumbo's arms are fringed.
-    const suckers = new Path2D();
-    const cirri = new Path2D();
-    for (let i = 0; i < 8; i++) {
-      const [tx, ty] = tips[i];
-      const rx = -Math.cos(angles[i]) * R * 0.4;
-      const qx = tx * 0.8;
-      const qy = ty * 0.45;
-      for (let t = 0.35; t < 0.97; t += 0.09) {
-        const u = 1 - t;
-        const x = u * u * rx + 2 * u * t * qx + t * t * tx;
-        const y = u * u * R * 0.05 + 2 * u * t * qy + t * t * ty;
-        const sr = R * 0.028 * (1.2 - t * 0.6);
-        suckers.moveTo(x + sr, y);
-        suckers.ellipse(x, y, sr, sr * 0.75, 0, 0, Math.PI * 2);
-        const out = -Math.cos(angles[i]) >= 0 ? 1 : -1;
-        cirri.moveTo(x + out * sr * 1.4, y);
-        cirri.lineTo(x + out * sr * 1.4 + out * R * 0.05, y + R * 0.03);
+  // Furthest first, so the nearer arms lie over them.
+  const order = [...arms].sort((p, q) => p.depth - q.depth);
+  const webPatch = (p: Arm, q: Arm) => {
+    const path = new Path2D();
+    const at = (A: Arm, t: number) => cubic([A.pts[0], A.pts[1], A.pts[2], A.pts[3], A.pts[4], A.pts[5], A.pts[6], A.pts[7]], t);
+    path.moveTo(p.pts[0], p.pts[1]);
+    for (let k = 1; k <= 8; k++) path.lineTo(...at(p, (k / 8) * 0.8));
+    const [px1, py1] = at(p, 0.8);
+    const [qx1, qy1] = at(q, 0.8);
+    path.quadraticCurveTo((px1 + qx1) / 2, (py1 + qy1) / 2 - 0.06 * S, qx1, qy1);
+    for (let k = 8; k >= 0; k--) path.lineTo(...at(q, (k / 8) * 0.8));
+    path.closePath();
+    return path;
+  };
+  // Neighbours round the crown.
+  const byAngle = [0, 1, 2, 3, 4, 5, 6, 7];
+  const armAt = (i: number) => arms[i % 8];
+  const farWeb = new Path2D();
+  const nearWeb = new Path2D();
+  for (const i of byAngle) {
+    const p = armAt(i);
+    const q = armAt(i + 1);
+    const patch = webPatch(p, q);
+    if (p.near && q.near) nearWeb.addPath(patch);
+    else farWeb.addPath(patch);
+  }
+
+  const armLine = (A: Arm, alpha: number, salt: number) => {
+    const pts = along(A.pts, 0, 1, 16);
+    inkLine(ctx, pts, false, { width: pw * (A.near ? 1.1 : 0.8), color: ink, alpha: base * alpha, taper: [0.05, 0.45], seed: hash32(seed, salt), light, raw: true, plate: true, min: 0.25 * px });
+  };
+  const cirri = (A: Arm, alpha: number) => {
+    // Fine cirri in pairs down the arm, and the suckers between them.
+    const hairs = new Path2D();
+    const sucks = new Path2D();
+    const P = A.pts;
+    for (let t = 0.32; t < 0.95; t += d > 0.4 ? 0.055 : 0.11) {
+      const [ax, ay] = cubic(P, t);
+      const [bx, by] = cubic(P, Math.min(1, t + 0.02));
+      const tx = bx - ax;
+      const ty = by - ay;
+      const tn = Math.hypot(tx, ty) || 1;
+      // The cirri stand off the arm's inner face, toward the web's middle.
+      const sd = (ax - crown.x) * ty - (ay - crown.y) * tx > 0 ? -1 : 1;
+      const nx = (-ty / tn) * sd;
+      const ny = (tx / tn) * sd;
+      const len = S * 0.028 * (1.1 - t * 0.5);
+      const wob = (unitOf(seed, Math.round(t * 100)) - 0.5) * 0.5;
+      hairs.moveTo(ax + nx * pw * 0.6, ay + ny * pw * 0.6);
+      hairs.quadraticCurveTo(ax + nx * len * 0.7, ay + ny * len * 0.7, ax + nx * len + (tx / tn) * len * (0.4 + wob), ay + ny * len + (ty / tn) * len * (0.4 + wob));
+      if (d > 0.4) {
+        const sr = S * 0.007 * (1.2 - t * 0.6);
+        sucks.moveTo(ax - nx * pw * 1.4 + sr, ay - ny * pw * 1.4);
+        sucks.ellipse(ax - nx * pw * 1.4, ay - ny * pw * 1.4, sr, sr * 0.7, Math.atan2(ty, tx), 0, Math.PI * 2);
       }
     }
-    ctx.globalAlpha = env * 0.45;
-    ctx.lineWidth = 0.4 * px;
-    ctx.stroke(suckers);
-    ctx.globalAlpha = env * 0.35;
-    ctx.stroke(cirri);
+    ctx.strokeStyle = ink;
+    ctx.globalAlpha = base * alpha * 0.55;
+    ctx.lineWidth = Math.max(0.3 * px, pw * 0.35);
+    ctx.stroke(hairs);
+    ctx.globalAlpha = base * alpha * 0.45;
+    ctx.stroke(sucks);
+  };
+
+  // A fin: a thin paddle out from the mantle's side, on a short stalk,
+  // with fine rays fanning from its root, rowing through its arc.
+  const fin = (rootX: number, rootY: number, ang: number, len: number, wid: number, alpha: number, salt: number) => {
+    const c = Math.cos(ang);
+    const sn = Math.sin(ang);
+    const P = (u: number, v: number) => [rootX + c * u - sn * v, rootY + sn * u + c * v] as const;
+    const outline: number[] = [];
+    const prof: [number, number][] = [
+      [0, -0.12], [0.25, -0.22], [0.55, -0.5], [0.8, -0.52], [0.97, -0.25], [1, 0.05], [0.9, 0.4], [0.65, 0.5], [0.4, 0.3], [0.2, 0.18], [0, 0.12],
+    ];
+    for (const [u, v] of prof) outline.push(...P(u * len, v * wid));
+    const path = smoothPath(outline, true, 4);
+    const box = boundsOf(outline);
+    ctx.globalAlpha = base * alpha;
+    washFill(ctx, path, box, { color: wash, alpha: 0.85, edge: 0.35, paper: dark ? null : water, highlight: 0.35, granulate: 0.3, light, px });
+    // Rays: fine lines from the root to the paddle's rim.
+    const rays = new Path2D();
+    const nRays = d > 0.4 ? 9 : 4;
+    for (let k = 0; k < nRays; k++) {
+      const v = -0.4 + (k / (nRays - 1)) * 0.8;
+      const [x0, y0] = P(len * 0.12, v * wid * 0.2);
+      const [x1, y1] = P(len * (0.86 - Math.abs(v) * 0.15), v * wid * 0.85);
+      rays.moveTo(x0, y0);
+      rays.lineTo(x1, y1);
+    }
+    ctx.strokeStyle = ink;
+    ctx.globalAlpha = base * alpha * 0.35;
+    ctx.lineWidth = Math.max(0.3 * px, pw * 0.3);
+    ctx.stroke(rays);
+    inkLine(ctx, outline, true, { width: pw * 0.9, color: ink, alpha: base * alpha * 0.9, seed: hash32(seed, salt), light, plate: true, min: 0.25 * px });
+  };
+  // The fins row together, both swept back along the mantle: the far one
+  // shows over its back, the near one lies over its side.
+  const row = 0.55 * flap;
+  const finLen = 0.3 * S;
+  const finWid = 0.11 * S;
+
+  // Far side first: its fin, its arms and the web behind.
+  // A point on the mantle's surface, from its own frame (u across, v down).
+  const onMantle = (u: number, v: number): [number, number] => [mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt)];
+  // The far fin is behind the mantle: only its tip shows over the crown,
+  // and only as it rises.
+  const farRoot = onMantle(MW * 0.05, -MH * 0.18);
+  fin(farRoot[0], farRoot[1], -Math.PI / 2 - 0.55 - row * 0.9, finLen * 0.85, finWid * 0.8, 0.6, 1);
+  ctx.globalAlpha = base * 0.3;
+  ctx.fillStyle = web;
+  ctx.fill(farWeb);
+  for (const A of order) if (!A.near) armLine(A, 0.45, 10 + A.depth * 7);
+
+  // The mantle: wash with its paper strip, stipple where it turns away,
+  // contour lines round its side, and a pressure line.
+  ctx.globalAlpha = base;
+  washFill(ctx, mantlePath, mantleBox, { color: wash, edge: 0.4, paper: dark ? null : water, highlight: 0.55, granulate: 0.35, light, px });
+  const across = shadeAcross(mantleBox, light);
+  if (d > 0.15) {
+    hatch(ctx, mantlePath, mantleBox, {
+      spacing: Math.max(1.3 * px, S * 0.022),
+      angle: tilt + 0.15,
+      bow: 1.1,
+      shade: across,
+      from: 0.58,
+      color: ink,
+      width: Math.max(0.35 * px, S * 0.0045),
+      alpha: base * 0.32,
+      seed: seed ^ 0xd1,
+    });
+    stipple(ctx, mantlePath, mantleBox, { spacing: Math.max(1.2 * px, S * 0.012), radius: Math.max(0.3 * px, S * 0.0025), shade: across, from: 0.4, color: ink, alpha: base * 0.45, seed: seed ^ 0xd0 });
+  }
+  // Inked round the dome only: below, the mantle runs on into the web.
+  const dome: number[] = [];
+  for (let k = 0; k <= 40; k++) {
+    const t = Math.PI / 2 + 0.95 + (k / 40) * (Math.PI * 2 - 1.9);
+    const c = Math.cos(t);
+    const sn = Math.sin(t);
+    const u = (MW / 2) * c * (1 - 0.12 * sn);
+    const v = (MH / 2) * sn;
+    dome.push(mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt));
+  }
+  inkLine(ctx, dome, false, { width: pw * 1.15, color: ink, alpha: base, seed, light, taper: [0.12, 0.12], plate: true, min: 0.25 * px });
+
+  // The near web over the mantle's foot, then the near arms in it.
+  // Thick where it leaves the body, thinning to the margin, so the mantle
+  // runs on into it.
+  const wg = ctx.createLinearGradient(0, crown.y - 0.06 * S, 0, crown.y + 0.38 * S);
+  wg.addColorStop(0, `${wash}E0`);
+  wg.addColorStop(0.3, `${mixHex(wash, web, 0.5)}99`);
+  wg.addColorStop(1, `${web}66`);
+  ctx.globalAlpha = base;
+  ctx.fillStyle = wg;
+  ctx.fill(nearWeb);
+  if (d > 0.3) {
+    const wb = { x: -0.5 * S, y: -0.15 * S, w: S, h: 0.6 * S };
+    stipple(ctx, nearWeb, wb, { spacing: Math.max(1.3 * px, S * 0.014), radius: Math.max(0.3 * px, S * 0.0022), shade: (_x, yy) => 0.3 + 0.7 * Math.max(0, (yy + 0.05 * S) / (0.4 * S)), from: 0.45, color: ink, alpha: base * 0.35, seed: seed ^ 0xeb });
+  }
+  for (const A of order) {
+    if (!A.near) continue;
+    armLine(A, 0.85, 20 + A.depth * 7);
+    cirri(A, 1);
+  }
+  // The web's margin between the near arms, a fine line.
+  for (const i of byAngle) {
+    const p = armAt(i);
+    const q = armAt(i + 1);
+    if (!(p.near && q.near)) continue;
+    const [px1, py1] = cubic(p.pts, 0.8);
+    const [qx1, qy1] = cubic(q.pts, 0.8);
+    const m: number[] = [];
+    for (let k = 0; k <= 8; k++) {
+      const t = k / 8;
+      const u = 1 - t;
+      const cxm = (px1 + qx1) / 2;
+      const cym = (py1 + qy1) / 2 - 0.06 * S;
+      m.push(u * u * px1 + 2 * u * t * cxm + t * t * qx1, u * u * py1 + 2 * u * t * cym + t * t * qy1);
+    }
+    inkLine(ctx, m, false, { width: pw * 0.6, color: ink, alpha: base * 0.6, taper: [0.15, 0.15], seed: hash32(seed, 'web', i), light, raw: true, plate: true, min: 0.25 * px });
   }
 
-  // The fins: a pair of thin paddles out from the sides of the mantle,
-  // a little above its middle, held nearly flat and rowing through a small
-  // arc, the far edge drooping as it comes down.
-  const raise = 0.02 + 0.22 * flap;
-  for (const side of [-1, 1]) {
-    ctx.save();
-    ctx.translate(side * 0.8 * R, -0.95 * R);
-    ctx.scale(side, 1);
-    ctx.rotate(-raise);
-    const fin = new Path2D();
-    fin.moveTo(0, -0.1 * R);
-    fin.bezierCurveTo(0.3 * R, -0.2 * R, 0.68 * R, -0.16 * R, 0.8 * R, 0.0 * R);
-    fin.bezierCurveTo(0.84 * R, 0.1 * R, 0.6 * R, 0.17 * R, 0.3 * R, 0.13 * R);
-    fin.quadraticCurveTo(0.12 * R, 0.11 * R, 0, 0.1 * R);
-    ctx.fillStyle = wash;
-    ctx.globalAlpha = env * 0.7;
-    ctx.fill(fin);
-    ctx.globalAlpha = env * 0.9;
-    ctx.lineWidth = 0.9 * px;
-    ctx.stroke(fin);
-    // A couple of strokes of shading along the fin, more of them big.
-    ctx.beginPath();
-    for (const o of d > 0.4 ? [-0.12, -0.04, 0.04, 0.12, 0.19] : [0]) {
-      ctx.moveTo(0.12 * R, (0.0 + o * 0.6) * R);
-      ctx.quadraticCurveTo(0.42 * R, (-0.03 + o * 0.7) * R, (0.7 - Math.abs(o)) * R, o * 0.6 * R);
-    }
-    ctx.globalAlpha = env * 0.35;
-    ctx.lineWidth = 0.5 * pw;
+  // The near fin, standing out from the side.
+  const nearRoot = onMantle(-MW * 0.42, -MH * 0.02);
+  fin(nearRoot[0], nearRoot[1], Math.PI - 0.05 + row * 0.7, finLen, finWid, 1, 2);
+
+  // The eye: small, low on the side toward the way it's going, a bulge of
+  // skin round it; and only the rim of the far one, past the front.
+  const er = Math.max(0.8 * px, MW * 0.04);
+  const [ex, ey] = onMantle(MW * 0.22, MH * 0.12);
+  const bulge: number[] = [];
+  for (let k = 0; k <= 10; k++) {
+    const a = Math.PI * (1.05 + (k / 10) * 0.9);
+    bulge.push(ex + Math.cos(a) * er * 2.2, ey + Math.sin(a) * er * 1.8);
+  }
+  inkLine(ctx, bulge, false, { width: pw * 0.6, color: ink, alpha: base * 0.55, taper: [0.3, 0.3], seed: seed ^ 0xe1, light, plate: true, min: 0.25 * px });
+  // Dark in either water, the light ink only round it.
+  ctx.globalAlpha = base * 0.95;
+  ctx.fillStyle = mixHex(hue, '#16120F', 0.8);
+  ctx.beginPath();
+  ctx.ellipse(ex, ey, er, er * 0.85, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (dark) {
+    ctx.strokeStyle = ink;
+    ctx.globalAlpha = base * 0.6;
+    ctx.lineWidth = Math.max(0.35 * px, pw * 0.5);
     ctx.stroke();
-    ctx.restore();
   }
-
-  // The mantle: a tall bell, inked twice, the second pass fainter and just
-  // off, and a few lines of hatching on its shaded side.
-  const bell = new Path2D();
-  bell.moveTo(-R * 0.85, 0);
-  bell.bezierCurveTo(-R * 0.98, -R * 0.95, -R * 0.62, -R * 1.62, 0, -R * 1.62);
-  bell.bezierCurveTo(R * 0.62, -R * 1.62, R * 0.98, -R * 0.95, R * 0.85, 0);
-  // Only the dome is inked: below, the mantle runs on into the web.
-  const dome = new Path2D(bell);
-  bell.quadraticCurveTo(0, R * 0.22, -R * 0.85, 0);
-  bell.closePath();
-  ctx.fillStyle = wash;
-  ctx.globalAlpha = env * 0.9;
-  ctx.fill(bell);
-  ctx.globalAlpha = env;
-  if (d > 0.4) {
-    // Stipple down the mantle's shadow side, and the dome in one pressure line.
-    const box = { x: -R, y: -1.62 * R, w: 2 * R, h: 1.7 * R };
-    stipple(ctx, bell, box, { spacing: 1.4 * px, radius: 0.3 * px, shade: shadeAcross(box, light), from: 0.42, color: ink, alpha: 0.55, seed: seed ^ 0xd0 });
-    const pts: number[] = [];
-    const cub = (p: number[]) => {
-      for (let i = 0; i <= 16; i++) {
-        const t = i / 16;
-        const u = 1 - t;
-        pts.push(u * u * u * p[0] + 3 * u * u * t * p[2] + 3 * u * t * t * p[4] + t * t * t * p[6], u * u * u * p[1] + 3 * u * u * t * p[3] + 3 * u * t * t * p[5] + t * t * t * p[7]);
-      }
-    };
-    cub([-R * 0.85, 0, -R * 0.98, -R * 0.95, -R * 0.62, -R * 1.62, 0, -R * 1.62]);
-    cub([0, -R * 1.62, R * 0.62, -R * 1.62, R * 0.98, -R * 0.95, R * 0.85, 0]);
-    inkLine(ctx, pts, false, { width: 1.1 * pw, color: ink, swell: 0.8, taper: [0.08, 0.08], seed, light });
-  } else {
-    ctx.lineWidth = 1.1 * px;
-    ctx.stroke(dome);
-  }
-  ctx.save();
-  ctx.translate(0.9 * px, 0.4 * px);
-  ctx.globalAlpha = env * 0.3;
-  ctx.lineWidth = 0.8 * px;
-  ctx.stroke(dome);
-  ctx.restore();
-  ctx.beginPath();
-  for (let k = 0; k < 4; k++) {
-    const y0 = -R * (1.1 - k * 0.24);
-    ctx.moveTo(-way * R * 0.78, y0);
-    ctx.quadraticCurveTo(-way * R * 0.62, y0 + R * 0.08, -way * R * 0.5, y0 + R * 0.04);
-  }
-  ctx.globalAlpha = env * 0.3;
-  ctx.lineWidth = 0.6 * px;
-  ctx.stroke();
-
-  // Its eyes: small and dark, set toward the way it's going.
-  const eye = Math.max(1 * px, R * 0.07);
-  ctx.fillStyle = dark ? '#141210' : mixHex(pale, '#1A1714', 0.75);
-  ctx.globalAlpha = env * 0.8;
-  for (const side of [-1, 1]) {
+  if (er > 1.6 * px) {
+    ctx.fillStyle = '#FBF8EF';
+    ctx.globalAlpha = base * 0.75;
     ctx.beginPath();
-    ctx.ellipse(side * 0.34 * R + way * R * 0.18, -0.36 * R, eye, eye * 1.2, 0, 0, Math.PI * 2);
+    ctx.arc(ex - er * 0.35, ey - er * 0.3, er * 0.22, 0, Math.PI * 2);
     ctx.fill();
   }
+  void r;
   ctx.restore();
+}
+
+/** A number 0 to 1 for the i-th part of an animal. */
+function unitOf(seed: number, i: number): number {
+  let x = Math.imul(i + 1, 0x9e3779b1) ^ seed;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x85ebca6b);
+  x ^= x >>> 13;
+  return (x >>> 0) / 4294967296;
 }
 
 /* ---- The whale fall ---- */
 
 const BONE = '#DCD2BC';
 
+type Pt = [number, number];
+
+/** A scratch canvas, or null where there is no document. */
+function scratch(w: number, h: number): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.ceil(w));
+  c.height = Math.max(1, Math.ceil(h));
+  return c;
+}
+
+/** Points along a cubic, from t0 to t1. */
+function along(p: number[], t0: number, t1: number, m: number): number[] {
+  const out: number[] = [];
+  for (let k = 0; k <= m; k++) out.push(...cubic(p, t0 + ((t1 - t0) * k) / m));
+  return out;
+}
+
+/** Normals down a polyline, unit length, turned left of travel. */
+function normals(cl: number[]): number[] {
+  const n = cl.length / 2;
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(0, i - 1);
+    const b = Math.min(n - 1, i + 1);
+    const dx = cl[b * 2] - cl[a * 2];
+    const dy = cl[b * 2 + 1] - cl[a * 2 + 1];
+    const d = Math.hypot(dx, dy) || 1;
+    out.push(-dy / d, dx / d);
+  }
+  return out;
+}
+
+interface Bones {
+  ctx: CanvasRenderingContext2D;
+  dark: boolean;
+  px: number;
+  d: number;
+  ink: string;
+  wash: string;
+  pale: string;
+  /** The light in the drawing's own frame (it may be mirrored). */
+  light: [number, number];
+  seed: number;
+}
+
+/**
+ * A long bone round a centre line: a ribbon `w0` wide at its root and `w1`
+ * at its end, with knuckled, rounded ends; washed, shaded in short strokes
+ * round its shadowed side, and outlined in the pen. Returns the outline.
+ */
+function bone(b: Bones, cl: number[], w0: number, w1: number, salt: number): number[] {
+  const { ctx, px, d, ink, light } = b;
+  const n = cl.length / 2;
+  if (n < 2) return [];
+  const nm = normals(cl);
+  const r = mulberry32(hash32('bone', b.seed, salt));
+  const width = (i: number) => {
+    const t = i / (n - 1);
+    // A knuckle at each end, the shaft between them a little irregular.
+    const knob = 1 + 0.35 * Math.exp(-t * 14) + 0.08 * Math.exp(-(1 - t) * 14);
+    // Broadest a little past the root, as a rib is, and never a pipe.
+    const belly = 1 + 0.25 * Math.sin(Math.min(1, t * 1.6) * Math.PI);
+    return (w0 + (w1 - w0) * t) * knob * belly * (1 + (r() - 0.5) * 0.12);
+  };
+  const ws: number[] = [];
+  for (let i = 0; i < n; i++) ws.push(width(i));
+  const left: number[] = [];
+  const right: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const h = ws[i] / 2;
+    left.push(cl[i * 2] + nm[i * 2] * h, cl[i * 2 + 1] + nm[i * 2 + 1] * h);
+    right.push(cl[i * 2] - nm[i * 2] * h, cl[i * 2 + 1] - nm[i * 2 + 1] * h);
+  }
+  // Round the ends: a few points round each cap, out past the end.
+  const cap = (i: number, sgn: number) => {
+    const out: number[] = [];
+    const nx = nm[i * 2];
+    const ny = nm[i * 2 + 1];
+    // Travel along the bone, turned outward at the start.
+    const tx = ny * sgn;
+    const ty = -nx * sgn;
+    const h = ws[i] / 2;
+    for (const th of [0.5, 1, 1.5, 2, 2.5]) {
+      const ang = (th / 3) * Math.PI;
+      const c = Math.cos(ang) * sgn;
+      out.push(cl[i * 2] + nx * h * c + tx * h * 0.8 * Math.sin(ang), cl[i * 2 + 1] + ny * h * c + ty * h * 0.8 * Math.sin(ang));
+    }
+    return out;
+  };
+  const poly: number[] = [...left, ...cap(n - 1, 1)];
+  for (let i = n - 1; i >= 0; i--) poly.push(right[i * 2], right[i * 2 + 1]);
+  poly.push(...cap(0, -1));
+  const path = new Path2D();
+  path.moveTo(poly[0], poly[1]);
+  for (let i = 2; i < poly.length; i += 2) path.lineTo(poly[i], poly[i + 1]);
+  path.closePath();
+  ctx.fillStyle = b.wash;
+  ctx.globalAlpha = 1;
+  ctx.fill(path);
+  // Round its shadowed side: strokes across the bone from its middle out,
+  // the way an engraver turns a cylinder.
+  const step = Math.max(1.3 * px, (w0 + w1) * 0.16);
+  const strokes = new Path2D();
+  let acc = 0;
+  for (let i = 1; i < n; i++) {
+    acc += Math.hypot(cl[i * 2] - cl[i * 2 - 2], cl[i * 2 + 1] - cl[i * 2 - 1]);
+    if (acc < step) continue;
+    acc = 0;
+    const sx = nm[i * 2];
+    const sy = nm[i * 2 + 1];
+    const sgn = sx * light[0] + sy * light[1] >= 0 ? 1 : -1;
+    const h = ws[i] / 2;
+    const reach = 0.92 - (d > 0.4 ? 0 : 0.2) - r() * 0.15;
+    strokes.moveTo(cl[i * 2] + sx * sgn * h * 0.05, cl[i * 2 + 1] + sy * sgn * h * 0.05);
+    strokes.lineTo(cl[i * 2] + sx * sgn * h * reach, cl[i * 2 + 1] + sy * sgn * h * reach);
+  }
+  ctx.strokeStyle = ink;
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = Math.max(0.4 * px, Math.min(w0, w1) * 0.08);
+  ctx.stroke(strokes);
+  ctx.globalAlpha = 1;
+  // The edge where its flat face turns, a fine line down the lit side.
+  if (n > 4 && d > 0.2) {
+    const ridge: number[] = [];
+    const lsg = nm[2] * light[0] + nm[3] * light[1] >= 0 ? -1 : 1;
+    for (let i = 1; i < n - 1; i++) ridge.push(cl[i * 2] + nm[i * 2] * lsg * ws[i] * 0.22, cl[i * 2 + 1] + nm[i * 2 + 1] * lsg * ws[i] * 0.22);
+    inkLine(ctx, ridge, false, { width: Math.max(0.35 * px, (w0 + w1) * 0.03), color: ink, alpha: 0.4, seed: hash32(b.seed, salt, 'r'), light, taper: [0.25, 0.35], raw: true, plate: true, min: 0.3 * px });
+  }
+  inkLine(ctx, poly, true, { width: Math.max(0.6 * px, (w0 + w1) * 0.05), color: ink, alpha: 0.85, seed: hash32(b.seed, salt), light, raw: true, plate: true, min: 0.3 * px });
+  return poly;
+}
+
+/** A lumpy closed blob round (x, y), `a` by `b`, its corners squared a little. */
+function lump(x: number, y: number, a: number, bb: number, rot: number, r: () => number, square = 0.6, k = 18): number[] {
+  const pts: number[] = [];
+  const cs = Math.cos(rot);
+  const sn = Math.sin(rot);
+  for (let i = 0; i < k; i++) {
+    const t = (i / k) * Math.PI * 2;
+    const c = Math.cos(t);
+    const s = Math.sin(t);
+    const u = Math.sign(c) * Math.pow(Math.abs(c), square) * a * (0.94 + r() * 0.12);
+    const v = Math.sign(s) * Math.pow(Math.abs(s), square) * bb * (0.94 + r() * 0.12);
+    pts.push(x + u * cs - v * sn, y + u * sn + v * cs);
+  }
+  return pts;
+}
+
+/** A shape's outline washed, shaded in contour lines away from the light, stippled big, and inked. */
+function mass(b: Bones, pts: number[], o: { angle: number; bow: number; spacing: number; from?: number; cross?: number; stip?: boolean; wash?: string; salt: number }): Path2D {
+  const { ctx, px, d, ink, light } = b;
+  const path = smoothPath(pts, true, 4);
+  const box = boundsOf(pts);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = o.wash ?? b.wash;
+  ctx.fill(path);
+  const across = shadeAcross(box, light);
+  hatch(ctx, path, box, {
+    spacing: Math.max(1.3 * px, o.spacing),
+    angle: o.angle,
+    bow: o.bow,
+    shade: across,
+    from: o.from ?? 0.5,
+    // Crossed only in the deepest shadow, and only in dark ink: a light ink
+    // crossed over a lit side reads as a grid.
+    cross: d > 0.4 && !b.dark ? o.cross ?? 0.8 : undefined,
+    color: ink,
+    width: Math.max(0.4 * px, o.spacing * 0.22),
+    alpha: 0.55,
+    seed: hash32(b.seed, o.salt),
+  });
+  if (o.stip && d > 0.25) {
+    stipple(ctx, path, box, { spacing: Math.max(1.2 * px, o.spacing * 0.6), radius: Math.max(0.3 * px, o.spacing * 0.09), shade: across, from: 0.3, color: ink, alpha: 0.4, seed: hash32(b.seed, o.salt, 's') });
+  }
+  inkLine(ctx, pts, true, { width: Math.max(0.6 * px, o.spacing * 0.35), color: ink, alpha: 0.9, seed: hash32(b.seed, o.salt, 'i'), light, plate: true, min: 0.3 * px });
+  return path;
+}
+
+function boundsOf(pts: number[]): { x: number; y: number; w: number; h: number } {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (let i = 0; i < pts.length; i += 2) {
+    x0 = Math.min(x0, pts[i]);
+    x1 = Math.max(x1, pts[i]);
+    y0 = Math.min(y0, pts[i + 1]);
+    y1 = Math.max(y1, pts[i + 1]);
+  }
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+}
+
+interface Fall {
+  key: string;
+  canvas: HTMLCanvasElement | null;
+  /** Where the canvas sits relative to the skull's tip on the floor line, page px. */
+  x0: number;
+  y0: number;
+  /** The top of the bones at x (in the drawing's own frame, skull at 0, tail at +L). */
+  tops: Pt[];
+}
+
+let falls: Fall[] = [];
+
+/** The top of the bones at x, read off the tops laid down with them. */
+function topOf(tops: Pt[], x: number): number {
+  if (!tops.length) return 0;
+  let best = tops[0];
+  for (const t of tops) if (Math.abs(t[0] - x) < Math.abs(best[0] - x)) best = t;
+  return best[1];
+}
+
+/**
+ * The bones, in the drawing's own frame: the skull's tip at the origin on
+ * the floor line, the tail along +x. Seen a little from above and from the
+ * side, so the far ribs stand behind the spine and the near ones fall
+ * forward off it, toward the reader; the near floor is below the line.
+ */
+function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: number, dark: boolean, dir: number, tops: Pt[], siltColor?: string): void {
+  const r = mulberry32(hash32('whale-bones', seed));
+  const d = detailFor(L * 0.35);
+  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
+  const wash = dark ? mixHex(BONE, '#110F0D', 0.5) : mixHex(BONE, '#FBF8EF', 0.25);
+  const pale = dark ? mixHex(BONE, '#110F0D', 0.3) : mixHex(BONE, '#FBF8EF', 0.55);
+  const lightBase: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
+  const light: [number, number] = [lightBase[0] * dir, lightBase[1]];
+  const b: Bones = { ctx, dark, px, d, ink, wash, pale, light, seed };
+  const silt = siltColor ?? (dark ? '#191714' : '#3A3F3B');
+  const crest = dark ? mixHex(silt, '#8C8576', 0.35) : mixHex(silt, '#C9C3B4', 0.3);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // The scour under it, darker than the floor round it, fading every way.
+  ctx.save();
+  ctx.translate(0.5 * L, -0.004 * L);
+  ctx.scale(1, 0.05);
+  const scour = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.56 * L);
+  const sh = dark ? '4, 4, 3' : '26, 23, 20';
+  scour.addColorStop(0, `rgba(${sh}, ${dark ? 0.3 : 0.18})`);
+  scour.addColorStop(0.7, `rgba(${sh}, ${dark ? 0.18 : 0.1})`);
+  scour.addColorStop(1, `rgba(${sh}, 0)`);
+  ctx.fillStyle = scour;
+  ctx.beginPath();
+  ctx.arc(0, 0, 0.56 * L, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // The spine, from behind the skull to the tail, the bones shrinking and
+  // closing up as they go, sinking deeper into the silt toward the tail.
+  const N = 26;
+  const ph = r() * 6.28;
+  const spine: { x: number; y: number; a: number; b: number; rot: number; t: number; gone: boolean }[] = [];
+  for (let k = 0; k < N; k++) {
+    const t = k / (N - 1);
+    const u = 0.245 + 0.73 * (1 - Math.pow(1 - t, 1.25));
+    const un = 0.245 + 0.73 * (1 - Math.pow(1 - Math.min(1, t + 1 / (N - 1)), 1.25));
+    const hv = L * (0.034 * Math.pow(1 - t, 0.85) + 0.007);
+    let x = u * L;
+    let y = -L * (0.016 * (1 - 0.7 * t)) + L * 0.003 * Math.sin(t * 5 + ph);
+    let rot = (r() - 0.5) * 0.3;
+    // Settled unevenly, some deeper in the silt than others.
+    y += hv * (r() - 0.3) * 0.35;
+    x += (r() - 0.5) * hv * 0.25;
+    // A few knocked loose and rolled off the line.
+    const loose = k > 2 && r() < 0.2;
+    if (loose) {
+      x += (r() - 0.5) * hv * 1.2;
+      y += hv * (0.2 + r() * 0.35);
+      rot = (r() - 0.5) * 1.6;
+    }
+    const gone = k > 4 && r() < 0.09;
+    spine.push({ x, y, a: Math.max(1.4 * px, (un - u) * L * 0.38), b: hv / 2, rot, t, gone });
+  }
+
+  // Ribs: the far ones first, standing behind the spine or fallen away
+  // from it; the near ones after it, fallen toward the reader.
+  const ribs = (near: boolean) => {
+    const q = mulberry32(hash32('ribs', seed, near ? 1 : 0));
+    for (let i = 0; i < 12; i++) {
+      const v = spine[i + 2];
+      if (v.gone) continue;
+      const hs = 0.45 + q() * 0.75;
+      const ls = 0.6 + q() * 0.8;
+      const tilt = (q() - 0.5) * 0.9;
+      const fate = q();
+      const w0 = L * 0.0085 * (1 - i / 22) * (0.85 + q() * 0.3);
+      const w1 = w0 * 0.45;
+      const rx = v.x;
+      const ry = v.y - v.b * 0.2;
+      const rot = (pts: number[]) => {
+        const c = Math.cos(tilt);
+        const sn = Math.sin(tilt);
+        for (let k = 2; k < pts.length; k += 2) {
+          const dx = pts[k] - rx;
+          const dy = pts[k + 1] - ry;
+          pts[k] = rx + dx * c - dy * sn;
+          pts[k + 1] = ry + dx * sn + dy * c;
+        }
+        return pts;
+      };
+      let p: number[];
+      let stand: boolean;
+      if (!near) {
+        stand = fate < 0.45;
+        p = fate < 0.45
+          ? rot([rx, ry, rx + 0.012 * L, ry - 0.062 * L * hs, rx + 0.052 * L * ls, ry - 0.085 * L * hs, rx + 0.072 * L * ls, -0.03 * L])
+          : rot([rx, ry, rx + 0.025 * L, ry - 0.022 * L, rx + 0.06 * L * ls, -0.04 * L, rx + 0.095 * L * ls, -0.033 * L]);
+      } else {
+        stand = fate < 0.3;
+        p = fate < 0.3
+          ? rot([rx, ry, rx - 0.006 * L, ry - 0.05 * L * hs, rx + 0.045 * L * ls, ry - 0.045 * L * hs, rx + 0.062 * L * ls, 0.014 * L])
+          : rot([rx, v.y + v.b * 0.4, rx + 0.022 * L, 0.003 * L, rx + 0.05 * L * ls, 0.012 * L, rx + 0.085 * L * ls, 0.01 * L]);
+      }
+      // Some stood until they snapped: what is left stands, the rest lies under it.
+      const broken = stand && q() < 0.55;
+      const end = broken ? 0.35 + q() * 0.35 : 1;
+      bone(b, along(p, 0, end, 14), w0, broken ? w0 * 0.75 : w1, i * 2 + (near ? 101 : 1));
+      if (broken) {
+        const [bx, by] = cubic(p, end);
+        const fy = near ? 0.008 * L : -0.028 * L;
+        const flen = 0.03 * L + q() * 0.03 * L;
+        const fa = (q() - 0.5) * 0.6;
+        const fx = bx + (q() - 0.3) * 0.02 * L;
+        const frag = [fx, fy, fx + Math.cos(fa) * flen * 0.33, fy - 0.004 * L, fx + Math.cos(fa) * flen * 0.66, fy - 0.003 * L + Math.sin(fa) * flen * 0.2, fx + Math.cos(fa) * flen, fy + Math.sin(fa) * flen * 0.3];
+        bone(b, along(frag, 0, 1, 8), w0 * 0.7, w1, i * 2 + (near ? 151 : 51));
+        void by;
+      }
+    }
+  };
+  ribs(false);
+
+  // The skull: a long flat rostrum running out to the tip, the braincase low
+  // and broad behind it, its top a lighter plane seen from above, the orbit
+  // a hollow under the brow; on its far side, nothing but the top's edge.
+  const sk = mulberry32(hash32('skull', seed));
+  const jit = () => (sk() - 0.5) * 0.002 * L;
+  const skullTop: number[] = [];
+  const skullPts: number[] = [];
+  const profile: Pt[] = [
+    [0, -0.004], [0.05, -0.009], [0.1, -0.016], [0.138, -0.026], [0.162, -0.039], [0.184, -0.047], [0.205, -0.051], [0.222, -0.048], [0.236, -0.036], [0.247, -0.017],
+  ];
+  for (const [u, v] of profile) skullPts.push(u * L + jit(), v * L + jit());
+  const under: Pt[] = [[0.25, 0.004], [0.236, 0.008], [0.214, 0.003], [0.19, 0.006], [0.14, 0.005], [0.07, 0.003], [0.01, 0.001]];
+  for (const [u, v] of under) skullPts.push(u * L + jit(), v * L + jit());
+  mass(b, skullPts, { angle: -0.12, bow: 0.5, spacing: L * 0.0045, from: 0.42, cross: 0.75, stip: true, salt: 9001 });
+  // The back of the skull: the occipital shield's edge, and the squamosal
+  // coming down behind the orbit.
+  inkLine(ctx, [0.205 * L, -0.049 * L, 0.218 * L, -0.036 * L, 0.226 * L, -0.018 * L, 0.228 * L, 0.002 * L], false, { width: Math.max(0.5 * px, L * 0.0013), color: ink, alpha: 0.6, seed: seed ^ 0x73, light, taper: [0.2, 0.3], plate: true });
+  // The top plane: from the tip along the ridge, the far edge a little higher.
+  for (const [u, v] of profile) skullTop.push(u * L, v * L);
+  for (let i = profile.length - 1; i >= 0; i--) {
+    const [u, v] = profile[i];
+    const lift = 0.006 * Math.sin(Math.min(1, u / 0.2) * Math.PI * 0.9);
+    skullTop.push(u * L - 0.004 * L, (v - lift) * L);
+  }
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = pale;
+  ctx.fill(smoothPath(skullTop, true, 4));
+  ctx.globalAlpha = 1;
+  inkLine(ctx, skullTop.slice(profile.length * 2), false, { width: Math.max(0.5 * px, L * 0.0012), color: ink, alpha: 0.7, seed: seed ^ 0x70, light, taper: [0.2, 0.2], plate: true });
+  // The blowhole's slit on the top, and a suture.
+  inkLine(ctx, [0.118 * L, -0.03 * L, 0.13 * L, -0.0335 * L, 0.142 * L, -0.036 * L], false, { width: Math.max(0.6 * px, L * 0.002), color: ink, alpha: 0.75, seed: seed ^ 0x71, light, plate: true });
+  inkLine(ctx, [0.02 * L, -0.006 * L, 0.07 * L, -0.012 * L, 0.11 * L, -0.019 * L], false, { width: Math.max(0.4 * px, L * 0.0009), color: ink, alpha: 0.45, seed: seed ^ 0x72, light, plate: true });
+  // The brow, and the orbit under it: a hollow in shadow, not a dark disc.
+  const orbit = lump(0.176 * L, -0.03 * L, 0.014 * L, 0.0075 * L, -0.25, sk, 0.8, 14);
+  const orbitPath = smoothPath(orbit, true, 4);
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = mixHex(wash, dark ? '#000000' : '#2A2320', 0.45);
+  ctx.fill(orbitPath);
+  ctx.globalAlpha = 1;
+  const ob = boundsOf(orbit);
+  hatch(ctx, orbitPath, ob, { spacing: Math.max(1.2 * px, L * 0.0022), angle: 0.9, shade: (x, y) => 0.5 + 0.5 * ((y - ob.y) / ob.h), from: 0.35, cross: 0.7, color: ink, width: Math.max(0.4 * px, L * 0.0006), alpha: 0.6, seed: seed ^ 0x0b });
+  inkLine(ctx, orbit.slice(0, 16), false, { width: Math.max(0.5 * px, L * 0.0013), color: ink, alpha: 0.7, seed: seed ^ 0x0c, light, taper: [0.2, 0.3], plate: true });
+  inkLine(ctx, [0.152 * L, -0.04 * L, 0.17 * L, -0.0425 * L, 0.19 * L, -0.04 * L, 0.203 * L, -0.033 * L], false, { width: Math.max(0.7 * px, L * 0.0022), color: ink, alpha: 0.8, seed: seed ^ 0x0d, light, plate: true });
+  tops.push([0.04 * L, -0.012 * L], [0.1 * L, -0.022 * L], [0.16 * L, -0.044 * L], [0.2 * L, -0.06 * L], [0.235 * L, -0.044 * L]);
+
+  // The vertebrae, each a drum with its end turned a little to the reader,
+  // a spine standing off its top and its processes either side.
+  for (const v of spine) {
+    if (v.gone) continue;
+    const { x, y, a, rot, t } = v;
+    const bb = v.b;
+    const proc = t < 0.78;
+    const salt = Math.round(t * 1000);
+    if (proc) {
+      // The far process, behind.
+      bone(b, [x - a * 0.1, y - bb * 0.3, x - a * 0.25, y - bb * 0.55, x - a * 0.4, y - bb * 0.85 - bb * 0.4 * (1 - t)], a * 0.42, a * 0.22, salt + 3);
+    }
+    const body = lump(x, y, a, bb, rot, r, 0.55, 16);
+    mass(b, body, { angle: Math.PI / 2 - 0.1 + rot, bow: 0.5, spacing: Math.max(1.3 * px, bb * 0.16), from: 0.45, cross: 0.8, salt: salt + 5 });
+    // The end face, a disc of spongy bone turned toward the skull.
+    const ex = x - Math.cos(rot) * a * 0.82;
+    const ey = y - Math.sin(rot) * a * 0.82;
+    const face = lump(ex, ey, a * 0.26, bb * 0.88, rot, r, 1, 14);
+    const facePath = smoothPath(face, true, 4);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = pale;
+    ctx.fill(facePath);
+    if (d > 0.3) stipple(ctx, facePath, boundsOf(face), { spacing: Math.max(1.2 * px, bb * 0.12), radius: Math.max(0.3 * px, bb * 0.02), shade: () => 0.55, from: 0.2, color: ink, alpha: 0.35, seed: hash32(seed, salt, 'f') });
+    inkLine(ctx, face, true, { width: Math.max(0.5 * px, bb * 0.05), color: ink, alpha: 0.75, seed: hash32(seed, salt, 'fi'), light, plate: true });
+    if (proc) {
+      // The neural spine, leaning back toward the tail.
+      const lean = 0.45 + r() * 0.35 + rot;
+      const len = bb * 2 * (0.9 + r() * 0.4) * (1 - t * 0.65) * (r() < 0.25 ? 0.35 + r() * 0.3 : 1);
+      const sx = x + a * 0.1;
+      const sy = y - bb * 0.8;
+      const tx = sx + Math.sin(lean) * len;
+      const ty = sy - Math.cos(lean) * len;
+      bone(b, [sx, sy, (sx + tx) / 2 - len * 0.05, (sy + ty) / 2, tx, ty], a * 0.6, a * 0.3, salt + 7);
+      tops.push([tx, ty]);
+      // And the near process, down toward the reader, into the silt.
+      bone(b, [x + a * 0.1, y + bb * 0.2, x + a * 0.25, y + bb * 0.6, x + a * 0.35, y + bb * 1.1], a * 0.45, a * 0.25, salt + 9);
+    }
+    tops.push([x, y - bb]);
+  }
+
+  // The shoulder blade, fallen against the spine near the skull: a fan.
+  const sc = mulberry32(hash32('scapula', seed));
+  const scap: number[] = [0.265 * L, 0.004 * L, 0.258 * L, -0.012 * L, 0.27 * L, -0.03 * L, 0.29 * L, -0.042 * L, 0.312 * L, -0.044 * L, 0.33 * L, -0.034 * L, 0.338 * L, -0.016 * L, 0.33 * L, 0.002 * L, 0.3 * L, 0.006 * L];
+  for (let i = 0; i < scap.length; i++) scap[i] += (sc() - 0.5) * 0.002 * L;
+  mass(b, scap, { angle: -1.1, bow: 0.6, spacing: L * 0.004, from: 0.45, stip: true, salt: 9100 });
+  inkLine(ctx, [0.27 * L, -0.002 * L, 0.29 * L, -0.02 * L, 0.31 * L, -0.038 * L], false, { width: Math.max(0.6 * px, L * 0.0018), color: ink, alpha: 0.7, seed: seed ^ 0x5c, light, plate: true });
+
+  // The silt heaped along the spine's foot, so the bones sink into it rather than
+  // sit on it: a ragged bank along the front, thicker at the skull and the
+  // tail, with grains on it and a lit crest.
+  const hp = mulberry32(hash32('silt-heap', seed));
+  const heap: number[] = [];
+  const crestPts: number[] = [];
+  const M = 60;
+  const p1 = hp() * 6.28;
+  const p2 = hp() * 6.28;
+  for (let i = 0; i <= M; i++) {
+    const u = -0.05 + (i / M) * 1.1;
+    const bump = 0.004 + 0.004 * Math.max(0, Math.sin(u * 23 + p1)) + 0.003 * Math.max(0, Math.sin(u * 61 + p2)) + 0.006 * Math.exp(-Math.pow((u - 0.12) / 0.08, 2)) + 0.007 * Math.max(0, (u - 0.6) / 0.4) + hp() * 0.002;
+    const edge = Math.min(1, (u + 0.05) / 0.06, (1.05 - u) / 0.06);
+    const y = -bump * L * Math.max(0, edge);
+    heap.push(u * L, y);
+    crestPts.push(u * L, y);
+  }
+  const heapPath = new Path2D();
+  heapPath.moveTo(heap[0], heap[1]);
+  for (let i = 2; i < heap.length; i += 2) heapPath.lineTo(heap[i], heap[i + 1]);
+  heapPath.lineTo(1.05 * L, 0.012 * L);
+  heapPath.lineTo(-0.05 * L, 0.012 * L);
+  heapPath.closePath();
+  const fill = ctx.createLinearGradient(0, -0.02 * L, 0, 0.012 * L);
+  fill.addColorStop(0, mixHex(silt, crest, 0.5));
+  fill.addColorStop(0.5, silt);
+  fill.addColorStop(0.68, silt);
+  fill.addColorStop(1, `${silt}00`);
+  ctx.globalAlpha = 0.94;
+  ctx.fillStyle = fill;
+  ctx.fill(heapPath);
+  ctx.globalAlpha = 1;
+  const hbox = { x: -0.05 * L, y: -0.03 * L, w: 1.1 * L, h: 0.07 * L };
+  stipple(ctx, heapPath, hbox, { spacing: Math.max(1.3 * px, L * 0.0025), radius: Math.max(0.3 * px, L * 0.0005), shade: (_x, y) => Math.max(0, 0.75 - (y + 0.01 * L) / (0.05 * L)), from: 0.25, color: crest, alpha: 0.6, seed: seed ^ 0x51 });
+  inkLine(ctx, crestPts, false, { width: Math.max(0.5 * px, L * 0.0012), color: dark ? IRON_GALL.dark : crest, alpha: dark ? 0.4 : 0.7, seed: seed ^ 0x52, light, taper: [0.05, 0.05], plate: true, min: 0.3 * px });
+
+  ribs(true);
+
+  // A jaw, lying in front of the skull, half in the silt.
+  bone(b, along([-0.012 * L, 0.008 * L, 0.06 * L, -0.004 * L, 0.15 * L, -0.002 * L, 0.225 * L, 0.009 * L], 0, 1, 22), L * 0.008, L * 0.012, 9200);
+  // The flipper's small bones, scattered in front of the shoulder.
+  const fl = mulberry32(hash32('flipper', seed));
+  for (let i = 0; i < 6; i++) {
+    const fx = (0.3 + fl() * 0.12) * L;
+    const fy = (0.004 + fl() * 0.012) * L;
+    const fa = (fl() - 0.5) * 1.2;
+    const fl0 = (0.008 + fl() * 0.008) * L;
+    bone(b, [fx, fy, fx + Math.cos(fa) * fl0 * 0.5, fy + Math.sin(fa) * fl0 * 0.5, fx + Math.cos(fa) * fl0, fy + Math.sin(fa) * fl0], L * 0.004, L * 0.003, 9300 + i);
+  }
+
+  // And drifts of it over the bones lying on the near floor, so they go
+  // under and come out again.
+  const dr = mulberry32(hash32('drifts', seed));
+  for (let i = 0; i < 16; i++) {
+    const x = (0.02 + dr() * 0.8) * L;
+    const y = (0.006 + dr() * 0.01) * L;
+    const hw = (0.012 + dr() * 0.025) * L;
+    const hh = (0.003 + dr() * 0.004) * L;
+    const pts: number[] = [];
+    for (let k = 0; k <= 10; k++) {
+      const u = -1 + (k / 10) * 2;
+      pts.push(x + u * hw, y - hh * Math.pow(1 - u * u, 0.8) * (0.85 + dr() * 0.3));
+    }
+    const drift = new Path2D();
+    drift.moveTo(pts[0], pts[1]);
+    for (let k = 2; k < pts.length; k += 2) drift.lineTo(pts[k], pts[k + 1]);
+    drift.lineTo(x + hw, y + hh * 0.8);
+    drift.lineTo(x - hw, y + hh * 0.8);
+    drift.closePath();
+    const g = ctx.createLinearGradient(0, y - hh, 0, y + hh * 0.8);
+    g.addColorStop(0, mixHex(silt, crest, 0.45));
+    g.addColorStop(0.55, silt);
+    g.addColorStop(1, `${silt}00`);
+    ctx.fillStyle = g;
+    ctx.globalAlpha = 0.95;
+    ctx.fill(drift);
+    ctx.globalAlpha = 1;
+    stipple(ctx, drift, { x: x - hw, y: y - hh, w: hw * 2, h: hh * 2 }, { spacing: Math.max(1.3 * px, L * 0.0025), radius: Math.max(0.3 * px, L * 0.0005), shade: () => 0.55, from: 0.2, color: crest, alpha: 0.5, seed: hash32(seed, 'drift', i) });
+    inkLine(ctx, pts, false, { width: Math.max(0.4 * px, L * 0.001), color: dark ? IRON_GALL.dark : crest, alpha: dark ? 0.3 : 0.6, seed: hash32(seed, 'dl', i), light, taper: [0.3, 0.3], plate: true, min: 0.3 * px });
+  }
+
+  // The bacterial mat: a pale bloom of fine dots over the tops of the bones.
+  const mat = new Path2D();
+  const mr = mulberry32(hash32('mat', seed));
+  for (let i = 0; i < 260; i++) {
+    const t = tops[Math.floor(mr() * tops.length)];
+    if (!t) break;
+    const x = t[0] + (mr() - 0.5) * 0.012 * L;
+    const y = t[1] + mr() * 0.008 * L;
+    const rad = Math.max(0.35 * px, L * (0.0004 + mr() * 0.0006));
+    mat.moveTo(x + rad, y);
+    mat.arc(x, y, rad, 0, Math.PI * 2);
+  }
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = dark ? '#E6EBD6' : '#F2F0E2';
+  ctx.fill(mat);
+  ctx.globalAlpha = 1;
+}
+
 /**
  * A whale's skeleton on the floor, long since picked clean and now a reef
- * of its own: the skull at one end, the spine running away smaller to the
- * tail, ribs standing up off it, some broken off and some lain down, all
- * a little sunk in the silt. A pale mat of bacteria on the bones, a few
- * tufts of bone worms, and squat lobsters and crabs picking their way along
- * it. It comes in over its arrival and then only the small life moves.
+ * of its own: the skull at one end with its jaw beside it, the spine running
+ * away smaller to the tail, ribs standing up off it at all angles, some
+ * snapped with the rest lying under them, many fallen flat, all a little
+ * sunk in the silt heaped round them. A pale mat of bacteria on the bones,
+ * a few small tufts of bone worms, and squat lobsters and crabs picking
+ * their way along it. It comes in over its arrival and then only the small
+ * life moves; the bones are drawn once and placed.
  */
 export function drawWhaleFall(
   ctx: CanvasRenderingContext2D,
@@ -466,377 +1157,140 @@ export function drawWhaleFall(
   ambient: number,
   dark: boolean,
   floorY: number,
+  /** The floor's own colour at its line, for the silt heaped round the bones. */
+  siltColor?: string,
 ): void {
   const a = 0.85 * smooth(appear);
   if (a <= 0) return;
+  void h;
   // The layout comes from the seed afresh each frame, so it never shifts.
   const rand = mulberry32(seed ^ 0x3a1ef);
   const L = w * 0.45;
   const dir = rand() < 0.5 ? -1 : 1;
   const cx = w * (0.375 + rand() * 0.25);
-  const sag0 = rand() * Math.PI * 2;
+  const tipX = cx - (dir * L) / 2;
 
-  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
-  const wash = dark ? mixHex(BONE, '#110F0D', 0.55) : mixHex(BONE, '#FBF8EF', 0.3);
-  const ground = dark ? '#080706' : '#2E3431';
-  const silt = dark ? 'rgba(8, 7, 6, ' : 'rgba(46, 52, 49, ';
-  const edge = dark ? '#2B2926' : '#6E7672';
+  const key = `${Math.round(L)}|${seed}|${px}|${dark ? 1 : 0}|${siltColor ?? ''}`;
+  let fall = falls.find((f) => f.key === key);
+  if (!fall) {
+    // The canvas spans the bones from a little before the skull to a little
+    // past the tail, and from above the tallest rib to into the near silt.
+    const left = -0.07 * L;
+    const right = 1.08 * L;
+    const top = -0.13 * L;
+    const bottom = 0.045 * L;
+    const canvas = scratch(right - left, bottom - top);
+    const g = canvas?.getContext('2d');
+    const tops: Pt[] = [];
+    const x0 = dir > 0 ? left : -right;
+    if (canvas && g) {
+      g.translate(-x0, -top);
+      g.scale(dir, 1);
+      paintBones(g, L, seed, px, dark, dir, tops, siltColor);
+    }
+    fall = { key, canvas: canvas && g ? canvas : null, x0, y0: top, tops };
+    falls = [fall, ...falls].slice(0, 2);
+  }
 
   ctx.save();
-  // The skull's tip at the origin, on the floor line, the tail along +x.
-  ctx.translate(cx - (dir * L) / 2, floorY);
+  if (fall.canvas) {
+    ctx.globalAlpha *= a;
+    ctx.drawImage(fall.canvas, tipX + fall.x0, floorY + fall.y0);
+  } else {
+    // No canvas to keep them on: draw them in place.
+    ctx.translate(tipX, floorY);
+    ctx.scale(dir, 1);
+    ctx.globalAlpha *= a;
+    const tops: Pt[] = [];
+    paintBones(ctx, L, seed, px, dark, dir, tops, siltColor);
+    fall.tops = tops;
+  }
+  ctx.restore();
+
+  // The living part arrives last, once the bones are there to be on, and
+  // stays small: things a few millimetres long on a skeleton of metres.
+  const life = a * smooth((appear - 0.6) / 0.4);
+  if (life <= 0) return;
+  const tops = fall.tops;
+  ctx.save();
+  ctx.translate(tipX, floorY);
   ctx.scale(dir, 1);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  // Whatever is below the line is in the silt.
-  ctx.beginPath();
-  ctx.rect(-L, -L, L * 3, L + 1.5 * px);
-  ctx.clip();
-
-  // The spine: from behind the skull to the tail, the bones shrinking and
-  // closing up as they go.
-  const s0 = 0.21 * L;
-  const N = 26;
-  const spineX = (t: number) => s0 + (L - s0) * (1 - Math.pow(1 - t, 1.35));
-  const boneH = (t: number) => L * (0.034 * Math.pow(1 - t, 0.9) + 0.005);
-  const boneY = (t: number) => -boneH(t) * 0.32 + L * 0.004 * Math.sin(t * 5 + sag0);
-  const topAt = (x: number) => {
-    if (x < s0) return -(0.003 * L + 0.045 * L * Math.pow(Math.max(0, x) / s0, 1.6));
-    const f = Math.min(1, (x - s0) / (L - s0));
-    const t = 1 - Math.pow(1 - f, 1 / 1.35);
-    return boneY(t) - boneH(t) / 2;
-  };
-
-  const centra = new Path2D();
-  const spines = new Path2D();
-  // Each vertebra's shading, its lower half in short strokes that follow the drum.
-  const shading = new Path2D();
-  const roots: [number, number, number][] = [];
-  for (let k = 0; k < N; k++) {
-    const t = k / (N - 1);
-    const hv = boneH(t);
-    const gap = spineX(Math.min(1, t + 1 / (N - 1))) - spineX(t);
-    let x = spineX(t);
-    let y = boneY(t);
-    let rot = 0;
-    // A few have been knocked loose.
-    if (rand() < 0.14) {
-      x += (rand() - 0.5) * hv;
-      y += rand() * hv * 0.2;
-      rot = (rand() - 0.5) * 0.9;
+  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
+  const r2 = mulberry32(seed ^ 0x0ed);
+  // Bone worms: little rust plumes standing off the bone, swaying.
+  const worms = new Path2D();
+  for (let i = 0; i < 5; i++) {
+    const x = L * (0.06 + r2() * 0.55);
+    const y = topOf(tops, x) + 0.5 * px;
+    const tall = Math.max(2 * px, L * (0.005 + r2() * 0.004));
+    for (let j = 0; j < 5; j++) {
+      const lean = (j - 2) * 0.22 + Math.sin(ambient * 0.8 + i * 2 + j) * 0.12;
+      worms.moveTo(x + (j - 2) * 0.3 * px, y);
+      worms.quadraticCurveTo(x + Math.sin(lean) * tall * 0.3, y - tall * 0.5, x + Math.sin(lean) * tall, y - Math.cos(lean) * tall * (0.8 + 0.2 * (j % 2)));
     }
-    // A centrum from the side: a short drum, its sides drawn in a little.
-    const hw = Math.max(gap * 0.38, 1.5 * px);
-    const hh = hv / 2;
-    const cs = Math.cos(rot);
-    const sn = Math.sin(rot);
-    const at = (u: number, v: number): [number, number] => [x + u * cs - v * sn, y + u * sn + v * cs];
-    const corners: [number, number][] = [at(-hw, -hh), at(hw, -hh), at(hw, hh), at(-hw, hh)];
-    const pinch: [number, number][] = [at(0, -hh * 0.8), at(hw * 0.85, 0), at(0, hh * 0.8), at(-hw * 0.85, 0)];
-    centra.moveTo(...pinch[3]);
-    for (let j = 0; j < 4; j++) centra.quadraticCurveTo(corners[j][0], corners[j][1], pinch[j][0], pinch[j][1]);
-    centra.closePath();
-    const strokes = Math.max(2, Math.round(hw / (1.4 * px)));
-    for (let q = 0; q < strokes; q++) {
-      const u = -hw * 0.75 + (1.5 * hw * (q + 0.5)) / strokes;
-      // On light water the shadow is below; on dark, the light ink marks the top.
-      const v0 = dark ? -hh * 0.75 : hh * 0.1 - (q % 2) * hh * 0.15;
-      const v1 = dark ? -hh * 0.2 : hh * 0.78;
-      shading.moveTo(...at(u, v0));
-      shading.lineTo(...at(u + hw * 0.08, v1));
-    }
-    if (t < 0.8) {
-      spines.moveTo(x, y - hv / 2);
-      spines.lineTo(x + hv * 0.5, y - hv / 2 - hv * 0.9 * (1 - t * 0.6));
-    }
-    roots.push([x, y - hv * 0.3, hv]);
   }
+  ctx.strokeStyle = dark ? '#C9988A' : '#8E4A3A';
+  ctx.globalAlpha = life * 0.6;
+  ctx.lineWidth = Math.max(0.5 * px, L * 0.0007);
+  ctx.stroke(worms);
 
-  // Ribs, off the front of the spine. The carcass lies on its side, so a
-  // rib that still stands is a long low bow sprung back toward the tail;
-  // some are snapped short with the rest lying below, and many have lain
-  // down flat in the silt.
-  const ribs = (rng: () => number, shift: number) => {
-    const path = new Path2D();
-    for (let i = 0; i < 11; i++) {
-      const [rx0, ry] = roots[i + 2];
-      const rx = rx0 + shift;
-      const H = L * (0.085 - 0.035 * (i / 10)) * (0.7 + 0.5 * rng());
-      const lean = L * (0.05 + rng() * 0.05) * (rng() < 0.2 ? -0.6 : 1);
-      const fate = rng();
-      if (fate < 0.35) {
-        const way = rng() < 0.5 ? -1 : 1;
-        const len = H * (1.1 + rng() * 0.5);
-        path.moveTo(rx + way * L * 0.01, -0.003 * L);
-        path.quadraticCurveTo(rx + way * len * 0.5, -0.012 * L - rng() * 0.01 * L, rx + way * len, -0.002 * L);
-        continue;
-      }
-      const p = [rx, ry, rx + lean * 0.1, ry - H, rx + lean * 0.75, -H * 0.95, rx + lean, 2 * px];
-      const end = fate < 0.62 ? 0.35 + rng() * 0.35 : 1;
-      path.moveTo(rx, ry);
-      for (let k = 1; k <= 12; k++) {
-        const [x, y] = cubic(p, (end * k) / 12);
-        path.lineTo(x, y);
-      }
-      if (end < 1) {
-        // The broken-off piece, lying in the silt beneath.
-        const [bx] = cubic(p, 0.85);
-        path.moveTo(bx - L * 0.03, -0.001 * L);
-        path.quadraticCurveTo(bx, -0.011 * L, bx + L * 0.025, -0.003 * L);
-      }
-    }
-    return path;
-  };
-  const far = ribs(mulberry32(seed ^ 0xfa4), L * 0.012);
-  const near = ribs(rand, 0);
-
-  // The skull, its eye socket, and the jaw lying beside it.
-  const skull = new Path2D();
-  // Long and flat: the rostrum running out to a point, the braincase low
-  // and broad behind it, not a dome.
-  skull.moveTo(0, -0.003 * L);
-  skull.bezierCurveTo(0.05 * L, -0.008 * L, 0.1 * L, -0.018 * L, 0.14 * L, -0.03 * L);
-  skull.bezierCurveTo(0.16 * L, -0.045 * L, 0.19 * L, -0.05 * L, 0.205 * L, -0.036 * L);
-  skull.quadraticCurveTo(0.216 * L, -0.015 * L, 0.21 * L, 0.012 * L);
-  skull.lineTo(0, 0.006 * L);
-  skull.closePath();
-  const jaw = new Path2D();
-  jaw.moveTo(-0.01 * L, 0.001 * L);
-  jaw.quadraticCurveTo(0.1 * L, -0.02 * L, 0.2 * L, 0.002 * L);
-  const shoulder = new Path2D();
-  shoulder.moveTo(0.27 * L, 0.002 * L);
-  shoulder.lineTo(0.255 * L, -0.032 * L);
-  shoulder.quadraticCurveTo(0.29 * L, -0.058 * L, 0.325 * L, -0.038 * L);
-  shoulder.closePath();
-
-  const thick = Math.max(2.2 * px, L * 0.007);
-  // On a wallpaper the bones are near enough to engrave.
-  const d = detailFor(L * 0.35);
-  const ink1 = 1.1 * px * (1 - 0.35 * d);
-
-  // Far ribs first, faint, as the other side of the animal.
-  ctx.strokeStyle = wash;
-  ctx.globalAlpha = a * 0.35;
-  ctx.lineWidth = thick;
-  ctx.stroke(far);
-  ctx.strokeStyle = ink;
-  ctx.globalAlpha = a * 0.35;
-  ctx.lineWidth = 0.8 * px;
-  ctx.stroke(far);
-
-  // Then the bones: the wash, then the line over it.
-  ctx.fillStyle = wash;
-  ctx.globalAlpha = a * 0.85;
-  ctx.fill(skull);
-  ctx.fill(centra);
-  ctx.fill(shoulder);
-  ctx.strokeStyle = wash;
-  ctx.lineWidth = thick;
-  ctx.stroke(spines);
-  ctx.stroke(near);
-  ctx.lineWidth = thick * 1.6;
-  ctx.stroke(jaw);
-
-  if (d > 0.4) {
-    // Engraved: each rib and the jaw a bone with two edges, shaded along
-    // its underside, and the skull and the vertebrae hatched below, crossed
-    // where they sit in the silt.
-    const deep = mixHex(wash, dark ? '#000000' : '#5A4A38', 0.35);
+  // Crabs and squat lobsters, picking along the bones with a hesitant
+  // gait: they slow, nearly stop, and go on.
+  const shell = dark ? mixHex('#C9A58A', '#110F0D', 0.25) : '#B08A6A';
+  const c = Math.max(1.8 * px, L * 0.0042);
+  for (let i = 0; i < 4; i++) {
+    const home = L * (0.08 + r2() * 0.72);
+    const reach = L * (0.03 + r2() * 0.07);
+    const speed = 0.04 + r2() * 0.06;
+    const ph = r2() * Math.PI * 2;
+    const g = ambient * speed + ph;
+    const gait = g - Math.sin(g * 6) / 7.5;
+    const x = Math.max(0.05 * L, Math.min(0.85 * L, home + reach * Math.sin(gait)));
+    const facing = Math.cos(gait) >= 0 ? 1 : -1;
+    const y = topOf(tops, x) - c * 0.45;
+    const step = Math.sin(gait * 60);
     ctx.save();
-    ctx.translate(0, thick * 0.22);
-    ctx.strokeStyle = deep;
-    ctx.globalAlpha = a * 0.6;
-    ctx.lineWidth = thick * 0.4;
-    ctx.stroke(near);
-    ctx.lineWidth = thick * 0.6;
-    ctx.stroke(jaw);
-    ctx.restore();
-    // Strokes down a bone, clipped to it: under the bone's middle on light
-    // water, crossed along its bottom edge; on dark water, along its lit top.
-    const strokesIn = (region: Path2D, x0: number, x1: number, top: number, bottom: number) => {
-      const p = new Path2D();
-      const cross = new Path2D();
-      const step = 1.7 * px;
-      for (let x = x0, q = 0; x < x1; x += step, q++) {
-        const jit = (q % 3) * 0.06;
-        const y0 = dark ? top : top + (bottom - top) * (0.45 + jit);
-        const y1 = dark ? top + (bottom - top) * (0.4 - jit) : bottom;
-        p.moveTo(x, y0);
-        p.lineTo(x + step * 0.6, y1);
-        if (!dark && q % 2 === 0) {
-          cross.moveTo(x - step, bottom - (bottom - top) * 0.25);
-          cross.lineTo(x + step * 1.5, bottom);
+    ctx.translate(x, y);
+    ctx.scale(facing, 1);
+    const legs = new Path2D();
+    const body = new Path2D();
+    if (i % 2 === 0) {
+      // A crab: a broad shell, legs either side, two small claws.
+      body.ellipse(0, 0, c, c * 0.6, 0, 0, Math.PI * 2);
+      for (let k = 0; k < 3; k++) {
+        const lift = (k % 2 ? step : -step) * c * 0.15;
+        for (const sd of [-1, 1]) {
+          legs.moveTo(sd * c * (0.3 + k * 0.25), c * 0.3);
+          legs.quadraticCurveTo(sd * c * (0.7 + k * 0.3), c * 0.2, sd * c * (0.8 + k * 0.35), c * 0.85 + lift);
         }
       }
-      ctx.save();
-      ctx.clip(region);
-      ctx.strokeStyle = ink;
-      ctx.lineWidth = 0.4 * px;
-      ctx.globalAlpha = a * 0.5;
-      ctx.stroke(p);
-      ctx.globalAlpha = a * 0.4;
-      ctx.stroke(cross);
-      ctx.restore();
-    };
-    strokesIn(skull, 0, 0.22 * L, -0.05 * L, 0.012 * L);
-    strokesIn(shoulder, 0.25 * L, 0.33 * L, -0.058 * L, 0.002 * L);
-    ctx.save();
-    ctx.clip(centra);
-    ctx.strokeStyle = ink;
-    ctx.globalAlpha = a * 0.45;
-    ctx.lineWidth = 0.4 * px;
-    ctx.stroke(shading);
-    ctx.restore();
-    // Both edges of each long bone in the pen.
-    ctx.strokeStyle = ink;
-    ctx.globalAlpha = a * 0.75;
-    ctx.lineWidth = thick + ink1 * 1.4;
-    ctx.globalCompositeOperation = 'destination-over';
-    ctx.stroke(near);
-    ctx.lineWidth = thick * 1.6 + ink1 * 1.4;
-    ctx.stroke(jaw);
-    ctx.globalCompositeOperation = 'source-over';
-  }
-  ctx.strokeStyle = ink;
-  ctx.globalAlpha = a;
-  ctx.lineWidth = ink1;
-  ctx.stroke(skull);
-  ctx.stroke(centra);
-  ctx.stroke(shoulder);
-  ctx.globalAlpha = a * (d > 0.4 ? 0.35 : 1);
-  ctx.stroke(near);
-  ctx.stroke(jaw);
-  ctx.globalAlpha = a;
-  ctx.lineWidth = 0.9 * px;
-  ctx.stroke(spines);
-
-  // A suture, the scapula's ridge, and the shadow of the socket, lightly.
-  ctx.beginPath();
-  ctx.moveTo(0.01 * L, -0.004 * L);
-  ctx.quadraticCurveTo(0.08 * L, -0.012 * L, 0.15 * L, -0.03 * L);
-  ctx.moveTo(0.29 * L, -0.008 * L);
-  ctx.lineTo(0.3 * L, -0.032 * L);
-  ctx.globalAlpha = a * 0.45;
-  ctx.lineWidth = 0.7 * px;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(0.168 * L, -0.02 * L, 0.009 * L, 0.006 * L, -0.2, 0, Math.PI * 2);
-  ctx.fillStyle = ground;
-  ctx.globalAlpha = a * 0.6;
-  ctx.fill();
-
-  // The bacterial mat: stipple, thickest on the skull and the big bones.
-  ctx.fillStyle = dark ? '#E6EBD6' : '#7E8C74';
-  const dots = mulberry32(seed ^ 0xbac7);
-  for (let i = 0; i < 150; i++) {
-    const x = Math.pow(dots(), 1.4) * L * 0.95;
-    const top = topAt(x);
-    const y = top * (0.15 + dots() * 0.9);
-    ctx.globalAlpha = a * (0.18 + dots() * 0.25);
-    ctx.fillRect(x, y, (0.6 + dots() * 0.7) * px, (0.6 + dots() * 0.7) * px);
-  }
-
-  // The silt heaped round the bases, so they sink into it rather than sit on it.
-  const heap = new Path2D();
-  heap.moveTo(-0.03 * L, 2 * px);
-  const bumps = mulberry32(seed ^ 0x5117);
-  for (let i = 0; i <= 14; i++) {
-    const x = -0.03 * L + (i / 14) * 1.06 * L;
-    const lift = i === 0 || i === 14 ? 0 : L * (0.003 + bumps() * 0.008);
-    heap.quadraticCurveTo(x - 0.035 * L, -lift * 1.3, x, -lift * 0.4);
-  }
-  heap.lineTo(1.03 * L, 2 * px);
-  heap.closePath();
-  const sink = ctx.createLinearGradient(0, -0.014 * L, 0, 1.5 * px);
-  sink.addColorStop(0, `${silt}0)`);
-  sink.addColorStop(1, `${silt}0.95)`);
-  ctx.fillStyle = sink;
-  ctx.globalAlpha = a / 0.85;
-  ctx.fill(heap);
-  ctx.strokeStyle = edge;
-  ctx.globalAlpha = a * 0.2;
-  ctx.lineWidth = 0.8 * px;
-  ctx.stroke(heap);
-
-  // The living part arrives last, once the bones are there to be on.
-  const life = a * smooth((appear - 0.6) / 0.4);
-  if (life > 0) {
-    const r2 = mulberry32(seed ^ 0x0ed);
-    // Bone worms: little pale plumes standing off the bone, swaying.
-    ctx.strokeStyle = dark ? '#E8C9BF' : '#8E625A';
-    ctx.lineWidth = 0.7 * px;
-    for (let i = 0; i < 3; i++) {
-      const x = L * (0.08 + r2() * 0.5);
-      const y = topAt(x) + 0.5 * px;
-      const tall = Math.max(4 * px, L * (0.012 + r2() * 0.008));
-      ctx.beginPath();
-      for (let j = 0; j < 6; j++) {
-        const lean = (j - 2.5) * 0.18 + Math.sin(ambient * 0.8 + i * 2 + j) * 0.12;
-        const tx = x + Math.sin(lean) * tall;
-        const ty = y - Math.cos(lean) * tall * (0.75 + 0.25 * ((j * 7) % 3) / 2);
-        ctx.moveTo(x + (j - 2.5) * 0.4 * px, y);
-        ctx.quadraticCurveTo(x + Math.sin(lean) * tall * 0.3, y - tall * 0.5, tx, ty);
+      legs.moveTo(c * 0.7, -c * 0.2);
+      legs.quadraticCurveTo(c * 1.3, -c * 0.7, c * 1.5, -c * 0.25);
+    } else {
+      // A squat lobster: narrower, its long arms held out ahead.
+      body.ellipse(0, 0, c * 1.05, c * 0.42, 0, 0, Math.PI * 2);
+      for (let k = 0; k < 3; k++) {
+        const lift = (k % 2 ? step : -step) * c * 0.15;
+        legs.moveTo(-c * 0.2 + k * c * 0.35, c * 0.3);
+        legs.lineTo(-c * 0.5 + k * c * 0.45, c * 0.85 + lift);
       }
-      ctx.globalAlpha = life * 0.7;
-      ctx.stroke();
+      const wave = Math.sin(ambient * 0.7 + i) * c * 0.15;
+      legs.moveTo(c * 0.9, -c * 0.1);
+      legs.quadraticCurveTo(c * 1.8, -c * 0.4, c * 2.5, -c * 0.45 + wave);
+      legs.moveTo(c * 0.9, c * 0.1);
+      legs.quadraticCurveTo(c * 1.7, c * 0.1, c * 2.4, c * 0.05 + wave);
     }
-
-    // Crabs and squat lobsters, picking along the bones with a hesitant
-    // gait: they slow, nearly stop, and go on.
-    const shell = dark ? '#E2C9B0' : '#5A4636';
-    const c = Math.max(2.5 * px, L * 0.006);
-    for (let i = 0; i < 4; i++) {
-      const home = L * (0.08 + r2() * 0.72);
-      const reach = L * (0.03 + r2() * 0.07);
-      const speed = 0.04 + r2() * 0.06;
-      const ph = r2() * Math.PI * 2;
-      const g = ambient * speed + ph;
-      const gait = g - Math.sin(g * 6) / 7.5;
-      const x = Math.max(0.05 * L, Math.min(0.85 * L, home + reach * Math.sin(gait)));
-      const facing = Math.cos(gait) >= 0 ? 1 : -1;
-      const y = topAt(x) - c * 0.55;
-      const step = Math.sin(gait * 60);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(facing, 1);
-      ctx.strokeStyle = shell;
-      ctx.fillStyle = shell;
-      ctx.lineWidth = 0.7 * px;
-      ctx.globalAlpha = life * 0.85;
-      ctx.beginPath();
-      if (i % 2 === 0) {
-        // A crab: a round shell, legs either side, two small claws.
-        ctx.ellipse(0, 0, c, c * 0.62, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        for (let k = 0; k < 3; k++) {
-          const lift = (k % 2 ? step : -step) * c * 0.15;
-          for (const s of [-1, 1]) {
-            ctx.moveTo(s * c * (0.3 + k * 0.25), c * 0.3);
-            ctx.lineTo(s * c * (0.7 + k * 0.35), c * 0.85 + lift);
-          }
-        }
-        ctx.moveTo(c * 0.7, -c * 0.2);
-        ctx.quadraticCurveTo(c * 1.4, -c * 0.7, c * 1.6, -c * 0.2);
-      } else {
-        // A squat lobster: narrower, its long arms held out ahead.
-        ctx.ellipse(0, 0, c * 1.1, c * 0.42, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        for (let k = 0; k < 3; k++) {
-          const lift = (k % 2 ? step : -step) * c * 0.15;
-          ctx.moveTo(-c * 0.2 + k * c * 0.35, c * 0.3);
-          ctx.lineTo(-c * 0.5 + k * c * 0.45, c * 0.85 + lift);
-        }
-        const wave = Math.sin(ambient * 0.7 + i) * c * 0.15;
-        ctx.moveTo(c * 0.9, -c * 0.1);
-        ctx.lineTo(c * 2.6, -c * 0.45 + wave);
-        ctx.moveTo(c * 0.9, c * 0.1);
-        ctx.lineTo(c * 2.5, c * 0.05 + wave);
-      }
-      ctx.stroke();
-      ctx.restore();
-    }
+    ctx.globalAlpha = life * 0.85;
+    ctx.fillStyle = shell;
+    ctx.fill(body);
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(0.45 * px, c * 0.12);
+    ctx.globalAlpha = life * 0.8;
+    ctx.stroke(body);
+    ctx.stroke(legs);
+    ctx.restore();
   }
   ctx.restore();
 }

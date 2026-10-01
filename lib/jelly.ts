@@ -70,12 +70,16 @@ export function buildJelly(seed: number, body: JellyBody = PLAIN_BODY): JellySha
     v: 0.84 + 0.16 * r(),
     ph: r() * Math.PI * 2,
     amp: 4 + r() * 5,
-    sting: r() < body.stingP,
+    roll: r(),
   }));
+  // About a third of them strung with stinging cells, a few more on a jelly
+  // bred to sting: the ones whose roll came lowest, so the dice are the same.
+  const stung = Math.max(1, Math.round(TENTACLES * (0.24 + 0.22 * Math.max(0, Math.min(1, body.stingP)))));
+  const cut = [...raw.map((t) => t.roll)].sort((a, b) => a - b)[Math.min(TENTACLES, stung) - 1];
   // The longest tentacle is exactly the full length, so the one that touches
   // the floor does so at the target and not a little before or after it.
   const longest = Math.max(...raw.map((t) => t.v));
-  const tentacles = raw.map((t) => ({ ...t, v: t.v / longest }));
+  const tentacles = raw.map(({ roll, ...t }) => ({ ...t, v: t.v / longest, sting: roll <= cut }));
   const hairs = Array.from({ length: Math.max(0, Math.round(body.hairs)) }, () => ({ v: 0.22 + 0.2 * r(), ph: r() * Math.PI * 2 }));
   const arms = Array.from({ length: ARMS }, (_, i) => ({
     ph: r() * Math.PI * 2,
@@ -93,6 +97,9 @@ export function buildJelly(seed: number, body: JellyBody = PLAIN_BODY): JellySha
   return { tentacles, hairs, arms, snow, aspect: body.aspect, scallops: Math.max(4, Math.round(body.scallops)) };
 }
 
+/** The moon jelly's four gonads: a soft pink, mixed with the course colour. */
+const GONAD = '#E8C9D4';
+
 /** The inks a jelly is drawn in, mixed once from the course colour. */
 export interface JellyInk {
   /** The bell's wash, pale at the crown and deeper at the rim. */
@@ -100,6 +107,7 @@ export interface JellyInk {
   bellRim: string;
   edge: string;
   rib: string;
+  /** The gonads' wash, laid at about a third. */
   gonad: string;
   tentacle: string;
   sting: string;
@@ -132,7 +140,7 @@ export function jellyInk(color: string, paper: string, light: boolean, pen = tru
       // The pen's own off-white, with a breath of the jelly's colour in it.
       edge: pen ? mixHex(IRON_GALL.dark, color, 0.15) : mixHex(color, '#FFFFFF', 0.35),
       rib: pen ? mixHex(IRON_GALL.dark, color, 0.35) : mixHex(color, '#FFFFFF', 0.25),
-      gonad: mixHex(color, '#FFFFFF', 0.45),
+      gonad: mixHex(GONAD, color, 0.4),
       tentacle: mixHex(color, '#FFFFFF', 0.2),
       sting: mixHex(color, '#FFFFFF', 0.6),
       arm: mixHex(color, paper, 0.18),
@@ -150,7 +158,7 @@ export function jellyInk(color: string, paper: string, light: boolean, pen = tru
     // The pen's iron-gall, with a breath of the jelly's colour in it.
     edge: pen ? mixHex(IRON_GALL.light, color, 0.15) : mixHex(color, '#1A1714', 0.45),
     rib: pen ? mixHex(IRON_GALL.light, color, 0.4) : mixHex(color, '#1A1714', 0.3),
-    gonad: mixHex(color, '#1A1714', 0.18),
+    gonad: mixHex(GONAD, color, 0.4),
     tentacle: mixHex(color, '#1A1714', 0.28),
     sting: mixHex(color, '#1A1714', 0.4),
     arm: mixHex(color, paper, 0.3),
@@ -521,9 +529,21 @@ export function drawJelly(
     if (n < 2) continue;
     traceStrip(ctx, n);
     tips.push({ x: stripX[n - 1], y: stripY[n - 1], i });
-    if (shape.tentacles[i].sting) {
-      for (let j = 6; j < n; j += 6) {
-        stings.push(stripX[j] + (j % 12 ? 1 : -1) * stripW[j] * 0.9, stripY[j]);
+    const t = shape.tentacles[i];
+    if (t.sting) {
+      // Strung along it at its own pace: each tentacle starts its beads at
+      // its own place and spaces them a quarter either way of six steps, so
+      // no row runs across the trails.
+      const base = 6;
+      let at = base * (0.3 + 0.7 * frac(t.ph * 0.618));
+      for (let k = 0; at < n - 1; k++) {
+        const j = Math.floor(at);
+        const f = at - j;
+        const x = stripX[j] + (stripX[j + 1] - stripX[j]) * f;
+        const y = stripY[j] + (stripY[j + 1] - stripY[j]) * f;
+        const wd = stripW[j] + (stripW[j + 1] - stripW[j]) * f;
+        stings.push(x + (k % 2 ? 1 : -1) * wd * 0.9, y);
+        at += base * (1 + 0.25 * (2 * frac(Math.sin(i * 12.9898 + k * 78.233) * 43758.5453) - 1));
       }
     }
   }
@@ -746,35 +766,79 @@ export function drawJelly(
   ctx.stroke();
 
   // The four horseshoes of a moon jelly, set in a ring like a clover, each
-  // a soft wash under an open ring whose gap turns to the middle.
+  // open toward the middle: a soft wash of pink laid on the bell and let
+  // spread at its edge, with only a broken thread of the pen along its outer
+  // curve, as a plate shows an organ seen through the clear bell.
   const gy = y0 + now.bh * 0.55;
   const rg = now.r * 0.1;
-  const rings = [0.25, 0.75, 1.25, 1.75].map((q) => {
+  const horseshoe = (gx0: number, gy0: number, open: number, k: number) => {
+    // Nearly a ring, fuller on its far side than at its two ends, its edge
+    // a little uneven: a soft organ, not a letter.
+    const from = open + 0.5;
+    const to = open + Math.PI * 2 - 0.5;
+    const p = new Path2D();
+    const N = 22;
+    const edge = (a: number, q: number) => 1 + 0.06 * Math.sin(a * 3 + q) + 0.04 * Math.sin(a * 7 + q * 2);
+    for (let q = 0; q <= N; q++) {
+      const a = from + ((to - from) * q) / N;
+      const full = 0.5 - 0.5 * Math.cos(a - open);
+      const out = rg * (1.12 + 0.28 * full + 0.12 * k) * edge(a, 1);
+      const x = gx0 + Math.cos(a) * out;
+      const y = gy0 + Math.sin(a) * out * 0.72;
+      if (q) p.lineTo(x, y);
+      else p.moveTo(x, y);
+    }
+    for (let q = N; q >= 0; q--) {
+      const a = from + ((to - from) * q) / N;
+      const full = 0.5 - 0.5 * Math.cos(a - open);
+      const inn = rg * (0.72 - 0.22 * full - 0.1 * k) * edge(a, 4);
+      p.lineTo(gx0 + Math.cos(a) * inn, gy0 + Math.sin(a) * inn * 0.72);
+    }
+    p.closePath();
+    return p;
+  };
+  const shoes = [0.25, 0.75, 1.25, 1.75].map((q) => {
     const th = q * Math.PI;
     const gx0 = bx + Math.cos(th) * now.rw * 0.3;
     const gy0 = gy + Math.sin(th) * now.bh * 0.19;
     return { gx0, gy0, open: Math.atan2(gy - gy0, bx - gx0) };
   });
-  ctx.fillStyle = ink.bellTop;
-  ctx.globalAlpha = 0.55;
-  ctx.beginPath();
-  for (const g of rings) {
-    ctx.moveTo(g.gx0 + rg, g.gy0);
-    ctx.ellipse(g.gx0, g.gy0, rg, rg * 0.72, 0, 0, Math.PI * 2);
+  ctx.fillStyle = ink.gonad;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  for (const g of shoes) {
+    // The wash, and a wider breath of it round its edge, as wet colour spreads.
+    const strength = dark ? 0.7 : 1;
+    ctx.globalAlpha = 0.1 * strength;
+    ctx.strokeStyle = ink.gonad;
+    ctx.lineWidth = 2.2 * line;
+    ctx.stroke(horseshoe(g.gx0, g.gy0, g.open, 0.4));
+    ctx.globalAlpha = 0.35 * strength;
+    ctx.fill(horseshoe(g.gx0, g.gy0, g.open, 0));
+    ctx.globalAlpha = 0.12 * strength;
+    ctx.fill(horseshoe(g.gx0, g.gy0, g.open, 0.7));
   }
-  ctx.fill();
-  ctx.strokeStyle = ink.gonad;
-  ctx.lineWidth = 1.4 * line;
-  ctx.globalAlpha = 0.85;
+  ctx.restore();
+  // The pen: a thin thread along each outer curve, lifted more than it is down.
+  ctx.strokeStyle = ink.rib;
+  ctx.lineWidth = 0.5 * px;
+  ctx.globalAlpha = 0.45;
   ctx.beginPath();
-  for (const g of rings) {
-    const from = g.open + 0.6;
-    const to = g.open + Math.PI * 2 - 0.6;
-    ctx.moveTo(g.gx0 + Math.cos(from) * rg, g.gy0 + Math.sin(from) * rg * 0.72);
-    for (let a = from + 0.2; a <= to; a += 0.2) {
-      ctx.lineTo(g.gx0 + Math.cos(a) * rg, g.gy0 + Math.sin(a) * rg * 0.72);
+  shoes.forEach((g, gi) => {
+    const from = g.open + 1.3;
+    const to = g.open + Math.PI * 2 - 1.3;
+    const out = rg * 1.36;
+    for (let seg = 0; seg < 3; seg++) {
+      const a0 = from + ((to - from) * (seg + 0.12 + 0.1 * ((gi + seg) % 2))) / 3;
+      const a1 = from + ((to - from) * (seg + 0.62 + 0.08 * ((gi * 3 + seg) % 3))) / 3;
+      for (let a = a0, first = true; a <= a1; a += 0.12, first = false) {
+        const x = g.gx0 + Math.cos(a) * out;
+        const y = g.gy0 + Math.sin(a) * out * 0.72;
+        if (first) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
     }
-  }
+  });
   ctx.stroke();
 
   // A lick of white on the crown, where the light catches it.
@@ -806,16 +870,71 @@ export function drawJelly(
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
+  // The weight follows the light: thin on the lit side and breaking where
+  // it is hardest, the clear edge lost in it, and heavy where the bell turns
+  // away, with a second stroke laid into the shadow along the right of the
+  // dome and under the rim.
+  const penLight: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
   inkLine(ctx, outline, true, {
-    width: 1.5 * line * (1 - 0.3 * detail),
+    width: 1.35 * line * (1 - 0.3 * detail),
     color: ink.edge,
-    swell: 0.8,
-    lost: 0.3,
+    swell: 1,
+    lost: 0.85,
     seed: 7,
     raw: true,
-    light: dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT,
+    light: penLight,
     min: 0.3 * px,
   });
+  {
+    const m = outline.length / 2;
+    let area = 0;
+    for (let i = 0; i < m; i++) {
+      const j = (i + 1) % m;
+      area += outline[i * 2] * outline[j * 2 + 1] - outline[j * 2] * outline[i * 2 + 1];
+    }
+    const sgn = area > 0 ? 1 : -1;
+    const deep: boolean[] = [];
+    const inner: number[] = [];
+    for (let i = 0; i < m; i++) {
+      const a = (i - 1 + m) % m;
+      const b = (i + 1) % m;
+      let dx = outline[b * 2] - outline[a * 2];
+      let dy = outline[b * 2 + 1] - outline[a * 2 + 1];
+      const dl = Math.hypot(dx, dy) || 1;
+      dx /= dl;
+      dy /= dl;
+      // Outward, then how squarely it faces along the light.
+      const ox = dy * sgn;
+      const oy = -dx * sgn;
+      deep.push(ox * penLight[0] + oy * penLight[1] > 0.3);
+      inner.push(outline[i * 2] - ox * 0.45 * line, outline[i * 2 + 1] - oy * 0.45 * line);
+    }
+    const s0 = deep.findIndex((v, i) => v && !deep[(i - 1 + m) % m]);
+    if (s0 >= 0) {
+      let run: number[] = [];
+      for (let q = 0; q <= m; q++) {
+        const i = (s0 + q) % m;
+        if (deep[i] && q < m) run.push(inner[i * 2], inner[i * 2 + 1]);
+        else {
+          if (run.length >= 8) {
+            inkLine(ctx, run, false, {
+              width: 0.95 * line * (1 - 0.25 * detail),
+              color: ink.edge,
+              alpha: 0.8,
+              swell: 0.3,
+              lost: 0,
+              taper: [0.25, 0.25],
+              seed: 11 + q,
+              raw: true,
+              light: penLight,
+              min: 0.25 * px,
+            });
+          }
+          run = [];
+        }
+      }
+    }
+  }
   ctx.strokeStyle = ink.edge;
   ctx.save();
   ctx.translate(0.9 * line, 0.7 * line);
@@ -996,6 +1115,11 @@ export function jellyStartle(ms: number): number {
   if (ms < 0) return 0;
   if (ms < 150) return smooth(ms / 150);
   return Math.max(0, 1 - smooth(Math.min(1, (ms - 150) / 1000)));
+}
+
+/** The fractional part, always 0 to 1. */
+function frac(x: number): number {
+  return x - Math.floor(x);
 }
 
 /** `#rrggbb` to an rgba() string at `alpha`, for the glow's gradient. */

@@ -11,7 +11,7 @@ import type { Env } from './biome';
 import type { Depth } from './depth';
 import { KELP_ROCK, kelpDescent, kelpInView, type Kelp, type KelpLedge, type KelpStalk } from './kelp';
 import { IRON_GALL, kelpInk, type KelpInk, type Water } from './palette';
-import { inkLine, smooth, smoothPath } from './pen';
+import { detailFor, hatch, inkLine, LIGHT, shadeAcross, smooth, smoothPath, stipple, washFill } from './pen';
 import { hash32, mulberry32 } from './random';
 import type { Visitor } from './schedule';
 import type { Sprite } from './sprites';
@@ -290,12 +290,198 @@ function floorEdgeAt(edge: number[], w: number, x: number): number {
   return edge[i * 2 + 1];
 }
 
+/* ---- Vents ---- */
+
+/** A vent's chimney: its outline, where its mouth is, and its ledges. */
+interface VentShape {
+  outline: number[];
+  /** The mouth, relative to the foot: x, y and its half width. */
+  mx: number;
+  my: number;
+  mr: number;
+  /** Where the stacked pieces meet, as [y, half width] up the chimney. */
+  joins: [number, number, number][];
+  height: number;
+}
+
+/**
+ * A chimney `wid` wide at its foot, rolled from `seed`: three to five
+ * pieces stacked a little crooked, each narrower than the one below, some
+ * with a lip where one was laid down on the next, and a flared foot in the
+ * silt. Relative to the middle of its foot.
+ */
+function ventShape(wid: number, seed: number, maxHeight: number): VentShape {
+  const r = mulberry32(hash32('vent', seed));
+  const n = 3 + Math.floor(r() * 3);
+  const height = Math.min(maxHeight, wid * (3.4 + r() * 2.2));
+  const cuts: number[] = [0];
+  for (let i = 1; i < n; i++) cuts.push(cuts[i - 1] + (0.6 + r() * 0.8));
+  const total = cuts[n - 1] + 0.6 + r() * 0.8;
+  const left: number[] = [];
+  const right: number[] = [];
+  const joins: [number, number, number][] = [];
+  let lean = 0;
+  // The foot, spread into the silt.
+  left.push(-wid * (0.95 + r() * 0.2), wid * 0.06);
+  right.push(wid * (0.95 + r() * 0.2), wid * 0.06);
+  left.push(-wid * 0.62, -height * 0.04);
+  right.push(wid * 0.6, -height * 0.05);
+  for (let i = 0; i < n; i++) {
+    const y0 = -height * (cuts[i] / total);
+    const y1 = -height * ((i + 1 < n ? cuts[i + 1] : total) / total);
+    const hw0 = (wid / 2) * (1 - 0.13 * i) * (0.92 + r() * 0.16);
+    const hw1 = hw0 * (0.82 + r() * 0.12);
+    lean += (r() - 0.5) * wid * 0.16;
+    const lip = i > 0 && r() < 0.6;
+    if (lip) {
+      // A lip: the edge of the piece below, standing proud of this one.
+      left.push(lean - hw0 * 1.22, y0 + wid * 0.04, lean - hw0 * 1.18, y0 - wid * 0.08);
+      right.push(lean + hw0 * 1.2, y0 + wid * 0.03, lean + hw0 * 1.16, y0 - wid * 0.07);
+    }
+    joins.push([y0, lean, hw0 * (lip ? 1.2 : 1)]);
+    // Lumps up each side of the piece: mineral grows where it will.
+    for (const t of [0.25, 0.55, 0.85]) {
+      const y = y0 + (y1 - y0) * (t + (r() - 0.5) * 0.12);
+      const hw = (hw0 + (hw1 - hw0) * t) * (0.85 + r() * 0.35);
+      left.push(lean - hw * (0.85 + r() * 0.3), y);
+      right.push(lean + hw * (0.85 + r() * 0.3), y);
+    }
+    if (i === n - 1) {
+      left.push(lean - hw1, y1);
+      right.push(lean + hw1, y1);
+    }
+  }
+  const top = left.length - 2;
+  const mx = (left[top] + right[top]) / 2;
+  const my = left[top + 1];
+  const mr = (right[top] - left[top]) / 2;
+  const outline = left.slice();
+  for (let i = right.length - 2; i >= 0; i -= 2) outline.push(right[i], right[i + 1]);
+  return { outline, mx, my, mr, joins, height };
+}
+
+/** The vents' colours: a dark mineral wash, never black, under the one ink. */
+const VENT_WASH = '#2E2B29';
+
+/**
+ * A hydrothermal vent's chimney standing on the floor at (x, y), its foot
+ * `wid` wide: a mineral wash with an ink outline, banded where its pieces
+ * meet, shaded in contour lines on the side away from the light, the mouth
+ * open at its top. The still part of a vent; `drawPlume` is its breath.
+ */
+export function drawChimney(ctx: CanvasRenderingContext2D, x: number, y: number, wid: number, px: number, seed: number, dark: boolean, maxHeight = Infinity): VentShape {
+  const v = ventShape(wid, seed, maxHeight);
+  const pts: number[] = [];
+  for (let i = 0; i < v.outline.length; i += 2) pts.push(x + v.outline[i], y + v.outline[i + 1]);
+  const path = smoothPath(pts, true, 4);
+  const box = { x: x - wid, y: y - v.height, w: wid * 2, h: v.height };
+  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
+  const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
+  const d = detailFor(wid * 6);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  washFill(ctx, path, box, { color: dark ? VENT_WASH : mixHex(VENT_WASH, '#8C8576', 0.25), edge: 0.45, paper: null, granulate: 0.5, px });
+  // Shaded down its length on the side away from the light, crossed where
+  // it is darkest: a column, engraved.
+  const across = shadeAcross(box, light);
+  hatch(ctx, path, box, {
+    spacing: Math.max(1.4 * px, wid * 0.085),
+    angle: Math.PI / 2 - 0.08,
+    bow: 0.4,
+    shade: across,
+    from: 0.48,
+    cross: d > 0.4 ? 0.8 : undefined,
+    color: ink,
+    width: Math.max(0.4 * px, wid * 0.03),
+    alpha: dark ? 0.5 : 0.6,
+    seed: seed ^ 0x7e47,
+  });
+  if (d > 0.3) {
+    stipple(ctx, path, box, {
+      spacing: Math.max(1.3 * px, wid * 0.05),
+      radius: Math.max(0.3 * px, wid * 0.01),
+      shade: across,
+      from: 0.3,
+      color: ink,
+      alpha: 0.35,
+      seed: seed ^ 0x5701,
+    });
+  }
+  // The joins between pieces, each a short line round the front.
+  for (const [jy, jx, hw] of v.joins.slice(1)) {
+    const seam: number[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const u = -1 + (i / 6) * 2;
+      seam.push(x + jx + u * hw * 0.95, y + jy + Math.sqrt(1 - u * u * 0.9) * wid * 0.06);
+    }
+    inkLine(ctx, seam, false, { width: Math.max(0.5 * px, wid * 0.04), color: ink, alpha: 0.55, taper: [0.2, 0.2], seed: hash32(seed, jy), light, plate: true });
+  }
+  inkLine(ctx, pts, true, { width: Math.max(0.7 * px, wid * 0.06), color: ink, alpha: 0.8, seed, light, min: 0.3 * px, plate: true });
+  // The mouth: the dark of the bore, seen a little from above.
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = mixHex(VENT_WASH, '#0B0A09', 0.55);
+  ctx.beginPath();
+  ctx.ellipse(x + v.mx, y + v.my, v.mr * 0.8, v.mr * 0.28, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  const rim: number[] = [];
+  for (let i = 0; i <= 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    rim.push(x + v.mx + Math.cos(a) * v.mr * 0.82, y + v.my + Math.sin(a) * v.mr * 0.3);
+  }
+  inkLine(ctx, rim, true, { width: Math.max(0.5 * px, wid * 0.04), color: ink, alpha: 0.7, seed: seed ^ 0x3, light, plate: true });
+  ctx.restore();
+  return v;
+}
+
+/**
+ * A vent's breath: warm water shimmering up off its mouth at (x, y),
+ * billowing out as it rises and leaning with the current, soft and faint
+ * (about a fifth, at its thickest), on the slow clock.
+ */
+export function drawPlume(ctx: CanvasRenderingContext2D, x: number, y: number, wid: number, px: number, ambient: number, seed: number, dark: boolean, lean = 1): void {
+  const r = mulberry32(hash32('plume', seed));
+  const tall = wid * (7 + r() * 4);
+  const dot = softDot(dark ? '200, 196, 186' : '120, 116, 108');
+  const n = 14;
+  const rate = 0.05 + r() * 0.03;
+  const ph = r() * 6.28;
+  ctx.save();
+  const base = ctx.globalAlpha;
+  for (let k = 0; k < n; k++) {
+    const t = ((k / n + ambient * rate) % 1 + 1) % 1;
+    const rise = t * tall;
+    const bx = x + lean * t * t * wid * 2.2 + Math.sin(ambient * 0.4 + k * 1.7 + ph) * wid * 0.25 * t;
+    const by = y - rise;
+    const rad = wid * (0.35 + t * 1.7);
+    // In from nothing at the mouth, out to nothing at the top.
+    const a = 0.2 * Math.min(1, t * 6) * (1 - t) * (1 - t) * 0.55;
+    if (a <= 0.003) continue;
+    ctx.globalAlpha = base * a;
+    if (dot) ctx.drawImage(dot, bx - rad * 1.6, by - rad * 1.6, rad * 3.2, rad * 3.2);
+  }
+  ctx.restore();
+}
+
+/** Where a sitting's vents stand on the floor, and how wide each is, as shares of the page. */
+function ventsOf(env: Env, w: number): { x: number; wid: number; seed: number }[] {
+  if (!env.vents) return [];
+  return [0, 1].map((v) => {
+    const seed = hash32('floor-vent', v, env.shafts, env.shaftTilt);
+    const r = mulberry32(seed);
+    return { x: w * (0.22 + v * 0.55), wid: w * (0.012 + 0.008 * r()), seed };
+  });
+}
+
 interface FloorSprite {
   key: string;
   rgb: [number, number, number];
   canvas: HTMLCanvasElement;
   /** How far above the floor's line the sprite starts. */
   top: number;
+  /** The vents' mouths: x, and how far below the floor's line. */
+  mouths: { x: number; dy: number; wid: number; seed: number }[];
 }
 
 let floorSprites: FloorSprite[] = [];
@@ -314,7 +500,7 @@ function rgbOf(hex: string): [number, number, number] {
  */
 function floorSprite(w: number, h: number, env: Env, water: Water, px: number): FloorSprite | null {
   const rgb = rgbOf(water.bottom);
-  const key = `${w}|${h}|${px}|${env.shafts}|${env.shaftTilt}`;
+  const key = `${w}|${h}|${px}|${env.shafts}|${env.shaftTilt}|${env.vents ? 1 : 0}`;
   const hit = floorSprites.find((s) => s.key === key && s.rgb.every((v, i) => Math.abs(v - rgb[i]) <= 4));
   if (hit) return hit;
   const top = h * 0.05 + 30 * px;
@@ -328,6 +514,7 @@ function floorSprite(w: number, h: number, env: Env, water: Water, px: number): 
   const ink = IRON_GALL.dark;
   const edge = floorEdge(w, env, px);
   const yAt = (x: number) => top + floorEdgeAt(edge, w, x);
+  const mouths: FloorSprite['mouths'] = [];
   g.lineCap = 'round';
   g.lineJoin = 'round';
 
@@ -446,7 +633,13 @@ function floorSprite(w: number, h: number, env: Env, water: Water, px: number): 
     g.fill(stone);
     inkLine(g, pts, true, { width: 0.9 * px, color: ink, alpha: 0.55, lost: 0.5, seed: hash32('stone', i), min: 0.3 * px });
   }
-  const sprite: FloorSprite = { key, rgb, canvas: c, top };
+  // The vents' chimneys, if the sitting rolled them: still, so drawn once.
+  for (const v of ventsOf(env, w)) {
+    const foot = yAt(v.x) + 2 * px;
+    const shape = drawChimney(g, v.x, foot, v.wid, px, v.seed, true, top * 0.85);
+    mouths.push({ x: v.x + shape.mx, dy: foot - top + shape.my, wid: v.wid, seed: v.seed });
+  }
+  const sprite: FloorSprite = { key, rgb, canvas: c, top, mouths };
   floorSprites = [sprite, ...floorSprites].slice(0, 2);
   return sprite;
 }
@@ -482,35 +675,9 @@ export function drawFloor(
       ctx.fillRect(0, under - 1, w, h - under + 1);
     }
   }
-  if (env.vents) {
-    const ground = mixHex(water.bottom, '#000000', 0.35);
-    const edge = mixHex(water.bottom, '#FFFFFF', 0.12);
-    const line = floorEdge(w, env, px);
-    ctx.lineWidth = 1.1 * px;
-    for (let v = 0; v < 2; v++) {
-      const x = w * (0.22 + v * 0.55);
-      const y = base + floorEdgeAt(line, w, x) + 2 * px;
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = ground;
-      ctx.beginPath();
-      ctx.moveTo(x - 11 * px, y + 4 * px);
-      ctx.quadraticCurveTo(x - 6 * px, y - 8 * px, x - 4 * px, y - 26 * px);
-      ctx.lineTo(x + 4 * px, y - 26 * px);
-      ctx.quadraticCurveTo(x + 6 * px, y - 8 * px, x + 11 * px, y + 4 * px);
-      ctx.fill();
-      ctx.strokeStyle = IRON_GALL.dark;
-      ctx.globalAlpha = 0.5;
-      ctx.stroke();
-      // Its breath: a few specks rising off the top, on the slow clock.
-      ctx.fillStyle = edge;
-      for (let k = 0; k < 6; k++) {
-        const t = ((ambient / 4 + k / 6 + v * 0.3) % 1 + 1) % 1;
-        ctx.globalAlpha = 0.35 * (1 - t);
-        ctx.beginPath();
-        ctx.arc(x + Math.sin(t * 6 + k) * 6 * px, y - 26 * px - t * 60 * px, (1 + t * 2) * px, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
+  if (sprite) {
+    // Only the vents' breath moves.
+    for (const m of sprite.mouths) drawPlume(ctx, m.x, Math.round(base - sprite.top) + sprite.top + m.dy, m.wid, px, ambient, m.seed, true, env.current);
   }
   ctx.restore();
 }
@@ -562,11 +729,29 @@ export function drawVisitor(
       const sw = w / n;
       const amp = v.len * (g.plan === 'eel' ? 0.07 : 0.035) * px;
       const speed = 3 + 2 * v.species.speed;
+      // The wave's offset at each join between strips. Boundary 0 is the
+      // tail end, since every sprite faces right.
+      const offAt = (b: number) => {
+        const tail = 1 - b / n;
+        return Math.sin(ambient * speed + v.phase - b * 0.9) * amp * tail * tail;
+      };
+      // Each strip is sheared, not shifted: its left edge sits at one join's
+      // offset and its right edge at the next one's, so neighbouring strips
+      // meet exactly and the body bends instead of breaking into stepped
+      // segments with daylight between them. A pixel of overlap covers the
+      // antialiased seam.
+      let prev = offAt(0);
       for (let i = 0; i < n; i++) {
-        // Strip 0 is the tail end, since every sprite faces right.
-        const tail = 1 - i / n;
-        const off = Math.sin(ambient * speed + v.phase - i * 0.9) * amp * tail * tail;
-        ctx.drawImage(sprite.canvas, i * sw, 0, sw + 1, h, -w / 2 + i * sw, -h / 2 + off, sw + 1, h);
+        const next = offAt(i + 1);
+        const x0 = -w / 2 + i * sw;
+        const k = (next - prev) / sw;
+        const sx = i * sw;
+        const span = Math.min(sw + 1, w - sx);
+        ctx.save();
+        ctx.transform(1, k, 0, 1, 0, prev - x0 * k);
+        ctx.drawImage(sprite.canvas, sx, 0, span, h, x0, -h / 2, span, h);
+        ctx.restore();
+        prev = next;
       }
     } else {
       ctx.drawImage(sprite.canvas, -w / 2, -h / 2);
@@ -776,9 +961,33 @@ export function drawWhale(ctx: CanvasRenderingContext2D, w: number, h: number, a
   ctx.restore();
 }
 
+/** A soft round point of light, made once a colour and placed at any size: no hard rim. */
+const softDots = new Map<string, HTMLCanvasElement | null>();
+
+function softDot(rgb: string): HTMLCanvasElement | null {
+  if (softDots.has(rgb)) return softDots.get(rgb) ?? null;
+  const size = 32;
+  const c = scratch(size, size);
+  const g = c?.getContext('2d');
+  if (c && g) {
+    const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, `rgba(${rgb}, 1)`);
+    grad.addColorStop(0.18, `rgba(${rgb}, 0.8)`);
+    grad.addColorStop(0.45, `rgba(${rgb}, 0.22)`);
+    grad.addColorStop(1, `rgba(${rgb}, 0)`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, size, size);
+  }
+  softDots.set(rgb, c);
+  return c;
+}
+
 /**
  * The water lighting up: a cloud of tiny animals flashing, slowly spreading
  * out from somewhere to one side. It comes up over seconds, never at once.
+ * Each one is a small soft point, cold and pale, never neon; the haze about
+ * them is a few soft clouds, each a disc that has faded to nothing at its
+ * rim, so it has no edge anywhere.
  */
 export function drawStorm(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number) {
   const env = envelope(age, 0.12, 0.3);
@@ -788,17 +997,30 @@ export function drawStorm(ctx: CanvasRenderingContext2D, w: number, h: number, a
   const spread = Math.max(w, h) * (0.2 + age * 0.35);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  // A haze first, then the points.
-  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, spread);
-  g.addColorStop(0, `rgba(120, 214, 200, ${0.2 * env})`);
-  g.addColorStop(1, 'rgba(120, 214, 200, 0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
+  const base = ctx.globalAlpha;
+  // The haze: uneven, a few overlapping clouds rather than one disc.
+  const hz = mulberry32(seed ^ 0x57a2);
+  for (let k = 0; k < 5; k++) {
+    const hx = cx + (hz() - 0.5) * spread * 0.7;
+    const hy = cy + (hz() - 0.5) * spread * 0.45;
+    const hr = spread * (0.45 + hz() * 0.4);
+    const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
+    g.addColorStop(0, 'rgba(132, 186, 178, 1)');
+    g.addColorStop(0.5, 'rgba(132, 186, 178, 0.35)');
+    g.addColorStop(1, 'rgba(132, 186, 178, 0)');
+    ctx.globalAlpha = base * env * (k === 0 ? 0.07 : 0.04);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(hx, hy, hr, 0, Math.PI * 2);
+    ctx.fill();
+  }
   let s = seed || 1;
   const next = () => {
     s = (Math.imul(s ^ (s >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) | 0;
     return ((s >>> 0) % 10000) / 10000;
   };
+  const pale = softDot('201, 230, 222');
+  const cold = softDot('214, 232, 236');
   for (let i = 0; i < 320; i++) {
     const ang = next() * Math.PI * 2;
     const rad = Math.sqrt(next()) * spread;
@@ -808,65 +1030,357 @@ export function drawStorm(ctx: CanvasRenderingContext2D, w: number, h: number, a
     const flash = Math.exp(-b * 8);
     const x = cx + Math.cos(ang) * rad + Math.sin(ambient * 0.3 + i) * 6 * px;
     const y = cy + Math.sin(ang) * rad * 0.7 + Math.cos(ambient * 0.25 + i) * 6 * px;
-    const r = (1.1 + flash * 2.6) * px;
-    ctx.globalAlpha = env * (0.3 + 0.7 * flash);
-    ctx.fillStyle = i % 5 === 0 ? '#C9F2FF' : '#8EF0D2';
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
+    // Small: a grain at rest, a little bloom as it flashes.
+    const r = (0.55 + flash * 1.1) * px;
+    const a = env * (0.14 + 0.5 * flash);
+    const dot = i % 5 === 0 ? cold : pale;
+    if (dot) {
+      const big = r * 3.2;
+      ctx.globalAlpha = base * a;
+      ctx.drawImage(dot, x - big, y - big, big * 2, big * 2);
+    } else {
+      ctx.globalAlpha = base * a * 0.6;
+      ctx.fillStyle = 'rgb(201, 230, 222)';
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.restore();
 }
 
+/** Squid skin and its chromatophores: rust and brown, drained by the depth. */
+const SQUID_SKIN = { light: '#B48A7A', dark: '#6E4A40' } as const;
+const CHROMATOPHORES = ['#9C4A2E', '#7A3B26', '#5C3324', '#8E5A3A'];
+
 /**
  * An eye at the edge of the page, bigger than anything else in the water,
  * that opens, looks, blinks once, and is gone. The rest of the animal is
- * never seen.
+ * never seen: only the patch of mantle the eye is set in, its skin stippled
+ * with chromatophores, fading into the dark it came out of.
+ *
+ * It is drawn as a plate's eye, not a target: a silvery iris struck through
+ * with fine radial lines, a crescent of pupil lying on its side, two
+ * highlights, contour hatching round the ball where it turns from the light,
+ * and the lids a pen line that closes over it for the blink. The eye is
+ * about 7.5% of the page's short side, and at the page's edge most of it
+ * (three quarters) is in.
+ *
+ * `page`, the page's short side, sizes it; without it the region is taken
+ * to be the page, unless it is a band across it (as the picture gives it,
+ * a fifth as tall as it is wide), when its width is.
  */
-export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, dark: boolean) {
+export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, dark: boolean, page?: number) {
   const env = envelope(age, 0.25, 0.25);
   if (env <= 0) return;
   const left = seed % 2 === 0;
-  const r = Math.min(w, h) * 0.2;
-  const cx = left ? -r * 0.3 : w + r * 0.3;
+  const unit = Math.min(w, h);
+  const short = page ?? (h < w * 0.35 ? w : unit);
+  const re = Math.max(4 * px, Math.min(0.2 * unit, short * 0.0375));
+  const out = left ? -1 : 1;
+  // Three quarters in: the edge of the page crosses its outer rim.
+  const cx = left ? re * 0.4 : w - re * 0.4;
   // High on the page, clear of the clock and the controls.
   const cy = h * (0.18 + ((seed >>> 6) % 100) / 100 * 0.2);
   // One slow blink, just past the middle.
   const lid = age > 0.55 && age < 0.65 ? Math.sin(((age - 0.55) / 0.1) * Math.PI) : 0;
-  const open = 1 - lid * 0.92;
+  const open = 1 - lid * 0.96;
+  const d = detailFor(re * 5);
+  const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
+  const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
+  const skin = dark ? SQUID_SKIN.dark : SQUID_SKIN.light;
+  const paper = dark ? '#E8E0CF' : '#FBF8EF';
+  const r = mulberry32(hash32('squid-eye', seed));
+  // The patch of mantle sits a little toward the edge, where the body is.
+  const px0 = cx + out * re * 0.7;
+  const py0 = cy + re * 0.15;
+
   ctx.save();
-  ctx.globalAlpha = env * (dark ? 0.75 : 0.65);
-  ctx.translate(cx, cy);
-  ctx.scale(1, open);
-  // Skin round it, then the eye.
-  const skin = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 1.6);
-  skin.addColorStop(0, dark ? 'rgba(90, 40, 36, 0.9)' : 'rgba(120, 70, 60, 0.7)');
-  skin.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = skin;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const base = ctx.globalAlpha * env;
+
+  // The water closing in round it: a soft, uneven shadow, never a ring.
+  const dim = dark ? '5, 6, 10' : '42, 35, 32';
+  const vig = (x: number, y: number, rad: number, a: number) => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+    g.addColorStop(0, `rgba(${dim}, ${a})`);
+    g.addColorStop(0.55, `rgba(${dim}, ${a * 0.5})`);
+    g.addColorStop(1, `rgba(${dim}, 0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  ctx.globalAlpha = base;
+  const vk = dark ? 1 : 0.6;
+  vig(px0 + out * re, py0, re * 4.4, 0.12 * vk);
+  for (let k = 0; k < 6; k++) {
+    const a = r() * Math.PI * 2;
+    const dist = re * (1.2 + r() * 1.6);
+    vig(px0 + Math.cos(a) * dist + out * re * 0.6, py0 + Math.sin(a) * dist * 0.8, re * (1.2 + r() * 1.3), 0.045 * vk);
+  }
+
+  // The mantle: an uneven patch of wash, thickest round the eye and thinning
+  // to nothing, its edge ragged rather than stopped.
+  // Laid out round the patch's middle, in a frame squashed to its ellipse.
+  const blob = (scale: number, salt: number) => {
+    const pts: number[] = [];
+    const q = mulberry32(hash32('squid-skin', seed, salt));
+    const ph = [q() * 6.28, q() * 6.28, q() * 6.28];
+    for (let k = 0; k < 40; k++) {
+      const a = (k / 40) * Math.PI * 2;
+      const rr = re * 2.5 * scale * (1 + 0.07 * Math.sin(a * 3 + ph[0]) + 0.05 * Math.sin(a * 7 + ph[1]) + 0.035 * Math.sin(a * 13 + ph[2]) + (q() - 0.5) * 0.05);
+      pts.push(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    return smoothPath(pts, true, 3);
+  };
+  const skinA = dark ? 0.62 : 0.5;
+  ctx.save();
+  ctx.translate(px0, py0);
+  ctx.scale(1.1, 0.85);
+  const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, re * 2.6);
+  sg.addColorStop(0, mixHex(skin, '#000000', 0.12));
+  sg.addColorStop(0.5, skin);
+  sg.addColorStop(0.82, `${skin}55`);
+  sg.addColorStop(1, `${skin}00`);
+  ctx.globalAlpha = base * skinA;
+  ctx.fillStyle = sg;
+  ctx.fill(blob(1.0, 9));
+  // Mottling: thinner washes laid over it, each stopping somewhere else.
+  for (let k = 0; k < 3; k++) {
+    ctx.globalAlpha = base * 0.06;
+    ctx.fillStyle = mixHex(skin, '#5C3324', 0.3);
+    ctx.fill(blob(0.5 + k * 0.16, k));
+  }
+  ctx.restore();
+  const patch = new Path2D();
+  patch.ellipse(px0, py0, re * 2.6 * 1.1, re * 2.6 * 0.85, 0, 0, Math.PI * 2);
+
+  // Chromatophores: small dots of rust and brown, crowded nearer the eye and
+  // thinning out to the patch's edge, a few of them opened wide and soft.
+  const nDots = Math.round(160 + 480 * d);
+  const dotPaths = CHROMATOPHORES.map(() => new Path2D());
+  const halos = new Path2D();
+  for (let k = 0; k < nDots; k++) {
+    const a = r() * Math.PI * 2;
+    const t = Math.pow(r(), 0.8);
+    const dist = re * (1.15 + t * 1.3);
+    const x = px0 + Math.cos(a) * dist * 1.1 - out * re * 0.5 * (1 - t);
+    const y = py0 + Math.sin(a) * dist * 0.85;
+    if (Math.hypot(x - cx, y - cy) < re * 1.16) continue;
+    if (r() > 1.05 - t * 0.65) continue;
+    const big = r() < 0.07;
+    const rad = Math.max(0.45 * px, re * (big ? 0.022 + r() * 0.016 : 0.006 + r() * 0.015));
+    const dp = dotPaths[Math.floor(r() * dotPaths.length)];
+    dp.moveTo(x + rad, y);
+    dp.ellipse(x, y, rad, rad * (0.7 + r() * 0.3), r() * 3, 0, Math.PI * 2);
+    if (big) {
+      halos.moveTo(x + rad * 1.9, y);
+      halos.ellipse(x, y, rad * 1.9, rad * 1.6, r() * 3, 0, Math.PI * 2);
+    }
+  }
+  ctx.globalAlpha = base * 0.08;
+  ctx.fillStyle = dark ? '#A0603F' : '#9C4A2E';
+  ctx.fill(halos);
+  dotPaths.forEach((p, i) => {
+    ctx.globalAlpha = base * (dark ? 0.5 : 0.45) * (0.75 + 0.1 * i);
+    ctx.fillStyle = dark ? mixHex(CHROMATOPHORES[i], '#E8E0CF', 0.12) : CHROMATOPHORES[i];
+    ctx.fill(p);
+  });
+  // And the skin's own stipple, where it turns from the light.
+  if (d > 0.2) {
+    const box = { x: px0 - re * 2.8, y: py0 - re * 2.2, w: re * 5.6, h: re * 4.4 };
+    const across = shadeAcross(box, light);
+    stipple(ctx, patch, box, {
+      spacing: Math.max(1.4 * px, re * 0.05),
+      radius: Math.max(0.3 * px, re * 0.008),
+      shade: (x, y) => across(x, y) * Math.min(1, Math.hypot(x - cx, y - cy) / (re * 1.6)),
+      from: 0.38,
+      color: ink,
+      alpha: base * 0.4,
+      seed: seed ^ 0x51c,
+    });
+  }
+
+  // The socket: the skin folds in round the ball, a shade darker, softly.
+  const sock = ctx.createRadialGradient(cx, cy, re * 0.9, cx, cy, re * 1.45);
+  const sc = mixHex(skin, dark ? '#000000' : '#2A2320', 0.4);
+  sock.addColorStop(0, sc);
+  sock.addColorStop(0.35, `${sc}AA`);
+  sock.addColorStop(1, `${sc}00`);
+  ctx.globalAlpha = base * 0.6;
+  ctx.fillStyle = sock;
   ctx.beginPath();
-  ctx.arc(0, 0, r * 1.6, 0, Math.PI * 2);
+  ctx.arc(cx, cy, re * 1.45, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = dark ? '#A89F8C' : '#D9D0BB';
+
+  // The aperture the lids leave: round when open, a slit at the blink.
+  const aperture = (k: number) => {
+    const top: number[] = [];
+    const bottom: number[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const u = -1 + (i / 24) * 2;
+      const x = cx + u * re * 1.06;
+      const s = Math.sqrt(Math.max(0, 1 - u * u));
+      top.push(x, cy - re * 1.06 * s * k + re * 0.06 * (1 - k) * s);
+      bottom.push(x, cy + re * 1.06 * s * k + re * 0.06 * (1 - k) * s);
+    }
+    return { top, bottom };
+  };
+  const ap = aperture(open);
+  const apPath = new Path2D();
+  apPath.moveTo(ap.top[0], ap.top[1]);
+  for (let i = 2; i < ap.top.length; i += 2) apPath.lineTo(ap.top[i], ap.top[i + 1]);
+  for (let i = ap.bottom.length - 2; i >= 0; i -= 2) apPath.lineTo(ap.bottom[i], ap.bottom[i + 1]);
+  apPath.closePath();
+
+  const ball = new Path2D();
+  ball.arc(cx, cy, re, 0, Math.PI * 2);
+  const ballBox = { x: cx - re, y: cy - re, w: re * 2, h: re * 2 };
+  ctx.save();
+  ctx.clip(apPath);
+  // The ball: a silvery iris, pooled darker toward its rim.
+  const iris = dark ? '#8C8878' : '#A49E88';
+  ctx.globalAlpha = base;
+  washFill(ctx, ball, ballBox, { color: iris, edge: 0.5, paper: null, granulate: 0.3, px });
+  const limbus = ctx.createRadialGradient(cx, cy, re * 0.55, cx, cy, re);
+  limbus.addColorStop(0, 'rgba(26, 23, 20, 0)');
+  limbus.addColorStop(0.7, 'rgba(26, 23, 20, 0.12)');
+  limbus.addColorStop(1, 'rgba(26, 23, 20, 0.5)');
+  ctx.fillStyle = limbus;
+  ctx.fill(ball);
+  // Radial striations, dark and pale by turns, none quite straight or even.
+  const nStri = Math.round(40 + 80 * d);
+  const darkLines = new Path2D();
+  const paleLines = new Path2D();
+  for (let k = 0; k < nStri; k++) {
+    const a = ((k + r() * 0.6) / nStri) * Math.PI * 2;
+    const r0 = re * (0.36 + r() * 0.08);
+    const r1 = re * (0.8 + r() * 0.15);
+    const bend = (r() - 0.5) * 0.12;
+    const path = k % 2 ? paleLines : darkLines;
+    path.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    path.quadraticCurveTo(cx + Math.cos(a + bend) * (r0 + r1) * 0.5, cy + Math.sin(a + bend) * (r0 + r1) * 0.5, cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+  }
+  ctx.strokeStyle = '#2A2320';
+  ctx.globalAlpha = base * 0.38;
+  ctx.lineWidth = Math.max(0.4 * px, re * 0.012);
+  ctx.stroke(darkLines);
+  ctx.strokeStyle = '#EFE8D6';
+  ctx.globalAlpha = base * 0.3;
+  ctx.lineWidth = Math.max(0.35 * px, re * 0.009);
+  ctx.stroke(paleLines);
+  // The collarette, an uneven ring round the pupil's zone.
+  const coll: number[] = [];
+  for (let k = 0; k < 18; k++) {
+    const a = (k / 18) * Math.PI * 2;
+    const rr = re * (0.4 + (r() - 0.5) * 0.05);
+    coll.push(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.9 + re * 0.02);
+  }
+  inkLine(ctx, coll, true, { width: Math.max(0.5 * px, re * 0.014), color: '#2A2320', alpha: base * 0.4, seed: seed ^ 0xc011, light: LIGHT, plate: true });
+  // The pupil: a crescent lying on its side, horns up, both its edges
+  // sagging and the lower one more.
+  const pup: number[] = [];
+  const pa = re * 0.56;
+  for (let i = 0; i <= 16; i++) {
+    const u = -1 + (i / 16) * 2;
+    pup.push(cx + u * pa, cy - re * 0.1 + re * 0.12 * (1 - u * u));
+  }
+  for (let i = 15; i >= 1; i--) {
+    const u = -1 + (i / 16) * 2;
+    pup.push(cx + u * pa, cy - re * 0.1 + re * 0.4 * (1 - u * u));
+  }
+  const pupil = smoothPath(pup, true, 4);
+  ctx.globalAlpha = base * 0.95;
+  ctx.fillStyle = '#16120F';
+  ctx.fill(pupil);
+  // Engraved: the ball's turn from the light in contour lines.
+  if (d > 0.15) {
+    hatch(ctx, ball, ballBox, {
+      spacing: Math.max(1.3 * px, re * 0.05),
+      angle: -0.75,
+      bow: 1.2,
+      shade: shadeAcross(ballBox, LIGHT),
+      from: 0.56,
+      cross: 0.82,
+      color: '#2A2320',
+      width: Math.max(0.45 * px, re * 0.014),
+      alpha: base * 0.45,
+      seed: seed ^ 0xba11,
+    });
+  }
+  // Two highlights: the window, over the pupil's upper edge, and a small
+  // second one low on the far side.
+  ctx.globalAlpha = base * 0.85;
+  ctx.fillStyle = '#FBF8EF';
   ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.ellipse(cx - re * 0.24, cy - re * 0.16, re * 0.12, re * 0.075, -0.5, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#3B4A4E';
+  ctx.globalAlpha = base * 0.5;
   ctx.beginPath();
-  ctx.arc(left ? r * 0.12 : -r * 0.12, 0, r * 0.72, 0, Math.PI * 2);
+  ctx.ellipse(cx + re * 0.34, cy + re * 0.36, re * 0.05, re * 0.035, -0.5, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#0B0B0A';
-  ctx.beginPath();
-  ctx.ellipse(left ? r * 0.16 : -r * 0.16, 0, r * 0.2, r * 0.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.beginPath();
-  ctx.arc(left ? r * 0.35 : r * 0.1, -r * 0.3, r * 0.08, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#1A1815';
-  ctx.lineWidth = 2 * px;
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.stroke();
+  ctx.restore();
+
+  // The lids: when the eye shuts, the skin comes over it, the socket's own
+  // colour, and the ball's bulge still shows under them.
+  if (open < 0.999) {
+    const shut = 1 - open;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, re * 1.07, 0, Math.PI * 2);
+    ctx.clip();
+    const cover = new Path2D();
+    cover.rect(cx - re * 1.2, cy - re * 1.2, re * 2.4, re * 2.4);
+    cover.addPath(apPath);
+    const lidTone = ctx.createRadialGradient(cx - re * 0.3, cy - re * 0.35, re * 0.1, cx, cy, re * 1.1);
+    lidTone.addColorStop(0, mixHex(skin, dark ? '#E8E0CF' : '#FBF8EF', 0.08));
+    lidTone.addColorStop(1, mixHex(sc, skin, 0.4));
+    ctx.globalAlpha = base * Math.min(1, shut * 1.4);
+    ctx.fillStyle = lidTone;
+    ctx.fill(cover, 'evenodd');
+    if (d > 0.15) {
+      // The lid's skin in contour lines, round the ball under it.
+      ctx.clip(cover, 'evenodd');
+      hatch(ctx, ball, ballBox, {
+        spacing: Math.max(1.4 * px, re * 0.06),
+        angle: 0.08,
+        bow: 1.6,
+        shade: shadeAcross(ballBox, light),
+        from: 0.3,
+        color: ink,
+        width: Math.max(0.4 * px, re * 0.012),
+        alpha: base * 0.35 * shut,
+        seed: seed ^ 0x11dd,
+      });
+    }
+    ctx.restore();
+    const bulge: number[] = [];
+    for (let i = 0; i <= 20; i++) {
+      const a = Math.PI * (0.05 + (i / 20) * 0.9) + (out < 0 ? Math.PI : 0);
+      bulge.push(cx + Math.cos(a) * re, cy + Math.sin(a) * re);
+    }
+    inkLine(ctx, bulge, false, { width: Math.max(0.5 * px, re * 0.02), color: ink, alpha: base * 0.35 * shut, taper: [0.3, 0.3], seed: seed ^ 0xb0, light, plate: true });
+  }
+  const lidW = Math.max(0.7 * px, re * 0.035);
+  inkLine(ctx, ap.top, false, { width: lidW * 1.3, color: ink, alpha: base * 0.85, taper: [0.14, 0.14], seed: seed ^ 0x11d, light, plate: true });
+  inkLine(ctx, ap.bottom, false, { width: lidW * 0.8, color: ink, alpha: base * 0.55, taper: [0.32, 0.32], seed: seed ^ 0x11e, light, plate: true });
+  // The fold of skin over the eye, off to the body's side, and a short
+  // crease under it: not rings, the skin's own lines.
+  const fold: number[] = [];
+  const crease: number[] = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    const a = -Math.PI / 2 + out * (-0.9 + t * 1.6);
+    const rr = re * (1.28 + 0.1 * Math.sin(t * Math.PI));
+    fold.push(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.92);
+    const b = Math.PI / 2 - out * (-0.5 + t * 1.1);
+    const rc = re * (1.2 + 0.06 * Math.sin(t * Math.PI));
+    crease.push(cx + Math.cos(b) * rc, cy + Math.sin(b) * rc);
+  }
+  inkLine(ctx, fold, false, { width: lidW * 0.7, color: ink, alpha: base * 0.4, taper: [0.3, 0.4], seed: seed ^ 0xf01d, light, plate: true });
+  inkLine(ctx, crease, false, { width: lidW * 0.5, color: ink, alpha: base * 0.28, taper: [0.4, 0.4], seed: seed ^ 0xc4ea, light, plate: true });
   ctx.restore();
 }
 

@@ -12,29 +12,33 @@
  *
  * Everything is measured in frame heights, so a phone and a monitor sink past
  * the same forest at the same pace. Like the rest of the ocean it is a pure
- * function of the sitting and the focus time; the far stalks stand further
- * off, and so slide by slower.
+ * function of the sitting and the focus time. The stalks stand at three
+ * depths, the far ones smaller, paler and hazier.
  */
 
 import { hash32, int, mulberry32, range, type Rand } from './random';
 
-export type KelpLayer = 0 | 1;
+/** 0 standing furthest back (palest, haziest, finest), 1 between, 2 near. */
+export type KelpLayer = 0 | 1 | 2;
 
 export interface KelpBlade {
   /** Where on the stalk it grows, 0 at the holdfast to 1 at the top. */
   t: number;
   side: 1 | -1;
-  /** Length and greatest half-width, in CSS pixels. */
+  /** Length and greatest width, as shares of the page's height. */
   len: number;
   width: number;
-  /** How far it turns off the stalk, in radians. */
+  /** How far it turns off the stalk before the current takes it, in radians. */
   angle: number;
+  /** How far it hangs down as it streams with the current, 0 to 1. */
+  droop: number;
   /** How much it curls along its length, as a share of it. */
   curl: number;
+  /** Where its ruffled margin starts. */
+  ph: number;
 }
 
 export interface KelpStalk {
-  /** 0 standing further back (fainter, finer), 1 near. */
   layer: KelpLayer;
   /** Across the page, 0 to 1. */
   x: number;
@@ -43,6 +47,9 @@ export interface KelpStalk {
   /** Frame heights from the holdfast to the tip. */
   height: number;
   phase: number;
+  /** How the stipe winds as it goes up: its amplitude in frame heights, its
+      frequency in radians a frame height, and where it starts. */
+  wave: [number, number, number];
   blades: KelpBlade[];
   /** The holdfast's roots, as angles off straight down. */
   roots: number[];
@@ -55,10 +62,8 @@ export interface KelpLedge {
   reach: number;
   /** Its top, in frame heights below the top of the page at the start. */
   top: number;
-  /** Boulders along its top, -1 to 1 each. */
-  bumps: number[];
-  /** Stipple on the rock, as shares of its reach and thickness. */
-  specks: { x: number; y: number; r: number }[];
+  /** The rock's own dice (see `rockShape`). */
+  seed: number;
 }
 
 export interface Kelp {
@@ -74,8 +79,12 @@ const LEDGE = 2.2;
 const RATE = 0.19;
 /** How thick the ledge is where it meets the edge of the page, in frame heights. */
 export const KELP_ROCK = 0.3;
-/** Blades to a frame height of stalk, back and near. */
-const BLADES_PER_FRAME: [number, number] = [9, 12];
+/** Blades to a frame height of stalk, back to near. */
+const BLADES_PER_FRAME = [18, 23, 28];
+/** How big a stalk is drawn, back to near: the further, the smaller. */
+export const KELP_SCALE = [0.62, 0.8, 1];
+/** How much of a forest's mass a stalk at each depth is. */
+const MASS = [0.35, 0.65, 1];
 
 /** How far the forest has slid up the page, in frame heights. */
 export function kelpDescent(focusSeconds: number): number {
@@ -88,28 +97,31 @@ export function kelpInView(focusSeconds: number): boolean {
 }
 
 function rollStalk(r: Rand, edge: -1 | 1, layer: KelpLayer): KelpStalk {
-  const off = layer === 1 ? range(r, 0.02, 0.12) : range(r, 0.06, 0.18);
+  // The near ones stand nearest their wall; the far ones a little further out.
+  const off = [range(r, 0.06, 0.21), range(r, 0.04, 0.18), range(r, 0.03, 0.16)][layer];
   const base = LEDGE + range(r, 0.005, 0.02);
   const water = base - KELP_SURFACE;
   // Most are longer than the water is deep and lay their tops along the
   // surface; a few are young and stop short of it.
-  const height = r() < 0.25 ? water * range(r, 0.5, 0.8) : water + range(r, -0.04, 0.22);
+  const height = r() < 0.2 ? water * range(r, 0.55, 0.8) : water + range(r, 0.02, 0.24);
   const count = Math.max(4, Math.round(height * BLADES_PER_FRAME[layer]));
   const blades: KelpBlade[] = [];
   let side: 1 | -1 = r() < 0.5 ? 1 : -1;
+  const k = KELP_SCALE[layer];
   for (let j = 0; j < count; j++) {
     const t = (j + 0.3 + r() * 0.4) / count;
     // Nothing on the lowest bit of stalk, and smaller blades at the growing tip.
-    if (t * height < 0.06) continue;
-    const tip = 1 - 0.5 * Math.max(0, (t - 0.88) / 0.12);
-    const len = range(r, 32, 56) * (layer === 1 ? 1 : 0.75) * tip;
+    if (t * height < 0.05) continue;
+    const tip = 1 - 0.45 * Math.max(0, (t - 0.9) / 0.1);
     blades.push({
       t,
       side,
-      len,
-      width: len * range(r, 0.1, 0.15),
-      angle: range(r, 0.25, 0.6),
-      curl: range(r, -0.18, 0.18),
+      len: range(r, layer === 2 ? 0.05 : 0.04, 0.07) * k * tip,
+      width: range(r, 0.008, 0.012) * k * (0.75 + 0.25 * tip),
+      angle: range(r, 0.35, 0.8),
+      droop: range(r, 0.45, 1),
+      curl: range(r, -0.15, 0.15),
+      ph: range(r, 0, Math.PI * 2),
     });
     side = side === 1 ? -1 : 1;
   }
@@ -119,31 +131,63 @@ function rollStalk(r: Rand, edge: -1 | 1, layer: KelpLayer): KelpStalk {
     base,
     height,
     phase: range(r, 0, Math.PI * 2),
+    wave: [range(r, 0.022, 0.036) * k, range(r, 5, 8.5), range(r, 0, Math.PI * 2)],
     blades,
-    roots: Array.from({ length: int(r, 4, 7) }, () => range(r, -1.2, 1.2)),
+    roots: Array.from({ length: int(r, 6, 10) }, () => range(r, -1.3, 1.3)),
   };
 }
 
-/** The forest a sitting starts beside. Call only when `env.kelp` is set. */
+const massOf = (ss: KelpStalk[]) => ss.reduce((m, s) => m + MASS[s.layer] * s.height, 0);
+
+/**
+ * The forest a sitting starts beside. Call only when `env.kelp` is set.
+ *
+ * Five to nine stalks at three depths. Where it stands at both edges of the
+ * page the two sides are never a pair of curtains: one is the forest, the
+ * other a few stragglers back in the haze, never more than two fifths of it.
+ */
 export function rollKelp(key: string): Kelp {
-  const r = mulberry32(hash32(key, 'kelp'));
-  const u = r();
+  // The first roll says which edges, and `picture/layout.ts` reads it the
+  // same way: it must stay the first. The rest comes off its own stream.
+  const r0 = mulberry32(hash32(key, 'kelp'));
+  const u = r0();
   const edges: (-1 | 1)[] = u < 0.4 ? [-1, 1] : u < 0.7 ? [-1] : [1];
+  const r = mulberry32(hash32(key, 'kelp', 'forest'));
+  const total = int(r, 5, 9);
+  const main: -1 | 1 = edges.length === 2 ? (r() < 0.5 ? -1 : 1) : edges[0];
+  const few = edges.length === 2 ? Math.min(2, Math.max(1, total - 4), int(r, 1, 2)) : 0;
   const stalks: KelpStalk[] = [];
   const ledges: KelpLedge[] = [];
+  const sides = new Map<-1 | 1, KelpStalk[]>();
   for (const edge of edges) {
-    const mine = [
-      ...Array.from({ length: int(r, 1, 2) }, () => rollStalk(r, edge, 0)),
-      ...Array.from({ length: int(r, 2, 3) }, () => rollStalk(r, edge, 1)),
-    ];
+    const n = edge === main ? total - few : few;
+    // The forest: at least one near, the rest spread back through the depths.
+    // The stragglers: only back in the haze.
+    const layers: KelpLayer[] =
+      edge === main
+        ? Array.from({ length: n }, (_, i) => (i === 0 ? 2 : i === 1 ? 1 : i === 2 ? 0 : ([0, 1, 2] as const)[int(r, 0, 2)]))
+        : Array.from({ length: n }, () => 0 as KelpLayer);
+    sides.set(edge, layers.map((l) => rollStalk(r, edge, l)));
+  }
+  if (edges.length === 2) {
+    const big = sides.get(main)!;
+    const small = sides.get(main === -1 ? 1 : -1)!;
+    // Never more than two fifths of the forest's mass: further back, then shorter.
+    for (let guard = 0; guard < 12 && massOf(small) > 0.4 * massOf(big); guard++) {
+      const s = small.reduce((a, b) => (MASS[b.layer] * b.height > MASS[a.layer] * a.height ? b : a));
+      if (s.layer > 0) s.layer = (s.layer - 1) as KelpLayer;
+      else s.height *= 0.8;
+    }
+  }
+  for (const edge of edges) {
+    const mine = sides.get(edge)!;
     stalks.push(...mine);
     const furthest = Math.max(...mine.map((s) => (edge < 0 ? s.x : 1 - s.x)));
     ledges.push({
       edge,
-      reach: furthest + range(r, 0.05, 0.09),
+      reach: Math.min(0.32, furthest + range(r, 0.06, 0.1) + (edge === main ? 0.03 : 0)),
       top: LEDGE,
-      bumps: Array.from({ length: 6 }, () => range(r, -1, 1)),
-      specks: Array.from({ length: 16 }, () => ({ x: r(), y: r(), r: range(r, 0.6, 1.4) })),
+      seed: (r() * 4294967296) >>> 0,
     });
   }
   // Back ones first, so the near ones are drawn over them.

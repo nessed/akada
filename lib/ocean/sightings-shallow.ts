@@ -14,7 +14,7 @@
 
 import { mixHex } from '../fan';
 import { HUES, IRON_GALL } from './palette';
-import { detailFor, hatch, inkLine, LIGHT, shadeAcross, stipple } from './pen';
+import { detailFor, hatch, inkLine, LIGHT, shadeAcross, smoothPath, stipple } from './pen';
 import { mulberry32, range } from './random';
 
 /** The light as the pen takes it: on dark water the light ink marks the light. */
@@ -301,17 +301,29 @@ export function drawTurtle(
   ctx.lineWidth = 0.8 * pw;
   ctx.globalAlpha = alpha * 0.7;
   ctx.stroke(marks);
+  // The eye: a dark iris under a heavy lid, a highlight, never a white disc.
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = dark ? mixHex(PAPER, NIGHT, 0.2) : PAPER;
+  ctx.fillStyle = dark ? '#5A4A38' : '#4A3B2C';
   ctx.beginPath();
-  ctx.arc(0.432 * u, -0.034 * u, 0.018 * u, 0, Math.PI * 2);
+  ctx.ellipse(0.434 * u, -0.033 * u, 0.015 * u, 0.013 * u, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.lineWidth = 0.9 * pw;
   ctx.stroke();
   ctx.fillStyle = '#141210';
   ctx.beginPath();
-  ctx.arc(0.437 * u, -0.033 * u, 0.01 * u, 0, Math.PI * 2);
+  ctx.arc(0.437 * u, -0.033 * u, 0.008 * u, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = PAPER;
+  ctx.globalAlpha = alpha * 0.8;
+  ctx.beginPath();
+  ctx.arc(0.431 * u, -0.037 * u, 0.0035 * u, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = alpha * 0.8;
+  ctx.beginPath();
+  ctx.moveTo(0.416 * u, -0.041 * u);
+  ctx.quadraticCurveTo(0.434 * u, -0.054 * u, 0.452 * u, -0.04 * u);
+  ctx.lineWidth = 1.1 * pw;
+  ctx.stroke();
   ctx.restore();
 
   // The plastron under the shell, then the shell.
@@ -570,29 +582,42 @@ export function drawSiphonophore(
     if (i === 0) stem.moveTo(X, Y);
     else stem.lineTo(X, Y);
   }
+  // A bell is small, but on a wallpaper it is near enough to show its
+  // canals and shading, and the whole colony is drawn in the pen.
+  const bellR = m * 0.011;
+  const d = detailFor(bellR * 12);
+  const light = dark ? UNLIGHT : LIGHT;
   ctx.strokeStyle = wash;
   ctx.globalAlpha = alpha * 0.35;
   ctx.lineWidth = 2.6 * px;
   ctx.stroke(stem);
-  ctx.strokeStyle = ink;
-  ctx.globalAlpha = alpha * 0.7;
-  ctx.lineWidth = 0.9 * px;
-  ctx.stroke(stem);
-  ctx.save();
-  ctx.translate(0.8 * px, 0.4 * px);
-  ctx.globalAlpha = alpha * 0.22;
-  ctx.lineWidth = 0.6 * px;
-  ctx.stroke(stem);
-  ctx.restore();
+  if (d > 0.4) {
+    // The stem in one pressure line, broken where the light is.
+    const pts: number[] = [];
+    for (let i = 0; i <= steps; i++) {
+      at(front - ((front - back) * i) / steps);
+      pts.push(X, Y);
+    }
+    inkLine(ctx, pts, false, { width: 1.1 * px, color: ink, alpha: alpha * 0.8, taper: [0.01, 0.01], seed: seed ^ 0x57e, light, raw: true, plate: true, min: 0.3 * px });
+  } else {
+    ctx.strokeStyle = ink;
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.lineWidth = 0.9 * px;
+    ctx.stroke(stem);
+    ctx.save();
+    ctx.translate(0.8 * px, 0.4 * px);
+    ctx.globalAlpha = alpha * 0.22;
+    ctx.lineWidth = 0.6 * px;
+    ctx.stroke(stem);
+    ctx.restore();
+  }
 
   // The swimming bells, alternating either side of the stem, each squeezing
   // in its turn so the beat runs down the row.
   const bells = new Path2D();
   const sacs = new Path2D();
-  const bellR = m * 0.011;
-  // A bell is small, but on a wallpaper it is near enough to show its canals and shading.
-  const d = detailFor(bellR * 12);
   const placed: number[] = [];
+  const bellOutlines: number[][] = [];
   const nBells = Math.floor((front - 0.03 * diag - bellsEnd) / (0.022 * diag));
   for (let j = 0; j <= nBells; j++) {
     const s = front - 0.03 * diag - j * 0.022 * diag;
@@ -609,8 +634,27 @@ export function drawSiphonophore(
     const by = Y + Math.cos(ang) * side * rb * 0.95;
     const rx = rb * 1.25;
     const ry = rb * 0.8 * (1 - 0.14 * squeeze);
-    bells.moveTo(bx + Math.cos(ang) * rx, by + Math.sin(ang) * rx);
-    bells.ellipse(bx, by, rx, ry, ang, 0, Math.PI * 2);
+    if (d > 0.4) {
+      // A nectophore, not an ellipse: a rounded box, flattened across its
+      // opening at the back, a little lopsided.
+      const pts: number[] = [];
+      const ca = Math.cos(ang);
+      const sa = Math.sin(ang);
+      for (let k = 0; k < 14; k++) {
+        const t = (k / 14) * Math.PI * 2;
+        const c = Math.cos(t);
+        const sn = Math.sin(t);
+        const sq = (v: number, e: number) => Math.sign(v) * Math.pow(Math.abs(v), e);
+        const u = sq(c, c < 0 ? 0.45 : 0.8) * rx * (0.95 + 0.1 * unit(seed, j * 31 + k));
+        const v = sq(sn, 0.75) * ry * (1 + 0.12 * c) * (0.95 + 0.1 * unit(seed, j * 37 + k));
+        pts.push(bx + ca * u - sa * v, by + sa * u + ca * v);
+      }
+      bellOutlines.push(pts);
+      bells.addPath(smoothPath(pts, true, 4));
+    } else {
+      bells.moveTo(bx + Math.cos(ang) * rx, by + Math.sin(ang) * rx);
+      bells.ellipse(bx, by, rx, ry, ang, 0, Math.PI * 2);
+    }
     // The muscular sac inside, opening backward: that is what it swims with.
     const ix = bx - Math.cos(ang) * rx * 0.2;
     const iy = by - Math.sin(ang) * rx * 0.2;
@@ -621,10 +665,14 @@ export function drawSiphonophore(
   ctx.fillStyle = wash;
   ctx.globalAlpha = alpha * (d > 0.4 ? 0.32 : 0.22);
   ctx.fill(bells);
-  ctx.strokeStyle = ink;
-  ctx.globalAlpha = alpha * 0.6;
-  ctx.lineWidth = 0.8 * px;
-  ctx.stroke(bells);
+  if (d > 0.4) {
+    for (let k = 0; k < bellOutlines.length; k++) inkLine(ctx, bellOutlines[k], true, { width: 0.9 * px, color: ink, alpha: alpha * 0.75, seed: seed ^ (k * 977), light, plate: true, min: 0.25 * px });
+  } else {
+    ctx.strokeStyle = ink;
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.lineWidth = 0.8 * px;
+    ctx.stroke(bells);
+  }
   ctx.globalAlpha = alpha * 0.35;
   ctx.lineWidth = 0.6 * px;
   ctx.stroke(sacs);
@@ -670,6 +718,7 @@ export function drawSiphonophore(
   const bracts = new Path2D();
   const polyps = new Path2D();
   const threads = new Path2D();
+  const threadLines: number[][] = [];
   const beads = new Path2D();
   const step = 0.011 * diag;
   const bead = Math.max(0.7 * px, m * 0.0012);
@@ -692,33 +741,52 @@ export function drawSiphonophore(
     const ly = Math.sin(bang) * br * 2.4;
     const wx = -Math.sin(bang) * br * 0.8;
     const wy = Math.cos(bang) * br * 0.8;
+    // A leaf fuller on one edge than the other, and no two alike.
+    const full = 1.1 + 0.5 * unit(seed, i + 8000);
     bracts.moveTo(X, Y);
-    bracts.quadraticCurveTo(X + lx * 0.5 + wx, Y + ly * 0.5 + wy, X + lx, Y + ly);
-    bracts.quadraticCurveTo(X + lx * 0.5 - wx, Y + ly * 0.5 - wy, X, Y);
+    bracts.quadraticCurveTo(X + lx * 0.45 + wx * full, Y + ly * 0.45 + wy * full, X + lx, Y + ly);
+    bracts.quadraticCurveTo(X + lx * 0.6 - wx * 0.6, Y + ly * 0.6 - wy * 0.6, X, Y);
     // The polyp hanging under it.
-    const pr = br * 0.55;
-    polyps.moveTo(X + pr * 0.8, Y + br * 1.6);
-    polyps.ellipse(X, Y + br * 1.6, pr * 0.8, pr * 1.3, 0, 0, Math.PI * 2);
+    const pr = br * 0.42;
+    // A tear, hanging well under the stem, its point up toward it.
+    const py0 = Y + br * 2.3;
+    polyps.moveTo(X, py0 - pr * 1.5);
+    polyps.quadraticCurveTo(X + pr * 1.1, py0 - pr * 0.2, X + pr * 0.15, py0 + pr * 1.2);
+    polyps.quadraticCurveTo(X - pr * 0.9, py0 + pr * 0.6, X, py0 - pr * 1.5);
     // And its tentacle, hanging, swaying a little, longer on some than others.
     if (i % 3 === 2 && q < 0.5) continue;
     const len = m * (0.025 + 0.06 * q);
     const sway = Math.sin(ambient * 0.5 + i * 0.7) * 0.25 + 0.08 * Math.sin(ambient * 0.17 + i);
     const x0 = X;
-    const y0 = Y + br * 2.6;
+    const y0 = Y + br * 2.3 + pr * 1.2;
     const qx = x0 + sway * len * 0.15;
     const qy = y0 + len * 0.5;
     const ex = x0 + sway * len * 0.55;
     const ey = y0 + len;
-    threads.moveTo(x0, y0);
-    threads.quadraticCurveTo(qx, qy, ex, ey);
-    for (const t of [0.35, 0.55, 0.75, 0.93]) {
+    if (d > 0.4) {
+      const pts: number[] = [];
+      for (let k = 0; k <= 10; k++) {
+        const t = k / 10;
+        pts.push((1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * qx + t * t * ex, (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * qy + t * t * ey);
+      }
+      threadLines.push(pts);
+    } else {
+      threads.moveTo(x0, y0);
+      threads.quadraticCurveTo(qx, qy, ex, ey);
+    }
+    // The stinging cells: small beads, not evenly spaced or sized, each a
+    // little longer than wide along the thread.
+    const nb = 3 + Math.floor(unit(seed, i + 4000) * 3);
+    for (let k = 0; k < nb; k++) {
+      const t = 0.3 + ((k + 0.3 + 0.5 * unit(seed, i * 7 + k + 5000)) / nb) * 0.66;
       const a = (1 - t) * (1 - t);
       const b = 2 * (1 - t) * t;
       const c = t * t;
       const dx = a * x0 + b * qx + c * ex;
       const dy = a * y0 + b * qy + c * ey;
-      beads.moveTo(dx + bead, dy);
-      beads.arc(dx, dy, bead, 0, Math.PI * 2);
+      const br = bead * (0.6 + 0.7 * unit(seed, i * 11 + k + 6000));
+      beads.moveTo(dx + br * 0.7, dy);
+      beads.ellipse(dx, dy, br * 0.7, br * 1.2, sway * 0.4, 0, Math.PI * 2);
     }
   }
   ctx.fillStyle = wash;
@@ -733,6 +801,7 @@ export function drawSiphonophore(
   ctx.globalAlpha = alpha * 0.35;
   ctx.lineWidth = 0.5 * px;
   ctx.stroke(threads);
+  for (let k = 0; k < threadLines.length; k++) inkLine(ctx, threadLines[k], false, { width: 0.7 * px, color: ink, alpha: alpha * 0.5, taper: [0.05, 0.7], seed: seed ^ (k * 131), light, raw: true, plate: true, min: 0.2 * px });
   ctx.fillStyle = ink;
   ctx.globalAlpha = alpha * 0.55;
   ctx.fill(beads);
@@ -742,19 +811,20 @@ export function drawSiphonophore(
   if (dark) {
     const glow = mixHex(mixHex(hue, '#FFFFFF', 0.5), '#9FE8FF', 0.25);
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = glow;
     for (let i = 0, s = front - 0.03 * diag; s > back; i += 2, s -= step * 2) {
       at(s);
       if (!onPage(X, Y)) continue;
       const wave = 0.5 + 0.5 * Math.sin(ambient * 0.9 - i * 0.18);
       const pulse = wave * wave * wave;
-      ctx.globalAlpha = env * 0.05 * (0.25 + pulse);
+      // A soft glow, faded to nothing at its rim: no hard discs in a row.
+      const g = ctx.createRadialGradient(X, Y, 0, X, Y, 8 * px);
+      g.addColorStop(0, glow);
+      g.addColorStop(0.3, `${glow}66`);
+      g.addColorStop(1, `${glow}00`);
+      ctx.fillStyle = g;
+      ctx.globalAlpha = env * 0.12 * (0.2 + pulse);
       ctx.beginPath();
-      ctx.arc(X, Y, 7 * px, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = env * 0.1 * (0.2 + pulse);
-      ctx.beginPath();
-      ctx.arc(X, Y, 2.4 * px, 0, Math.PI * 2);
+      ctx.arc(X, Y, 8 * px, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalCompositeOperation = 'source-over';
@@ -886,19 +956,38 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
     membrane.closePath();
   }
   const rayStep = (d > 0.4 ? 3 : 5) * px;
-  for (let s = s0; s < len; s += rayStep) {
+  // Rays in three weights, so the fin is a run of drawn lines and not a
+  // comb: every few a heavier one, and each bowed a little.
+  const raysBy = [new Path2D(), new Path2D(), new Path2D()];
+  for (let s = s0, i = 0; s < len; s += rayStep * (0.85 + 0.3 * unit(seed, i + 300)), i++) {
     const [bx, by, ex, ey] = tipAt(s);
     if (by > h + D * 2) break;
-    rays.moveTo(bx, by);
-    rays.lineTo(ex, ey);
+    const q = unit(seed, i + 700);
+    const p = raysBy[i % 4 === 0 ? 2 : q < 0.5 ? 0 : 1];
+    const mx = (bx + ex) / 2 + (ey - by) * 0.06;
+    const my = (by + ey) / 2 - (ex - bx) * 0.06;
+    p.moveTo(bx, by);
+    p.quadraticCurveTo(mx, my, ex, ey);
   }
   ctx.fillStyle = c.membrane;
   ctx.globalAlpha = alpha * 0.45;
   ctx.fill(membrane);
   ctx.strokeStyle = d > 0.4 ? c.ink : c.fin;
-  ctx.globalAlpha = alpha * (d > 0.4 ? 0.4 : 0.6);
-  ctx.lineWidth = (d > 0.4 ? 0.4 : 0.6) * px;
-  ctx.stroke(rays);
+  raysBy.forEach((p, k) => {
+    ctx.globalAlpha = alpha * (d > 0.4 ? 0.28 + 0.12 * k : 0.45 + 0.1 * k);
+    ctx.lineWidth = (d > 0.4 ? 0.3 + 0.12 * k : 0.5 + 0.1 * k) * px;
+    ctx.stroke(p);
+  });
+  if (d > 0.4) {
+    // The membrane's edge, a broken pen line along the ray tips.
+    const edge: number[] = [];
+    for (let i = 0; i <= N; i++) {
+      const [, , ex, ey] = tipAt(s0 + ((len - s0) * i) / N);
+      if (ey > h + D * 2) break;
+      edge.push(ex, ey);
+    }
+    inkLine(ctx, edge, false, { width: 0.7 * pw, color: c.ink, alpha: alpha * 0.5, taper: [0.02, 0.02], seed: seed ^ 0xed9e, light: dark ? UNLIGHT : LIGHT, raw: true, plate: true, min: 0.25 * px });
+  }
 
   // The body: a ribbon, its snout rounded off at the top.
   const body = new Path2D();
@@ -948,24 +1037,75 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
   ctx.globalAlpha = alpha * 0.92;
   ctx.fill(body);
 
-  // Fine diagonal hatching across the silver, and a line of faint streaks
-  // down the flank.
-  const hatch = new Path2D();
+  // Shading across the silver: big, engraved lines on the shadowed half that
+  // swell into the dark; small, a few faint strokes. And a line of faint
+  // streaks down the flank.
   const streaks = new Path2D();
   // Which edge of the ribbon is away from the light.
   at(len * 0.4);
-  const sg = NX * LIGHT[0] + NY * LIGHT[1] > 0 ? 1 : -1;
-  for (let s = 1.8 * D; s < len; s += (d > 0.4 ? 3 : 5) * px) {
-    at(s);
-    if (Y > h + D) break;
-    // Big, only the shadowed half is hatched, the rest left silver in the light.
-    const a0 = d > 0.4 ? -0.02 * sg : 0.35;
-    const a1 = d > 0.4 ? 0.48 * sg : -0.48;
-    const ax = X + NX * Dd * a0;
-    const ay = Y + NY * Dd * a0;
-    at(s + Dd * 0.55);
-    hatch.moveTo(ax, ay);
-    hatch.lineTo(X + NX * Dd * a1, Y + NY * Dd * a1);
+  // (On dark water the light ink marks the light, as everywhere.)
+  const lt = dark ? UNLIGHT : LIGHT;
+  const sg = NX * lt[0] + NY * lt[1] > 0 ? 1 : -1;
+  if (d > 0.4) {
+    // Laid down the body rather than clipped from a grid: each stroke runs
+    // from the middle of the ribbon to its shadowed edge, a hair where it
+    // starts and swelling into the dark, and in deep shadow a second set
+    // across the first.
+    const sp = Math.max(1.3 * px, D * 0.07);
+    const lines = new Path2D();
+    const cross = new Path2D();
+    const wMax = Math.max(0.5 * px, sp * 0.32);
+    for (let s = 1.8 * D, i = 0; s < len; s += sp * (0.9 + 0.2 * unit(seed, i + 1500)), i++) {
+      at(s);
+      if (Y > h + D) break;
+      const start = 0.02 + 0.12 * unit(seed, i + 1600);
+      const ax = X + NX * Dd * start * sg;
+      const ay = Y + NY * Dd * start * sg;
+      const nx0 = NX;
+      const ny0 = NY;
+      at(s + Dd * 0.5);
+      const bx = X + NX * Dd * 0.48 * sg;
+      const by = Y + NY * Dd * 0.48 * sg;
+      // The stroke's normal, for its width.
+      const lx = bx - ax;
+      const ly = by - ay;
+      const ll = Math.hypot(lx, ly) || 1;
+      const qx = -ly / ll;
+      const qy = lx / ll;
+      const w1 = wMax * (0.7 + 0.5 * unit(seed, i + 1700));
+      lines.moveTo(ax, ay);
+      lines.lineTo(bx + (qx * w1) / 2, by + (qy * w1) / 2);
+      lines.lineTo(bx - (qx * w1) / 2, by - (qy * w1) / 2);
+      lines.closePath();
+      if (!dark && i % 2 === 0) {
+        const cx0 = ax + (bx - ax) * 0.55 - nx0 * 0;
+        const cy0 = ay + (by - ay) * 0.55 - ny0 * 0;
+        cross.moveTo(cx0, cy0);
+        cross.lineTo(bx - lx * 0.1 + qx * sp * 1.2, by - ly * 0.1 + qy * sp * 1.2);
+      }
+    }
+    ctx.fillStyle = c.ink;
+    ctx.globalAlpha = alpha * 0.5;
+    ctx.fill(lines);
+    ctx.strokeStyle = c.ink;
+    ctx.globalAlpha = alpha * 0.3;
+    ctx.lineWidth = 0.4 * px;
+    ctx.stroke(cross);
+  } else {
+    const strokes = new Path2D();
+    for (let s = 1.8 * D; s < len; s += 5 * px) {
+      at(s);
+      if (Y > h + D) break;
+      const ax = X + NX * Dd * 0.35;
+      const ay = Y + NY * Dd * 0.35;
+      at(s + Dd * 0.55);
+      strokes.moveTo(ax, ay);
+      strokes.lineTo(X - NX * Dd * 0.48, Y - NY * Dd * 0.48);
+    }
+    ctx.strokeStyle = c.ink;
+    ctx.globalAlpha = alpha * 0.2;
+    ctx.lineWidth = 0.55 * px;
+    ctx.stroke(strokes);
   }
   for (let s = 2.4 * D, i = 0; s < len; s += D * 1.3, i++) {
     at(s);
@@ -982,9 +1122,6 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
     );
   }
   ctx.strokeStyle = c.ink;
-  ctx.globalAlpha = alpha * 0.22;
-  ctx.lineWidth = 0.55 * px;
-  ctx.stroke(hatch);
   ctx.globalAlpha = alpha * 0.35;
   ctx.lineWidth = 0.8 * pw;
   ctx.stroke(streaks);
@@ -1044,6 +1181,25 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
   // out from the crown, each with a little flag at the tip.
   const plumes = new Path2D();
   const flags = new Path2D();
+  const plumeLines: number[][] = [];
+  /** A small leaf of membrane at a plume's tip, along `fa`, `fr` long. */
+  const leaf = (ex: number, ey: number, fa: number, fr: number, k: number) => {
+    const ca = Math.cos(fa);
+    const sa = Math.sin(fa);
+    const wv = fr * (0.38 + 0.1 * unit(seed, k + 50));
+    flags.moveTo(ex - ca * fr * 0.6, ey - sa * fr * 0.6);
+    flags.quadraticCurveTo(ex - sa * wv, ey + ca * wv, ex + ca * fr, ey + sa * fr);
+    flags.quadraticCurveTo(ex + sa * wv * 0.8, ey - ca * wv * 0.8, ex - ca * fr * 0.6, ey - sa * fr * 0.6);
+  };
+  const plumeOf = (bx: number, by: number, qx: number, qy: number, ex: number, ey: number) => {
+    const pts: number[] = [];
+    for (let k = 0; k <= 12; k++) {
+      const t = k / 12;
+      const u = 1 - t;
+      pts.push(u * u * bx + 2 * u * t * qx + t * t * ex, u * u * by + 2 * u * t * qy + t * t * ey);
+    }
+    plumeLines.push(pts);
+  };
   for (let j = 0; j < 6; j++) {
     const s = D * (0.45 + j * 0.28);
     at(s);
@@ -1059,10 +1215,8 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
     const ey = by + NY * pl * 0.92 - ty * (pl * 0.05 + sway) + ty * j * D * 0.12;
     plumes.moveTo(bx, by);
     plumes.quadraticCurveTo(qx, qy, ex, ey);
-    const fr = D * 0.09;
-    const fa = Math.atan2(ey - qy, ex - qx);
-    flags.moveTo(ex + Math.cos(fa) * fr, ey + Math.sin(fa) * fr);
-    flags.ellipse(ex, ey, fr, fr * 0.45, fa, 0, Math.PI * 2);
+    plumeOf(bx, by, qx, qy, ex, ey);
+    leaf(ex, ey, Math.atan2(ey - qy, ex - qx), D * 0.11, j);
   }
   // And the two oars, long and thin under the throat, paddles at the ends.
   for (let j = 0; j < 2; j++) {
@@ -1079,18 +1233,22 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
     const ey = by - NY * (ol * 0.3 + sway) + ty * ol;
     plumes.moveTo(bx, by);
     plumes.quadraticCurveTo(qx, qy, ex, ey);
-    const fr = D * 0.17;
-    const fa = Math.atan2(ey - qy, ex - qx);
-    flags.moveTo(ex + Math.cos(fa) * fr, ey + Math.sin(fa) * fr);
-    flags.ellipse(ex, ey, fr, fr * 0.4, fa, 0, Math.PI * 2);
+    plumeOf(bx, by, qx, qy, ex, ey);
+    leaf(ex, ey, Math.atan2(ey - qy, ex - qx), D * 0.2, j + 10);
   }
-  ctx.strokeStyle = c.fin;
-  ctx.globalAlpha = alpha * 0.8;
-  ctx.lineWidth = 0.8 * px;
-  ctx.stroke(plumes);
+  if (d > 0.4) {
+    // Big, each plume a tapering stroke of the pen.
+    for (const pl of plumeLines) inkLine(ctx, pl, false, { width: 1.1 * pw, color: c.fin, alpha: alpha * 0.85, taper: [0.05, 0.4], seed: seed ^ pl.length, light: dark ? UNLIGHT : LIGHT, raw: true, plate: true, min: 0.25 * px });
+  } else {
+    ctx.strokeStyle = c.fin;
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.lineWidth = 0.8 * px;
+    ctx.stroke(plumes);
+  }
   ctx.fillStyle = c.membrane;
   ctx.globalAlpha = alpha * 0.75;
   ctx.fill(flags);
+  ctx.strokeStyle = c.fin;
   ctx.globalAlpha = alpha * 0.8;
   ctx.lineWidth = 0.6 * px;
   ctx.stroke(flags);
@@ -1115,21 +1273,31 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
   at(D * 0.55);
   const ex = X + NX * Dd * 0.08;
   const ey = Y + NY * Dd * 0.08;
-  const er = D * 0.2;
+  const er = D * 0.17;
+  // A plate's eye: a silver iris round a dark pupil, two highlights, and a
+  // fine line round it; not a white disc.
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = c.eye;
+  ctx.fillStyle = dark ? mixHex(SILVER, NIGHT, 0.2) : mixHex(SILVER, '#C9B98A', 0.35);
   ctx.beginPath();
   ctx.arc(ex, ey, er, 0, Math.PI * 2);
   ctx.fill();
-  ctx.lineWidth = 1 * px;
-  ctx.stroke();
-  ctx.fillStyle = '#141210';
+  ctx.fillStyle = '#16120F';
   ctx.beginPath();
-  ctx.arc(ex + TX() * er * 0.08, ey + TY() * er * 0.08, er * 0.58, 0, Math.PI * 2);
+  ctx.arc(ex + TX() * er * 0.08, ey + TY() * er * 0.08, er * 0.6, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = dark ? 'rgba(255,255,255,0.55)' : 'rgba(251,248,239,0.8)';
+  const rim: number[] = [];
+  for (let k = 0; k < 16; k++) {
+    const a = (k / 16) * Math.PI * 2;
+    rim.push(ex + Math.cos(a) * er, ey + Math.sin(a) * er);
+  }
+  inkLine(ctx, rim, true, { width: Math.max(0.6 * px, er * 0.12), color: c.ink, alpha: alpha * 0.9, seed: seed ^ 0xe1e, light: dark ? UNLIGHT : LIGHT, plate: true, min: 0.25 * px });
+  ctx.fillStyle = dark ? 'rgba(232, 224, 207, 0.75)' : 'rgba(251, 248, 239, 0.9)';
   ctx.beginPath();
-  ctx.arc(ex - TX() * er * 0.25 + NX * er * 0.2, ey - TY() * er * 0.25 + NY * er * 0.2, er * 0.16, 0, Math.PI * 2);
+  ctx.arc(ex - TX() * er * 0.22 + NX * er * 0.22, ey - TY() * er * 0.22 + NY * er * 0.22, er * 0.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.beginPath();
+  ctx.arc(ex + TX() * er * 0.25 - NX * er * 0.25, ey + TY() * er * 0.25 - NY * er * 0.25, er * 0.07, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }

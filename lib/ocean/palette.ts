@@ -168,7 +168,8 @@ export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureIn
     dot: g.lit ? mixHex(glow, '#FFFFFF', 0.4) : ink,
     eyeW: dark ? mixHex(glow, '#FFFFFF', 0.3) : '#FBF8EF',
     pupil: '#141210',
-    bodyAlpha: g.clear ? 0.38 : 0.95,
+    // A comb jelly is glass whatever the dice say: its rows are what shows.
+    bodyAlpha: g.clear ? 0.38 : g.plan === 'comb' ? 0.5 : 0.95,
     finAlpha: g.clear ? 0.35 : 0.8,
   };
 }
