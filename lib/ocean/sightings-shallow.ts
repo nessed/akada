@@ -14,7 +14,7 @@
 
 import { mixHex } from '../fan';
 import { HUES, IRON_GALL } from './palette';
-import { detailFor, hatch, inkLine, LIGHT, shadeAcross, smoothPath, stipple, washFill } from './pen';
+import { smooth as curve, detailFor, hatch, inkLine, LIGHT, shadeAcross, smoothPath, stipple, washFill } from './pen';
 import { mulberry32, range } from './random';
 
 /** The light as the pen takes it: on dark water the light ink marks the light. */
@@ -680,6 +680,14 @@ function glowDot(color: string): HTMLCanvasElement | null {
 
 /** The pale pastels a colony can be: rose, lavender, peach, sky, mint. */
 const SIPHON_HUES = [HUES[1], HUES[2], HUES[3], HUES[4], HUES[7]];
+/** A swimming bell's radius, as a share of the short side of what the colony is drawn in. */
+const SIPHON_BELL = 0.03;
+/** How far above its stem a colony reaches, in bells: the near row's, and the bracts raked up. */
+const SIPHON_ABOVE = 1.75;
+/** Its longest fishing line, as a share of the same short side. */
+const SIPHON_LINE = 0.4;
+/** How far below its stem it reaches, as a share of the same: the polyps and the lines under them. */
+const SIPHON_BELOW = 0.21;
 
 /** How a still colony lies: its tilt, and where its head is, in its region. */
 interface SiphonStill {
@@ -715,8 +723,8 @@ function stillOf(w: number, h: number, seed: number, lie: number): SiphonStill {
   const inward = lie > 0 ? -1 : 1;
   const span = 0.5 * w;
   const m = Math.min(w, h);
-  const above = m * 0.016 * 2.5 + 0.025 * span;
-  const below = m * 0.17 + 0.025 * span;
+  const above = m * SIPHON_BELL * SIPHON_ABOVE + 0.025 * span;
+  const below = m * SIPHON_BELOW + 0.025 * span;
   const tall = (t: number) => above + stillDrop({ tilt: t, span }, span * STILL_SHOWN) + below;
   while (tilt > 0.26 && tall(tilt) > h * 0.96) tilt = Math.max(0.26, tilt - 0.02);
   const hy = (h - tall(tilt)) / 2 + above;
@@ -738,12 +746,12 @@ function stillOf(w: number, h: number, seed: number, lie: number): SiphonStill {
 export function siphonophoreReach(w: number, h: number, seed: number, lie: number, edge = lie > 0 ? 0.04 * w + 0.5 * w * STILL_SHOWN : 0.96 * w - 0.5 * w * STILL_SHOWN): { x0: number; x1: number; y0: number; y1: number; tilt: number } {
   const st = stillOf(w, h, seed, lie);
   const m = Math.min(w, h);
-  const bellR = m * 0.016;
+  const bellR = m * SIPHON_BELL;
   const run = Math.max(0, Math.min(st.span, Math.abs(edge - st.hx)));
   const x0 = st.inward > 0 ? st.hx - run : st.hx - bellR * 2;
   const x1 = st.inward > 0 ? st.hx + bellR * 2 : st.hx + run;
   const wob = 0.025 * st.span;
-  return { x0, x1, y0: st.hy - bellR * 2.5 - wob, y1: st.hy + stillDrop(st, run) + wob + m * 0.17, tilt: st.tilt };
+  return { x0, x1, y0: st.hy - bellR * SIPHON_ABOVE - wob, y1: st.hy + stillDrop(st, run) + wob + m * SIPHON_BELOW, tilt: st.tilt };
 }
 
 /**
@@ -850,21 +858,221 @@ export function drawSiphonophore(
 
   const ink = inkOf(hue, dark);
   const wash = washOf(hue, dark);
+  // The feeding polyps and the gonophores: the colony's one warm tinge.
+  const tinge = dark ? mixHex(mixHex(hue, '#E9B79A', 0.5), NIGHT, 0.3) : mixHex(mixHex(hue, '#C9785A', 0.45), PAPER, 0.15);
+  // Glass catches the light in a line along its lit side.
+  const glint = dark ? mixHex(hue, '#FFFFFF', 0.75) : '#FFFFFF';
   const alpha = env * (dark ? 0.85 : 0.8);
   // A bell is small, but on a wallpaper it is near enough to show its
   // canals and shading, and the whole colony is drawn in the pen.
-  const bellR = m * 0.016;
+  const bellR = m * SIPHON_BELL;
   const d = detailFor(bellR * 12);
   const light = dark ? UNLIGHT : LIGHT;
+  const [lx, ly] = light;
+  const fine = Math.max(0.45 * px, 0.5 * px * (0.8 + 0.4 * d));
+  // A pen line up to a third over a device pixel is drawn a pixel wide:
+  // the same line to the eye, and Skia strokes a line a pixel wide or less
+  // as a hairline, about ten times faster than any wider (and the same
+  // however a picture's strips clip it).
+  const hair = (wd: number) => (wd < 1.35 ? Math.min(wd, 1) : wd);
 
   ctx.save();
   ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  // Every line here is a smooth run of short straight steps: a bevel at
+  // each is as good as a round join, and much cheaper to stroke.
+  ctx.lineJoin = 'bevel';
 
-  // The stem: thickest behind the bells and thinning to a thread, a wash
+  /** Flat points as a path, straight steps only (see `poly`). */
+  const poly = (into: Path2D, pts: number[], closed: boolean) => {
+    if (pts.length < 4) return;
+    into.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) into.lineTo(pts[i], pts[i + 1]);
+    if (closed) into.closePath();
+  };
+  /** A shape laid in its own frame (u along `ux, uy`, v across it) at (cx, cy). */
+  const place = (local: number[], cx: number, cy: number, ux: number, uy: number) => {
+    const out: number[] = [];
+    for (let i = 0; i < local.length; i += 2) out.push(cx + ux * local[i] - uy * local[i + 1], cy + uy * local[i] + ux * local[i + 1]);
+    return out;
+  };
+  /** A clear thing's glint: the stretch of its outline facing the light, a little inside it. */
+  const glintOf = (into: Path2D, pts: number[], cx: number, cy: number, inset: number) => {
+    let run: number[] = [];
+    const k = pts.length / 2;
+    // Start where the outline faces away from the light, so a lit stretch is never cut in two.
+    let s0 = 0;
+    let worst = Infinity;
+    for (let i = 0; i < k; i++) {
+      const f = -((pts[i * 2] - cx) * lx + (pts[i * 2 + 1] - cy) * ly);
+      if (f < worst) {
+        worst = f;
+        s0 = i;
+      }
+    }
+    for (let q = 0; q <= k; q++) {
+      const i = (s0 + q) % k;
+      const ox = pts[i * 2] - cx;
+      const oy = pts[i * 2 + 1] - cy;
+      const ol = Math.hypot(ox, oy) || 1;
+      if (-(ox * lx + oy * ly) / ol > 0.55) run.push(pts[i * 2] - (ox / ol) * inset, pts[i * 2 + 1] - (oy / ol) * inset);
+      else {
+        if (run.length >= 6) poly(into, run, false);
+        run = [];
+      }
+    }
+    if (run.length >= 6) poly(into, run, false);
+  };
+  /** A thing of glass: a faint wash, so where two overlap the colour deepens, and the pen round it. */
+  const glass = (pts: number[], fill: string, a: number, line: number, k: number) => {
+    const p = new Path2D();
+    poly(p, pts, true);
+    ctx.fillStyle = fill;
+    ctx.globalAlpha = alpha * a;
+    ctx.fill(p);
+    if (d > 0.85) inkLine(ctx, pts, true, { width: 0.75 * px, color: ink, alpha: alpha * line, seed: seed ^ (k * 977), light, plate: true, raw: true, min: 0.25 * px });
+    else {
+      ctx.strokeStyle = ink;
+      ctx.globalAlpha = alpha * line * 0.85;
+      ctx.lineWidth = hair(Math.max(0.6 * px, 0.75 * px * (0.8 + 0.4 * d)));
+      ctx.stroke(p);
+    }
+    return p;
+  };
+
+  // The head: a float the size of a seed, then six to ten swimming bells
+  // close-packed in two rows down either side of the stem, each overlapping
+  // the one before, the youngest smallest at the front, each squeezing in
+  // its turn so the beat runs down the row. Each is a soft box with two
+  // shoulders, its mouth turned back and out: the way it swims.
+  const nBells = 6 + Math.floor(unit(seed, 0xbe1) * 5);
+  const floatLen = bellR * 1.05;
+  interface Bell {
+    pts: number[];
+    sac: number[];
+    mouth: number[];
+    canals: number[][];
+    cx: number;
+    cy: number;
+    ux: number;
+    uy: number;
+    rx: number;
+    ry: number;
+    j: number;
+  }
+  const rows: [Bell[], Bell[]] = [[], []];
+  let lb = floatLen;
+  for (let j = 0; j < nBells; j++) {
+    const rb = bellR * (0.55 + 0.45 * Math.min(1, j / 3.5)) * (0.92 + 0.16 * unit(seed, j + 900));
+    lb += rb * 0.78;
+    at(lb);
+    if (!onPage(X, Y)) continue;
+    const side = j % 2 ? 1 : -1;
+    const fx = Math.cos(ANG);
+    const fy = Math.sin(ANG);
+    // Out to its side of the stem, its axis turned back and out from it.
+    const turn = 0.32 + 0.26 * unit(seed, j + 940);
+    const ux = -fx * Math.cos(turn) - fy * side * Math.sin(turn);
+    const uy = -fy * Math.cos(turn) + fx * side * Math.sin(turn);
+    const cx = X - fy * side * rb * 0.55 + fx * rb * 0.08;
+    const cy = Y + fx * side * rb * 0.55 + fy * rb * 0.08;
+    const squeeze = Math.max(0, Math.sin(ambient * 2.2 - j * 0.6));
+    const rx = rb * 1.06;
+    const ry = rb * 0.84 * (1 - 0.12 * squeeze);
+    const local: number[] = [];
+    for (let k = 0; k < 18; k++) {
+      const t = (k / 18) * Math.PI * 2;
+      const c = Math.cos(t);
+      const sn = Math.sin(t);
+      // Two shoulders, and flattened across its mouth, a little lopsided.
+      const sq = 1 + 0.06 * Math.pow(Math.sin(2 * t), 2);
+      const mouth = c > 0.8 ? 0.86 : 1;
+      local.push(c * rx * sq * mouth * (0.96 + 0.08 * unit(seed, j * 31 + k)), sn * ry * sq * (1 + 0.1 * c) * (0.96 + 0.08 * unit(seed, j * 37 + k)));
+    }
+    const pts = place(curve(local, true, 3), cx, cy, ux, uy);
+    // The swimming sac inside it, open toward the mouth: that is what it swims with.
+    const sacL: number[] = [];
+    const m0 = 0.55 + 0.25 * unit(seed, j + 970);
+    for (let q = 0; q <= 10; q++) {
+      const t = m0 + (q / 10) * (Math.PI * 2 - 2 * m0);
+      sacL.push(Math.cos(t) * rx * 0.62 + rx * 0.2, Math.sin(t) * ry * 0.58);
+    }
+    // Its mouth, a ring seen edge on.
+    const mouthL: number[] = [];
+    for (let q = 0; q <= 12; q++) {
+      const t = (q / 12) * Math.PI * 2;
+      mouthL.push(rx * (0.84 + 0.07 * Math.cos(t)), Math.sin(t) * ry * 0.5);
+    }
+    // Its canals, from the mouth back over the dome.
+    const canals: number[][] = [];
+    for (const v of [-0.5, 0.08, 0.52]) {
+      const c: number[] = [];
+      for (let q = 0; q <= 6; q++) {
+        const u = 0.82 - (q / 6) * 1.6;
+        c.push(u * rx, (v + 0.18 * (1 - u * u)) * ry * 0.8);
+      }
+      canals.push(place(c, cx, cy, ux, uy));
+    }
+    rows[side > 0 ? 1 : 0].push({ pts, sac: place(curve(sacL, false, 2), cx, cy, ux, uy), mouth: place(mouthL, cx, cy, ux, uy), canals, cx, cy, ux, uy, rx, ry, j });
+  }
+  const bellRow = (row: Bell[]) => {
+    // The oldest first, so the younger ones lie over them.
+    for (let q = row.length - 1; q >= 0; q--) {
+      const b = row[q];
+      glass(b.pts, wash, 0.26, 0.6, b.j);
+      // The sac, and on a big drawing the canals and the shadow side in dots.
+      const inner = new Path2D();
+      poly(inner, b.sac, false);
+      poly(inner, b.mouth, false);
+      ctx.strokeStyle = ink;
+      ctx.globalAlpha = alpha * 0.32;
+      ctx.lineWidth = hair(fine);
+      ctx.stroke(inner);
+      if (d > 0.3) {
+        const canals = new Path2D();
+        for (const c of b.canals) poly(canals, c, false);
+        ctx.globalAlpha = alpha * 0.22;
+        ctx.lineWidth = hair(0.45 * px);
+        ctx.stroke(canals);
+      }
+      if (d > 0.4) {
+        // (Inside the bell's own ellipse, so it needs no clip; a dot under
+        // a pixel and a half is a square as well as anything.)
+        const dots = new Path2D();
+        const dr = 0.3 * px;
+        for (let k = 0; k < 90; k++) {
+          const u = unit(seed, b.j * 197 + k * 2 + 5000) * 2 - 1;
+          const v = unit(seed, b.j * 197 + k * 2 + 5001) * 2 - 1;
+          if (u * u + v * v > 0.8) continue;
+          const x = b.cx + b.ux * u * b.rx - b.uy * v * b.ry;
+          const y = b.cy + b.uy * u * b.rx + b.ux * v * b.ry;
+          const sh = 0.5 + 0.5 * (((x - b.cx) * lx + (y - b.cy) * ly) / b.rx);
+          if (unit(seed, b.j * 197 + k + 9000) > Math.pow(Math.max(0, sh), 1.8)) continue;
+          if (dr < 0.75) dots.rect(x - dr, y - dr, dr * 2, dr * 2);
+          else {
+            dots.moveTo(x + dr, y);
+            dots.arc(x, y, dr, 0, Math.PI * 2);
+          }
+        }
+        ctx.fillStyle = ink;
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.fill(dots);
+      }
+      const g = new Path2D();
+      glintOf(g, b.pts, b.cx, b.cy, Math.max(1.1 * px, b.ry * 0.16));
+      ctx.strokeStyle = glint;
+      ctx.globalAlpha = alpha * (dark ? 0.35 : 0.6);
+      ctx.lineWidth = Math.max(0.8 * px, b.ry * 0.09);
+      ctx.stroke(g);
+    }
+  };
+
+  // The far row, behind the stem.
+  bellRow(rows[0]);
+
+  // The stem: stout behind the bells and thinning to a thread, a wash
   // under the pen's own ribbon.
-  const wHead = Math.max(1.4 * px, m * 0.0032);
-  const wTail = 0.3 * px;
+  const wHead = Math.max(1.2 * px, m * 0.003);
+  const wTail = 0.25 * px;
   const ribbon = (scale: number) => {
     const left: number[] = [];
     const right: number[] = [];
@@ -877,7 +1085,7 @@ export function drawSiphonophore(
       const dy = stem[j * 2 + 1] - stem[k * 2 + 1];
       const dl = Math.hypot(dx, dy) || 1;
       const t = lens[i] / total;
-      const wd = (wTail + (wHead - wTail) * Math.pow(1 - t, 1.6)) * scale * 0.5;
+      const wd = (wTail + (wHead - wTail) * Math.pow(1 - t, 1.4)) * scale * 0.5;
       left.push(x - (dy / dl) * wd, y + (dx / dl) * wd);
       right.push(x + (dy / dl) * wd, y - (dx / dl) * wd);
     }
@@ -890,242 +1098,274 @@ export function drawSiphonophore(
   };
   ctx.fillStyle = wash;
   ctx.globalAlpha = alpha * 0.35;
-  ctx.fill(ribbon(2.4));
+  ctx.fill(ribbon(2.2));
   ctx.fillStyle = ink;
-  ctx.globalAlpha = alpha * 0.8;
+  ctx.globalAlpha = alpha * 0.72;
   ctx.fill(ribbon(1));
 
-  // The head: a float the size of a seed, then six to ten swimming bells
-  // close-packed in two rows, overlapping, the youngest smallest at the
-  // front, each squeezing in its turn so the beat runs down the row.
-  const nBells = 6 + Math.floor(unit(seed, 0xbe1) * 5);
-  const floatLen = bellR * 0.9;
-  at(floatLen * 0.5);
-  const fx = X;
-  const fy = Y;
-  const fang = ANG;
-  const pitch = bellR * 1.05;
-  const bellOutlines: number[][] = [];
-  const bellPaths: Path2D[] = [];
-  const sacs = new Path2D();
-  const placed: number[] = [];
-  for (let j = nBells - 1; j >= 0; j--) {
-    at(floatLen + bellR * 0.6 + j * pitch);
-    if (!onPage(X, Y)) continue;
-    const side = j % 2 ? 1 : -1;
-    const ang = ANG + side * 0.42;
-    const squeeze = Math.max(0, Math.sin(ambient * 2.2 - j * 0.6));
-    const rb = bellR * (0.62 + 0.38 * Math.min(1, j / 3)) * (0.9 + 0.2 * unit(seed, j + 900));
-    // Each bell hangs off the stem to its side, its opening toward the back.
-    const bx = X - Math.sin(ANG) * side * rb * 0.62 - Math.cos(ANG) * rb * 0.15;
-    const by = Y + Math.cos(ANG) * side * rb * 0.62 - Math.sin(ANG) * rb * 0.15;
-    const rx = rb * 1.25;
-    const ry = rb * 0.85 * (1 - 0.14 * squeeze);
-    const pts: number[] = [];
-    const ca = Math.cos(ang);
-    const sa = Math.sin(ang);
-    for (let k = 0; k < 14; k++) {
-      const t = (k / 14) * Math.PI * 2;
-      const c = Math.cos(t);
-      const sn = Math.sin(t);
-      const sq = (v: number, e: number) => Math.sign(v) * Math.pow(Math.abs(v), e);
-      // A rounded box, flattened across its opening at the back, a little lopsided.
-      const u = sq(c, c < 0 ? 0.6 : 0.9) * rx * (0.95 + 0.1 * unit(seed, j * 31 + k));
-      const v = sq(sn, 0.85) * ry * (1 + 0.18 * c) * (0.95 + 0.1 * unit(seed, j * 37 + k));
-      pts.push(bx + ca * u - sa * v, by + sa * u + ca * v);
-    }
-    bellOutlines.push(pts);
-    bellPaths.push(smoothPath(pts, true, 4));
-    // The muscular sac inside, opening backward: that is what it swims with.
-    const ix = bx - ca * rx * 0.2;
-    const iy = by - sa * rx * 0.2;
-    sacs.moveTo(ix + ca * rx * 0.62, iy + sa * rx * 0.62);
-    sacs.ellipse(ix, iy, rx * 0.62, ry * 0.5, ang, 0, Math.PI * 2);
-    placed.push(bx, by, rx, ry, ang, j);
-  }
-  // Clear things laid over each other: each its own thin wash, so where
-  // two overlap the colour deepens.
-  for (let k = 0; k < bellPaths.length; k++) {
-    ctx.fillStyle = wash;
-    ctx.globalAlpha = alpha * 0.24;
-    ctx.fill(bellPaths[k]);
-    if (d > 0.85) inkLine(ctx, bellOutlines[k], true, { width: 0.9 * px, color: ink, alpha: alpha * 0.75, seed: seed ^ (k * 977), light, plate: true, min: 0.25 * px });
-    else {
-      ctx.strokeStyle = ink;
-      ctx.globalAlpha = alpha * 0.6;
-      ctx.lineWidth = 0.8 * px;
-      ctx.stroke(bellPaths[k]);
-    }
-  }
-  ctx.strokeStyle = ink;
-  ctx.globalAlpha = alpha * 0.25;
-  ctx.lineWidth = 0.6 * px;
-  ctx.stroke(sacs);
-  if (d > 0.4) {
-    // Each bell stippled on its shadow side, as a clear thing is drawn, and
-    // its four radial canals running from the opening back over the dome.
-    const dots = new Path2D();
-    const canals = new Path2D();
-    const [lx, ly] = light;
-    const dr = 0.3 * px;
-    for (let q = 0; q < placed.length; q += 6) {
-      const [bx, by, rx, ry, ang, j] = placed.slice(q, q + 6);
-      const ca = Math.cos(ang);
-      const sa = Math.sin(ang);
-      for (let k = 0; k < 90; k++) {
-        const u = unit(seed, j * 197 + k * 2 + 5000) * 2 - 1;
-        const v = unit(seed, j * 197 + k * 2 + 5001) * 2 - 1;
-        if (u * u + v * v > 0.92) continue;
-        const x = bx + ca * u * rx - sa * v * ry;
-        const y = by + sa * u * rx + ca * v * ry;
-        const sh = 0.5 + 0.5 * (((x - bx) * lx + (y - by) * ly) / Math.max(rx, ry));
-        if (unit(seed, j * 197 + k + 9000) > Math.pow(sh, 1.6)) continue;
-        dots.moveTo(x + dr, y);
-        dots.arc(x, y, dr, 0, Math.PI * 2);
-      }
-      for (const v of [-0.55, -0.2, 0.2, 0.55]) {
-        canals.moveTo(bx + ca * rx * 0.9 - sa * v * ry * 0.4, by + sa * rx * 0.9 + ca * v * ry * 0.4);
-        canals.quadraticCurveTo(bx - sa * v * ry * 1.05, by + ca * v * ry * 1.05, bx - ca * rx * 0.85 - sa * v * ry * 0.3, by - sa * rx * 0.85 + ca * v * ry * 0.3);
-      }
-    }
-    ctx.fillStyle = ink;
-    ctx.globalAlpha = alpha * 0.55;
-    ctx.fill(dots);
-    ctx.strokeStyle = ink;
-    ctx.globalAlpha = alpha * 0.25;
-    ctx.lineWidth = 0.4 * px;
-    ctx.stroke(canals);
-  }
-  // The float, at the very front, with its spot of pigment.
-  if (onPage(fx, fy)) {
-    const fr = bellR * 0.42;
-    ctx.save();
-    ctx.translate(fx, fy);
-    ctx.rotate(fang);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, fr * 1.2, fr * 0.75, 0, 0, Math.PI * 2);
-    ctx.fillStyle = wash;
-    ctx.globalAlpha = alpha * 0.5;
-    ctx.fill();
-    ctx.strokeStyle = ink;
-    ctx.globalAlpha = alpha * 0.7;
-    ctx.lineWidth = 0.8 * px;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(fr * 0.45, 0, fr * 0.4, fr * 0.3, 0, 0, Math.PI * 2);
-    ctx.fillStyle = mixHex(hue, dark ? '#E8E0CF' : '#5A2E24', 0.45);
-    ctx.globalAlpha = alpha * 0.8;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Down the rest of it, the groups that feed it, at uneven intervals: a
-  // pair of bracts, a polyp, a tentacle with its side branches. Batched,
-  // so a run of them is a handful of strokes.
-  const bracts = new Path2D();
+  // Down the rest of it, the groups that feed it, at uneven intervals
+  // (each gap 0.65 to 1.35 of the mean) and shrinking toward the end: one
+  // or two bracts of glass raked back off the stem, a feeding polyp hanging
+  // under them, now and then a grape of gonophores, and a fishing line
+  // streaming back from the polyp's foot as the colony swims, each its own
+  // length, a few drawn up in coils, with its side branches swept back and
+  // each ending in its knot of stinging cells. Batched, so a run of them is
+  // a handful of fills and strokes.
+  // A group's bracts, each in its own batch, so the two or three of a group
+  // overlap glass over glass, and a run of them is three fills.
+  const bracts = [new Path2D(), new Path2D(), new Path2D()];
+  const bractRibs = new Path2D();
   const polyps = new Path2D();
+  const polypRings = new Path2D();
+  const grapes = new Path2D();
   const threads = new Path2D();
   const threadLines: number[][] = [];
-  const beads = new Path2D();
-  const bead = Math.max(0.7 * px, m * 0.0014);
-  const gap = bellR * 2.6;
-  let l = floatLen + bellR * 0.6 + nBells * pitch + bellR * 0.8;
-  for (let i = 0; i < 160 && l < total; i++) {
+  const branches = new Path2D();
+  const knots = new Path2D();
+  const lineMax = m * SIPHON_LINE;
+  const reach = margin + lineMax;
+  const l0 = lb + bellR * 1.1;
+  const gap = bellR * 2.5;
+  let l = l0 + gap * (0.2 + 0.3 * unit(seed, 2999));
+  for (let i = 0; i < 200 && l < total; i++) {
     at(l);
     const q = unit(seed, i);
-    // ±35% on the spacing to the next.
-    l += gap * (0.65 + 0.7 * unit(seed, i + 3000)) * (1 + 0.5 * (l / total));
-    if (!onPage(X, Y)) continue;
-    // The groups shrink a little toward the tail.
-    const shrink = 1 - 0.35 * Math.min(1, (l / total) * 1.5);
-    const ang = ANG;
-    // Whichever side of the stem is underneath.
-    const down = Math.cos(ang) >= 0 ? 1 : -1;
-    for (let b = 0; b < 2; b++) {
-      // A bract: a little clear leaf off the underside, pointing back.
-      const br = m * (0.006 + 0.003 * q) * shrink * (b ? 0.8 : 1);
-      const bang = ang + Math.PI - (0.6 + 0.5 * b) * down;
-      const lx = Math.cos(bang) * br * 2.4;
-      const ly = Math.sin(bang) * br * 2.4;
-      const wx = -Math.sin(bang) * br * 0.8;
-      const wy = Math.cos(bang) * br * 0.8;
-      // A leaf fuller on one edge than the other, and no two alike.
-      const full = 1.1 + 0.5 * unit(seed, i * 2 + b + 8000);
-      bracts.moveTo(X, Y);
-      bracts.quadraticCurveTo(X + lx * 0.45 + wx * full, Y + ly * 0.45 + wy * full, X + lx, Y + ly);
-      bracts.quadraticCurveTo(X + lx * 0.6 - wx * 0.6, Y + ly * 0.6 - wy * 0.6, X, Y);
+    const f = clamp01((l - l0) / Math.max(1, total - l0));
+    const k = 1 - 0.55 * f;
+    l += gap * (0.65 + 0.7 * unit(seed, i + 3000)) * (0.55 + 0.45 * k);
+    if (X < -reach || X > w + reach || Y < -reach || Y > h + margin) continue;
+    const fx = Math.cos(ANG);
+    const fy = Math.sin(ANG);
+    // Across the stem, the side that is up on the page.
+    const upS = fx >= 0 ? 1 : -1;
+    const nux = fy * upS;
+    const nuy = -fx * upS;
+    // The bracts: a pointed leaf of glass, its root on the stem, raked back
+    // and out above it or below, now one way and now the other.
+    const nr = unit(seed, i + 3100);
+    const nb = nr < 0.2 ? 1 : nr < 0.8 ? 2 : 3;
+    for (let b = 0; b < nb; b++) {
+      const up = unit(seed, i * 3 + b + 3200) < 0.68 ? 1 : -1;
+      const rake = 0.3 + 0.5 * unit(seed, i * 3 + b + 3300);
+      const ux = -fx * Math.cos(rake) + nux * up * Math.sin(rake);
+      const uy = -fy * Math.cos(rake) + nuy * up * Math.sin(rake);
+      const bl = bellR * (1.05 + 0.55 * unit(seed, i * 3 + b + 3400)) * k * (b ? 0.82 : 1);
+      const bw = bl * (0.28 + 0.1 * unit(seed, i * 3 + b + 3500));
+      // Fuller on its outer edge than its inner, and no two alike.
+      const o = up;
+      const leaf = [0, 0, bl * 0.3, -bw * 0.9 * o, bl * 0.72, -bw * 0.8 * o, bl, -bw * 0.12 * o, bl * 0.62, bw * 0.3 * o, bl * 0.2, bw * 0.34 * o];
+      const pts = place(curve(leaf, true, 3), X + fx * bl * (0.06 - 0.25 * b), Y + fy * bl * (0.06 - 0.25 * b), ux, uy);
+      poly(bracts[b], pts, true);
+      if (d > 0.3) poly(bractRibs, place([bl * 0.08, 0, bl * 0.5, -bw * 0.18 * o, bl * 0.86, -bw * 0.12 * o], X, Y, ux, uy), false);
     }
-    // The feeding polyp hanging under them: a tear, its point up to the stem.
-    const pr = m * 0.0032 * shrink * (0.85 + 0.3 * q);
-    const py0 = Y + pr * 3.2;
-    polyps.moveTo(X, py0 - pr * 2.2);
-    polyps.quadraticCurveTo(X + pr * 1.3, py0 - pr * 0.2, X + pr * 0.15, py0 + pr * 1.3);
-    polyps.quadraticCurveTo(X - pr * 1.1, py0 + pr * 0.6, X, py0 - pr * 2.2);
-    // And its tentacle, hanging and streaming back from the way it swims,
-    // swaying a little, some long, most short, a few drawn up in coils.
-    const len = m * (0.03 + 0.12 * Math.pow(q, 1.5)) * shrink;
-    const sway = Math.sin(ambient * 0.5 + i * 0.7) * 0.25 + 0.08 * Math.sin(ambient * 0.17 + i);
-    const trail = -Math.cos(ang) * 0.35;
-    const x0 = X;
-    const y0 = py0 + pr * 1.3;
-    const qx = x0 + (sway * 0.15 + trail * 0.4) * len;
-    const qy = y0 + len * 0.5;
-    const ex = x0 + (sway * 0.55 + trail) * len;
-    const ey = y0 + len;
-    const coiled = unit(seed, i + 9100) < 0.3;
-    const pts: number[] = [];
-    const steps = coiled ? 28 : 10;
-    for (let k = 0; k <= steps; k++) {
-      const t = k / steps;
-      let x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * qx + t * t * ex;
-      const y = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * qy + t * t * ey;
-      // A coil seen from the side: a wave across it, growing toward the tip.
-      if (coiled && t > 0.35) x += Math.sin((t - 0.35) * 30 + i) * len * 0.07 * Math.min(1, (t - 0.35) * 4);
+    // The feeding polyp hanging under the stem, a little back: a flask,
+    // narrow at its stalk, swelling, and its mouth at the bottom.
+    const pl = bellR * (0.75 + 0.35 * q) * k;
+    const pw = pl * 0.4;
+    const hang = 0.25 + 0.2 * unit(seed, i + 3600);
+    const hx = -fx * Math.sin(hang) - nux * Math.cos(hang);
+    const hy = -fy * Math.sin(hang) - nuy * Math.cos(hang);
+    const flask = [0, 0.1, 0.22, 0.26, 0.5, 0.5, 0.78, 0.44, 0.97, 0.22, 1.04, 0, 0.97, -0.22, 0.78, -0.44, 0.5, -0.5, 0.22, -0.26, 0, -0.1].map((v, s) => v * (s % 2 ? pw : pl));
+    poly(polyps, place(curve(flask, true, 2), X, Y, hx, hy), true);
+    if (d > 0.4) {
+      for (const u of [0.42, 0.62]) poly(polypRings, place([u * pl, -pw * 0.42, (u + 0.05) * pl, 0, u * pl, pw * 0.42], X, Y, hx, hy), false);
+    }
+    // Here and there a small grape of gonophores beside it.
+    if (d > 0.2 && unit(seed, i + 3700) < 0.45) {
+      const gx = X + hx * pl * 0.3 - fx * pl * 0.45;
+      const gy = Y + hy * pl * 0.3 - fy * pl * 0.45;
+      const gr = bellR * 0.11 * k;
+      for (let g = 0; g < 4; g++) {
+        const a = g * 2.1 + q * 6;
+        const rr = gr * (0.8 + 0.4 * unit(seed, i * 5 + g + 3800));
+        const cx = gx + Math.cos(a) * gr * 1.1;
+        const cy = gy + Math.sin(a) * gr * 1.1 + g * gr * 0.5;
+        const ring: number[] = [];
+        for (let s = 0; s < 8; s++) ring.push(cx + Math.cos((s / 8) * Math.PI * 2) * rr, cy + Math.sin((s / 8) * Math.PI * 2) * rr);
+        poly(grapes, ring, true);
+      }
+    }
+    // The fishing line, from the polyp's foot: down, then taken back by the
+    // water as the colony swims. Most short, a few long, some coiled up.
+    const len = lineMax * k * (0.2 + 0.8 * Math.pow(unit(seed, i + 3900), 1.3));
+    const coiled = unit(seed, i + 9100) < 0.32;
+    const sx = X + hx * pl * 0.15;
+    const sy = Y + hy * pl * 0.15;
+    // The way it ends up going: back along the stem and down, on the
+    // swell, each its own.
+    const sway = Math.sin(ambient * 0.5 + i * 0.7) * 0.18 + 0.06 * Math.sin(ambient * 0.17 + i);
+    let ex = -fx * (0.75 + 0.45 * unit(seed, i + 4100)) + sway;
+    let ey = 0.6 + 0.35 * unit(seed, i + 4200);
+    const el = Math.hypot(ex, ey) || 1;
+    ex /= el;
+    ey /= el;
+    const wav = 0.04 + 0.08 * unit(seed, i + 4300);
+    const wph = unit(seed, i + 4400) * Math.PI * 2;
+    const pts: number[] = [sx, sy];
+    const straight = coiled ? 0.62 : 1;
+    const steps = Math.max(6, Math.min(30, Math.ceil(len / (3 * px))));
+    let x = sx;
+    let y = sy;
+    let dirx = hx;
+    let diry = hy;
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      const e = smooth(Math.min(1, t * 1.8));
+      const wv = Math.sin(t * 7 + wph + ambient * 0.3) * wav;
+      let tx = hx + (ex - hx) * e;
+      let ty = hy + (ey - hy) * e;
+      tx += -ty * wv;
+      ty += tx * wv;
+      const tl = Math.hypot(tx, ty) || 1;
+      dirx = tx / tl;
+      diry = ty / tl;
+      const ds = (len * straight) / steps;
+      x += dirx * ds;
+      y += diry * ds;
       pts.push(x, y);
     }
-    if (d > 0.85) threadLines.push(pts);
-    else {
-      threads.moveTo(pts[0], pts[1]);
-      for (let k = 2; k < pts.length; k += 2) threads.lineTo(pts[k], pts[k + 1]);
+    if (coiled) {
+      // A coil seen from the side: drawn up into a shrinking spiral.
+      const turns = 1.5 + unit(seed, i + 4500);
+      const r0 = len * 0.075;
+      const spin = unit(seed, i + 4600) < 0.5 ? 1 : -1;
+      const a0 = Math.atan2(diry, dirx) - spin * Math.PI / 2;
+      const ccx = x - Math.cos(a0) * r0;
+      const ccy = y - Math.sin(a0) * r0;
+      const cs = Math.ceil(turns * 14);
+      for (let s = 1; s <= cs; s++) {
+        const t = s / cs;
+        const a = a0 + spin * t * turns * Math.PI * 2;
+        const rr = r0 * (1 - 0.65 * t);
+        pts.push(ccx + Math.cos(a) * rr + dirx * r0 * 0.5 * t, ccy + Math.sin(a) * rr + diry * r0 * 0.5 * t);
+      }
     }
-    // The side branches, each ending in its knot of stinging cells: short,
-    // not evenly spaced or sized, swept back down the tentacle.
-    const nb = 3 + Math.floor(unit(seed, i + 4000) * 3);
-    for (let k = 0; k < nb; k++) {
-      const t = 0.25 + ((k + 0.3 + 0.5 * unit(seed, i * 7 + k + 5000)) / nb) * 0.7;
-      const a = (1 - t) * (1 - t);
-      const b = 2 * (1 - t) * t;
-      const c = t * t;
-      const dx = a * x0 + b * qx + c * ex;
-      const dy = a * y0 + b * qy + c * ey;
-      const side = k % 2 ? 1 : -1;
-      const tl = len * (0.05 + 0.035 * unit(seed, i * 13 + k + 7000));
-      const tx = dx + side * tl * 0.6;
-      const ty = dy + tl * 0.8;
-      threads.moveTo(dx, dy);
-      threads.quadraticCurveTo(dx + side * tl * 0.4, dy + tl * 0.3, tx, ty);
-      const br = bead * (0.6 + 0.7 * unit(seed, i * 11 + k + 6000));
-      beads.moveTo(tx + br * 0.7, ty);
-      beads.ellipse(tx, ty, br * 0.7, br * 1.2, sway * 0.4 + side * 0.5, 0, Math.PI * 2);
+    // Never further below the stem than the colony's reach (`siphonophoreReach`):
+    // a line that would hang lower is drawn up shorter, the same shape.
+    let low = 0;
+    for (let s = 3; s < pts.length; s += 2) low = Math.max(low, pts[s] - Y);
+    const room = m * SIPHON_BELOW - bellR * 0.45;
+    if (low > room) {
+      const f = room / low;
+      for (let s = 2; s < pts.length; s += 2) {
+        pts[s] = sx + (pts[s] - sx) * f;
+        pts[s + 1] = Y + (pts[s + 1] - Y) * f;
+      }
+    }
+    if (d > 0.85) threadLines.push(pts);
+    else poly(threads, pts, false);
+    // The side branches, short and uneven, swept back down the line, each
+    // ending in its knot.
+    const tStep = Math.max(4 * px, bellR * 0.55 * k);
+    const np = pts.length / 2;
+    let acc = tStep * (0.5 + unit(seed, i + 4700));
+    let run = 0;
+    for (let s = 1, c = 0; s < np && c < 14; s++) {
+      const ax = pts[s * 2 - 2];
+      const ay = pts[s * 2 - 1];
+      const dx = pts[s * 2] - ax;
+      const dy = pts[s * 2 + 1] - ay;
+      const dl = Math.hypot(dx, dy) || 1;
+      run += dl;
+      if (run < acc) continue;
+      acc = run + tStep * (0.65 + 0.7 * unit(seed, i * 17 + c + 4800));
+      const t = run / len;
+      if (t > 0.92 || t < 0.12) continue;
+      const side = c % 2 ? 1 : -1;
+      c++;
+      const bl = bellR * (0.22 + 0.16 * unit(seed, i * 19 + c + 4900)) * k * (1 - 0.45 * t);
+      const ang = Math.atan2(dy, dx) + side * (0.55 + 0.4 * unit(seed, i * 23 + c + 5100));
+      const bx = ax + Math.cos(ang) * bl;
+      const by = ay + Math.sin(ang) * bl;
+      branches.moveTo(ax, ay);
+      branches.lineTo(ax + Math.cos(ang - side * 0.25) * bl * 0.55, ay + Math.sin(ang - side * 0.25) * bl * 0.55);
+      branches.lineTo(bx, by);
+      const kr = Math.max(0.45 * px, bellR * 0.06 * k);
+      if (kr < 1.1) {
+        // Too small, in device px, to have a shape: a speck.
+        knots.rect(bx - kr, by - kr, kr * 2, kr * 2);
+        continue;
+      }
+      const ring: number[] = [];
+      for (let e = 0; e < 7; e++) {
+        const a = (e / 7) * Math.PI * 2;
+        ring.push(bx + Math.cos(a) * kr * 0.7 * Math.cos(ang) - Math.sin(a) * kr * 1.3 * Math.sin(ang), by + Math.cos(a) * kr * 0.7 * Math.sin(ang) + Math.sin(a) * kr * 1.3 * Math.cos(ang));
+      }
+      poly(knots, ring, true);
     }
   }
-  ctx.fillStyle = wash;
-  ctx.globalAlpha = alpha * 0.3;
-  ctx.fill(bracts);
+  // The lines first, then the polyps they hang from, then the glass over them.
+  ctx.strokeStyle = ink;
+  ctx.globalAlpha = alpha * 0.55;
+  ctx.lineWidth = hair(0.55 * px);
+  ctx.stroke(threads);
+  for (let k = 0; k < threadLines.length; k++) inkLine(ctx, threadLines[k], false, { width: 0.75 * px, color: ink, alpha: alpha * 0.55, taper: [0.04, 0.5], seed: seed ^ (k * 131), light, raw: true, plate: true, min: 0.2 * px });
   ctx.globalAlpha = alpha * 0.45;
+  ctx.lineWidth = hair(0.45 * px);
+  ctx.stroke(branches);
+  ctx.fillStyle = ink;
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.fill(knots);
+  ctx.fillStyle = tinge;
+  ctx.globalAlpha = alpha * 0.55;
   ctx.fill(polyps);
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.fill(grapes);
   ctx.strokeStyle = ink;
   ctx.globalAlpha = alpha * 0.5;
-  ctx.lineWidth = 0.6 * px;
-  ctx.stroke(bracts);
+  ctx.lineWidth = hair(fine);
   ctx.stroke(polyps);
+  ctx.globalAlpha = alpha * 0.35;
+  ctx.lineWidth = hair(0.45 * px);
+  ctx.stroke(grapes);
+  ctx.stroke(polypRings);
+  // The bracts, glass each on its own, so where two cross the colour deepens.
+  ctx.fillStyle = wash;
+  ctx.globalAlpha = alpha * 0.28;
+  for (const b of bracts) ctx.fill(b);
+  ctx.strokeStyle = ink;
   ctx.globalAlpha = alpha * 0.55;
-  ctx.lineWidth = 0.55 * px;
-  ctx.stroke(threads);
-  for (let k = 0; k < threadLines.length; k++) inkLine(ctx, threadLines[k], false, { width: 0.7 * px, color: ink, alpha: alpha * 0.5, taper: [0.05, 0.7], seed: seed ^ (k * 131), light, raw: true, plate: true, min: 0.2 * px });
-  ctx.fillStyle = ink;
-  ctx.globalAlpha = alpha * 0.55;
-  ctx.fill(beads);
+  ctx.lineWidth = hair(fine);
+  for (const b of bracts) ctx.stroke(b);
+  ctx.globalAlpha = alpha * 0.25;
+  ctx.lineWidth = hair(0.45 * px);
+  ctx.stroke(bractRibs);
+
+  // The near row of bells, over the stem.
+  bellRow(rows[1]);
+
+  // The float, at the very front, with its spot of pigment at the tip.
+  at(floatLen * 0.5);
+  if (onPage(X, Y)) {
+    const fr = bellR * 0.5;
+    const fx = Math.cos(ANG);
+    const fy = Math.sin(ANG);
+    const local: number[] = [];
+    for (let k = 0; k < 16; k++) {
+      const t = (k / 16) * Math.PI * 2;
+      const c = Math.cos(t);
+      // An ovoid, fuller behind, narrowing to the tip.
+      local.push(c * fr * 1.25, Math.sin(t) * fr * 0.7 * (1 - 0.18 * c));
+    }
+    const pts = place(local, X, Y, fx, fy);
+    glass(pts, wash, 0.45, 0.8, 0x51);
+    const spot: number[] = [];
+    for (let k = 0; k < 10; k++) {
+      const t = (k / 10) * Math.PI * 2;
+      spot.push(fr * 0.78 + Math.cos(t) * fr * 0.3, Math.sin(t) * fr * 0.24);
+    }
+    const sp = new Path2D();
+    poly(sp, place(spot, X, Y, fx, fy), true);
+    ctx.fillStyle = mixHex(hue, dark ? '#E8E0CF' : '#5A2E24', 0.45);
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.fill(sp);
+    const g = new Path2D();
+    glintOf(g, pts, X, Y, Math.max(1 * px, fr * 0.18));
+    ctx.strokeStyle = glint;
+    ctx.globalAlpha = alpha * (dark ? 0.35 : 0.6);
+    ctx.lineWidth = Math.max(0.8 * px, fr * 0.1);
+    ctx.stroke(g);
+  }
 
   // On dark water, a faint light along the stem, a wave of it travelling
   // back from the front. Soft and low: the page is still the brightest thing.

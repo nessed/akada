@@ -1394,27 +1394,45 @@ not show and nothing is scored, as everywhere in the deep.
 | How long the reader focused | How deep the picture goes. Each zone gets its share of the page, not its metres, so a short sitting is an airy, sunlit picture and a long one falls through the dark to the floor. |
 | When it began | The light at the surface (`sunFor` in `light.ts`): the shafts lean one way in the morning and the other in the afternoon, white at noon, amber at dusk; after dark the window of sky holds the moon in that night's real phase. |
 | Which course | The water's tint and the course's own species among the cast, so a term of one course's pictures look like a set. |
-| Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Together they are the way down, read through them and a thin trail of rising bubbles, never a drawn line. |
-| Each break | A rock at that depth, near and fully inked, a longer break a longer rock. A side of the page holds two rocks at most, the kelp's counted; breaks beyond that are ledges in a wall, a bench with its shadow under it, so every break still leaves its mark. Rocks merely passed are drawn far, small and faint in the water's colour, so the near rocks still count the breaks. |
-| What swam by | The species that really did, met where they were met, curated to a cast of twenty or thirty; the rarest gets the best place. |
-| Rare sightings | Drawn where they happened; the whale fall lies on the floor. |
+| Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Only the last four read as jellies; older blocks hang far off as ghosts. Together they are the way down, read through them and a thin trail of rising bubbles, never a drawn line. |
+| Each break | A rock at that depth on the page's one wall, near and fully inked, a longer break a longer rock; two rocks at most, the kelp's counted, and breaks beyond that are ledges on the same wall, a bench with its shadow under it, so every break still leaves its mark. Where the kelp's rock stands at a break's depth, the break's rock stands straight under it. Only the ledges the one wall has no room for go on a second, far-off wall. Rocks merely passed are drawn far, small and faint, and only on a page with no wall of its own. |
+| What swam by | The species that really did, met near where they were met, curated to a cast of five for a short sitting and a few more for each hour, never past eleven (a school counts as one); the rarest gets the best place. |
+| Rare sightings | Two at most, the rarest; a second is drawn only if the page keeps its calm with it. The whale fall lies on the floor, and only where the floor is drawn. |
 | What was passed | Kelp at the top if it began in kelp, rocks and their growths at their depths, the floor if the abyss was reached. |
 
 **The hero leads.** The last block's jelly is the largest thing on the page
-(about a sixth of its short side across) and the only one in full ink, a
-pool of its own light round it; the one before is about half its size, the
-older ones smaller and further off, the oldest only faint shapes in the
-water. Siblings are visibly different animals: each differs from the
-hero in at least two things you can see (the bell's height, the trails'
-length, the arms, the hue), no two hang at the same depth or within reach
-of each other's arms, and on a wide page they zigzag off the diagonal
-rather than ride it. Far off they are hazed toward the water but keep their
-rim, ribs and trails, never a soap bubble. With no floor under it, the
-hero's trails reach most of the way down and one near animal swims in the
-page's foot, so a short sitting's picture is never empty at the bottom. On a tall page the hero
-hangs a little below the middle. Past three hours the floor parts into a
-trench under it, two walls falling into a dark cleft, and the whale fall,
+(a fifth of its short side across) and the only one in full ink, a
+pool of its own light round it; each of its three elders is at most half
+its size.
+Only the hero and its three youngest elders are drawn as jellies; older
+blocks hang far off as ghosts, a quarter strength and at most a third the
+hero's size, never on a rock, a wall or the kelp, so every block still
+shows but only four read as jellies. Siblings are visibly different
+animals: each differs from the hero in at least two things you can see
+(the bell's height, the trails' length, the arms, the hue), and no two hang
+at the same depth or within reach of each other's arms. The family never
+steps down a diagonal: each step to the next jelly differs from the step
+after it by at least four tenths, across and down, and they zig from side
+to side. Far off they are hazed toward the water but keep their rim, ribs
+and trails, never a soap bubble. With no floor under it, the hero's trails
+reach most of the way down, inked dark enough on the cream paper to read
+where they end, so a short sitting's picture is never empty at the
+bottom. On a tall page the hero hangs a little below the middle. Past
+three hours the floor parts into a trench under it, two walls falling into
+a dark cleft from 0.73 of a tall page down (0.77 of a wide one), so the
+water over the cleft is the hero's stage, and the whale fall,
 if there is one, lies on the gentler slope, never in the cleft.
+
+**One calm stretch.** The page is weighed to one side: the wall, the way
+down and the hero on it, the window leaning to the other. Every page keeps
+one clear stretch of a quarter of it or more with nothing in it but water,
+light and bubbles, usually across from the hero and under the light. The
+rare things are placed to leave it, and the cast never enters it. The cast
+gathers in one to three loose clumps, never a lone speck (each animal
+within an eighth of the short side of another, the rarest excepted) and
+never a ladder of three down the page. This is the rule the rest serve:
+the pictures that sell are the calm ones, so a long sitting reads as depth
+and quiet, not as a crowd.
 
 **Composed, not cropped.** Each shape is laid out on its own: tall for a
 phone or a print (the way down a gentle S), wide for a laptop (a diagonal).
@@ -1423,7 +1441,10 @@ them, and keeps the best. Some things are rules, not scores: a margin round
 the hero, jellies never crowding each other, nothing over the window of sky,
 the rare things touching nothing, and the rocks and the cast moving to make
 room, never the jellies' path. The rest is weighed: nothing cut by the edge,
-no three things in a row at one height, the cast in a few loose groups with
+no three things in a row at one height (no more than two of the middle
+and near cast in any band a sixteenth of the page tall, none level with
+another, over two depths or more, three for seven or more, any two animals a fiftieth of
+the short side apart, nose to tail), the cast in a few loose groups with
 one wide calm stretch of water left open, near, middle and far each its own,
 and things far off made hazy in their own colour, never set on a pale
 backing. The page darkens to its foot whatever the length, so even a short
@@ -1433,15 +1454,20 @@ timer, the finish sheet or Stats.
 
 **Two papers.** Cream: watercolour on rag, the deep laid in indigo washes
 that keep their grain and never go to black. Night: the dark water with the
-pen's light ink.
+pen's light ink. On cream the water under the window is lighter all down
+the shafts' path, a soft fan at the sun's lean, so the light is as present
+as by night.
 
 **No horizon, no stage.** The water deepens as one smooth fall over half
 the page or more (the depth's colour is eased down the page so no band of it
 darkens faster than about 2 L* a hundredth of the page), and the wash's
 glazes are each laid by a stroke across part of the page only, tilted a
-degree or three and ragged at the edge, so no edge runs side to side and
-nothing reads as a sea's surface seen side on. Nothing floats: every rock
-stands out from a side wall, a cliff 0.04 to 0.09 of the width running from
+degree or three and ragged at the edge, each edge swinging three
+hundredths of the page either way and feathered over eight with no pale
+line along it, so no edge runs side to side and nothing reads as a sea's
+surface seen side on. Nothing floats: every rock
+stands out from the page's wall, one wall on one side, a cliff 0.035 to
+0.065 of the width running from
 under it down into the floor, the trench or the page's foot, flaring into a
 buttress under the rock so no rock sits as a cap on a stem, and fading from
 whole to about a third as it goes down (`inkWall` in `outcrop-sprite.ts`,
@@ -1449,20 +1475,32 @@ the rocks' own hand). Every rock runs off its edge (0.08 of the width or
 more); no two face each other across the page at one depth; each has a
 build of its own (a heap, a slab, a spire, an overhang, a field of
 boulders); far ones keep a broken thread of pen and a few strokes of
-shadow, and fade into a far wall of their own, never a near rock's. The
+shadow, and fade into a far wall of their own, never a near rock's. On cream the
+stone is never the palest thing on the page: lifted only to the water's own
+tone, a step under it, and carried down the page darker with the water. The
 kelp's far side is left out of a picture rather than drawn as a lone stalk.
-The floor is sediment, not a stage: level strata hatched across it,
-pebbles in small clusters, its crest a broken ink line with only a hair of
-light under it, and on either paper darker than the water above it. The cast keeps three planes, each its own scale and
+A rock is drawn whole and cut at its underside, which rises from the wall
+to the lip, and that cut is inked: no rock, kelp ledge or wall ends in a
+fade hanging in open water. A wall's buttress holds at least the rock's
+width over 1.6 down to the rock's underside and never stands out past its
+crest. The floor is sediment, not a stage: level strata engraved across it
+(`inkFloor`, the walls' own hand), pebbles in small clusters, its crest one
+broken ink line with nothing pale under it, and on either paper darker than
+the water above it. Floor animals lie on the ground, a star wholly below
+the floor's line. The cast keeps three planes, each its own scale and
 strength (near whole, middle 0.6 at 0.75, far 0.35 at 0.45), and kinds keep
 their real sizes against each other (a turtle three school fish long, a
 squid one or two). A trench's walls fall in ledges, each lip jutting over
 the drop with its shadow under it, the beds of rock lying level across
 them, lit only on the wall that faces the window. A passing whale is always
 its whole shadow, half the page long (smaller only when the page is
-crowded), soft, pitched a little head-up with its back fading in, and
+crowded), as crisp as the live sea's, pitched a little head-up with only
+its back lost in the water, 7 to 13 per cent darker than the water round
+it by day and by night, and
 never laid along the water's steepest fall, where its level back would draw
-a horizon. Sightings keep a clear margin from everything, walls included;
+a horizon. Sightings keep a clear margin from everything, walls included, and one
+that can't have its room isn't drawn; one anglerfish to a picture at most;
+the siphonophore always hangs at 22 to 36 degrees;
 the squid's eye is a twentieth of the short side across. On the cream
 paper the moon is a flat pale disc with a few faint seas in it, never
 shaded like a ball.

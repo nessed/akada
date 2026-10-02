@@ -1091,6 +1091,9 @@ export function drawLightPass(
  * usual). On paper the specks get a breath of slate under them, since white
  * on pale water is otherwise lost. Deterministic from `seed`.
  */
+/** A speck of dust as an octagon: cos and sin of its eight corners. */
+const DUST = Array.from({ length: 16 }, (_, i) => (i % 2 ? Math.sin : Math.cos)((Math.floor(i / 2) / 8) * Math.PI * 2));
+
 export function drawSnowDeep(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -1118,21 +1121,25 @@ export function drawSnowDeep(
   const css = (w * h) / (px * px);
   const lit = (x: number, y: number) => (o.litBy ? 0.45 + 1.0 * clamp01(o.litBy(x, y)) : 1);
   const [cr, cg, cb] = rgbOf(o.color);
+  // Ten strengths, each speck filled on its own: a path of thousands of
+  // them is laid by another of the rasteriser's hands than a path of a few,
+  // so a picture drawn in strips would not match itself drawn whole.
   const BUCKETS = 10;
-  const fillBuckets = (buckets: Path2D[], color: (a: number) => string) => {
-    for (let k = 0; k < BUCKETS; k++) {
-      ctx.fillStyle = color((k + 0.5) / BUCKETS);
-      ctx.fill(buckets[k]);
-    }
+  const level = (a: number) => (Math.max(0, Math.min(BUCKETS - 1, Math.floor(a * BUCKETS))) + 0.5) / BUCKETS;
+  const fillOne = (pts: number[], color: string) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(pts[0], pts[1]);
+    for (let k = 2; k < pts.length; k += 2) ctx.lineTo(pts[k], pts[k + 1]);
+    ctx.closePath();
+    ctx.fill();
   };
-  const bucketOf = (a: number) => Math.max(0, Math.min(BUCKETS - 1, Math.floor(a * BUCKETS)));
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
 
   // Far: fine dust, a lot of it, barely there.
   {
     const n = Math.round((css / 380) * o.density);
-    const buckets = Array.from({ length: BUCKETS }, () => new Path2D());
     for (let i = 0; i < n; i++) {
       const x = r() * w;
       const y = r() * h;
@@ -1140,18 +1147,18 @@ export function drawSnowDeep(
       const base = 0.1 + 0.18 * r();
       if (!shown(y)) continue;
       const a = Math.min(1, base * lit(x, y));
-      const p = buckets[bucketOf(a)];
-      p.moveTo(x + rad, y);
-      p.arc(x, y, rad, 0, TAU);
+      // As straight steps, never an arc: a curve is stepped differently where
+      // a strip's clip cuts it, and a picture drawn in strips would not join.
+      const pts: number[] = [];
+      for (let k = 0; k < 8; k++) pts.push(x + rad * DUST[k * 2], y + rad * DUST[k * 2 + 1]);
+      const l = level(a);
+      fillOne(pts, o.dark ? `rgba(${cr}, ${cg}, ${cb}, ${l})` : `rgba(70, 84, 82, ${l * 0.55})`);
     }
-    fillBuckets(buckets, (a) => (o.dark ? `rgba(${cr}, ${cg}, ${cb}, ${a})` : `rgba(70, 84, 82, ${a * 0.55})`));
   }
 
   // Between: crisp flakes, ragged, a few with a tail.
   {
     const n = Math.round((css / 2600) * o.density);
-    const under = Array.from({ length: BUCKETS }, () => new Path2D());
-    const over = Array.from({ length: BUCKETS }, () => new Path2D());
     for (let i = 0; i < n; i++) {
       const x = r() * w;
       const y = r() * h;
@@ -1176,26 +1183,16 @@ export function drawSnowDeep(
         }
         continue;
       }
-      const add = (p: Path2D, ox: number, oy: number) => {
-        p.moveTo(pts[0] + ox, pts[1] + oy);
-        for (let k = 2; k < pts.length; k += 2) p.lineTo(pts[k] + ox, pts[k + 1] + oy);
-        p.closePath();
-      };
-      add(over[bucketOf(a)], 0, 0);
-      if (!o.dark) add(under[bucketOf(a)], px * 0.5, px * 0.6);
+      // (Its shadow under it on paper, then the flake, then its wisp.)
+      if (!o.dark) fillOne(pts.map((v, k) => v + (k % 2 ? px * 0.6 : px * 0.5)), `rgba(52, 64, 62, ${level(a) * 0.4})`);
+      fillOne(pts, `rgba(${cr}, ${cg}, ${cb}, ${level(a)})`);
       if (r() < 0.15) {
         // A trailing wisp: snow is clumped stuff, mucus and all.
         const tail = Math.min(most * 0.6, size * (2 + r() * 3));
         const ang = -Math.PI / 2 + (r() - 0.5) * 1.2;
-        const p = over[bucketOf(a * 0.5)];
-        p.moveTo(x, y);
-        p.lineTo(x + Math.cos(ang) * tail - px * 0.3, y + Math.sin(ang) * tail);
-        p.lineTo(x + Math.cos(ang) * tail + px * 0.3, y + Math.sin(ang) * tail);
-        p.closePath();
+        fillOne([x, y, x + Math.cos(ang) * tail - px * 0.3, y + Math.sin(ang) * tail, x + Math.cos(ang) * tail + px * 0.3, y + Math.sin(ang) * tail], `rgba(${cr}, ${cg}, ${cb}, ${level(a * 0.5)})`);
       }
     }
-    if (!o.dark) fillBuckets(under, (a) => `rgba(52, 64, 62, ${a * 0.4})`);
-    fillBuckets(over, (a) => `rgba(${cr}, ${cg}, ${cb}, ${a})`);
   }
 
   // Nothing nearer: no soft discs drifting past a lens. This is a drawing,
