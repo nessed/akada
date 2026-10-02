@@ -560,7 +560,7 @@ function buildGrammar(
   for (const [cx, top, rx, ry] of stones) add(cx, top, rx, ry, [2.1, 2.5]);
   // The slope ends under its outermost stone, its wall end kept where it
   // was: run on past them, cut under its lip it hung there as a tongue.
-  const end = Math.max(...stones.map(([cx, , rx]) => cx + rx * 0.35));
+  const end = Math.max(...stones.map(([cx, , rx]) => cx + rx * 0.1));
   const slope = boulders[0];
   const k = Math.min(1, (end - (slope.cx - slope.rx)) / (2 * slope.rx));
   if (k < 1) {
@@ -2625,7 +2625,7 @@ function glassShape(H: number, r: Rand) {
  * and no plate stands off on its own. The steepest first.
  */
 function plateWhorl(H: number, r: Rand) {
-  const n = int(r, 3, 5);
+  const n = int(r, 3, 4);
   const s0 = chance(r, 0.5) ? 1 : -1;
   const root = { x: range(r, -0.04, 0.04) * H, y: -H * 0.07 };
   const plates = Array.from({ length: n }, (_, k) => {
@@ -2654,14 +2654,15 @@ function plateWhorl(H: number, r: Rand) {
     };
     // Narrow where it is grown on: the spread opens out over its first half.
     const spread = (rho: number) => w * (0.4 + 0.6 * Math.sqrt(Math.min(1, rho / (0.45 * L))));
+    // (Few points: the pen smooths a curve through them.)
     const pts: number[] = [];
-    const M = 10;
+    const M = 6;
     for (let i = 0; i <= M; i++) {
       const rho = (L * 0.9 * i) / M;
       pts.push(...at(rho, -spread(rho)));
     }
-    for (let i = 0; i <= 40; i++) {
-      const a = -w + (2 * w * i) / 40;
+    for (let i = 1; i < 24; i++) {
+      const a = -w + (2 * w * i) / 24;
       pts.push(...at(rim(a), a));
     }
     for (let i = M; i >= 0; i--) {
@@ -3400,19 +3401,30 @@ const DRAW: Record<Growth['kind'], Drawer> = {
   // thickness, then its top washed and shaded, ringed with its growth
   // following the wavy margin and ribbed from where it is grown on.
   plate(ctx, H, ink, r, px, pen) {
-    plateWhorl(H, r).forEach((p, k) => {
+    const plates = plateWhorl(H, r);
+    const n = plates.length;
+    plates.forEach((p, k) => {
       const under = p.pts.map((v, i) => (i % 2 ? v + p.lip : v));
       const underPath = pathOf(under);
       ctx.fillStyle = ink.deep;
       ctx.fill(underPath);
-      if (pen.d > 0.4 && !pen.dark) {
+      const front = k >= n - 2;
+      if (front && pen.d > 0.4 && !pen.dark) {
         hatch(ctx, underPath, boxOf(under), { spacing: 1.7 * px, angle: 1.3, shade: () => 0.8, from: 0.5, color: ink.ink, width: 0.4 * px, alpha: 0.5, seed: pen.seed + k });
       }
-      outline(ctx, under, true, ink, pen, 0.8);
+      // (Its underside mostly under its top: a plain line serves.)
+      ctx.strokeStyle = ink.ink;
+      ctx.lineWidth = 0.75 * px;
+      ctx.stroke(underPath);
       const top = pathOf(p.pts);
       const tb = boxOf(p.pts);
-      wash(ctx, top, tb, ink.body, pen);
-      shadeIn(ctx, top, tb, ink, pen, { angle: 1.25, bow: 0.3, from: 0.58, cross: null });
+      // (Washed and ringed, no hatch on its face: its ribs are its shading.
+      // The ones behind, mostly hidden, take the colour flat.)
+      if (front) wash(ctx, top, tb, ink.body, pen);
+      else {
+        ctx.fillStyle = ink.body;
+        ctx.fill(top);
+      }
       ctx.save();
       ctx.clip(top);
       const ringPath = new Path2D();
@@ -3442,7 +3454,12 @@ const DRAW: Record<Growth['kind'], Drawer> = {
         faint(ctx, pen.dark ? 0.18 : 0.28, () => ctx.stroke(ribs));
       }
       ctx.restore();
-      outline(ctx, p.pts, true, ink, pen, 0.85);
+      if (front) outline(ctx, p.pts, true, ink, pen, 0.85);
+      else {
+        ctx.strokeStyle = ink.ink;
+        ctx.lineWidth = 0.75 * px;
+        ctx.stroke(top);
+      }
     });
     ctx.fillStyle = ink.body;
   },
@@ -3559,11 +3576,13 @@ const DRAW: Record<Growth['kind'], Drawer> = {
   // polyps when drawn big; in the dark a few of its polyps glow.
   seapen(ctx, H, ink, r, px, pen) {
     const s = seapenShape(H, r);
+    // (The foot is small: flat colour and a plain line.)
     const footPath = pathOf(s.foot);
-    const fb = boxOf(s.foot);
-    wash(ctx, footPath, fb, mixHex(ink.body, ink.deep, 0.25), pen);
-    shadeIn(ctx, footPath, fb, ink, pen, { angle: 0.2, cross: null, from: 0.5 });
-    outline(ctx, s.foot, true, ink, pen, 0.8);
+    ctx.fillStyle = mixHex(ink.body, ink.deep, 0.25);
+    ctx.fill(footPath);
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = 0.7 * px;
+    ctx.stroke(footPath);
     const line: number[] = [];
     for (let k = 0; k <= 20; k++) line.push(...s.at(k / 20));
     const stem = ribbon(line, s.stemW * 2, s.stemW * 0.6);
@@ -3573,13 +3592,19 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     const leaves = s.leaves.slice().sort((a, b) => a.y - b.y);
     const veins = new Path2D();
     const dots = new Path2D();
-    for (const l of leaves) {
-      const path = pathOf(l.pts);
-      ctx.fillStyle = l.side > 0 === pen.dark ? ink.body : mixHex(ink.body, ink.deep, 0.35);
-      ctx.fill(path);
+    // A rank at a time, each laid as one path, top leaf first (later
+    // leaves of a path lie over earlier ones where they overlap).
+    const shaded = mixHex(ink.body, ink.deep, 0.35);
+    for (const side of [-1, 1]) {
+      const rank = new Path2D();
+      for (const l of leaves) if (l.side === side) rank.addPath(pathOf(l.pts));
+      ctx.fillStyle = side > 0 === pen.dark ? ink.body : shaded;
+      ctx.fill(rank);
       ctx.strokeStyle = ink.ink;
       ctx.lineWidth = (pen.d > 0.3 ? 0.45 : 0.55) * px;
-      ctx.stroke(path);
+      ctx.stroke(rank);
+    }
+    for (const l of leaves) {
       veins.moveTo(l.x, l.y);
       veins.lineTo(l.x + Math.sin(l.ang) * l.pl * 0.85, l.y - Math.cos(l.ang) * l.pl * 0.85);
       if (pen.d > 0.3) {

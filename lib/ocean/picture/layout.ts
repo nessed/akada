@@ -1104,18 +1104,20 @@ export interface Composition {
   high: boolean;
   /** Whether the calm is laid over the hero rather than across from it. */
   calmAbove: boolean;
-  /** The window of sky, from the wall, as a share of the width. */
+  /** The window of sky, from the wall, as a share of the width: straight over the hero, its far edge no further out than the hero's, so the calm beside them runs from the top of the page down (over the family, on a page calm above). */
   win: number;
+  /** The wall's side, once the page knows it. */
+  wallSide: -1 | 1;
 }
 
-export function composeFor(key: string, tall: boolean): Composition {
-  const name = COMPOSITIONS[hash32(key, 'composition-5') % COMPOSITIONS.length];
+export function composeFor(key: string, tall: boolean, turn = 0): Composition {
+  const name = COMPOSITIONS[(hash32(key, 'composition-5') + turn) % COMPOSITIONS.length];
   const u = unit01(key, 'composition-x');
   const v = unit01(key, 'composition-win');
   const [lo, hi] = tall ? HERO_FROM_WALL.tall : HERO_FROM_WALL.wide;
   const span = hi - lo;
   const at = name === 'vault' ? 0.55 + 0.4 * u : name === 'lifted' ? 0.1 + 0.4 * u : 0.05 + 0.4 * u;
-  return { name, hero: lo + span * at, high: name === 'lifted', calmAbove: name === 'vault', win: name === 'vault' ? 0.5 + 0.15 * v : 0.62 + 0.14 * v };
+  return { name, hero: lo + span * at, high: name === 'lifted', calmAbove: name === 'vault', win: name === 'vault' ? 0.3 + 0.1 * v : lo + span * at - 0.035 + 0.025 * v, wallSide: -1 };
 }
 
 /** The largest clear stretch among some boxes, judged on a coarse grid (for the solvers, many times over). */
@@ -1133,6 +1135,8 @@ interface FamilyEnv {
   comp: Composition;
   winBox: Box;
   kelpZone: Box | null;
+  /** The kelp's rocks, as boxes: no jelly on them. */
+  kelpRocks: Box[];
   groundTop: number | null;
   rowGap: number;
   wallSide: -1 | 1;
@@ -1176,6 +1180,7 @@ function placeFamily(s: Session, family: PlacedJelly[], e: FamilyEnv): void {
     if (box.y0 < h * MARGIN || box.x0 < w * MARGIN - 1e-6 || box.x1 > w * (1 - MARGIN) + 1e-6) return false;
     if (inter(box, grow(e.winBox, CLEAR)) > 0) return false;
     if (e.kelpZone && inter(box, grow(e.kelpZone, CLEAR)) > 0) return false;
+    if (e.kelpRocks.some((k) => inter(box, grow(k, CLEAR)) > 0)) return false;
     if (e.groundTop != null && box.y1 > e.groundTop - CLEAR) return false;
     const next = at[m + 1];
     if (y > next.y - e.rowGap + 1e-6) return false;
@@ -1223,6 +1228,10 @@ function placeFamily(s: Session, family: PlacedJelly[], e: FamilyEnv): void {
         cost += (1.5 * Math.abs(at[m].y - targets[m])) / h;
         const edge = share(e.wallSide < 0 ? b.x0 : b.x1);
         if (edge < 0.1) cost += (0.1 - edge) * 4;
+        // Off the water the composition keeps calm: the far side, or the water over the hero.
+        const far = share(e.wallSide < 0 ? b.x1 : b.x0);
+        if (!e.comp.calmAbove) cost += 6 * Math.max(0, far - 0.58);
+        else if (b.y0 < hero.y) cost += 6 * Math.max(0, far - 0.4) * Math.min(1, (hero.y - b.y0) / (h * 0.2));
         // (Nor under the kelp's rock, where a break's rock would stand.)
         if (e.kelpZone && inter(b, { x0: e.kelpZone.x0 - w * 0.1, x1: e.kelpZone.x1 + w * 0.1, y0: e.kelpZone.y1, y1: e.kelpZone.y1 + h * 0.14 }) > 0) cost += 1;
         if (Math.abs(at[m + 1].x - at[m].x) < w * 0.14) cost += 0.4;
@@ -1230,7 +1239,7 @@ function placeFamily(s: Session, family: PlacedJelly[], e: FamilyEnv): void {
       // (Not all to one side of the hero: the family hangs round it.)
       if (kin >= 2 && (at.slice(0, kin).every((p) => p.x < hero.x) || at.slice(0, kin).every((p) => p.x > hero.x))) cost += 0.5;
       const calm = coarseCalm(w, h, [...fixedBoxes, ...boxes]);
-      cost += 25 * Math.max(0, 0.36 - calm.share) + calmMiss(calm, e.comp, { ...hero, box: boxes[kin] }, w, h, e.wallSide);
+      cost += 25 * Math.max(0, 0.4 - calm.share) + calmMiss(calm, e.comp, { ...hero, box: boxes[kin] }, w, h, e.wallSide);
       if (!best || cost < best.cost) best = { at, cost };
     }
     if (best) break;
@@ -1305,6 +1314,7 @@ function placeShoal(shoal: PlacedJelly[], family: PlacedJelly[], e: ShoalEnv): v
         if (inter(b, grow(e.winBox, CLEAR)) > 0 || (e.kelpZone && inter(b, grow(e.kelpZone, CLEAR)) > 0)) broken++;
         if (e.groundTop != null && b.y1 > e.groundTop - CLEAR) broken++;
         if (famBoxes.some((f) => boxGap(f, b) < CLEAR * 2)) broken++;
+        if (family.some((f) => Math.abs(f.y - (b.y0 + b.y1) / 2) < h * 0.05)) broken++;
         if (e.avoid && e.avoid(b)) broken++;
       }
       const calm = coarseCalm(w, h, [...fixedBoxes, ...boxes]);
@@ -1333,7 +1343,40 @@ interface Shape {
   height: number;
 }
 
+/**
+ * The picture's plan: laid in the composition the sitting's key chooses, and
+ * if that one cannot keep the page's rules that are about the whole of it (a
+ * quarter of the page calm, the cast not all by the wall, one of it over the
+ * page's middle), in the next that can.
+ */
 export function plan(s: Session, color: string, ground: 'paper' | 'night', shape: Shape): Plan {
+  let best: { plan: Plan; miss: number } | null = null;
+  for (let turn = 0; turn < COMPOSITIONS.length; turn++) {
+    const p = planIn(s, color, ground, shape, turn);
+    const miss = pageMiss(p);
+    if (!best || miss < best.miss - 1e-9) best = { plan: p, miss };
+    if (miss <= 0) break;
+  }
+  return (best as { plan: Plan }).plan;
+}
+
+/** How far a plan falls short of the rules about the whole page: 0 when it keeps them. */
+export function pageMiss(p: Plan): number {
+  const calm = calmArea(p).share;
+  let miss = Math.max(0, CALM + 0.005 - calm) * 10;
+  const share = (x: number) => (p.composition.wallSide < 0 ? x / p.w : 1 - x / p.w);
+  const water = p.cast.filter((a) => !a.floor);
+  // (The rarest animal met is always drawn.)
+  if (p.cast.length && !p.cast.some((a) => a.rare)) miss += 1;
+  if (water.length >= 2) {
+    const byWall = water.filter((a) => share(a.x) < 1 / 3).length / water.length;
+    miss += Math.max(0, byWall - CAST_BY_WALL);
+    if (!water.some((a) => Math.max(share(a.box.x0), share(a.box.x1)) > 0.5)) miss += 0.2;
+  }
+  return miss;
+}
+
+export function planIn(s: Session, color: string, ground: 'paper' | 'night', shape: Shape, turn: number): Plan {
   const minSide = Math.max(1, Math.min(shape.width, shape.height));
   const unit = minSide / REF;
   const w = (shape.width / minSide) * REF;
@@ -1368,7 +1411,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   const short = s.focus < 3600;
   // The page's composition, from the sitting's own key: where the hero
   // hangs across and how high, and where the calm water lies.
-  const comp = composeFor(s.key, tall);
+  const comp = composeFor(s.key, tall, turn);
   const yEnd = comp.high
     ? h * ((tall ? 0.54 : 0.47) + 0.04 * unit01(s.key, 'hero-y'))
     : tall
@@ -1439,6 +1482,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     wallSide = left >= right ? -1 : 1;
   }
   const calmSide = (-wallSide) as -1 | 1;
+  comp.wallSide = wallSide;
   /** A share of the width measured from the wall, as x in units. */
   const fromWall = (f: number) => w * (0.5 + wallSide * (0.5 - f));
   /** And back: how far from the wall x is, as a share of the width. */
@@ -1450,6 +1494,33 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   const win = { x: winX, y: winY, r: winR };
   const winBox: Box = { x0: winX - winR * 1.08, x1: winX + winR * 1.08, y0: 0, y1: winY + winR * 0.46 * 1.08 };
 
+  // The rocks the kelp stands on, as kelp-draw lays them.
+  const kelpRocks = (bottom: number): PlacedRock[] => {
+    if (!forest) return [];
+    const hf = (bottom - kelpTop) / 2.45;
+    return forest.ledges.filter((ledge) => kelpKept.has(ledge.edge)).map((ledge) => {
+      // kelp-draw stands the ledge on the same engine: (reach + 3%) of the
+      // width out from a wall 3% off the page, KELP_ROCK of a frame deep.
+      const span = (ledge.reach + 0.03) * kelpW;
+      const sh = rockSilhouette([{ seed: ledge.seed, at: 0, span: 1, dy: 0, thick: Math.max(KELP_ROCK * hf, 0.75 * span) / span }]);
+      const k: Omit<PlacedRock, 'box'> = {
+        kind: 'kelp',
+        rest: -1,
+        slot: -1,
+        edge: ledge.edge,
+        y: kelpTop + ledge.top * hf - sh.lift * span,
+        height: sh.ratio * span,
+        reach: (ledge.reach * kelpW) / w,
+        off: (0.03 * kelpW) / w,
+        plane: 2,
+        zone: 0,
+        seconds: 0,
+        seed: ledge.seed,
+        shape: sh,
+      };
+      return { ...k, box: rockBox(k, w) };
+    });
+  };
   // ---- The jellies: one per block. The hero and its youngest elders (two
   // on a tall page, three on a wide one) are drawn as the family; the older
   // blocks are a far shoal of tiny bells.
@@ -1495,7 +1566,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   hero.y = yEnd;
   hero.box = jellyHull(hero);
   const family = jellies.slice(n - 1 - kin);
-  placeFamily(s, family, { w, h, tall, seed, comp, winBox, kelpZone, groundTop, rowGap, wallSide, yOf, blocks: s.blocks });
+  placeFamily(s, family, { w, h, tall, seed, comp, winBox, kelpZone, kelpRocks: kelpRocks(kelpBottom).map((k) => k.box), groundTop, rowGap, wallSide, yOf, blocks: s.blocks });
   const shoal = jellies.slice(0, shoalN);
   /** What the shoal keeps off besides the family and the window: none yet. */
   const placeTheShoal = (avoid: ((b: Box) => boolean) | null) => placeShoal(shoal, family, { w, h, seed, winBox, kelpZone, groundTop, wallSide, comp, avoid });
@@ -1574,31 +1645,6 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     // most a few stragglers), drawn from the top of the page down, its
     // canopy inside the page; its rocks are kelp-draw's. Here they only
     // hold their place, so no other rock crowds them.
-    const kelpRocks = (bottom: number): PlacedRock[] => {
-      const hf = (bottom - kelpTop) / 2.45;
-      return forest.ledges.filter((ledge) => kelpKept.has(ledge.edge)).map((ledge) => {
-        // kelp-draw stands the ledge on the same engine: (reach + 3%) of the
-        // width out from a wall 3% off the page, KELP_ROCK of a frame deep.
-        const span = (ledge.reach + 0.03) * kelpW;
-        const sh = rockSilhouette([{ seed: ledge.seed, at: 0, span: 1, dy: 0, thick: Math.max(KELP_ROCK * hf, 0.75 * span) / span }]);
-        const k: Omit<PlacedRock, 'box'> = {
-          kind: 'kelp',
-          rest: -1,
-          slot: -1,
-          edge: ledge.edge,
-          y: kelpTop + ledge.top * hf - sh.lift * span,
-          height: sh.ratio * span,
-          reach: (ledge.reach * kelpW) / w,
-          off: (0.03 * kelpW) / w,
-          plane: 2,
-          zone: 0,
-          seconds: 0,
-          seed: ledge.seed,
-          shape: sh,
-        };
-        return { ...k, box: rockBox(k, w) };
-      });
-    };
     // The forest stands higher if its rock would crowd a jelly: the rock
     // moves, never the way down.
     let bottom = kelpBottom;
@@ -2264,10 +2310,12 @@ export function steepestFall(zStops: { y: number; z: number }[], h: number): num
  * eye's middle, toward the page, up and down.
  */
 export const EYE_R = 0.025 * REF;
-const EYE_REACH = 3.0 * 1.14 + 0.1;
-const EYE_PATCH_IN = 3.5;
-const EYE_PATCH_UP = 3.35;
-const EYE_PATCH_DOWN = 3.5;
+/** Where the eye looks in from, shares of the page's height. */
+export const EYE_BAND: [number, number] = [0.45, 0.8];
+const EYE_REACH = 3.92;
+const EYE_PATCH_IN = 3.1;
+const EYE_PATCH_UP = 3.9;
+const EYE_PATCH_DOWN = 3.9;
 
 /**
  * The turtle come to look at a jelly, from its own side of it or (mirrored)
@@ -2411,11 +2459,11 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       // whole patch (EYE_PATCH_Y radii up and down) inside its band.
       const re = EYE_R;
       const reach = re * EYE_REACH + 2;
-      const rh = Math.max(w * 0.2, 0.2 * M, reach * 2 + 8, re * 7.2);
+      const rh = Math.max(w * 0.2, 0.2 * M, reach * 2 + 16, re * 7.2);
       const left = sd % 2 === 0;
       const want = rh * (0.18 + (((sd >>> 6) % 100) / 100) * 0.2);
       const ny = clamp(want, reach, rh - reach);
-      const ry = clamp(y, h * 0.15, h * 0.85) - ny;
+      const ry = clamp(y, h * EYE_BAND[0], h * EYE_BAND[1]) - ny;
       const mirror = (left ? -1 : 1) !== side;
       const onLeft = left !== mirror;
       const pe: PlacedEvent = { ...base, age: 0.4, rx: 0, ry, rw: w, rh, mirror, x: onLeft ? re * 0.82 : w - re * 0.82, y: ry + ny, far: false, box: null, edge: true };
@@ -2496,23 +2544,26 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
         x1 = onLeft ? leftRoom : w * 0.91;
         want = onLeft ? x0 + L / 2 : x1 - L / 2;
       }
+      // (drawWhaleFall's bones run from 0.57 of its length one side of the
+      // middle to 0.58 the other, skull to tail.)
       const rise = (cx: number, len: number) => {
         let lo = Infinity;
         let hi = -Infinity;
-        for (let k = 0; k <= 16; k++) {
-          const g = o.groundY(cx - len / 2 + (len * k) / 16);
+        for (let k = 0; k <= 20; k++) {
+          const g = o.groundY(cx - len * 0.58 + (len * 1.16 * k) / 20);
           lo = Math.min(lo, g);
           hi = Math.max(hi, g);
         }
         return { lo, hi };
       };
       let pick: { cx: number; L: number; cost: number } | null = null;
-      for (const len of [L, L * 0.85, L * 0.72]) {
+      const level = (t ? WHALEFALL_LEVEL_TRENCH : WHALEFALL_LEVEL) * REF;
+      for (const len of [L, L * 0.85, L * 0.72, L * 0.6, L * 0.5]) {
         for (let k = 0; k <= 40; k++) {
-          const cx = x0 + len / 2 + ((x1 - x0 - len) * k) / 40;
-          if (x1 - x0 < len) break;
+          const cx = x0 + len * 0.58 + ((x1 - x0 - len * 1.16) * k) / 40;
+          if (x1 - x0 < len * 1.16) break;
           const { lo, hi } = rise(cx, len);
-          const cost = Math.max(0, hi - lo - WHALEFALL_LEVEL * REF) * 0.2 + Math.abs(cx - want) / w + (1 - len / L);
+          const cost = Math.max(0, hi - lo - level) * 0.2 + Math.abs(cx - want) / w + (1 - len / L);
           if (!pick || cost < pick.cost) pick = { cx, L: len, cost };
         }
       }
@@ -2521,8 +2572,7 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       const rw = L / 0.45;
       // (Its bones are laid along the lowest of the ground under it, so none stands off it.)
       const fy = rise(cx, L).hi + 0.004 * h;
-      // It lies in front of the floor's line: the near ribs and the jaw reach 0.085 of its length below it.
-      return { ...base, age: 1, rx: cx - rw * at, ry: 0, rw, rh: h, x: cx, y: fy, far: false, box: { x0: cx - L / 2, x1: cx + L / 2, y0: fy - L * 0.12, y1: fy + L * 0.085 } };
+      return { ...base, age: 1, rx: cx - rw * at, ry: 0, rw, rh: h, x: cx, y: fy, far: false, box: { x0: cx - L * 0.58, x1: cx + L * 0.58, y0: fy - L * 0.05, y1: fy + L * 0.115 } };
     }
   }
   return null;
@@ -2608,6 +2658,8 @@ export const RARE_BELL: [number, number] = [0.7, 0.95];
 
 /** How far the ground under a whale fall may rise and fall along it, a share of the short side: level enough that every bone rests on it. */
 export const WHALEFALL_LEVEL = 0.006;
+/** On a trench's bench, a little more (it is rock, and falls in ledges). */
+export const WHALEFALL_LEVEL_TRENCH = 0.02;
 
 /** The most rare things one picture draws. */
 export const EVENTS_MAX = 2;
@@ -2637,6 +2689,8 @@ function settleEvents(
     if (!b) return false;
     if (inter(b, grow(e.winBox, 4)) > 0) return true;
     if (v.kind !== 'whalefall' && b.y0 < h * 0.04) return true;
+    // The squid's eye low on the page, and never under the window.
+    if (v.kind === 'eye' && (v.y < h * EYE_BAND[0] || v.y > h * EYE_BAND[1] || Math.abs(v.x - (e.winBox.x0 + e.winBox.x1) / 2) < w * 0.25)) return true;
     if (v.kind !== 'whalefall' && v.kind !== 'oarfish' && e.floorTop != null && b.y1 > e.floorTop) return true;
     if (v.kind !== 'whalefall' && v.kind !== 'oarfish' && e.groundUnder && b.y1 > e.groundUnder(b) - CLEAR) return true;
     // Nothing of the middle water in the whale's shadow.
@@ -3367,8 +3421,10 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       for (let a = 0; a <= 40; a++) {
         for (let b = 0; b <= 60; b++) {
           it.x = clampX(w * (a / 40), it, w);
-          it.y = clamp(h * (b / 60), it.sp.genome.plan === 'bell' ? it.ya : Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2, it.sp.genome.plan === 'bell' ? it.yb : (floorTop ?? h * (1 - MARGIN)) - it.bh / 2);
-          const d = Math.abs(it.y - it.ty) / h + Math.abs(it.x - x0) / w * 0.3;
+          // (A rare jelly as low as it can be, if not where it should.)
+          const bellLow = it.sp.genome.plan === 'bell';
+          it.y = clamp(h * (b / 60), bellLow ? Math.max(Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2, it.ya - h * 0.3) : Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2, bellLow ? it.yb : (floorTop ?? h * (1 - MARGIN)) - it.bh / 2);
+          const d = (bellLow ? (3 * Math.max(0, it.ya - it.y)) / h : Math.abs(it.y - it.ty) / h) + (Math.abs(it.x - x0) / w) * 0.3;
           if ((!best || d < best.d) && legal(it, kept)) best = { x: it.x, y: it.y, d };
         }
       }
@@ -4008,6 +4064,32 @@ export function snowAt(plan: { focus: number; h: number; zStops: { y: number; z:
   const z = a.z + (b.z - a.z) * clamp((y - a.y) / Math.max(1e-6, b.y - a.y), 0, 1);
   const t = clamp((z - 0.3) / 0.6, 0, 1);
   return dur * t * t * (3 - 2 * t);
+}
+
+/** Where the thick snow of a long sitting's deep marks the page, as `snowAt` gives it. */
+export const SNOW_MARK = 0.5;
+
+/**
+ * The share of the page with no mark on it at all: cells a twentieth of the
+ * short side square that nothing drawn stands in (the jellies and the cast,
+ * the rare things, the rocks, the wall and the ground, what grows on them,
+ * the bubbles, and the thick snow of a long sitting's deep). The light is not
+ * a mark. It falls as the sitting lengthens, the calm stretch kept.
+ */
+export function emptyShare(plan: Plan): number {
+  const o = occupancy(solidsOf(plan), 0.05 * REF);
+  let empty = 0;
+  for (let j = 0; j < o.gy; j++) {
+    const thick = snowAt(plan, (j + 0.5) * o.ch) >= SNOW_MARK;
+    for (let i = 0; i < o.gx; i++) {
+      if (thick || o.cells[j * o.gx + i]) continue;
+      const x0 = i * o.cw;
+      const y0 = j * o.ch;
+      if (plan.bubbles.some((b) => b.x >= x0 && b.x < x0 + o.cw && b.y >= y0 && b.y < y0 + o.ch)) continue;
+      empty++;
+    }
+  }
+  return empty / (o.gx * o.gy);
 }
 
 /* ---- The bubbles ---- */

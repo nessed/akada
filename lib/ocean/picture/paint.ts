@@ -2635,7 +2635,7 @@ function drawEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: Plac
       break;
     case 'eye':
       // Sized to the page; its own soft vignette is all the dark it needs.
-      drawEye(ctx, w, h, e.age, e.seed, D, dark, Math.min(plan.w, plan.h) * D);
+      drawEye(ctx, w, h, e.age, e.seed, D, dark, Math.min(plan.w, plan.h) * D, plan.ground);
       break;
     case 'turtle':
       drawTurtle(ctx, w, h, e.age, e.seed, D, ambient, dark, { x: (e.look?.x ?? e.rw / 2) * D, y: (e.look?.y ?? e.rh / 2) * D });

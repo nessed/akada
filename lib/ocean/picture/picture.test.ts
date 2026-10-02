@@ -6,10 +6,11 @@ import { planPicture, type PictureInput } from './index';
 import { rollBiome } from '../biome';
 import { rollKelp } from '../kelp';
 import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, floorAt, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, PICTURE_KELP, STEM, wallAt, wallTouches, type Box, type Plan } from './layout';
+const grow = (b: Box, d: number): Box => ({ x0: b.x0 - d, y0: b.y0 - d, x1: b.x1 + d, y1: b.y1 + d });
 import { EYE_R, ROW_BAND, ROW_LEVEL, SIPHON_TILT, steepestFall, stepsApart, whaleHull } from './layout';
 import { partExt, rockSpan, rockX, WALL_STEP } from './layout';
 import { calmArea, CALM, CAST_MAX, castWant, EVENTS_MAX, GHOST_ROW, HERO_R, LONE_GAP, SIBLING_SCALE, TRENCH_TOP, WALL_W } from './layout';
-import { ACROSS, BELL_APART, CAST_BY_WALL, emptyShare, HERO_FROM_WALL, RARE_BELL, SHOAL_SCALE, SIBLINGS_TALL, SIBLINGS_WIDE, TRENCH_RISE, WHALE_CLEAR, WHALEFALL_LEVEL } from './layout';
+import { ACROSS, BELL_APART, CAST_BY_WALL, emptyShare, HERO_FROM_WALL, RARE_BELL, SHOAL_SCALE, SIBLINGS_TALL, SIBLINGS_WIDE, TRENCH_RISE, WHALE_CLEAR, WHALEFALL_LEVEL, WHALEFALL_LEVEL_TRENCH } from './layout';
 import { EVENTS } from '../events';
 import { rockShape } from '../outcrop-sprite';
 import { siphonophoreReach } from '../sightings-shallow';
@@ -714,6 +715,113 @@ test('one big calm: a quarter of the page or more in one clear stretch, nothing 
         assert.ok(calm.share >= CALM, `${c.name} ${shape.width}x${shape.height} ${ground}: the calm water is ${(calm.share * 100).toFixed(1)}% of the page`);
         // And the cast kept out of the stretch the plan kept for it.
         for (const a of plan.cast) assert.equal(inter(a.box, plan.calm), 0, `${c.name}: ${a.id} in the calm water`);
+      }
+    }
+  }
+});
+
+const wallSideOf = (plan: Plan): -1 | 1 => plan.composition.wallSide;
+const fromWall = (plan: Plan, x: number) => (wallSideOf(plan) < 0 ? x / plan.w : 1 - x / plan.w);
+
+test('not one layout twice: the hero out toward the open side, the family round it, the cast across the page', () => {
+  const looks = new Set<string>();
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const hero = plan.jellies[plan.jellies.length - 1];
+      // The hero holds the open water, not the wall: 0.38 to 0.55 of the width from it on a tall page, 0.40 to 0.62 on a wide one.
+      const [lo, hi] = plan.tall ? HERO_FROM_WALL.tall : HERO_FROM_WALL.wide;
+      const at = fromWall(plan, hero.x);
+      assert.ok(at >= lo - 1e-6 && at <= hi + 1e-6, `${tag}: the hero ${at.toFixed(2)} W from the wall`);
+      if (shape !== SHAPES[2]) looks.add(`${plan.composition.name}|${wallSideOf(plan)}`);
+      // The family: two elders at most on a tall page, three on a wide one; one of them a quarter of the width across the hero's axis; no two bells within BELL_APART across.
+      const fam = plan.jellies.filter((j) => !j.shoal);
+      assert.ok(fam.length - 1 <= (plan.tall ? SIBLINGS_TALL : SIBLINGS_WIDE), `${tag}: ${fam.length - 1} elders`);
+      if (fam.length > 1) assert.ok(fam.some((j) => !j.hero && Math.abs(j.x - hero.x) >= plan.w * ACROSS - 1e-6), `${tag}: no elder across the hero's axis`);
+      const biome = rollBiome(plan.key, plan.courseKey);
+      const bells = [...fam.map((j) => j.x), ...plan.cast.filter((a) => biome.pools[a.zone]?.[a.slot]?.genome.plan === 'bell').map((a) => a.x)];
+      for (let i = 0; i < bells.length; i++) for (let k = i + 1; k < bells.length; k++) assert.ok(Math.abs(bells[i] - bells[k]) >= plan.w * BELL_APART - 1e-6, `${tag}: two bells ${(Math.abs(bells[i] - bells[k]) / plan.w).toFixed(3)} W apart across`);
+      // The cast not all by the wall: three in five at most in its third of the page, and one of it over the page's middle.
+      const water = plan.cast.filter((a) => !a.floor);
+      if (water.length >= 2) {
+        const byWall = water.filter((a) => fromWall(plan, a.x) < 1 / 3).length / water.length;
+        assert.ok(byWall <= CAST_BY_WALL + 1e-9, `${tag}: ${(byWall * 100).toFixed(0)}% of the cast by the wall`);
+        assert.ok(water.some((a) => Math.max(fromWall(plan, a.box.x0), fromWall(plan, a.box.x1)) > 0.5), `${tag}: none of the cast over the page's middle`);
+      }
+      // One wall.
+      assert.equal(plan.walls.length, 1, `${tag}: ${plan.walls.length} walls`);
+    }
+  }
+  // Pages from different sittings are composed differently: three looks at least among the eight.
+  assert.ok(looks.size >= 3, `only ${looks.size} looks: ${[...looks].join(', ')}`);
+});
+
+test('a long sitting reads long: more grows on the stone and the floor, fewer empty stretches, the trench deeper', () => {
+  const two = CASES.find((c) => c.name.startsWith('2 h'))!;
+  const long = CASES.find((c) => c.name.startsWith('4.5 h'))!;
+  for (const shape of SHAPES.slice(0, 2)) {
+    const density = (p: Plan) => p.life.length / Math.max(1, p.lifeEdge / Math.min(p.w, p.h));
+    const a = density(planOf(two, shape));
+    const b = density(planOf(long, shape));
+    assert.ok(b >= 2 * a, `${shape.width}x${shape.height}: ${b.toFixed(1)} things per S of stone at 4.5 h against ${a.toFixed(1)} at 2 h`);
+    // Empty stretches (no mark at all) fall as the sitting lengthens: never more of them on a page an hour longer, and at most 0.45 from three hours.
+    const plans = CASES.map((c) => ({ min: focusOf(c.segs) / 60, empty: emptyShare(planOf(c, shape)), name: c.name }));
+    for (const p of plans) if (p.min >= 180) assert.ok(p.empty <= 0.45, `${p.name} ${shape.width}x${shape.height}: ${(p.empty * 100).toFixed(0)}% empty`);
+    for (const p of plans) for (const q of plans) if (q.min >= p.min + 60) assert.ok(q.empty <= p.empty + 0.02, `${q.name} is emptier (${q.empty.toFixed(2)}) than ${p.name} (${p.empty.toFixed(2)})`);
+  }
+  // The trench deeper the longer: its walls start higher at 4.5 h than at 3.5 h.
+  const t35 = planOf(CASES.find((c) => c.name.startsWith('3.5 h'))!, SHAPES[0]).trench!;
+  const t45 = planOf(long, SHAPES[0]).trench!;
+  assert.ok(t45.top < t35.top - 1e-6);
+});
+
+test('nothing overlaps or floats: 0.02 S between the animals, what grows, the ground and the hero\'s trails; none in the whale; the whale fall on level ground', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const S = Math.min(plan.w, plan.h);
+      const ground = (b: Box) => {
+        let g = plan.h;
+        if (plan.floor) for (let k = 0; k <= 12; k++) g = Math.min(g, floorAt(plan, b.x0 + ((b.x1 - b.x0) * k) / 12));
+        return g;
+      };
+      const hero = plan.jellies[plan.jellies.length - 1];
+      if (plan.floor) assert.ok(hero.box.y1 <= ground(hero.box) - CLEAR + 1e-6, `${tag}: the hero's trails ${((ground(hero.box) - hero.box.y1) / S).toFixed(3)} S over the ground`);
+      const swim = plan.cast.filter((a) => !a.floor);
+      for (const a of swim) assert.ok(a.box.y1 <= ground(a.box) - CLEAR + 1e-6, `${tag}: ${a.id} on the ground`);
+      const animals = [...swim.map((a) => a.box), ...plan.jellies.map((j) => j.box), ...plan.events.filter((e) => e.box && !e.far && e.kind !== 'whalefall').map((e) => e.box as Box)];
+      for (const l of plan.life) {
+        for (const b of animals) assert.ok(boxGap(l.box, b) >= CLEAR - 1e-6, `${tag}: a ${l.kind} ${(boxGap(l.box, b) / S).toFixed(3)} S from an animal`);
+        assert.equal(inter(l.box, plan.calm), 0, `${tag}: a ${l.kind} in the calm`);
+      }
+      const whale = plan.events.find((e) => e.kind === 'whale');
+      if (whale) {
+        const at = whaleHull(whale, S, plan.current);
+        const keep = [grow(at.body, plan.w * WHALE_CLEAR), grow(at.flipper, plan.w * WHALE_CLEAR)];
+        for (const a of swim) if (a.layer > 0) for (const k of keep) assert.equal(inter(a.box, k), 0, `${tag}: ${a.id} in the whale's shadow`);
+        for (const e of plan.events) if (e.box && e.kind !== 'whale' && !e.far) for (const k of keep) assert.equal(inter(e.box, k), 0, `${tag}: the ${e.kind} on the whale`);
+      }
+      const fall = plan.events.find((e) => e.kind === 'whalefall');
+      if (fall && fall.box) {
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (let k = 0; k <= 20; k++) {
+          const g = floorAt(plan, fall.box.x0 + ((fall.box.x1 - fall.box.x0) * k) / 20);
+          lo = Math.min(lo, g);
+          hi = Math.max(hi, g);
+        }
+        assert.ok(hi - lo <= (plan.trench ? WHALEFALL_LEVEL_TRENCH : WHALEFALL_LEVEL) * REF + 1e-6, `${tag}: the ground under the whale fall rises ${(hi - lo).toFixed(1)}`);
+        // Every bone rests on it: the bones' line no higher than the ground anywhere under them.
+        assert.ok(fall.y >= hi - 1e-6, `${tag}: whale-fall bones over open water`);
+      }
+      // A rare jelly glows low: 0.7 to 0.95 of the page, or as low as the ground lets it.
+      const biome = rollBiome(plan.key, plan.courseKey);
+      for (const a of plan.cast.filter((q) => q.rare && biome.pools[q.zone]?.[q.slot]?.genome.plan === 'bell')) {
+        const lowest = plan.floor ? (plan.trench ? plan.trench.top : plan.floor.y) - CLEAR : plan.h * (1 - MARGIN);
+        assert.ok(a.box.y0 >= plan.h * RARE_BELL[0] - 1e-6 || a.box.y1 >= lowest - plan.h * 0.08, `${tag}: a rare jelly high, at ${(a.y / plan.h).toFixed(2)} H`);
+        assert.ok(a.y <= plan.h * RARE_BELL[1] + 1e-6);
       }
     }
   }
