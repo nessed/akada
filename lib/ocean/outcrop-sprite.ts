@@ -25,9 +25,9 @@
 
 import { mixHex } from '../fan';
 import { zoneMid } from './depth';
-import type { EelPatch, Growth, Outcrop, outcropsInView } from './outcrop';
+import type { EelPatch, Growth, GrowthKind, Outcrop, outcropsInView } from './outcrop';
 import { HUES, IRON_GALL, waterAt, type Water } from './palette';
-import { detailFor, grain, hatch, inkLine, LIGHT, mottle, shadeAcross, stipple, washFill } from './pen';
+import { contourHatch, detailFor, grain, hatch, inkLine, LIGHT, mottle, shadeAcross, stipple, tubeWash, washFill } from './pen';
 import { chance, hash32, int, mulberry32, range, type Rand } from './random';
 
 /** The light from the top left, and the other way for light ink on dark
@@ -166,6 +166,10 @@ export interface RockShape {
   grammar: RockGrammar;
 }
 
+/** How square a boulder is (`squareness`): above and below its middle, and
+    optionally above it on its lip side, the first then being its wall side's. */
+type Squares = [number, number] | [number, number, number];
+
 /** Points round a boulder. */
 const BN = 96;
 
@@ -259,15 +263,17 @@ export function rockShape(seed: number, span: number, thick: number, px: number,
   const S = Math.max(8 * px, span);
   const Hr = Math.max(0.5 * S, Math.min(1.2 * S, thick));
   const boulders: Boulder[] = [];
-  // `sq` is how square it is above and below its middle (`squareness`).
-  const add = (cx: number, top: number, rx: number, ry: number, sq: [number, number] = [2, 2], amp = 1) => {
+  // `sq` is how square it is above and below its middle (`squareness`),
+  // and, if given a third, above it on its lip side (the second above is
+  // then its wall side's): a pinnacle comes up to a point of its own.
+  const add = (cx: number, top: number, rx: number, ry: number, sq: Squares = [2, 2], amp = 1) => {
     // Lumps at a few scales, coarse to fine, so the top breaks into knuckles.
     const n: number[] = [];
     const ks = [2, 3, 5, 7, 11, 17];
     const amps = [0.09, 0.07, 0.045, 0.028, 0.016, 0.009];
     for (let i = 0; i < ks.length; i++) n.push(amps[i] * amp * range(r, 0.5, 1.35), ks[i], range(r, 0, Math.PI * 2));
     const cy = top + ry;
-    const sqAt = (th: number) => squareness(th, Math.sin(th) < 0 ? sq[0] : sq[1]);
+    const sqAt = (th: number) => squareness(th, Math.sin(th) >= 0 ? sq[1] : Math.cos(th) > 0 ? (sq[2] ?? sq[0]) : sq[0]);
     const pts: number[] = [];
     for (let i = 0; i < BN; i++) {
       const th = (i / BN) * Math.PI * 2;
@@ -284,7 +290,8 @@ export function rockShape(seed: number, span: number, thick: number, px: number,
     }
     boulders.push({ cx, cy, rx, ry, n, pts, full, coarse });
   };
-  if (grammar !== 'heap') buildGrammar(grammar, r, S, Hr, add);
+  // (A second stream for what came after: every rock rolled before keeps its dice.)
+  if (grammar !== 'heap') buildGrammar(grammar, r, mulberry32(seed ^ 0x2f1e9d), S, Hr, add, boulders);
   else {
     // Boulders out from the wall to the lip, each over the last by about a
     // third of itself, so the top is one broken crest; the ones by the wall
@@ -461,9 +468,11 @@ function noMushroom(boulders: Boulder[], Hr: number) {
 function buildGrammar(
   g: RockGrammar,
   r: Rand,
+  r2: Rand,
   S: number,
   Hr: number,
-  add: (cx: number, top: number, rx: number, ry: number, sq?: [number, number], amp?: number) => void,
+  add: (cx: number, top: number, rx: number, ry: number, sq?: Squares, amp?: number) => void,
+  boulders: Boulder[],
 ) {
   // The mass it all stands in, back into the wall and down past where the wash runs dry.
   const foot = (cx: number, top: number, rx: number) => add(cx, top, rx, Math.max(0.5 * Hr, (Hr * 1.3 - top) / 2), [2.2, 2.6]);
@@ -471,47 +480,53 @@ function buildGrammar(
     // Set back a little under the beds and up into them, so they never
     // sit on a neck of it.
     foot(0.06 * S, Hr * 0.2, 0.7 * S);
-    // Beds from the lowest up, each laid over the one under it, thick and
-    // square-ended, and each stepping back toward the wall from the one
-    // under it: one tabular mass rising in benches, never a stack of
-    // pancakes each jutting further than the last.
-    const beds = 2 + (r() < 0.6 ? 1 : 0);
-    const ys: number[] = [];
-    let y = -0.05 * Hr;
-    for (let i = 0; i < beds; i++) {
-      const thick = Hr * range(r, 0.3, 0.4) * (i === 0 ? 1.1 : 1);
-      ys.push(y, thick);
-      y += thick * range(r, 0.62, 0.78);
-    }
-    const outs: number[] = [];
-    let out = S * range(r, 0.82, 1);
-    for (let i = beds - 1; i >= 0; i--) {
-      outs[i] = out;
-      out *= range(r, 0.78, 0.94);
-    }
-    // The lowest laid first, each bed over the one it sits on.
-    for (let i = beds - 1; i >= 0; i--) {
-      const rx = outs[i] * 0.5 + 0.12 * S;
-      const ry = ys[i * 2 + 1] / 2;
+    // Two beds, never a stack of like ones: a thick lower bed (a merged
+    // pair, its bedding line drawn across it) and over it a thinner one
+    // stepped back toward the wall by a third or more of its length, so the
+    // top of the lower bed shows as a bench. Square-ended and
+    // broken off, not rounded: three beds of one length read as pillows.
+    const thickLow = Hr * range(r, 0.55, 0.7);
+    const thickUp = Hr * range(r, 0.26, 0.36);
+    const outLow = S * range(r, 0.86, 1);
+    const outUp = outLow * (1 - range(r2, 0.3, 0.45));
+    const yUp = -0.08 * Hr;
+    const yLow = yUp + thickUp * range(r, 0.55, 0.7);
+    const bed = (out: number, top: number, thick: number, sq: Squares) => {
+      const rx = out * 0.5 + 0.12 * S;
+      const ry = thick / 2;
       // A flat bed's lumps scaled to its thickness, not its length: on a
       // long thin ellipse the full lumps push its end out into a tongue.
-      add(outs[i] - rx * 0.96, ys[i * 2], rx, ry, [3.2, 4.2], Math.max(0.35, Math.min(1, (1.6 * ry) / rx)));
-    }
+      add(out - rx * 0.96, top, rx, ry, sq, Math.max(0.35, Math.min(1, (1.6 * ry) / rx)));
+    };
+    // (The upper one behind: the lower bed's top edge runs across its foot,
+    // so it stands back on the bench and never sits on it as a cushion.)
+    bed(outUp, yUp, thickUp, [4.5, 5, 6]);
+    bed(outLow, yLow, thickLow, [3.4, 3.2, 6]);
     return;
   }
   if (g === 'spire') {
     foot(0.2 * S, Hr * 0.45, 0.55 * S);
-    // A low shoulder by the wall.
-    add(0.04 * S, Hr * range(r, 0.12, 0.24), 0.28 * S, Hr * 0.34, [2.4, 2.4]);
+    // A low shoulder by the wall, broad and rounded and well under half the
+    // pinnacle's height: two near-equal points read as a castle's turrets.
+    r();
+    add(0.02 * S, Hr * range(r2, 0.26, 0.36), 0.3 * S, Hr * 0.28, [2.6, 2.4]);
     // A buttress against its outer foot, now and then.
     const at = S * range(r, 0.5, 0.66);
     const rx = S * range(r, 0.17, 0.22);
     if (r() < 0.6) add(at + rx * 0.7, Hr * range(r, 0.25, 0.38), rx * 0.8, Hr * 0.3, [2.3, 2.3]);
-    // The pinnacle: one tall column, squared at the sides and coming up to a
-    // blunt point.
+    // The pinnacle: one tall column, squared at its foot and narrowing to a
+    // broken point, one shoulder of it steeper than the other (a blunt top
+    // reads as a tooth): its top tenth under a third of its width.
     const top = -Hr * range(r, 0.4, 0.65);
     const tall = Hr * 0.75 - top;
-    add(at, top, rx, tall / 2, [1.45, 2.7]);
+    const steep = range(r2, 0.82, 0.98);
+    const full = range(r2, 1.15, 1.4);
+    const flip = r2() < 0.5;
+    // Its top broken: a block standing behind one flank a quarter of the
+    // way down, so the profile steps out there and the two sides differ.
+    const side = flip ? 1 : -1;
+    add(at + side * rx * 0.62, top + tall * range(r2, 0.22, 0.32), rx * 0.42, tall * 0.11, [2.6, 2.2]);
+    add(at, top, rx, tall / 2, flip ? [steep, 2.7, full] : [full, 2.7, steep]);
     return;
   }
   if (g === 'overhang') {
@@ -520,7 +535,8 @@ function buildGrammar(
     // but not by much: a ledge, never a mushroom (`MAX_CAP`).
     add(0.2 * S, Hr * 0.12, S * range(r, 0.38, 0.44), Hr * 0.46, [2.4, 2.6]);
     // A block on top by the wall, now and then.
-    if (r() < 0.5) add(0.1 * S, -Hr * range(r, 0.2, 0.28), S * 0.22, Hr * 0.17, [3, 3]);
+    // (Sunk into the support's top, never resting above it on nothing.)
+    if (r() < 0.5) add(0.1 * S, -Hr * (0.04 + 0.3 * range(r, 0.2, 0.28)), S * 0.22, Hr * 0.17, [3, 3]);
     // The cap, jutting out over open water, its underside turned from the light.
     const ry = Hr * range(r, 0.2, 0.27);
     add(S * range(r, 0.5, 0.56), -Hr * range(r, 0.02, 0.1), S * range(r, 0.4, 0.46), ry, [2.6, 3.4]);
@@ -544,6 +560,17 @@ function buildGrammar(
   }
   stones.sort((a, b) => a[1] + a[3] - (b[1] + b[3]));
   for (const [cx, top, rx, ry] of stones) add(cx, top, rx, ry, [2.1, 2.5]);
+  // The slope ends under its outermost stone, its wall end kept where it
+  // was: run on past them, cut under its lip it hung there as a tongue.
+  const end = Math.max(...stones.map(([cx, , rx]) => cx + rx * 0.1));
+  const slope = boulders[0];
+  const k = Math.min(1, (end - (slope.cx - slope.rx)) / (2 * slope.rx));
+  if (k < 1) {
+    const ncx = slope.cx - slope.rx * (1 - k);
+    for (let i = 0; i < slope.pts.length; i += 2) slope.pts[i] = ncx + (slope.pts[i] - slope.cx) * k;
+    slope.cx = ncx;
+    slope.rx *= k;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -884,7 +911,17 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
     // Long strokes close together (the lanes 80 px² of pen apart, over the
     // stroke and its gap), so the shadow reads as a tone, not a scatter.
     const len = Math.max(10 * px, Math.min(30 * px, 0.55 * Math.min(b.rx, b.ry)));
-    hatchStrokes(hp, box, field, { px, seed: (k.seed ^ Math.imul(bi + 1, 0x9e3779b1)) >>> 0, len, width: (dark ? 0.75 : fine ? 1 : 0.85) * px });
+    // Light ink on dark water is fine and close, and laid evenly it beats
+    // into a quilted moiré: there each lane sits its own way off the grid
+    // (up to a third of the spacing), each stroke turns up to 6° off the
+    // set, and each lane starts its strokes at its own place.
+    hatchStrokes(hp, box, field, {
+      px,
+      seed: (k.seed ^ Math.imul(bi + 1, 0x9e3779b1)) >>> 0,
+      len,
+      width: (dark ? 0.75 : fine ? 1 : 0.85) * px,
+      ...(dark ? { space: 0.35, jitter: 0.105, scatter: true, vary: 0.3 } : {}),
+    });
     ctx.fillStyle = k.line;
     ctx.globalAlpha = dark ? 0.38 : 0.85;
     ctx.fill(hp);
@@ -1257,6 +1294,10 @@ function hatchStrokes(
         graver's point). Fuller reads as a burin line at poster size,
         not a needle. */
     ends?: number;
+    /** How far a lane may sit off its place on the grid, as a share of
+        the spacing either way (0.11). Fine strokes evenly apart beat
+        against each other into a moiré; uneven lanes never do. */
+    space?: number;
   },
 ): void {
   const { px } = o;
@@ -1304,7 +1345,7 @@ function hatchStrokes(
     for (let c = Math.floor(c0 / sp) * sp; c <= c1; c += sp) {
       const li = Math.round(c / sp);
       const lr = mulberry32(ihash(salt, li, 0x3c6ef372));
-      const off = c + (lr() - 0.5) * sp * 0.22;
+      const off = c + (lr() - 0.5) * sp * 2 * (o.space ?? 0.11);
       const phase = o.scatter ? period * lr() : period * (1.6 * valueNoise(salt, li * 0.21, 0.5) + (lr() - 0.5) * 0.1);
       for (let ai = Math.floor((a0 - phase) / period); ai * period + phase <= a1; ai++) {
         const a = ai * period + phase;
@@ -1429,13 +1470,13 @@ const HATCH_COVER = 0.25;
  * strokes show on it however dark the stone is: a dark stone is a light
  * tint under close, heavy hatching, as an engraver makes a dark.
  */
-function engrave(stone: string, paper: string, ink: string): { tint: string; dense: number } {
+function engrave(stone: string, paper: string, ink: string, most = 0.6): { tint: string; dense: number } {
   const ls = lum(stone);
   const lp = lum(paper);
   const li = lum(ink);
   // A quarter covered, the plain hatch; but never closer to the ink than this.
   let lw = (ls - HATCH_COVER * li) / (1 - HATCH_COVER);
-  lw = Math.min(Math.max(lw, li + 0.22), lp - 0.05, ls + 0.6 * (lp - ls));
+  lw = Math.min(Math.max(lw, li + 0.22), lp - 0.05, ls + most * (lp - ls));
   if (lw <= ls || lp - ls < 0.02) return { tint: stone, dense: 1 };
   const cover = Math.min(0.55, (lw - ls) / Math.max(0.02, lw - li));
   return { tint: mixHex(stone, paper, clamp01((lw - ls) / (lp - ls))), dense: Math.max(1, cover / HATCH_COVER) };
@@ -1612,7 +1653,10 @@ export function inkWall(
   // line) bringing it down to the stone's tone on the mean, so a wall reads
   // as engraved stone and not a flat grey, however dark the stone it is.
   const ink = dark ? style.line : mixHex(style.line, '#000000', 0.4);
-  const { tint, dense } = dark ? { tint: stone, dense: 1 } : engrave(stone, style.paper, ink);
+  // (A wall's tint no more than a third of the way to the paper: its lit
+  // faces are hatched sparsely, and where the paper is the water's own
+  // tone a lighter tint there read as water seen through the stone.)
+  const { tint, dense } = dark ? { tint: stone, dense: 1 } : engrave(stone, style.paper, ink, 0.32);
   const deepT = mixHex(tint, dark ? '#000000' : '#2A2320', dark ? 0.45 : 0.32);
   const liftT = mixHex(tint, style.paper, dark ? 0.18 : 0.32);
 
@@ -1621,24 +1665,13 @@ export function inkWall(
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   // The wash, in bands down the wall so it thins with depth (no layer, no
-  // erasing: it may be drawn straight onto the picture). Where the open
-  // edge faces the light the brush stops 2.5 px of pen short of it: bare
-  // paper inside the line, nothing added.
+  // erasing: it may be drawn straight onto the picture), right up to its
+  // line: stone is never see-through. Where the open edge faces the light
+  // the stone just inside the line is lifted toward the paper, after.
   const g = ctx.createLinearGradient(farX, box.y0, nearX, box.y0 + bw * 0.6);
-  g.addColorStop(0, mixHex(tint, liftT, 0.5));
+  g.addColorStop(0, mixHex(tint, liftT, 0.3));
   g.addColorStop(0.55, tint);
   g.addColorStop(1, mixHex(tint, deepT, 0.55));
-  let washPath: Path2D | null = null;
-  if (litEdge && rows.length > 1) {
-    washPath = new Path2D();
-    const gapW = 2.5 * px;
-    washPath.moveTo(nearX + 4 * px, rows[0] - rowStep);
-    washPath.lineTo(edge[0] + gapW, rows[0] - rowStep);
-    for (let i = 0; i < rows.length; i++) washPath.lineTo(edge[i] + gapW, rows[i]);
-    washPath.lineTo(edge[rows.length - 1] + gapW, box.y1 + rowStep);
-    washPath.lineTo(nearX + 4 * px, box.y1 + rowStep);
-    washPath.closePath();
-  }
   ctx.fillStyle = g;
   // Bands on whole device pixels, so they meet without a seam.
   const washBands = 28;
@@ -1647,21 +1680,14 @@ export function inkWall(
     const ya = bandY(i);
     const yb = bandY(i + 1);
     ctx.globalAlpha = keep((ya + yb) / 2);
-    if (washPath) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(Math.floor(box.x0) - 2, ya, bw + 4, yb - ya);
-      ctx.clip();
-      ctx.fill(washPath);
-      ctx.restore();
-    } else ctx.fillRect(Math.floor(box.x0) - 2, ya, bw + 4, yb - ya);
+    ctx.fillRect(Math.floor(box.x0) - 2, ya, bw + 4, yb - ya);
   }
   // Where the pigment settled unevenly, a wall's width at a time down it,
   // and the paper's tooth, both going with the wash.
   const rm = mulberry32(hash32(seed, 'mottle'));
   for (let y = box.y0; y < box.y1; y += bw * 1.4) {
     const hgt = Math.min(bw * 1.8, box.y1 - y);
-    mottle(ctx, washPath ?? outline, { x: box.x0, y, w: bw, h: hgt }, deepT, liftT, (dark ? 0.2 : 0.26) * keep(y + hgt / 2), (rm() * 4294967296) >>> 0);
+    mottle(ctx, outline, { x: box.x0, y, w: bw, h: hgt }, deepT, liftT, (dark ? 0.2 : 0.26) * keep(y + hgt / 2), (rm() * 4294967296) >>> 0);
   }
   const gr = grain(ctx);
   if (gr) {
@@ -1673,6 +1699,17 @@ export function inkWall(
       ctx.globalAlpha = (dark ? 0.3 : 0.24) * keep((ya + yb) / 2);
       ctx.fillRect(Math.floor(box.x0) - 2, ya, bw + 4, yb - ya);
     }
+  }
+  // Along an open edge facing the light, the stone lifted toward the paper
+  // in a strip 2.5 px of pen wide inside the line: lighter stone, opaque.
+  if (litEdge && rows.length > 1) {
+    const lip = new Path2D();
+    lip.moveTo(edge[0], rows[0]);
+    for (let i = 1; i < rows.length; i++) lip.lineTo(edge[i], rows[i]);
+    ctx.strokeStyle = liftT;
+    ctx.lineWidth = 2 * 2.5 * px;
+    ctx.globalAlpha = dark ? 0.45 : 0.6;
+    ctx.stroke(lip);
   }
   // Where the pigment ran to the open edge and dried there: darker along it.
   if (rows.length > 1) {
@@ -2425,26 +2462,581 @@ function outline(ctx: CanvasRenderingContext2D, pts: number[], closed: boolean, 
   });
 }
 
+// ---------------------------------------------------------------------------
+// The growths' shapes, shared by their drawers and `growthExtent`: each
+// rolls its dice in the order its drawer always has, so a shape built for
+// its extent is the shape that is drawn.
+
+/** A growth's box about its base, in the px it is drawn at: y up is negative. */
+export interface GrowthBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Room for every point of `pts` (flat x, y) and `pad` round it. */
+function take(b: GrowthBox, pts: number[], pad = 0) {
+  for (let i = 0; i < pts.length; i += 2) {
+    b.x0 = Math.min(b.x0, pts[i] - pad);
+    b.x1 = Math.max(b.x1, pts[i] + pad);
+    b.y0 = Math.min(b.y0, pts[i + 1] - pad);
+    b.y1 = Math.max(b.y1, pts[i + 1] + pad);
+  }
+}
+
+/** Antler coral's branches: [x, y, cx, cy, x1, y1, width] each, a quadratic. */
+function branchSegs(H: number, r: Rand, px: number): number[][] {
+  const segs: number[][] = [];
+  const grow = (x: number, y: number, a: number, len: number, wd: number, lvl: number) => {
+    const x1 = x + Math.sin(a) * len;
+    const y1 = y - Math.cos(a) * len;
+    const bend = range(r, -0.3, 0.3) * len;
+    segs.push([x, y, (x + x1) / 2 + Math.cos(a) * bend, (y + y1) / 2 + Math.sin(a) * bend, x1, y1, wd]);
+    if (lvl === 0) return;
+    const k = chance(r, 0.3) ? 3 : 2;
+    for (let i = 0; i < k; i++) {
+      const turn = k === 2 ? (i ? 1 : -1) * range(r, 0.3, 0.55) : (i - 1) * range(r, 0.4, 0.6);
+      const na = Math.max(-1.2, Math.min(1.2, a + turn + range(r, -0.1, 0.1)));
+      grow(x1, y1, na, len * range(r, 0.66, 0.8), wd * 0.74, lvl - 1);
+    }
+  };
+  grow(0, 0, range(r, -0.12, 0.12), H * 0.34, Math.max(1.8 * px, H * 0.1), H > 44 * px ? 3 : 2);
+  return segs;
+}
+
+/** An anemone's tentacles, each its centre line from the disc to its curled tip. */
+function anemoneTents(H: number, r: Rand, r2: Rand): number[][] {
+  const tw = H * 0.38;
+  const chh = H * 0.36;
+  const n = int(r, 14, 20);
+  const tents: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1);
+    const bx = (u - 0.5) * tw * 0.95;
+    const by = -chh;
+    const a = (u - 0.5) * 2.4 + range(r, -0.15, 0.15);
+    const len = H * range(r, 0.42, 0.6);
+    const cx = bx + Math.sin(a) * len * 0.5;
+    const cy = by - Math.cos(a) * len * 0.5;
+    const a2 = a * 1.5 + range(r, -0.3, 0.3);
+    const ex = cx + Math.sin(a2) * len * 0.5;
+    const ey = cy - Math.cos(a2) * len * 0.5;
+    const pts: number[] = [bx, by];
+    quadPts(pts, bx, by, cx, cy, ex, ey, 10);
+    // The last of it curls over, outward, the way a tentacle hangs in a current.
+    let px0 = ex;
+    let py0 = ey;
+    let ca = a2;
+    const curl = (a >= 0 ? 1 : -1) * range(r2, 0.25, 0.45);
+    for (let k = 0; k < 4; k++) {
+      ca += curl;
+      px0 += Math.sin(ca) * len * 0.07;
+      py0 -= Math.cos(ca) * len * 0.07;
+      pts.push(px0, py0);
+    }
+    tents.push(pts);
+  }
+  return tents;
+}
+
+/**
+ * A clump of tube sponges: two to four tubes grown up out of one crust,
+ * each its own height and girth, leaning out from the clump and bending a
+ * little as it goes, its wall swelling and narrowing unevenly (never in
+ * steps, which read as a stack of rings) and opening at the top in a thick
+ * rolled rim round its dark mouth. The ones behind first.
+ */
+function tubeCluster(H: number, r: Rand) {
+  const n = int(r, 2, 4);
+  const tall = int(r, 0, n - 1);
+  const tubes = Array.from({ length: n }, (_, i) => {
+    const u = n === 1 ? 0 : i / (n - 1) - 0.5;
+    const main = i === tall;
+    const th = H * (main ? range(r, 0.85, 1) : range(r, 0.45, 0.8));
+    // (Close at the foot, so the tubes are fused there into one clump.)
+    const x0 = u * H * (0.08 + 0.05 * n) + range(r, -0.02, 0.02) * H;
+    const lean = u * range(r, 0.25, 0.5) + range(r, -0.08, 0.08);
+    const bend = range(r, -0.35, 0.35);
+    const rad0 = H * range(r, 0.075, 0.105) * (main ? 1.12 : 1);
+    const flare = range(r, 1.05, 1.35);
+    const ph = [range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28)];
+    const z = main ? 0.5 + range(r, 0, 0.3) : range(r, 0, 1);
+    // The spine, stepped up from the foot, turning as it bends.
+    const N = 16;
+    const sp: number[] = [x0, 0];
+    const ang: number[] = [lean];
+    for (let k = 1; k <= N; k++) {
+      const t = (k - 0.5) / N;
+      const a = lean + bend * t * t;
+      sp.push(sp[(k - 1) * 2] + (Math.sin(a) * th) / N, sp[(k - 1) * 2 + 1] - (Math.cos(a) * th) / N);
+      ang.push(lean + bend * (k / N) * (k / N));
+    }
+    // Each side lumpy in its own way: a soft swelling and a pinch, never a pipe.
+    const side = (t: number, s: number) =>
+      rad0 * (1 + (flare - 1) * t * t) * (1 + 0.14 * Math.sin(t * 3.3 + ph[s]) + 0.06 * Math.sin(t * 7.9 + ph[s + 1])) * (1 + 0.35 * Math.pow(1 - t, 6));
+    const rad = (t: number) => (side(t, 0) + side(t, 2)) / 2;
+    const a: number[] = [];
+    const bb: number[] = [];
+    for (let k = 0; k <= N; k++) {
+      const t = k / N;
+      const nx = Math.cos(ang[k]);
+      const ny = Math.sin(ang[k]);
+      // (Toward the rim, both sides meet the rim's own width.)
+      const m = Math.pow(t, 6);
+      const wl = side(t, 0) * (1 - m) + rad(1) * m;
+      const wr = side(t, 2) * (1 - m) + rad(1) * m;
+      a.push(sp[k * 2] - nx * wl, sp[k * 2 + 1] - ny * wl);
+      bb.push(sp[k * 2] + nx * wr, sp[k * 2 + 1] + ny * wr);
+    }
+    // The rim: the mouth seen a little from above, across the tube's top.
+    const top = { x: sp[N * 2], y: sp[N * 2 + 1], rx: rad(1) * 1.06, ry: rad(1) * 0.38, ang: ang[N] };
+    const pts: number[] = [...a];
+    // Over the back of the rim, from the left edge to the right.
+    for (let k = 1; k < 12; k++) {
+      const q = Math.PI + (Math.PI * k) / 12;
+      const ex = Math.cos(q) * top.rx;
+      const ey = Math.sin(q) * top.ry;
+      pts.push(top.x + ex * Math.cos(top.ang) - ey * Math.sin(top.ang), top.y + ex * Math.sin(top.ang) + ey * Math.cos(top.ang));
+    }
+    for (let k = N; k >= 0; k--) pts.push(bb[k * 2], bb[k * 2 + 1]);
+    const rim: number[] = [];
+    for (let k = 0; k < 24; k++) {
+      const q = (Math.PI * 2 * k) / 24;
+      const ex = Math.cos(q) * top.rx;
+      const ey = Math.sin(q) * top.ry;
+      rim.push(top.x + ex * Math.cos(top.ang) - ey * Math.sin(top.ang), top.y + ex * Math.sin(top.ang) + ey * Math.cos(top.ang));
+    }
+    return { th, z, sp, ang, rad, a, b: bb, top, pts, rim };
+  });
+  tubes.sort((p, q) => p.z - q.z);
+  // The crust they grow from, a low mound round their feet.
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const t of tubes) {
+    lo = Math.min(lo, t.a[0], t.b[0]);
+    hi = Math.max(hi, t.a[0], t.b[0]);
+  }
+  const crust: number[] = [];
+  const cw = (hi - lo) / 2 + H * 0.03;
+  const cx = (hi + lo) / 2;
+  for (let k = 0; k <= 16; k++) {
+    const q = Math.PI + (Math.PI * k) / 16;
+    crust.push(cx + Math.cos(q) * cw, Math.sin(q) * H * 0.05);
+  }
+  return { tubes, crust };
+}
+
+/** Black coral's whips, each its line from the foot to the tip. */
+function whipLines(H: number, r: Rand): number[][] {
+  const n = int(r, 2, 4);
+  const whips: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const lean = range(r, -0.35, 0.35);
+    const len = H * range(r, 0.75, 1.05);
+    const amp = H * range(r, 0.03, 0.07);
+    const freq = range(r, 1.5, 2.5);
+    const ph = range(r, 0, Math.PI * 2);
+    const bx = range(r, -0.08, 0.08) * H;
+    const pts: number[] = [];
+    for (let k = 0; k <= 24; k++) {
+      const t = k / 24;
+      const wave = Math.sin(t * freq * Math.PI * 2 + ph) * amp * t;
+      pts.push(bx + Math.sin(lean) * len * t + Math.cos(lean) * wave, -Math.cos(lean) * len * t + Math.sin(lean) * wave);
+    }
+    whips.push(pts);
+  }
+  return whips;
+}
+
+/** A glass sponge's outline, and the size of its mouth. */
+function glassShape(H: number, r: Rand) {
+  const b = H * 0.06;
+  const tw = H * range(r, 0.17, 0.22);
+  const lean = range(r, -0.05, 0.05) * H;
+  const pts: number[] = [-b, 0];
+  cubicPts(pts, [-b, 0, -H * 0.2, -H * 0.35, -tw * 0.6 + lean, -H * 0.75, -tw + lean, -H], 14);
+  arcPts(pts, lean, -H, tw, tw * 0.25, Math.PI, Math.PI * 2, 14);
+  cubicPts(pts, [tw + lean, -H, tw * 0.6 + lean, -H * 0.75, H * 0.2, -H * 0.35, b, 0], 14);
+  return { b, tw, lean, pts };
+}
+
+/**
+ * Plate coral, a rosette of thin plates grown out of one place on the
+ * rock, each a fan seen nearly edge-on: narrow where it is grown on,
+ * flaring out to a wavy margin that curls down a little, the near edge
+ * showing its thickness. The low plates lie out flat either side, the
+ * higher ones stand up more steeply between them, all from the one root,
+ * so there is no stalk anywhere (a shelf on a stalk reads as a cake stand)
+ * and no plate stands off on its own. The steepest first.
+ */
+function plateWhorl(H: number, r: Rand) {
+  const n = int(r, 3, 4);
+  const s0 = chance(r, 0.5) ? 1 : -1;
+  const root = { x: range(r, -0.04, 0.04) * H, y: -H * 0.07 };
+  const plates = Array.from({ length: n }, (_, k) => {
+    const side = k % 2 ? -s0 : s0;
+    const up = k / (n - 1);
+    const L = H * range(r, 0.5, 0.64) * (1 - 0.3 * up);
+    const tilt = 0.12 + 0.6 * up + range(r, -0.08, 0.08);
+    // (Each grown from a little across the middle, so the plates overlap at their root.)
+    const bx = root.x - side * H * 0.035;
+    const by = root.y - H * 0.06 * up;
+    const w = range(r, 0.85, 1.1);
+    const f = range(r, 0.24, 0.34);
+    const droop = range(r, 0.05, 0.12) * (1 - 0.5 * up);
+    const ph = [range(r, 0, 6.28), range(r, 0, 6.28)];
+    const dx = side * Math.cos(tilt);
+    const dy = -Math.sin(tilt);
+    // Across the plate's spread: toward the viewer, and so down the page.
+    const qx = side * Math.sin(tilt) * 0.5;
+    const qy = Math.cos(tilt);
+    const rim = (a: number) => L * (0.88 + 0.12 * Math.cos((a / w) * (Math.PI / 2))) * (1 + 0.035 * Math.sin(a * 7 + ph[0]) + 0.015 * Math.sin(a * 17 + ph[1]));
+    /** A point of the plate, `rho` out along it at `a` across it. */
+    const at = (rho: number, a: number): [number, number] => {
+      const u = rho * Math.cos(a);
+      const v = rho * Math.sin(a) * f * 2.2 + (rho * rho * droop) / L;
+      return [bx + dx * u + qx * v, by + dy * u + qy * v];
+    };
+    // Narrow where it is grown on: the spread opens out over its first half.
+    const spread = (rho: number) => w * (0.4 + 0.6 * Math.sqrt(Math.min(1, rho / (0.45 * L))));
+    // (Few points: the pen smooths a curve through them.)
+    const pts: number[] = [];
+    const M = 6;
+    for (let i = 0; i <= M; i++) {
+      const rho = (L * 0.9 * i) / M;
+      pts.push(...at(rho, -spread(rho)));
+    }
+    for (let i = 1; i < 24; i++) {
+      const a = -w + (2 * w * i) / 24;
+      pts.push(...at(rim(a), a));
+    }
+    for (let i = M; i >= 0; i--) {
+      const rho = (L * 0.9 * i) / M;
+      pts.push(...at(rho, spread(rho)));
+    }
+    return { L, w, rim, at, spread, pts, lip: H * 0.03, up };
+  });
+  return plates.sort((a, b) => b.up - a.up);
+}
+
+/**
+ * A sea pen, as a plate draws Pennatula: a swollen foot rooted in the
+ * ground, widest where it goes in; a fleshy stem bending a little in the
+ * current; and up it the polyp leaves in two ranks, broad fleshy crescents
+ * set close and overlapping, the longest a third of the way up, so the
+ * whole is one feather with a scalloped edge.
+ */
+function seapenShape(H: number, r: Rand) {
+  const lean = range(r, -0.15, 0.15) * H;
+  const bow = range(r, -0.06, 0.06) * H;
+  const sy = -0.15 * H;
+  const at = (t: number): [number, number] => {
+    const u = 1 - t;
+    return [2 * u * t * (lean * 0.2 + bow) + t * t * lean, u * u * sy + 2 * u * t * (sy - 0.4 * H) + t * t * -H];
+  };
+  const m = int(r, 14, 18);
+  const leaves: { x: number; y: number; side: number; pl: number; ang: number; pts: number[]; edge: number[] }[] = [];
+  for (let i = 0; i < m; i++) {
+    for (const side of [-1, 1]) {
+      // The two ranks alternate up the stem.
+      const t = 0.03 + (0.86 * (i + (side > 0 ? 0.5 : 0))) / m;
+      const [x, y] = at(t);
+      const [x2, y2] = at(Math.min(1, t + 0.02));
+      const ta = Math.atan2(x2 - x, -(y2 - y));
+      const pl = H * 0.15 * Math.pow(Math.sin(Math.PI * (0.08 + 0.86 * Math.pow(t, 0.75))), 0.8) * range(r, 0.9, 1.06);
+      // Swept up from square to the stem by 35 to 45 degrees.
+      const ang = ta + side * (Math.PI / 2 - range(r, 0.6, 0.78));
+      const ex = x + Math.sin(ang) * pl;
+      const ey = y - Math.cos(ang) * pl;
+      const wd = Math.max(1, pl * 0.7);
+      // Its outer (lower) edge full and bearing the polyps, its inner (upper) edge a shallow curve.
+      const nx = -Math.cos(ang) * side;
+      const ny = -Math.sin(ang) * side;
+      const pts: number[] = [x, y - wd * 0.2];
+      quadPts(pts, x, y - wd * 0.2, x + Math.sin(ang) * pl * 0.5 - nx * wd * 0.2, y - Math.cos(ang) * pl * 0.5 - ny * wd * 0.2, ex, ey, 8);
+      const edge: number[] = [ex, ey];
+      quadPts(edge, ex, ey, x + Math.sin(ang) * pl * 0.6 + nx * wd, y - Math.cos(ang) * pl * 0.6 + ny * wd, x, y + wd * 0.4, 10);
+      pts.push(...edge.slice(2));
+      leaves.push({ x, y, side, pl, ang, pts, edge });
+    }
+  }
+  // The foot: the stem flaring a little as it goes into the ground, the swelling of it under the ground.
+  const foot: number[] = [];
+  const fw = H * 0.036;
+  const stemW = H * 0.022;
+  const prof = (t: number) => stemW + (fw - stemW) * (1 - t) * (1 - t);
+  for (let k = 0; k <= 10; k++) {
+    const t = k / 10;
+    foot.push(-prof(t), H * 0.03 + (sy - H * 0.03) * t);
+  }
+  for (let k = 10; k >= 0; k--) {
+    const t = k / 10;
+    foot.push(prof(t), H * 0.03 + (sy - H * 0.03) * t);
+  }
+  return { at, sy, leaves, foot, stemW };
+}
+
+/**
+ * A stalked crinoid, a sea lily: a long jointed stalk with whorls of
+ * hooked cirri at its nodes and a few roots at its foot, and at its top a
+ * small cup with ten feathered arms rising from it as a lily's petals do,
+ * in toward each other and then flaring out at their tips, the whole crown
+ * nodding a little into the current. Taller than it is wide, and open at
+ * the top: never a ball on a stick, nor a palm.
+ */
+function crinoidShape(H: number, r: Rand) {
+  const c = chance(r, 0.5) ? 1 : -1;
+  const Ls = H * range(r, 0.58, 0.66);
+  const sx = c * range(r, -0.03, 0.08) * H;
+  const bow = range(r, -0.06, 0.06) * H;
+  const stalk: number[] = [0, 0];
+  quadPts(stalk, 0, 0, sx * 0.3 + bow, -Ls * 0.5, sx, -Ls, 20);
+  const tip = (k: number): [number, number, number] => {
+    const i = Math.max(0, Math.min(stalk.length / 2 - 2, k));
+    const x = stalk[i * 2];
+    const y = stalk[i * 2 + 1];
+    return [x, y, Math.atan2(stalk[i * 2 + 2] - x, -(stalk[i * 2 + 3] - y))];
+  };
+  // Whorls of cirri at nodes up the stalk: hooks out and down, curling.
+  const cirri: number[][] = [];
+  const nodes = int(r, 4, 6);
+  for (let q = 0; q < nodes; q++) {
+    const [x, y, a] = tip(Math.round(3 + (15 * q) / Math.max(1, nodes - 1)));
+    const len = H * range(r, 0.06, 0.09) * (1 - 0.3 * (q / nodes));
+    for (const side of [-1, 1, -1, 1]) {
+      let h = a + side * range(r, 1.3, 2);
+      let px0 = x;
+      let py0 = y;
+      const pts = [x, y];
+      for (let k = 0; k < 6; k++) {
+        px0 += (Math.sin(h) * len) / 6;
+        py0 -= (Math.cos(h) * len) / 6;
+        pts.push(px0, py0);
+        h += side * 0.3;
+      }
+      cirri.push(pts);
+    }
+  }
+  // Roots: a few short fingers spread along the ground.
+  const roots: number[][] = [];
+  for (let k = 0; k < 4; k++) {
+    const d = (k < 2 ? -1 : 1) * H * range(r, 0.05, 0.1);
+    roots.push([0, -H * 0.01, d * 0.5, H * 0.005, d, H * range(r, 0.005, 0.02)]);
+  }
+  // The crown, nodding into the current.
+  const [cx, cy, ca] = tip(stalk.length / 2 - 2);
+  const axis = ca + c * range(r, 0.15, 0.4);
+  const arms: number[][] = [];
+  const nArm = 10;
+  for (let i = 0; i < nArm; i++) {
+    const u = i / (nArm - 1) - 0.5 + range(r, -0.04, 0.04);
+    const La = H * range(r, 0.3, 0.42) * (1 - 0.25 * Math.abs(u));
+    const open = range(r, 0.8, 1.15);
+    // Most tips flare out; now and then one coils back in.
+    const flare = range(r, 0.5, 1.3) * (chance(r, 0.25) ? -1.6 : 1);
+    let x = cx + Math.sin(axis) * H * 0.025;
+    let y = cy - Math.cos(axis) * H * 0.025;
+    const pts = [x, y];
+    const N = 16;
+    for (let k = 0; k < N; k++) {
+      const t = (k + 0.5) / N;
+      // Out from the cup, in toward the middle, and out again at the tip.
+      const h = axis + u * open * (2.2 - 1.3 * Math.sin(Math.PI * Math.min(1, t * 1.1))) + Math.sign(u || c) * flare * Math.max(0, t - 0.7) * 3;
+      x += (Math.sin(h) * La) / N;
+      y -= (Math.cos(h) * La) / N;
+      pts.push(x, y);
+    }
+    arms.push(pts);
+  }
+  return { c, stalk, cirri, roots, arms, cup: { x: cx, y: cy, a: ca }, axis };
+}
+
+/**
+ * A brittle star on the rock, seen low from the side: a small five-rayed
+ * disc and five long arms snaking over the rock, banded with their plates
+ * and bristling with fine spines; the far ones lying back over the rock,
+ * the near ones hanging over its edge, and one or two raised and curling
+ * into the water, as they feed. `H` is about how far its arms reach either side.
+ */
+function brittleShape(H: number, r: Rand) {
+  const rd = H * 0.1;
+  const disc = { x: 0, y: -rd * 0.5, rx: rd, ry: rd * 0.55 };
+  const psi0 = range(r, 0, Math.PI * 2);
+  const raised = int(r, 1, 2);
+  const arms: { pts: number[]; back: boolean }[] = [];
+  // The arms by how far back each lies: the furthest raised.
+  const psis = Array.from({ length: 5 }, (_, k) => psi0 + (k * Math.PI * 2) / 5 + range(r, -0.2, 0.2));
+  const backness = psis.map((p) => Math.sin(p));
+  const rank = psis.map((_, i) => i).sort((a, b) => backness[b] - backness[a]);
+  psis.forEach((psi, k) => {
+    const La = H * range(r, 0.5, 0.62);
+    const up = rank.indexOf(k) < raised;
+    const amp = range(r, 0.7, 1.1) * (chance(r, 0.5) ? 1 : -1);
+    const fr = range(r, 1.6, 2.6);
+    const ph = range(r, 0, 6.28);
+    let gx = Math.cos(psi) * rd * 0.9;
+    let gz = Math.sin(psi) * rd * 0.9;
+    let lift = 0;
+    const rise = up ? range(r, 0.2, 0.32) : 0;
+    const pts: number[] = [gx, disc.y - gz * 0.3];
+    const N = 24;
+    for (let i = 1; i <= N; i++) {
+      const t = i / N;
+      // Snaking: its heading swinging one way and the other down its length.
+      const h = psi + amp * Math.sin(t * fr * Math.PI + ph) * (0.35 + 0.65 * t);
+      const step = La / N;
+      if (up) {
+        // Raised: climbing off the rock, then the tip curled over.
+        const climb = Math.sin(Math.PI * Math.min(1, t * 1.2)) * (t < 0.7 ? 1 : -1);
+        lift += step * (rise / 0.3) * Math.max(-0.6, climb) * 0.9;
+        gx += Math.cos(h) * step * 0.6;
+        gz += Math.sin(h) * step * 0.6;
+      } else {
+        gx += Math.cos(h) * step;
+        gz += Math.sin(h) * step;
+      }
+      // Near ones hang over the edge a little.
+      const hang = !up && gz < 0 ? H * 0.08 * t * t : 0;
+      pts.push(gx, disc.y - gz * 0.3 - lift + hang);
+    }
+    arms.push({ pts, back: Math.sin(psi) > 0 || up });
+  });
+  return { disc, arms, rd };
+}
+
+/** A growth's ink, in a few shared marks: a ribbon tapering from `w0` to `w1` along a line. */
+function ribbon(pts: number[], w0: number, w1: number): number[] {
+  const m = pts.length / 2;
+  const left: number[] = [];
+  const right: number[] = [];
+  for (let j = 0; j < m; j++) {
+    const a = Math.max(0, j - 1);
+    const b = Math.min(m - 1, j + 1);
+    const tx = pts[b * 2] - pts[a * 2];
+    const ty = pts[b * 2 + 1] - pts[a * 2 + 1];
+    const tl = Math.hypot(tx, ty) || 1;
+    const hw = (w0 + (w1 - w0) * (j / Math.max(1, m - 1))) / 2;
+    left.push(pts[j * 2] - (ty / tl) * hw, pts[j * 2 + 1] + (tx / tl) * hw);
+    right.push(pts[j * 2] + (ty / tl) * hw, pts[j * 2 + 1] - (tx / tl) * hw);
+  }
+  for (let j = m - 1; j >= 0; j--) left.push(right[j * 2], right[j * 2 + 1]);
+  return left;
+}
+
+/** The kinds that grow in the deep, below the light: what a long sitting's walls and floor gather. */
+export const DEEP_GROWTHS: readonly GrowthKind[] = ['seapen', 'crinoid', 'brittlestar', 'glass', 'whip', 'anemone'];
+
+/**
+ * Where a growth's ink reaches about its base (the point `drawGrowth`
+ * stands it on), in the same px as `g.size`: multiply by the px it is drawn
+ * at. y is negative upward; a brittle star's near arms and a sea pen's foot
+ * reach a little below its base (y1 > 0). The same dice as the drawing, so
+ * it is its box and not a guess; a sea pen's glow in the dark is counted.
+ */
+export function growthExtent(g: Pick<Growth, 'kind' | 'size' | 'seed'>, zone = 2, dark = false): GrowthBox {
+  const H = g.size;
+  const r = mulberry32(g.seed);
+  const r2 = mulberry32(g.seed ^ 0x6d2b79f5);
+  const b: GrowthBox = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  // The pen's own width, and its taper's overshoot.
+  const pen = 1.2;
+  switch (g.kind) {
+    case 'branch':
+      for (const [x, y, cx, cy, x1, y1, wd] of branchSegs(H, r, 1)) take(b, [x, y, cx, cy, x1, y1], wd / 2 + 0.9);
+      break;
+    case 'brain':
+      // (The pen round its foot's corners overshoots them a little.)
+      take(b, [-H * 0.93, -H * 0.57, H * 0.93, 0], pen);
+      break;
+    case 'fan': {
+      const stem = H * range(r, 0.1, 0.15);
+      const R = H - stem;
+      const half = range(r, 1.1, 1.3);
+      const lean = range(r, -0.12, 0.12);
+      const pad = Math.max(1.2, H * 0.035) / 2 + 0.9;
+      take(b, [0, 0, lean * stem, -stem], Math.max(1.4, H * 0.05) / 2 + pen);
+      for (let i = 0; i <= 32; i++) {
+        const a = lean - half + (2 * half * i) / 32;
+        const rr = R * 0.99 * (1 - 0.12 * Math.abs((a - lean) / half) ** 3);
+        take(b, [lean * stem + Math.sin(a) * rr, -stem - Math.cos(a) * rr], pad);
+      }
+      break;
+    }
+    case 'anemone': {
+      const base = Math.max(1.4, H * 0.045);
+      for (const t of anemoneTents(H, r, r2)) take(b, t, base / 2 + 0.4);
+      take(b, [-H * 0.19, -H * 0.41, H * 0.19, 0], pen);
+      break;
+    }
+    case 'tube': {
+      const c = tubeCluster(H, r);
+      for (const t of c.tubes) take(b, [...t.pts, ...t.rim], pen);
+      take(b, c.crust, pen);
+      take(b, [0, 0], 0);
+      break;
+    }
+    case 'urchin': {
+      const R = H * 0.2;
+      take(b, [-R, -2 * R, R, 0], pen);
+      const n = int(r, 26, 34);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + range(r, -0.08, 0.08);
+        if (Math.sin(a) > 0.2) continue;
+        const len = H * range(r, 0.3, 0.45);
+        take(b, [Math.cos(a) * (R + len), -R + Math.sin(a) * (R + len)], 0.5);
+      }
+      break;
+    }
+    case 'plate':
+      for (const p of plateWhorl(H, r)) take(b, [...p.pts, ...p.pts.map((v, i) => (i % 2 ? v + p.lip : v))], 2);
+      take(b, [0, 0], 0);
+      break;
+    case 'whip':
+      for (const w of whipLines(H, r)) take(b, w, 1.6 + 0.6);
+      take(b, [-H * 0.07, -3, H * 0.07, 1], pen);
+      break;
+    case 'glass': {
+      const s = glassShape(H, r);
+      take(b, s.pts, pen);
+      // Its roots, a tuft of spicules into the ground.
+      take(b, [-H * 0.15, 0, H * 0.15, H * 0.035], 0.5);
+      break;
+    }
+    case 'seapen': {
+      const s = seapenShape(H, r);
+      for (const l of s.leaves) take(b, l.pts, pen);
+      take(b, s.foot, pen);
+      take(b, s.foot.map((v, i) => (i % 2 ? Math.min(v, 0) : v)), pen);
+      for (let k = 0; k <= 16; k++) take(b, s.at(k / 16), s.stemW + pen);
+      if (dark && zone >= 2) for (const l of s.leaves) take(b, [l.edge[0], l.edge[1]], 4);
+      break;
+    }
+    case 'crinoid': {
+      const s = crinoidShape(H, r);
+      take(b, s.stalk, Math.max(1.2, H * 0.024) / 2 + pen);
+      for (const c of [...s.cirri, ...s.roots]) take(b, c, pen);
+      // Each arm's pinnules stand out from it, a little more than a twentieth of the height.
+      for (const a of s.arms) take(b, a, H * 0.05 + pen);
+      break;
+    }
+    case 'brittlestar': {
+      const s = brittleShape(H, r);
+      const d = s.disc;
+      take(b, [d.x - d.rx, d.y - d.ry, d.x + d.rx, d.y + d.ry], pen);
+      for (const a of s.arms) take(b, a.pts, Math.max(1.2, H * 0.045) / 2 + H * 0.02 + pen);
+      break;
+    }
+  }
+  return b;
+}
+
 const DRAW: Record<Growth['kind'], Drawer> = {
   // Antler coral: forking three or four times, each branch a tube outlined
   // in ink, shaded down its far side and lifted down its near one, and
   // studded with polyp cups when drawn big.
   branch(ctx, H, ink, r, px, pen) {
-    const segs: number[][] = [];
-    const grow = (x: number, y: number, a: number, len: number, wd: number, lvl: number) => {
-      const x1 = x + Math.sin(a) * len;
-      const y1 = y - Math.cos(a) * len;
-      const bend = range(r, -0.3, 0.3) * len;
-      segs.push([x, y, (x + x1) / 2 + Math.cos(a) * bend, (y + y1) / 2 + Math.sin(a) * bend, x1, y1, wd]);
-      if (lvl === 0) return;
-      const k = chance(r, 0.3) ? 3 : 2;
-      for (let i = 0; i < k; i++) {
-        const turn = k === 2 ? (i ? 1 : -1) * range(r, 0.3, 0.55) : (i - 1) * range(r, 0.4, 0.6);
-        const na = Math.max(-1.2, Math.min(1.2, a + turn + range(r, -0.1, 0.1)));
-        grow(x1, y1, na, len * range(r, 0.66, 0.8), wd * 0.74, lvl - 1);
-      }
-    };
-    grow(0, 0, range(r, -0.12, 0.12), H * 0.34, Math.max(1.8 * px, H * 0.1), H > 44 * px ? 3 : 2);
+    const segs = branchSegs(H, r, px);
     const stroke = (color: string, width: (wd: number) => number, off: number) => {
       ctx.strokeStyle = color;
       for (const [x, y, cx, cy, x1, y1, wd] of segs) {
@@ -2637,34 +3229,7 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     const cw = H * 0.3;
     const tw = H * 0.38;
     const chh = H * 0.36;
-    const n = int(r, 14, 20);
-    const tents: number[][] = [];
-    for (let i = 0; i < n; i++) {
-      const u = i / (n - 1);
-      const bx = (u - 0.5) * tw * 0.95;
-      const by = -chh;
-      const a = (u - 0.5) * 2.4 + range(r, -0.15, 0.15);
-      const len = H * range(r, 0.42, 0.6);
-      const cx = bx + Math.sin(a) * len * 0.5;
-      const cy = by - Math.cos(a) * len * 0.5;
-      const a2 = a * 1.5 + range(r, -0.3, 0.3);
-      const ex = cx + Math.sin(a2) * len * 0.5;
-      const ey = cy - Math.cos(a2) * len * 0.5;
-      const pts: number[] = [bx, by];
-      quadPts(pts, bx, by, cx, cy, ex, ey, 10);
-      // The last of it curls over, outward, the way a tentacle hangs in a current.
-      let px0 = ex;
-      let py0 = ey;
-      let ca = a2;
-      const curl = (a >= 0 ? 1 : -1) * range(pen.r2, 0.25, 0.45);
-      for (let k = 0; k < 4; k++) {
-        ca += curl;
-        px0 += Math.sin(ca) * len * 0.07;
-        py0 -= Math.cos(ca) * len * 0.07;
-        pts.push(px0, py0);
-      }
-      tents.push(pts);
-    }
+    const tents = anemoneTents(H, r, pen.r2);
     // Each tentacle a ribbon, full at the disc and fine at the tip.
     const base = Math.max(1.4 * px, H * 0.045);
     const tentPath = new Path2D();
@@ -2732,129 +3297,102 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     outline(ctx, col, true, ink, pen, 0.85);
   },
 
-  // Vase sponges: one to three irregular vases, narrow at the foot and
-  // swelling to a thick rolled lip, each a little lopsided, dark in the
-  // mouth, shaded in lines that wrap round the form on its shadow side and
-  // pitted with pores when drawn big. In the reef's colours, never grey.
+  // Tube sponges (`tubeCluster`): the crust, then each tube from the back,
+  // washed graded across its round, its shadow side worked in lines that
+  // run up the tube with it (never round it), pitted with pores, and its
+  // mouth a dark hollow inside a thick rolled rim. In the reef's colours,
+  // never grey.
   tube(ctx, H, ink, r, px, pen) {
-    const n = int(r, 1, 3);
-    const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => Math.abs(b - (n - 1) / 2) - Math.abs(a - (n - 1) / 2));
-    for (const i of order) {
-      const main = i === Math.floor(n / 2);
-      const x0 = (i - (n - 1) / 2) * H * 0.26 + range(r, -0.03, 0.03) * H;
-      const th = H * (main ? range(r, 0.8, 1) : range(r, 0.5, 0.75));
-      const foot = H * range(r, 0.05, 0.08);
-      const belly = H * range(r, 0.15, 0.22) * (main ? 1 : 0.85);
-      const lip = belly * range(r, 0.9, 1.1);
-      const lean = range(r, -0.12, 0.12) + (i - (n - 1) / 2) * 0.1;
-      // Two sides of their own, lumpy, so it is never a turned pot.
-      const wob = [range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28)];
-      const half = (t: number, side: number) => {
-        const shape = foot + (belly - foot) * Math.pow(Math.sin(Math.min(1, t / 0.75) * (Math.PI / 2)), 1.3) + (lip - belly) * Math.max(0, (t - 0.75) / 0.25);
-        const k = side < 0 ? 0 : 2;
-        return shape * (1 + 0.13 * Math.sin(t * 6 + wob[k]) + 0.06 * Math.sin(t * 15 + wob[k + 1]));
-      };
-      const ry = lip * 0.3;
-      const spine = (t: number): [number, number] => [x0 + Math.sin(lean) * th * t + Math.sin(t * 3 + wob[0]) * H * 0.015, -th * t];
-      const pts: number[] = [];
-      const N = 18;
-      for (let k = 0; k <= N; k++) {
-        const t = k / N;
-        const [sx, sy] = spine(t);
-        pts.push(sx - half(t, -1), sy);
+    const { tubes, crust } = tubeCluster(H, r);
+    const cp = pathOf(crust);
+    wash(ctx, cp, boxOf(crust), ink.deep, pen, 0.9);
+    if (pen.d > 0.3) outline(ctx, crust, false, ink, pen, 0.7, [0.2, 0.2]);
+    for (const t of tubes) {
+      const body = pathOf(t.pts);
+      const box = boxOf(t.pts);
+      // The ones behind a little in shadow.
+      const tone = t.z < 0.35 ? mixHex(ink.body, ink.deep, 0.35) : ink.body;
+      if (pen.d > 0.45) {
+        const a = ctx.globalAlpha;
+        ctx.globalAlpha = 1;
+        tubeWash(ctx, body, [{ a: t.a, b: t.b }], box, {
+          stops: [
+            [0, pen.dark ? mixHex(tone, ink.lit, 0.5) : mixHex(tone, '#FBF8EF', 0.45)],
+            [0.4, tone],
+            [1, ink.deep],
+          ],
+          alpha: a,
+        });
+        ctx.globalAlpha = a;
+      } else wash(ctx, body, box, tone, pen);
+      if (pen.d > 0.5) {
+        // Lines up the tube on its shadow side (its lit side, on dark water).
+        const shade = shadeAcross(box, pen.light);
+        contourHatch(ctx, body, [{ a: t.a, b: t.b }], {
+          spacing: 1.5 * px,
+          shade,
+          reach: 0.42,
+          width: 0.55 * px,
+          k: 0.75,
+          color: ink.ink,
+          alpha: pen.dark ? 0.45 : 0.6,
+          light: pen.light,
+          seed: pen.seed ^ 0x2c1,
+        });
       }
-      const [tx, ty] = spine(1);
-      // Over the back of the lip, then down the other side.
-      for (let k = 1; k < 12; k++) {
-        const a = Math.PI + (Math.PI * k) / 12;
-        pts.push(tx + Math.cos(a) * (half(1, -1) + half(1, 1)) * 0.5 + (half(1, 1) - half(1, -1)) * 0.5, ty + Math.sin(a) * ry);
-      }
-      for (let k = N; k >= 0; k--) {
-        const t = k / N;
-        const [sx, sy] = spine(t);
-        pts.push(sx + half(t, 1), sy);
-      }
-      const body = pathOf(pts);
-      const box = boxOf(pts);
-      wash(ctx, body, box, ink.body, pen);
-      // Lines round the form, bowed as a ring is seen from a little above,
-      // only on its shadow side and heavier into it.
-      ctx.save();
-      ctx.clip(body);
-      const rings = new Path2D();
-      const rows = Math.max(3, Math.round(th / ((pen.d > 0.3 ? 3 : 4) * px)));
-      for (let q = 1; q < rows; q++) {
-        const t = q / rows;
-        const [sx, sy] = spine(t);
-        const hl = half(t, -1);
-        const hr = half(t, 1);
-        const rr = ((hl + hr) / 2) * 0.38;
-        // Each ring starts and stops somewhere of its own.
-        const stop = 0.5 + 0.12 * Math.sin(q * 2.3 + wob[1]);
-        let on = false;
-        for (let k = 0; k <= 20; k++) {
-          const ph = (Math.PI * k) / 20;
-          const c = Math.cos(ph);
-          // Facing: the right of the front, away from the light, is the shade.
-          const sh = 0.45 + 0.45 * c + 0.12 * (1 - Math.sin(ph));
-          const want = pen.dark ? 1 - sh : sh;
-          const x = sx + (c >= 0 ? c * hr : c * hl);
-          const y = sy + Math.sin(ph) * rr;
-          if (want < stop) {
-            on = false;
-            continue;
-          }
-          if (on) rings.lineTo(x, y);
-          else rings.moveTo(x, y);
-          on = true;
-        }
-      }
-      ctx.strokeStyle = ink.ink;
-      ctx.lineWidth = (pen.d > 0.3 ? 0.45 : 0.55) * px;
-      faint(ctx, pen.dark ? 0.35 : 0.55, () => ctx.stroke(rings));
-      ctx.restore();
       if (pen.d > 0.3) {
-        // Pores: small dark openings over the near face, each with a lit lower lip.
+        // Pores: small dark openings scattered over the near face, each with a lit lower lip.
         const pores = new Path2D();
         const lips = new Path2D();
-        const count = Math.round(6 + 14 * pen.d * (th / H));
+        const count = Math.round(2 + 10 * (pen.d - 0.2) * (t.th / H));
         for (let k = 0; k < count; k++) {
-          const t = 0.12 + 0.72 * pen.r2();
-          const u = (pen.r2() - 0.5) * 1.3;
-          const [sx, sy] = spine(t);
-          const hw = u < 0 ? half(t, -1) : half(t, 1);
-          const prx = (0.5 + pen.r2() * 0.6) * px * (1 - Math.abs(u) * 0.6);
-          const qx = sx + u * hw * 0.85;
-          const qy = sy;
+          const tt = 0.14 + 0.7 * pen.r2();
+          const v = (pen.r2() - 0.5) * 1.3;
+          const i = Math.round(tt * 16);
+          const nx = Math.cos(t.ang[i]);
+          const ny = Math.sin(t.ang[i]);
+          const w = t.rad(tt);
+          const prx = Math.max(0.35 * px, w * (0.12 + 0.08 * pen.r2())) * (1 - Math.abs(v) * 0.5);
+          const qx = t.sp[i * 2] + nx * v * w * 0.85;
+          const qy = t.sp[i * 2 + 1] + ny * v * w * 0.85;
           pores.moveTo(qx + prx, qy);
-          pores.ellipse(qx, qy, prx, prx * 0.7, 0, 0, Math.PI * 2);
+          pores.ellipse(qx, qy, prx * (1 - Math.abs(v) * 0.4), prx * 0.75, t.ang[i], 0, Math.PI * 2);
           lips.moveTo(qx + prx, qy + 0.3 * px);
-          lips.ellipse(qx, qy + 0.3 * px, prx, prx * 0.7, 0, 0.2, Math.PI - 0.2);
+          lips.ellipse(qx, qy + 0.3 * px, prx, prx * 0.7, t.ang[i], 0.2, Math.PI - 0.2);
         }
         ctx.fillStyle = ink.hollow;
-        faint(ctx, 0.55, () => ctx.fill(pores));
+        faint(ctx, 0.6, () => ctx.fill(pores));
         ctx.strokeStyle = ink.lit;
         ctx.lineWidth = 0.4 * px;
         faint(ctx, 0.7, () => ctx.stroke(lips));
       }
-      // The mouth: a rolled lip round a dark hollow, the far inside wall catching the light.
-      const lx = tx + (half(1, 1) - half(1, -1)) * 0.5;
-      const lw = (half(1, -1) + half(1, 1)) * 0.5;
+      outline(ctx, t.pts, true, ink, pen, 0.9);
+      // The mouth: a dark hollow inside the rim's thickness, its far inside wall catching the light.
+      const { x, y, rx, ry, ang } = t.top;
       const mouth = new Path2D();
-      mouth.ellipse(lx, ty + ry * 0.12, lw * 0.8, ry * 0.62, 0, 0, Math.PI * 2);
+      mouth.ellipse(x, y, rx * 0.72, ry * 0.62, ang, 0, Math.PI * 2);
+      const lip = new Path2D();
+      lip.ellipse(x, y, rx, ry, ang, 0, Math.PI * 2);
+      ctx.fillStyle = pen.dark ? mixHex(tone, ink.lit, 0.3) : mixHex(tone, '#FBF8EF', 0.3);
+      ctx.fill(lip);
       ctx.fillStyle = ink.hollow;
       faint(ctx, 0.85, () => ctx.fill(mouth));
       const wall = new Path2D();
-      wall.ellipse(lx, ty + ry * 0.12, lw * 0.8, ry * 0.62, 0, Math.PI, Math.PI * 2);
-      wall.ellipse(lx, ty + ry * 0.5, lw * 0.7, ry * 0.4, 0, Math.PI * 2, Math.PI, true);
+      wall.ellipse(x, y, rx * 0.72, ry * 0.62, ang, Math.PI, Math.PI * 2);
+      wall.ellipse(x, y + ry * 0.3, rx * 0.62, ry * 0.36, ang, Math.PI * 2, Math.PI, true);
       ctx.fillStyle = ink.deep;
-      faint(ctx, 0.6, () => ctx.fill(wall));
-      ctx.fillStyle = ink.body;
-      outline(ctx, pts, true, ink, pen, 0.9);
-      const rim: number[] = [];
-      arcPts(rim, lx, ty + ry * 0.12, lw * 0.8, ry * 0.62, 0, Math.PI * 2, 24);
-      outline(ctx, rim, true, ink, pen, 0.6);
+      faint(ctx, 0.55, () => ctx.fill(wall));
+      ctx.strokeStyle = ink.ink;
+      if (pen.d > 0.45) outline(ctx, t.rim, true, ink, pen, 0.75);
+      else {
+        // (Small, the rim is one plain line: the pen's pressure would not show.)
+        ctx.lineWidth = 0.7 * px;
+        ctx.stroke(lip);
+      }
+      ctx.lineWidth = 0.45 * px;
+      faint(ctx, 0.7, () => ctx.stroke(mouth));
     }
+    ctx.fillStyle = ink.body;
   },
 
   // Urchin: a round test bristling with fine tapering spines, none into the
@@ -2915,132 +3453,83 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     ctx.fillStyle = ink.body;
   },
 
-  // Plate coral: one or two shelves held up on a stout stalk that grows
-  // out of the rock on a spreading foot (never more than two: three read
-  // as a cake stand, and a shelf with no stalk under it floats), each ringed
-  // with its growth, the underside of each in shadow.
+  // Plate coral: a whorl of thin plates in tiers (`plateWhorl`), the top
+  // one first, so each lower one lies over where the one above is grown
+  // on. Each is its underside in shadow slid out from under it by its
+  // thickness, then its top washed and shaded, ringed with its growth
+  // following the wavy margin and ribbed from where it is grown on.
   plate(ctx, H, ink, r, px, pen) {
-    const n = Math.min(2, int(r, 2, 3));
-    const shelves = Array.from({ length: n }, (_, k) => {
-      const rx = H * range(r, 0.45, 0.62) * (1 - 0.15 * k);
-      // The second shelf well above the first and off to the other side,
-      // so the stalk shows between them: a branching shelf, not a stack.
-      return { x: (k % 2 ? -1.6 : 1) * range(r, 0.05, 0.2) * H, y: -H * (0.42 + 0.4 * k), rx: rx * (k ? 0.85 : 1), ry: rx * (k ? 0.85 : 1) * 0.2 };
-    });
-    // The stalk: up from its foot through each shelf's middle to the top
-    // one, tapering, its foot flared into the rock (a little into it, so
-    // it is grown on and not stood on).
-    const spine: [number, number][] = [[0, H * 0.04]];
-    for (const s of shelves) spine.push([s.x * 0.6, s.y + s.ry * 0.5]);
-    const left: number[] = [];
-    const right: number[] = [];
-    const steps = 14;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const f = t * (spine.length - 1);
-      const j = Math.min(spine.length - 2, Math.floor(f));
-      const u = f - j;
-      const x = spine[j][0] + (spine[j + 1][0] - spine[j][0]) * u;
-      const y = spine[j][1] + (spine[j + 1][1] - spine[j][1]) * u;
-      // Stout at the foot and flaring into the rock over its last tenth.
-      const flare = t < 0.12 ? 0.11 * H * (1 - t / 0.12) ** 2 : 0;
-      const half = H * (0.065 - 0.03 * t) + flare;
-      left.push(x - half, y);
-      right.push(x + half, y);
-    }
-    const stalkPts = [...left];
-    for (let i = right.length - 2; i >= 0; i -= 2) stalkPts.push(right[i], right[i + 1]);
-    const stalkPath = pathOf(stalkPts);
-    const sb = boxOf(stalkPts);
-    const sg = ctx.createLinearGradient(sb.x, 0, sb.x + sb.w, 0);
-    sg.addColorStop(0, pen.dark ? ink.deep : ink.lit);
-    sg.addColorStop(0.45, ink.body);
-    sg.addColorStop(1, pen.dark ? ink.lit : ink.deep);
-    ctx.fillStyle = sg;
-    ctx.fill(stalkPath);
-    shadeIn(ctx, stalkPath, sb, ink, pen, { angle: 0.15, spacing: 1.8, cross: null });
-    outline(ctx, left, false, ink, pen, 0.9, [0.05, 0.1]);
-    outline(ctx, right, false, ink, pen, 1.1, [0.05, 0.1]);
-    ctx.fillStyle = ink.body;
-    // Top shelf first, so the lower ones lie over its stalk.
-    for (let k = n - 1; k >= 0; k--) {
-      const s = shelves[k];
-      const lip = H * 0.045;
-      const under: number[] = [];
-      arcPts(under, s.x, s.y + lip, s.rx, s.ry, 0, Math.PI * 2, 36);
+    const plates = plateWhorl(H, r);
+    const n = plates.length;
+    plates.forEach((p, k) => {
+      const under = p.pts.map((v, i) => (i % 2 ? v + p.lip : v));
       const underPath = pathOf(under);
-      const ubox = boxOf(under);
       ctx.fillStyle = ink.deep;
       ctx.fill(underPath);
-      if (pen.d > 0.4 && !pen.dark) {
-        hatch(ctx, underPath, ubox, {
-          spacing: 1.7 * px,
-          angle: 1.3,
-          shade: () => 0.8,
-          from: 0.5,
-          color: ink.ink,
-          width: 0.4 * px,
-          alpha: 0.5,
-          seed: pen.seed + k,
-        });
+      const front = k >= n - 2;
+      if (front && pen.d > 0.4 && !pen.dark) {
+        hatch(ctx, underPath, boxOf(under), { spacing: 1.7 * px, angle: 1.3, shade: () => 0.8, from: 0.5, color: ink.ink, width: 0.4 * px, alpha: 0.5, seed: pen.seed + k });
       }
-      outline(ctx, under, true, ink, pen, 0.8);
-      const topPts: number[] = [];
-      arcPts(topPts, s.x, s.y, s.rx, s.ry, 0, Math.PI * 2, 36);
-      const top = pathOf(topPts);
-      wash(ctx, top, boxOf(topPts), ink.body, pen);
+      // (Its underside mostly under its top: a plain line serves.)
+      ctx.strokeStyle = ink.ink;
+      ctx.lineWidth = 0.75 * px;
+      ctx.stroke(underPath);
+      const top = pathOf(p.pts);
+      const tb = boxOf(p.pts);
+      // (Washed and ringed, no hatch on its face: its ribs are its shading.
+      // The ones behind, mostly hidden, take the colour flat.)
+      if (front) wash(ctx, top, tb, ink.body, pen);
+      else {
+        ctx.fillStyle = ink.body;
+        ctx.fill(top);
+      }
       ctx.save();
       ctx.clip(top);
-      ctx.beginPath();
-      const rings = pen.d > 0.3 ? [0.3, 0.5, 0.66, 0.8, 0.91] : [0.35, 0.6, 0.82];
-      for (const f of rings) {
-        ctx.moveTo(s.x * 0.3 + s.rx * f + (s.x - s.x * 0.3) * f, s.y);
-        ctx.ellipse(s.x * 0.3 + (s.x - s.x * 0.3) * f, s.y, s.rx * f, s.ry * f, 0, 0, Math.PI * 2);
+      const ringPath = new Path2D();
+      const rings = pen.d > 0.3 ? [0.42, 0.66, 0.86] : [0.5, 0.82];
+      for (const q of rings) {
+        for (let i = 0; i <= 24; i++) {
+          const a0 = -p.w + (2 * p.w * i) / 24;
+          const rho = q * p.rim(a0);
+          const [x, y] = p.at(rho, a0 * Math.min(1, p.spread(rho) / p.w));
+          if (i) ringPath.lineTo(x, y);
+          else ringPath.moveTo(x, y);
+        }
       }
       ctx.strokeStyle = ink.ink;
-      ctx.lineWidth = (pen.d > 0.3 ? 0.45 : 0.6) * px;
-      faint(ctx, pen.dark ? 0.25 : 0.4, () => ctx.stroke());
+      ctx.lineWidth = (pen.d > 0.3 ? 0.4 : 0.55) * px;
+      faint(ctx, pen.dark ? 0.3 : 0.45, () => ctx.stroke(ringPath));
       if (pen.d > 0.4) {
-        // Fine radial ridges from the centre to the rim.
-        ctx.beginPath();
-        const cx0 = s.x * 0.3 + (s.x - s.x * 0.3) * 0.15;
-        for (let a = 0.1; a < Math.PI * 2; a += 0.28 + 0.1 * Math.sin(a * 5)) {
-          ctx.moveTo(cx0 + Math.cos(a) * s.rx * 0.18, s.y + Math.sin(a) * s.ry * 0.18);
-          ctx.lineTo(s.x + Math.cos(a) * s.rx * 0.97, s.y + Math.sin(a) * s.ry * 0.97);
+        // Fine ribs from where it is grown on out to the margin.
+        const ribs = new Path2D();
+        for (let a = -p.w * 0.92; a <= p.w * 0.92; a += 0.11 + 0.05 * Math.sin(a * 13 + k)) {
+          const [x0, y0] = p.at(p.L * 0.15, a * (p.spread(p.L * 0.15) / p.w));
+          const [x1, y1] = p.at(p.rim(a) * 0.97, a);
+          ribs.moveTo(x0, y0);
+          ribs.lineTo(x1, y1);
         }
         ctx.lineWidth = 0.3 * px;
-        faint(ctx, pen.dark ? 0.15 : 0.25, () => ctx.stroke());
+        faint(ctx, pen.dark ? 0.18 : 0.28, () => ctx.stroke(ribs));
       }
       ctx.restore();
-      outline(ctx, topPts, true, ink, pen, 0.85);
-    }
+      if (front) outline(ctx, p.pts, true, ink, pen, 0.85);
+      else {
+        ctx.strokeStyle = ink.ink;
+        ctx.lineWidth = 0.75 * px;
+        ctx.stroke(top);
+      }
+    });
     ctx.fillStyle = ink.body;
   },
 
   // Black coral: a few long whips, waving gently, each a pen line that
   // tapers to its tip over a thin wash, set with polyps when drawn big.
   whip(ctx, H, ink, r, px, pen) {
-    const n = int(r, 2, 4);
+    const whips = whipLines(H, r);
     const p = new Path2D();
-    const whips: number[][] = [];
-    for (let i = 0; i < n; i++) {
-      const lean = range(r, -0.35, 0.35);
-      const len = H * range(r, 0.75, 1.05);
-      const amp = H * range(r, 0.03, 0.07);
-      const freq = range(r, 1.5, 2.5);
-      const ph = range(r, 0, Math.PI * 2);
-      const bx = range(r, -0.08, 0.08) * H;
-      const pts: number[] = [];
-      for (let k = 0; k <= 24; k++) {
-        const t = k / 24;
-        const wave = Math.sin(t * freq * Math.PI * 2 + ph) * amp * t;
-        const x = bx + Math.sin(lean) * len * t + Math.cos(lean) * wave;
-        const y = -Math.cos(lean) * len * t + Math.sin(lean) * wave;
-        if (k === 0) p.moveTo(x, y);
-        else p.lineTo(x, y);
-        pts.push(x, y);
-      }
-      whips.push(pts);
+    for (const pts of whips) {
+      p.moveTo(pts[0], pts[1]);
+      for (let k = 2; k < pts.length; k += 2) p.lineTo(pts[k], pts[k + 1]);
     }
     ctx.strokeStyle = ink.body;
     ctx.lineWidth = 2.2 * px;
@@ -3077,22 +3566,26 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     ctx.stroke();
   },
 
-  // Glass sponge: a tall pale vase of crossed lattice, barely there.
+  // Glass sponge: a tall pale vase of crossed lattice, barely there,
+  // Venus's flower basket: its lattice woven in rings when drawn big, a
+  // few oblique ridges winding up it, and its tuft of rooting spicules.
   glass(ctx, H, ink, r, px, pen) {
-    const b = H * 0.06;
-    const tw = H * range(r, 0.17, 0.22);
-    const lean = range(r, -0.05, 0.05) * H;
-    const vase = new Path2D();
-    vase.moveTo(-b, 0);
-    vase.bezierCurveTo(-H * 0.2, -H * 0.35, -tw * 0.6 + lean, -H * 0.75, -tw + lean, -H);
-    vase.ellipse(lean, -H, tw, tw * 0.25, 0, Math.PI, 0);
-    vase.bezierCurveTo(tw * 0.6 + lean, -H * 0.75, H * 0.2, -H * 0.35, b, 0);
-    vase.closePath();
-    const pts: number[] = [-b, 0];
-    cubicPts(pts, [-b, 0, -H * 0.2, -H * 0.35, -tw * 0.6 + lean, -H * 0.75, -tw + lean, -H], 14);
-    arcPts(pts, lean, -H, tw, tw * 0.25, Math.PI, Math.PI * 2, 14);
-    cubicPts(pts, [tw + lean, -H, tw * 0.6 + lean, -H * 0.75, H * 0.2, -H * 0.35, b, 0], 14);
-    faint(ctx, 0.3, () => ctx.fill(vase));
+    const { b, tw, lean, pts } = glassShape(H, r);
+    const vase = pathOf(pts);
+    // The roots first, fine and pale, fanning down into the ground.
+    const roots = new Path2D();
+    for (let i = 0; i < 7; i++) {
+      const u = i / 6 - 0.5;
+      roots.moveTo(u * b, -H * 0.02);
+      roots.quadraticCurveTo(u * H * 0.12, -H * 0.005, u * H * 0.27 + range(pen.r2, -0.01, 0.01) * H, H * range(pen.r2, 0.005, 0.03));
+    }
+    ctx.lineWidth = 0.4 * px;
+    faint(ctx, 0.5, () => ctx.stroke(roots));
+    // Pale glass, not a hole in the water: an ivory wash, let go toward the
+    // paper on its lit side and turned on its far side by a few lines.
+    const vb = boxOf(pts);
+    wash(ctx, vase, vb, ink.body, pen, pen.dark ? 0.35 : 0.62);
+    shadeIn(ctx, vase, vb, ink, pen, { angle: Math.PI / 2 - 0.1, bow: 0, from: 0.6, cross: null, k: 0.4 });
     ctx.save();
     ctx.clip(vase);
     ctx.beginPath();
@@ -3115,6 +3608,18 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     ctx.strokeStyle = ink.ink;
     ctx.lineWidth = (pen.d > 0.3 ? 0.35 : 0.5) * px;
     faint(ctx, 0.4, () => ctx.stroke());
+    if (pen.d > 0.3) {
+      // Its ridges, winding up it.
+      const ridges = new Path2D();
+      const ph = range(pen.r2, 0, 1);
+      for (let k = 0; k < 3; k++) {
+        const y0 = -H * (0.3 + 0.22 * (k + ph));
+        ridges.moveTo(-H * 0.3, y0 + H * 0.05);
+        ridges.quadraticCurveTo(lean * 0.5, y0 - H * 0.02, H * 0.3, y0 - H * 0.12);
+      }
+      ctx.lineWidth = 0.6 * px;
+      faint(ctx, 0.45, () => ctx.stroke(ridges));
+    }
     ctx.restore();
     faint(ctx, 0.85, () => outline(ctx, pts, true, ink, pen, 0.8));
     ctx.beginPath();
@@ -3127,69 +3632,66 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     ctx.fillStyle = ink.body;
   },
 
-  // Sea pen: a feather on a short stalk; in the dark a few of its polyps glow.
+  // Sea pen (`seapenShape`): the swollen foot washed and shaded, the stem
+  // up through the leaves, and the leaves in two ranks, each crescent
+  // washed and edged in the pen with its vein, its outer edge dotted with
+  // polyps when drawn big; in the dark a few of its polyps glow.
   seapen(ctx, H, ink, r, px, pen) {
-    const lean = range(r, -0.15, 0.15) * H;
-    const sy = -0.22 * H;
-    const at = (t: number): [number, number] => {
-      const u = 1 - t;
-      return [2 * u * t * lean * 0.2 + t * t * lean, u * u * sy + 2 * u * t * (sy - 0.4 * H) + t * t * -H];
-    };
-    const m = int(r, 9, 13);
-    const tips: [number, number][] = [];
-    const leaves = new Path2D();
-    const veins = new Path2D();
-    for (let i = 0; i < m; i++) {
-      const t = 0.08 + (0.87 * i) / (m - 1);
-      const [x, y] = at(t);
-      const pl = H * 0.22 * Math.pow(Math.sin(Math.PI * (0.1 + 0.85 * t)), 0.8);
-      const wd = H * 0.035;
-      for (const side of [-1, 1]) {
-        const ex = x + side * pl * 0.82;
-        const ey = y - pl * 0.57;
-        leaves.moveTo(x, y);
-        leaves.quadraticCurveTo(x + side * pl * 0.35, y - pl * 0.5 - wd, ex, ey);
-        leaves.quadraticCurveTo(x + side * pl * 0.5, y - pl * 0.1 + wd, x, y + wd * 0.5);
-        veins.moveTo(x, y);
-        veins.quadraticCurveTo(x + side * pl * 0.42, y - pl * 0.3, ex, ey);
-        tips.push([ex, ey]);
-      }
-    }
-    ctx.fillStyle = ink.body;
-    ctx.fill(leaves);
+    const s = seapenShape(H, r);
+    // (The foot is small: flat colour and a plain line.)
+    const footPath = pathOf(s.foot);
+    ctx.fillStyle = mixHex(ink.body, ink.deep, 0.25);
+    ctx.fill(footPath);
     ctx.strokeStyle = ink.ink;
-    ctx.lineWidth = 0.55 * px;
-    ctx.stroke(leaves);
-    if (pen.d > 0.3) {
-      ctx.lineWidth = 0.35 * px;
-      faint(ctx, 0.45, () => ctx.stroke(veins));
-      // The polyps along each leaf's edge: a row of tiny dots.
-      const dots = new Path2D();
-      for (const [ex, ey] of tips) {
-        for (let k = 0; k < 3; k++) {
-          const x = ex - (ex - (tips[0][0] + ex) / 2) * 0.12 * k;
-          const y = ey + 0.9 * px * k;
-          dots.moveTo(x + 0.35 * px, y);
-          dots.arc(x, y, 0.35 * px, 0, Math.PI * 2);
+    ctx.lineWidth = 0.7 * px;
+    ctx.stroke(footPath);
+    const line: number[] = [];
+    for (let k = 0; k <= 20; k++) line.push(...s.at(k / 20));
+    const stem = ribbon(line, s.stemW * 2, s.stemW * 0.6);
+    ctx.fillStyle = mixHex(ink.body, ink.deep, 0.3);
+    ctx.fill(pathOf(stem));
+    // The leaves from the top down, so each lies over the barb above it.
+    const leaves = s.leaves.slice().sort((a, b) => a.y - b.y);
+    const veins = new Path2D();
+    const dots = new Path2D();
+    // A rank at a time, each laid as one path, top leaf first (later
+    // leaves of a path lie over earlier ones where they overlap).
+    const shaded = mixHex(ink.body, ink.deep, 0.35);
+    for (const side of [-1, 1]) {
+      const rank = new Path2D();
+      for (const l of leaves) if (l.side === side) rank.addPath(pathOf(l.pts));
+      ctx.fillStyle = side > 0 === pen.dark ? ink.body : shaded;
+      ctx.fill(rank);
+      ctx.strokeStyle = ink.ink;
+      ctx.lineWidth = (pen.d > 0.3 ? 0.45 : 0.55) * px;
+      ctx.stroke(rank);
+    }
+    for (const l of leaves) {
+      veins.moveTo(l.x, l.y);
+      veins.lineTo(l.x + Math.sin(l.ang) * l.pl * 0.85, l.y - Math.cos(l.ang) * l.pl * 0.85);
+      if (pen.d > 0.3) {
+        for (let i = 2; i < l.edge.length - 4; i += 4) {
+          dots.moveTo(l.edge[i] + 0.4 * px, l.edge[i + 1]);
+          dots.arc(l.edge[i], l.edge[i + 1], 0.4 * px, 0, Math.PI * 2);
         }
       }
-      ctx.fillStyle = ink.ink;
-      faint(ctx, 0.5, () => ctx.fill(dots));
-      ctx.fillStyle = ink.body;
     }
-    ctx.beginPath();
-    ctx.ellipse(0, sy * 0.4, H * 0.035, -sy * 0.45, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineWidth = 0.8 * px;
-    ctx.stroke();
-    const rachis: number[] = [0, 0, 0, sy];
-    for (let k = 1; k <= 16; k++) rachis.push(...at(k / 16));
-    outline(ctx, rachis, false, ink, pen, 1.2, [0, 0.4]);
+    if (pen.d > 0.3) {
+      ctx.lineWidth = 0.3 * px;
+      faint(ctx, 0.45, () => ctx.stroke(veins));
+      ctx.fillStyle = ink.ink;
+      faint(ctx, 0.55, () => ctx.fill(dots));
+    }
+    // The stem's line over the leaves' roots, fading out toward the tip.
+    outline(ctx, line, false, ink, pen, 1, [0, 0.5]);
+    ctx.fillStyle = ink.body;
     if (!ink.glow) return;
     // A soft light at a few of the polyps: small, and no brighter than the snow.
     const a = ctx.globalAlpha;
-    for (let i = 0; i < tips.length; i += 3) {
-      const [x, y] = tips[i];
+    // (One leaf in five: more, and the pen reads as a string of lamps.)
+    for (let i = 2; i < s.leaves.length; i += 5) {
+      const x = s.leaves[i].edge[0];
+      const y = s.leaves[i].edge[1];
       const rad = 4 * px;
       const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
       g.addColorStop(0, ink.glow);
@@ -3206,6 +3708,172 @@ const DRAW: Record<Growth['kind'], Drawer> = {
       ctx.fill();
     }
     ctx.globalAlpha = a;
+    ctx.fillStyle = ink.body;
+  },
+
+  // Stalked crinoid (`crinoidShape`): roots and stalk in the pen, the stalk
+  // washed and ringed with its joints, its cirri fine hooks; the cup, and
+  // the arms fanned into the current, each a tapering line feathered with
+  // pinnules either side, the far arms first.
+  crinoid(ctx, H, ink, r, px, pen) {
+    const s = crinoidShape(H, r);
+    for (const rt of s.roots) outline(ctx, rt, false, ink, pen, 0.7, [0, 0.6]);
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = (pen.d > 0.3 ? 0.4 : 0.55) * px;
+    const hooks = new Path2D();
+    for (const c of s.cirri) {
+      hooks.moveTo(c[0], c[1]);
+      for (let i = 2; i < c.length; i += 2) hooks.lineTo(c[i], c[i + 1]);
+    }
+    faint(ctx, 0.8, () => ctx.stroke(hooks));
+    const w0 = Math.max(1.2 * px, H * 0.026);
+    const w1 = Math.max(0.9 * px, H * 0.016);
+    const stalk = ribbon(s.stalk, w0, w1);
+    const sp = pathOf(stalk);
+    const sb = boxOf(stalk);
+    wash(ctx, sp, sb, ink.body, pen);
+    if (pen.d > 0.3) {
+      // The joints of the stalk, ring on ring.
+      const rings = new Path2D();
+      const m = s.stalk.length / 2;
+      let acc = 0;
+      const step = Math.max(1.5 * px, H * 0.016);
+      for (let i = 1; i < m - 1; i++) {
+        const x = s.stalk[i * 2];
+        const y = s.stalk[i * 2 + 1];
+        const tx = s.stalk[i * 2 + 2] - s.stalk[i * 2 - 2];
+        const ty = s.stalk[i * 2 + 3] - s.stalk[i * 2 - 1];
+        const tl = Math.hypot(tx, ty) || 1;
+        acc += tl / 2;
+        for (; acc > step; acc -= step) {
+          const hw = (w0 + (w1 - w0) * (i / m)) / 2;
+          rings.moveTo(x - (ty / tl) * hw, y + (tx / tl) * hw);
+          rings.lineTo(x + (ty / tl) * hw, y - (tx / tl) * hw);
+        }
+      }
+      ctx.lineWidth = 0.35 * px;
+      faint(ctx, 0.55, () => ctx.stroke(rings));
+    }
+    outline(ctx, stalk, true, ink, pen, 0.75);
+    // The cup the arms rise from.
+    const { x, y, a } = s.cup;
+    const cw = H * 0.035;
+    const ch = H * 0.045;
+    const cup: number[] = [];
+    const P = (u: number, v: number) => cup.push(x + Math.cos(a) * u + Math.sin(a) * v, y + Math.sin(a) * u - Math.cos(a) * v);
+    P(-cw * 0.45, 0);
+    P(-cw, ch * 0.7);
+    P(-cw * 0.7, ch);
+    P(cw * 0.7, ch);
+    P(cw, ch * 0.7);
+    P(cw * 0.45, 0);
+    // The arms: the ones bent furthest back behind.
+    const order = s.arms.map((_, i) => i).sort((p, q) => Math.abs(q - 4.5) - Math.abs(p - 4.5));
+    const fringe = new Path2D();
+    const under = new Path2D();
+    for (const i of order) {
+      const arm = s.arms[i];
+      const m = arm.length / 2;
+      for (let k = 1; k < m - 1; k++) {
+        const t = k / (m - 1);
+        const ax = arm[k * 2];
+        const ay = arm[k * 2 + 1];
+        const hx = arm[k * 2 + 2] - arm[k * 2 - 2];
+        const hy = arm[k * 2 + 3] - arm[k * 2 - 1];
+        const h = Math.atan2(hx, -hy);
+        const len = H * 0.045 * (1 - 0.55 * t);
+        for (const side of [-1, 1]) {
+          const pa = h + side * 0.6;
+          const ex = ax + Math.sin(pa) * len;
+          const ey = ay - Math.cos(pa) * len;
+          fringe.moveTo(ax, ay);
+          fringe.quadraticCurveTo(ax + Math.sin(h + side * 0.9) * len * 0.5, ay - Math.cos(h + side * 0.9) * len * 0.5, ex, ey);
+          under.moveTo(ax, ay);
+          under.lineTo(ex, ey);
+        }
+      }
+    }
+    ctx.strokeStyle = ink.body;
+    ctx.lineWidth = Math.max(1 * px, H * 0.012);
+    faint(ctx, 0.6, () => ctx.stroke(under));
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = (pen.d > 0.3 ? 0.32 : 0.45) * px;
+    faint(ctx, 0.7, () => ctx.stroke(fringe));
+    for (const i of order) {
+      const rib = ribbon(s.arms[i], Math.max(1 * px, H * 0.02), Math.max(0.4 * px, H * 0.005));
+      ctx.fillStyle = ink.body;
+      ctx.fill(pathOf(rib));
+      outline(ctx, s.arms[i], false, ink, pen, 0.75, [0, 0.4]);
+    }
+    const cupPath = pathOf(cup);
+    const cb = boxOf(cup);
+    wash(ctx, cupPath, cb, ink.body, pen);
+    shadeIn(ctx, cupPath, cb, ink, pen, { angle: 0.4, cross: null, from: 0.4 });
+    outline(ctx, cup, true, ink, pen, 0.8);
+    ctx.fillStyle = ink.body;
+  },
+
+  // Brittle star (`brittleShape`): the far arms, then the disc washed and
+  // stippled with its five radial shields, then the near arms; each arm a
+  // ribbon tapering to a thread, banded with its plates and set with
+  // spines either side when drawn big.
+  brittlestar(ctx, H, ink, r, px, pen) {
+    const s = brittleShape(H, r);
+    const w0 = Math.max(1.2 * px, H * 0.045);
+    const arm = (pts: number[]) => {
+      const rib = ribbon(pts, w0, Math.max(0.35 * px, w0 * 0.12));
+      const path = pathOf(rib);
+      const b = boxOf(rib);
+      wash(ctx, path, b, ink.body, pen);
+      shadeIn(ctx, path, b, ink, pen, { dots: true, spacing: 1.4, from: 0.5, k: 0.45 });
+      const bands = new Path2D();
+      const spines = new Path2D();
+      const m = pts.length / 2;
+      for (let k = 1; k < m - 1; k++) {
+        const x = pts[k * 2];
+        const y = pts[k * 2 + 1];
+        const tx = pts[k * 2 + 2] - pts[k * 2 - 2];
+        const ty = pts[k * 2 + 3] - pts[k * 2 - 1];
+        const tl = Math.hypot(tx, ty) || 1;
+        const hw = (w0 + (w0 * 0.12 - w0) * (k / (m - 1))) / 2;
+        const nx = -ty / tl;
+        const ny = tx / tl;
+        bands.moveTo(x - nx * hw, y - ny * hw);
+        bands.lineTo(x + nx * hw, y + ny * hw);
+        if (pen.d > 0.3) {
+          const sl = hw + H * 0.02 * (1 - 0.6 * (k / m));
+          for (const sd of [-1, 1]) {
+            spines.moveTo(x + sd * nx * hw, y + sd * ny * hw);
+            spines.lineTo(x + sd * nx * sl + (tx / tl) * sl * 0.35, y + sd * ny * sl + (ty / tl) * sl * 0.35);
+          }
+        }
+      }
+      ctx.strokeStyle = ink.ink;
+      ctx.lineWidth = 0.35 * px;
+      faint(ctx, 0.5, () => ctx.stroke(bands));
+      faint(ctx, 0.65, () => ctx.stroke(spines));
+      outline(ctx, rib, true, ink, pen, 0.7);
+    };
+    for (const a of s.arms) if (a.back) arm(a.pts);
+    const d = s.disc;
+    const disc: number[] = [];
+    arcPts(disc, d.x, d.y, d.rx, d.ry, 0, Math.PI * 2, 28);
+    const dp = pathOf(disc);
+    const db = boxOf(disc);
+    wash(ctx, dp, db, ink.body, pen);
+    shadeIn(ctx, dp, db, ink, pen, { dots: true, spacing: 1.2, from: 0.4 });
+    ctx.beginPath();
+    for (const a of s.arms) {
+      const ex = a.pts[0];
+      const ey = a.pts[1];
+      ctx.moveTo(d.x + (ex - d.x) * 0.25, d.y + (ey - d.y) * 0.25);
+      ctx.lineTo(d.x + (ex - d.x) * 0.8, d.y + (ey - d.y) * 0.8);
+    }
+    ctx.strokeStyle = ink.ink;
+    ctx.lineWidth = 0.4 * px;
+    faint(ctx, 0.5, () => ctx.stroke());
+    outline(ctx, disc, true, ink, pen, 0.8);
+    for (const a of s.arms) if (!a.back) arm(a.pts);
     ctx.fillStyle = ink.body;
   },
 };

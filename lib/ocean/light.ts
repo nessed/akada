@@ -539,36 +539,50 @@ export function drawSnellWindow(
       ctx.fillStyle = g;
       ctx.fillRect(body.x - halo, body.y - halo, halo * 2, halo * 2);
     } else {
-      // On paper the sun is the paper: a warm glaze laid round it, thinning
-      // outward, and the disc itself left bare.
-      const halo = rd * 5.5;
-      const gold = mixHex(sun.warmth, '#E6C27E', 0.55);
-      const g = ctx.createRadialGradient(body.x, body.y, rd * 0.8, body.x, body.y, halo);
-      g.addColorStop(0, rgba(gold, 0.42));
-      g.addColorStop(0.18, rgba(gold, 0.3));
-      g.addColorStop(0.5, rgba(gold, 0.1));
+      // On paper the sun is a warm disc in a glow of its own warmth, the
+      // glow deepest under the disc and thinning out smoothly from its edge
+      // over half its width again: never a darker band round a bare disc
+      // (that reads as a cup's ring). Its colour a pale peach-gold whatever
+      // the hour mixes in (the moon's grey at dawn turns a glaze brown).
+      const gold = mixHex('#EEC4A6', sun.warmth, 0.25);
+      const halo = rd * 2.2;
+      const g = ctx.createRadialGradient(body.x, body.y, 0, body.x, body.y, halo);
+      g.addColorStop(0, rgba(gold, 0.34));
+      g.addColorStop(0.45, rgba(gold, 0.26));
+      g.addColorStop(0.68, rgba(gold, 0.09));
       g.addColorStop(1, rgba(gold, 0));
       ctx.save();
       ctx.clip(windowPath);
+      ctx.translate(body.x, body.y);
+      ctx.scale(1, 1 / SNELL_SQUASH);
+      ctx.translate(-body.x, -body.y);
       ctx.globalCompositeOperation = 'multiply';
       ctx.fillStyle = g;
       ctx.fillRect(body.x - halo, body.y - halo, halo * 2, halo * 2);
       ctx.restore();
     }
+    const paperSun = mixHex('#FFFFFF', '#F2CDAA', 0.3);
     const disc = brokenDisc(
       rd,
       rs,
       (g, d) => {
         const f = g.createRadialGradient(0, 0, 0, 0, 0, d);
-        f.addColorStop(0, '#FFFFFF');
-        f.addColorStop(0.6, mixHex('#FFFFFF', sun.warmth, 0.35));
-        f.addColorStop(1, mixHex('#FFFFFF', sun.warmth, 0.7));
+        if (dark) {
+          f.addColorStop(0, '#FFFFFF');
+          f.addColorStop(0.6, mixHex('#FFFFFF', sun.warmth, 0.35));
+          f.addColorStop(1, mixHex('#FFFFFF', sun.warmth, 0.7));
+        } else {
+          // (On paper an even pale warmth, a little deeper at the limb: no bright core.)
+          f.addColorStop(0, paperSun);
+          f.addColorStop(1, mixHex(paperSun, '#EEC4A6', 0.35));
+        }
         g.fillStyle = f;
         g.beginPath();
         g.arc(0, 0, d, 0, TAU);
         g.fill();
       },
-      0.9,
+      // (On paper barely torn: a whole disc, its edge just stirred.)
+      dark ? 0.9 : 0.2,
     );
     if (disc) {
       const soft = soften(disc, Math.max(1.5, rd / 18));
@@ -624,31 +638,26 @@ export function drawSnellWindow(
       ctx.arc(0, 0, rm, 0, TAU);
       ctx.fill();
       ctx.filter = 'none';
+      // The seas: three or four soft blots of grey wash, no pen and no
+      // stipple (dots read as specks on a plate), up and to one side.
       const seas = mulberry32(hash32('moon', 'seas', 'print'));
-      const patches = 3 + Math.floor(seas() * 3);
-      ctx.fillStyle = '#6E7066';
-      ctx.globalAlpha = 0.15;
-      const dot = Math.max(0.5 * px, rm * 0.035);
+      const patches = 4;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, rm * 0.94, 0, TAU);
+      ctx.clip();
+      ctx.filter = `blur(${Math.max(0.8 * px, rm * 0.07).toFixed(2)}px)`;
+      ctx.fillStyle = '#86887F';
       for (let i = 0; i < patches; i++) {
-        // The seas lie up and to one side, as the moon's own do.
-        const ang = -2.4 + seas() * 2.9;
-        const dist = rm * (0.2 + 0.42 * seas());
-        const px0 = Math.cos(ang) * dist;
-        const py0 = Math.sin(ang) * dist;
-        const ex = rm * (0.12 + 0.12 * seas());
-        const ey = ex * (0.6 + 0.35 * seas());
-        const n = Math.round(14 + 22 * (ex / rm));
-        for (let k = 0; k < n; k++) {
-          const t = Math.sqrt(seas());
-          const a = seas() * TAU;
-          const x = px0 + Math.cos(a) * ex * t;
-          const y = py0 + Math.sin(a) * ey * t;
-          if (x * x + y * y > rm * rm * 0.8) continue;
-          ctx.beginPath();
-          ctx.arc(x, y, dot * (0.6 + 0.8 * seas()), 0, TAU);
-          ctx.fill();
-        }
+        const ang = -2.9 + (3.2 * (i + 0.2 + 0.6 * seas())) / patches;
+        const dist = rm * (0.28 + 0.3 * seas());
+        ctx.globalAlpha = 0.16 + 0.09 * seas();
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(ang) * dist, Math.sin(ang) * dist, rm * (0.12 + 0.1 * seas()), rm * (0.08 + 0.07 * seas()), seas() * 3, 0, TAU);
+        ctx.fill();
       }
+      ctx.filter = 'none';
+      ctx.restore();
       ctx.globalAlpha = 1;
       ctx.restore();
     } else {
@@ -767,7 +776,7 @@ export function drawSnellWindow(
 
 /* ---- God rays ---- */
 
-interface RayOptions {
+export interface RayOptions {
   source: { x: number; y: number };
   occluder: CanvasImageSource | null;
   strength: number;
@@ -775,6 +784,8 @@ interface RayOptions {
   px: number;
   seed: number;
   dark: boolean;
+  /** A second, narrower sheaf of the same light coming down elsewhere (the open water away from the window), at `strength` of the first. */
+  sheaf?: { x: number; y: number; strength: number; width: number } | null;
 }
 
 /** The ray buffer's share of the canvas: the rays are soft, and this is a ninth of the pixels. */
@@ -793,62 +804,64 @@ function paintRays(w: number, h: number, o: RayOptions): Surface | null {
   const g = S.ctx;
   g.scale(q, q);
   g.globalCompositeOperation = 'lighter';
-  const r = mulberry32(hash32('rays', o.seed));
-  const { x: sx, y: sy } = o.source;
   const size = Math.max(w, h);
   const tilt = o.sun.tilt;
-  // A wider fan when the source is close to the top of the picture.
-  const spread = 0.42 + 0.25 * clamp01(1 - (sy + size * 0.1) / (size * 0.4));
-  const base = w * 0.34;
-  const n = 110;
   const col = mixHex(o.sun.warmth, '#FFFFFF', 0.25);
   const [cr, cg, cb] = rgbOf(col);
-  for (let i = 0; i < n; i++) {
-    // Rays bunch a little, as shafts do: some gaps, some sheaves.
-    const u = (i + r() * 0.9) / n;
-    const bunch = 0.5 + 0.5 * Math.sin(u * 23 + o.seed * 0.001) * Math.sin(u * 7.3 + 1.1);
-    const along = (u - 0.5) * 2;
-    const a = tilt + along * spread * 0.5 + (r() - 0.5) * 0.04;
-    const dx = Math.sin(a);
-    const dy = Math.cos(a);
-    const x0 = sx + along * base * 0.5 + (r() - 0.5) * base * 0.06;
-    const y0 = sy;
-    const len = size * (0.55 + 0.75 * r());
-    const w0 = size * (0.0015 + 0.009 * r() * r());
-    const w1 = w0 * (2.2 + 3.5 * r());
-    const bright = (0.18 + 0.82 * Math.pow(r(), 1.8)) * (0.35 + 0.65 * bunch);
-    // The fan thins out at its sides, so it has no edge, only less light.
-    const sideFade = Math.pow(Math.max(0, 1 - along * along), 1.1);
-    const nx = dy;
-    const ny = -dx;
-    const ex = x0 + dx * len;
-    const ey = y0 + dy * len;
-    const grad = g.createLinearGradient(x0, y0, ex, ey);
-    // Uneven along its length: a few soft breaks, then the fade.
-    const breaks = [0, 0.09, 0.16 + r() * 0.08, 0.3 + r() * 0.15, 0.5 + r() * 0.15, 0.75, 1];
-    const level = [0, 1, 0.55 + 0.45 * r(), 0.35 + 0.5 * r(), 0.25 + 0.3 * r(), 0.12 * r() + 0.06, 0];
-    for (let k = 0; k < breaks.length; k++) {
-      // The water swallows it: light falls off with distance.
-      const fade = Math.exp(-breaks[k] * 1.6);
-      grad.addColorStop(Math.min(1, breaks[k]), `rgba(${cr}, ${cg}, ${cb}, ${(bright * sideFade * level[k] * fade * 0.22).toFixed(4)})`);
+  const fan = (sx: number, sy: number, n: number, base: number, spread: number, gain: number, r: Rand) => {
+    for (let i = 0; i < n; i++) {
+      // Rays bunch a little, as shafts do: some gaps, some sheaves.
+      const u = (i + r() * 0.9) / n;
+      const bunch = 0.5 + 0.5 * Math.sin(u * 23 + o.seed * 0.001) * Math.sin(u * 7.3 + 1.1);
+      const along = (u - 0.5) * 2;
+      const a = tilt + along * spread * 0.5 + (r() - 0.5) * 0.04;
+      const dx = Math.sin(a);
+      const dy = Math.cos(a);
+      const x0 = sx + along * base * 0.5 + (r() - 0.5) * base * 0.06;
+      const y0 = sy;
+      const len = size * (0.55 + 0.75 * r());
+      const w0 = size * (0.0015 + 0.009 * r() * r());
+      const w1 = w0 * (2.2 + 3.5 * r());
+      const bright = (0.18 + 0.82 * Math.pow(r(), 1.8)) * (0.35 + 0.65 * bunch) * gain;
+      // The fan thins out at its sides, so it has no edge, only less light.
+      const sideFade = Math.pow(Math.max(0, 1 - along * along), 1.1);
+      const nx = dy;
+      const ny = -dx;
+      const ex = x0 + dx * len;
+      const ey = y0 + dy * len;
+      const grad = g.createLinearGradient(x0, y0, ex, ey);
+      // Uneven along its length: a few soft breaks, then the fade.
+      const breaks = [0, 0.09, 0.16 + r() * 0.08, 0.3 + r() * 0.15, 0.5 + r() * 0.15, 0.75, 1];
+      const level = [0, 1, 0.55 + 0.45 * r(), 0.35 + 0.5 * r(), 0.25 + 0.3 * r(), 0.12 * r() + 0.06, 0];
+      for (let k = 0; k < breaks.length; k++) {
+        // The water swallows it: light falls off with distance.
+        const fade = Math.exp(-breaks[k] * 1.6);
+        grad.addColorStop(Math.min(1, breaks[k]), `rgba(${cr}, ${cg}, ${cb}, ${(bright * sideFade * level[k] * fade * 0.22).toFixed(4)})`);
+      }
+      g.fillStyle = grad;
+      // Twice: a wide faint sheath, then the core.
+      for (const [k, alpha] of [
+        [2.4, 0.45],
+        [1, 1],
+      ] as const) {
+        g.globalAlpha = alpha;
+        g.beginPath();
+        g.moveTo(x0 - (nx * w0 * k) / 2, y0 - (ny * w0 * k) / 2);
+        g.lineTo(x0 + (nx * w0 * k) / 2, y0 + (ny * w0 * k) / 2);
+        g.lineTo(ex + (nx * w1 * k) / 2, ey + (ny * w1 * k) / 2);
+        g.lineTo(ex - (nx * w1 * k) / 2, ey - (ny * w1 * k) / 2);
+        g.closePath();
+        g.fill();
+      }
     }
-    g.fillStyle = grad;
-    // Twice: a wide faint sheath, then the core.
-    for (const [k, alpha] of [
-      [2.4, 0.45],
-      [1, 1],
-    ] as const) {
-      g.globalAlpha = alpha;
-      g.beginPath();
-      g.moveTo(x0 - (nx * w0 * k) / 2, y0 - (ny * w0 * k) / 2);
-      g.lineTo(x0 + (nx * w0 * k) / 2, y0 + (ny * w0 * k) / 2);
-      g.lineTo(ex + (nx * w1 * k) / 2, ey + (ny * w1 * k) / 2);
-      g.lineTo(ex - (nx * w1 * k) / 2, ey - (ny * w1 * k) / 2);
-      g.closePath();
-      g.fill();
-    }
-  }
-  g.globalAlpha = 1;
+    g.globalAlpha = 1;
+  };
+  const { x: sx, y: sy } = o.source;
+  // A wider fan when the source is close to the top of the picture.
+  const spread = 0.42 + 0.25 * clamp01(1 - (sy + size * 0.1) / (size * 0.4));
+  fan(sx, sy, 110, w * 0.34, spread, 1, mulberry32(hash32('rays', o.seed)));
+  // The second sheaf: fewer, nearly parallel, out over the open water.
+  if (o.sheaf && o.sheaf.strength > 0) fan(o.sheaf.x, o.sheaf.y, 46, o.sheaf.width, 0.16, o.sheaf.strength, mulberry32(hash32('rays-sheaf', o.seed)));
   // A glow where they all start, under the surface.
   const halo = size * 0.35;
   const hg = g.createRadialGradient(sx, sy, 0, sx, sy, halo);
@@ -897,7 +910,7 @@ function marchShadow(w: number, h: number, o: RayOptions, occluder: CanvasImageS
 let rayCache: { key: string; occluder: CanvasImageSource | null; rays: Surface; missing: Surface | null } | null = null;
 
 function raysFor(w: number, h: number, o: RayOptions): { rays: Surface; missing: Surface | null } | null {
-  const key = [w, h, o.source.x, o.source.y, o.sun.tilt, o.sun.warmth, o.seed, o.dark].join('|');
+  const key = [w, h, o.source.x, o.source.y, o.sun.tilt, o.sun.warmth, o.seed, o.dark, o.sheaf ? [o.sheaf.x, o.sheaf.y, o.sheaf.strength, o.sheaf.width].join(',') : ''].join('|');
   if (rayCache && rayCache.key === key && rayCache.occluder === o.occluder) return rayCache;
   const rays = paintRays(w, h, o);
   if (!rays) return null;
@@ -943,7 +956,7 @@ export function drawGodRays(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  o: { source: { x: number; y: number }; occluder: CanvasImageSource | null; strength: number; sun: SunLight; px: number; seed: number; dark: boolean },
+  o: RayOptions,
 ): void {
   const k = Math.max(0, o.strength) * Math.max(0.05, o.sun.strength);
   if (k <= 0.01 || w <= 0 || h <= 0) return;
@@ -983,7 +996,7 @@ export function drawGodRays(
 export function godRayLight(
   w: number,
   h: number,
-  o: { source: { x: number; y: number }; occluder: CanvasImageSource | null; strength: number; sun: SunLight; px: number; seed: number; dark: boolean },
+  o: RayOptions,
 ): (x: number, y: number) => number {
   const got = raysFor(w, h, o);
   if (!got) return () => 0;
@@ -1109,6 +1122,12 @@ export function drawSnowDeep(
     maxSize?: number;
     /** Only these rows are drawn (a strip of a bigger picture): the rest are rolled, so every speck lands where it would, but not drawn. */
     rows?: { y0: number; y1: number };
+    /**
+     * How much of the snow stays at a point, 0 to 1 (a denser fall in some
+     * water than in other): decided by a roll of its own, so every speck
+     * still lands where it would without it.
+     */
+    keep?: (x: number, y: number) => number;
   },
 ): void {
   if (w <= 0 || h <= 0 || !(o.density > 0)) return;
@@ -1118,6 +1137,8 @@ export function drawSnowDeep(
   const ry1 = (o.rows?.y1 ?? Infinity) + 8 * px;
   const shown = (y: number) => y >= ry0 && y <= ry1;
   const r = mulberry32(hash32('snow-deep', o.seed));
+  const rk = mulberry32(hash32('snow-keep', o.seed));
+  const kept = (x: number, y: number) => !o.keep || rk() < o.keep(x, y);
   const css = (w * h) / (px * px);
   const lit = (x: number, y: number) => (o.litBy ? 0.45 + 1.0 * clamp01(o.litBy(x, y)) : 1);
   const [cr, cg, cb] = rgbOf(o.color);
@@ -1145,7 +1166,7 @@ export function drawSnowDeep(
       const y = r() * h;
       const rad = Math.min(most / 2, px * (0.3 + 0.35 * r()));
       const base = 0.1 + 0.18 * r();
-      if (!shown(y)) continue;
+      if (!kept(x, y) || !shown(y)) continue;
       const a = Math.min(1, base * lit(x, y));
       // As straight steps, never an arc: a curve is stepped differently where
       // a strip's clip cuts it, and a picture drawn in strips would not join.
@@ -1156,40 +1177,54 @@ export function drawSnowDeep(
     }
   }
 
-  // Between: crisp flakes, ragged, a few with a tail.
+  // Between: flakes, ragged and of every size, most of them small and a few
+  // up to four pixels across (a long tail of sizes, never a field of like
+  // dots, which reads as stars), a third drawn out two or three times their
+  // width along the slow drift they share, the larger ones soft at the edge.
+  // Every roll is made for each flake whether it is drawn or not, so a
+  // picture drawn in strips is the picture drawn whole.
   {
     const n = Math.round((css / 2600) * o.density);
+    const drift = -Math.PI / 2 + (hash32('snow-drift', o.seed) % 1000) / 1000 - 0.5;
+    const k0 = px / 1.2;
     for (let i = 0; i < n; i++) {
       const x = r() * w;
       const y = r() * h;
-      const size = Math.min(most / 3.4, px * (0.6 + 1.6 * Math.pow(r(), 2.2)));
-      const base = 0.3 + 0.5 * r();
-      const vis = shown(y);
-      const a = vis ? Math.min(1, base * lit(x, y)) : 0;
+      const size = Math.min(most / 2, k0 * (0.5 + 1.5 * Math.pow(r(), 2.6)));
+      const base = 0.25 + 0.45 * r();
       const sides = 8 + Math.floor(r() * 3);
-      const turn = r() * TAU;
-      const stretch = 1 + r() * 0.6;
-      const pts: number[] = [];
-      for (let k = 0; k < sides; k++) {
-        const ang = turn + (k / sides) * TAU;
-        const rad = size * (0.75 + 0.35 * r());
-        pts.push(x + Math.cos(ang) * rad * stretch, y + Math.sin(ang) * rad);
-      }
-      if (!vis) {
-        // Rolled as it would be, and passed over.
-        if (r() < 0.15) {
-          r();
-          r();
+      const long = r() < 0.3;
+      const stretch = long ? 2 + r() : 1 + r() * 0.3;
+      const turn = drift + (r() - 0.5) * 0.5;
+      const radii: number[] = [];
+      for (let k = 0; k < 10; k++) radii.push(0.75 + 0.35 * r());
+      const wisp = r() < 0.12;
+      const wispLen = 2 + r() * 3;
+      const wispAng = (r() - 0.5) * 1.2;
+      if (!kept(x, y) || !shown(y)) continue;
+      const a = Math.min(0.7, Math.max(0.25, base * lit(x, y)));
+      const ca = Math.cos(turn);
+      const sa = Math.sin(turn);
+      const shape = (grow: number, dx = 0, dy = 0) => {
+        const pts: number[] = [];
+        for (let k = 0; k < sides; k++) {
+          const ang = (k / sides) * TAU;
+          const u = Math.cos(ang) * size * radii[k] * stretch * grow;
+          const v = Math.sin(ang) * size * radii[k] * grow;
+          pts.push(x + u * ca - v * sa + dx, y + u * sa + v * ca + dy);
         }
-        continue;
-      }
+        return pts;
+      };
+      // Over three pixels across, a soft edge: a wider, fainter ring under it.
+      const soft = size * 2 * Math.sqrt(stretch) > 3 * k0;
       // (Its shadow under it on paper, then the flake, then its wisp.)
-      if (!o.dark) fillOne(pts.map((v, k) => v + (k % 2 ? px * 0.6 : px * 0.5)), `rgba(52, 64, 62, ${level(a) * 0.4})`);
-      fillOne(pts, `rgba(${cr}, ${cg}, ${cb}, ${level(a)})`);
-      if (r() < 0.15) {
+      if (!o.dark) fillOne(shape(1, px * 0.5, px * 0.6), `rgba(52, 64, 62, ${level(a) * 0.3})`);
+      if (soft) fillOne(shape(1.45), `rgba(${cr}, ${cg}, ${cb}, ${level(a * 0.35)})`);
+      fillOne(shape(1), `rgba(${cr}, ${cg}, ${cb}, ${level(soft ? a * 0.85 : a)})`);
+      if (wisp) {
         // A trailing wisp: snow is clumped stuff, mucus and all.
-        const tail = Math.min(most * 0.6, size * (2 + r() * 3));
-        const ang = -Math.PI / 2 + (r() - 0.5) * 1.2;
+        const tail = Math.min(most * 0.6, size * wispLen);
+        const ang = drift + Math.PI + wispAng;
         fillOne([x, y, x + Math.cos(ang) * tail - px * 0.3, y + Math.sin(ang) * tail, x + Math.cos(ang) * tail + px * 0.3, y + Math.sin(ang) * tail], `rgba(${cr}, ${cg}, ${cb}, ${level(a * 0.5)})`);
       }
     }

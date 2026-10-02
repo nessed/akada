@@ -904,7 +904,7 @@ natural-history plate draws one, in the course colour, never a cartoon.
   4.2s cycle the held clock breathes on, quick in and slow out, the rim
   flaring a little on the squeeze. Each squeeze is a stroke: the bell jets
   up with it (a tenth of its radius) and sinks as it lets go, and the
-  tentacles, held at the tips, stretch and slacken behind. Left alone it
+  tentacles slacken and draw after it, never stretched past their length. Left alone it
   wanders a little either side on two slow slides that do not line up, leaning
   into the one it is on, with each depth of the trails reading the slide from
   a moment earlier so they drag. A slow wave travels down every
@@ -926,11 +926,14 @@ natural-history plate draws one, in the course colour, never a cartoon.
   and empty water lets it through. Taken, the bell goes where the finger
   goes, close to one for one and any direction, easing off only at the edge
   of what the frame can spare (up stays under the header, down stays off the
-  floor). The trails stream out behind it, each hanging from where the bell
-  was a few frames earlier, while their tips stay put, so a lifted bell
-  bunches them and a lowered one stretches them, and a full jelly still
-  touches the floor. The bell leans into the pull about its rim. Let go and
-  it bobs back past where it started once or twice, on a softer spring than
+  floor). The bell leads and everything hangs from it: it leans into the pull
+  about its rim, and each trail's root stays on the drawn rim as it leans,
+  leaves it heading down, and only then bends into the wake, each trail by
+  its own amount, so they never stream out as a comb. No trail ever
+  stretches: a lifted bell brings its tips up with it rather than drawing
+  them out, and a pushed-down one bunches them with the tips held, while a
+  full jelly at rest still touches the floor. Let go and it bobs back past
+  where it started once, on a softer spring than
   the fan's, and keeps the speed of the hand, so a flick is thrown.
   Touching it makes it clench, the same squeeze as the beat, laid over it. A
   poke (down and up inside 350ms and 6px) is the clench and then a jet, up
@@ -1112,7 +1115,12 @@ only ever grows, it never runs backwards, and none of it touches progress.
   siphonophore is a colony, not a string of beads: overlapping glass bells
   at its head, a tapering stem with its groups unevenly spaced, trailing
   15 to 40 degrees below level. Jellies are always glass, never a solid
-  dome or a flat saucer; a comb jelly's
+  dome or a flat saucer; below the midnight line every bell is a crown
+  jelly, an Atolla (a flat disc with a coronal groove, rim lobes and one
+  long trailing tentacle) or a Periphylla (a helmet), its stomach an organ
+  seen through glass, a soft wine cone darkest at its tip and fading out
+  before the groove, never a dark hole; a sea star is a solid animal, never
+  glass, its arms washed, stippled in the shade and ridged with plates; a comb jelly's
   mouth end is one soft curve with its lobes drawn inside it, never a
   notch. Drawn big, the solid ones
   are shaded in contour hatching that runs with the spine, only in the
@@ -1139,7 +1147,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   ones large and in full ink, and never more than four near. Schools cross as
   one flock. Swimmers undulate, bells beat, rays flap, and the floor has a
   few things shuffling on it once the abyss is reached, with vents breathing
-  where the sitting rolled them. Anything that wanders over the header, the
+  where the sitting rolled them, each a black smoker: a knobbly mineral
+  spire with side spurs and one-sided flanges, engraved up its shadow side
+  and crusted in stipple, never stacked rings or a turret. Anything that wanders over the header, the
   face or the controls goes faint there, so the clock always reads.
 - **The jelly has a family.** In the deep the jelly's own body is rolled too
   (tentacles, arms, fringe, the height of its bell, a lean toward another
@@ -1237,13 +1247,25 @@ only ever grows, it never runs backwards, and none of it touches progress.
   bare paper left inside the outline. Nothing stands as a cap on a stem;
   a rock is never more than about half again as wide as what holds it up.
   At night the pale ink hatches the lit faces instead, and is never
-  crossed. Walls, trench faces and floors are engraved the same way, not
+  crossed, laid in uneven lanes (each up to a third of the spacing off, each
+  stroke a few degrees off the set) so fine hatching never beats into a
+  moiré. A pinnacle comes to a broken point, one dominant spire with its shoulder
+  well under half its height and its top broken on one side; a slab is two
+  beds, the upper stepped back by a third or more so a bench shows, never a
+  stack of like beds. A wall is washed right up to its line, the stone just
+  inside its lit edge lifted toward the paper but never left open to the
+  water. Walls, trench faces and floors are engraved the same way, not
   washed: on the cream paper the wash is only a light tint and the hatching
   carries the value, closer and heavier on darker stone; depth takes a
   wall's ink strength more than its strokes, so a wall far down is still
   drawn; and nothing on a wall repeats, so scallops or tiles there are a
   bug. Every rock is outlined as far down as its wash goes. Plate coral
-  grows on a stalk, two shelves at most. Sea fans
+  is a rosette of thin plates from one root, never a shelf on a stalk; tube
+  sponges grow as a fused clump of uneven tubes, each with a rolled rim
+  round a dark mouth, shaded up the tube and never round it. In a
+  picture's deep the walls and floor gather sea pens (broad crescent leaves
+  in two ranks), stalked crinoids (a lily of feathered arms nodding on a
+  jointed stalk), brittle stars, glass sponges, whips and anemones. Sea fans
   are a flat net, wider than tall; sponges are lopsided vases with a rolled
   lip. Each rock is inked once to a sprite and then only placed, and like
   everything written on the page it goes faint where it crosses the clock.
@@ -1254,18 +1276,20 @@ only ever grows, it never runs backwards, and none of it touches progress.
   in four that reaches the twilight). From the midnight zone down the water
   sometimes lights up, a cloud of tiny animals flashing that comes up over
   seconds and never at once; less often a giant squid's eye opens at the edge
-  of the page, high and clear of the clock, blinks once and goes: a striated
-  iris darkening to its rim, the pupil a level lens the same above and
-  below, never bent into a mouth, set in the flank of an animal far bigger
-  than the page: one ink contour runs down the page side of it, from a body
-  whose middle lies well off the page, the skin a thin wash inside it with
-  a few engraved lines on its shadow side, and the drawing let go above and
-  below. Its chromatophores vary in size and spacing, half opened into
-  ragged blots and half closed to dots, crowded on the back. At night the
-  skin is a neutral grey close to the water's own value, no red and no
-  glow; the only light is the eye's catchlight. Never a halo, of stipple
-  or of colour. The whale is always the
-  whole animal, head, flipper and flukes, one soft grey shape a little over
+  of the page, high and clear of the clock, blinks once and goes. It is seen as a plate would show it at
+  the trim: the eye fully on the page, round-pupilled with one small sharp
+  catchlight, set in the head of an animal far bigger than the page; the
+  mantle runs up and off, a collar line sits behind the eye, the lid folds
+  come to a corner toward its front, and below it a bundle of arms curves
+  in, the front one with its suckers. The page's edge is its only straight
+  edge; the mantle and arms are let go along their length, never cut. Its
+  skin is one thin umber wash, darker toward the trim and hatched there,
+  with rust chromatophores on the cream paper and grey-brown at night,
+  within a few L* of the water. Nothing round it glows. The whale is always the
+  whole animal, head, flipper and flukes, the flukes level and seen edge-on,
+  the tail stock narrowing to a peduncle and flaring again into a notched
+  wedge, never an upright fork and never a needle, the dorsal a
+  small low hump two thirds of the way back, one soft grey shape a little over
   half the page long. In the abyss,
   about one three-hour sitting in a hundred and fifty, something very large
   goes past behind everything, a dark flank with lights along it; no head, no
@@ -1291,7 +1315,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   catchlight set wide on the sides of the head, as a plate draws them;
   and a whale fall can arrive on the floor: a skeleton half sunk in the silt,
   seen a little from above, a spine of vertebrae on a gentle S with paired
-  ribs, some broken, the skull and its two jaws, and crabs working along it, which stays for the rest of the
+  ribs, some broken, a rorqual's skull (a broad flat rostrum, the nostrils
+  in their recess, the wings over the orbits) and its two bowed jaws, every
+  bone lying on or in front of the floor's line, and crabs working along it, which stays for the rest of the
   sitting once it has come. The recap names whichever was rarest, as it does
   the others.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
@@ -1392,22 +1418,30 @@ not show and nothing is scored, as everywhere in the deep.
 | What happened | How it shows |
 |---|---|
 | How long the reader focused | How deep the picture goes. Each zone gets its share of the page, not its metres, so a short sitting is an airy, sunlit picture and a long one falls through the dark to the floor. |
-| When it began | The light at the surface (`sunFor` in `light.ts`): the shafts lean one way in the morning and the other in the afternoon, white at noon, amber at dusk; after dark the window of sky holds the moon in that night's real phase. |
+| When it began | The light at the surface (`sunFor` in `light.ts`): the shafts lean one way in the morning and the other in the afternoon, white at noon, amber at dusk; after dark the window of sky holds the moon in that night's real phase, and its shafts come down at about half the noon sun's strength (more at full moon), so a night page is lit and never a bare gradient. |
 | Which course | The water's tint and the course's own species among the cast, so a term of one course's pictures look like a set. |
-| Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Only the last four read as jellies; older blocks hang far off as ghosts. Together they are the way down, read through them and a thin trail of rising bubbles, never a drawn line. |
-| Each break | A rock at that depth on the page's one wall, near and fully inked, a longer break a longer rock; two rocks at most, the kelp's counted, and breaks beyond that are ledges on the same wall, a bench with its shadow under it, so every break still leaves its mark. Where the kelp's rock stands at a break's depth, the break's rock stands straight under it. Only the ledges the one wall has no room for go on a second, far-off wall. Rocks merely passed are drawn far, small and faint, and only on a page with no wall of its own. |
+| Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Only the hero and its youngest elders read as jellies, two on a tall page and three on a wide one (two past three hours); the older blocks are a far shoal of 14 to 22 tiny bells out over the open water above the hero, each older block its own bell, the oldest highest, the rest drifting with them. Together with a thin trail of rising bubbles they are the way down, never a drawn line. |
+| Each break | A rock at that depth on the page's one wall, near and fully inked, a longer break a longer rock; two rocks at most, the kelp's counted, and breaks beyond that are ledges on the same wall, a bench with its shadow under it, so every break still leaves its mark, all on the page's one wall; there is never a second wall. Where the kelp's rock stands at a break's depth, the break's rock stands straight under it. Rocks merely passed are drawn far, small and faint, and only on a page with no wall of its own. |
 | What swam by | The species that really did, met near where they were met, curated to a cast of five for a short sitting and a few more for each hour, never past eleven (a school counts as one); the rarest gets the best place. |
 | Rare sightings | Two at most, the rarest; a second is drawn only if the page keeps its calm with it. The whale fall lies on the floor, and only where the floor is drawn. |
 | What was passed | Kelp at the top if it began in kelp, rocks and their growths at their depths, the floor if the abyss was reached. |
 
 **The hero leads.** The last block's jelly is the largest thing on the page
 (a fifth of its short side across) and the only one in full ink, a
-pool of its own light round it; each of its three elders is at most half
-its size.
-Only the hero and its three youngest elders are drawn as jellies; older
-blocks hang far off as ghosts, a quarter strength and at most a third the
-hero's size, never on a rock, a wall or the kelp, so every block still
-shows but only four read as jellies. Siblings are visibly different
+pool of its own light round it; each of its elders is at most half its
+size. Only the hero and two or three elders are drawn as jellies; older
+blocks are a far shoal of 14 to 22 tiny bells (8 to 18 px at 1200 across),
+at a fifth to a quarter strength and thickest at the middle, a fifth of the
+width across at most, out over the open water above the hero: each older
+block has its own bell, the oldest highest, and the rest drift with them.
+Like the light, the shoal may lie in the calm. The family never steps down
+a stair: no three bells run the same way across as they go down. One elder
+hangs a quarter of the width or more across the hero's axis, on the open
+side when the calm allows; no two of the family hang within 0.08 of the
+width of each other across, and none level with another. A rare jelly (in
+the deep a crown jelly, Atolla or Periphylla) hangs 0.72 to 0.92 of the
+page down; over a trench it hangs in the cleft, and it is never raised to
+keep it. Siblings are visibly different
 animals: each differs from the hero in at least two things you can see
 (the bell's height, the trails' length, the arms, the hue), and no two hang
 at the same depth or within reach of each other's arms. The family never
@@ -1417,22 +1451,52 @@ to side. Far off they are hazed toward the water but keep their rim, ribs
 and trails, never a soap bubble. With no floor under it, the hero's trails
 reach most of the way down, inked dark enough on the cream paper to read
 where they end, so a short sitting's picture is never empty at the
-bottom. On a tall page the hero hangs a little below the middle. Past
+bottom, and always end a fiftieth of the short side or more above the
+ground. Past
 three hours the floor parts into a trench under it, two walls falling into
-a dark cleft from 0.73 of a tall page down (0.77 of a wide one), so the
-water over the cleft is the hero's stage, and the whale fall,
+a dark cleft from 0.73 of a tall page down (0.77 of a wide one), higher
+and steeper the longer past three hours (0.05 of the page higher by four
+and a half), so the water over the cleft is the hero's stage, and the whale fall,
 if there is one, lies on the gentler slope, never in the cleft.
 
-**One calm stretch.** The page is weighed to one side: the wall, the way
-down and the hero on it, the window leaning to the other. Every page keeps
-one clear stretch of a quarter of it or more with nothing in it but water,
-light and bubbles, usually across from the hero and under the light. The
-rare things are placed to leave it, and the cast never enters it. The cast
+**One calm stretch.** Each sitting's key chooses a composition, so pages
+from different sittings never look alike: the calm down the open side with
+the hero low; the same with the hero high; or the calm laid over the hero
+with the family down the wall. The wall stands on either side, the kelp's
+forest with it; if a page can't keep its calm, its cast or its rarest in
+one composition, the next is tried. The hero hangs 0.38 to 0.55 of the
+width from the wall on a tall page (0.40 to 0.62 on a wide one), holding
+the open water, and the window stands over the open water (over the hero
+on a wide page), further out where the light leans toward the wall, so the
+shafts cross the calm. Every page keeps one clear stretch, about 0.28 of it
+and never under a quarter, with nothing in it but water, light and
+bubbles. The rare things are placed to leave it, and the cast never enters
+it; a sighting that would take it is not drawn, and the next rarest that
+keeps it is. No more than three in five of the cast are in the wall's third,
+and one is always over the page's middle. When the light leans (any hour but
+the middle of the day or of the night) the hero hangs 0.15 to 0.28 of the
+width off to one side of the window, down the light's lean, and the shafts
+come down at a slant aimed at it. The third of the page away from the wall
+is never dead: if no shoal, elder, whale or cast stands in it, a second,
+narrower sheaf of the same light comes down across it, at full strength on
+cream and a third of it by night. The cast
 gathers in one to three loose clumps, never a lone speck (each animal
 within an eighth of the short side of another, the rarest excepted) and
 never a ladder of three down the page. This is the rule the rest serve:
 the pictures that sell are the calm ones, so a long sitting reads as depth
 and quiet, not as a crowd.
+
+**A long sitting reads long.** Duration gathers on the stone, never in the
+mid-water. Sea pens, crinoids, brittle stars, glass and tube sponges, whips
+and anemones grow in clumps along the rocks' crests, out from the wall's
+face, on its ledges and over the floor, one every 0.15 of the short side
+for an hour or less and one every 0.04 by four and a half hours; the floor's growths stand in clumps, most of them out on the floor's face
+in front of its line. Each keeps
+clear of every animal and stays out of the calm. A second fall of marine
+snow comes in from forty-five minutes, thickening down the page and with
+the hours to two and a half times the first. So the share of the page with
+no mark on it falls as the sitting lengthens, to under half from three
+hours.
 
 **Composed, not cropped.** Each shape is laid out on its own: tall for a
 phone or a print (the way down a gentle S), wide for a laptop (a diagonal).
@@ -1456,7 +1520,11 @@ timer, the finish sheet or Stats.
 that keep their grain and never go to black. Night: the dark water with the
 pen's light ink. On cream the water under the window is lighter all down
 the shafts' path, a soft fan at the sun's lean, so the light is as present
-as by night.
+as by night; the sun is a pale warm disc in a glow that thins out from it,
+with no darker ring. Marine snow comes in every size up to four pixels,
+most of it small, a third drawn out along its drift, so it never reads as a
+starfield; an animal in the shafts casts its shadow down the light as a
+faint strip, never a blot round it.
 
 **No horizon, no stage.** The water deepens as one smooth fall over half
 the page or more (the depth's colour is eased down the page so no band of it
@@ -1485,7 +1553,7 @@ fade hanging in open water. A wall's buttress holds at least the rock's
 width over 1.6 down to the rock's underside and never stands out past its
 crest. The floor is sediment, not a stage: level strata engraved across it
 (`inkFloor`, the walls' own hand), pebbles in small clusters, its crest one
-broken ink line with nothing pale under it, and on either paper darker than
+broken ink line, no ridge or band laid behind it, and on either paper darker than
 the water above it. Floor animals lie on the ground, a star wholly below
 the floor's line. The cast keeps three planes, each its own scale and
 strength (near whole, middle 0.6 at 0.75, far 0.35 at 0.45), and kinds keep
@@ -1496,14 +1564,19 @@ them, lit only on the wall that faces the window. A passing whale is always
 its whole shadow, half the page long (smaller only when the page is
 crowded), as crisp as the live sea's, pitched a little head-up with only
 its back lost in the water, 7 to 13 per cent darker than the water round
-it by day and by night, and
-never laid along the water's steepest fall, where its level back would draw
+it by day and by night, no animal of the middle or near water within 0.05
+of the width of its shadow, and never laid along the water's steepest fall, where its level back would draw
 a horizon. Sightings keep a clear margin from everything, walls included, and one
 that can't have its room isn't drawn; one anglerfish to a picture at most;
 the siphonophore always hangs at 22 to 36 degrees;
-the squid's eye is a twentieth of the short side across. On the cream
-paper the moon is a flat pale disc with a few faint seas in it, never
-shaded like a ball.
+the squid's eye is a twentieth of the short side across, low on the page
+(0.45 to 0.8 of it) and a quarter of the width or more from the window; the
+whale fall lies only where the ground is level under its whole skeleton,
+every bone on the ground, or it is not drawn. On the cream
+paper the moon is a flat pale disc with three or four soft blots of sea,
+never shaded like a ball. The whale passes high, its middle no lower than
+0.3 of the page, never behind the wall, a rock or the kelp; with no such
+room it isn't drawn.
 
 **Drawn for the wall.** At print size everything is inked at its full
 detail; things far off are hazier and take the water's colour; the pictures

@@ -6,9 +6,13 @@ import { planPicture, type PictureInput } from './index';
 import { rollBiome } from '../biome';
 import { rollKelp } from '../kelp';
 import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, floorAt, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, PICTURE_KELP, STEM, wallAt, wallTouches, type Box, type Plan } from './layout';
+const grow = (b: Box, d: number): Box => ({ x0: b.x0 - d, y0: b.y0 - d, x1: b.x1 + d, y1: b.y1 + d });
 import { EYE_R, ROW_BAND, ROW_LEVEL, SIPHON_TILT, steepestFall, stepsApart, whaleHull } from './layout';
 import { partExt, rockSpan, rockX, WALL_STEP } from './layout';
-import { calmArea, CALM, CAST_MAX, castWant, EVENTS_MAX, GHOST_ROW, HERO_R, LONE_GAP, SIBLING_SCALE, TRENCH_TOP, WALL_W } from './layout';
+import { calmArea, CALM, CAST_MAX, castWant, EVENTS_MAX, HERO_R, LONE_GAP, SIBLING_SCALE, TRENCH_TOP, WALL_W } from './layout';
+import { EYE_BAND, mirrorKelp } from './layout';
+import { SLANT_MAX, SLANT_OFFSET } from './layout';
+import { ACROSS, BELL_APART, CAST_BY_WALL, emptyShare, HERO_FROM_WALL, RARE_BELL, SHOAL_SCALE, SIBLINGS_TALL, SIBLINGS_WIDE, TRENCH_RISE, WHALE_CLEAR, WHALEFALL_LEVEL, WHALEFALL_LEVEL_TRENCH } from './layout';
 import { EVENTS } from '../events';
 import { rockShape } from '../outcrop-sprite';
 import { siphonophoreReach } from '../sightings-shallow';
@@ -126,8 +130,11 @@ test('one jelly per block, where it ended, the last the hero and the largest', (
         assert.ok(!j.hero);
         assert.ok(j.r < hero.r, `${c.name}: an older jelly is as large as the hero`);
       }
-      // Down the page in the order they came.
-      for (let i = 1; i < plan.jellies.length; i++) assert.ok(plan.jellies[i].y >= plan.jellies[i - 1].y - 1e-6, `${c.name}: jelly ${i} above ${i - 1}`);
+      // Down the page in the order they came: the family, and the far shoal among itself.
+      for (let i = 1; i < plan.jellies.length; i++) {
+        if (plan.jellies[i].shoal !== plan.jellies[i - 1].shoal) continue;
+        assert.ok(plan.jellies[i].y >= plan.jellies[i - 1].y - 1e-6, `${c.name}: jelly ${i} above ${i - 1}`);
+      }
     }
   }
 });
@@ -205,15 +212,21 @@ test('the jellies: the hero large and low, the one before half its size, older o
       const bell = (hero.r * 2) / S;
       // A fifth of the short side across: it owns the page.
       assert.ok(bell >= 0.19 && bell <= 0.21, `${c.name}: hero bell ${bell.toFixed(3)} S`);
-      if (plan.tall) assert.ok(hero.y >= plan.h * 0.6 && hero.y <= plan.h * 0.7, `${c.name}: hero at ${(hero.y / plan.h).toFixed(2)} H`);
+      // A little below the middle (high) or lower (low), as the composition has it.
+      if (plan.tall) assert.ok(hero.y >= plan.h * 0.54 - 1e-6 && hero.y <= plan.h * 0.7, `${c.name}: hero at ${(hero.y / plan.h).toFixed(2)} H`);
       assert.equal(hero.weight, 1);
+      // The family: the hero and two elders on a tall page, three on a wide one (or two, where three would take its calm); the rest a far shoal.
+      const most = plan.tall || plan.trench ? SIBLINGS_TALL : SIBLINGS_WIDE;
+      const kin = plan.jellies.filter((j) => !j.shoal).length - 1;
+      assert.ok(kin <= most && kin >= Math.min(plan.jellies.length - 1, SIBLINGS_TALL), `${c.name}: ${kin} elders`);
       const inked = plan.jellies.filter((j) => !j.far);
-      assert.ok(inked.length <= 4, `${c.name}: ${inked.length} inked jellies`);
+      assert.ok(inked.length <= kin + 1, `${c.name}: ${inked.length} inked jellies`);
       for (const j of plan.jellies.slice(0, -1)) {
         assert.ok(j.weight <= 0.8, `${c.name}: jelly ${j.block} drawn at the hero's weight`);
         // Past three siblings, a ghost: a quarter strength and a third the hero's size at most.
-        if (j.far) assert.ok(j.alpha <= 0.25 + 1e-9 && j.r <= hero.r * 0.35 + 1e-9, `${c.name}: ghost ${j.block} at ${j.alpha} strength, ${(j.r / hero.r).toFixed(2)} of the hero`);
-        assert.equal(j.far, plan.jellies.length - 1 - j.block > 3, `${c.name}: jelly ${j.block} far or near out of turn`);
+        if (j.far) assert.ok(j.alpha <= 0.25 + 1e-9 && j.r <= hero.r * SHOAL_SCALE[1] + 1e-9, `${c.name}: shoal bell ${j.block} at ${j.alpha} strength, ${(j.r / hero.r).toFixed(2)} of the hero`);
+        assert.equal(j.far, plan.jellies.length - 1 - j.block > kin, `${c.name}: jelly ${j.block} far or near out of turn`);
+        assert.equal(j.shoal, j.far);
       }
       if (plan.jellies.length >= 2) {
         const prev = plan.jellies[plan.jellies.length - 2];
@@ -243,6 +256,8 @@ test('hard rules: the hero kept clear, jellies apart, the window bare, the big r
           for (let k = i + 1; k < plan.jellies.length; k++) {
             const a = plan.jellies[i];
             const b = plan.jellies[k];
+            // (The shoal's tiny bells keep their own looser spacing.)
+            if (a.shoal && b.shoal) continue;
             const d = Math.hypot(a.x - b.x, a.y - b.y);
             assert.ok(d >= 1.4 * (a.r + b.r) - 1e-6, `${tag}: jellies ${i} and ${k} ${d.toFixed(0)} apart`);
           }
@@ -296,7 +311,9 @@ test('the floor: a few things on it, spread out and small; the trench clear of c
         const t = plan.trench;
         const gap = (t.gap / plan.w);
         assert.ok(gap >= 0.25 && gap <= 0.4, `${c.name}: the cleft is ${gap.toFixed(2)} W`);
-        assert.ok(Math.abs(t.top - plan.h * (plan.tall ? TRENCH_TOP[0] : TRENCH_TOP[1])) < 1e-6);
+        // Its walls start higher the longer past three hours it went, by TRENCH_RISE at four and a half.
+        const k = Math.min(1, Math.max(0, (focusOf(c.segs) - 3 * 3600) / (1.5 * 3600)));
+        assert.ok(Math.abs(t.top - plan.h * ((plan.tall ? TRENCH_TOP[0] : TRENCH_TOP[1]) - TRENCH_RISE * k)) < 1e-6);
         assert.ok(Math.abs(hero.x - t.x) < t.gap / 2, `${c.name}: the hero is not over the cleft`);
         const fall = plan.events.find((e) => e.kind === 'whalefall');
         if (fall && fall.box) assert.ok(fall.box.x1 <= t.x - t.gap / 2 || fall.box.x0 >= t.x + t.gap / 2, `${c.name}: the whale fall is in the cleft`);
@@ -342,7 +359,7 @@ test('no rock floats: each stands out from a wall that goes down into the ground
       }
       // The kelp: three stalks a side or none.
       if (plan.kelp) {
-        const kelp = rollKelp(rollBiome(plan.key, plan.courseKey).key, PICTURE_KELP);
+        const kelp = mirrorKelp(rollKelp(rollBiome(plan.key, plan.courseKey).key, PICTURE_KELP), plan.kelp.mirror);
         for (const edge of [-1, 1]) {
           const n = plan.kelp.keep.filter((i) => (kelp.stalks[i].x < 0.5 ? -1 : 1) === edge).length;
           assert.ok(n === 0 || n >= 3, `${tag}: ${n} kelp stalks on a side`);
@@ -467,16 +484,18 @@ test('siblings: each apart from the hero in two ways a print shows, none in anot
       // Never a staircase: each step down the family unlike the next, by 0.4 of the larger, across and down.
       // (Three ghosts far off in a row are held to nothing: only a step through a jelly counts.)
       for (let i = 2; i < J.length; i++) {
-        if (J[i - 1].far) continue;
+        if (J[i - 1].far || J[i - 2].far) continue;
         const a = { dx: J[i - 1].x - J[i - 2].x, dy: J[i - 1].y - J[i - 2].y };
         const b = { dx: J[i].x - J[i - 1].x, dy: J[i].y - J[i - 1].y };
         assert.ok(stepsApart(a, b), `${tag}: jellies ${i - 2}, ${i - 1} and ${i} step alike (${a.dx.toFixed(0)},${a.dy.toFixed(0)}) then (${b.dx.toFixed(0)},${b.dy.toFixed(0)})`);
       }
       for (let i = 0; i < J.length; i++) {
         for (let k = i + 1; k < J.length; k++) {
+          if (J[i].shoal && J[k].shoal) continue;
           assert.ok(boxGap(J[i].box, J[k].box) >= CLEAR - 1e-6, `${tag}: jellies ${i} and ${k} ${boxGap(J[i].box, J[k].box).toFixed(0)} apart`);
-          // (Two ghosts far off a little closer.)
-          assert.ok(Math.abs(J[i].y - J[k].y) >= plan.h * (J[i].far && J[k].far ? GHOST_ROW : 0.05) - 1e-6, `${tag}: jellies ${i} and ${k} at one depth`);
+          // (The far shoal's tiny bells are a cloud in the haze, held to no rows.)
+          if (J[i].shoal || J[k].shoal) continue;
+          assert.ok(Math.abs(J[i].y - J[k].y) >= plan.h * 0.05 - 1e-6, `${tag}: jellies ${i} and ${k} at one depth`);
         }
       }
     }
@@ -703,5 +722,197 @@ test('one big calm: a quarter of the page or more in one clear stretch, nothing 
         for (const a of plan.cast) assert.equal(inter(a.box, plan.calm), 0, `${c.name}: ${a.id} in the calm water`);
       }
     }
+  }
+});
+
+const wallSideOf = (plan: Plan): -1 | 1 => plan.composition.wallSide;
+const fromWall = (plan: Plan, x: number) => (wallSideOf(plan) < 0 ? x / plan.w : 1 - x / plan.w);
+
+test('not one layout twice: the hero out toward the open side, the family round it, the cast across the page', () => {
+  const looks = new Set<string>();
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const hero = plan.jellies[plan.jellies.length - 1];
+      // The hero holds the open water, not the wall: 0.38 to 0.55 of the width from it on a tall page, 0.40 to 0.62 on a wide one.
+      const [lo, hi] = plan.tall ? HERO_FROM_WALL.tall : HERO_FROM_WALL.wide;
+      const at = fromWall(plan, hero.x);
+      assert.ok(at >= lo - 1e-6 && at <= hi + 1e-6, `${tag}: the hero ${at.toFixed(2)} W from the wall`);
+      if (shape !== SHAPES[2]) looks.add(`${plan.composition.name}|${wallSideOf(plan)}`);
+      // The family: two elders at most on a tall page, three on a wide one; one of them a quarter of the width across the hero's axis; no two bells within BELL_APART across.
+      const fam = plan.jellies.filter((j) => !j.shoal);
+      assert.ok(fam.length - 1 <= (plan.tall ? SIBLINGS_TALL : SIBLINGS_WIDE), `${tag}: ${fam.length - 1} elders`);
+      if (fam.length > 1) assert.ok(fam.some((j) => !j.hero && Math.abs(j.x - hero.x) >= plan.w * ACROSS - 1e-6), `${tag}: no elder across the hero's axis`);
+      const biome = rollBiome(plan.key, plan.courseKey);
+      for (let i = 0; i < fam.length; i++) for (let k = i + 1; k < fam.length; k++) assert.ok(Math.abs(fam[i].x - fam[k].x) >= plan.w * BELL_APART - 1e-6, `${tag}: two bells ${(Math.abs(fam[i].x - fam[k].x) / plan.w).toFixed(3)} W apart across`);
+      // (A rare jelly too, unless a fifth of the page under or over.)
+      for (const a of plan.cast.filter((q) => biome.pools[q.zone]?.[q.slot]?.genome.plan === 'bell')) for (const j of fam) if (Math.abs(j.y - a.y) < plan.h * 0.2) assert.ok(Math.abs(j.x - a.x) >= plan.w * BELL_APART - 1e-6, `${tag}: a rare jelly in line with jelly ${j.block}`);
+      // The cast not all by the wall: three in five at most in its third of the page, and one of it over the page's middle.
+      const water = plan.cast.filter((a) => !a.floor);
+      if (water.length >= 2) {
+        const byWall = water.filter((a) => fromWall(plan, a.x) < 1 / 3).length / water.length;
+        assert.ok(byWall <= CAST_BY_WALL + 1e-9, `${tag}: ${(byWall * 100).toFixed(0)}% of the cast by the wall`);
+        assert.ok(water.some((a) => Math.max(fromWall(plan, a.box.x0), fromWall(plan, a.box.x1)) > 0.5), `${tag}: none of the cast over the page's middle`);
+      }
+      // One wall.
+      assert.equal(plan.walls.length, 1, `${tag}: ${plan.walls.length} walls`);
+    }
+  }
+  // Pages from different sittings are composed differently: three looks at least among the eight.
+  assert.ok(looks.size >= 3, `only ${looks.size} looks: ${[...looks].join(', ')}`);
+});
+
+test('a long sitting reads long: more grows on the stone and the floor, fewer empty stretches, the trench deeper', () => {
+  const two = CASES.find((c) => c.name.startsWith('2 h'))!;
+  const long = CASES.find((c) => c.name.startsWith('4.5 h'))!;
+  for (const shape of SHAPES.slice(0, 2)) {
+    const density = (p: Plan) => p.life.length / Math.max(1, p.lifeEdge / Math.min(p.w, p.h));
+    const a = density(planOf(two, shape));
+    const b = density(planOf(long, shape));
+    assert.ok(b >= 2 * a, `${shape.width}x${shape.height}: ${b.toFixed(1)} things per S of stone at 4.5 h against ${a.toFixed(1)} at 2 h`);
+    // Empty stretches (no mark at all) fall as the sitting lengthens: never more of them on a page an hour longer, and at most 0.45 from three hours.
+    const plans = CASES.map((c) => ({ min: focusOf(c.segs) / 60, empty: emptyShare(planOf(c, shape)), name: c.name }));
+    for (const p of plans) if (p.min >= 180) assert.ok(p.empty <= 0.45, `${p.name} ${shape.width}x${shape.height}: ${(p.empty * 100).toFixed(0)}% empty`);
+    for (const p of plans) for (const q of plans) if (q.min >= p.min + 60) assert.ok(q.empty <= p.empty + 0.02, `${q.name} is emptier (${q.empty.toFixed(2)}) than ${p.name} (${p.empty.toFixed(2)})`);
+  }
+  // The trench deeper the longer: its walls start higher at 4.5 h than at 3.5 h.
+  const t35 = planOf(CASES.find((c) => c.name.startsWith('3.5 h'))!, SHAPES[0]).trench!;
+  const t45 = planOf(long, SHAPES[0]).trench!;
+  assert.ok(t45.top < t35.top - 1e-6);
+});
+
+test('nothing overlaps or floats: 0.02 S between the animals, what grows, the ground and the hero\'s trails; none in the whale; the whale fall on level ground', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const S = Math.min(plan.w, plan.h);
+      const ground = (b: Box) => {
+        let g = plan.h;
+        if (plan.floor) for (let k = 0; k <= 12; k++) g = Math.min(g, floorAt(plan, b.x0 + ((b.x1 - b.x0) * k) / 12));
+        return g;
+      };
+      const hero = plan.jellies[plan.jellies.length - 1];
+      if (plan.floor) assert.ok(hero.box.y1 <= ground(hero.box) - CLEAR + 1e-6, `${tag}: the hero's trails ${((ground(hero.box) - hero.box.y1) / S).toFixed(3)} S over the ground`);
+      const swim = plan.cast.filter((a) => !a.floor);
+      for (const a of swim) assert.ok(a.box.y1 <= ground(a.box) - CLEAR + 1e-6, `${tag}: ${a.id} on the ground`);
+      const animals = [...swim.map((a) => a.box), ...plan.jellies.map((j) => j.box), ...plan.events.filter((e) => e.box && !e.far && e.kind !== 'whalefall').map((e) => e.box as Box)];
+      for (const l of plan.life) {
+        for (const b of animals) assert.ok(boxGap(l.box, b) >= CLEAR - 1e-6, `${tag}: a ${l.kind} ${(boxGap(l.box, b) / S).toFixed(3)} S from an animal`);
+        assert.equal(inter(l.box, plan.calm), 0, `${tag}: a ${l.kind} in the calm`);
+      }
+      const whale = plan.events.find((e) => e.kind === 'whale');
+      if (whale) {
+        const at = whaleHull(whale, S, plan.current);
+        const keep = [grow(at.body, plan.w * WHALE_CLEAR), grow(at.flipper, plan.w * WHALE_CLEAR)];
+        for (const a of swim) if (a.layer > 0) for (const k of keep) assert.equal(inter(a.box, k), 0, `${tag}: ${a.id} in the whale's shadow`);
+        for (const e of plan.events) if (e.box && e.kind !== 'whale' && !e.far) for (const k of keep) assert.equal(inter(e.box, k), 0, `${tag}: the ${e.kind} on the whale`);
+      }
+      const fall = plan.events.find((e) => e.kind === 'whalefall');
+      if (fall && fall.box) {
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (let k = 0; k <= 20; k++) {
+          const g = floorAt(plan, fall.box.x0 + ((fall.box.x1 - fall.box.x0) * k) / 20);
+          lo = Math.min(lo, g);
+          hi = Math.max(hi, g);
+        }
+        assert.ok(hi - lo <= (plan.trench ? WHALEFALL_LEVEL_TRENCH : WHALEFALL_LEVEL) * REF + 1e-6, `${tag}: the ground under the whale fall rises ${(hi - lo).toFixed(1)}`);
+        // Every bone rests on it: the bones' line no higher than the ground anywhere under them.
+        assert.ok(fall.y >= hi - 1e-6, `${tag}: whale-fall bones over open water`);
+      }
+      // The squid's eye looks in low on the page (0.45 to 0.8 of it), a quarter of the width or more from the window.
+      for (const e of plan.events.filter((v) => v.kind === 'eye')) {
+        assert.ok(e.y >= plan.h * EYE_BAND[0] - 1e-6 && e.y <= plan.h * EYE_BAND[1] + 1e-6, `${tag}: the eye at ${(e.y / plan.h).toFixed(2)} H`);
+        assert.ok(Math.abs(e.x - plan.window.x) >= plan.w * 0.25 - plan.window.r * 0.08 - 1e-6, `${tag}: the eye by the window`);
+      }
+      // A rare jelly glows low: 0.72 to 0.92 of the page (over a trench, down in its cleft), or on a floor as low as it lets it.
+      const biome = rollBiome(plan.key, plan.courseKey);
+      for (const a of plan.cast.filter((q) => q.rare && biome.pools[q.zone]?.[q.slot]?.genome.plan === 'bell')) {
+        const lowest = plan.floor && !plan.trench ? plan.floor.y - CLEAR : plan.h * (1 - MARGIN);
+        assert.ok(a.y >= plan.h * RARE_BELL[0] - 1e-6 || a.box.y1 >= lowest - plan.h * 0.02, `${tag}: a rare jelly high, at ${(a.y / plan.h).toFixed(2)} H`);
+        assert.ok(a.y <= plan.h * RARE_BELL[1] + 1e-6);
+      }
+    }
+  }
+});
+
+test('the light leans to the hero: in half the sittings or more it hangs 0.15 to 0.3 of the width off the window, the shafts slanting down to it', () => {
+  for (const shape of SHAPES.slice(0, 2)) {
+    let off = 0;
+    for (const c of CASES) {
+      const plan = planOf(c, shape);
+      const hero = plan.jellies[plan.jellies.length - 1];
+      const d = Math.abs(hero.x - plan.window.x) / plan.w;
+      const lean = plan.composition.lean ?? 0;
+      if ((plan.composition.offset ?? 0) > 0) {
+        off++;
+        assert.ok(d >= SLANT_OFFSET[0] - 1e-6 && d <= SLANT_OFFSET[1] + 1e-6, `${c.name} ${shape.width}x${shape.height}: the hero ${d.toFixed(2)} W off the window`);
+        // Aimed at the hero, never steeper than the steepest the hour allows.
+        assert.ok(Math.abs(lean) <= SLANT_MAX + 0.02 && Math.sign(lean) === Math.sign(hero.x - plan.window.x), `${c.name}: shafts lean ${lean.toFixed(2)}`);
+      }
+    }
+    assert.ok(off >= CASES.length / 2, `${shape.width}x${shape.height}: the hero off the window in only ${off} sittings`);
+  }
+});
+
+test('the family never steps down a stair: no three bells running the same way across as they go down', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const fam = plan.jellies.filter((j) => !j.shoal).sort((a, b) => a.y - b.y);
+      for (let i = 0; i < fam.length; i++) for (let k = i + 1; k < fam.length; k++) for (let m = k + 1; m < fam.length; m++) {
+        assert.ok((fam[k].x - fam[i].x) * (fam[m].x - fam[k].x) <= 0, `${c.name} ${shape.width}x${shape.height}: jellies ${fam[i].block}, ${fam[k].block}, ${fam[m].block} step down a stair`);
+      }
+    }
+  }
+});
+
+test('the far shoal: a dozen tiny faint bells or more out over the open water, one for each older block', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const old = plan.jellies.filter((j) => j.shoal);
+      if (!old.length) {
+        assert.ok(!plan.shoal, `${tag}: a shoal with no blocks in it`);
+        continue;
+      }
+      const sh = plan.shoal;
+      assert.ok(sh && sh.bells.length >= Math.max(12, old.length) && sh.bells.length <= Math.max(40, old.length), `${tag}: a shoal of ${sh?.bells.length}`);
+      const hero = plan.jellies[plan.jellies.length - 1];
+      for (const j of old) assert.ok(sh.bells.some((b) => b.block === j.block && b.x === j.x && b.y === j.y), `${tag}: block ${j.block} has no bell`);
+      for (const b of sh.bells) {
+        assert.ok(b.r >= hero.r * SHOAL_SCALE[0] - 1e-9 && b.r <= hero.r * SHOAL_SCALE[1] + 1e-9, `${tag}: a shoal bell ${(b.r / hero.r).toFixed(3)} of the hero`);
+        assert.ok(b.alpha >= 0.18 - 1e-9 && b.alpha <= 0.28 + 1e-9);
+      }
+      assert.ok(sh.box.x1 - sh.box.x0 <= plan.w * 0.25 + 1e-6, `${tag}: the shoal ${((sh.box.x1 - sh.box.x0) / plan.w).toFixed(2)} W across`);
+      // Never on the window, a rock, a wall or the family.
+      for (const r of plan.rocks) assert.ok(!rockTouches(r, plan.w, sh.box), `${tag}: the shoal on a rock`);
+      for (const wl of plan.walls) assert.ok(!wallTouches(wl, plan.w, sh.box), `${tag}: the shoal on a wall`);
+      assert.equal(inter(sh.box, plan.windowBox), 0, `${tag}: the shoal over the window`);
+      for (const j of plan.jellies) if (!j.shoal) assert.ok(boxGap(j.box, sh.box) >= CLEAR - 1e-6, `${tag}: the shoal in jelly ${j.block}`);
+    }
+  }
+});
+
+test('the floor is a colony, not a fence: most of what grows on it stands out on its face, in front of its line', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES.slice(0, 2)) {
+      const plan = planOf(c, shape);
+      const on = plan.life.filter((l) => l.on === 'floor');
+      if (on.length < 5) continue;
+      const below = on.filter((l) => l.y - floorAt(plan, l.x) > plan.h * 0.015).length;
+      assert.ok(below / on.length >= 0.6, `${c.name} ${shape.width}x${shape.height}: ${below} of ${on.length} in front of the floor's line`);
+    }
+  }
+});
+
+test('a sighting is kept where the page can have it: the dawn turtle beside the whale', () => {
+  const dawn = CASES.find((c) => c.name.startsWith('90 min'))!;
+  for (const shape of SHAPES) for (const ground of ['paper', 'night'] as const) {
+    const plan = planOf(dawn, shape, ground);
+    assert.ok(plan.events.some((e) => e.kind === 'turtle'), `${shape.width}x${shape.height} ${ground}: no turtle`);
   }
 });

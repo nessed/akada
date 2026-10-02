@@ -17,10 +17,10 @@
  */
 
 import { mixHex } from '../fan';
-import { buildAnatomy, jawed, type Anatomy, type LayerName, type Shape, type Tube } from './anatomy';
+import { buildAnatomy, crownOf, jawed, type Anatomy, type LayerName, type Shape, type Tube } from './anatomy';
 import type { Species } from './biome';
 import { creatureInk, type CreatureInk } from './palette';
-import { bounds, contourHatch, detailFor, grain, inkLine, LIGHT, mottle, poolEdge, smooth, stipple, tubeWash, washFill } from './pen';
+import { bounds, contourHatch, detailFor, grain, hatch, inkLine, LIGHT, mottle, poolEdge, shadeAcross, smooth, stipple, tubeWash, washFill } from './pen';
 import { mulberry32 } from './random';
 
 const anatomies = new WeakMap<Species, Anatomy>();
@@ -154,8 +154,10 @@ function render(species: Species, lenCss: number, dark: boolean, dpr: number, vi
     dpr,
     detail: pen.print ? Math.max(detailFor(devicePx), printDetail(devicePx, spacing)) : detailFor(devicePx),
     dark,
-    clear: (g.clear && !jawed(g)) || g.plan === 'bell' || g.plan === 'comb' || g.plan === 'chain',
+    // (A sea star is never glass: it is a solid animal on the ground.)
+    clear: (g.clear && !jawed(g) && g.plan !== 'star') || g.plan === 'bell' || g.plan === 'comb' || g.plan === 'chain',
     plan: g.plan,
+    crown: crownOf(g, species.seed),
     jawed: jawed(g),
     lit: g.lit,
     seed: species.seed,
@@ -382,6 +384,8 @@ interface Paint {
   /** See-through: stippled rather than hatched, with a lit rim on dark water. */
   clear: boolean;
   plan: string;
+  /** A crown jelly's form, if it is one. */
+  crown: 'atolla' | 'periphylla' | null;
   /** One of the jawed hunters (an angler, a dragonfish): one dark wash. */
   jawed: boolean;
   lit: boolean;
@@ -393,6 +397,11 @@ const PAPER = '#FBF8EF';
 const DARK = '#1A1714';
 /** The gonads' wash, through a clear bell: a soft rose. */
 const GONAD = '#E8C9D4';
+/**
+ * A crown jelly's stomach and the stain of its pedalia: the deep's wine red,
+ * dark on any water (red is the first light the deep takes away).
+ */
+const CROWN_GUT = { light: '#5B1E2E', dark: '#4A1A2A' } as const;
 /** The play of light down a comb row, on dark water. */
 const IRIDESCENT = ['#8FE3FF', '#B9F7C4', '#FFE79A', '#FFB0D6', '#BBA6FF', '#8FE3FF'];
 
@@ -563,8 +572,12 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
   const body = bodyLines.length ? pathOf(bodyLines) : null;
   const bodyBox = bodyLines.length ? boxOf(bodyLines) : null;
   const solidTubes = !o.clear && tubes.length > 0;
+  /** A sea star is worked in the pen from a small size, not only a poster's: it lies on the engraved ground. (The live clock's small ones stay cheap.) */
+  const starred = o.plan === 'star' && solidTubes && detail >= 0.25;
   if (body && bodyBox) {
-    if (heavy && solidTubes && !tiny) {
+    if (starred) {
+      starWash(ctx, body, bodyBox, tubes, ink, o);
+    } else if (heavy && solidTubes && !tiny) {
       // Graded across the body: for a swimmer, darker along the back, the
       // upper flank let go broadly toward bare paper (broad and soft, never a
       // narrow bright stripe, which reads as a gloss), the belly paler; for a
@@ -634,12 +647,14 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
   }
   plain('guts', 0.55, 0.45);
   inBody(() => {
-    if (L.gutFill.length) {
+    if (o.plan === 'bell') {
+      crownGut(ctx, L.pat.length ? shapes('pat') : null, L.pat.length ? boxOf(lines('pat')) : null, lines('gutFill'), ink, o, tiny);
+    } else if (L.gutFill.length) {
       ctx.globalAlpha = 0.4;
       ctx.fillStyle = ink.pat;
       ctx.fill(shapes('gutFill'));
     }
-    if (L.pat.length && bodyBox) {
+    if (L.pat.length && bodyBox && o.plan !== 'bell') {
       // Markings in wash, stronger on the back than the belly.
       const p = shapes('pat');
       const gr = ctx.createLinearGradient(0, bodyBox.y, 0, bodyBox.y + bodyBox.h);
@@ -659,7 +674,8 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     }
     ctx.globalAlpha = 1;
     if (L.patLine.length) penLines(lines('patLine'), 0.8, 0.6, ink.pat, [0.15, 0.4]);
-    if (body && bodyBox && heavy) shade(ctx, body, bodyBox, tubes, ink, o);
+    if (body && bodyBox && starred) starShade(ctx, body, bodyBox, tubes, ink, o);
+    else if (body && bodyBox && heavy) shade(ctx, body, bodyBox, tubes, ink, o);
   });
   // The fine lines: the lateral line's pores, a gill cover, a ray's radials.
   if (fine > 0 && L.lines.length) {
@@ -694,7 +710,7 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
     ctx.fill(shapes('gape'));
     ctx.restore();
   }
-  penLines(bodyLines, o.plan === 'comb' ? 0.5 : o.plan === 'chain' ? 0.6 : o.clear ? 0.85 : 1);
+  penLines(bodyLines, o.plan === 'comb' ? 0.5 : o.plan === 'chain' ? 0.6 : o.clear ? 0.85 : starred ? 1.25 : 1);
   if (L.teeth.length) {
     // Needle teeth: bare paper, the pen round them only when they are big enough to hold it.
     const p = shapes('teeth');
@@ -727,12 +743,14 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
       ctx.globalAlpha = 1;
     }
   }
-  if (fine > 0 && L.nodes.length) {
+  // A star's knobs show from a smaller size: they are its texture, not its fine work.
+  const knobs = starred ? ramp(detail, 0.2, 0.45) : fine;
+  if (knobs > 0 && L.nodes.length) {
     const p = shapes('nodes');
-    ctx.globalAlpha = 0.5 * fine;
-    ctx.fillStyle = mixHex(ink.pat, pen, 0.25);
+    ctx.globalAlpha = 0.5 * knobs;
+    ctx.fillStyle = starred ? (dark ? mixHex(ink.body, pen, 0.45) : mixHex(ink.body, ink.paper ?? PAPER, 0.5)) : mixHex(ink.pat, pen, 0.25);
     ctx.fill(p);
-    ctx.globalAlpha = 0.6 * fine;
+    ctx.globalAlpha = 0.6 * knobs;
     ctx.strokeStyle = pen;
     ctx.lineWidth = Math.max(0.25, 0.3 * base);
     ctx.stroke(p);
@@ -769,6 +787,100 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
   });
   strand('lure', 0.8, 1, [0, 0.15]);
   ctx.globalAlpha = 1;
+}
+
+/**
+ * A crown jelly's colour, seen through the clear bell: the stomach a soft
+ * wine wash, strongest at its tip and fading out toward the groove, worked
+ * in fine lines that run down it from the tip (its folds) and gather on its
+ * shadow side, with no line round it, so it is an organ seen through glass
+ * and never a dark hole; the gonads beside its foot fainter still; and the
+ * band of the pedalia stained from the groove and paling toward the rim,
+ * hatched down its furrows on its shadow side (on dark water, in the light
+ * ink, on the side the light comes from).
+ */
+function crownGut(ctx: CanvasRenderingContext2D, band: Path2D | null, bandBox: Box | null, gut: { pts: number[]; close: boolean }[], ink: CreatureInk, o: Paint, tiny: boolean) {
+  const { dark, base, spacing } = o;
+  const deep = dark ? CROWN_GUT.dark : CROWN_GUT.light;
+  // Three fifths of its old strength: lifted toward the bell's own wash.
+  const wine = mixHex(deep, mixHex(ink.body, dark ? '#B8A8AE' : '#E8DCDC', 0.5), 0.3);
+  const rgba = (hex: string, a: number) => `${hex}${Math.round(255 * Math.max(0, Math.min(1, a))).toString(16).padStart(2, '0')}`;
+  const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
+  const lineInk = dark ? mixHex(wine, ink.pen, 0.55) : mixHex(deep, DARK, 0.25);
+  ctx.save();
+  if (band && bandBox) {
+    const gr = ctx.createLinearGradient(0, bandBox.y, 0, bandBox.y + bandBox.h);
+    gr.addColorStop(0, rgba(wine, dark ? 0.34 : 0.26));
+    gr.addColorStop(1, rgba(wine, dark ? 0.1 : 0.07));
+    ctx.fillStyle = gr;
+    ctx.fill(band);
+    if (!tiny && o.detail >= 0.3) {
+      hatch(ctx, band, bandBox, {
+        spacing: Math.max(1.2, spacing * 0.6),
+        angle: Math.PI / 2,
+        shade: shadeAcross(bandBox, light),
+        from: 0.5,
+        color: lineInk,
+        width: Math.max(0.3, base * 0.5),
+        alpha: dark ? 0.5 : 0.55,
+        bow: 0.3,
+        seed: o.seed ^ 0x3a7,
+      });
+    }
+  }
+  const [stomach, ...beans] = gut;
+  if (stomach && stomach.pts.length >= 6) {
+    const sp = pathOf([stomach]);
+    const sb = bounds(stomach.pts);
+    // The tip: the stomach's highest point (a Periphylla's cone), or its middle (an Atolla's lens).
+    let ax = sb.x + sb.w / 2;
+    let ay = sb.y;
+    for (let i = 1; i < stomach.pts.length; i += 2) {
+      if (stomach.pts[i] <= ay + 1e-6) {
+        ay = stomach.pts[i];
+        ax = stomach.pts[i - 1];
+      }
+    }
+    const cone = o.crown === 'periphylla';
+    const gr = cone ? ctx.createLinearGradient(0, sb.y, 0, sb.y + sb.h) : ctx.createRadialGradient(ax, sb.y + sb.h * 0.45, 0, ax, sb.y + sb.h * 0.45, Math.max(sb.w, sb.h) * 0.55);
+    gr.addColorStop(0, rgba(wine, dark ? 0.7 : 0.62));
+    gr.addColorStop(0.3, rgba(wine, dark ? 0.5 : 0.44));
+    gr.addColorStop(0.7, rgba(wine, dark ? 0.2 : 0.16));
+    gr.addColorStop(1, rgba(wine, 0));
+    ctx.fillStyle = gr;
+    ctx.fill(sp);
+    if (!tiny && o.detail >= 0.3) {
+      // Its folds: fine lines down from the tip, fanning to its foot, heavier on the shadow side and gone before the groove.
+      ctx.save();
+      ctx.clip(sp);
+      const folds = Math.max(5, Math.min(14, Math.round(sb.w / Math.max(2, spacing * 1.1))));
+      const r = mulberry32(o.seed ^ 0x9e1);
+      for (let k = 0; k <= folds; k++) {
+        const u = k / folds - 0.5;
+        const side = u * 2 * (light[0] >= 0 ? 1 : -1);
+        const w = 0.5 + 0.5 * side;
+        if (w < 0.15) continue;
+        const ex = ax + u * sb.w * 0.95 + (r() - 0.5) * spacing * 0.4;
+        const ey = cone ? sb.y + sb.h * (0.82 + 0.1 * r()) : sb.y + sb.h * (0.95 - 0.5 * Math.abs(u));
+        const sx = cone ? ax + u * sb.w * 0.08 : ax + u * sb.w * 0.35;
+        const sy = cone ? ay + sb.h * 0.04 : sb.y + sb.h * 0.15;
+        const pts: number[] = [];
+        for (let q = 0; q <= 8; q++) {
+          const t = q / 8;
+          // (Bowed out with the cone's swell.)
+          pts.push(sx + (ex - sx) * Math.pow(t, 0.8), sy + (ey - sy) * t);
+        }
+        inkLine(ctx, pts, false, { width: base * (0.3 + 0.35 * w), color: lineInk, alpha: (dark ? 0.55 : 0.6) * (0.4 + 0.6 * w), taper: [0.1, 0.6], plate: true, light, seed: o.seed + k * 7 });
+      }
+      ctx.restore();
+    }
+  }
+  if (beans.length) {
+    ctx.globalAlpha = dark ? 0.32 : 0.26;
+    ctx.fillStyle = wine;
+    ctx.fill(pathOf(beans));
+  }
+  ctx.restore();
 }
 
 /** A closed outline drawn as a few arcs with the pen lifted between them: never a ring. */
@@ -942,6 +1054,101 @@ function shade(ctx: CanvasRenderingContext2D, body: Path2D, box: Box, tubes: Tub
     crossAngle: (35 * Math.PI) / 180,
     seed: o.seed ^ 0x2c1,
   });
+}
+
+/**
+ * A sea star's wash: graded across each arm, the lit side let go toward
+ * the paper and the far side deepened, so every arm is round and the disc
+ * between them sits up off the ground. On dark water the body is kept low,
+ * near the water's own dark, so the light pen carries it as it carries the
+ * rock and the growths round it.
+ */
+function starWash(ctx: CanvasRenderingContext2D, body: Path2D, box: Box, tubes: Tube[], ink: CreatureInk, o: Paint) {
+  const paper = ink.paper ?? PAPER;
+  const base = o.dark ? mixHex(ink.body, '#141210', 0.68) : ink.body;
+  const stops: [number, string][] = o.dark
+    ? [
+        [0, mixHex(base, ink.pen, 0.16)],
+        [0.4, base],
+        [1, mixHex(base, '#000000', 0.4)],
+      ]
+    : [
+        [0, mixHex(base, paper, 0.62)],
+        [0.3, mixHex(base, paper, 0.25)],
+        [0.62, base],
+        [1, mixHex(base, DARK, 0.45)],
+      ];
+  tubeWash(ctx, body, tubes, box, { stops, alpha: ink.bodyAlpha, fade: 0.3 });
+  const m = Math.min(box.w, box.h);
+  poolEdge(ctx, body, mixHex(base, DARK, 0.4), ink.bodyAlpha * 0.3, Math.max(1, Math.min(m * 0.06, o.base * 5)), o.base * 0.4);
+  if (o.detail >= 0.3) {
+    mottle(ctx, body, box, mixHex(base, DARK, 0.2), paper, ink.bodyAlpha * 0.12, o.seed ^ 0x6d1);
+    const gr = grain(ctx);
+    if (gr) {
+      gr.setTransform?.(new DOMMatrix([o.dpr, 0, 0, o.dpr, 0, 0]));
+      ctx.save();
+      ctx.clip(body);
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = gr;
+      ctx.fillRect(box.x, box.y, box.w, box.h);
+      ctx.restore();
+    }
+  }
+}
+
+/**
+ * A sea star in the pen: its shadow side stippled (a star's skin is a
+ * mosaic of small plates, so its tone is in dots, not lines), contour
+ * lines down each arm's shadowed edge where the arm is broad enough to
+ * hold them, and the ridge of plates along the middle of every arm. On
+ * dark water the same work is laid in the light ink on the side the light
+ * comes from, as everything else on the night ground is.
+ */
+function starShade(ctx: CanvasRenderingContext2D, body: Path2D, box: Box, tubes: Tube[], ink: CreatureInk, o: Paint) {
+  const { base, spacing, dark } = o;
+  const sp = Math.max(1.1, spacing * 0.4);
+  const field = shadeField(body, box, sp);
+  // Each arm round across itself, and the whole star a low dome, its far side in shadow.
+  const dome = shadeAcross(box);
+  // (Stretched, so the far side of the disc gathers its dots too.)
+  const mixed = (x: number, y: number) => Math.max(0, Math.min(1, (0.62 * field(x, y) + 0.38 * dome(x, y) - 0.25) / 0.6));
+  const shade = dark ? (x: number, y: number) => 1 - mixed(x, y) : mixed;
+  const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
+  stipple(ctx, body, box, {
+    spacing: sp,
+    shade,
+    color: ink.pen,
+    radius: Math.max(0.3, Math.min(sp * 0.26, base * 0.4)),
+    alpha: (dark ? 0.7 : 0.8) * (0.6 + 0.4 * ramp(o.detail, 0.3, 0.6)),
+    from: 0.35,
+    seed: o.seed ^ 0x5f3,
+  });
+  // Lines down the shadowed edge of each arm, closer than a body's: an arm is narrow.
+  const cs = Math.max(1.2, spacing * 0.6);
+  let thick = 0;
+  for (const t of tubes) for (let i = 0; i < t.a.length; i += 2) thick = Math.max(thick, Math.hypot(t.b[i] - t.a[i], t.b[i + 1] - t.a[i + 1]));
+  if (thick * 0.42 >= cs * 1.2) {
+    contourHatch(ctx, body, tubes, {
+      spacing: cs,
+      shade,
+      reach: 0.42,
+      width: base,
+      k: 0.5,
+      color: ink.pen,
+      alpha: dark ? 0.6 : 0.65,
+      light,
+      seed: o.seed ^ 0x2c1,
+    });
+  }
+  // The ridge down each arm: the middle row of plates, a fine broken line.
+  for (let k = 0; k < tubes.length; k++) {
+    const t = tubes[k];
+    const n = Math.min(t.a.length, t.b.length) / 2;
+    if (n < 5) continue;
+    const mid: number[] = [];
+    for (let i = 1; i < n - 1; i++) mid.push((t.a[i * 2] + t.b[i * 2]) / 2, (t.a[i * 2 + 1] + t.b[i * 2 + 1]) / 2);
+    inkLine(ctx, mid, false, { width: base * 0.45, color: ink.pen, alpha: dark ? 0.45 : 0.5, taper: [0.15, 0.5], raw: false, plate: true, light, seed: o.seed + k * 13 });
+  }
 }
 
 /**
