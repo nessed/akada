@@ -882,6 +882,12 @@ begin
   end if;
 end $$;
 
+-- A day may end as late as 9am (Settings, "Day ends at"). The first
+-- constraint above stays for databases that never saw this; it is replaced.
+alter table user_settings drop constraint if exists user_settings_day_ending_hour_range;
+alter table user_settings add constraint user_settings_day_ending_hour_range
+  check (day_ending_hour between 0 and 9);
+
 -- A recall prompt is a line, not a document (RECALL_PROMPT_MAX in
 -- lib/recall/constants.ts), a key is an id with a prefix, and the history is
 -- always the array lib/recall reads.

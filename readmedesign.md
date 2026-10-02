@@ -419,7 +419,9 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   or a late night) with each timed block laid where it happened in its course
   colour and a thin ink mark for now. Only a sitting the timer ran knows when
   it happened, from its segments; one logged by hand counts in the figure and
-  is not placed. With a day that ends after midnight (Settings, "day ends
+  is not placed, and whatever time that leaves off the strip is named under
+  it in a serif line ("2h 3m logged without a start time, so not on the
+  strip"), so the strip never silently under-draws the figure. With a day that ends after midnight (Settings, "day ends
   at"), the strip also carries **the small hours before today began**: the
   day before's blocks that ran past midnight, at 45% in their course
   colours, left of a dashed `ink-soft` line where the day started, and a
@@ -732,12 +734,13 @@ The sheet follows the reader to every screen until it is answered, so it
 says why it is there, in the serif italic under the heading: "You stopped a
 1h 10m session on ECON 100 and haven't saved it", or why the clock was
 stopped for them (left running while the page was closed, a break past 45
-minutes, the 18 hour limit).
+minutes, a pause past two hours, the 18 hour limit).
 
 ### The blink on P
 
 `P` holds or lets go of the clock from any screen (`TimerHotkeys`), and it is
-pressed with the eyes on the book, not on the dock. So the page answers it:
+pressed with the eyes on the book, not on the dock. So the page answers it
+(and answers `B` the same way, for the same reason):
 it blinks once, like an eye. Two lids of `bg` (the app's own background, so
 cream in the day and the night paper after dark) come in from the top and
 bottom edges, deepest at the edge and gone by the middle, close in 130ms and
@@ -1033,9 +1036,6 @@ tree in the middle of it; the wood is what stands around it. Code in
   and was visible on any size of screen. No counts, no score, nothing to
   beat; a sitting the app closed for the reader gets no line, and nor does
   any drawing but the wood.
-- **Sound.** With ambient noise on, the noise closes in as the canopy does:
-  open in the meadow, most of the way muffled by old growth (a lowpass in
-  `useAmbientNoise`, eased so the change is never heard as a step).
 - **Cost.** The standing land is drawn once per step of growth into its own
   canvas, trees are cached sprites, the scene runs at thirty frames a second
   on at most one and a half device pixels, and the tree only puts its ink
@@ -1150,10 +1150,14 @@ only ever grows, it never runs backwards, and none of it touches progress.
 - **Pause and break.** Held, the ocean eases to a stop over about 700ms and
   goes grey, the way the rest of the screen does; the jelly closes as it
   always has. A break is a rest on a ledge: nobody new arrives and you do not
-  sink, but the water keeps breathing at a third of its pace.
+  sink, but the water keeps breathing at a third of its pace, and whoever was
+  in it swims on at that pace and leaves, the wood's scene clock
+  (`lib/wood/clock.ts`). Arrivals are focus seconds; where an animal or a
+  sighting has got to is read on the scene clock, so nothing hangs mid-stroke
+  for five minutes.
 - **Reproducible.** The ocean is a pure function of the course, the moment
   the sitting started (which the log keeps as the first stretch's start) and
-  the focus time: there is no simulation, so a reload puts every animal back
+  the focus and break time: there is no simulation, so a reload puts every animal back
   where it was, and a finished sitting can always be dived again.
 - **Reduced motion** gets a still, brought up to date every half minute.
 - **Performance.** Each species is inked once to a sprite and then only
@@ -1290,21 +1294,21 @@ only ever grows, it never runs backwards, and none of it touches progress.
   ribs, some broken, the skull and its two jaws, and crabs working along it, which stays for the rest of the
   sitting once it has come. The recap names whichever was rarest, as it does
   the others.
-- **The noise darkens.** With ambient noise on, a lowpass follows the depth:
-  open at the surface, a low hush on the floor.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
-  appears in the Sound menu under the pink noise and plays a tank heard from
+  appears in the Sound menu and plays a tank heard from
   across a room: a low bed of water that swells slowly, a thin shimmer, the
   hum of a pump, and bubbles that rise now and then, sometimes in a short
   string, all of it pitched low (an octave under where it first sat, which
   read as a little bright). Synthesised (`lib/use-aquarium-sound.ts`), so it works on iOS and
-  offline, it muffles with the same depth the noise does, and it is
-  independent of the pink noise: either, both or neither.
+  offline, and a lowpass follows the depth: open at the surface, a low hush on
+  the floor. It eases in over about a second and a half and out over a
+  little more than one (`lib/audio-fade.ts`, a cosine curve that picks up from
+  wherever the gain is, so a tap mid-fade turns around without a step).
 - **The Sound menu** (`components/SoundMenu.tsx`) is the one speaker button in
-  the timer's header, in the soft ink and not the faint one so it can be found
+  the timer's header, drawn only in the deep, in the soft ink and not the faint one so it can be found
   on either paper, with a dot in the course colour while anything plays. It
-  opens a small paper card under the button: a switch for each sound, and
-  under the tank's a volume line, a pencil rule that fills with ink as it
+  opens a small paper card under the button: a switch for the tank, and
+  under it a volume line, a pencil rule that fills with ink as it
   rises, a round paper knob, and the level as mono digits. The line is
   `.pl-volume` in `globals.css`; it takes the card's ink, track and knob as
   custom properties so the same rule serves day and night. The level is
@@ -1470,8 +1474,11 @@ develops (`lib/print/`).
 
 ### The break
 A block that runs out keeps running, shown as overrun rather than stopped for
-the reader. A **break** is a stretch taken by hand, from the timer, and the
-sitting carries on as a chain of blocks and the rests between them.
+the reader. A **break** is a stretch taken by hand, and the sitting carries on
+as a chain of blocks and the rests between them. It is taken from anywhere:
+the timer's **Break** button, the cup on the dock, or `B` on any screen. It
+used to be the timer's alone, so a reader resting from Tasks pressed the only
+key there was, `P`, and the rest went down as nothing.
 
 The break does not bring a screen of its own. It borrows the timer's: the same
 frame, the same deckle, the same two-line clock. Three things change and
@@ -1531,6 +1538,33 @@ and the solid button says **Start**. The block begins when that is pressed,
 and its stretch in the chain starts there, not when the break ended. A block
 that ran the moment rest stopped was counting the walk back to the desk as
 work.
+
+### The pause
+A pause and a break stay two things. Pause is "I have stepped away, count
+nothing"; a break is rest, kept and reported beside the hours. What the pause
+gets is a way to be told what it was afterwards, and a length on screen to
+tell it by.
+
+- **The pause says how long.** Held for a minute or more, the line under the
+  clock reads `· paused 12m`, the digits in mono. The number it is beside is
+  frozen, so it was the only way to tell five minutes away from fifty.
+- **Break on a held block counts the pause as the break.** Pressed while a
+  block is paused, Break starts the break where the pause began, not now: the
+  reader who paused, walked off and came back was resting the whole time.
+  The button says **Count as break** while it would do that, and the dock's
+  cup and the key hint say the same. It does not reach back for a block held
+  at zero after a break (no pause was taken), or for a hold so long the break
+  would have under five minutes before its 45-minute ceiling; those start
+  the break now, as before. Nothing is ever counted as rest without the press.
+- **A pause has a ceiling: two hours** (`MAX_PAUSE_MS` in
+  `lib/timer-context.tsx`). Past it the sitting is closed where the pause
+  began and the log sheet says why ("sat paused for over two hours… Nothing
+  paused was counted."). It had none, so a clock paused before dinner was
+  still on the dock the next afternoon, and resumed then, logged into
+  yesterday. Two hours leaves room for a lecture between two halves of a
+  chapter. Unlike the other ways a sitting is closed for the reader, this one
+  casts no doubt on the hours, so it is not written to the session as a
+  recovery and the recap still draws.
 
 ### One word for each thing
 Outside the Record, the app says **session** (never "sitting" or
@@ -1934,7 +1968,7 @@ and "6.5/8" in mono.
 sits in quiet mono before the hours, since the hours are what those lists are.
 
 ### The reader's day, not the calendar's
-Settings lets a day end as late as 8am. `isoDate()` with no argument is that
+Settings lets a day end as late as 9am. `isoDate()` with no argument is that
 day, and anything that means "today" reads it; `new Date()` is only the wall
 clock. Arithmetic from today goes through `logicalToday()` and `addDays()` in
 `lib/utils.ts`: "tomorrow" worked out from the wall clock at 3am, for a day
@@ -1945,7 +1979,7 @@ day starts as an instant, `dayStartsAt(iso)`.
 
 ### The chime
 The one sound that announces something; the rest only answer a finger (see
-"Sounds under a finger"), and the ambient noise is one a reader turns on
+"Sounds under a finger"), and the tank is one a reader turns on
 themselves. It is a **struck glass**: three sine partials over a 1.5s
 exponential tail, two notes settling downward into a break and three opening
 upward out of one. Not an alarm, for the same reason nothing else in the app
@@ -1962,6 +1996,8 @@ late, and a Notification goes out alongside, which is the only thing that
 reaches a phone in a pocket.
 
 Both the chime and the break length are the reader's to set, in Settings.
+`DayEndPicker` answers each hour in the margin, in `HandNote`, with a line
+of its own ("ambitious" at 4am); the hour is the only thing that changes it.
 `BreakLengthPicker` is written in `DayEndPicker`'s idiom: a sentence about
 their own habit, with the marks appearing only once the line is touched, so
 the panel stays a page of sentences until something is being changed.
@@ -2165,15 +2201,18 @@ the one screen that looked like a spreadsheet. It is now a planner spread.
   open it at the top of the list.
 
 ### Keys for the running clock
-Three more, and they work from every screen rather than from the timer. `R`
+Four more, and they work from every screen rather than from the timer. `R`
 resets the sitting: it opens the same `ConfirmSheet` every destructive
 question uses ("Reset this sitting? The time so far won't be saved."), and
 only the sheet's Reset button throws the clock away, so a stray key never
 does. The timer screen's key hint names it too ("R reset"), since that is
-where a reader looks for the keys. The rest of this section describes `P` and `K`.
+where a reader looks for the keys. `B` takes a break; on a held block it
+counts the pause as the break (see "The pause"), and on a break it does
+nothing, since ending one is `P`'s. It used to be the timer screen's own
+key. The rest of this section describes `P` and `K`.
 
 A sitting is started from a row on Today or Tasks and the reader then goes
-back to their book. The timer's own keys (Space, B, F) only exist on the
+back to their book. The timer's own keys (Space, F) only exist on the
 timer screen, which is the one screen a reader mid-chapter is least likely to
 be looking at, so stopping meant finding the dock with a mouse. `P` and `K`
 reach the clock from wherever they are: `P` holds it or lets it go, and means
@@ -2186,8 +2225,9 @@ instead, so the key never ends a sitting with nothing to show for it.
 unless a sitting is running**, which is the same rule the task list follows.
 It stands down for a held key, for anything typed into a field, and for any
 chord: `⌘P` is print and `⌘K` is the browser's, and a chord belongs to
-whoever the reader thinks they are talking to. The dock's two buttons name
-the keys in their tooltips, and the help sheet behind `?` lists them only
+whoever the reader thinks they are talking to. The dock's buttons name
+the keys in their tooltips (a third, the cup, is drawn while a block is on
+the clock and takes the break), and the help sheet behind `?` lists them only
 while a sitting is running, for the same reason it lists nothing else that
 is not bound.
 

@@ -11,6 +11,7 @@
 import type { Biome } from './biome';
 import { depthAt } from './depth';
 import { hash32 } from './random';
+import { swimAge, type Swim } from './schedule';
 
 export type EventKind =
   | 'whale'
@@ -120,13 +121,15 @@ export function firstEventUpTo(biome: Biome, kind: EventKind, t: number): OceanE
   return null;
 }
 
-/** Events under way at `t`, with how far through each is (0 to 1). */
-export function eventsAt(biome: Biome, t: number): { event: OceanEvent; age: number }[] {
+/** Events under way at `t`, with how far through each is (0 to 1). Like the
+    animals, one begins on a focus second and plays out on the swim clock. */
+export function eventsAt(biome: Biome, t: number, swim?: Swim): { event: OceanEvent; age: number }[] {
   const out: { event: OceanEvent; age: number }[] = [];
   for (let m = Math.max(1, Math.floor((t - MAX_SECONDS - 20) / 60)); m <= Math.floor(t / 60); m++) {
     const e = eventAtMinute(biome, m);
     if (!e) continue;
-    const age = (t - e.start) / e.seconds;
+    if (e.start > t) continue;
+    const age = swimAge(t, e.start, swim) / e.seconds;
     if (age >= 0 && age < 1) out.push({ event: e, age });
   }
   return out;

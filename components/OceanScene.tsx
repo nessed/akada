@@ -36,19 +36,21 @@ import { drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/ocean/sightings
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
 import { hash32 } from '@/lib/ocean/random';
-import { visitorsAt } from '@/lib/ocean/schedule';
+import { swimAge, visitorsAt, type Swim } from '@/lib/ocean/schedule';
 import { SpriteCache } from '@/lib/ocean/sprites';
 import { registerWallpaperLayer } from '@/lib/wallpaper';
+import { BREAK_PACE } from '@/lib/wood/clock';
 
 /**
- * The sitting's focus time, as the timer holds it: what the finished blocks
- * came to, and the stretch on the clock now. Read afresh every frame, so the
- * ocean moves smoothly without the page re-rendering to move it. `frozen`
- * is a still: the moment after Finish, under the sheet.
+ * The sitting as the timer holds it: the closed stretches, and the one on
+ * the clock now, focus or break. Read afresh every frame, so the ocean moves
+ * smoothly without the page re-rendering to move it. Focus time is how deep
+ * the water is; the swim clock (focus, plus breaks at a crawl) is where the
+ * animals are. `frozen` is a still: the moment after Finish, under the sheet.
  */
 export type OceanClock =
-  | { completedSeconds: number; stretchMs: number; runningSince: number | null }
-  | { frozen: number };
+  | { segments: Swim['segments']; phase: 'focus' | 'break'; stretchMs: number; runningSince: number | null }
+  | { frozen: number; rest?: number; segments?: Swim['segments'] };
 
 /** A share of the scene, 0 to 1 on each axis, that animals keep out of. */
 export interface ClearRect {
@@ -157,13 +159,26 @@ export default function OceanScene({
     let last = performance.now();
     let frame = 0;
 
-    const trueFocus = () => {
+    const trueTime = () => {
       const c = live.current.clock;
-      if ('frozen' in c) return c.frozen;
+      if ('frozen' in c) return { focus: c.frozen, scene: c.frozen + BREAK_PACE * (c.rest ?? 0) };
+      let focus = 0;
+      let rest = 0;
+      for (const s of c.segments) {
+        if (s.kind === 'break') rest += s.seconds;
+        else focus += s.seconds;
+      }
       const running = c.runningSince != null ? Math.max(0, Date.now() - c.runningSince) : 0;
-      return c.completedSeconds + (c.stretchMs + running) / 1000;
+      const stretch = (c.stretchMs + running) / 1000;
+      if (c.phase === 'break') rest += stretch;
+      else focus += stretch;
+      return { focus, scene: focus + BREAK_PACE * rest };
     };
-    let shown = trueFocus();
+    const start = trueTime();
+    let shown = start.focus;
+    // Where the animals are. It runs with focus, crawls through a break so
+    // whoever was there swims on and leaves, and stops when the clock does.
+    let scene = start.scene;
     let ambient = hash32(sittingKey, 'ambient') % 1000;
     let micro = live.current.paused ? 0 : 1;
     let held = live.current.paused ? 1 : 0;
@@ -272,6 +287,7 @@ export default function OceanScene({
       drawShafts(bctx, W, H, biome.env, water, ambient);
       drawSnow(bctx, W, H, snow.back, water.snow, ambient, biome.env.current, px, biome.env.visibility);
       drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px);
+      const swim: Swim = { scene, segments: L.clock.segments ?? [] };
       const minute = Math.floor(shown / 60);
       if (minute !== fallMinute) {
         fallMinute = minute;
@@ -280,7 +296,7 @@ export default function OceanScene({
 
       // The rare things, when one is under way: behind everything, the
       // large and far; the eye goes on the front, at the edge.
-      const events = eventsAt(biome, shown);
+      const events = eventsAt(biome, shown, swim);
       for (const { event, age } of events) {
         if (event.kind === 'whale') drawWhale(bctx, W, H, age, event.seed, biome.env.current, px, ambient, water.dark);
         else if (event.kind === 'leviathan') drawLeviathan(bctx, W, H, age, event.seed, biome.env.current, px, ambient);
@@ -324,7 +340,7 @@ export default function OceanScene({
       drawDarkness(bctx, W, H, jelly, darkness, px, L.color);
       // Found things stay findable: the whale fall is drawn over the dark, faint.
       if (fall && fall.start <= shown && depth.zone >= 3) {
-        const appear = Math.min(1, (shown - fall.start) / fall.seconds);
+        const appear = Math.min(1, swimAge(shown, fall.start, swim) / fall.seconds);
         drawWhaleFall(bctx, W, H, appear, fall.seed, px, ambient, water.dark, floorLine(depth, shown, H));
       }
       for (const { event, age } of events) {
@@ -337,7 +353,7 @@ export default function OceanScene({
       }
 
       // The animals. Anything that wanders over the clock goes faint there.
-      const visitors = visitorsAt(biome, shown, { width: css.w, height: css.h }, quality);
+      const visitors = visitorsAt(biome, shown, { width: css.w, height: css.h }, quality, swim);
       const strips = quality > 0.8 ? 8 : quality > 0.55 ? 5 : 1;
       fctx.clearRect(0, 0, front.width, front.height);
       for (const v of visitors) {
@@ -423,16 +439,26 @@ export default function OceanScene({
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const L = live.current;
-      const target = trueFocus();
+      const truth = trueTime();
+      const target = truth.focus;
       // A reload, a sleep, a hidden tab: jump rather than race to catch up.
+      const ease = 1 - Math.exp(-dt / FOCUS_TAU);
       if (Math.abs(target - shown) > 4) shown = target;
-      else shown = Math.max(shown, shown + (target - shown) * (1 - Math.exp(-dt / FOCUS_TAU)));
+      else shown = Math.max(shown, shown + (target - shown) * ease);
+      if (Math.abs(truth.scene - scene) > 4) scene = truth.scene;
+      else scene = Math.max(scene, scene + (truth.scene - scene) * ease);
       const microTarget = L.paused ? 0 : L.resting ? 0.3 : 1;
       micro += (microTarget - micro) * (1 - Math.exp(-dt / AMBIENT_TAU));
       held += ((L.paused ? 1 : 0) - held) * (1 - Math.exp(-dt / AMBIENT_TAU));
       ambient += dt * micro;
       paint();
-      const settled = L.paused && micro < 0.002 && held > 0.998 && Math.abs(target - shown) < 0.01 && !transient;
+      const settled =
+        L.paused &&
+        micro < 0.002 &&
+        held > 0.998 &&
+        Math.abs(target - shown) < 0.01 &&
+        Math.abs(truth.scene - scene) < 0.01 &&
+        !transient;
       if (L.still || settled) return;
       raf = requestAnimationFrame(step);
     };
@@ -441,7 +467,9 @@ export default function OceanScene({
       if (disposed || raf != null) return;
       last = performance.now();
       if (reduced || live.current.still) {
-        shown = trueFocus();
+        const truth = trueTime();
+        shown = truth.focus;
+        scene = truth.scene;
         held = live.current.paused ? 1 : 0;
         paint();
         return;

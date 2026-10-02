@@ -4,7 +4,21 @@ import { useState } from 'react';
 import HandNote from '@/components/notebook/HandNote';
 
 /** The hours a day is allowed to run over into. Midnight is a plain day. */
-const HOURS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+const HOURS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+/** A line in the margin for each hour, said back when it is picked. */
+const QUIPS: Record<number, string> = {
+  0: 'a regular day',
+  1: 'a session at 1am still counts as tonight',
+  2: 'night owl',
+  3: 'late one',
+  4: 'ambitious',
+  5: 'up all night',
+  6: 'up all night',
+  7: 'basically morning',
+  8: 'basically morning',
+  9: 'basically morning',
+};
 
 /** How the chosen hour reads in a sentence. */
 export function dayEndLabel(hour: number): string {
@@ -73,7 +87,7 @@ export default function DayEndPicker({
           </div>
           <p className="mt-2.5 mb-0 text-right">
             <HandNote size={16} rotate={-1.5} color="var(--muted)">
-              a session at 1am still counts as tonight
+              {QUIPS[value] ?? QUIPS[1]}
             </HandNote>
           </p>
         </div>

@@ -82,25 +82,25 @@ the tokens there, not in `globals.css`.
 
 Saves searching. If one of these moves, fix the line here in the same commit.
 
-- **Timer keys** (`P`, `K`, `R`, from any screen) are in
+- **Timer keys** (`P`, `B`, `K`, `R`, from any screen) are in
   `components/TimerHotkeys.tsx`, mounted in the root layout. The timer
-  screen's own keys (Space, B, F, Esc) are in `app/timer/page.tsx`.
+  screen's own keys (Space, F, Esc) are in `app/timer/page.tsx`.
 - **The `?` help sheet** is buried in `app/tasks/page.tsx`, in a `k` / `l` list
   of keys. Keys that only work while a sitting runs are listed only while one
   does.
 - **Destructive actions** ask through `components/ConfirmSheet.tsx`. Never
   `window.confirm()` or `prompt()`.
-- **The Sound menu** (speaker button in the timer's header, with the tank's
-  volume) is `components/SoundMenu.tsx`. **Keep the picture** (the timer's
-  picture button, the finish sheet's link, the mark on a sitting in Stats)
-  is `components/SavePicture.tsx`. "This moment" is `lib/wallpaper.ts`; any
-  canvas that should be in it registers a layer there. "The whole sitting"
-  is `lib/ocean/picture/`. Both go out through `lib/print/` (strip
-  rendering, the streaming PNG, the print frame and sizes).
+- **The Sound menu** (speaker button in the timer's header, only in the deep, with the
+  tank's volume) is `components/SoundMenu.tsx`. **Keep the picture** (the
+  timer's picture button, the finish sheet's link, the mark on a sitting in
+  Stats) is `components/SavePicture.tsx`. "This moment" is
+  `lib/wallpaper.ts`; any canvas that should be in it registers a layer
+  there. "The whole sitting" is `lib/ocean/picture/`. Both go out through
+  `lib/print/` (strip rendering, the streaming PNG, the print frame and
+  sizes).
 - **The deep's pen** (one ink, pressure lines, hatching, stipple, watercolour
   fills) is `lib/ocean/pen.ts`. Anything new drawn in the sea uses it.
-- **Audio hooks** are `lib/use-*.ts` (`use-ambient-noise`,
-  `use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
+- **Audio hooks** are `lib/use-*.ts` (`use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
   files, so they work on iOS and offline.
 - **Timer state and actions** (`pause`, `stop`, `cancel`, breaks) are in
   `lib/timer-context.tsx`; read them with `useTimerState()`.

@@ -231,7 +231,7 @@ export default function GuidePage() {
           </li>
           <li>
             <strong>Late nights count for the right day.</strong>{' '}In Settings you can say
-            your day ends as late as 8am, so a 2am session goes on the day you were still
+            your day ends as late as 9am, so a 2am session goes on the day you were still
             living in.
           </li>
           <li>

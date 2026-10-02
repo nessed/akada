@@ -62,16 +62,22 @@ export default function PendingSessionLogSheet() {
   // saving it will do to the record, read before the reader decides.
   const { sitting, logged } = useProgression();
   const [{ timerDrawing, darkMode }] = usePreferences();
+  // Closed for the reader in a way that puts the hours in doubt. A sitting
+  // closed for sitting held too long is not one of them: a held clock counted
+  // nothing, so what it logs is exactly what was worked.
+  const doubtful = pendingLog?.recoveryReason && pendingLog.recoveryReason !== 'pause'
+    ? pendingLog.recoveryReason
+    : null;
   // The deep's read of the session. A recovered sitting gets none: the clock
   // ran on without the reader, and the ocean would be telling them about a
   // dive they did not take.
   const diveKey =
-    pendingLog && timerDrawing === 'ocean' && !pendingLog.recoveryReason
+    pendingLog && timerDrawing === 'ocean' && !doubtful
       ? oceanKeyFromSegments(pendingLog.courseId, pendingLog.segments)
       : null;
   // The wood's, under the same rule.
   const woodKey =
-    pendingLog && timerDrawing === 'wood' && !pendingLog.recoveryReason
+    pendingLog && timerDrawing === 'wood' && !doubtful
       ? woodKeyFromSegments(pendingLog.courseId, pendingLog.segments)
       : null;
   // The reader's usual sitting on this course, from the record without this
@@ -182,7 +188,7 @@ export default function PendingSessionLogSheet() {
     // A sitting the reader did not end, or cut back by hand from a very long
     // one: kept, but not a length records and habits should learn from.
     const recovery =
-      pendingLog.recoveryReason ?? (useQuiet || durationSeconds > LONG_SITTING_SECONDS ? 'idle' : null);
+      doubtful ?? (useQuiet || durationSeconds > LONG_SITTING_SECONDS ? 'idle' : null);
     if (!isLoggableDuration(durationSeconds)) {
       handleDiscard();
       return;
@@ -380,7 +386,9 @@ function LogNotice({
         ? `The break ran past 45 minutes, so the ${courseCode} session was closed where it began.`
         : log.recoveryReason === 'max'
           ? `The ${courseCode} session reached the 18 hour limit and stopped there.`
-          : `You stopped a ${full} session on ${courseCode} and haven't saved it.`;
+          : log.recoveryReason === 'pause'
+            ? `The ${courseCode} session sat paused for over two hours, so it was closed where the pause began. Nothing paused was counted.`
+            : `You stopped a ${full} session on ${courseCode} and haven't saved it.`;
 
   // Anything over four hours is asked about, however it ended.
   const long = log.durationSeconds > LONG_SITTING_SECONDS;

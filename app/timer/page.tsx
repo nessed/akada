@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTimer } from '@/lib/timer-context';
-import { useAmbientNoise } from '@/lib/use-ambient-noise';
+import { breakStartsAt, useTimer } from '@/lib/timer-context';
 import { useAquariumSound } from '@/lib/use-aquarium-sound';
 import SoundMenu from '@/components/SoundMenu';
 import SavePicture from '@/components/SavePicture';
@@ -20,7 +19,7 @@ import { useNotice } from '@/components/Notice';
 import StudyFan from '@/components/StudyFan';
 import WoodScene from '@/components/WoodScene';
 import HandNote from '@/components/notebook/HandNote';
-import { arrival, successionAt } from '@/lib/wood/succession';
+import { successionAt } from '@/lib/wood/succession';
 import dynamic from 'next/dynamic';
 import type { ClearRect, OceanClock } from '@/components/OceanScene';
 import { mixHex } from '@/lib/fan';
@@ -34,7 +33,7 @@ import TallyMarks from '@/components/progression/TallyMarks';
 import { MARKS_PER_PAGE } from '@/lib/progression';
 import { useProgression } from '@/lib/progression/use-progression';
 import { useCourses, useTasks } from '@/lib/data-hooks';
-import { clockFace } from '@/lib/utils';
+import { clockFace, formatHM } from '@/lib/utils';
 import { hasEarlierBlock, stretchFace } from '@/lib/timer-face';
 import { NIGHT_UNDERLINE, usePreferences } from '@/lib/preferences';
 
@@ -128,7 +127,6 @@ export default function TimerPage() {
   const { courses } = useCourses();
   const { tasks } = useTasks();
   const { notify } = useNotice();
-  const noise = useAmbientNoise();
   const aquarium = useAquariumSound();
   /* The record with this sitting folded in. The course's open page is drawn
      in the corner of the frame and fills as the reader sits; a mark that
@@ -140,9 +138,6 @@ export default function TimerPage() {
      and a phone has no cursor to hover with, so on the device most likely to
      have the audio blocked the reason reached nobody. It is said out loud
      once, each time the reason changes. */
-  useEffect(() => {
-    if (noise.error) notify(noise.error);
-  }, [noise.error, notify]);
   useEffect(() => {
     if (aquarium.error) notify(aquarium.error);
   }, [aquarium.error, notify]);
@@ -203,20 +198,11 @@ export default function TimerPage() {
   const active = liveActive ?? (pendingLog ? held?.active ?? null : null);
   const elapsedSeconds = liveActive ? liveElapsed : held?.elapsed ?? 0;
   const focusSeconds = liveActive ? liveFocus : held?.focus ?? 0;
-  // In the deep, the noise darkens as the water does. Stepped, so the
+  // In the deep, the tank darkens as the water does. Stepped, so the
   // filter is only touched a few dozen times over a whole descent.
-  // Under the wood's canopy it closes in the same way: open in the meadow,
-  // most of the way muffled by old growth.
-  const noiseDepth =
-    timerDrawing === 'ocean'
-      ? Math.round(depthAt(focusSeconds).z * 50) / 50
-      : timerDrawing === 'wood'
-        ? Math.round(arrival(successionAt(focusSeconds).z, 0.45, 0.45) * 0.85 * 50) / 50
-        : null;
-  const setNoiseDepth = noise.setDepth;
-  useEffect(() => setNoiseDepth(noiseDepth), [setNoiseDepth, noiseDepth]);
+  const tankDepth = timerDrawing === 'ocean' ? Math.round(depthAt(focusSeconds).z * 50) / 50 : null;
   const setAquariumDepth = aquarium.setDepth;
-  useEffect(() => setAquariumDepth(noiseDepth), [setAquariumDepth, noiseDepth]);
+  useEffect(() => setAquariumDepth(tankDepth), [setAquariumDepth, tankDepth]);
   const onBreak = liveActive ? liveOnBreak : held?.onBreak ?? false;
   const breakTarget = liveActive ? liveBreakTarget : held?.breakTarget ?? null;
   /* Whether anything on screen can still be acted on. A held frame is a
@@ -351,7 +337,8 @@ export default function TimerPage() {
   }, [woodStage, live]);
 
   /* Space pauses, F finishes, Escape goes back. Typed into a field they mean
-     what the field means, so the handler stands down for one. */
+     what the field means, so the handler stands down for one. B is not here:
+     it takes a break from every screen, so it lives in TimerHotkeys. */
   useEffect(() => {
     if (!liveActive) return;
     const onKey = (e: KeyboardEvent) => {
@@ -365,9 +352,6 @@ export default function TimerPage() {
         if (onBreak) endBreak();
         else if (liveActive.isPaused) resume();
         else pause();
-      } else if (e.key === 'b' || e.key === 'B') {
-        e.preventDefault();
-        if (!onBreak) startBreak();
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         handleStop();
@@ -378,7 +362,7 @@ export default function TimerPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [endBreak, handleStop, immersive, liveActive, onBreak, pause, resume, router, startBreak, toggleImmersive]);
+  }, [endBreak, handleStop, immersive, liveActive, onBreak, pause, resume, router, toggleImmersive]);
 
   if (!hydrated || (!course && !pendingLog)) {
     return (
@@ -447,16 +431,25 @@ export default function TimerPage() {
   const heroBody = sittingKey ? jellyForBlock(sittingKey, blockIndex) : undefined;
   const heroColor = heroBody ? mixHex(color, HUES[heroBody.hue], heroBody.hueMix) : color;
   const drawingSeed = sittingKey ? `${sittingKey}-${blockIndex}` : fanSeed;
+  /* A break runs the stretch too: focus stands still through it, but the
+     animals swim on (OceanScene's swim clock), so it is handed over as is. */
   const oceanClock: OceanClock =
     live && active
       ? {
-          completedSeconds: segments.reduce((sum, s) => (s.kind === 'focus' ? sum + s.seconds : sum), 0),
-          stretchMs: active.phase === 'focus' ? Math.max(0, active.accumulatedMs) : 0,
-          runningSince: active.phase === 'focus' && !active.isPaused ? active.startedAt : null,
+          segments,
+          phase: active.phase,
+          stretchMs: Math.max(0, active.accumulatedMs),
+          runningSince: active.isPaused ? null : active.startedAt,
         }
       : // After Finish the sitting is a still; after a close that bypassed
         // the Finish button there is no snapshot, and the log says how long.
-        { frozen: held ? focusSeconds : pendingLog?.durationSeconds ?? focusSeconds };
+        // The log has the last stretch closed into it, so it is the one that
+        // knows how long the breaks were.
+        {
+          frozen: held ? focusSeconds : pendingLog?.durationSeconds ?? focusSeconds,
+          rest: (pendingLog?.segments ?? segments).reduce((sum, s) => (s.kind === 'break' ? sum + s.seconds : sum), 0),
+          segments: pendingLog?.segments ?? segments,
+        };
   const oceanDepth = ocean ? depthAt(focusSeconds) : null;
   /* The water as a picture: this moment drawn again at full size
      (lib/wallpaper), or the whole sitting painted as one (lib/ocean/picture),
@@ -535,11 +528,26 @@ export default function TimerPage() {
     'absolute inset-0 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)]';
   const swapWord =
     'col-start-1 row-start-1 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)]';
+  /* How long the clock has been held, once that is a minute or more. A
+     pause used to be a frozen number and nothing else, so a reader coming
+     back had no way to tell whether they had been gone five minutes or
+     fifty, which is the thing that decides whether it was a break. */
+  const heldSeconds =
+    pausedFocus && !heldFresh && active?.pausedAt != null ? Math.max(0, (wallNow - active.pausedAt) / 1000) : 0;
   const pausedMark = pausedFocus ? (
     <span className="inline-block animate-settle" style={{ animationDelay: '120ms' }}>
       {heldFresh ? '\u00a0· ready' : '\u00a0· paused'}
+      {heldSeconds >= 60 ? (
+        <>
+          {' '}
+          <span className="font-mono not-italic tabular-nums">{formatHM(heldSeconds)}</span>
+        </>
+      ) : null}
     </span>
   ) : null;
+  /* Whether Break, pressed now, files the hold as the rest it was. Named on
+     the button when it does, since it is a different thing to press. */
+  const breakFromPause = live && active != null && !resting && breakStartsAt(active, wallNow) < wallNow;
 
   /* The wood's line: the stage it has reached and how many years of growth,
      the digits in mono and the words in the serif, the same division the
@@ -705,7 +713,7 @@ export default function TimerPage() {
       </button>
 
       {isBlock && secondary('+5 min', () => extend(5 * 60))}
-      {secondary('Break', () => startBreak())}
+      {secondary(breakFromPause ? 'Count as break' : 'Break', () => startBreak())}
       {finishButton}
       {discardButton}
     </div>
@@ -807,7 +815,6 @@ export default function TimerPage() {
         <SoundMenu
           night={night}
           accent={color}
-          noise={{ on: noise.on, toggle: noise.toggle }}
           tank={timerDrawing === 'ocean' ? aquarium : undefined}
         />
         <button
@@ -1212,7 +1219,9 @@ export default function TimerPage() {
         )}
 
         <p className="key-hint m-0 -mt-3 font-mono text-[11px] text-muted-soft">
-          {resting ? 'Space back · F finish · R reset · Esc back' : 'Space pause · B break · F finish · R reset · Esc back'}
+          {resting
+            ? 'Space back · F finish · R reset · Esc back'
+            : `Space ${isPaused ? (heldFresh ? 'start' : 'resume') : 'pause'} · B ${breakFromPause ? 'count as break' : 'break'} · F finish · R reset · Esc back`}
         </p>
       </div>
 

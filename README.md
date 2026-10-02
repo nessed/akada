@@ -67,7 +67,7 @@ Either way the screen draws a study fan, a single stem that branches as the
 session goes on, seeded off the session id so a saved session redraws the same
 shape it grew. It replaced a countdown ring, which told you what fraction of
 your session was gone, which is the one thing nobody in the middle of a chapter
-wants to be told. There is pink noise if you want it, and the session logs with
+wants to be told. In the deep there is a tank to listen to if you want it, and the session logs with
 a note when you stop.
 
 **Courses** hold the weekly goal, the colour, and how the course is marked. The
@@ -128,7 +128,7 @@ A course page shows what it is keeping and how much of it is settled, and the
 Coming panel draws that under an exam's countdown. Like the record, the
 schedule is worked out from the answers on every read and never stored.
 
-**Settings** covers the daily goal, when your day ends (anywhere up to 8am, so
+**Settings** covers the daily goal, when your day ends (anywhere up to 9am, so
 a 2am session counts toward the right day), whether weekends count, CSV export,
 and appearance. Akada opens on the night paper; Appearance swaps it for one of
 four daylight tones, and also has four heading serifs, three densities and two
