@@ -43,8 +43,24 @@ function isPublicPath(pathname: string): boolean {
   return /\.[a-z0-9]+$/i.test(pathname);
 }
 
+/**
+ * Public paths that never look at who is signed in. These skip the session
+ * check entirely, so a hit on them costs no Supabase round trip. The two
+ * public pages left out, '/' and '/auth', still need it to send a signed-in
+ * user on to the dashboard.
+ */
+function needsNoSession(pathname: string): boolean {
+  if (pathname === '/' || pathname === '/auth') return false;
+  return isPublicPath(pathname);
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  // The proxy runs as a function on every request it matches, and the time
+  // spent awaiting Supabase is billed as provisioned memory. Pages, the MCP
+  // connector and the OAuth routes that do not need the session go straight
+  // through.
+  if (needsNoSession(pathname)) return NextResponse.next({ request });
   const isPublic = isPublicPath(pathname);
 
   let supabaseResponse = NextResponse.next({ request });
@@ -93,11 +109,14 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  // IMPORTANT: Use getUser() instead of getSession(); it validates the JWT
-  // server-side and refreshes the access token when it has expired.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // IMPORTANT: never getSession() here, it trusts the cookie as is.
+  // getClaims() verifies the JWT's signature and refreshes the access token
+  // when it is about to expire. With asymmetric signing keys it does that
+  // locally against the cached JWKS, where getUser() would make a round trip
+  // to the Auth server on every request; with a legacy symmetric secret it
+  // falls back to that same round trip.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
@@ -131,9 +150,10 @@ export const config = {
      * Match all request paths except:
      * - _next/static (static files)
      * - _next/image (image optimization)
-     * - favicon.ico (favicon)
-     * - images, svgs, etc.
+     * - anything with a file extension: manifest, robots, sitemap, icons,
+     *   fonts. isPublicPath already lets these through, so matching them only
+     *   spent a function invocation on each.
      */
-    '/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|.*\\.[a-zA-Z0-9]+$).*)',
   ],
 };
