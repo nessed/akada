@@ -539,36 +539,50 @@ export function drawSnellWindow(
       ctx.fillStyle = g;
       ctx.fillRect(body.x - halo, body.y - halo, halo * 2, halo * 2);
     } else {
-      // On paper the sun is the paper: a warm glaze laid round it, thinning
-      // outward, and the disc itself left bare.
-      const halo = rd * 5.5;
-      const gold = mixHex(sun.warmth, '#E6C27E', 0.55);
-      const g = ctx.createRadialGradient(body.x, body.y, rd * 0.8, body.x, body.y, halo);
-      g.addColorStop(0, rgba(gold, 0.42));
-      g.addColorStop(0.18, rgba(gold, 0.3));
-      g.addColorStop(0.5, rgba(gold, 0.1));
+      // On paper the sun is a warm disc in a glow of its own warmth, the
+      // glow deepest under the disc and thinning out smoothly from its edge
+      // over half its width again: never a darker band round a bare disc
+      // (that reads as a cup's ring). Its colour a pale peach-gold whatever
+      // the hour mixes in (the moon's grey at dawn turns a glaze brown).
+      const gold = mixHex('#EEC4A6', sun.warmth, 0.25);
+      const halo = rd * 2.2;
+      const g = ctx.createRadialGradient(body.x, body.y, 0, body.x, body.y, halo);
+      g.addColorStop(0, rgba(gold, 0.34));
+      g.addColorStop(0.45, rgba(gold, 0.26));
+      g.addColorStop(0.68, rgba(gold, 0.09));
       g.addColorStop(1, rgba(gold, 0));
       ctx.save();
       ctx.clip(windowPath);
+      ctx.translate(body.x, body.y);
+      ctx.scale(1, 1 / SNELL_SQUASH);
+      ctx.translate(-body.x, -body.y);
       ctx.globalCompositeOperation = 'multiply';
       ctx.fillStyle = g;
       ctx.fillRect(body.x - halo, body.y - halo, halo * 2, halo * 2);
       ctx.restore();
     }
+    const paperSun = mixHex('#FFFFFF', '#F2CDAA', 0.3);
     const disc = brokenDisc(
       rd,
       rs,
       (g, d) => {
         const f = g.createRadialGradient(0, 0, 0, 0, 0, d);
-        f.addColorStop(0, '#FFFFFF');
-        f.addColorStop(0.6, mixHex('#FFFFFF', sun.warmth, 0.35));
-        f.addColorStop(1, mixHex('#FFFFFF', sun.warmth, 0.7));
+        if (dark) {
+          f.addColorStop(0, '#FFFFFF');
+          f.addColorStop(0.6, mixHex('#FFFFFF', sun.warmth, 0.35));
+          f.addColorStop(1, mixHex('#FFFFFF', sun.warmth, 0.7));
+        } else {
+          // (On paper an even pale warmth, a little deeper at the limb: no bright core.)
+          f.addColorStop(0, paperSun);
+          f.addColorStop(1, mixHex(paperSun, '#EEC4A6', 0.35));
+        }
         g.fillStyle = f;
         g.beginPath();
         g.arc(0, 0, d, 0, TAU);
         g.fill();
       },
-      0.9,
+      // (On paper barely torn: a whole disc, its edge just stirred.)
+      dark ? 0.9 : 0.2,
     );
     if (disc) {
       const soft = soften(disc, Math.max(1.5, rd / 18));
@@ -624,31 +638,26 @@ export function drawSnellWindow(
       ctx.arc(0, 0, rm, 0, TAU);
       ctx.fill();
       ctx.filter = 'none';
+      // The seas: three or four soft blots of grey wash, no pen and no
+      // stipple (dots read as specks on a plate), up and to one side.
       const seas = mulberry32(hash32('moon', 'seas', 'print'));
-      const patches = 3 + Math.floor(seas() * 3);
-      ctx.fillStyle = '#6E7066';
-      ctx.globalAlpha = 0.15;
-      const dot = Math.max(0.5 * px, rm * 0.035);
+      const patches = 4;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, rm * 0.94, 0, TAU);
+      ctx.clip();
+      ctx.filter = `blur(${Math.max(0.8 * px, rm * 0.07).toFixed(2)}px)`;
+      ctx.fillStyle = '#86887F';
       for (let i = 0; i < patches; i++) {
-        // The seas lie up and to one side, as the moon's own do.
-        const ang = -2.4 + seas() * 2.9;
-        const dist = rm * (0.2 + 0.42 * seas());
-        const px0 = Math.cos(ang) * dist;
-        const py0 = Math.sin(ang) * dist;
-        const ex = rm * (0.12 + 0.12 * seas());
-        const ey = ex * (0.6 + 0.35 * seas());
-        const n = Math.round(14 + 22 * (ex / rm));
-        for (let k = 0; k < n; k++) {
-          const t = Math.sqrt(seas());
-          const a = seas() * TAU;
-          const x = px0 + Math.cos(a) * ex * t;
-          const y = py0 + Math.sin(a) * ey * t;
-          if (x * x + y * y > rm * rm * 0.8) continue;
-          ctx.beginPath();
-          ctx.arc(x, y, dot * (0.6 + 0.8 * seas()), 0, TAU);
-          ctx.fill();
-        }
+        const ang = -2.9 + (3.2 * (i + 0.2 + 0.6 * seas())) / patches;
+        const dist = rm * (0.28 + 0.3 * seas());
+        ctx.globalAlpha = 0.16 + 0.09 * seas();
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(ang) * dist, Math.sin(ang) * dist, rm * (0.12 + 0.1 * seas()), rm * (0.08 + 0.07 * seas()), seas() * 3, 0, TAU);
+        ctx.fill();
       }
+      ctx.filter = 'none';
+      ctx.restore();
       ctx.globalAlpha = 1;
       ctx.restore();
     } else {

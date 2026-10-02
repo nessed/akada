@@ -292,72 +292,113 @@ function floorEdgeAt(edge: number[], w: number, x: number): number {
 
 /* ---- Vents ---- */
 
-/** A vent's chimney: its outline, where its mouth is, and its ledges. */
+/** A vent's chimney: its outline, where its mouth is, and what grows off it. */
 interface VentShape {
   outline: number[];
   /** The mouth, relative to the foot: x, y and its half width. */
   mx: number;
   my: number;
   mr: number;
-  /** Where the stacked pieces meet, as [y, half width] up the chimney. */
-  joins: [number, number, number][];
+  /** Flanges: shelves standing out from one side, as [x of the wall, y, reach out (signed)]. */
+  flanges: [number, number, number][];
+  /** Side spurs' tips, where each little chimney of its own is open: [x, y]. */
+  spurs: [number, number][];
+  /** Crevices across the front: [x, y, half length]. */
+  cracks: [number, number, number][];
   height: number;
 }
 
 /**
- * A chimney `wid` wide at its foot, rolled from `seed`: three to five
- * pieces stacked a little crooked, each narrower than the one below, some
- * with a lip where one was laid down on the next, and a flared foot in the
- * silt. Relative to the middle of its foot.
+ * A black smoker `wid` wide at its foot, rolled from `seed`: one knobbly
+ * mineral spire, broad in its mound and narrowing, leaning a little and
+ * bending as it grew, its sides lumpy at more than one scale; one or two
+ * side spurs (small chimneys of their own) leaning out and up off it; a
+ * flange or two, thin shelves standing out from one side; a few crevices.
+ * Never stacked rings, never a turret. Relative to the middle of its foot;
+ * it keeps within a wid either side of it.
  */
 function ventShape(wid: number, seed: number, maxHeight: number): VentShape {
   const r = mulberry32(hash32('vent', seed));
-  const n = 3 + Math.floor(r() * 3);
   const height = Math.min(maxHeight, wid * (3.4 + r() * 2.2));
-  const cuts: number[] = [0];
-  for (let i = 1; i < n; i++) cuts.push(cuts[i - 1] + (0.6 + r() * 0.8));
-  const total = cuts[n - 1] + 0.6 + r() * 0.8;
+  const bend = (r() - 0.5) * wid * 0.7;
+  const tilt = (r() - 0.5) * wid * 0.25;
+  const n = 22;
+  // Slow lumps, the same up both sides (the spire swells and pinches), and
+  // fine knobs on each side of their own.
+  const ph = [r() * 6.28, r() * 6.28];
+  const axis = (t: number) => tilt * t + bend * t * t;
+  const half = (t: number) => {
+    const body = wid * (0.16 + 0.82 * Math.pow(1 - t, 1.7));
+    const swell = 1 + 0.13 * Math.sin(t * 9 + ph[0]) + 0.07 * Math.sin(t * 23 + ph[1]);
+    return body * swell;
+  };
   const left: number[] = [];
   const right: number[] = [];
-  const joins: [number, number, number][] = [];
-  let lean = 0;
-  // The foot, spread into the silt.
-  left.push(-wid * (0.95 + r() * 0.2), wid * 0.06);
-  right.push(wid * (0.95 + r() * 0.2), wid * 0.06);
-  left.push(-wid * 0.62, -height * 0.04);
-  right.push(wid * 0.6, -height * 0.05);
-  for (let i = 0; i < n; i++) {
-    const y0 = -height * (cuts[i] / total);
-    const y1 = -height * ((i + 1 < n ? cuts[i + 1] : total) / total);
-    const hw0 = (wid / 2) * (1 - 0.13 * i) * (0.92 + r() * 0.16);
-    const hw1 = hw0 * (0.82 + r() * 0.12);
-    lean += (r() - 0.5) * wid * 0.16;
-    const lip = i > 0 && r() < 0.6;
-    if (lip) {
-      // A lip: the edge of the piece below, standing proud of this one.
-      left.push(lean - hw0 * 1.22, y0 + wid * 0.04, lean - hw0 * 1.18, y0 - wid * 0.08);
-      right.push(lean + hw0 * 1.2, y0 + wid * 0.03, lean + hw0 * 1.16, y0 - wid * 0.07);
-    }
-    joins.push([y0, lean, hw0 * (lip ? 1.2 : 1)]);
-    // Lumps up each side of the piece: mineral grows where it will.
-    for (const t of [0.25, 0.55, 0.85]) {
-      const y = y0 + (y1 - y0) * (t + (r() - 0.5) * 0.12);
-      const hw = (hw0 + (hw1 - hw0) * t) * (0.85 + r() * 0.35);
-      left.push(lean - hw * (0.85 + r() * 0.3), y);
-      right.push(lean + hw * (0.85 + r() * 0.3), y);
-    }
-    if (i === n - 1) {
-      left.push(lean - hw1, y1);
-      right.push(lean + hw1, y1);
+  // The mound spread into the silt.
+  left.push(-wid * (0.98 + r() * 0.1), wid * 0.06);
+  right.push(wid * (0.98 + r() * 0.1), wid * 0.06);
+  const spurs: [number, number][] = [];
+  const flanges: [number, number, number][] = [];
+  // Where the spurs and flanges come off, and on which side.
+  const nSpur = 1 + (r() < 0.5 ? 1 : 0);
+  const spurAt: [number, number][] = [];
+  for (let k = 0; k < nSpur; k++) spurAt.push([0.28 + r() * 0.34 + k * 0.08, r() < 0.5 ? -1 : 1]);
+  // One flange, sometimes two, each on the side away from the spur nearest it.
+  const nFlange = 1 + (r() < 0.35 ? 1 : 0);
+  const flangeAt: [number, number][] = [];
+  for (let k = 0; k < nFlange; k++) {
+    const tf = 0.42 + r() * 0.4;
+    let near = spurAt[0];
+    for (const sp of spurAt) if (Math.abs(sp[0] - tf) < Math.abs(near[0] - tf)) near = sp;
+    flangeAt.push([tf, Math.abs(near[0] - tf) < 0.2 ? -near[1] : r() < 0.5 ? -1 : 1]);
+  }
+  if (flangeAt.length === 2) flangeAt[1][1] = flangeAt[0][1];
+  for (let i = 1; i <= n; i++) {
+    const t = Math.pow(i / n, 0.9) * 0.97;
+    const y = -height * t;
+    const c = axis(t);
+    const hw = half(t);
+    for (const side of [-1, 1]) {
+      const into = side < 0 ? left : right;
+      into.push(c + side * hw * (0.9 + r() * 0.2), y);
+      for (const [ts, ss] of spurAt) {
+        if (ss !== side || Math.abs(t - ts) > 0.5 / n) continue;
+        // A spur: out and up off the wall, tapering to a small open tip.
+        const len = wid * (0.3 + r() * 0.18);
+        const base = hw * 0.95;
+        const sw = Math.max(wid * 0.07, hw * 0.28);
+        const tx = c + side * (base + len * 0.75);
+        const ty = y - len * 0.8;
+        into.push(c + side * (base + sw * 0.6), y + sw * 0.3, tx + side * sw * 0.45, ty + sw * 0.4, tx, ty, tx - side * sw * 0.5, ty + sw * 0.5, c + side * base, y - sw * 1.6);
+        spurs.push([tx, ty]);
+      }
+      for (const [tf, sf] of flangeAt) {
+        if (sf !== side || Math.abs(t - tf) > 0.5 / n) continue;
+        // A flange: a thin shelf, its top near level and its lip turned down.
+        const reach = wid * (0.2 + r() * 0.14);
+        const th = Math.max(wid * 0.07, height * 0.016);
+        into.push(c + side * hw, y + th * 1.2, c + side * (hw + reach * 0.8), y + th * 1.3, c + side * (hw + reach), y + th * 0.4, c + side * (hw + reach * 0.85), y - th * 0.9, c + side * (hw + reach * 0.3), y - th * 1.4, c + side * hw * 0.98, y - th * 1.8);
+        flanges.push([c + side * hw, y, side * reach]);
+      }
     }
   }
-  const top = left.length - 2;
-  const mx = (left[top] + right[top]) / 2;
-  const my = left[top + 1];
-  const mr = (right[top] - left[top]) / 2;
+  // The top: rough and a little open.
+  const c1 = axis(1);
+  const hw1 = half(1) * 0.9;
+  left.push(c1 - hw1 * 0.7, -height * 0.995);
+  right.push(c1 + hw1 * 0.7, -height);
+  const mx = c1;
+  const my = -height * 0.995;
+  const mr = hw1 * 0.75;
+  const cracks: [number, number, number][] = [];
+  const nCrack = 3 + Math.floor(r() * 3);
+  for (let k = 0; k < nCrack; k++) {
+    const t = 0.12 + r() * 0.7;
+    cracks.push([axis(t) + (r() - 0.5) * half(t) * 0.6, -height * t, half(t) * (0.25 + r() * 0.3)]);
+  }
   const outline = left.slice();
   for (let i = right.length - 2; i >= 0; i -= 2) outline.push(right[i], right[i + 1]);
-  return { outline, mx, my, mr, joins, height };
+  return { outline, mx, my, mr, flanges, spurs, cracks, height };
 }
 
 /** The vents' colours: a dark mineral wash, never black, under the one ink. */
@@ -365,70 +406,94 @@ const VENT_WASH = '#2E2B29';
 
 /**
  * A hydrothermal vent's chimney standing on the floor at (x, y), its foot
- * `wid` wide: a mineral wash with an ink outline, banded where its pieces
- * meet, shaded in contour lines on the side away from the light, the mouth
- * open at its top. The still part of a vent; `drawPlume` is its breath.
+ * `wid` wide: a black smoker, a knobbly mineral spire with its spurs and
+ * flanges (ventShape), in a dark mineral wash under the one ink. Engraved
+ * in lines up its length on the side away from the light, crossed where it
+ * is darkest; crusted in stipple all over, thicker in the shadow; each
+ * flange's underside in shadow; a few crevices; the mouth and each spur's
+ * tip open and dark. The still part of a vent; `drawPlume` is its breath.
  */
 export function drawChimney(ctx: CanvasRenderingContext2D, x: number, y: number, wid: number, px: number, seed: number, dark: boolean, maxHeight = Infinity): VentShape {
   const v = ventShape(wid, seed, maxHeight);
   const pts: number[] = [];
   for (let i = 0; i < v.outline.length; i += 2) pts.push(x + v.outline[i], y + v.outline[i + 1]);
-  const path = smoothPath(pts, true, 4);
-  const box = { x: x - wid, y: y - v.height, w: wid * 2, h: v.height };
+  const path = smoothPath(pts, true, 3);
+  const box = { x: x - wid * 1.1, y: y - v.height * 1.02, w: wid * 2.2, h: v.height * 1.08 };
   const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
   const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
   const d = detailFor(wid * 6);
+  const wash = dark ? VENT_WASH : mixHex(VENT_WASH, '#8C8576', 0.4);
+  const bore = mixHex(VENT_WASH, '#0B0A09', 0.55);
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  washFill(ctx, path, box, { color: dark ? VENT_WASH : mixHex(VENT_WASH, '#8C8576', 0.25), edge: 0.45, paper: null, granulate: 0.5, px });
-  // Shaded down its length on the side away from the light, crossed where
-  // it is darkest: a column, engraved.
+  washFill(ctx, path, box, { color: wash, edge: 0.45, paper: null, granulate: 0.6, px });
+  // Each flange's underside in its own shadow, soft, on the wall below it.
+  ctx.save();
+  ctx.clip(path);
+  for (const [fx, fy, reach] of v.flanges) {
+    const g = ctx.createRadialGradient(x + fx + reach * 0.4, y + fy + wid * 0.12, 0, x + fx + reach * 0.4, y + fy + wid * 0.12, Math.abs(reach) * 0.9);
+    g.addColorStop(0, `${bore}`);
+    g.addColorStop(1, `${bore}00`);
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = g;
+    ctx.fillRect(x + fx - Math.abs(reach), y + fy - wid * 0.2, Math.abs(reach) * 2.4, wid * 0.8);
+  }
+  ctx.restore();
+  // Lines up its length on the side away from the light, crossed where it
+  // is darkest: a spire, engraved.
   const across = shadeAcross(box, light);
+  const lean = Math.atan2(-v.height, v.mx);
   hatch(ctx, path, box, {
     spacing: Math.max(1.4 * px, wid * 0.085),
-    angle: Math.PI / 2 - 0.08,
-    bow: 0.4,
+    angle: lean,
+    bow: 0.5,
     shade: across,
-    from: 0.48,
-    cross: d > 0.4 ? 0.8 : undefined,
+    from: 0.46,
+    cross: d > 0.4 ? 0.78 : undefined,
     color: ink,
-    width: Math.max(0.4 * px, wid * 0.03),
+    width: Math.max(0.4 * px, wid * 0.028),
     alpha: dark ? 0.5 : 0.6,
     seed: seed ^ 0x7e47,
   });
-  if (d > 0.3) {
-    stipple(ctx, path, box, {
-      spacing: Math.max(1.3 * px, wid * 0.05),
-      radius: Math.max(0.3 * px, wid * 0.01),
-      shade: across,
-      from: 0.3,
-      color: ink,
-      alpha: 0.35,
-      seed: seed ^ 0x5701,
-    });
+  // The crust: stipple all over, gathering in the shadow.
+  stipple(ctx, path, box, {
+    spacing: Math.max(1.3 * px, wid * 0.055),
+    radius: Math.max(0.3 * px, wid * 0.012),
+    shade: (sx, sy) => 0.35 + 0.65 * across(sx, sy),
+    from: 0.3,
+    color: ink,
+    alpha: dark ? 0.4 : 0.45,
+    seed: seed ^ 0x5701,
+  });
+  // Crevices: short, broken, never round the whole of it.
+  for (const [cx, cy, hl] of v.cracks) {
+    const q = mulberry32(hash32(seed, cy));
+    const crack: number[] = [];
+    for (let i = 0; i <= 4; i++) crack.push(x + cx - hl + (i / 4) * hl * 2, y + cy + (q() - 0.5) * wid * 0.08 + (i % 2) * wid * 0.03);
+    inkLine(ctx, crack, false, { width: Math.max(0.45 * px, wid * 0.035), color: ink, alpha: 0.5, taper: [0.3, 0.3], seed: hash32(seed, cy, 1), light, plate: true, min: 0.3 * px });
   }
-  // The joins between pieces, each a short line round the front.
-  for (const [jy, jx, hw] of v.joins.slice(1)) {
-    const seam: number[] = [];
-    for (let i = 0; i <= 6; i++) {
-      const u = -1 + (i / 6) * 2;
-      seam.push(x + jx + u * hw * 0.95, y + jy + Math.sqrt(1 - u * u * 0.9) * wid * 0.06);
-    }
-    inkLine(ctx, seam, false, { width: Math.max(0.5 * px, wid * 0.04), color: ink, alpha: 0.55, taper: [0.2, 0.2], seed: hash32(seed, jy), light, plate: true });
+  // The flanges' lips, drawn heavier: the edge a shelf shows.
+  for (const [fx, fy, reach] of v.flanges) {
+    const lip = [x + fx + reach * 0.15, y + fy - wid * 0.03, x + fx + reach * 0.6, y + fy - wid * 0.01, x + fx + reach, y + fy + wid * 0.02];
+    inkLine(ctx, lip, false, { width: Math.max(0.5 * px, wid * 0.04), color: ink, alpha: 0.6, taper: [0.4, 0.1], seed: hash32(seed, fy, 2), light, plate: true, min: 0.3 * px });
   }
-  inkLine(ctx, pts, true, { width: Math.max(0.7 * px, wid * 0.06), color: ink, alpha: 0.8, seed, light, min: 0.3 * px, plate: true });
-  // The mouth: the dark of the bore, seen a little from above.
+  inkLine(ctx, pts, true, { width: Math.max(0.7 * px, wid * 0.055), color: ink, alpha: 0.8, seed, light, min: 0.3 * px, plate: true });
+  // The mouth, and each spur's: the dark of the bore, seen a little from above.
   ctx.globalAlpha = 0.85;
-  ctx.fillStyle = mixHex(VENT_WASH, '#0B0A09', 0.55);
+  ctx.fillStyle = bore;
   ctx.beginPath();
-  ctx.ellipse(x + v.mx, y + v.my, v.mr * 0.8, v.mr * 0.28, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + v.mx, y + v.my, v.mr * 0.8, v.mr * 0.3, 0, 0, Math.PI * 2);
+  for (const [sx, sy] of v.spurs) {
+    ctx.moveTo(x + sx + wid * 0.06, y + sy);
+    ctx.ellipse(x + sx, y + sy, wid * 0.06, wid * 0.025, 0, 0, Math.PI * 2);
+  }
   ctx.fill();
   ctx.globalAlpha = 1;
   const rim: number[] = [];
   for (let i = 0; i <= 12; i++) {
     const a = (i / 12) * Math.PI * 2;
-    rim.push(x + v.mx + Math.cos(a) * v.mr * 0.82, y + v.my + Math.sin(a) * v.mr * 0.3);
+    rim.push(x + v.mx + Math.cos(a) * v.mr * 0.82 * (1 + 0.1 * Math.sin(a * 3 + seed)), y + v.my + Math.sin(a) * v.mr * 0.32);
   }
   inkLine(ctx, rim, true, { width: Math.max(0.5 * px, wid * 0.04), color: ink, alpha: 0.7, seed: seed ^ 0x3, light, plate: true });
   ctx.restore();
@@ -957,14 +1022,14 @@ function envelope(age: number, rise: number, fall: number): number {
  * A whale's outline, side on, head at +x, in shares of its length about its
  * middle: a rorqual's long body, the head tapering flat to the snout, the
  * throat full under it, a small low dorsal hump two thirds of the way back,
- * the tail stock narrowing to a deep, keeled peduncle (a quarter of the
- * body's depth where the flukes leave it, so that blurred it still reads as
- * a tail, never a needle), and a long pectoral flipper hanging back from
+ * the tail stock narrowing to a keeled peduncle (a sixth of the body's
+ * depth where the flukes leave it, so that blurred it still reads as a
+ * tail, never a needle), and a long pectoral flipper hanging back from
  * under the chest. The flukes are level, as a whale's are, so from the side
- * they are seen all but edge-on: a wedge flaring back off the peduncle, its
- * tips lifted a little, a quarter of the body's depth across at the
- * trailing edge, with a slight notch between the lobes. Never a shark's
- * upright fork.
+ * they are seen all but edge-on: a wedge flaring back off the peduncle to
+ * more than twice its depth (a third of the body's) at the trailing edge,
+ * its tips lifted a little, with a notch between the lobes. Never a
+ * shark's upright fork.
  */
 const WHALE_BODY: number[] = [
   // The snout, and the flat head rising from it.
@@ -972,15 +1037,16 @@ const WHALE_BODY: number[] = [
   // The dorsal fin: a small low hump, hooked back.
   -0.15, -0.063, -0.163, -0.068, -0.171, -0.067, -0.18, -0.057, -0.2, -0.051,
   // The tail stock, deep and keeled, narrowing to the peduncle.
-  -0.25, -0.047, -0.3, -0.041, -0.36, -0.034, -0.41, -0.027, -0.44, -0.0225, -0.458, -0.0195, -0.47, -0.018,
-  // The flukes edge-on: the upper edge out to the tips, lifted a little.
-  -0.49, -0.0195, -0.515, -0.0225, -0.537, -0.0265, -0.553, -0.0295,
+  -0.25, -0.047, -0.3, -0.04, -0.36, -0.032, -0.41, -0.024, -0.44, -0.018, -0.458, -0.0148, -0.472, -0.0138,
+  // The flukes edge-on: the upper edge out to the tips, lifted a little,
+  // flaring to more than twice the peduncle.
+  -0.49, -0.017, -0.512, -0.0225, -0.534, -0.029, -0.553, -0.035,
   // The trailing edge, with the notch between the lobes.
-  -0.557, -0.024, -0.549, -0.012, -0.544, -0.0045, -0.552, 0.003, -0.556, 0.0085,
+  -0.557, -0.028, -0.546, -0.013, -0.537, -0.0035, -0.549, 0.006, -0.556, 0.015,
   // The lower edge back to the root.
-  -0.54, 0.0115, -0.515, 0.0135, -0.49, 0.0155, -0.47, 0.017,
+  -0.54, 0.0175, -0.512, 0.0165, -0.49, 0.0135, -0.472, 0.0118,
   // The stock's keel, and the belly forward to the throat and the jaw.
-  -0.456, 0.019, -0.44, 0.0215, -0.41, 0.025, -0.36, 0.03, -0.3, 0.037, -0.25, 0.044, -0.2, 0.053, -0.08, 0.068, 0.05, 0.078, 0.17, 0.081, 0.28, 0.074, 0.37, 0.058, 0.44, 0.039, 0.485, 0.025,
+  -0.458, 0.0128, -0.44, 0.016, -0.41, 0.022, -0.36, 0.03, -0.3, 0.037, -0.25, 0.044, -0.2, 0.053, -0.08, 0.068, 0.05, 0.078, 0.17, 0.081, 0.28, 0.074, 0.37, 0.058, 0.44, 0.039, 0.485, 0.025,
 ];
 const WHALE_FLIPPER: number[] = [
   0.29, 0.05, 0.262, 0.096, 0.21, 0.148, 0.14, 0.194, 0.088, 0.22, 0.072, 0.214, 0.112, 0.176, 0.162, 0.13, 0.186, 0.094, 0.18, 0.058,

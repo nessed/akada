@@ -1897,7 +1897,7 @@ export function planIn(s: Session, color: string, ground: 'paper' | 'night', sha
   }
   // A second sighting is drawn only if the page keeps its calm with it:
   // otherwise the rarest alone.
-  while (events.length > 1 && calmWith(eventSolids(events, M, s.biome.env.current)) < CALM + 0.02) {
+  while (events.length > 1 && calmWith(eventSolids(events, M, s.biome.env.current)) < CALM + 0.01) {
     events = events.slice(0, -1);
     settleEvents(events, settleEnv);
   }
@@ -2858,6 +2858,8 @@ const LOOSE = 0.01 * REF;
 const CALM_PULL = 20;
 const CALM_ENOUGH = 0.31;
 
+/** The lowest a whale's middle comes, a share of the page: it passes high, in the far water. */
+export const WHALE_LOW = 0.3;
 /** How far the middle and near cast keep from the whale's shadow, a share of the width. */
 export const WHALE_CLEAR = 0.05;
 /** The most of the cast by the wall: its third of the page. */
@@ -2898,6 +2900,8 @@ function settleEvents(
     if (!b) return false;
     if (inter(b, grow(e.winBox, 4)) > 0) return true;
     if (v.kind !== 'whalefall' && b.y0 < h * 0.04) return true;
+    // (What swims in the open water is wholly on the page, inside its margin.)
+    if ((v.kind === 'turtle' || v.kind === 'dumbo') && (b.x0 < w * MARGIN || b.x1 > w * (1 - MARGIN))) return true;
     // The squid's eye low on the page, and never under the window.
     if (v.kind === 'eye' && (v.y < h * EYE_BAND[0] || v.y > h * EYE_BAND[1] || Math.abs(v.x - (e.winBox.x0 + e.winBox.x1) / 2) < w * 0.25)) return true;
     if (v.kind !== 'whalefall' && v.kind !== 'oarfish' && e.floorTop != null && b.y1 > e.floorTop) return true;
@@ -2929,7 +2933,8 @@ function settleEvents(
     for (const j of e.jellies) if (!j.hero && v.kind !== 'eye' && boxGap(b, j.box) < LOOSE) return true;
     return false;
   };
-  for (const v of events) if (v.kind === 'whale') settleWhale(v, e);
+  // (A whale with no room of its own in the far water is not drawn: never behind the wall, a rock or the kelp.)
+  for (let i = events.length - 1; i >= 0; i--) if (events[i].kind === 'whale' && !settleWhale(events[i], e)) events.splice(i, 1);
   /** One settling of `list` in place: how many had to be laid by the looser rules (and ten for each given up). */
   const attempt = (list: PlacedEvent[], how: 0 | 1 | 2): number => {
   let loose = 0;
@@ -3059,7 +3064,7 @@ function settleEvents(
  * the fall into a false horizon. It moves up or down from where its depth
  * put it, then across: the least it takes.
  */
-function settleWhale(v: PlacedEvent, e: { w: number; h: number; M: number; jellies: PlacedJelly[]; winBox: Box; steepY: number | null; current: 1 | -1; calmWith: (extra: Box[]) => number }): void {
+function settleWhale(v: PlacedEvent, e: { w: number; h: number; M: number; jellies: PlacedJelly[]; rocks: PlacedRock[]; walls: Wall[]; kelp: Box[]; winBox: Box; steepY: number | null; current: 1 | -1; calmWith: (extra: Box[]) => number }): boolean {
   const { w, h } = e;
   const S = Math.min(w, h);
   type Fit = { cost: number; dx: number; dy: number; k: number; box: Box };
@@ -3083,7 +3088,10 @@ function settleWhale(v: PlacedEvent, e: { w: number; h: number; M: number; jelli
         const box = move(at0.box);
         const parts = [move(at0.body), move(at0.flipper)];
         const dorsal = at0.dorsal + dy;
-        if (box.y0 < h * 0.05 || at0.cy + dy > h * 0.55) continue;
+        // High in the far water, a third of the page down at most.
+        if (box.y0 < h * 0.05 || at0.cy + dy > h * WHALE_LOW) continue;
+        // Whole and in front of nothing near: never behind the wall, a rock or the kelp.
+        if (parts.some((p) => e.kelp.some((q) => inter(p, grow(q, CLEAR)) > 0) || e.rocks.some((q) => q.plane > 0 && rockTouches(q, w, p, CLEAR)) || e.walls.some((q) => wallTouches(q, w, p, CLEAR)))) continue;
         let cost = Math.abs(dy) / h + (xi === 0 ? 0 : xi === 1 ? 0.08 : 0.1 + Math.abs(dx) / w * 0.2) + (1 - k) * 1.5;
         if (inter(box, grow(e.winBox, 6)) > 0) cost += 10;
         if (e.steepY != null) {
@@ -3113,7 +3121,7 @@ function settleWhale(v: PlacedEvent, e: { w: number; h: number; M: number; jelli
     if (best && best.cost < 4) break;
     fits.length = 0;
   }
-  if (!best) return;
+  if (!best || best.cost >= 4) return false;
   const cx = v.rx + v.rw / 2;
   v.rw *= best.k;
   v.rh *= best.k;
@@ -3121,6 +3129,7 @@ function settleWhale(v: PlacedEvent, e: { w: number; h: number; M: number; jelli
   v.x = cx + best.dx;
   v.ry += best.dy;
   v.y += best.dy;
+  return true;
 }
 
 /* ---- The cast ---- */
