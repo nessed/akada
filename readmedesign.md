@@ -879,7 +879,23 @@ natural-history plate draws one, in the course colour, never a cartoon.
   velum strokes, and the four horseshoes set in a ring like a clover, each
   open toward the middle. The rim is sixteen shallow scallops with eight dark
   sense organs along it, and the outline is inked twice, the second pass
-  fainter and just off the first, the way a pen goes over its own line.
+  fainter and just off the first, the way a pen goes over its own line. The
+  outline is a pen's (`inkLine` in `lib/ocean/pen.ts`): heavier on the side
+  away from the light, breaking where the light is hardest. In the deep it is
+  inked in that sea's one iron-gall ink, like everything else there; the
+  jellyfish drawing on its own keeps an edge in its own colour. The deep's
+  bell is drawn as a plate draws it, not as the lamp above: a dome with a
+  crown whose sides swell just above the rim and turn back in, so no wall
+  stands upright; the canals run down it like meridians; no white lick and
+  no doubled outline, the light only a soft strip of bare paper along the
+  lit shoulder (the jelly's own glow on the night paper) and one pressure
+  line, a hair where it faces the light, broken twice there, heavy in the
+  shadow; the four horseshoes soft pink washes with no pen at all. Drawn big,
+  a stipple gathers on the bell's shadow side, and on dark water a soft rim
+  of its own glow swells with the beat. The clover of horseshoes is a soft
+  pink wash with only a broken thread along each curve, and the stinging
+  beads hang on about a third of the tentacles, each at its own spacing, so
+  they never line up in rows.
 - **The trails.** Sixteen tentacles taper from the rim to hairline tips, a
   few of them strung with stinging cells; fifteen short fine hairs fill the
   fringe between them; and four oral arms hang in the middle as ribbons that
@@ -1045,11 +1061,15 @@ only ever grows, it never runs backwards, and none of it touches progress.
   the page going from day to night. The course colour tints it while there is
   light, and light shafts come down, slanting and swaying, in the sunlit
   water only. Marine snow drifts up the whole way.
-- **It is painted, not filled** (`lib/ocean/wash.ts`): under the depth's
-  colour there is paper grain, and the pigment lies unevenly, pooling a
-  little darker at the page's edges and in a few soft blooms with the harder
-  rim a wash leaves as it dries. From a step back it is the same water; up
-  close it is a watercolour, like the animals in it are ink.
+- **It is painted, not filled** (`lib/ocean/wash.ts`): the depth's colour is
+  laid as bands of glaze, one over the last, each stopping in a ragged edge
+  with the dried tide line a wash leaves, and under them pools, blooms,
+  brush strokes and paper grain. The darkest water carries the most of it, so
+  the deep is never a flat black. From a step back it is the same water; up
+  close it is a watercolour, like the animals in it are ink. It is painted
+  once to a sheet, and a frame only lays the sheet down.
+- **The shafts are sheaves, not stripes**: uneven soft rays painted once and
+  swayed, and the marine snow inside one comes up brighter, caught in it.
 - **Light off the surface** (`lib/ocean/caustics.ts`): in the sunlit water
   the wobbling net of light a pool floor shows plays over everything, the
   jelly included, strongest near the top and gone as the light is. Faint
@@ -1070,7 +1090,46 @@ only ever grows, it never runs backwards, and none of it touches progress.
   siphonophore chain, fish, eel, ray, squid, and on the floor starfish and
   crawlers) and dozens of traits, with the depth leaning on the dice, so the
   deep ones come out clear-bodied, big-eyed or blind, lit, lured. They are
-  drawn in the jellyfish's ink, course pastels for their colour.
+  drawn like a plate (`lib/ocean/pen.ts`, `sprites.ts`): one iron-gall ink
+  for every line in the sea (`IRON_GALL`, near-black on a light ground,
+  warm off-white on the night one), colour only in the washes; outlines are
+  a pen's, swelling on the side away from the light, thinning and breaking
+  where it is hardest, tapering to a hair at a tentacle's tip; bodies are
+  watercolour a little under the pastel's own value, graded darker along
+  the back, the upper flank let go broadly toward bare paper and a paler
+  belly, pooled at its edge. There is no lifted highlight on any body or
+  bell: a pale blot or arc reads as gloss on plastic, so the light is only
+  that bare paper and the thinner line on the lit side. A fish's snout
+  rounds off and its tail narrows to a wrist, and every fish has a tail fin
+  at least a fifth of its body long, since a body that tapers to a point
+  reads as a lemon; its mouth is a shut,
+  level cleft with the corner turned down, never a smile. A fish carries one dorsal fin, no higher than a third of its depth and
+  set well back from the snout; a sea star has five arms at the least, a
+  many-armed one's lying nearly straight. A fish with a
+  lure is a dark hunter, never see-through: a globe-bodied angler with a
+  jaw and needle teeth, or a long dragonfish with its light on a chin
+  barbel; ribs show only faintly, over the belly of a glass fish. A
+  siphonophore is a colony, not a string of beads: overlapping glass bells
+  at its head, a tapering stem with its groups unevenly spaced, trailing
+  15 to 40 degrees below level. Jellies are always glass, never a solid
+  dome or a flat saucer; a comb jelly's
+  mouth end is one soft curve with its lobes drawn inside it, never a
+  notch. Drawn big, the solid ones
+  are shaded in contour hatching that runs with the spine, only in the
+  shaded part of the body and crossed only in its darkest; the clear ones in
+  stipple. Markings are marks, not patterns: spots are dabs of wash, bars
+  are brush strokes fading to the belly, never a grid. The fine anatomy comes
+  in: fin rays, the lateral line, the gill cover, beads along a third of the
+  tentacles at their own spacing, the lights as rings; an eye is an iris set
+  in the head, one in profile, with two highlights. Each body plan gets only
+  its own parts: an eel is one tapering body with one fin ribbon round it, a
+  squid a mantle, fins, arms and two clubbed tentacles. Small, on the live timer, they stay line and wash, since a
+  speck has no room for engraving and a phone no time for it. In a picture
+  (a print) how much drawing an animal gets is judged by how many of the
+  page's hatching lines it spans (`printDetail` in `sprites.ts`), not by its
+  pixel size, so the mid and near cast are engraved like the big ones. The rocks,
+  coral, kelp, eels, the sightings and the jelly are drawn with the same pen
+  and the same ink, so the whole sea is one hand's.
 - **An ecosystem, not a zoo.** Each zone has a pool of species; half of every
   pool is rolled from the course and comes back every sitting of it (a
   course's sea has its regulars), half from the sitting and is never seen
@@ -1125,11 +1184,20 @@ only ever grows, it never runs backwards, and none of it touches progress.
   species blink, each in its own rhythm, a flash that dies away and then the
   wait.
 - **Kelp, where the light is.** About half of sittings start at the edge of
-  a kelp forest (`lib/ocean/kelp.ts`): a few olive-gold stalks at one side of
-  the page or both, rooted on a ledge of rock far below and reaching up to the
-  surface, where the longer ones lay their tops along it as canopy. Each blade
-  is a long ruffled ribbon on a little float, in the animals' ink, and the
-  stalks further back are finer and fainter. It is the one plant in the sea
+  a kelp forest (`lib/ocean/kelp.ts`, drawn by `kelp-draw.ts`): five to nine
+  winding stalks at three depths, the far ones smaller, paler and hazier, on
+  one side of the page; if the other side has any, it is a straggler or two,
+  never a second curtain. They root on a heap of boulders far below and reach
+  up to the surface, where the canopy bends over and lies a short way along
+  it, sagging a little, then trails down past the edge of the clump on a
+  slant, so the forest never ends in a straight cut. Each stalk leans a few
+  degrees out from its wall and winds as it goes. Each blade is a strap
+  six to ten times as long as it is wide, its margin ruffled, a small gas
+  bladder at its base and no midrib, since a midrib makes it a leaf;
+  streaming away from the wall, opaque, filled and
+  inked one at a time from the back forward so blades never show through
+  each other, in a golden-brown wash with its own darker ink, draining toward
+  the water's colour as it goes down. It is the one plant in the sea
   and it stays in the sunlit water, since nothing grows where the light has
   gone. The reader starts among the tops and sinks past them: the stalks slide
   up the page, swaying on the slow clock with the sway travelling up them, and
@@ -1151,9 +1219,34 @@ only ever grows, it never runs backwards, and none of it touches progress.
   Some rocks in the light and the twilight carry a patch of sand with a
   colony of garden eels standing up out of it, leaning into the current;
   tap near them and they drop into their burrows, then come back up one at
-  a time a few seconds later (`lib/ocean/garden-eels.ts`). Each
-  rock is inked once to a sprite and then only placed, and like everything
-  written on the page it goes faint where it crosses the clock.
+  a time a few seconds later (`lib/ocean/garden-eels.ts`). A rock is one of five
+  shapes, rolled per rock so the reef never repeats one vocabulary: a heap
+  of lumpy boulders with a broken top, undercut lips and clefts; a flat
+  slab; a spire; an overhang; or a field of loose boulders. Its foot runs
+  back into the wall and fades, the pen thinning out first and the wash
+  after it on its own ragged line, never a hem or a square bottom; a far
+  rock is a pale wash with a broken hairline, never lineless smoke
+  (`rockShape`, `inkRock` in
+  `outcrop-sprite.ts`, shared by the kelp's ledge and the pictures). Stone
+  is engraved, not modelled: short, near-straight strokes all one way, about
+  twenty degrees off vertical along the light, dense on the shadow side,
+  almost none on the lit face, crossed only in the darkest fifth, and never
+  contour lines wrapped round the form, which read as a shell. Every near
+  rock carries two to four broken, near-level bedding lines with a ledge of
+  shadow under each. No highlight is ever added: the lit edge is a hair of
+  bare paper left inside the outline. Nothing stands as a cap on a stem;
+  a rock is never more than about half again as wide as what holds it up.
+  At night the pale ink hatches the lit faces instead, and is never
+  crossed. Walls, trench faces and floors are engraved the same way, not
+  washed: on the cream paper the wash is only a light tint and the hatching
+  carries the value, closer and heavier on darker stone; depth takes a
+  wall's ink strength more than its strokes, so a wall far down is still
+  drawn; and nothing on a wall repeats, so scallops or tiles there are a
+  bug. Every rock is outlined as far down as its wash goes. Plate coral
+  grows on a stalk, two shelves at most. Sea fans
+  are a flat net, wider than tall; sponges are lopsided vases with a rolled
+  lip. Each rock is inked once to a sprite and then only placed, and like
+  everything written on the page it goes faint where it crosses the clock.
 - **Now and then, something rare.** One roll a minute against the zone's
   rare events, never two within eight minutes, and the odds are flat per
   minute: a long sitting has more minutes to be lucky in and no more luck per
@@ -1161,7 +1254,19 @@ only ever grows, it never runs backwards, and none of it touches progress.
   in four that reaches the twilight). From the midnight zone down the water
   sometimes lights up, a cloud of tiny animals flashing that comes up over
   seconds and never at once; less often a giant squid's eye opens at the edge
-  of the page, high and clear of the clock, blinks once and goes. In the abyss,
+  of the page, high and clear of the clock, blinks once and goes: a striated
+  iris darkening to its rim, the pupil a level lens the same above and
+  below, never bent into a mouth, set in the flank of an animal far bigger
+  than the page: one ink contour runs down the page side of it, from a body
+  whose middle lies well off the page, the skin a thin wash inside it with
+  a few engraved lines on its shadow side, and the drawing let go above and
+  below. Its chromatophores vary in size and spacing, half opened into
+  ragged blots and half closed to dots, crowded on the back. At night the
+  skin is a neutral grey close to the water's own value, no red and no
+  glow; the only light is the eye's catchlight. Never a halo, of stipple
+  or of colour. The whale is always the
+  whole animal, head, flipper and flukes, one soft grey shape a little over
+  half the page long. In the abyss,
   about one three-hour sitting in a hundred and fifty, something very large
   goes past behind everything, a dark flank with lights along it; no head, no
   tail. Nothing is announced and nothing is scored.
@@ -1169,14 +1274,24 @@ only ever grows, it never runs backwards, and none of it touches progress.
   `sightings-deep.ts`), which only lands in minutes the first roll left well
   alone, so no sitting saved before it lost or moved anything. In the light,
   a turtle comes in from the side, stops short of the jelly and looks it
-  over (turtles eat them), then thinks better of it and goes. From the
-  twilight down, a siphonophore longer than the page drifts across, so both
-  ends are never seen at once; and, rarest of anything, an oarfish hangs
+  over (turtles eat them), then thinks better of it and goes; it is drawn
+  as a plate draws one, each scute streaked from the corner it grew from
+  and the dome hatched, a round eye with no lid, a beak whose edge runs
+  straight. From the twilight down, a siphonophore longer than the page
+  drifts across, so both ends are never seen at once: six to ten clear,
+  overlapping swimming bells at its head, a stem that thins to a thread,
+  its feeding groups at uneven intervals, never level (on a screen it sags
+  corner to corner, in a picture it hangs from its head at 15 to 40
+  degrees); and, rarest of anything, an oarfish hangs
   nearly upright at one side, silver, its red crest running the whole length
   of it. From the midnight down, a single light bobs in the dark, and for a
   moment the teeth behind it show. In the abyss, a dumbo octopus hovers by
-  on its two ear fins, and a whale fall can arrive on the floor: a skeleton
-  in the silt with crabs working along it, which stays for the rest of the
+  on its two ear fins, an upright mantle rowing over a webbed skirt,
+  leaning a little forward, its crown darker, its two eyes dark dots with a
+  catchlight set wide on the sides of the head, as a plate draws them;
+  and a whale fall can arrive on the floor: a skeleton half sunk in the silt,
+  seen a little from above, a spine of vertebrae on a gentle S with paired
+  ribs, some broken, the skull and its two jaws, and crabs working along it, which stays for the rest of the
   sitting once it has come. The recap names whichever was rarest, as it does
   the others.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
@@ -1200,19 +1315,40 @@ only ever grows, it never runs backwards, and none of it touches progress.
   squared into a gain, so the bottom half of the line is the quiet half, and
   is kept in `localStorage` (`akada.aquariumVolume`). Escape closes the card
   before it leaves the screen.
-- **Save as wallpaper.** Beside the speaker, only in the deep: a small picture
-  icon draws the water again, once, at the screen's own shape and at least 3x
-  (long side no more than 4096), and saves a PNG named for the depth. Soft
-  screenshots were the reason: the live canvases are held to 2x and a pixel
-  budget. The scene, the jelly and the near animals are laid down in order
-  (`lib/wallpaper.ts`; each canvas registers a layer), with none of the
-  chrome, none of the page's rules or paper bleeds, nothing faded out of the
-  clock's way, the bell open and the colour back if the sitting is held. It is
-  the sea at its best at any depth: no dark closing in round the jelly's pool,
-  and every animal in the colour it has in the light, not drained by the
-  water (`creatureInk(..., vivid)`). The live screen keeps both. On a
-  phone or tablet the share sheet takes it, so it can go straight to Photos;
-  everywhere else, a touchscreen laptop included, it is a plain download.
+- **Keep the picture.** Beside the speaker, only in the deep: a small picture
+  icon opens a sheet (`components/SavePicture.tsx`) with three choices, as
+  eyebrow-labelled rows: **what** (this moment, or the whole sitting), **paper**
+  (cream or night) and **size** (this screen, or a print at 300 dpi in a
+  frame shape: A4/A3/A2, or 8×10/12×18/18×24 in where inches are the habit),
+  with the pixel size in mono under it.
+  - *This moment* is the water drawn again, once, at the screen's real shape
+    and resolution (a 5K screen gets 5K), with none of the chrome, none of the
+    page's rules or paper bleeds, nothing faded out of the clock's way, the
+    bell open and the colour back if the sitting is held: the sea at its best
+    at any depth, every animal in the colour it has in the light
+    (`creatureInk(..., vivid)`). Each canvas registers a layer
+    (`lib/wallpaper.ts`).
+  - *The whole sitting* is the sitting painted as one picture (see "The
+    sitting as a picture" below).
+  - A print sits on cream rag paper (or the night paper) with a margin a
+    little heavier at the foot, a deckle where the paint stops (a fine ragged
+    edge with the tide line a wash leaves just inside it), and a plate mark
+    pressed round it: a narrow bevel lit along its top and left, the plate a
+    shade darker than the margin, like an etching. Fine rag texture
+    throughout. No words, no mark of the app.
+  - Saving takes its time on purpose. There is no spinner: the picture's
+    shape is a pencil outline that fills in strip by strip, with "letting it
+    develop…" in the hand under it and a Stop. Pictures are drawn in strips
+    and written out as they go (`lib/print/`), so a print bigger than a phone
+    will hold as one canvas still saves on a phone.
+  - On a phone or tablet the share sheet takes it (after a second tap, since
+    the sheet needs a fresh one after a long wait), so it can go straight to
+    Photos; everywhere else, a touchscreen laptop included, it is a plain
+    download.
+  - The finish sheet has a quiet line under the recap to keep the sitting's
+    picture, and in Stats every logged sitting that kept its stretches has a
+    small picture mark that opens the same sheet for it, since the sea is
+    rebuilt from the log.
 - **Full screen** is the browser's where there is one (`requestFullscreen`),
   and the header put away where there isn't, which is every iPhone. Either way
   a small exit mark sits in the corner, since the header is where the button
@@ -1239,7 +1375,102 @@ pencil sketch and the ground are the jellyfish's, unchanged. Geometry is in `lib
 `anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`, `kelp`, `outcrop`), the drawing in
 `lib/ocean/draw.ts`, `sprites.ts`, `outcrop-sprite.ts`, the two `sightings` files, `wash`, `caustics`, `glow`, `sparkle` and `garden-eels` (with `jelly-at`, through which `StudyFan` tells the scene where the bell is), the scene in `components/OceanScene.tsx`,
 which draws the far water behind the hero `StudyFan` and the near animals in
-front of it.
+front of it. The kelp is drawn by `kelp-draw.ts`, the still-only light (the
+sky seen from below, the shafts with their shadows, things that glow
+lighting their neighbours, snow at three distances, the dither) by
+`light.ts`, all of it with the pen in `pen.ts`.
+
+### The sitting as a picture
+"Keep the picture" can paint a whole sitting as one cutaway of the sea
+(`lib/ocean/picture/`): the top is where it began, the bottom as deep as it
+went, and between them what happened, in order. **There are no words in it
+anywhere**: no date, no course, no length. A stranger sees a deep-sea plate;
+the reader who sat it can read their evening in it, the way a map of a walk
+reads to the person who walked it. It describes and never grades: pauses do
+not show and nothing is scored, as everywhere in the deep.
+
+| What happened | How it shows |
+|---|---|
+| How long the reader focused | How deep the picture goes. Each zone gets its share of the page, not its metres, so a short sitting is an airy, sunlit picture and a long one falls through the dark to the floor. |
+| When it began | The light at the surface (`sunFor` in `light.ts`): the shafts lean one way in the morning and the other in the afternoon, white at noon, amber at dusk; after dark the window of sky holds the moon in that night's real phase. |
+| Which course | The water's tint and the course's own species among the cast, so a term of one course's pictures look like a set. |
+| Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Together they are the way down, read through them and a thin trail of rising bubbles, never a drawn line. |
+| Each break | A rock at that depth, near and fully inked, a longer break a longer rock. A side of the page holds two rocks at most, the kelp's counted; breaks beyond that are ledges in a wall, a bench with its shadow under it, so every break still leaves its mark. Rocks merely passed are drawn far, small and faint in the water's colour, so the near rocks still count the breaks. |
+| What swam by | The species that really did, met where they were met, curated to a cast of twenty or thirty; the rarest gets the best place. |
+| Rare sightings | Drawn where they happened; the whale fall lies on the floor. |
+| What was passed | Kelp at the top if it began in kelp, rocks and their growths at their depths, the floor if the abyss was reached. |
+
+**The hero leads.** The last block's jelly is the largest thing on the page
+(about a sixth of its short side across) and the only one in full ink, a
+pool of its own light round it; the one before is about half its size, the
+older ones smaller and further off, the oldest only faint shapes in the
+water. Siblings are visibly different animals: each differs from the
+hero in at least two things you can see (the bell's height, the trails'
+length, the arms, the hue), no two hang at the same depth or within reach
+of each other's arms, and on a wide page they zigzag off the diagonal
+rather than ride it. Far off they are hazed toward the water but keep their
+rim, ribs and trails, never a soap bubble. With no floor under it, the
+hero's trails reach most of the way down and one near animal swims in the
+page's foot, so a short sitting's picture is never empty at the bottom. On a tall page the hero
+hangs a little below the middle. Past three hours the floor parts into a
+trench under it, two walls falling into a dark cleft, and the whale fall,
+if there is one, lies on the gentler slope, never in the cleft.
+
+**Composed, not cropped.** Each shape is laid out on its own: tall for a
+phone or a print (the way down a gentle S), wide for a laptop (a diagonal).
+A layout solver tries many arrangements from the sitting's own key, scores
+them, and keeps the best. Some things are rules, not scores: a margin round
+the hero, jellies never crowding each other, nothing over the window of sky,
+the rare things touching nothing, and the rocks and the cast moving to make
+room, never the jellies' path. The rest is weighed: nothing cut by the edge,
+no three things in a row at one height, the cast in a few loose groups with
+one wide calm stretch of water left open, near, middle and far each its own,
+and things far off made hazy in their own colour, never set on a pale
+backing. The page darkens to its foot whatever the length, so even a short
+sitting has a deep end. The result is the same every time, so the
+same sitting always makes the same picture, today or in a year, from the
+timer, the finish sheet or Stats.
+
+**Two papers.** Cream: watercolour on rag, the deep laid in indigo washes
+that keep their grain and never go to black. Night: the dark water with the
+pen's light ink.
+
+**No horizon, no stage.** The water deepens as one smooth fall over half
+the page or more (the depth's colour is eased down the page so no band of it
+darkens faster than about 2 L* a hundredth of the page), and the wash's
+glazes are each laid by a stroke across part of the page only, tilted a
+degree or three and ragged at the edge, so no edge runs side to side and
+nothing reads as a sea's surface seen side on. Nothing floats: every rock
+stands out from a side wall, a cliff 0.04 to 0.09 of the width running from
+under it down into the floor, the trench or the page's foot, flaring into a
+buttress under the rock so no rock sits as a cap on a stem, and fading from
+whole to about a third as it goes down (`inkWall` in `outcrop-sprite.ts`,
+the rocks' own hand). Every rock runs off its edge (0.08 of the width or
+more); no two face each other across the page at one depth; each has a
+build of its own (a heap, a slab, a spire, an overhang, a field of
+boulders); far ones keep a broken thread of pen and a few strokes of
+shadow, and fade into a far wall of their own, never a near rock's. The
+kelp's far side is left out of a picture rather than drawn as a lone stalk.
+The floor is sediment, not a stage: level strata hatched across it,
+pebbles in small clusters, its crest a broken ink line with only a hair of
+light under it, and on either paper darker than the water above it. The cast keeps three planes, each its own scale and
+strength (near whole, middle 0.6 at 0.75, far 0.35 at 0.45), and kinds keep
+their real sizes against each other (a turtle three school fish long, a
+squid one or two). A trench's walls fall in ledges, each lip jutting over
+the drop with its shadow under it, the beds of rock lying level across
+them, lit only on the wall that faces the window. A passing whale is always
+its whole shadow, half the page long (smaller only when the page is
+crowded), soft, pitched a little head-up with its back fading in, and
+never laid along the water's steepest fall, where its level back would draw
+a horizon. Sightings keep a clear margin from everything, walls included;
+the squid's eye is a twentieth of the short side across. On the cream
+paper the moon is a flat pale disc with a few faint seas in it, never
+shaded like a ball.
+
+**Drawn for the wall.** At print size everything is inked at its full
+detail; things far off are hazier and take the water's colour; the pictures
+are drawn in strips sized to the clock, so the page keeps answering while it
+develops (`lib/print/`).
 
 ### The break
 A block that runs out keeps running, shown as overrun rather than stopped for

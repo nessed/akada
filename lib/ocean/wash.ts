@@ -1,18 +1,23 @@
 /**
  * The water, painted: the depth's gradient laid as a watercolour wash.
  *
- * A flat gradient reads as a screen. A wash on paper has three things a
- * gradient doesn't: the paper's tooth showing through, pigment that settled
+ * A flat gradient reads as a screen. A wash on paper has things a gradient
+ * doesn't: it is laid in glazes, each band of sea a wash over the last, so
+ * the water deepens in soft steps with an irregular, slightly darker edge
+ * where each glaze dried; the paper's tooth shows through; pigment settled
  * unevenly as it dried (soft pools, and lighter blooms where water crept
- * back in, each with a faint crinkled tide line at its rim), and a little
- * more colour at the edges where the wet pigment ran to. From a step back it
- * is still the same smooth water; close up it should look laid by hand.
+ * back in, each with a faint crinkled tide line at its rim); the brush left
+ * long faint strokes across; and a little more colour sits at the edges
+ * where the wet pigment ran to. From a step back it is still the same water
+ * at the same depth; close up it should look laid by hand.
  *
- * Both layers are neutral, only black and white at low alpha, so they sit
- * over any depth's colour without being redrawn: on pale water the darker
- * pools show and on dark water the lighter blooms do, which is how a real
- * wash behaves too. They are worked out once for the sitting and the page's
- * size; a frame pays a gradient, one image copy and one pattern fill.
+ * All of that is neutral, only black and white at low alpha, so it sits over
+ * any depth's colour without being redrawn: on pale water the darker pools
+ * and glaze edges show and on dark water the lighter blooms and the lifted
+ * tops of the glazes do, which is how a real wash behaves too. It is worked
+ * out once for the sitting and the page's size and baked, with the grain,
+ * into one texture at the canvas's own size; a frame pays a gradient and one
+ * image copy.
  */
 
 import type { Water } from './palette';
@@ -116,11 +121,79 @@ function buildGrain(): HTMLCanvasElement | null {
   return c;
 }
 
+/** The glazes: how many bands of sea, and where each one's top edge lies across the page. */
+interface Glazes {
+  n: number;
+  /** The top edge of glaze k (1 to n - 1), CSS px down the page at CSS px X across it. */
+  at: (k: number, X: number) => number;
+  /** How crisp glaze k's edge is at X, 0 (melted into the next) to 1 (a dried edge). */
+  crisp: (k: number, X: number) => number;
+}
+
+function glazesFor(cssW: number, cssH: number, seed: number, soft = false): Glazes {
+  const n = Math.max(3, Math.min(7, Math.round(cssH / 230)));
+  const l = lattice(hash32('wash', seed, 'glaze'));
+  const r = mulberry32(hash32('wash', seed, 'glazes'));
+  const band = cssH / n;
+  const base = [0];
+  for (let k = 1; k < n; k++) base.push(band * (k + (r() - 0.5) * 0.4));
+  if (!soft) {
+    // Each edge laid a little aslant, as a brush crosses a page, wandering
+    // and ragged rather than rolling: a wash's edge, not a horizon.
+    const slant = Array.from({ length: n }, () => (r() - 0.5) * 0.14);
+    return {
+      n,
+      at: (k, X) =>
+        base[k] +
+        slant[k] * (X - cssW / 2) +
+        (fbm(l, X / 260 + k * 17.3, k * 5.1, 4) - 0.5) * band * 0.5 +
+        (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 10 +
+        (noise(l, X / 9 + k * 7, k * 3.3) - 0.5) * 2.5,
+      crisp: () => 1,
+    };
+  }
+  // A print's glazes: each laid by a brush that crossed only part of the
+  // page (never more than seven tenths of it), tilted a degree to three,
+  // one way and then the other, its edge ragged by a few hundredths of the
+  // page; past the ends of its stroke it melts into the wash. No edge runs
+  // from side to side, so nothing reads as a horizon.
+  const slant = Array.from({ length: n }, (_, k) => (k % 2 ? 1 : -1) * Math.tan(((1 + 2 * r()) * Math.PI) / 180));
+  const reach = Array.from({ length: n }, () => {
+    const wide = cssW * (0.35 + 0.3 * r());
+    const mid = wide / 2 + r() * Math.max(0, cssW - wide);
+    return { a: mid - wide / 2, b: mid + wide / 2 };
+  });
+  const fade = cssW * 0.1;
+  // And each edge swung up and down by a long, uneven wave, three hundredths
+  // of the page either way, so even the stretch a brush crossed is never
+  // ruled: a straight edge under a row of animals reads as a horizon. (Its
+  // own rolls, so the glazes above are laid where they always were.)
+  const jr = mulberry32(hash32('wash', seed, 'glaze-swing'));
+  const swing = Array.from({ length: n }, () => ({ l1: cssW * (0.3 + 0.25 * jr()), l2: cssW * (0.11 + 0.08 * jr()), p1: jr() * Math.PI * 2, p2: jr() * Math.PI * 2 }));
+  const swingAt = (k: number, X: number) => cssH * (0.022 * Math.sin((X / swing[k].l1) * Math.PI * 2 + swing[k].p1) + 0.008 * Math.sin((X / swing[k].l2) * Math.PI * 2 + swing[k].p2));
+  return {
+    n,
+    at: (k, X) =>
+      base[k] +
+      swingAt(k, X) +
+      slant[k] * (X - (reach[k].a + reach[k].b) / 2) +
+      (fbm(l, X / (cssW * 0.3) + k * 17.3, k * 5.1, 3) - 0.5) * cssH * 0.2 +
+      (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 16 +
+      (noise(l, X / 9 + k * 7, k * 3.3) - 0.5) * 3,
+    crisp: (k, X) => smooth(reach[k].a - fade, reach[k].a + fade, X) * (1 - smooth(reach[k].b - fade, reach[k].b + fade, X)),
+  };
+}
+
 /**
  * Where the pigment settled, over the page's CSS size. Positive is more
  * pigment (drawn black), negative less (white).
+ *
+ * The glazes are a staircase laid over the gradient's ramp, so that summed
+ * with the gradient underneath, the water deepens in steps: inside a band
+ * the colour holds, and drops at the next band's soft edge. Taking the ramp
+ * off keeps the average where the depth's colours put it.
  */
-function buildStain(cssW: number, cssH: number, seed: number): HTMLCanvasElement | null {
+function buildStain(cssW: number, cssH: number, seed: number, soft = false): HTMLCanvasElement | null {
   const step = Math.max(1.5, Math.sqrt((cssW * cssH) / STAIN_SAMPLES));
   const sw = Math.max(1, Math.ceil(cssW / step));
   const sh = Math.max(1, Math.ceil(cssH / step));
@@ -134,6 +207,27 @@ function buildStain(cssW: number, cssH: number, seed: number): HTMLCanvasElement
   const oy = r() * 256;
   // Pigment runs to the foot of a tilted page: a little more pools there.
   const foot = 0.6 + r() * 0.5;
+  const glazes = glazesFor(cssW, cssH, seed, soft);
+  const n = glazes.n;
+  // A soft glaze's edge is wide and its pooling faint: feathered over
+  // eight hundredths of the page, and its pooled pigment spread as wide, so
+  // no edge steps the water.
+  const edgeW = soft ? Math.max(70, cssH * 0.04) : 9;
+  const poolK = soft ? 0.018 : 0.035;
+  const poolAt = soft ? cssH * 0.02 : 6;
+  const poolW = soft ? cssH * 0.03 : 16;
+  // The glaze edges are a function of X alone: worked out a column at a time.
+  const edges = new Float32Array(sw * n);
+  const crisp = new Float32Array(sw * n);
+  for (let i = 0; i < sw; i++) {
+    const X = (i + 0.5) * step;
+    for (let k = 1; k < n; k++) {
+      edges[i * n + k] = glazes.at(k, X);
+      crisp[i * n + k] = glazes.crisp(k, X);
+    }
+  }
+  // Where a glaze's edge has melted it is spread over most of a band.
+  const meltW = (cssH / n) * 0.9;
   const img = t.createImageData(sw, sh);
   const d = img.data;
   for (let j = 0; j < sh; j++) {
@@ -144,16 +238,34 @@ function buildStain(cssW: number, cssH: number, seed: number): HTMLCanvasElement
       const p = fbm(pool, ox + X / 420, oy + Y / 420, 3) - 0.5;
       // Mottling, smaller, where the brush went over twice.
       const m = fbm(pool, ox + 90 + X / 110, oy + Y / 110, 2) - 0.5;
+      // The brush's strokes: long, faint, across the page.
+      // (On a print a broader, fainter brush: thin dark strokes stacked
+      // across a page read, row by row, as ruled shelves.)
+      const stroke = (fbm(bloom, ox + X / 520, oy + Y / (soft ? 26 : 11), 2) - 0.5) * (soft ? 0.6 : 1);
       // Blooms: where the field rises past a level, water crept back and
       // pushed the pigment out to a crinkled rim. The fine octaves are the
       // cauliflower in the edge.
       const b = fbm(bloom, X / 170, Y / 170, 6);
-      const lift = smooth(0.63, 0.65, b);
-      const rim = Math.exp(-(((b - 0.633) / 0.009) ** 2));
+      // (On a print the bloom's edge is let go of more gently.)
+      const lift = soft ? smooth(0.61, 0.69, b) : smooth(0.63, 0.65, b);
+      const rim = soft ? Math.exp(-(((b - 0.64) / 0.025) ** 2)) * 0.5 : Math.exp(-(((b - 0.633) / 0.009) ** 2));
       // More at the page's edges, and most at its foot.
       const edge = Math.min(X, cssW - X, Y);
       const run = Math.pow(1 - smooth(0, 120, edge), 2) * 0.07 + Math.pow(1 - smooth(0, 170, cssH - Y), 2) * 0.07 * foot;
-      const s = p * 0.2 + m * 0.06 - lift * 0.035 + rim * 0.03 + run;
+      // The glazes: how many lie over this point (soft-edged), less the ramp.
+      let laid = 0;
+      let pooled = 0;
+      for (let k = 1; k < n; k++) {
+        const e = edges[i * n + k];
+        const cr = crisp[i * n + k];
+        const ew = edgeW + (meltW - edgeW) * (1 - cr);
+        laid += smooth(e - ew, e + ew, Y);
+        // Pigment gathered just inside each glaze's edge as it dried.
+        const below = Y - e;
+        if (cr > 0 && below > poolAt - poolW * 2.5 && below < poolAt + poolW * 3.5) pooled += Math.exp(-(((below - poolAt) / poolW) ** 2)) * cr;
+      }
+      const stair = (laid + 0.5) / n - Y / cssH;
+      const s = stair * (soft ? 0.32 : 0.55) + pooled * poolK + p * 0.17 + m * 0.05 + stroke * 0.05 - lift * 0.035 + rim * 0.03 + run;
       put(d, (j * sw + i) * 4, s);
     }
   }
@@ -168,10 +280,33 @@ function tone(hex: string): number {
   return (0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255;
 }
 
+interface Stain {
+  canvas: HTMLCanvasElement;
+  seed: number;
+  w: number;
+  h: number;
+}
+
+interface Baked {
+  canvas: HTMLCanvasElement;
+  stain: Stain;
+  w: number;
+  h: number;
+  px: number;
+}
+
+/** How much the grain weighs against the pigment in the baked texture. */
+const GRAIN_SHARE = 0.21;
+
 export class Wash {
+  /** `soft`: flatter, wider glaze edges and fainter tide lines, for a picture on a wall. */
+  constructor(private readonly soft = false) {}
+
   private grain: HTMLCanvasElement | null = null;
-  private grainFor: { ctx: CanvasRenderingContext2D; pattern: CanvasPattern } | null = null;
-  private stain: { canvas: HTMLCanvasElement; seed: number; w: number; h: number } | null = null;
+  /** The last two of each, so a wallpaper drawn at another size and then
+      put back does not rebuild the page's on the way out. */
+  private stains: Stain[] = [];
+  private baked: Baked[] = [];
 
   /** Replaces drawWater: fill the whole back canvas with the water for this depth, painted. `seed` is a per-sitting number for where the pigment pooled. */
   draw(ctx: CanvasRenderingContext2D, w: number, h: number, water: Water, px: number, seed: number): void {
@@ -183,44 +318,113 @@ export class Wash {
     ctx.fillRect(0, 0, w, h);
     if (w <= 0 || h <= 0) return;
 
-    // Black shows best on pale water and white on dark, so each layer is
+    const tex = this.texture(Math.round(w), Math.round(h), px, seed);
+    if (!tex) return;
+    // Black shows best on pale water and white on dark, so the texture is
     // eased to keep the same weight as the water darkens, with no step
-    // where it turns.
+    // where it turns; held back on pale water, where a stain shows more
+    // than it should.
     const lum = (tone(water.top) + tone(water.bottom)) / 2;
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
-
-    const stain = this.stainFor(w / px, h / px, seed);
-    if (stain) {
-      // Held back on pale water, where a stain shows more than it should.
-      ctx.globalAlpha = 0.25 + 0.3 * lum;
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(stain, 0, 0, w, h);
-    }
-
-    const pattern = this.grainPattern(ctx);
-    if (pattern) {
-      pattern.setTransform(new DOMMatrix([px, 0, 0, px, 0, 0]));
-      ctx.globalAlpha = 0.05 + 0.07 * lum;
-      ctx.fillStyle = pattern;
-      ctx.fillRect(0, 0, w, h);
-    }
+    // The darkest water gets more, so it stays a wash and never goes flat:
+    // there only the lifts show, and they need the weight.
+    ctx.globalAlpha = 0.27 + 0.28 * lum + 0.25 * (1 - smooth(0.04, 0.3, lum));
+    ctx.drawImage(tex, 0, 0, w, h);
     ctx.restore();
   }
 
-  private stainFor(cssW: number, cssH: number, seed: number): HTMLCanvasElement | null {
-    const s = this.stain;
-    if (s && s.seed === seed && Math.abs(s.w - cssW) <= s.w * SLACK && Math.abs(s.h - cssH) <= s.h * SLACK) return s.canvas;
-    const canvas = buildStain(cssW, cssH, seed);
-    this.stain = canvas ? { canvas, seed, w: cssW, h: cssH } : null;
-    return canvas;
+  /** The glazes, the pigment, their edges and the grain, baked at the canvas's size. */
+  private texture(w: number, h: number, px: number, seed: number): HTMLCanvasElement | null {
+    const stain = this.stainFor(w / px, h / px, seed);
+    if (!stain) return null;
+    const hit = this.baked.find((b) => b.w === w && b.h === h && b.px === px && b.stain === stain);
+    if (hit) return hit.canvas;
+    const c = canvas(w, h);
+    const t = c?.getContext('2d');
+    if (!c || !t) return null;
+    t.imageSmoothingEnabled = true;
+    t.imageSmoothingQuality = 'high';
+    t.drawImage(stain.canvas, 0, 0, w, h);
+    this.tideLines(t, w, h, px, stain);
+    this.grain ??= buildGrain();
+    const pattern = this.grain ? t.createPattern(this.grain, 'repeat') : null;
+    if (pattern) {
+      pattern.setTransform(new DOMMatrix([px, 0, 0, px, 0, 0]));
+      t.globalAlpha = GRAIN_SHARE;
+      t.fillStyle = pattern;
+      t.fillRect(0, 0, w, h);
+      t.globalAlpha = 1;
+    }
+    this.baked = [{ canvas: c, stain, w, h, px }, ...this.baked].slice(0, 2);
+    return c;
   }
 
-  private grainPattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
-    if (this.grainFor?.ctx === ctx) return this.grainFor.pattern;
-    this.grain ??= buildGrain();
-    const pattern = this.grain ? ctx.createPattern(this.grain, 'repeat') : null;
-    this.grainFor = pattern ? { ctx, pattern } : null;
-    return pattern;
+  /**
+   * The edge each glaze dried to: a thin, broken, darker line just inside
+   * it, and a breath of white just above where the pigment pulled away.
+   * Drawn as lines at the canvas's own size, since the stain is too soft to
+   * carry anything this fine.
+   */
+  private tideLines(t: CanvasRenderingContext2D, w: number, h: number, px: number, stain: Stain): void {
+    const glazes = glazesFor(stain.w, stain.h, stain.seed, this.soft);
+    const sx = w / stain.w;
+    const sy = h / stain.h;
+    const l = lattice(hash32('wash', stain.seed, 'tide'));
+    const LEVELS = 4;
+    const dark = Array.from({ length: LEVELS }, () => new Path2D());
+    const light = new Path2D();
+    const stepX = 5;
+    for (let k = 1; k < glazes.n; k++) {
+      let level = -1;
+      let lightOn = false;
+      for (let X = -stepX; X <= stain.w + stepX; X += stepX) {
+        const y = glazes.at(k, X);
+        // The line comes and goes along its length, as a dried edge does.
+        const v = noise(l, X / 90 + k * 13, k * 7.3) * (0.4 + 0.6 * glazes.crisp(k, X));
+        // Mostly gone: a dried edge shows in short broken runs, never a rule.
+        const lv = v < 0.56 ? -1 : Math.min(LEVELS - 1, Math.floor(((v - 0.56) / 0.44) * LEVELS));
+        const x = X * sx;
+        const yy = (y + 1.5) * sy;
+        if (lv !== level) {
+          if (lv >= 0) dark[lv].moveTo(x, yy);
+          level = lv;
+        } else if (lv >= 0) dark[lv].lineTo(x, yy);
+        // The breath of white goes only where the edge dried crisp; on a
+        // print, nowhere: a long pale line over a darker one is a shelf.
+        const on = !this.soft && glazes.crisp(k, X) > 0.5;
+        if (on && lightOn) light.lineTo(x, (y - 5) * sy);
+        else if (on) light.moveTo(x, (y - 5) * sy);
+        lightOn = on;
+      }
+    }
+    t.save();
+    t.lineCap = 'round';
+    t.lineJoin = 'round';
+    t.strokeStyle = '#000000';
+    for (let i = 0; i < LEVELS; i++) {
+      const a = ((i + 1) / LEVELS) * (this.soft ? 0.45 : 1);
+      t.globalAlpha = 0.07 * a;
+      t.lineWidth = 4.5 * px;
+      t.stroke(dark[i]);
+      t.globalAlpha = 0.13 * a;
+      t.lineWidth = Math.max(1, 0.8 * px);
+      t.stroke(dark[i]);
+    }
+    t.strokeStyle = '#FFFFFF';
+    t.globalAlpha = 0.035;
+    t.lineWidth = 9 * px;
+    t.stroke(light);
+    t.restore();
+  }
+
+  private stainFor(cssW: number, cssH: number, seed: number): Stain | null {
+    const s = this.stains.find((s) => s.seed === seed && Math.abs(s.w - cssW) <= s.w * SLACK && Math.abs(s.h - cssH) <= s.h * SLACK);
+    if (s) return s;
+    const c = buildStain(cssW, cssH, seed, this.soft);
+    if (!c) return null;
+    const made = { canvas: c, seed, w: cssW, h: cssH };
+    this.stains = [made, ...this.stains].slice(0, 2);
+    return made;
   }
 }

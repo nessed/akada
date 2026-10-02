@@ -107,13 +107,21 @@ export function drawDarkness(
 
   // The jelly lighting the water it hangs in: barely there, more a warmth
   // than a colour, and stronger the darker it is round it.
-  const a = 0.09 * Math.min(1, darkness / DEEPEST);
+  // Water scatters a light toward white as it carries it, so the pool is
+  // the jelly's colour thinned with the paper's warmth, never its pure hue;
+  // and it falls off as light in water does, fast near the source and then
+  // in a long tail, not in a straight ramp.
+  const a = 0.1 * Math.min(1, darkness / DEEPEST);
   const rgb = rgbOf(tint);
+  const [tr, tg, tb] = rgb.split(',').map((v) => Number(v));
+  const soft = `${Math.round(tr + (246 - tr) * 0.3)}, ${Math.round(tg + (240 - tg) * 0.3)}, ${Math.round(tb + (226 - tb) * 0.3)}`;
   ctx.globalCompositeOperation = 'lighter';
   const glow = ctx.createRadialGradient(0, -DROP * r * 0.5, 0, 0, 0, CLEAR * 1.4 * r);
-  glow.addColorStop(0, `rgba(${rgb}, ${a.toFixed(4)})`);
-  glow.addColorStop(0.45, `rgba(${rgb}, ${(a * 0.45).toFixed(4)})`);
-  glow.addColorStop(1, `rgba(${rgb}, 0)`);
+  const tail = (t: number) => 1 / (1 + (t / 0.28) ** 2);
+  for (const t of [0, 0.12, 0.28, 0.5, 0.75, 1]) {
+    const f = (tail(t) - tail(1)) / (1 - tail(1));
+    glow.addColorStop(t, `rgba(${soft}, ${(a * f).toFixed(4)})`);
+  }
   ctx.fillStyle = glow;
   const g = CLEAR * 1.4 * r;
   ctx.fillRect(-g, -g, g * 2, g * 2);

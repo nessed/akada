@@ -8,7 +8,6 @@ import { depthAt, ZONES } from '@/lib/ocean/depth';
 import {
   drawEye,
   drawFloor,
-  drawKelp,
   drawLeviathan,
   drawRules,
   drawShafts,
@@ -27,6 +26,7 @@ import { GardenEels } from '@/lib/ocean/garden-eels';
 import { darknessAt, drawDarkness, litBy } from '@/lib/ocean/glow';
 import { JellyAtContext, type JellyAt } from '@/lib/ocean/jelly-at';
 import { rollKelp } from '@/lib/ocean/kelp';
+import { drawKelp } from '@/lib/ocean/kelp-draw';
 import { Sparkles } from '@/lib/ocean/sparkle';
 import { Wash } from '@/lib/ocean/wash';
 import { outcropsInView } from '@/lib/ocean/outcrop';

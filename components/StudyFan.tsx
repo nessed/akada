@@ -348,7 +348,8 @@ export default function StudyFan({
           every: habitRef.current?.every,
         }
       : undefined;
-    const ink = jellyInk(color, paper, light);
+    // In the deep the jelly is inked like the rest of that sea.
+    const ink = jellyInk(color, paper, light, species === 'ocean');
     const drift = new Array<number>(TRAIL_SAMPLES).fill(0);
     let stretchNow = 0;
     let contractNow = 0;
@@ -587,7 +588,7 @@ export default function StudyFan({
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly, interactive, habitKey, jellyAt]);
+  }, [color, light, trunkWidth, padTop, widthFill, baseOffset, depth, flex, reach, physics, leaves, sketch, ground, jelly, interactive, habitKey, jellyAt, species]);
 
   /* Where the jelly is in the canvas, for a hand to land on. The tree can be
      taken hold of anywhere in its frame; a jelly is a thing in the water, and

@@ -5,8 +5,8 @@ import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { breakStartsAt, useTimer } from '@/lib/timer-context';
 import { useAquariumSound } from '@/lib/use-aquarium-sound';
-import { renderWallpaper, saveWallpaper } from '@/lib/wallpaper';
 import SoundMenu from '@/components/SoundMenu';
+import SavePicture from '@/components/SavePicture';
 import {
   BLOCK_NOTE_MAX,
   BREAK_LENGTHS,
@@ -178,6 +178,8 @@ export default function TimerPage() {
   /* The wood's margin note when the land turns a stage: "scrub, year 5",
      in the hand, for a few seconds, and then the margin is clear again. */
   const [stageNote, setStageNote] = useState<{ text: string; at: number } | null>(null);
+  /* The Keep the picture sheet, from the picture button in the header. */
+  const [pictureOpen, setPictureOpen] = useState(false);
   const lastStageRef = useRef<number | null>(null);
   const chromeRef = useRef<HTMLDivElement | null>(null);
 
@@ -449,17 +451,10 @@ export default function TimerPage() {
           segments: pendingLog?.segments ?? segments,
         };
   const oceanDepth = ocean ? depthAt(focusSeconds) : null;
-  /* The water as a picture, for a wallpaper: the scene and the jelly drawn
-     again at full size (lib/wallpaper), without the clock on top of them. */
-  const saveWater = async () => {
-    const box = document.querySelector<HTMLElement>('[data-ocean-scene]');
-    const wall = box ? await renderWallpaper(box) : null;
-    if (!wall) {
-      notify('Couldn’t draw the water just now.');
-      return;
-    }
-    await saveWallpaper(wall, `akada-deep-${oceanDepth?.meters ?? 0}m.png`);
-  };
+  /* The water as a picture: this moment drawn again at full size
+     (lib/wallpaper), or the whole sitting painted as one (lib/ocean/picture),
+     for a wallpaper or a print (lib/print). The sheet does the drawing. */
+  const findScene = () => document.querySelector<HTMLElement>('[data-ocean-scene]');
   /* In the frame the deep is laid on the page itself: on the night paper it
      is night water from the start, on a daylight paper a wash that goes dark
      by the midnight zone, where the jelly's ink turns light with it. */
@@ -483,6 +478,25 @@ export default function TimerPage() {
           },
         ]
       : segments;
+
+  /* What the sheet paints as "the whole sitting": the stretches so far, the
+     rest being taken included, and the focus on the clock now. */
+  const pictureSheet = ocean && timerCourseId ? (
+    <SavePicture
+      open={pictureOpen}
+      onClose={() => setPictureOpen(false)}
+      momentRoot={findScene}
+      sitting={{
+        courseId: timerCourseId,
+        color,
+        segments: live ? liveChain : pendingLog?.segments ?? segments,
+        focusSeconds,
+        tzOffset: new Date().getTimezoneOffset(),
+      }}
+      night={darkMode || !isBlock}
+      name={`akada-deep-${oceanDepth?.meters ?? 0}m`}
+    />
+  ) : null;
 
   /* Pausing is the page going quiet, not a switch being thrown. The clock
      lets its ink down over half a second, the fan loses some of its colour
@@ -786,9 +800,9 @@ export default function TimerPage() {
         {timerDrawing === 'ocean' && (
           <button
             type="button"
-            onClick={saveWater}
-            aria-label="Save the water as a wallpaper"
-            title="Save as wallpaper"
+            onClick={() => setPictureOpen(true)}
+            aria-label="Keep the picture"
+            title="Keep the picture"
             style={{ color: inkSoft }}
             className="grid h-10 w-10 place-items-center rounded-[10px] transition-colors"
           >
@@ -1017,6 +1031,7 @@ export default function TimerPage() {
           </div>
         </div>
         <PendingSessionLogSheet />
+        {pictureSheet}
       </div>
     );
   }
@@ -1211,6 +1226,7 @@ export default function TimerPage() {
       </div>
 
       <PendingSessionLogSheet />
+      {pictureSheet}
     </div>
   );
 }

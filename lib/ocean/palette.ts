@@ -80,8 +80,20 @@ export function waterAt(z: number, ground: Ground, courseColor: string): Water {
 export const HUES = ['#A8B89B', '#D4A5A5', '#B5A8C9', '#E2B594', '#A8BCC9', '#C99B7E', '#D9C58C', '#9FC1B0', '#9AA3AB', '#B89BAA'];
 const GLOWS = ['#9FE8FF', '#B8FFD9', '#FFD9A0', '#E3C2FF'];
 
+/**
+ * The one ink every animal's lines are drawn in, as a plate's are: iron-gall
+ * brown-black on light water, a warm off-white on dark. The colour is all in
+ * the washes, so it drains with depth while the line stays the same.
+ */
+export const IRON_GALL = { light: '#2A2320', dark: '#E8E0CF' } as const;
+
 export interface CreatureInk {
+  /** The animal's own tinted ink, kept for anything still drawn in it. */
   ink: string;
+  /** The pen: every line, outline, hatch and stipple, in one ink. */
+  pen: string;
+  /** The bare paper a wash leaves as its highlight, or null for none. */
+  paper: string | null;
   body: string;
   fin: string;
   tent: string;
@@ -143,17 +155,27 @@ export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureIn
   const glow = GLOWS[Math.max(0, Math.min(3, Math.round(g.glow)))];
   const ink = dark ? mixHex(hue, '#FFFFFF', 0.45) : mixHex(hue, '#1A1714', 0.62);
   const water = dark ? '#1A1815' : '#FBF8EF';
+  // A fish with a lure (an angler, a dragonfish) is a dark animal on any
+  // water: one deep wash, so its jaw and its light are what show.
+  const angler = g.plan === 'fish' && !!g.lure;
   return {
     ink,
-    body: dark ? mixHex(hue, water, 0.45) : mixHex(hue, water, 0.2),
-    fin: dark ? mixHex(hue, water, 0.25) : mixHex(hue, water, 0.45),
+    pen: dark ? IRON_GALL.dark : IRON_GALL.light,
+    // On dark water there is no paper to leave bare; only a faint lift.
+    paper: dark ? mixHex(hue, IRON_GALL.dark, 0.3) : '#FBF8EF',
+    // A wash a little under the pastel's own value: laid over toned water it
+    // must still read as pigment on the paper, not a pale cut-out.
+    body: angler ? mixHex(hue, dark ? '#0B0A09' : '#1A1714', dark ? 0.72 : 0.7) : dark ? mixHex(hue, water, 0.45) : mixHex(hue, '#6E655B', 0.1),
+    fin: angler ? mixHex(hue, dark ? '#0B0A09' : '#1A1714', dark ? 0.55 : 0.5) : dark ? mixHex(hue, water, 0.25) : mixHex(hue, water, 0.45),
     tent: dark ? mixHex(hue, '#FFFFFF', 0.35) : mixHex(hue, '#1A1714', 0.45),
     pat: dark ? mixHex(glow, water, 0.35) : mixHex(hue, '#1A1714', 0.42),
     glow: g.lit || dark ? glow : null,
     dot: g.lit ? mixHex(glow, '#FFFFFF', 0.4) : ink,
     eyeW: dark ? mixHex(glow, '#FFFFFF', 0.3) : '#FBF8EF',
     pupil: '#141210',
-    bodyAlpha: g.clear ? 0.38 : 0.95,
-    finAlpha: g.clear ? 0.35 : 0.8,
+    // A comb jelly is glass whatever the dice say: its rows are what shows.
+    // A bell is never opaque either: a solid dome reads as a lampshade.
+    bodyAlpha: angler ? 0.85 : g.clear ? 0.38 : g.plan === 'comb' ? 0.5 : g.plan === 'bell' ? 0.62 : 0.95,
+    finAlpha: angler ? 0.7 : g.clear ? 0.35 : 0.8,
   };
 }

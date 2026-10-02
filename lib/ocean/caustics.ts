@@ -34,12 +34,15 @@ function canvas(w: number, h: number): HTMLCanvasElement | null {
 
 /**
  * The net itself: the edges between wobbly cells, a bright thin core with a
- * little glow round it. Cells are a Voronoi of jittered points on a wrapped
+ * little glow round it, brightest where three cells meet (light gathers at
+ * a caustic's knots). Cells are a Voronoi of jittered points on a wrapped
  * grid, and the page is bent by whole-number sines before they are looked
- * up, so the edges curve and the tile still meets itself all round.
+ * up, so the edges curve and the tile still meets itself all round. `size`
+ * is the tile's side in its own pixels: the live net's is small, a still's
+ * large enough to stay crisp at a poster's scale.
  */
-function buildTile(): HTMLCanvasElement | null {
-  const c = canvas(TILE, TILE);
+function buildTile(size = TILE): HTMLCanvasElement | null {
+  const c = canvas(size, size);
   const t = c?.getContext('2d');
   if (!c || !t) return null;
   const r = mulberry32(hash32('caustics'));
@@ -51,18 +54,19 @@ function buildTile(): HTMLCanvasElement | null {
     }
   }
   const ph = [r(), r(), r(), r(), r(), r()].map((p) => p * TAU);
-  const img = t.createImageData(TILE, TILE);
+  const img = t.createImageData(size, size);
   const d = img.data;
-  for (let y = 0; y < TILE; y++) {
-    const v = y / TILE;
-    for (let x = 0; x < TILE; x++) {
-      const u = x / TILE;
+  for (let y = 0; y < size; y++) {
+    const v = y / size;
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
       const wu = u + 0.04 * Math.sin(TAU * (2 * v) + ph[0]) + 0.02 * Math.sin(TAU * (3 * u + 2 * v) + ph[1]);
       const wv = v + 0.04 * Math.sin(TAU * (2 * u) + ph[2]) + 0.02 * Math.sin(TAU * (2 * u - 3 * v) + ph[3]);
       const cx = Math.floor(wu * CELLS);
       const cy = Math.floor(wv * CELLS);
       let f1 = 9;
       let f2 = 9;
+      let f3 = 9;
       for (let dy = -1; dy <= 1; dy++) {
         const gy = cy + dy;
         const iy = ((gy % CELLS) + CELLS) % CELLS;
@@ -74,20 +78,30 @@ function buildTile(): HTMLCanvasElement | null {
           const ey = wv - (pts[k + 1] + (gy - iy) / CELLS);
           const dist = ex * ex + ey * ey;
           if (dist < f1) {
+            f3 = f2;
             f2 = f1;
             f1 = dist;
-          } else if (dist < f2) f2 = dist;
+          } else if (dist < f2) {
+            f3 = f2;
+            f2 = dist;
+          } else if (dist < f3) f3 = dist;
         }
       }
-      // How far from an edge, in cell widths: nought on it.
-      const e = (Math.sqrt(f2) - Math.sqrt(f1)) * CELLS;
+      // How far from an edge, in cell widths: nought on it; and from a knot.
+      const s1 = Math.sqrt(f1);
+      const e = (Math.sqrt(f2) - s1) * CELLS;
+      const e3 = (Math.sqrt(f3) - s1) * CELLS;
       // Real nets are uneven: some strands thick and bright, some all but gone.
       const m = 0.5 + 0.5 * Math.sin(TAU * (u + 2 * v) + ph[4]) * Math.sin(TAU * (2 * u - v) + ph[5]);
-      const width = 0.03 + 0.04 * m;
+      const width = 0.028 + 0.04 * m;
       const core = Math.max(0, 1 - e / width);
       const glow = Math.max(0, 1 - e / (width * 3.5));
-      const a = Math.min(1, core * core * (0.55 + 0.45 * m) + glow * glow * 0.22);
-      const o = (y * TILE + x) * 4;
+      const knot = Math.max(0, 1 - e3 / (width * 5));
+      // The cells are not quite dark: a little light lies across them too,
+      // thickest toward their rims.
+      const floor = 0.03 * Math.max(0, 1 - e / 0.35);
+      const a = Math.min(1, core * core * (0.5 + 0.5 * m) + glow * glow * 0.18 + knot * knot * 0.25 + floor);
+      const o = (y * size + x) * 4;
       d[o] = 255;
       d[o + 1] = 252;
       d[o + 2] = 240;
@@ -96,6 +110,66 @@ function buildTile(): HTMLCanvasElement | null {
   }
   t.putImageData(img, 0, 0);
   return c;
+}
+
+/** The still's net: built once, large. */
+let stillTile: HTMLCanvasElement | null | undefined;
+
+/**
+ * Caustic light laid onto a shape, for a still: the net of light the waves
+ * throw, caught on the top of a rock, the floor, a back. Two nets at
+ * different sizes and angles are summed, as in the live water, and the light
+ * is strongest along the top of `box` (it comes from above) and gone by its
+ * foot. Screened on, so it brightens what is there on any water.
+ * `strength` 0 to 1; `box` is the shape's bounds in the context's units;
+ * a cell is about a hand's width (120 CSS px), so `px` sets its size.
+ */
+export function causticsOn(
+  ctx: CanvasRenderingContext2D,
+  region: Path2D,
+  box: { x: number; y: number; w: number; h: number },
+  strength: number,
+  px: number,
+  seed: number,
+): void {
+  if (!(strength > 0.005) || box.w < 1 || box.h < 1) return;
+  if (stillTile === undefined) stillTile = buildTile(768);
+  const tile = stillTile;
+  const s = canvas(Math.ceil(box.w), Math.ceil(box.h));
+  const g = s?.getContext('2d');
+  if (!tile || !s || !g) return;
+  const pattern = g.createPattern(tile, 'repeat');
+  if (!pattern) return;
+  const r = mulberry32(hash32('caustics-on', seed));
+  const base = (CELL_CSS * 0.8 * Math.max(0.5, px) * CELLS) / tile.width;
+  g.globalCompositeOperation = 'lighter';
+  for (const [k, alpha] of [
+    [1, 0.75],
+    [1.31, 0.4],
+  ] as const) {
+    const turn = r() * TAU;
+    const cos = Math.cos(turn) * base * k;
+    const sin = Math.sin(turn) * base * k;
+    pattern.setTransform(new DOMMatrix([cos, sin, -sin, cos, -r() * tile.width * base, -r() * tile.width * base]));
+    g.fillStyle = pattern;
+    g.globalAlpha = alpha;
+    g.fillRect(0, 0, s.width, s.height);
+  }
+  // Strongest along the top, where the light lands; gone at the foot.
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'destination-in';
+  const fade = g.createLinearGradient(0, 0, 0, s.height);
+  fade.addColorStop(0, 'rgba(0,0,0,1)');
+  fade.addColorStop(0.45, 'rgba(0,0,0,0.5)');
+  fade.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = fade;
+  g.fillRect(0, 0, s.width, s.height);
+  ctx.save();
+  ctx.clip(region);
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = Math.min(1, strength);
+  ctx.drawImage(s, box.x, box.y, box.w, box.h);
+  ctx.restore();
 }
 
 export class Caustics {

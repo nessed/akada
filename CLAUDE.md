@@ -91,9 +91,15 @@ Saves searching. If one of these moves, fix the line here in the same commit.
 - **Destructive actions** ask through `components/ConfirmSheet.tsx`. Never
   `window.confirm()` or `prompt()`.
 - **The Sound menu** (speaker button in the timer's header, only in the deep, with the
-  tank's volume) is `components/SoundMenu.tsx`. **Save as wallpaper** is
-  `lib/wallpaper.ts`; any canvas that should be in the picture registers a
-  layer there.
+  tank's volume) is `components/SoundMenu.tsx`. **Keep the picture** (the
+  timer's picture button, the finish sheet's link, the mark on a sitting in
+  Stats) is `components/SavePicture.tsx`. "This moment" is
+  `lib/wallpaper.ts`; any canvas that should be in it registers a layer
+  there. "The whole sitting" is `lib/ocean/picture/`. Both go out through
+  `lib/print/` (strip rendering, the streaming PNG, the print frame and
+  sizes).
+- **The deep's pen** (one ink, pressure lines, hatching, stipple, watercolour
+  fills) is `lib/ocean/pen.ts`. Anything new drawn in the sea uses it.
 - **Audio hooks** are `lib/use-*.ts` (`use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
   files, so they work on iOS and offline.
 - **Timer state and actions** (`pause`, `stop`, `cancel`, breaks) are in
