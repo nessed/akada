@@ -1420,7 +1420,7 @@ not show and nothing is scored, as everywhere in the deep.
 | How long the reader focused | How deep the picture goes. Each zone gets its share of the page, not its metres, so a short sitting is an airy, sunlit picture and a long one falls through the dark to the floor. |
 | When it began | The light at the surface (`sunFor` in `light.ts`): the shafts lean one way in the morning and the other in the afternoon, white at noon, amber at dusk; after dark the window of sky holds the moon in that night's real phase, and its shafts come down at about half the noon sun's strength (more at full moon), so a night page is lit and never a bare gradient. |
 | Which course | The water's tint and the course's own species among the cast, so a term of one course's pictures look like a set. |
-| Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Only the hero and its youngest elders read as jellies, two on a tall page and three on a wide one (two past three hours); the older blocks are a far shoal of tiny bells, one for each, the oldest highest, never on rock. Together with a thin trail of rising bubbles they are the way down, never a drawn line. |
+| Each finished block | A jelly, the child of the one before, placed where the block ended; the last is the largest. Only the hero and its youngest elders read as jellies, two on a tall page and three on a wide one (two past three hours); the older blocks are a far shoal of 14 to 22 tiny bells out over the open water above the hero, each older block its own bell, the oldest highest, the rest drifting with them. Together with a thin trail of rising bubbles they are the way down, never a drawn line. |
 | Each break | A rock at that depth on the page's one wall, near and fully inked, a longer break a longer rock; two rocks at most, the kelp's counted, and breaks beyond that are ledges on the same wall, a bench with its shadow under it, so every break still leaves its mark, all on the page's one wall; there is never a second wall. Where the kelp's rock stands at a break's depth, the break's rock stands straight under it. Rocks merely passed are drawn far, small and faint, and only on a page with no wall of its own. |
 | What swam by | The species that really did, met near where they were met, curated to a cast of five for a short sitting and a few more for each hour, never past eleven (a school counts as one); the rarest gets the best place. |
 | Rare sightings | Two at most, the rarest; a second is drawn only if the page keeps its calm with it. The whale fall lies on the floor, and only where the floor is drawn. |
@@ -1430,13 +1430,18 @@ not show and nothing is scored, as everywhere in the deep.
 (a fifth of its short side across) and the only one in full ink, a
 pool of its own light round it; each of its elders is at most half its
 size. Only the hero and two or three elders are drawn as jellies; older
-blocks are a far shoal of tiny bells, a fifth of the hero's size or less at
-a quarter strength, one for each block, never on a rock, a wall or the
-kelp, so every block still shows. One elder hangs a quarter of the width
-or more across the hero's axis, no two of the family within 0.08 of the
+blocks are a far shoal of 14 to 22 tiny bells (8 to 18 px at 1200 across),
+at a fifth to a quarter strength and thickest at the middle, a fifth of the
+width across at most, out over the open water above the hero: each older
+block has its own bell, the oldest highest, and the rest drift with them.
+Like the light, the shoal may lie in the calm. The family never steps down
+a stair: no three bells run the same way across as they go down. One elder
+hangs a quarter of the width or more across the hero's axis, on the open
+side when the calm allows; no two of the family hang within 0.08 of the
 width of each other across, and none level with another. A rare jelly (in
-the deep a crown jelly, Atolla or Periphylla) hangs low, 0.7 to 0.95 of the
-page or as low as the ground lets it. Siblings are visibly different
+the deep a crown jelly, Atolla or Periphylla) hangs 0.72 to 0.92 of the
+page down; over a trench it hangs in the cleft, and it is never raised to
+keep it. Siblings are visibly different
 animals: each differs from the hero in at least two things you can see
 (the bell's height, the trails' length, the arms, the hue), and no two hang
 at the same depth or within reach of each other's arms. The family never
@@ -1466,8 +1471,15 @@ on a wide page), further out where the light leans toward the wall, so the
 shafts cross the calm. Every page keeps one clear stretch, about 0.28 of it
 and never under a quarter, with nothing in it but water, light and
 bubbles. The rare things are placed to leave it, and the cast never enters
-it. No more than three in five of the cast are in the wall's third, and one
-is always over the page's middle. The cast
+it; a sighting that would take it is not drawn, and the next rarest that
+keeps it is. No more than three in five of the cast are in the wall's third,
+and one is always over the page's middle. When the light leans (any hour but
+the middle of the day or of the night) the hero hangs 0.15 to 0.28 of the
+width off to one side of the window, down the light's lean, and the shafts
+come down at a slant aimed at it. The third of the page away from the wall
+is never dead: if no shoal, elder, whale or cast stands in it, a second,
+narrower sheaf of the same light comes down across it, at full strength on
+cream and a third of it by night. The cast
 gathers in one to three loose clumps, never a lone speck (each animal
 within an eighth of the short side of another, the rarest excepted) and
 never a ladder of three down the page. This is the rule the rest serve:
@@ -1478,8 +1490,8 @@ and quiet, not as a crowd.
 mid-water. Sea pens, crinoids, brittle stars, glass and tube sponges, whips
 and anemones grow in clumps along the rocks' crests, out from the wall's
 face, on its ledges and over the floor, one every 0.15 of the short side
-for an hour or less and one every 0.04 by four and a half hours; after two
-hours a second row stands on the floor in front of its line. Each keeps
+for an hour or less and one every 0.04 by four and a half hours; the floor's growths stand in clumps, most of them out on the floor's face
+in front of its line. Each keeps
 clear of every animal and stays out of the calm. A second fall of marine
 snow comes in from forty-five minutes, thickening down the page and with
 the hours to two and a half times the first. So the share of the page with
@@ -1508,7 +1520,11 @@ timer, the finish sheet or Stats.
 that keep their grain and never go to black. Night: the dark water with the
 pen's light ink. On cream the water under the window is lighter all down
 the shafts' path, a soft fan at the sun's lean, so the light is as present
-as by night.
+as by night; the sun is a pale warm disc in a glow that thins out from it,
+with no darker ring. Marine snow comes in every size up to four pixels,
+most of it small, a third drawn out along its drift, so it never reads as a
+starfield; an animal in the shafts casts its shadow down the light as a
+faint strip, never a blot round it.
 
 **No horizon, no stage.** The water deepens as one smooth fall over half
 the page or more (the depth's colour is eased down the page so no band of it
@@ -1557,8 +1573,10 @@ the squid's eye is a twentieth of the short side across, low on the page
 (0.45 to 0.8 of it) and a quarter of the width or more from the window; the
 whale fall lies only where the ground is level under its whole skeleton,
 every bone on the ground, or it is not drawn. On the cream
-paper the moon is a flat pale disc with a few faint seas in it, never
-shaded like a ball.
+paper the moon is a flat pale disc with three or four soft blots of sea,
+never shaded like a ball. The whale passes high, its middle no lower than
+0.3 of the page, never behind the wall, a rock or the kelp; with no such
+room it isn't drawn.
 
 **Drawn for the wall.** At print size everything is inked at its full
 detail; things far off are hazier and take the water's colour; the pictures
