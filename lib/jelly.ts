@@ -385,12 +385,20 @@ export function drawJelly(
   const line = Math.min(2.2, Math.max(0.6, R / (76 * px))) * px;
   const ease = (t: number) => 1 - (1 - t) * (1 - t);
 
+  // Read through a smooth curve, not joined dot to dot: a straight line
+  // between the samples bent every trail at the same depths, like a comb.
   const pull = (t: number) => {
     if (!drift || drift.length === 0) return 0;
-    const at = Math.min(drift.length - 1, Math.max(0, t) * (drift.length - 1));
-    const lo = Math.floor(at);
-    const hi = Math.min(drift.length - 1, lo + 1);
-    return drift[lo] + (drift[hi] - drift[lo]) * (at - lo);
+    const m = drift.length - 1;
+    if (m === 0) return drift[0];
+    const at = Math.min(m, Math.max(0, t) * m);
+    const i = Math.min(m - 1, Math.floor(at));
+    const f = at - i;
+    const p0 = drift[Math.max(0, i - 1)];
+    const p1 = drift[i];
+    const p2 = drift[i + 1];
+    const p3 = drift[Math.min(m, i + 2)];
+    return p1 + 0.5 * f * (p2 - p0 + f * (2 * p0 - 5 * p1 + 4 * p2 - p3 + f * (3 * (p1 - p2) + p3 - p0)));
   };
   // The bell goes where the hand takes it; everything below trails behind.
   // Left alone it is never still: it wanders a little way either side on two
@@ -401,17 +409,27 @@ export function drawJelly(
     alive ? R * (0.07 * Math.sin(t / 3300) + 0.04 * Math.sin(t / 1700 + 1.3)) * (1 - k) : 0;
   const handShift = pull(0) * px;
   const bellShift = handShift + wander(tm);
-  const lag = (st: number) =>
-    (pull(st / Math.max(1, maxL)) - pull(0)) * px +
-    wander(tm - 900 * Math.min(1, st / Math.max(1, maxL))) -
-    wander(tm);
-  // Lifted, the bell takes the tops of the trails with it and leaves their
-  // tips, so the floor stays the floor and a full jelly still touches it.
-  // Each squeeze is a stroke: the bell jets up with it and sinks back as it
-  // lets go, and the trails, held at the tips, stretch and slacken behind.
+  // How far back in the bell's path a depth `st` of a trail is, 0 to 1 of
+  // the history, times the trail's own drag `g`. It grows from nothing at
+  // the rim, slowly at first, so a trail leaves the bell heading down and
+  // only then bends away into the wake.
+  const pull0 = pull(0);
+  const wander0 = wander(tm);
+  const lag = (st: number, g: number) => {
+    const u = Math.min(1, st / Math.max(1, maxL));
+    const d = Math.min(1, u * Math.sqrt(u) * g);
+    return (pull(d) - pull0) * px + wander(tm - 900 * d) - wander0;
+  };
+  // Pushed down, the bell takes the tops of the trails with it and leaves
+  // their tips, so the floor stays the floor; the trails bunch, beginning a
+  // little way below the rim. Lifted, or jetting up on a squeeze, the bell
+  // can only take them along: a trail never stretches (see `hang`).
   const handY = Math.max(rise * px, -padTop * 0.85);
   const riseY = Math.max(handY - (alive ? 0.11 * R * pulse * (1 - k) : 0), -padTop * 0.85);
-  const hold = (st: number) => riseY * 0.85 * Math.min(1, st / (0.6 * maxL + 30 * px));
+  const hold = (st: number) => {
+    const u = Math.min(1, st / (0.6 * maxL + 30 * px));
+    return riseY * 0.85 * u * u * (3 - 2 * u);
+  };
 
   const pose = (pp: number, kk: number, beat: number): Pose => {
     const grow = Math.min(1, pp / 0.4);
@@ -424,6 +442,56 @@ export function drawJelly(
 
   const now = pose(p, k, pulse);
   const bx = cx + bellShift;
+  // The bell leans into a pull about the middle of its rim, and a touch into
+  // the slide it is on, so it is heading somewhere.
+  const lean = tilt + (alive ? 0.045 * Math.cos(tm / 3300) * (1 - k) : 0);
+  // The tops of the trails lean with it; below this they hang.
+  const leanReach = 0.3 * maxL + 40 * line;
+
+  /* Hang one live trail from the bell. The scratch arrays hold its centreline
+     as it would hang from a still bell, `step` apart down its length; this
+     moves it to the bell as it is now. The root goes where the bell's lean
+     puts that point of the rim, exactly, and the lean fades out down the
+     length; each depth then trails by where the bell was a moment before
+     (`g` is the trail's own drag); and no link is ever let grow longer than
+     it is at rest, so a hard pull swings the trail up behind the bell rather
+     than drawing it out like elastic. */
+  const hang = (n: number, step: number, g: number) => {
+    let rx = stripX[0];
+    let ry = stripY[0];
+    let qx = 0;
+    let qy = 0;
+    for (let j = 0; j < n; j++) {
+      const st = j * step;
+      const x = stripX[j];
+      const y = stripY[j];
+      // The lean, as a rotation about the rim's middle; small, so a short series.
+      const w = Math.min(1, st / leanReach);
+      const a = lean * (1 - w * w * (3 - 2 * w));
+      const a2 = a * a;
+      const ca = 1 - a2 / 2;
+      const sa = a - (a * a2) / 6;
+      const dx = x - bx;
+      const dy = y - now.rimY;
+      let tx = bx + dx * ca - dy * sa + lag(st, g);
+      let ty = now.rimY + dx * sa + dy * ca - hold(st);
+      if (j > 0) {
+        const ex = tx - qx;
+        const ey = ty - qy;
+        const el2 = ex * ex + ey * ey;
+        const rest2 = (x - rx) * (x - rx) + (y - ry) * (y - ry);
+        if (el2 > rest2) {
+          const f = Math.sqrt(rest2 / el2);
+          tx = qx + ex * f;
+          ty = qy + ey * f;
+        }
+      }
+      rx = x;
+      ry = y;
+      stripX[j] = qx = tx;
+      stripY[j] = qy = ty;
+    }
+  };
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
@@ -500,12 +568,14 @@ export function drawJelly(
         x0 +
         splay * st +
         wave -
-        (x0 - ox) * 0.3 * q.k * (st / reach) +
-        (live ? lag(st) - (x0 - ox) * 0.04 * q.sq * ramp : 0);
-      stripY[j] = yy + st - (live ? hold(st) : 0);
+        (x0 - ox) * 0.3 * q.k * (st / reach) -
+        (live ? (x0 - ox) * 0.04 * q.sq * ramp : 0);
+      stripY[j] = yy + st;
       // Full at the rim, running out to a hairline at its own tip.
       stripW[j] = Math.max(0.22 * px, 1.9 * line * Math.pow(Math.max(0, 1 - 0.94 * (st / reach)), 1.15) * (1 - 0.3 * (st / Math.max(1, maxL))));
     }
+    // Each trails by its own amount, so they never stream out as a comb.
+    if (live) hang(n, step, 0.8 + 0.35 * frac(t.ph * 1.618));
     return n;
   };
 
@@ -556,10 +626,11 @@ export function drawJelly(
       room(n);
       for (let j = 0; j < n; j++) {
         const st = j * step;
-        stripX[j] = x0 + 3 * line * Math.sin(st / (18 * line) - tm / 700 + h.ph) * (st / reach) + lag(st);
-        stripY[j] = now.rimY + 0.5 * px + st - hold(st);
+        stripX[j] = x0 + 3 * line * Math.sin(st / (18 * line) - tm / 700 + h.ph) * (st / reach);
+        stripY[j] = now.rimY + 0.5 * px + st;
         stripW[j] = Math.max(0.3 * px, 0.9 * line * (1 - st / reach));
       }
+      hang(n, step, 0.8 + 0.35 * frac(h.ph * 1.618));
       traceStrip(ctx, n);
     });
     ctx.fill();
@@ -634,11 +705,16 @@ export function drawJelly(
         stripX[j] =
           sx +
           a.splay * st * (1 - 0.5 * k) +
-          8 * line * Math.sin(st / (30 * line) - tm / 1300 + a.ph) * Math.min(1, st / (40 * line)) +
-          lag(st);
-        stripY[j] = sy + st - hold(st);
+          8 * line * Math.sin(st / (30 * line) - tm / 1300 + a.ph) * Math.min(1, st / (40 * line));
+        stripY[j] = sy + st;
+        stripW[j] = now.r * 0.16 * Math.pow(1 - tt, 0.9) * (0.35 + 0.65 * Math.abs(Math.cos(st / (a.twist * line) + a.ph))) + 0.4 * px;
+      }
+      // Heavier than a tentacle, so a little less drag between them.
+      hang(n, step, 0.75 + 0.25 * frac(a.ph * 1.618));
+      for (let j = 0; j < n; j++) {
+        const st = j * step;
+        const tt = st / armLen;
         const turn = 0.35 + 0.65 * Math.abs(Math.cos(st / (a.twist * line) + a.ph));
-        stripW[j] = now.r * 0.16 * Math.pow(1 - tt, 0.9) * turn + 0.4 * px;
         if (j % 2 === 0) rib.push(stripX[j], stripY[j]);
         if (armDetail > 0.4 && j % 2 === 1 && turn < 0.6 && tt < 0.85) folds.push(stripX[j], stripY[j], stripW[j]);
       }
@@ -715,10 +791,7 @@ export function drawJelly(
     ? plateDome(now, bx)
     : (a: number, sc: number) => [bx + Math.cos(a) * now.rw * sc, now.rimY - Math.pow(Math.sin(a), 0.85) * now.bh * sc] as const;
 
-  // The bell leans into a pull about the middle of its rim; the trails do
-  // not, they hang from where they were.
-  // Leaning a touch into the slide it is on, so it is heading somewhere.
-  const lean = tilt + (alive ? 0.045 * Math.cos(tm / 3300) * (1 - k) : 0);
+  // The bell leans (see `lean`); the trails' roots went with it in `hang`.
   ctx.save();
   if (lean) {
     ctx.translate(bx, now.rimY);

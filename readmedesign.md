@@ -904,7 +904,7 @@ natural-history plate draws one, in the course colour, never a cartoon.
   4.2s cycle the held clock breathes on, quick in and slow out, the rim
   flaring a little on the squeeze. Each squeeze is a stroke: the bell jets
   up with it (a tenth of its radius) and sinks as it lets go, and the
-  tentacles, held at the tips, stretch and slacken behind. Left alone it
+  tentacles slacken and draw after it, never stretched past their length. Left alone it
   wanders a little either side on two slow slides that do not line up, leaning
   into the one it is on, with each depth of the trails reading the slide from
   a moment earlier so they drag. A slow wave travels down every
@@ -926,11 +926,14 @@ natural-history plate draws one, in the course colour, never a cartoon.
   and empty water lets it through. Taken, the bell goes where the finger
   goes, close to one for one and any direction, easing off only at the edge
   of what the frame can spare (up stays under the header, down stays off the
-  floor). The trails stream out behind it, each hanging from where the bell
-  was a few frames earlier, while their tips stay put, so a lifted bell
-  bunches them and a lowered one stretches them, and a full jelly still
-  touches the floor. The bell leans into the pull about its rim. Let go and
-  it bobs back past where it started once or twice, on a softer spring than
+  floor). The bell leads and everything hangs from it: it leans into the pull
+  about its rim, and each trail's root stays on the drawn rim as it leans,
+  leaves it heading down, and only then bends into the wake, each trail by
+  its own amount, so they never stream out as a comb. No trail ever
+  stretches: a lifted bell brings its tips up with it rather than drawing
+  them out, and a pushed-down one bunches them with the tips held, while a
+  full jelly at rest still touches the floor. Let go and it bobs back past
+  where it started once, on a softer spring than
   the fan's, and keeps the speed of the hand, so a flick is thrown.
   Touching it makes it clench, the same squeeze as the beat, laid over it. A
   poke (down and up inside 350ms and 6px) is the clench and then a jet, up

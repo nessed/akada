@@ -2745,7 +2745,7 @@ function drawEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: Plac
 /* ---- What grows ---- */
 
 /** The second sheaf of light, against the window's own: on cream (screened onto pale water, it must be laid harder) and by night. */
-const SHEAF_STRENGTH: [number, number] = [0.8, 0.5];
+const SHEAF_STRENGTH: [number, number] = [1, 0.35];
 
 /** The second fall of snow at its thickest, against the first (`snowAt` says how much of it falls where). */
 const SNOW_MORE = 0.9;

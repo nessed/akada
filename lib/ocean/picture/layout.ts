@@ -22,6 +22,7 @@ import { depthAt, ZONES } from '../depth';
 import { EVENTS, type EventKind, type OceanEvent } from '../events';
 import { KELP_ROCK, rollKelp, type Kelp } from '../kelp';
 import { siphonophoreReach } from '../sightings-shallow';
+import { EYE_HULL } from '../draw';
 import { ROCK_GRAMMARS, rockShape, rollGrammar, type RockGrammar } from '../outcrop-sprite';
 import { moonPhase, sunFor } from '../light';
 import { jellyForBlock } from '../lineage';
@@ -1484,7 +1485,8 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
 /** How far a plan falls short of the rules about the whole page: 0 when it keeps them. */
 export function pageMiss(p: Plan): number {
   const calm = calmArea(p).share;
-  let miss = Math.max(0, CALM + 0.001 - calm) * 10;
+  // (The calm weighs most: a page that keeps it without a sighting is better than one that loses it to one.)
+  let miss = Math.max(0, CALM + 0.001 - calm) * 40;
   const share = (x: number) => (p.composition.wallSide < 0 ? x / p.w : 1 - x / p.w);
   const water = p.cast.filter((a) => !a.floor);
   // (The rarest animal met is always drawn, and the sightings too where a page can have them.)
@@ -1900,6 +1902,23 @@ export function planIn(s: Session, color: string, ground: 'paper' | 'night', sha
   while (events.length > 1 && calmWith(eventSolids(events, M, s.biome.env.current)) < CALM + 0.01) {
     events = events.slice(0, -1);
     settleEvents(events, settleEnv);
+  }
+  // And a lone one that would take the page's calm from it has no room: it is not drawn.
+  // (The next rarest that keeps it is drawn instead.)
+  if (events.length === 1 && calmWith(eventSolids(events, M, s.biome.env.current)) < CALM && calmWith([]) >= CALM + 0.01) {
+    const gone = events[0].kind;
+    events = [];
+    for (const e of kinds) {
+      if (e.kind === gone) continue;
+      const pe = placeEvent(e, yOf(e.start), eventEnv);
+      if (!pe) continue;
+      const one = [pe];
+      settleEvents(one, settleEnv);
+      if (one.length && calmWith(eventSolids(one, M, s.biome.env.current)) >= CALM + 0.01) {
+        events = one;
+        break;
+      }
+    }
   }
 
   // ---- The calm water: the largest stretch nothing stands in yet, cut to
@@ -2511,18 +2530,13 @@ export function steepestFall(zStops: { y: number; z: number }[], h: number): num
 
 /**
  * The squid's eye as drawEye (draw.ts) lays it in a picture: its radius
- * (EYE_PICTURE of the page's short side, so 0.05 S across); how far in
- * radii it keeps its middle from its band's top and foot (PATCH_RY ragged,
- * and a little); and how far its patch of mantle reaches, in radii from the
- * eye's middle, toward the page, up and down.
+ * (EYE_PICTURE of the page's short side, so 0.05 S across), its middle
+ * EYE_HULL.edge radii in from the trim, and its head reaching EYE_HULL.in
+ * radii on into the page, EYE_HULL.up above the eye and EYE_HULL.down below.
  */
 export const EYE_R = 0.025 * REF;
 /** Where the eye looks in from, shares of the page's height. */
 export const EYE_BAND: [number, number] = [0.45, 0.8];
-const EYE_REACH = 3.92;
-const EYE_PATCH_IN = 3.1;
-const EYE_PATCH_UP = 3.9;
-const EYE_PATCH_DOWN = 3.9;
 
 /**
  * The turtle come to look at a jelly, from its own side of it or (mirrored)
@@ -2660,20 +2674,22 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       return pe;
     }
     case 'eye': {
-      // Small in a print, its patch of mantle cut by the edge of the page.
-      // drawEye sizes the eye to the page (EYE_R: 5% of the short side
-      // across), sets it 0.82 of a radius in from the edge, and keeps its
-      // whole patch (EYE_PATCH_Y radii up and down) inside its band.
+      // The squid's head at the page's edge, the eye EYE_HULL.edge radii in
+      // from the trim. Its region is the page's width and tall enough for
+      // the whole head (drawEye shrinks the eye to fit a shorter one), and
+      // the eye is set in it as drawEye sets it.
       const re = EYE_R;
-      const reach = re * EYE_REACH + 2;
-      const rh = Math.max(w * 0.2, 0.2 * M, reach * 2 + 16, re * 7.2);
-      const left = sd % 2 === 0;
+      const H = EYE_HULL;
+      const rh = Math.max(w * 0.2, 0.2 * M, (H.up + H.down) * re + 8);
       const want = rh * (0.18 + (((sd >>> 6) % 100) / 100) * 0.2);
-      const ny = clamp(want, reach, rh - reach);
+      const lo = re * H.up + 2;
+      const hi = rh - re * H.down - 2;
+      const ny = hi > lo ? clamp(want, lo, hi) : (rh * H.up) / (H.up + H.down);
       const ry = clamp(y, h * EYE_BAND[0], h * EYE_BAND[1]) - ny;
+      const left = sd % 2 === 0;
       const mirror = (left ? -1 : 1) !== side;
       const onLeft = left !== mirror;
-      const pe: PlacedEvent = { ...base, age: 0.4, rx: 0, ry, rw: w, rh, mirror, x: onLeft ? re * 0.82 : w - re * 0.82, y: ry + ny, far: false, box: null, edge: true };
+      const pe: PlacedEvent = { ...base, age: 0.4, rx: 0, ry, rw: w, rh, mirror, x: onLeft ? re * H.edge : w - re * H.edge, y: ry + ny, far: false, box: null, edge: true };
       pe.box = eventHull(pe, w);
       return pe;
     }
@@ -2803,11 +2819,11 @@ function eventHull(e: PlacedEvent, w: number): Box | null {
       return { x0: Math.max(0, X0), x1: Math.min(w, X1), y0: e.ry + r.y0, y1: e.ry + r.y1 };
     }
     case 'eye': {
-      // drawEye sizes itself to the page: an eye 5% of the short side
-      // across, 0.82 of a radius in from the edge, in its patch of mantle.
+      // The squid's head round the eye: from the trim to EYE_HULL.in radii past the eye, up and down as drawEye reaches.
       const r = EYE_R;
+      const H = EYE_HULL;
       const onLeft = e.x < w / 2;
-      return onLeft ? { x0: 0, x1: e.x + r * EYE_PATCH_IN, y0: e.y - r * EYE_PATCH_UP, y1: e.y + r * EYE_PATCH_DOWN } : { x0: e.x - r * EYE_PATCH_IN, x1: w, y0: e.y - r * EYE_PATCH_UP, y1: e.y + r * EYE_PATCH_DOWN };
+      return onLeft ? { x0: 0, x1: e.x + r * H.in, y0: e.y - r * H.up, y1: e.y + r * H.down } : { x0: e.x - r * H.in, x1: w, y0: e.y - r * H.up, y1: e.y + r * H.down };
     }
     case 'oarfish': {
       const D = Math.min(w, e.rh) * 0.042;

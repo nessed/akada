@@ -99,10 +99,11 @@ const FOLD_DAMPING = 0.13;
 const TRAIL_SAMPLES = 13;
 const TRAIL_LAG = 2;
 /* A jelly hangs in water, not on a branch. It is softer than the fan, and
-   under-damped enough to bob back past where it started once or twice, which
-   is what the trails need to keep streaming after the bell has stopped. */
+   under-damped enough to bob back past where it started once, which is what
+   the trails need to keep streaming after the bell has stopped; the water
+   takes the rest out of it, so it settles rather than rings. */
 const BOB_STIFFNESS = 0.028;
-const BOB_DAMPING = 0.075;
+const BOB_DAMPING = 0.1;
 /* A finger that goes down and comes up within this many milliseconds and this
    many pixels is a poke, not a pull. */
 const POKE_MS = 350;
@@ -222,6 +223,9 @@ export default function StudyFan({
        tell a poke from a pull when the finger comes up. */
     at: number;
     moved: number;
+    /* Where the jelly's bell already was when it was taken, in the hand's
+       own terms, so a jelly caught mid-bob is held where it is caught. */
+    base: { x: number; y: number };
   } | null>(null);
   /* The jelly's own springs. Sideways and vertical are separate, and both
      hold pixels, not radians: the bell goes where the finger takes it. */
@@ -617,14 +621,32 @@ export default function StudyFan({
      the finger itself: the bell goes where it is taken, close to one for one,
      easing off only as it nears the edge of what the frame can spare, and the
      tentacles stream out behind it. */
+  /* The jelly's reach. Up is short (the bell must stay under the header)
+     and down is short (the trails have a floor); sideways gets the most. A
+     pull is eased through `tanh` toward these, never past them. */
+  const jellyReach = (f: { R: number; y0: number }) => ({
+    side: f.R * 1.5,
+    up: Math.max(8, Math.min(f.R * 0.7, f.y0 * 0.85)),
+    down: f.R * 0.8,
+  });
+  const soft = (d: number, lim: number) => lim * Math.tanh(d / lim);
+  const unsoft = (v: number, lim: number) => lim * Math.atanh(Math.max(-0.995, Math.min(0.995, v / lim)));
+
   const grab = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!physics) return;
     if (jelly && !overJelly(e)) return;
+    // Caught mid-bob, the jelly stays where it was caught: the hand's pull
+    // starts from there rather than snapping the bell back to its rest.
+    const fr = jelly ? frameOf() : null;
+    const lim = fr ? jellyReach(fr.f) : null;
+    const bx = bellXRef.current.at(0);
+    const by = bellYRef.current.at(0);
     handRef.current = {
       from: { x: e.clientX, y: e.clientY },
-      held: { bend: 0, slack: 0 },
+      held: { bend: jelly ? bx : 0, slack: jelly ? by : 0 },
       at: performance.now(),
       moved: 0,
+      base: lim ? { x: unsoft(bx, lim.side), y: by < 0 ? -unsoft(-by, lim.up) : unsoft(by, lim.down) } : { x: 0, y: 0 },
     };
     e.currentTarget.setPointerCapture(e.pointerId);
     e.currentTarget.style.cursor = 'grabbing';
@@ -649,14 +671,12 @@ export default function StudyFan({
     if (jelly) {
       const fr = frameOf();
       if (!fr) return;
-      const { R, y0 } = fr.f;
-      // Up is short (the bell must stay under the header) and down is short
-      // (the trails have a floor); sideways gets the most.
-      const soft = (d: number, lim: number) => lim * Math.tanh(d / lim);
-      const up = Math.max(8, Math.min(R * 0.7, y0 * 0.85));
+      const lim = jellyReach(fr.f);
+      const x = hand.base.x + dx;
+      const y = hand.base.y + dy;
       hand.held = {
-        bend: soft(dx, R * 1.5),
-        slack: dy < 0 ? -soft(-dy, up) : soft(dy, R * 0.8),
+        bend: soft(x, lim.side),
+        slack: y < 0 ? -soft(-y, lim.up) : soft(y, lim.down),
       };
       return;
     }
