@@ -186,7 +186,9 @@ is the whole screen, as it always was.
   above it. The one you are on is swiped in its
   own tint, as on the Tasks filter. A sitting on the clock puts a 6px dot in
   the course colour pulsing on `tick` on its row; the rail never draws a
-  second clock. A long list fades at whichever end has more behind it and
+  second clock. Pointing at a spine (a mouse only) swaps its open count for a
+  small play disc in the course tint: one click starts an untimed sitting on
+  that course and opens the timer. A long list fades at whichever end has more behind it and
   keeps the current course in view. Pointing at the list shows a dashed
   "add a course" line after the last one, always there when the term has none.
 - **The start** at the foot offers Up next's pick, through the same popover a

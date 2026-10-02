@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCourses, useTasks, useUserSettings, reorderCoursesOptimistic } from '@/lib/data-hooks';
@@ -204,7 +204,8 @@ export default function DesktopRail() {
   const [collapsed, setCollapsed] = useRailCollapsed();
   const { courses } = useCourses();
   const { tasks } = useTasks();
-  const { active } = useTimerState();
+  const { active, start: startTimer } = useTimerState();
+  const router = useRouter();
   const { reading, sizeOf } = useUpNext();
   const { settings } = useUserSettings();
 
@@ -397,8 +398,8 @@ export default function DesktopRail() {
     const tint = resolveTint(course.color, course.tint);
     const tipText = `${course.code} · ${course.name}${count > 0 ? ` · ${count} open` : ''}`;
     return (
+      <div key={course.id} className="group/spine relative">
       <Link
-        key={course.id}
         href={`/courses/${course.id}`}
         aria-current={on ? 'page' : undefined}
         className={`${rowBase} scroll-my-7 -ml-[18px] ${on ? 'text-ink' : 'text-ink-soft hover:text-ink'}`}
@@ -442,12 +443,29 @@ export default function DesktopRail() {
         )}
         {count > 0 && (
           <span
-            className={`rail-wide shrink-0 font-mono text-[11px] tabular-nums text-muted ${running ? '' : 'ml-auto'}`}
+            className={`rail-wide shrink-0 font-mono text-[11px] tabular-nums text-muted mouse:group-hover/spine:invisible mouse:group-focus-within/spine:invisible ${running ? '' : 'ml-auto'}`}
           >
             {count}
           </span>
         )}
       </Link>
+      {/* One click: an untimed sitting on this course, and the timer opens.
+          A sibling of the link, not inside it. Hover only; a touch screen has
+          no hover and keeps the start at the foot. */}
+      <button
+        type="button"
+        onClick={() => {
+          setTip(null);
+          startTimer(course.id, null, null);
+          router.push('/timer');
+        }}
+        aria-label={`Start untimed timer for ${course.code}`}
+        className="rail-wide absolute right-2 top-1/2 hidden h-7 w-7 -translate-y-1/2 place-items-center rounded-full opacity-0 transition-opacity mouse:grid mouse:group-hover/spine:opacity-100 focus-visible:opacity-100 mouse:group-focus-within/spine:opacity-100"
+        style={{ background: tint, color: course.color }}
+      >
+        {PLAY}
+      </button>
+      </div>
     );
   }
 
