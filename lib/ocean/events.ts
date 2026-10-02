@@ -23,7 +23,8 @@ export type EventKind =
   | 'lure'
   | 'dumbo'
   | 'whalefall'
-  | 'oarfish';
+  | 'oarfish'
+  | 'manowar';
 
 interface Spec {
   zones: number[];
@@ -48,12 +49,17 @@ export const EVENTS: Record<EventKind, Spec> = {
   // Arrives over its span, then stays on the floor for the rest of the sitting.
   whalefall: { zones: [3, 4], perHour: 0.04, seconds: 20, phrase: 'a whale fall on the floor', weight: 800 },
   oarfish: { zones: [1, 2], perHour: 0.006, seconds: 60, phrase: 'an oarfish, hanging in the dark', weight: 1100 },
+  // A surface animal, so only in the first of the light.
+  manowar: { zones: [0], perHour: 0.8, seconds: 50, phrase: "a Portuguese man o' war drifted over", weight: 250 },
 };
 const ORDER: EventKind[] = ['leviathan', 'eye', 'storm', 'whale'];
 /* The second roll, added after the first had been out in the world: its
    events only land in minutes the first left well alone, so no saved
    sitting loses or moves anything it already had. */
 const LATER: EventKind[] = ['oarfish', 'whalefall', 'siphonophore', 'dumbo', 'lure', 'turtle'];
+/* The third, the same again: only in minutes both rolls before it left
+   well alone, so nothing either of them put in a sitting moves. */
+const LATEST: EventKind[] = ['manowar'];
 const GAP_MINUTES = 8;
 const MAX_SECONDS = 90;
 
@@ -71,10 +77,18 @@ function rawAt(biome: Biome, minute: number): EventKind | null {
 }
 
 function laterAt(biome: Biome, minute: number): EventKind | null {
+  return rollAt(biome, minute, 'event-later', LATER);
+}
+
+function latestAt(biome: Biome, minute: number): EventKind | null {
+  return rollAt(biome, minute, 'event-latest', LATEST);
+}
+
+function rollAt(biome: Biome, minute: number, salt: string, kinds: EventKind[]): EventKind | null {
   const zone = depthAt(minute * 60).zone;
-  const u = hash32(biome.key, 'event-later', minute) / 4294967296;
+  const u = hash32(biome.key, salt, minute) / 4294967296;
   let edge = 0;
-  for (const kind of LATER) {
+  for (const kind of kinds) {
     const spec = EVENTS[kind];
     if (!spec.zones.includes(zone)) continue;
     edge += spec.perHour / 60;
@@ -95,7 +109,7 @@ export interface OceanEvent {
 /** The event that begins in a given minute, if any. */
 export function eventAtMinute(biome: Biome, minute: number): OceanEvent | null {
   if (minute < 1) return null;
-  const kind = rawAt(biome, minute) ?? laterEventAt(biome, minute);
+  const kind = rawAt(biome, minute) ?? laterEventAt(biome, minute) ?? latestEventAt(biome, minute);
   if (!kind) return null;
   // Raw hits, not kept ones, so the rule never needs to look further back.
   if (rawAt(biome, minute)) for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (rawAt(biome, m)) return null;
@@ -109,6 +123,15 @@ function laterEventAt(biome: Biome, minute: number): EventKind | null {
   if (!kind) return null;
   for (let m = Math.max(1, minute - GAP_MINUTES); m <= minute + GAP_MINUTES; m++) if (rawAt(biome, m)) return null;
   for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (laterAt(biome, m)) return null;
+  return kind;
+}
+
+/** The third roll's event, kept only with both rolls before it quiet for the gap either side (their raw hits, kept or not). */
+function latestEventAt(biome: Biome, minute: number): EventKind | null {
+  const kind = latestAt(biome, minute);
+  if (!kind) return null;
+  for (let m = Math.max(1, minute - GAP_MINUTES); m <= minute + GAP_MINUTES; m++) if (rawAt(biome, m) || laterAt(biome, m)) return null;
+  for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (latestAt(biome, m)) return null;
   return kind;
 }
 

@@ -1,7 +1,7 @@
 /**
- * Three more rare things, drawn straight in like the whale and the eye: a
+ * Four more rare things, drawn straight in like the whale and the eye: a
  * turtle that comes to look at the jelly, a siphonophore longer than the
- * page, and an oarfish hanging in the dark.
+ * page, an oarfish hanging in the dark, and a man o' war drifting over.
  *
  * The same contract as the rare things in `draw.ts`: device pixels, `px` on
  * every size and line that is not already a share of the page, `age` 0 to 1
@@ -1853,5 +1853,293 @@ export function drawOarfish(ctx: CanvasRenderingContext2D, w: number, h: number,
   ctx.beginPath();
   ctx.arc(ex + TX() * er * 0.25 - NX * er * 0.25, ey + TY() * er * 0.25 - NY * er * 0.25, er * 0.07, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+/* ---- The man o' war ---- */
+
+/** The float: blue glass going lavender toward its crest, the bluest thing in the sea. */
+const FLOAT = mixHex(mixHex(HUES[4], HUES[2], 0.4), '#7F9BD0', 0.35);
+/** The crest's frilled edge, the colony's one warm colour. */
+const CREST = mixHex(HUES[1], HUES[2], 0.35);
+/** Its fishing lines and the polyps under the float: the blue, deeper. */
+const STING = mixHex(mixHex(HUES[4], HUES[2], 0.3), '#3E5470', 0.3);
+
+interface WarInk {
+  ink: string;
+  float: string;
+  crest: string;
+  sting: string;
+  polyp: string;
+}
+
+function warInk(dark: boolean): WarInk {
+  return {
+    ink: inkOf(FLOAT, dark),
+    float: washOf(FLOAT, dark),
+    crest: dark ? mixHex(CREST, NIGHT, 0.3) : mixHex(CREST, '#1A1714', 0.08),
+    sting: dark ? mixHex(STING, '#FFFFFF', 0.2) : STING,
+    polyp: washOf(mixHex(HUES[2], HUES[1], 0.4), dark),
+  };
+}
+
+const WAR_LIGHT = warInk(false);
+const WAR_DARK = warInk(true);
+
+/** The man o' war's visit: it drifts in off its edge, slows, and is carried on. */
+const WAR_ARRIVED = 0.42;
+
+/**
+ * A Portuguese man o' war, seen from under it: not a jelly but a colony,
+ * like the siphonophore it is kin to. Up at the top of the page its float,
+ * a lopsided bladder of blue glass with its tip turned up and a frilled
+ * crest along its back, rocking on the swell; under the float a crowd of
+ * polyps, little sacs and tight curls; and from among them its fishing
+ * lines, a few short and one far longer than the rest, hanging nearly to
+ * the bottom of the page, beaded all the way with stinging cells. The wind
+ * has it, not the water, so its lines trail behind it on a slant, and each
+ * one draws itself up now and then and lets go again, the way they reel in
+ * what they catch. It drifts in off its side of the page, along the top,
+ * slows, and goes up and out of the light as the reader sinks away from it.
+ */
+export function drawManOWar(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean) {
+  const env = envelope(age, 0.15, 0.25);
+  if (env <= 0) return;
+  const m = Math.min(w, h);
+  const F = Math.min(0.17 * m, 0.22 * w);
+  const left = (seed & 1) === 0;
+  const dir = left ? 1 : -1;
+  // Its stretch of the page: the outer third, clear of the clock.
+  const settle = w * (0.17 + 0.08 * unit(seed, 1));
+  const xT = left ? Math.max(settle, F * 0.7) : Math.min(w - settle, w - F * 0.7);
+  const xFrom = left ? -F * 1.4 : w + F * 1.4;
+  let cx: number;
+  let speed: number;
+  if (age < WAR_ARRIVED) {
+    const k = age / WAR_ARRIVED;
+    cx = xFrom + (xT - xFrom) * (1 - (1 - k) * (1 - k) * (1 - k));
+    speed = 0.3 + 0.7 * (1 - k) * (1 - k);
+  } else {
+    cx = xT + dir * F * 0.35 * ((age - WAR_ARRIVED) / (1 - WAR_ARRIVED));
+    speed = 0.3;
+  }
+  // Rocking on the swell, and going up the page as the reader sinks.
+  const cy = h * (0.1 + 0.03 * unit(seed, 2)) - h * 0.06 * smooth(age) + Math.sin(ambient * 0.9 + seed) * F * 0.04;
+  const roll = 0.07 * Math.sin(ambient * 0.7 + unit(seed, 3) * 6) - dir * 0.05;
+  const cr = Math.cos(roll);
+  const sr = Math.sin(roll);
+  /** A point of the float's own frame (u along it the way it drifts, v down) on the page. */
+  const P = (u: number, v: number): [number, number] => [cx + u * dir * cr - v * sr, cy + u * dir * sr + v * cr];
+
+  const c = dark ? WAR_DARK : WAR_LIGHT;
+  const light = dark ? UNLIGHT : LIGHT;
+  const alpha = env * 0.92;
+  const d = detailFor(F * 1.3);
+  const hair = (wd: number) => (wd < 1.35 ? Math.min(wd, 1) : wd);
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'bevel';
+
+  // The float's outline, its front end (t = 1) narrowing and turned up.
+  const centre = (t: number) => -F * 0.12 * Math.pow(Math.max(0, t - 0.68) / 0.32, 2);
+  const half = (t: number) => F * 0.14 * Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, t))), 0.65) * (1.12 - 0.3 * t);
+  const N = 28;
+  const top: number[] = [];
+  const bottom: number[] = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const u = (t - 0.5) * F;
+    top.push(...P(u, centre(t) - half(t) * 0.9));
+    bottom.push(...P(u, centre(t) + half(t) * 1.1));
+  }
+  const outline: number[] = [...top];
+  for (let i = N - 1; i > 0; i--) outline.push(bottom[i * 2], bottom[i * 2 + 1]);
+
+  // ---- Its fishing lines, behind everything. They hang from the polyps
+  // along the float's underside, trail back from the way it drifts, sway
+  // with a wave going down them, and each draws itself up in its own time.
+  const lines = 6 + Math.floor(unit(seed, 4) * 4);
+  const longest = Math.floor(unit(seed, 5) * lines);
+  const trail = 0.16 + 0.22 * speed;
+  const washLine = new Path2D();
+  const inkBy = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+  const beads = new Path2D();
+  const rims = new Path2D();
+  for (let i = 0; i < lines; i++) {
+    const t = 0.2 + 0.55 * ((i + 0.5 * unit(seed, 10 + i)) / lines);
+    const [bx, by] = P((t - 0.5) * F, centre(t) + half(t) * 0.9);
+    const reach = i === longest ? 0.95 - cy / h : 0.25 + 0.4 * unit(seed, 20 + i);
+    const drawUp = 0.5 + 0.5 * Math.sin(ambient * (0.12 + 0.08 * unit(seed, 30 + i)) + unit(seed, 40 + i) * 6.28);
+    const len = h * reach * (0.8 + 0.2 * (1 - drawUp * drawUp));
+    // Never trailed off the page: on a narrow one they hang nearer straight.
+    const room = (left ? bx : w - bx) - 0.04 * w - F * 0.2;
+    const slant = Math.max(0.02, Math.min(trail, room / len));
+    const ph = unit(seed, 50 + i) * 6.28;
+    const k = (Math.PI * 2) / (0.35 * h);
+    // Near the float it is drawn up in tight coils.
+    // (Some hang slack all the way.)
+    const coil = unit(seed, 60 + i) < 0.3 ? 0 : F * (0.2 + 0.35 * unit(seed, 60 + i)) * (0.5 + 0.8 * drawUp);
+    const kc = (Math.PI * 2) / (F * 0.07);
+    const step = Math.max(2 * px, len / 220);
+    const pts: number[] = [];
+    for (let s = 0; s <= len; s += step) {
+      const amp = F * 0.18 * (s / len) + h * 0.015 * (s / len) * (s / len);
+      const sway = amp * Math.sin(s * k - ambient * 0.8 + ph);
+      const twist = s < coil * 1.5 ? F * 0.028 * Math.exp(-s / coil) * Math.sin(s * kc * (0.85 + 0.3 * unit(seed, 70 + i)) + ph) : 0;
+      pts.push(bx - dir * s * slant + sway + twist, by + s);
+    }
+    if (pts.length < 4) continue;
+    const n = pts.length / 2;
+    washLine.moveTo(pts[0], pts[1]);
+    for (let q = 1; q < n; q++) washLine.lineTo(pts[q * 2], pts[q * 2 + 1]);
+    // In four runs, each finer, so the line tapers to a hair at its end.
+    for (let r = 0; r < 4; r++) {
+      const a = Math.floor((n - 1) * [0, 0.45, 0.7, 0.88][r]);
+      const b = Math.floor((n - 1) * [0.45, 0.7, 0.88, 1][r]);
+      const p = inkBy[r];
+      p.moveTo(pts[a * 2], pts[a * 2 + 1]);
+      for (let q = a + 1; q <= b; q++) p.lineTo(pts[q * 2], pts[q * 2 + 1]);
+    }
+    // The stinging cells, beads closer near the top and drawn up close
+    // together when the line is.
+    let s = F * 0.12 + coil * 0.5;
+    for (let b = 0; s < len * 0.97; b++) {
+      const q = Math.min(n - 1, Math.round(s / step));
+      const rad = px * (1.5 - 0.9 * (s / len)) * (0.85 + 0.3 * unit(seed, 100 + i * 97 + b));
+      beads.moveTo(pts[q * 2] + rad, pts[q * 2 + 1]);
+      beads.arc(pts[q * 2], pts[q * 2 + 1], rad, 0, Math.PI * 2);
+      if (rad > 1.1 * px) {
+        rims.moveTo(pts[q * 2] + rad, pts[q * 2 + 1]);
+        rims.arc(pts[q * 2], pts[q * 2 + 1], rad, 0, Math.PI * 2);
+      }
+      s += F * (0.05 + 0.1 * (s / len)) * (0.7 + 0.6 * unit(seed, 200 + i * 89 + b)) * (1.1 - 0.3 * drawUp);
+    }
+  }
+  ctx.strokeStyle = c.sting;
+  ctx.globalAlpha = alpha * (dark ? 0.35 : 0.4);
+  ctx.lineWidth = 2.2 * px;
+  ctx.stroke(washLine);
+  ctx.strokeStyle = c.ink;
+  inkBy.forEach((p, r) => {
+    ctx.globalAlpha = alpha * (0.7 - 0.12 * r);
+    ctx.lineWidth = hair(px * [0.9, 0.7, 0.5, 0.3][r]);
+    ctx.stroke(p);
+  });
+  ctx.fillStyle = c.sting;
+  ctx.globalAlpha = alpha * 0.85;
+  ctx.fill(beads);
+  if (d > 0.3) {
+    ctx.strokeStyle = c.ink;
+    ctx.globalAlpha = alpha * 0.45;
+    ctx.lineWidth = hair(0.4 * px);
+    ctx.stroke(rims);
+  }
+
+  // ---- The polyps under the float: little sacs hanging, and between them
+  // short tendrils curled up tight.
+  const sacs = new Path2D();
+  const curls = new Path2D();
+  const nSacs = 9 + Math.floor(unit(seed, 6) * 5);
+  for (let j = 0; j < nSacs; j++) {
+    const t = 0.14 + 0.66 * unit(seed, 300 + j);
+    const [bx, by] = P((t - 0.5) * F, centre(t) + half(t) * 0.95);
+    const L = F * (0.07 + 0.08 * unit(seed, 330 + j));
+    const sw = Math.sin(ambient * 1.1 + j) * 0.25 - dir * trail * 0.6;
+    const ex = bx + Math.sin(sw) * L;
+    const ey = by + Math.cos(sw) * L;
+    const rw = L * 0.32;
+    const ox = Math.cos(sw) * rw;
+    const oy = -Math.sin(sw) * rw;
+    sacs.moveTo(bx, by);
+    sacs.quadraticCurveTo(bx + (ex - bx) * 0.6 + ox * 1.6, by + (ey - by) * 0.6 + oy * 1.6, ex, ey);
+    sacs.quadraticCurveTo(bx + (ex - bx) * 0.6 - ox * 1.6, by + (ey - by) * 0.6 - oy * 1.6, bx, by);
+  }
+  const nCurls = 10 + Math.floor(unit(seed, 7) * 6);
+  for (let j = 0; j < nCurls; j++) {
+    const t = 0.15 + 0.65 * unit(seed, 400 + j);
+    const [bx, by] = P((t - 0.5) * F, centre(t) + half(t) * 0.92);
+    const L = F * (0.08 + 0.14 * unit(seed, 430 + j));
+    const ph = unit(seed, 460 + j) * 6.28;
+    curls.moveTo(bx, by);
+    for (let q = 1; q <= 14; q++) {
+      const s = (q / 14) * L;
+      const r = F * 0.025 * (q / 14);
+      curls.lineTo(bx - dir * s * trail + r * Math.sin(q * 1.3 + ph + ambient * 0.6), by + s + r * Math.cos(q * 1.3 + ph));
+    }
+  }
+  ctx.fillStyle = c.polyp;
+  ctx.globalAlpha = alpha * 0.75;
+  ctx.fill(sacs);
+  ctx.strokeStyle = c.ink;
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.lineWidth = hair(0.6 * px);
+  ctx.stroke(sacs);
+  ctx.strokeStyle = c.sting;
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.lineWidth = hair(1.1 * px);
+  ctx.stroke(curls);
+  ctx.strokeStyle = c.ink;
+  ctx.globalAlpha = alpha * 0.4;
+  ctx.lineWidth = hair(0.45 * px);
+  ctx.stroke(curls);
+
+  // ---- The crest along its back: a frilled sail, pleated, rose at its edge.
+  const crestEdge: number[] = [];
+  const crestBase: number[] = [];
+  const pleats = new Path2D();
+  const C = 40;
+  for (let i = 0; i <= C; i++) {
+    const t = 0.08 + (0.8 * i) / C;
+    const rise = F * 0.13 * Math.pow(Math.sin((Math.PI * (t - 0.08)) / 0.8), 0.7);
+    const frill = F * 0.025 * Math.sin(t * 30 + ambient * 0.5 + seed) * Math.min(1, rise / (F * 0.05));
+    const [bx, by] = P((t - 0.5) * F, centre(t) - half(t) * 0.75);
+    const [ex, ey] = P((t - 0.5) * F + dir * rise * 0.12, centre(t) - half(t) * 0.75 - rise - frill);
+    crestBase.push(bx, by);
+    crestEdge.push(ex, ey);
+    if (i % 3 === 1 && rise > F * 0.04) {
+      pleats.moveTo(bx, by);
+      pleats.lineTo(bx + (ex - bx) * 0.92, by + (ey - by) * 0.92);
+    }
+  }
+  const sail = new Path2D();
+  sail.moveTo(crestBase[0], crestBase[1]);
+  for (let i = 2; i < crestEdge.length; i += 2) sail.lineTo(crestEdge[i], crestEdge[i + 1]);
+  for (let i = crestBase.length - 2; i >= 0; i -= 2) sail.lineTo(crestBase[i], crestBase[i + 1]);
+  sail.closePath();
+  const sailBox = { x: Math.min(top[0], top[N * 2]) - F * 0.1, y: cy - F * 0.5, w: F * 1.2, h: F * 0.5 };
+  ctx.globalAlpha = 1;
+  washFill(ctx, sail, sailBox, { color: c.crest, alpha: alpha * 0.6, edge: 0.45, paper: null, granulate: 0.3, light, px });
+  ctx.strokeStyle = c.ink;
+  ctx.globalAlpha = alpha * 0.35;
+  ctx.lineWidth = hair(0.45 * px);
+  ctx.stroke(pleats);
+
+  // ---- The float, over the crest's root: glass, so it is a thin wash, a
+  // little deeper underneath, stippled in its shade when it is big.
+  const body = new Path2D();
+  body.moveTo(outline[0], outline[1]);
+  for (let i = 2; i < outline.length; i += 2) body.lineTo(outline[i], outline[i + 1]);
+  body.closePath();
+  const box = { x: cx - F * 0.6, y: cy - F * 0.3, w: F * 1.2, h: F * 0.55 };
+  ctx.globalAlpha = 1;
+  washFill(ctx, body, box, { color: c.float, alpha: alpha * (dark ? 0.6 : 0.55), edge: 0.4, paper: null, granulate: 0.35, light, px });
+  // Clear on top, bluer where it sits down in the water.
+  {
+    const [ax, ay] = P(0, -F * 0.12);
+    const [bx2, by2] = P(0, F * 0.2);
+    const g = ctx.createLinearGradient(ax, ay, bx2, by2);
+    g.addColorStop(0, `${c.sting}00`);
+    g.addColorStop(1, c.sting);
+    ctx.save();
+    ctx.clip(body);
+    ctx.globalAlpha = alpha * 0.45;
+    ctx.fillStyle = g;
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+    ctx.restore();
+  }
+  if (d > 0.4) stipple(ctx, body, box, { spacing: 2.4 * px, radius: 0.45 * px, shade: shadeAcross(box, light), color: c.ink, alpha: alpha * 0.4, from: 0.55, seed: seed ^ 0x3a7 });
+  inkLine(ctx, outline, true, { width: 0.9 * px * (0.8 + 0.4 * d), color: c.ink, alpha: alpha * 0.85, seed: seed ^ 0x3b1, light, plate: true, raw: true, min: 0.25 * px });
+  inkLine(ctx, crestEdge, false, { width: 0.7 * px * (0.8 + 0.4 * d), color: c.ink, alpha: alpha * 0.7, seed: seed ^ 0x3c5, light, plate: true, raw: true, min: 0.25 * px, taper: [0.15, 0.15] });
   ctx.restore();
 }

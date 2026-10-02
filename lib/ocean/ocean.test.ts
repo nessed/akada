@@ -252,14 +252,27 @@ test('kelp only slides up the page, and is gone by the end of the sunlit water',
 
 test('the later sightings all turn up, and the first roll never hears of them', () => {
   const seen = new Set<EventKind>();
-  for (let k = 0; k < 600 && seen.size < 9; k++) {
+  for (let k = 0; k < 600 && seen.size < 10; k++) {
     for (const e of eventsUpTo(rollBiome(oceanKey('later', k), courseKey('later')), 4 * 3600)) seen.add(e.kind);
   }
-  for (const kind of ['turtle', 'siphonophore', 'lure', 'dumbo', 'whalefall'] as EventKind[]) assert.ok(seen.has(kind), `no ${kind} in 600 sittings`);
+  for (const kind of ['turtle', 'siphonophore', 'lure', 'dumbo', 'whalefall', 'manowar'] as EventKind[]) assert.ok(seen.has(kind), `no ${kind} in 600 sittings`);
   // Golden: a first-roll event that was there before the later roll existed is still there.
   const biome = rollBiome(oceanKey('gold', 1), courseKey('gold'));
   const first = eventsUpTo(biome, 4 * 3600).filter((e) => ['whale', 'storm', 'eye', 'leviathan'].includes(e.kind));
   for (const e of first) assert.equal(eventAtMinute(biome, Math.floor(e.start / 60))?.kind, e.kind);
+});
+
+test('a man o\' war only drifts over in the sunlit water, and never near another sighting', () => {
+  let seen = 0;
+  for (let k = 0; k < 400; k++) {
+    const all = eventsUpTo(rollBiome(oceanKey('war', k), courseKey('war')), 3 * 3600);
+    for (const e of all.filter((v) => v.kind === 'manowar')) {
+      seen++;
+      assert.ok(e.start < 15 * 60, `a man o' war at ${e.start}s`);
+      for (const o of all) if (o !== e) assert.ok(Math.abs(o.start - e.start) > 7 * 60, `a ${o.kind} within ${Math.abs(o.start - e.start)}s of a man o' war`);
+    }
+  }
+  assert.ok(seen > 20, `only ${seen} men o' war in 400 sittings`);
 });
 
 test('a whale fall stays on the floor once it has come', () => {
