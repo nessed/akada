@@ -25,6 +25,22 @@ export default function SoundMenu({ tank, night, accent }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const playing = !!tank?.on;
 
+  /* A click plays or stops the tank, first time, because that click is the
+     gesture the browser wants before it will make a sound. The volume is
+     behind a press and hold (or a right click), so it is there but never
+     stands between the reader and the sea. */
+  const holdRef = useRef<{ timer: number; fired: boolean }>({ timer: 0, fired: false });
+  const startHold = () => {
+    window.clearTimeout(holdRef.current.timer);
+    holdRef.current.fired = false;
+    holdRef.current.timer = window.setTimeout(() => {
+      holdRef.current.fired = true;
+      setOpen(true);
+    }, 450);
+  };
+  const endHold = () => window.clearTimeout(holdRef.current.timer);
+  useEffect(() => () => window.clearTimeout(holdRef.current.timer), []);
+
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent | TouchEvent) => {
@@ -91,11 +107,35 @@ export default function SoundMenu({ tank, night, accent }: Props) {
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (holdRef.current.fired) {
+            holdRef.current.fired = false;
+            return;
+          }
+          if (open) setOpen(false);
+          else tank.toggle();
+        }}
+        onPointerDown={startHold}
+        onPointerUp={endHold}
+        onPointerLeave={endHold}
+        onPointerCancel={endHold}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          endHold();
+          holdRef.current.fired = true;
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
         aria-expanded={open}
         aria-haspopup="true"
-        aria-label="Sound"
-        title="Sound"
+        aria-pressed={playing}
+        aria-label="Tank sound"
+        title="Tank sound (hold for volume)"
         style={{ color: open || playing ? ink : soft }}
         className="relative grid h-10 w-10 place-items-center rounded-[10px] transition-colors"
       >
