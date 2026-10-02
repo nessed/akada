@@ -348,7 +348,7 @@ export default function TimerPage() {
         e.preventDefault();
         // On a break the one thing Space can mean is ending it. Pausing a
         // break is a control nobody reaches for and it reads as stopping. The
-        // next block then waits for another Space to start it.
+        // next block starts running.
         if (onBreak) endBreak();
         else if (liveActive.isPaused) resume();
         else pause();

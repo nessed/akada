@@ -1644,13 +1644,10 @@ digits in mono, the words in the serif) and a smaller muted figure beside the
 dock's digits. Before the first break the two would be the same number
 twice, so it is not drawn.
 
-Nothing starts on its own after a break either. **End break** (one tap, or
-the space bar, or `P`) closes the rest and sets out the next block at the
-same length, held at zero: the clock reads `· ready` instead of `· paused`
-and the solid button says **Start**. The block begins when that is pressed,
-and its stretch in the chain starts there, not when the break ended. A block
-that ran the moment rest stopped was counting the walk back to the desk as
-work.
+**End break** (one tap, or the space bar, or `P`) closes the rest and starts
+the next block at once, at the same length, running from zero. Pressing it
+is the reader saying they are back, so the clock does not ask for a second
+press. The block's stretch in the chain starts there.
 
 ### The pause
 A pause and a break stay two things. Pause is "I have stepped away, count
@@ -2329,7 +2326,7 @@ back to their book. The timer's own keys (Space, F) only exist on the
 timer screen, which is the one screen a reader mid-chapter is least likely to
 be looking at, so stopping meant finding the dock with a mouse. `P` and `K`
 reach the clock from wherever they are: `P` holds it or lets it go, and means
-**end break** while a break runs (the next block then waits for another `P`); `K` finishes the sitting and the log sheet
+**end break** while a break runs (the next block starts running); `K` finishes the sitting and the log sheet
 opens on the spot, because `PageShell` already carries one on every tab. On
 the few screens that carry neither sheet nor shell, `K` opens the timer
 instead, so the key never ends a sitting with nothing to show for it.
