@@ -1451,9 +1451,15 @@ build of its own (a heap, a slab, a spire, an overhang, a field of
 boulders); far ones keep a broken thread of pen and a few strokes of
 shadow, and fade into a far wall of their own, never a near rock's. The
 kelp's far side is left out of a picture rather than drawn as a lone stalk.
-The floor is sediment, not a stage: level strata hatched across it,
-pebbles in small clusters, its crest a broken ink line with only a hair of
-light under it, and on either paper darker than the water above it. The cast keeps three planes, each its own scale and
+A rock is drawn whole and cut at its underside, which rises from the wall
+to the lip, and that cut is inked: no rock, kelp ledge or wall ends in a
+fade hanging in open water. A wall's buttress holds at least the rock's
+width over 1.6 down to the rock's underside and never stands out past its
+crest. The floor is sediment, not a stage: level strata engraved across it
+(`inkFloor`, the walls' own hand), pebbles in small clusters, its crest one
+broken ink line with nothing pale under it, and on either paper darker than
+the water above it. Floor animals lie on the ground, a star wholly below
+the floor's line. The cast keeps three planes, each its own scale and
 strength (near whole, middle 0.6 at 0.75, far 0.35 at 0.45), and kinds keep
 their real sizes against each other (a turtle three school fish long, a
 squid one or two). A trench's walls fall in ledges, each lip jutting over
