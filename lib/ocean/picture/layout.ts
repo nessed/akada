@@ -2143,7 +2143,7 @@ export function steepestFall(zStops: { y: number; z: number }[], h: number): num
  */
 export const EYE_R = 0.025 * REF;
 const EYE_REACH = 3.0 * 1.14 + 0.1;
-const EYE_PATCH_IN = 4.3;
+const EYE_PATCH_IN = 3.5;
 const EYE_PATCH_UP = 3.35;
 const EYE_PATCH_DOWN = 3.5;
 

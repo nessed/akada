@@ -1233,7 +1233,13 @@ only ever grows, it never runs backwards, and none of it touches progress.
   bare paper left inside the outline. Nothing stands as a cap on a stem;
   a rock is never more than about half again as wide as what holds it up.
   At night the pale ink hatches the lit faces instead, and is never
-  crossed. Sea fans
+  crossed. Walls, trench faces and floors are engraved the same way, not
+  washed: on the cream paper the wash is only a light tint and the hatching
+  carries the value, closer and heavier on darker stone; depth takes a
+  wall's ink strength more than its strokes, so a wall far down is still
+  drawn; and nothing on a wall repeats, so scallops or tiles there are a
+  bug. Every rock is outlined as far down as its wash goes. Plate coral
+  grows on a stalk, two shelves at most. Sea fans
   are a flat net, wider than tall; sponges are lopsided vases with a rolled
   lip. Each rock is inked once to a sprite and then only placed, and like
   everything written on the page it goes faint where it crosses the clock.
