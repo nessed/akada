@@ -451,19 +451,25 @@ function coronate(g: Genome, { P, C, vr, fine }: Kit, form: 'atolla' | 'periphyl
     band.push([Math.cos(th) * W * 0.99, Ht + bow * Math.sin(th)]);
   }
   P('pat', band, true);
-  // The stomach, dark wine red, seen through the dome; and the gonads at
-  // the groove, beans of the same.
+  // The stomach, wine red, seen through the dome; and the gonads at the
+  // groove, beans of the same. The stomach is always the first gutFill
+  // shape: the sprite lays it as a soft wash fading toward the rim, never
+  // a filled hole, and the beans after it fainter still.
   if (tall) {
-    // A blunt cone in the helmet, broad at its foot, which bows with the rim.
+    // A blunt cone in the helmet, its rounded tip high in the crown and its
+    // foot opening out to the groove, where it fades into the band below.
     const st: Pt[] = [];
+    const sw = Wg * 0.5;
     for (let i = 0; i <= 24; i++) {
       const a = Math.PI - (i / 24) * Math.PI;
       const h = Math.max(0, Math.sin(a));
-      st.push([Math.cos(a) * Wg * 0.46, Hg * 0.92 - Hg * 0.62 * Math.pow(h, 2.2)]);
+      // (Flanks a little hollow, so it is a stomach's cone and not a dome.)
+      const x = Math.cos(a) * sw * (1 - 0.18 * h * h);
+      st.push([x, Hg + notch * 0.4 - Hg * 0.78 * Math.pow(h, 2.6)]);
     }
     for (let i = 1; i < 12; i++) {
-      const x = Wg * 0.46 - (i / 12) * Wg * 0.92;
-      st.push([x, Hg * 0.92 + bow * 0.45 * Math.sqrt(Math.max(0, 1 - Math.pow(x / (Wg * 0.46), 2)))]);
+      const x = sw - (i / 12) * sw * 2;
+      st.push([x, Hg + notch * 0.4 + bow * 0.6 * Math.sqrt(Math.max(0, 1 - Math.pow(x / sw, 2)))]);
     }
     P('gutFill', st, true);
   } else {
@@ -471,8 +477,20 @@ function coronate(g: Genome, { P, C, vr, fine }: Kit, form: 'atolla' | 'periphyl
   }
   for (const t of [0.22, 0.42, 0.62, 0.8]) {
     const th = t * Math.PI;
-    P('gutFill', blob(Math.cos(th) * (tall ? Wg * 0.62 : W * 0.5), Hg + notch * (tall ? -1.6 : 0.6) + bow * 0.5 * Math.sin(th), W * 0.075, W * 0.035, Math.cos(th) * 0.4, vr, 9), true);
+    // (Down in the groove, beside the stomach's foot and not under it, where a row of them reads as teeth.)
+    P('gutFill', blob(Math.cos(th) * (tall ? Wg * 0.74 : W * 0.5), Hg + notch * (tall ? 0.9 : 0.6) + bow * 0.5 * Math.sin(th), W * (tall ? 0.06 : 0.075), W * (tall ? 0.028 : 0.035), Math.cos(th) * 0.4, vr, 9), true);
   }
+  // The margin's thickness: a fine line just inside the lobes, so the rim
+  // reads as a jelly's soft edge turned toward us and not a cut.
+  const lip: Pt[] = [];
+  for (let i = 1; i < n * 4; i++) {
+    const x = W - (i / (n * 4)) * 2 * W;
+    if (Math.abs(x) > W * 0.93) continue;
+    const near = bow * Math.sqrt(Math.max(0, 1 - Math.pow(x / W, 2)));
+    const dip = Math.pow(Math.abs(Math.sin((i / 4) * Math.PI)), 0.6) * Math.min(tall ? 5 : 6, ((2 * W) / n) * (tall ? 0.45 : 0.6));
+    lip.push([x, Ht + dip * 0.55 + near - Math.min(2.2, W * 0.035)]);
+  }
+  P('detail', lip);
 
   // The tentacles, one between each two pedalia, stiff, the near ones over
   // the bell and the far ones behind it.

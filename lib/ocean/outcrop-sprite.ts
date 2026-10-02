@@ -27,7 +27,7 @@ import { mixHex } from '../fan';
 import { zoneMid } from './depth';
 import type { EelPatch, Growth, GrowthKind, Outcrop, outcropsInView } from './outcrop';
 import { HUES, IRON_GALL, waterAt, type Water } from './palette';
-import { detailFor, grain, hatch, inkLine, LIGHT, mottle, shadeAcross, stipple, washFill } from './pen';
+import { contourHatch, detailFor, grain, hatch, inkLine, LIGHT, mottle, shadeAcross, stipple, tubeWash, washFill } from './pen';
 import { chance, hash32, int, mulberry32, range, type Rand } from './random';
 
 /** The light from the top left, and the other way for light ink on dark
@@ -480,40 +480,36 @@ function buildGrammar(
     // Set back a little under the beds and up into them, so they never
     // sit on a neck of it.
     foot(0.06 * S, Hr * 0.2, 0.7 * S);
-    // Beds from the lowest up, each laid over the one under it, thick and
-    // square-ended, and each stepping back toward the wall from the one
-    // under it: one tabular mass rising in benches, never a stack of
-    // pancakes each jutting further than the last.
-    const beds = 2 + (r() < 0.6 ? 1 : 0);
-    const ys: number[] = [];
-    let y = -0.05 * Hr;
-    for (let i = 0; i < beds; i++) {
-      const thick = Hr * range(r, 0.3, 0.4) * (i === 0 ? 1.1 : 1);
-      ys.push(y, thick);
-      y += thick * range(r, 0.62, 0.78);
-    }
-    // (Stepping back by a little: a bed far shorter than the one under it
-    // leaves the wall behind showing in the notch between their ends.)
-    const outs: number[] = [];
-    let out = S * range(r, 0.82, 1);
-    for (let i = beds - 1; i >= 0; i--) {
-      outs[i] = out;
-      out *= 0.9 + 0.07 * ((range(r, 0.78, 0.94) - 0.78) / 0.16);
-    }
-    // The lowest laid first, each bed over the one it sits on.
-    for (let i = beds - 1; i >= 0; i--) {
-      const rx = outs[i] * 0.5 + 0.12 * S;
-      const ry = ys[i * 2 + 1] / 2;
+    // Two beds, never a stack of like ones: a thick lower bed (a merged
+    // pair, its bedding line drawn across it) and over it a thinner one
+    // stepped back toward the wall by a third or more of its length, so the
+    // top of the lower bed shows as a bench. Square-ended and
+    // broken off, not rounded: three beds of one length read as pillows.
+    const thickLow = Hr * range(r, 0.55, 0.7);
+    const thickUp = Hr * range(r, 0.26, 0.36);
+    const outLow = S * range(r, 0.86, 1);
+    const outUp = outLow * (1 - range(r2, 0.3, 0.45));
+    const yUp = -0.08 * Hr;
+    const yLow = yUp + thickUp * range(r, 0.55, 0.7);
+    const bed = (out: number, top: number, thick: number, sq: Squares) => {
+      const rx = out * 0.5 + 0.12 * S;
+      const ry = thick / 2;
       // A flat bed's lumps scaled to its thickness, not its length: on a
       // long thin ellipse the full lumps push its end out into a tongue.
-      add(outs[i] - rx * 0.96, ys[i * 2], rx, ry, [3.2, 4.2], Math.max(0.35, Math.min(1, (1.6 * ry) / rx)));
-    }
+      add(out - rx * 0.96, top, rx, ry, sq, Math.max(0.35, Math.min(1, (1.6 * ry) / rx)));
+    };
+    // (The upper one behind: the lower bed's top edge runs across its foot,
+    // so it stands back on the bench and never sits on it as a cushion.)
+    bed(outUp, yUp, thickUp, [4.5, 5, 6]);
+    bed(outLow, yLow, thickLow, [3.4, 3.2, 6]);
     return;
   }
   if (g === 'spire') {
     foot(0.2 * S, Hr * 0.45, 0.55 * S);
-    // A low shoulder by the wall.
-    add(0.04 * S, Hr * range(r, 0.12, 0.24), 0.28 * S, Hr * 0.34, [2.4, 2.4]);
+    // A low shoulder by the wall, broad and rounded and well under half the
+    // pinnacle's height: two near-equal points read as a castle's turrets.
+    r();
+    add(0.02 * S, Hr * range(r2, 0.26, 0.36), 0.3 * S, Hr * 0.28, [2.6, 2.4]);
     // A buttress against its outer foot, now and then.
     const at = S * range(r, 0.5, 0.66);
     const rx = S * range(r, 0.17, 0.22);
@@ -525,7 +521,12 @@ function buildGrammar(
     const tall = Hr * 0.75 - top;
     const steep = range(r2, 0.82, 0.98);
     const full = range(r2, 1.15, 1.4);
-    add(at, top, rx, tall / 2, r2() < 0.5 ? [steep, 2.7, full] : [full, 2.7, steep]);
+    const flip = r2() < 0.5;
+    // Its top broken: a block standing behind one flank a quarter of the
+    // way down, so the profile steps out there and the two sides differ.
+    const side = flip ? 1 : -1;
+    add(at + side * rx * 0.62, top + tall * range(r2, 0.22, 0.32), rx * 0.42, tall * 0.11, [2.6, 2.2]);
+    add(at, top, rx, tall / 2, flip ? [steep, 2.7, full] : [full, 2.7, steep]);
     return;
   }
   if (g === 'overhang') {
@@ -534,7 +535,8 @@ function buildGrammar(
     // but not by much: a ledge, never a mushroom (`MAX_CAP`).
     add(0.2 * S, Hr * 0.12, S * range(r, 0.38, 0.44), Hr * 0.46, [2.4, 2.6]);
     // A block on top by the wall, now and then.
-    if (r() < 0.5) add(0.1 * S, -Hr * range(r, 0.2, 0.28), S * 0.22, Hr * 0.17, [3, 3]);
+    // (Sunk into the support's top, never resting above it on nothing.)
+    if (r() < 0.5) add(0.1 * S, -Hr * (0.04 + 0.3 * range(r, 0.2, 0.28)), S * 0.22, Hr * 0.17, [3, 3]);
     // The cap, jutting out over open water, its underside turned from the light.
     const ry = Hr * range(r, 0.2, 0.27);
     add(S * range(r, 0.5, 0.56), -Hr * range(r, 0.02, 0.1), S * range(r, 0.4, 0.46), ry, [2.6, 3.4]);
@@ -2538,47 +2540,91 @@ function anemoneTents(H: number, r: Rand, r2: Rand): number[][] {
   return tents;
 }
 
-/** A clump of vase sponges, the one behind first. */
-function tubeVases(H: number, r: Rand) {
-  const n = int(r, 1, 3);
-  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => Math.abs(b - (n - 1) / 2) - Math.abs(a - (n - 1) / 2));
-  return order.map((i) => {
-    const main = i === Math.floor(n / 2);
-    const x0 = (i - (n - 1) / 2) * H * 0.26 + range(r, -0.03, 0.03) * H;
-    const th = H * (main ? range(r, 0.8, 1) : range(r, 0.5, 0.75));
-    const foot = H * range(r, 0.05, 0.08);
-    const belly = H * range(r, 0.15, 0.22) * (main ? 1 : 0.85);
-    const lip = belly * range(r, 0.9, 1.1);
-    const lean = range(r, -0.12, 0.12) + (i - (n - 1) / 2) * 0.1;
-    // Two sides of their own, lumpy, so it is never a turned pot.
-    const wob = [range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28)];
-    const half = (t: number, side: number) => {
-      const shape = foot + (belly - foot) * Math.pow(Math.sin(Math.min(1, t / 0.75) * (Math.PI / 2)), 1.3) + (lip - belly) * Math.max(0, (t - 0.75) / 0.25);
-      const k = side < 0 ? 0 : 2;
-      return shape * (1 + 0.13 * Math.sin(t * 6 + wob[k]) + 0.06 * Math.sin(t * 15 + wob[k + 1]));
-    };
-    const ry = lip * 0.3;
-    const spine = (t: number): [number, number] => [x0 + Math.sin(lean) * th * t + Math.sin(t * 3 + wob[0]) * H * 0.015, -th * t];
-    const pts: number[] = [];
-    const N = 18;
+/**
+ * A clump of tube sponges: two to four tubes grown up out of one crust,
+ * each its own height and girth, leaning out from the clump and bending a
+ * little as it goes, its wall swelling and narrowing unevenly (never in
+ * steps, which read as a stack of rings) and opening at the top in a thick
+ * rolled rim round its dark mouth. The ones behind first.
+ */
+function tubeCluster(H: number, r: Rand) {
+  const n = int(r, 2, 4);
+  const tall = int(r, 0, n - 1);
+  const tubes = Array.from({ length: n }, (_, i) => {
+    const u = n === 1 ? 0 : i / (n - 1) - 0.5;
+    const main = i === tall;
+    const th = H * (main ? range(r, 0.85, 1) : range(r, 0.45, 0.8));
+    // (Close at the foot, so the tubes are fused there into one clump.)
+    const x0 = u * H * (0.08 + 0.05 * n) + range(r, -0.02, 0.02) * H;
+    const lean = u * range(r, 0.25, 0.5) + range(r, -0.08, 0.08);
+    const bend = range(r, -0.35, 0.35);
+    const rad0 = H * range(r, 0.075, 0.105) * (main ? 1.12 : 1);
+    const flare = range(r, 1.05, 1.35);
+    const ph = [range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28), range(r, 0, 6.28)];
+    const z = main ? 0.5 + range(r, 0, 0.3) : range(r, 0, 1);
+    // The spine, stepped up from the foot, turning as it bends.
+    const N = 16;
+    const sp: number[] = [x0, 0];
+    const ang: number[] = [lean];
+    for (let k = 1; k <= N; k++) {
+      const t = (k - 0.5) / N;
+      const a = lean + bend * t * t;
+      sp.push(sp[(k - 1) * 2] + (Math.sin(a) * th) / N, sp[(k - 1) * 2 + 1] - (Math.cos(a) * th) / N);
+      ang.push(lean + bend * (k / N) * (k / N));
+    }
+    // Each side lumpy in its own way: a soft swelling and a pinch, never a pipe.
+    const side = (t: number, s: number) =>
+      rad0 * (1 + (flare - 1) * t * t) * (1 + 0.14 * Math.sin(t * 3.3 + ph[s]) + 0.06 * Math.sin(t * 7.9 + ph[s + 1])) * (1 + 0.35 * Math.pow(1 - t, 6));
+    const rad = (t: number) => (side(t, 0) + side(t, 2)) / 2;
+    const a: number[] = [];
+    const bb: number[] = [];
     for (let k = 0; k <= N; k++) {
       const t = k / N;
-      const [sx, sy] = spine(t);
-      pts.push(sx - half(t, -1), sy);
+      const nx = Math.cos(ang[k]);
+      const ny = Math.sin(ang[k]);
+      // (Toward the rim, both sides meet the rim's own width.)
+      const m = Math.pow(t, 6);
+      const wl = side(t, 0) * (1 - m) + rad(1) * m;
+      const wr = side(t, 2) * (1 - m) + rad(1) * m;
+      a.push(sp[k * 2] - nx * wl, sp[k * 2 + 1] - ny * wl);
+      bb.push(sp[k * 2] + nx * wr, sp[k * 2 + 1] + ny * wr);
     }
-    const [tx, ty] = spine(1);
-    // Over the back of the lip, then down the other side.
+    // The rim: the mouth seen a little from above, across the tube's top.
+    const top = { x: sp[N * 2], y: sp[N * 2 + 1], rx: rad(1) * 1.06, ry: rad(1) * 0.38, ang: ang[N] };
+    const pts: number[] = [...a];
+    // Over the back of the rim, from the left edge to the right.
     for (let k = 1; k < 12; k++) {
-      const a = Math.PI + (Math.PI * k) / 12;
-      pts.push(tx + Math.cos(a) * (half(1, -1) + half(1, 1)) * 0.5 + (half(1, 1) - half(1, -1)) * 0.5, ty + Math.sin(a) * ry);
+      const q = Math.PI + (Math.PI * k) / 12;
+      const ex = Math.cos(q) * top.rx;
+      const ey = Math.sin(q) * top.ry;
+      pts.push(top.x + ex * Math.cos(top.ang) - ey * Math.sin(top.ang), top.y + ex * Math.sin(top.ang) + ey * Math.cos(top.ang));
     }
-    for (let k = N; k >= 0; k--) {
-      const t = k / N;
-      const [sx, sy] = spine(t);
-      pts.push(sx + half(t, 1), sy);
+    for (let k = N; k >= 0; k--) pts.push(bb[k * 2], bb[k * 2 + 1]);
+    const rim: number[] = [];
+    for (let k = 0; k < 24; k++) {
+      const q = (Math.PI * 2 * k) / 24;
+      const ex = Math.cos(q) * top.rx;
+      const ey = Math.sin(q) * top.ry;
+      rim.push(top.x + ex * Math.cos(top.ang) - ey * Math.sin(top.ang), top.y + ex * Math.sin(top.ang) + ey * Math.cos(top.ang));
     }
-    return { th, wob, half, ry, spine, pts };
+    return { th, z, sp, ang, rad, a, b: bb, top, pts, rim };
   });
+  tubes.sort((p, q) => p.z - q.z);
+  // The crust they grow from, a low mound round their feet.
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const t of tubes) {
+    lo = Math.min(lo, t.a[0], t.b[0]);
+    hi = Math.max(hi, t.a[0], t.b[0]);
+  }
+  const crust: number[] = [];
+  const cw = (hi - lo) / 2 + H * 0.03;
+  const cx = (hi + lo) / 2;
+  for (let k = 0; k <= 16; k++) {
+    const q = Math.PI + (Math.PI * k) / 16;
+    crust.push(cx + Math.cos(q) * cw, Math.sin(q) * H * 0.05);
+  }
+  return { tubes, crust };
 }
 
 /** Black coral's whips, each its line from the foot to the tip. */
@@ -2923,9 +2969,13 @@ export function growthExtent(g: Pick<Growth, 'kind' | 'size' | 'seed'>, zone = 2
       take(b, [-H * 0.19, -H * 0.41, H * 0.19, 0], pen);
       break;
     }
-    case 'tube':
-      for (const v of tubeVases(H, r)) take(b, v.pts, pen);
+    case 'tube': {
+      const c = tubeCluster(H, r);
+      for (const t of c.tubes) take(b, [...t.pts, ...t.rim], pen);
+      take(b, c.crust, pen);
+      take(b, [0, 0], 0);
       break;
+    }
     case 'urchin': {
       const R = H * 0.2;
       take(b, [-R, -2 * R, R, 0], pen);
@@ -3247,94 +3297,102 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     outline(ctx, col, true, ink, pen, 0.85);
   },
 
-  // Vase sponges: one to three irregular vases, narrow at the foot and
-  // swelling to a thick rolled lip, each a little lopsided, dark in the
-  // mouth, shaded in lines that wrap round the form on its shadow side and
-  // pitted with pores when drawn big. In the reef's colours, never grey.
+  // Tube sponges (`tubeCluster`): the crust, then each tube from the back,
+  // washed graded across its round, its shadow side worked in lines that
+  // run up the tube with it (never round it), pitted with pores, and its
+  // mouth a dark hollow inside a thick rolled rim. In the reef's colours,
+  // never grey.
   tube(ctx, H, ink, r, px, pen) {
-    for (const { th, wob, half, ry, spine, pts } of tubeVases(H, r)) {
-      const [tx, ty] = spine(1);
-      const body = pathOf(pts);
-      const box = boxOf(pts);
-      wash(ctx, body, box, ink.body, pen);
-      // Lines round the form, bowed as a ring is seen from a little above,
-      // only on its shadow side and heavier into it.
-      ctx.save();
-      ctx.clip(body);
-      const rings = new Path2D();
-      const rows = Math.max(3, Math.round(th / ((pen.d > 0.3 ? 3 : 4) * px)));
-      for (let q = 1; q < rows; q++) {
-        const t = q / rows;
-        const [sx, sy] = spine(t);
-        const hl = half(t, -1);
-        const hr = half(t, 1);
-        const rr = ((hl + hr) / 2) * 0.38;
-        // Each ring starts and stops somewhere of its own.
-        const stop = 0.5 + 0.12 * Math.sin(q * 2.3 + wob[1]);
-        let on = false;
-        for (let k = 0; k <= 20; k++) {
-          const ph = (Math.PI * k) / 20;
-          const c = Math.cos(ph);
-          // Facing: the right of the front, away from the light, is the shade.
-          const sh = 0.45 + 0.45 * c + 0.12 * (1 - Math.sin(ph));
-          const want = pen.dark ? 1 - sh : sh;
-          const x = sx + (c >= 0 ? c * hr : c * hl);
-          const y = sy + Math.sin(ph) * rr;
-          if (want < stop) {
-            on = false;
-            continue;
-          }
-          if (on) rings.lineTo(x, y);
-          else rings.moveTo(x, y);
-          on = true;
-        }
+    const { tubes, crust } = tubeCluster(H, r);
+    const cp = pathOf(crust);
+    wash(ctx, cp, boxOf(crust), ink.deep, pen, 0.9);
+    if (pen.d > 0.3) outline(ctx, crust, false, ink, pen, 0.7, [0.2, 0.2]);
+    for (const t of tubes) {
+      const body = pathOf(t.pts);
+      const box = boxOf(t.pts);
+      // The ones behind a little in shadow.
+      const tone = t.z < 0.35 ? mixHex(ink.body, ink.deep, 0.35) : ink.body;
+      if (pen.d > 0.45) {
+        const a = ctx.globalAlpha;
+        ctx.globalAlpha = 1;
+        tubeWash(ctx, body, [{ a: t.a, b: t.b }], box, {
+          stops: [
+            [0, pen.dark ? mixHex(tone, ink.lit, 0.5) : mixHex(tone, '#FBF8EF', 0.45)],
+            [0.4, tone],
+            [1, ink.deep],
+          ],
+          alpha: a,
+        });
+        ctx.globalAlpha = a;
+      } else wash(ctx, body, box, tone, pen);
+      if (pen.d > 0.5) {
+        // Lines up the tube on its shadow side (its lit side, on dark water).
+        const shade = shadeAcross(box, pen.light);
+        contourHatch(ctx, body, [{ a: t.a, b: t.b }], {
+          spacing: 1.5 * px,
+          shade,
+          reach: 0.42,
+          width: 0.55 * px,
+          k: 0.75,
+          color: ink.ink,
+          alpha: pen.dark ? 0.45 : 0.6,
+          light: pen.light,
+          seed: pen.seed ^ 0x2c1,
+        });
       }
-      ctx.strokeStyle = ink.ink;
-      ctx.lineWidth = (pen.d > 0.3 ? 0.45 : 0.55) * px;
-      faint(ctx, pen.dark ? 0.35 : 0.55, () => ctx.stroke(rings));
-      ctx.restore();
       if (pen.d > 0.3) {
-        // Pores: small dark openings over the near face, each with a lit lower lip.
+        // Pores: small dark openings scattered over the near face, each with a lit lower lip.
         const pores = new Path2D();
         const lips = new Path2D();
-        const count = Math.round(6 + 14 * pen.d * (th / H));
+        const count = Math.round(2 + 10 * (pen.d - 0.2) * (t.th / H));
         for (let k = 0; k < count; k++) {
-          const t = 0.12 + 0.72 * pen.r2();
-          const u = (pen.r2() - 0.5) * 1.3;
-          const [sx, sy] = spine(t);
-          const hw = u < 0 ? half(t, -1) : half(t, 1);
-          const prx = (0.5 + pen.r2() * 0.6) * px * (1 - Math.abs(u) * 0.6);
-          const qx = sx + u * hw * 0.85;
-          const qy = sy;
+          const tt = 0.14 + 0.7 * pen.r2();
+          const v = (pen.r2() - 0.5) * 1.3;
+          const i = Math.round(tt * 16);
+          const nx = Math.cos(t.ang[i]);
+          const ny = Math.sin(t.ang[i]);
+          const w = t.rad(tt);
+          const prx = Math.max(0.35 * px, w * (0.12 + 0.08 * pen.r2())) * (1 - Math.abs(v) * 0.5);
+          const qx = t.sp[i * 2] + nx * v * w * 0.85;
+          const qy = t.sp[i * 2 + 1] + ny * v * w * 0.85;
           pores.moveTo(qx + prx, qy);
-          pores.ellipse(qx, qy, prx, prx * 0.7, 0, 0, Math.PI * 2);
+          pores.ellipse(qx, qy, prx * (1 - Math.abs(v) * 0.4), prx * 0.75, t.ang[i], 0, Math.PI * 2);
           lips.moveTo(qx + prx, qy + 0.3 * px);
-          lips.ellipse(qx, qy + 0.3 * px, prx, prx * 0.7, 0, 0.2, Math.PI - 0.2);
+          lips.ellipse(qx, qy + 0.3 * px, prx, prx * 0.7, t.ang[i], 0.2, Math.PI - 0.2);
         }
         ctx.fillStyle = ink.hollow;
-        faint(ctx, 0.55, () => ctx.fill(pores));
+        faint(ctx, 0.6, () => ctx.fill(pores));
         ctx.strokeStyle = ink.lit;
         ctx.lineWidth = 0.4 * px;
         faint(ctx, 0.7, () => ctx.stroke(lips));
       }
-      // The mouth: a rolled lip round a dark hollow, the far inside wall catching the light.
-      const lx = tx + (half(1, 1) - half(1, -1)) * 0.5;
-      const lw = (half(1, -1) + half(1, 1)) * 0.5;
+      outline(ctx, t.pts, true, ink, pen, 0.9);
+      // The mouth: a dark hollow inside the rim's thickness, its far inside wall catching the light.
+      const { x, y, rx, ry, ang } = t.top;
       const mouth = new Path2D();
-      mouth.ellipse(lx, ty + ry * 0.12, lw * 0.8, ry * 0.62, 0, 0, Math.PI * 2);
+      mouth.ellipse(x, y, rx * 0.72, ry * 0.62, ang, 0, Math.PI * 2);
+      const lip = new Path2D();
+      lip.ellipse(x, y, rx, ry, ang, 0, Math.PI * 2);
+      ctx.fillStyle = pen.dark ? mixHex(tone, ink.lit, 0.3) : mixHex(tone, '#FBF8EF', 0.3);
+      ctx.fill(lip);
       ctx.fillStyle = ink.hollow;
       faint(ctx, 0.85, () => ctx.fill(mouth));
       const wall = new Path2D();
-      wall.ellipse(lx, ty + ry * 0.12, lw * 0.8, ry * 0.62, 0, Math.PI, Math.PI * 2);
-      wall.ellipse(lx, ty + ry * 0.5, lw * 0.7, ry * 0.4, 0, Math.PI * 2, Math.PI, true);
+      wall.ellipse(x, y, rx * 0.72, ry * 0.62, ang, Math.PI, Math.PI * 2);
+      wall.ellipse(x, y + ry * 0.3, rx * 0.62, ry * 0.36, ang, Math.PI * 2, Math.PI, true);
       ctx.fillStyle = ink.deep;
-      faint(ctx, 0.6, () => ctx.fill(wall));
-      ctx.fillStyle = ink.body;
-      outline(ctx, pts, true, ink, pen, 0.9);
-      const rim: number[] = [];
-      arcPts(rim, lx, ty + ry * 0.12, lw * 0.8, ry * 0.62, 0, Math.PI * 2, 24);
-      outline(ctx, rim, true, ink, pen, 0.6);
+      faint(ctx, 0.55, () => ctx.fill(wall));
+      ctx.strokeStyle = ink.ink;
+      if (pen.d > 0.45) outline(ctx, t.rim, true, ink, pen, 0.75);
+      else {
+        // (Small, the rim is one plain line: the pen's pressure would not show.)
+        ctx.lineWidth = 0.7 * px;
+        ctx.stroke(lip);
+      }
+      ctx.lineWidth = 0.45 * px;
+      faint(ctx, 0.7, () => ctx.stroke(mouth));
     }
+    ctx.fillStyle = ink.body;
   },
 
   // Urchin: a round test bristling with fine tapering spines, none into the
@@ -3523,7 +3581,11 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     }
     ctx.lineWidth = 0.4 * px;
     faint(ctx, 0.5, () => ctx.stroke(roots));
-    faint(ctx, 0.3, () => ctx.fill(vase));
+    // Pale glass, not a hole in the water: an ivory wash, let go toward the
+    // paper on its lit side and turned on its far side by a few lines.
+    const vb = boxOf(pts);
+    wash(ctx, vase, vb, ink.body, pen, pen.dark ? 0.35 : 0.62);
+    shadeIn(ctx, vase, vb, ink, pen, { angle: Math.PI / 2 - 0.1, bow: 0, from: 0.6, cross: null, k: 0.4 });
     ctx.save();
     ctx.clip(vase);
     ctx.beginPath();

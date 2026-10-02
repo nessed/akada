@@ -767,7 +767,7 @@ export function drawSnellWindow(
 
 /* ---- God rays ---- */
 
-interface RayOptions {
+export interface RayOptions {
   source: { x: number; y: number };
   occluder: CanvasImageSource | null;
   strength: number;
@@ -775,6 +775,8 @@ interface RayOptions {
   px: number;
   seed: number;
   dark: boolean;
+  /** A second, narrower sheaf of the same light coming down elsewhere (the open water away from the window), at `strength` of the first. */
+  sheaf?: { x: number; y: number; strength: number; width: number } | null;
 }
 
 /** The ray buffer's share of the canvas: the rays are soft, and this is a ninth of the pixels. */
@@ -793,62 +795,64 @@ function paintRays(w: number, h: number, o: RayOptions): Surface | null {
   const g = S.ctx;
   g.scale(q, q);
   g.globalCompositeOperation = 'lighter';
-  const r = mulberry32(hash32('rays', o.seed));
-  const { x: sx, y: sy } = o.source;
   const size = Math.max(w, h);
   const tilt = o.sun.tilt;
-  // A wider fan when the source is close to the top of the picture.
-  const spread = 0.42 + 0.25 * clamp01(1 - (sy + size * 0.1) / (size * 0.4));
-  const base = w * 0.34;
-  const n = 110;
   const col = mixHex(o.sun.warmth, '#FFFFFF', 0.25);
   const [cr, cg, cb] = rgbOf(col);
-  for (let i = 0; i < n; i++) {
-    // Rays bunch a little, as shafts do: some gaps, some sheaves.
-    const u = (i + r() * 0.9) / n;
-    const bunch = 0.5 + 0.5 * Math.sin(u * 23 + o.seed * 0.001) * Math.sin(u * 7.3 + 1.1);
-    const along = (u - 0.5) * 2;
-    const a = tilt + along * spread * 0.5 + (r() - 0.5) * 0.04;
-    const dx = Math.sin(a);
-    const dy = Math.cos(a);
-    const x0 = sx + along * base * 0.5 + (r() - 0.5) * base * 0.06;
-    const y0 = sy;
-    const len = size * (0.55 + 0.75 * r());
-    const w0 = size * (0.0015 + 0.009 * r() * r());
-    const w1 = w0 * (2.2 + 3.5 * r());
-    const bright = (0.18 + 0.82 * Math.pow(r(), 1.8)) * (0.35 + 0.65 * bunch);
-    // The fan thins out at its sides, so it has no edge, only less light.
-    const sideFade = Math.pow(Math.max(0, 1 - along * along), 1.1);
-    const nx = dy;
-    const ny = -dx;
-    const ex = x0 + dx * len;
-    const ey = y0 + dy * len;
-    const grad = g.createLinearGradient(x0, y0, ex, ey);
-    // Uneven along its length: a few soft breaks, then the fade.
-    const breaks = [0, 0.09, 0.16 + r() * 0.08, 0.3 + r() * 0.15, 0.5 + r() * 0.15, 0.75, 1];
-    const level = [0, 1, 0.55 + 0.45 * r(), 0.35 + 0.5 * r(), 0.25 + 0.3 * r(), 0.12 * r() + 0.06, 0];
-    for (let k = 0; k < breaks.length; k++) {
-      // The water swallows it: light falls off with distance.
-      const fade = Math.exp(-breaks[k] * 1.6);
-      grad.addColorStop(Math.min(1, breaks[k]), `rgba(${cr}, ${cg}, ${cb}, ${(bright * sideFade * level[k] * fade * 0.22).toFixed(4)})`);
+  const fan = (sx: number, sy: number, n: number, base: number, spread: number, gain: number, r: Rand) => {
+    for (let i = 0; i < n; i++) {
+      // Rays bunch a little, as shafts do: some gaps, some sheaves.
+      const u = (i + r() * 0.9) / n;
+      const bunch = 0.5 + 0.5 * Math.sin(u * 23 + o.seed * 0.001) * Math.sin(u * 7.3 + 1.1);
+      const along = (u - 0.5) * 2;
+      const a = tilt + along * spread * 0.5 + (r() - 0.5) * 0.04;
+      const dx = Math.sin(a);
+      const dy = Math.cos(a);
+      const x0 = sx + along * base * 0.5 + (r() - 0.5) * base * 0.06;
+      const y0 = sy;
+      const len = size * (0.55 + 0.75 * r());
+      const w0 = size * (0.0015 + 0.009 * r() * r());
+      const w1 = w0 * (2.2 + 3.5 * r());
+      const bright = (0.18 + 0.82 * Math.pow(r(), 1.8)) * (0.35 + 0.65 * bunch) * gain;
+      // The fan thins out at its sides, so it has no edge, only less light.
+      const sideFade = Math.pow(Math.max(0, 1 - along * along), 1.1);
+      const nx = dy;
+      const ny = -dx;
+      const ex = x0 + dx * len;
+      const ey = y0 + dy * len;
+      const grad = g.createLinearGradient(x0, y0, ex, ey);
+      // Uneven along its length: a few soft breaks, then the fade.
+      const breaks = [0, 0.09, 0.16 + r() * 0.08, 0.3 + r() * 0.15, 0.5 + r() * 0.15, 0.75, 1];
+      const level = [0, 1, 0.55 + 0.45 * r(), 0.35 + 0.5 * r(), 0.25 + 0.3 * r(), 0.12 * r() + 0.06, 0];
+      for (let k = 0; k < breaks.length; k++) {
+        // The water swallows it: light falls off with distance.
+        const fade = Math.exp(-breaks[k] * 1.6);
+        grad.addColorStop(Math.min(1, breaks[k]), `rgba(${cr}, ${cg}, ${cb}, ${(bright * sideFade * level[k] * fade * 0.22).toFixed(4)})`);
+      }
+      g.fillStyle = grad;
+      // Twice: a wide faint sheath, then the core.
+      for (const [k, alpha] of [
+        [2.4, 0.45],
+        [1, 1],
+      ] as const) {
+        g.globalAlpha = alpha;
+        g.beginPath();
+        g.moveTo(x0 - (nx * w0 * k) / 2, y0 - (ny * w0 * k) / 2);
+        g.lineTo(x0 + (nx * w0 * k) / 2, y0 + (ny * w0 * k) / 2);
+        g.lineTo(ex + (nx * w1 * k) / 2, ey + (ny * w1 * k) / 2);
+        g.lineTo(ex - (nx * w1 * k) / 2, ey - (ny * w1 * k) / 2);
+        g.closePath();
+        g.fill();
+      }
     }
-    g.fillStyle = grad;
-    // Twice: a wide faint sheath, then the core.
-    for (const [k, alpha] of [
-      [2.4, 0.45],
-      [1, 1],
-    ] as const) {
-      g.globalAlpha = alpha;
-      g.beginPath();
-      g.moveTo(x0 - (nx * w0 * k) / 2, y0 - (ny * w0 * k) / 2);
-      g.lineTo(x0 + (nx * w0 * k) / 2, y0 + (ny * w0 * k) / 2);
-      g.lineTo(ex + (nx * w1 * k) / 2, ey + (ny * w1 * k) / 2);
-      g.lineTo(ex - (nx * w1 * k) / 2, ey - (ny * w1 * k) / 2);
-      g.closePath();
-      g.fill();
-    }
-  }
-  g.globalAlpha = 1;
+    g.globalAlpha = 1;
+  };
+  const { x: sx, y: sy } = o.source;
+  // A wider fan when the source is close to the top of the picture.
+  const spread = 0.42 + 0.25 * clamp01(1 - (sy + size * 0.1) / (size * 0.4));
+  fan(sx, sy, 110, w * 0.34, spread, 1, mulberry32(hash32('rays', o.seed)));
+  // The second sheaf: fewer, nearly parallel, out over the open water.
+  if (o.sheaf && o.sheaf.strength > 0) fan(o.sheaf.x, o.sheaf.y, 46, o.sheaf.width, 0.16, o.sheaf.strength, mulberry32(hash32('rays-sheaf', o.seed)));
   // A glow where they all start, under the surface.
   const halo = size * 0.35;
   const hg = g.createRadialGradient(sx, sy, 0, sx, sy, halo);
@@ -897,7 +901,7 @@ function marchShadow(w: number, h: number, o: RayOptions, occluder: CanvasImageS
 let rayCache: { key: string; occluder: CanvasImageSource | null; rays: Surface; missing: Surface | null } | null = null;
 
 function raysFor(w: number, h: number, o: RayOptions): { rays: Surface; missing: Surface | null } | null {
-  const key = [w, h, o.source.x, o.source.y, o.sun.tilt, o.sun.warmth, o.seed, o.dark].join('|');
+  const key = [w, h, o.source.x, o.source.y, o.sun.tilt, o.sun.warmth, o.seed, o.dark, o.sheaf ? [o.sheaf.x, o.sheaf.y, o.sheaf.strength, o.sheaf.width].join(',') : ''].join('|');
   if (rayCache && rayCache.key === key && rayCache.occluder === o.occluder) return rayCache;
   const rays = paintRays(w, h, o);
   if (!rays) return null;
@@ -943,7 +947,7 @@ export function drawGodRays(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  o: { source: { x: number; y: number }; occluder: CanvasImageSource | null; strength: number; sun: SunLight; px: number; seed: number; dark: boolean },
+  o: RayOptions,
 ): void {
   const k = Math.max(0, o.strength) * Math.max(0.05, o.sun.strength);
   if (k <= 0.01 || w <= 0 || h <= 0) return;
@@ -983,7 +987,7 @@ export function drawGodRays(
 export function godRayLight(
   w: number,
   h: number,
-  o: { source: { x: number; y: number }; occluder: CanvasImageSource | null; strength: number; sun: SunLight; px: number; seed: number; dark: boolean },
+  o: RayOptions,
 ): (x: number, y: number) => number {
   const got = raysFor(w, h, o);
   if (!got) return () => 0;

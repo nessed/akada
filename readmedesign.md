@@ -1114,8 +1114,10 @@ only ever grows, it never runs backwards, and none of it touches progress.
   15 to 40 degrees below level. Jellies are always glass, never a solid
   dome or a flat saucer; below the midnight line every bell is a crown
   jelly, an Atolla (a flat disc with a coronal groove, rim lobes and one
-  long trailing tentacle) or a Periphylla (a helmet), its stomach showing
-  wine red through the bell; a comb jelly's
+  long trailing tentacle) or a Periphylla (a helmet), its stomach an organ
+  seen through glass, a soft wine cone darkest at its tip and fading out
+  before the groove, never a dark hole; a sea star is a solid animal, never
+  glass, its arms washed, stippled in the shade and ridged with plates; a comb jelly's
   mouth end is one soft curve with its lobes drawn inside it, never a
   notch. Drawn big, the solid ones
   are shaded in contour hatching that runs with the spine, only in the
@@ -1242,9 +1244,10 @@ only ever grows, it never runs backwards, and none of it touches progress.
   At night the pale ink hatches the lit faces instead, and is never
   crossed, laid in uneven lanes (each up to a third of the spacing off, each
   stroke a few degrees off the set) so fine hatching never beats into a
-  moiré. A pinnacle comes to a broken point; a slab's beds step back from
-  each other by a tenth at most, so the wall never shows in the notch
-  between their ends. A wall is washed right up to its line, the stone just
+  moiré. A pinnacle comes to a broken point, one dominant spire with its shoulder
+  well under half its height and its top broken on one side; a slab is two
+  beds, the upper stepped back by a third or more so a bench shows, never a
+  stack of like beds. A wall is washed right up to its line, the stone just
   inside its lit edge lifted toward the paper but never left open to the
   water. Walls, trench faces and floors are engraved the same way, not
   washed: on the cream paper the wash is only a light tint and the hatching
@@ -1252,7 +1255,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   wall's ink strength more than its strokes, so a wall far down is still
   drawn; and nothing on a wall repeats, so scallops or tiles there are a
   bug. Every rock is outlined as far down as its wash goes. Plate coral
-  is a rosette of thin plates from one root, never a shelf on a stalk. In a
+  is a rosette of thin plates from one root, never a shelf on a stalk; tube
+  sponges grow as a fused clump of uneven tubes, each with a rolled rim
+  round a dark mouth, shaded up the tube and never round it. In a
   picture's deep the walls and floor gather sea pens (broad crescent leaves
   in two ranks), stalked crinoids (a lily of feathered arms nodding on a
   jointed stalk), brittle stars, glass sponges, whips and anemones. Sea fans

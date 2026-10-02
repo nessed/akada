@@ -150,8 +150,12 @@ export function drained(hex: string, z: number): string {
 /** How a creature is inked, on dark water or light. `vivid` keeps the colour
     the depth would take, for a wallpaper, which is the animal at its best. */
 export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureInk {
-  const base = HUES[Math.max(0, Math.min(9, Math.round(g.hue)))];
-  const hue = vivid ? base : drained(base, g.z);
+  const hi = Math.max(0, Math.min(9, Math.round(g.hue)));
+  // (A sea star is never the grey pastel: an apricot one in its place.)
+  const base = HUES[g.plan === 'star' && HUES[hi] === '#9AA3AB' ? 3 : hi];
+  // A sea star keeps its colour longer than a swimmer: it is drawn as a
+  // specimen in the hand, and a grey star on grey ground is a cut-out.
+  const hue = vivid ? base : drained(base, g.plan === 'star' ? g.z * 0.45 : g.z);
   const glow = GLOWS[Math.max(0, Math.min(3, Math.round(g.glow)))];
   const ink = dark ? mixHex(hue, '#FFFFFF', 0.45) : mixHex(hue, '#1A1714', 0.62);
   const water = dark ? '#1A1815' : '#FBF8EF';
@@ -175,7 +179,8 @@ export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureIn
     pupil: '#141210',
     // A comb jelly is glass whatever the dice say: its rows are what shows.
     // A bell is never opaque either: a solid dome reads as a lampshade.
-    bodyAlpha: angler ? 0.85 : g.clear ? 0.38 : g.plan === 'comb' ? 0.5 : g.plan === 'bell' ? 0.62 : 0.95,
+    // (A sea star is never glass, whatever the dice say.)
+    bodyAlpha: angler ? 0.85 : g.plan === 'star' ? 0.92 : g.clear ? 0.38 : g.plan === 'comb' ? 0.5 : g.plan === 'bell' ? 0.62 : 0.95,
     finAlpha: angler ? 0.7 : g.clear ? 0.35 : 0.8,
   };
 }
