@@ -703,10 +703,9 @@ function toBreakState(state: TimerState, atMs: number, breakSeconds: number, fro
 }
 
 /**
- * End the break and set out the next block, at the same length as the last,
- * held at zero. It starts when the reader starts it, not when the break
- * ends: a block that began ticking the moment rest stopped was counting the
- * walk back to the desk as work.
+ * End the break and start the next block, at the same length as the last,
+ * running from zero. Pressing End break is the reader saying they are back,
+ * so the clock does not wait for a second press.
  */
 function toFocusState(state: TimerState, atMs: number): TimerState {
   return {
@@ -716,8 +715,8 @@ function toFocusState(state: TimerState, atMs: number): TimerState {
     startedAt: atMs,
     stretchStartedAt: atMs,
     accumulatedMs: 0,
-    isPaused: true,
-    pausedAt: atMs,
+    isPaused: false,
+    pausedAt: null,
     lastSeenAt: atMs,
     lastInputAt: atMs,
   };
@@ -1257,7 +1256,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [applyActive],
   );
 
-  /** End the break, set out the next block held at the same length as the last. */
+  /** End the break and start the next block at the same length as the last. */
   const endBreak = useCallback(() => {
     const running = activeRef.current;
     if (!running || running.phase !== 'break') return;
