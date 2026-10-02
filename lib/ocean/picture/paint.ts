@@ -34,7 +34,7 @@ import { Wash } from '../wash';
 import { causticsOn } from '../caustics';
 import type { Growth, GrowthKind } from '../outcrop';
 import { drawGrowth, inkRock, inkWall, rockFoot, rockShape, rockStyle } from '../outcrop-sprite';
-import { floorAt, PICTURE_KELP, REF, rockOutline, rockX, wallAt, WALL_STEP, WHALE_BLUR, WHALE_PITCH, whaleHull, type PlacedEvent, type PlacedJelly, type PlacedRock, type Plan, type Wall } from './layout';
+import { floorAt, partExt, PICTURE_KELP, REF, rockOutline, rockX, wallAt, WALL_STEP, WHALE_BLUR, WHALE_PITCH, whaleHull, type PlacedEvent, type PlacedJelly, type PlacedRock, type Plan, type Wall } from './layout';
 
 interface Caches {
   biome: Biome;
@@ -102,7 +102,7 @@ const FAR_MIX = 0.6;
  * ribs, rim and trails still read in the haze. Fainter than that it is a
  * soap bubble: a pale disc with a rim and nothing in it.
  */
-const FAR_JELLY = { haze: 0.45, alpha: 0.6 };
+const FAR_JELLY = { haze: 0.3, alpha: 0.6 };
 /** The middle plane: a step back into the water. */
 const MID_MIX = 0.3;
 /** How far the water takes a far rock. */
@@ -1025,7 +1025,7 @@ function paintJelly(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, j: Pla
     c.jellies.set(key, made);
   }
   ctx.save();
-  ctx.globalAlpha = j.far ? FAR_JELLY.alpha : j.alpha;
+  ctx.globalAlpha = j.far ? Math.min(FAR_JELLY.alpha, j.alpha) : j.alpha;
   blit(ctx, made.canvas, j.x * D - made.ox, j.y * D - made.oy, view);
   ctx.restore();
   // In the sunlit water the light off the surface plays over the bell.
@@ -1071,6 +1071,18 @@ function renderJelly(plan: Plan, c: Caches, j: PlacedJelly, D: number): { canvas
   const tint = mixHex(plan.color, HUES[genome.hue] ?? plan.color, genome.hueMix);
   const dark = water.dark;
   const ink = jellyInk(tint, dark ? NIGHT : PAPER, dark);
+  if (!dark && !j.far) {
+    // On paper the trails are drawn in the jelly's own colour darkened, and
+    // the water darkens down the page under them: by their lower third they
+    // would be the water's own value and vanish, ending the jelly a fifth
+    // short of where the night ground shows it. So the pen is taken down
+    // until it reads (L* 16 under the water) where the trails end.
+    const under = labOf(waterTone(plan, c, j.y + j.len * 0.85))[0];
+    let k = 0.28;
+    while (k < 0.8 && labOf(mixHex(tint, '#1A1714', k))[0] > under - 16) k += 0.04;
+    ink.tentacle = mixHex(tint, '#1A1714', k);
+    ink.sting = mixHex(tint, '#1A1714', Math.min(0.9, k + 0.12));
+  }
   drawJelly(o, shape, cw, ch, {
     progress: Math.min(1, Math.max(0.42, L / maxL)),
     // No halo of its own: it would be cut square at the edge of this little
@@ -1204,6 +1216,34 @@ function paintKelp(ctx: CanvasRenderingContext2D, plan: Plan, kelp: Kelp, c: Cac
   // frames stacked down the page from a little under its top, so the
   // canopy along the surface is inside the page: three frames from the
   // canopy to the rock its holdfasts grip.
+  // One water for the forest's colours in every frame (its middle's): a
+  // frame's own water stepped the blades' colour at its edge, a box in
+  // the kelp at night.
+  const inkWater = waterAtY(plan, c, top + 1.5 * hf);
+  // Its ledge is the engine's, its foot let go of into the water: here it
+  // is cut at its silhouette's underside instead (where it still reads,
+  // halfway between where the wash starts to go and where it is gone), so
+  // no see-through lobe hangs under it, and the cut is inked.
+  const cuts = plan.rocks.filter((r) => r.kind === 'kelp' && sides.some((sd) => sd.forest.ledges[0].edge === r.edge)).map((r) => {
+    const N = r.shape.under.length - 1;
+    const pts: number[] = [];
+    for (let i = 0; i <= N + 6; i++) {
+      const j = Math.min(N, i);
+      const v = r.shape.solid[j] + 0.5 * (r.shape.under[j] - r.shape.solid[j]);
+      pts.push(rockX(r, plan.w, i / N), r.y + v * r.height);
+    }
+    return { r, pts };
+  });
+  const below = new Path2D();
+  below.rect(-plan.w * D, -plan.h * D, plan.w * 3 * D, plan.h * 3 * D);
+  for (const { r, pts } of cuts) {
+    below.moveTo(pts[0] * D, pts[1] * D);
+    for (let i = 2; i < pts.length; i += 2) below.lineTo(pts[i] * D, pts[i + 1] * D);
+    const deep = (r.y + r.height * 3) * D;
+    below.lineTo(pts[pts.length - 2] * D, deep);
+    below.lineTo(pts[0] * D, deep);
+    below.closePath();
+  }
   for (let k = 0; k < 3; k++) {
     if (!inSight(0, k ? top + k * hf : 0, plan.w, k === 2 ? plan.h : top + (k + 1) * hf)) continue;
     const water = waterAtY(plan, c, top + (k + 0.5) * hf);
@@ -1214,14 +1254,24 @@ function paintKelp(ctx: CanvasRenderingContext2D, plan: Plan, kelp: Kelp, c: Cac
     const y1 = k === 2 ? plan.h * D : (top + (k + 1) * hf) * D;
     ctx.rect(-plan.w * D, k ? y0 : 0, plan.w * 3 * D, y1 - (k ? y0 : 0));
     ctx.clip();
+    if (cuts.length) ctx.clip(below, 'evenodd');
     ctx.translate(0, y0);
     for (const side of sides) {
       ctx.save();
       ctx.translate(side.x * D, 0);
-      drawKelp(ctx, fw * D, hf * D, side.forest, focus, water, ambient, c.biome.env.current, D, undefined, true, { page: plan.h * D });
+      drawKelp(ctx, fw * D, hf * D, side.forest, focus, water, ambient, c.biome.env.current, D, undefined, true, { page: plan.h * D, inkWater });
       ctx.restore();
     }
     ctx.restore();
+  }
+  const night = plan.ground === 'night';
+  for (const { r, pts } of cuts) {
+    // Only as far as the ledge reaches: past its lip the line would float.
+    const run: number[] = [];
+    const N = r.shape.under.length - 1;
+    for (let i = 0; i <= N; i++) if (r.shape.under[i] - r.shape.top[i] > 0.04) run.push(pts[i * 2] * D, pts[i * 2 + 1] * D);
+    if (run.length >= 8 && inSight(r.box.x0, r.box.y0, r.box.x1, r.box.y1 + 4))
+      inkLine(ctx, run, false, { width: 0.9 * D, color: rockStyle(waterAtY(plan, c, r.y), night, D, 1, r.seed).line, alpha: night ? 0.6 : 0.8, swell: 0.45, lost: 0.08, taper: [0.04, 0.1], seed: hash32(r.seed, 'kelp-cut') });
   }
 }
 
@@ -1329,13 +1379,15 @@ function renderWall(plan: Plan, c: Caches, wall: Wall, D: number, ux0: number, u
   if (!o) return null;
   const X = (d: number) => (wall.edge < 0 ? d : w - d) * D - ox;
   const Y = (y: number) => y * D - oy;
-  const strength = wall.plane === 2 ? 1 : wall.plane === 1 ? 0.92 : 0.7;
+  // (Never see-through: the water between takes a far wall, by mixing, below.)
+  const strength = 1;
   const faceAt = (y: number) => wallAt(wall, y) ?? 0;
   const rocks = plan.rocks.filter((k) => k.edge === wall.edge && k.wall === wall);
   // The strip: in from off the page, down its face. Under a rock its top
   // runs inside the rock, so nothing of it shows above the rock's own
   // underside; and it comes in softly from there.
   const region = new Path2D();
+  const crest: number[] = [];
   const topRock = rocks.reduce<PlacedRock | null>((a, k) => (!a || k.y + k.height * 0.3 < a.y + a.height * 0.3 ? k : a), null);
   const inside = topRock && topRock.y + topRock.height * 0.6 >= wall.top ? topRock : null;
   let i0 = 1;
@@ -1359,19 +1411,24 @@ function renderWall(plan: Plan, c: Caches, wall: Wall, D: number, ux0: number, u
     yStart = Math.max(wall.top, yf - plan.h * 0.01);
     region.lineTo(X(Math.min(d, wallAt(wall, yf) ?? d)), Y(yf));
   } else {
-    region.moveTo(X(-8), Y(wall.top - 2));
-    region.lineTo(X(wall.face[0] * 0.55), Y(wall.top));
+    // No rock over it: its top a low rounded crest, inked below, never a fade.
+    region.moveTo(X(-8), Y(wall.top - plan.h * 0.012));
+    for (let q = 1; q <= 8; q++) {
+      const d = -8 + ((wall.face[0] + 8) * q) / 8;
+      crest.push(X(d), Y(wall.top - plan.h * 0.012 * (1 - (q / 8) ** 2)));
+      region.lineTo(X(d), Y(wall.top - plan.h * 0.012 * (1 - (q / 8) ** 2)));
+    }
   }
   for (let i = i0; i < n; i++) region.lineTo(X(wall.face[i]), Y(wall.top + i * WALL_STEP));
   region.lineTo(X(-8), Y(wall.bottom + 2));
   region.closePath();
   const span = Math.max(1, wall.bottom - wall.top);
   /** How much of it is left at a depth, as the engine fades it. */
-  const keep = (y: number) => 1 - 0.65 * clampT((y - yStart) / Math.max(1, wall.bottom - yStart));
+  const keep = (y: number) => 1 - 0.3 * clampT((y - yStart) / Math.max(1, wall.bottom - yStart));
   o.lineCap = 'round';
   o.lineJoin = 'round';
   const style = rockStyle(waterAtY(plan, c, yStart + plan.h * 0.1), night, D, wall.plane === 0 ? 0.4 : wall.plane === 1 ? 0.75 : 1, wall.seed);
-  inkWall(o, region, { x0: 0, y0: Math.max(0, Y(yStart) - 2), x1: cw, y1: chh }, style, D, wall.seed, { side: wall.edge < 0 ? 'left' : 'right', fadeFrom: Y(yStart), fadeTo: Y(wall.bottom) });
+  inkWall(o, region, { x0: 0, y0: Math.max(0, Y(yStart) - 2), x1: cw, y1: chh }, style, D, wall.seed, { side: wall.edge < 0 ? 'left' : 'right', fadeFrom: Y(yStart), fadeTo: Y(wall.bottom) + 2 * (Y(wall.bottom) - Y(yStart)) });
   // The shadow under each rock and each ledge, going on into the wall: a
   // soft dark band hung under the underside, laid as copies slid down.
   o.save();
@@ -1380,8 +1437,10 @@ function renderWall(plan: Plan, c: Caches, wall: Wall, D: number, ux0: number, u
   const bands: { pts: number[]; deep: number }[] = [];
   for (const k of rocks) {
     const pts: number[] = [];
-    const N = k.shape.solid.length - 1;
-    for (let i = 0; i <= N; i++) pts.push(rockX(k, w, i / N), k.y + k.shape.solid[i] * k.height - plan.h * 0.01);
+    // (Under a whole rock's underside, where it is cut and inked; the kelp's at its foot.)
+    const under = k.kind === 'kelp' || !k.shape.parts.every((p) => p.whole) ? k.shape.solid : k.shape.under;
+    const N = under.length - 1;
+    for (let i = 0; i <= N; i++) pts.push(rockX(k, w, i / N), k.y + under[i] * k.height - plan.h * 0.004);
     bands.push({ pts, deep: plan.h * 0.03 });
   }
   for (const l of wall.ledges) {
@@ -1424,6 +1483,18 @@ function renderWall(plan: Plan, c: Caches, wall: Wall, D: number, ux0: number, u
     o.fillRect(0, 0, cw, chh);
     o.restore();
   }
+  // Its crest, where no rock stands over it, and far off its open edge too
+  // (the water's mixing has all but taken `inkWall`'s): in the pen, so it is
+  // stone in the haze, never a column of smoke.
+  {
+    const line = rockStyle(waterAtY(plan, c, yStart + plan.h * 0.1), night, D, 1, wall.seed).line;
+    if (crest.length >= 8) inkLine(o, crest, false, { width: 0.9 * D, color: line, alpha: wall.plane === 0 ? 0.5 : night ? 0.6 : 0.8, swell: 0.4, lost: 0.1, taper: [0.05, 0.2], seed: hash32(wall.seed, 'crest') });
+    if (wall.plane === 0) {
+      const pts: number[] = [];
+      for (let i = i0; i < n; i++) pts.push(X(wall.face[i]), Y(wall.top + i * WALL_STEP));
+      inkLine(o, pts, false, { width: 0.6 * D, color: line, alpha: night ? 0.46 : 0.5, swell: 0.35, lost: 0.25, taper: [0.02, 0.02], seed: hash32(wall.seed, 'far-edge') });
+    }
+  }
   // Soft in from its top, and its last stretch let go of altogether, so it
   // goes down behind the floor's far swells and never ends on a hem.
   {
@@ -1431,12 +1502,13 @@ function renderWall(plan: Plan, c: Caches, wall: Wall, D: number, ux0: number, u
     const at = (y: number) => clampT(Y(y) / chh);
     const lost = Math.min(span * 0.5, plan.h * 0.06);
     const stops: [number, number][] = [
-      [0, 0.15],
-      [at(yStart), 0.15],
-      [at(yStart + plan.h * 0.02), 0.6],
-      [at(yStart + plan.h * 0.04), 1],
+      // (Under its top rock the rock covers it: whole from there. Over the
+      // page's foot it runs on off the page, whole to the last.)
+      [0, inside ? 0.15 : 1],
+      [at(yStart), inside ? 0.15 : 1],
+      [at(yStart + plan.h * 0.01), 1],
       [at(wall.bottom - lost), 1],
-      [1, 0],
+      [1, wall.bottom >= plan.h ? 1 : 0],
     ];
     let last = -1;
     for (const [q, a] of stops) {
@@ -1471,6 +1543,85 @@ function paintRock(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, k: Plac
 }
 
 /**
+ * Where the engine lets a whole rock's wash run dry, as shares of its
+ * height: below its silhouette's underside (`ROCK_FOOT`), where it is cut,
+ * so above that it is all there, wash and pen, never a see-through lobe.
+ */
+const WHOLE_FADE: [number, number] = [1, 1.3];
+
+/**
+ * A whole rock cut at its silhouette's underside (the line the plan keeps
+ * the water clear of): everything of it below that taken off, and wherever
+ * the cut went through stone, the cut inked as the ledge's underside in one
+ * pressure line, a hair rough, so no rock ends in a fade, a lobe or a
+ * square edge.
+ */
+function underside(o: CanvasRenderingContext2D, plan: Plan, k: PlacedRock, D: number, ox: number, oy: number, cw: number, chh: number, line: string): void {
+  const w = plan.w;
+  const span = (k.off + k.reach) * w;
+  const N = k.shape.under.length - 1;
+  const wob = (hash32(k.seed, 'under') % 1000) / 159;
+  /** The underside at a column of the canvas, in its px. */
+  const cutAt = (x: number) => {
+    const px = (x + ox) / D;
+    const u = Math.max(0, Math.min(1, k.edge < 0 ? (px + k.off * w) / span : (w + k.off * w - px) / span));
+    const f = u * N;
+    const i0 = Math.floor(f);
+    const i1 = Math.min(N, i0 + 1);
+    const v = k.shape.under[i0] * (1 - (f - i0)) + k.shape.under[i1] * (f - i0);
+    const rough = 0.5 * Math.sin(px / 9 + wob) + 0.3 * Math.sin(px / 3.1 + wob * 2.3);
+    return (k.y + v * k.height + rough * 0.6) * D - oy;
+  };
+  const step = Math.max(1, Math.round(1.5 * D));
+  const keep = new Path2D();
+  keep.moveTo(-4, -4);
+  keep.lineTo(cw + 4, -4);
+  for (let x = cw + 4; x >= -4; x -= step) keep.lineTo(x, cutAt(x));
+  keep.closePath();
+  o.save();
+  o.globalCompositeOperation = 'destination-in';
+  o.globalAlpha = 1;
+  o.fill(keep);
+  o.restore();
+  // Its whole underside in the pen, the cut and the boulders' own bottoms
+  // alike (the engine leaves the mass the rest stand in unlined): read off
+  // what is left, column by column, the lowest of the stone; broken where
+  // it jumps (a step from one boulder to the next) or leaves the page.
+  const data = o.getImageData(0, 0, cw, chh).data;
+  const night = plan.ground === 'night';
+  const runs: number[][] = [];
+  let run: number[] = [];
+  let lastY = NaN;
+  for (let x = 0; x < cw; x += step) {
+    const page = (x + ox) / D;
+    let low = -1;
+    if (page > -2 && page < w + 2) for (let y = chh - 1; y >= 0; y--) if (data[(y * cw + x) * 4 + 3] > 100) {
+      low = y;
+      break;
+    }
+    if (low < 0 || (Number.isFinite(lastY) && Math.abs(low - lastY) > 4 * D)) {
+      if (run.length) runs.push(run);
+      run = [];
+    }
+    if (low >= 0) run.push(x, low - 0.4 * D);
+    lastY = low >= 0 ? low : NaN;
+  }
+  if (run.length) runs.push(run);
+  runs.forEach((rn, ri) => {
+    if (rn.length < 8) return;
+    inkLine(o, rn, false, {
+      width: (k.plane === 2 ? 1.05 : k.plane === 1 ? 0.9 : 0.6) * D,
+      color: line,
+      alpha: k.plane === 0 ? (night ? 0.46 : 0.5) : night ? 0.62 : 0.85,
+      swell: 0.45,
+      lost: 0.06,
+      taper: [0.04, 0.04],
+      seed: hash32(k.seed, 'cut', ri),
+    });
+  });
+}
+
+/**
  * A rock from a wall in the shared engine's pen and wash (`inkRock`, as the
  * live sea's outcrops and the kelp's ledge are drawn): the silhouette the
  * plan placed, its foot let go of into the water, what grows at its depth
@@ -1489,14 +1640,20 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
   // Each part as the engine builds it, and room under the lowest for its
   // foot to go on down into the water: to where the engine has let go of
   // it, and the foot's wash below that.
+  // (A whole part is drawn at its span over its `partExt`, so its last
+  // boulder ends at its lip.)
   const parts = k.shape.parts.map((part) => {
-    const ps = part.span * span;
+    const ext = partExt(part);
+    const ps = (part.span * span) / ext;
     const shape = rockShape(part.seed, ps * D, part.thick * ps * D, D, part.grammar ?? 'heap');
-    return { part, shape, top: k.y + (k.shape.lift + part.dy) * span };
+    return { part, shape, ext, top: k.y + (k.shape.lift + part.dy) * span };
   });
+  // Drawn whole and cut at its silhouette's underside (`WHOLE`), so the
+  // canvas reaches only a little under that; the old let-go foot needs no room.
+  const whole = k.shape.parts.every((p) => p.whole);
   let foot = k.box.y1;
-  for (const p of parts) foot = Math.max(foot, p.top + rockFoot(p.shape) / D);
-  const by1 = Math.max(k.box.y1 + span * 0.25, foot + 4);
+  if (!whole) for (const p of parts) foot = Math.max(foot, p.top + rockFoot(p.shape) / D);
+  const by1 = whole ? k.box.y1 + 6 : Math.max(k.box.y1 + span * 0.25, foot + 4);
   const cw = Math.max(1, Math.ceil((bx1 - bx0) * D));
   const chh = Math.max(1, Math.ceil((by1 - by0) * D));
   const canvas = document.createElement('canvas');
@@ -1530,10 +1687,27 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
     target.lineJoin = 'round';
     const style = rockStyle(water, night, pen, detail, hash32(k.seed, 'part', i));
     // Far off: the engine's own haze, a broken thread of pen round it.
-    if (k.plane === 0) style.far = { water: water.top, mix: FAR_ROCK_MIX };
+    // (A whole one is drawn as the near ones are and taken by the water as its wall is, below.)
+    if (k.plane === 0 && !whole) style.far = { water: water.top, mix: FAR_ROCK_MIX };
+    // Whole: the wash never runs dry above its silhouette's underside, and
+    // the pen holds to it (it is cut there and inked, below).
+    if (whole) style.fade = WHOLE_FADE;
     inkRock(target, shape, { x0, y0, dir }, { ...style, barnacles: k.zone < 2 && k.plane === 2 && i === k.shape.parts.length - 1 });
     if (i > 0) o.drawImage(layer, 0, 0);
   });
+  if (whole) underside(o, plan, k, D, ox, oy, cw, chh, rockStyle(water, night, pen, detail, k.seed).line);
+  if (whole && k.plane === 0) {
+    // Far off, taken by the water between as its wall is (`renderWall`):
+    // the same mix toward the water down the page, so rock and wall are one stone.
+    const g = o.createLinearGradient(0, 0, 0, chh);
+    for (let s = 0; s <= 6; s++) g.addColorStop(s / 6, waterTone(plan, c, (oy + (chh * s) / 6) / D));
+    o.save();
+    o.globalCompositeOperation = 'source-atop';
+    o.globalAlpha = FAR_ROCK_MIX;
+    o.fillStyle = g;
+    o.fillRect(0, 0, cw, chh);
+    o.restore();
+  }
   const N = k.shape.top.length - 1;
   const crestAt = (u: number) => {
     const f = Math.max(0, Math.min(N, u * N));
@@ -1577,7 +1751,7 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
         const a = cuts[s] + (s ? 2 : 0);
         const b = cuts[s + 1] - 1;
         if (b - a < 3) continue;
-        inkLine(o, pts.slice(a * 2, b * 2 + 2), false, { width: 0.4 * D, color: ink, alpha: night ? 0.34 : 0.42, swell: 0.3, taper: [0.1, 0.1], seed: hash32(k.seed, 'far', s) });
+        inkLine(o, pts.slice(a * 2, b * 2 + 2), false, { width: 0.5 * D, color: ink, alpha: night ? 0.46 : 0.5, swell: 0.3, taper: [0.1, 0.1], seed: hash32(k.seed, 'far', s) });
       }
       // A few strokes of hatching in its shadow, toward the lip and low.
       o.save();
@@ -1600,14 +1774,18 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
       o.restore();
     }
     // Its foot let go of into its wall below, never a pale skirt of haze.
-    const g = o.createLinearGradient(0, (k.y + k.height * 0.5) * D - oy, 0, (k.y + k.height * 0.95) * D - oy);
-    g.addColorStop(0, 'rgba(0, 0, 0, 1)');
-    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    o.save();
-    o.globalCompositeOperation = 'destination-in';
-    o.fillStyle = g;
-    o.fillRect(0, 0, cw, chh);
-    o.restore();
+    // (A whole rock is cut at its underside and inked there instead: no
+    // rock ends in a fade into open water.)
+    if (!whole) {
+      const g = o.createLinearGradient(0, (k.y + k.height * 0.5) * D - oy, 0, (k.y + k.height * 0.95) * D - oy);
+      g.addColorStop(0, 'rgba(0, 0, 0, 1)');
+      g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      o.save();
+      o.globalCompositeOperation = 'destination-in';
+      o.fillStyle = g;
+      o.fillRect(0, 0, cw, chh);
+      o.restore();
+    }
   }
   // What grows on it: on the near and middle rocks only, nothing in the haze.
   if (k.plane > 0) {
@@ -1743,8 +1921,12 @@ function siltColors(plan: Plan, c: Caches): { back: string; front: string; top: 
   // Lighter and hazier at the back, where it meets the water; darker coming forward.
   // Ground is darker than the water over it, on paper as at night: it is
   // where the light ends, never a pale stage.
-  const back = night ? mixHex(water, '#9A9282', 0.12) : mixHex(water, '#3E362F', 0.16);
-  const front = night ? mixHex(waterTone(plan, c, plan.h), '#05060A', 0.4) : mixHex(water, INK, 0.3);
+  // On paper it is stone, as the trench's walls are (the rocks' wash, a
+  // step darker), hazed toward the water at the back: a ground the pen's
+  // beds read on, never a navy fill they sink into.
+  const stone = rockStyle(waterAtY(plan, c, top), false, 1, 1, plan.seed).rock;
+  const back = night ? mixHex(water, '#9A9282', 0.12) : mixHex(stone, water, 0.35);
+  const front = night ? mixHex(waterTone(plan, c, plan.h), '#05060A', 0.4) : mixHex(stone, INK, 0.12);
   return { back, front, top };
 }
 
@@ -1797,7 +1979,8 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
     // The floor recedes: two lower ridges behind its line, each higher up
     // the page and hazier the farther back, overlapping where they cross.
     const f = plan.floor;
-    for (let ri = 2; ri >= 1; ri--) {
+    // (One: two read as a ribbon laid along the floor's line.)
+    for (let ri = 2; ri >= 2; ri--) {
       const lift = plan.h * (ri === 2 ? 0.022 : 0.011);
       const ph = f.phase * (1.7 + ri) + ri * 2.1;
       const amp = f.amp * (0.7 + 0.3 * ri);
@@ -1863,30 +2046,17 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
       ctx.fillStyle = sg;
       ctx.fillRect(Math.min(xa, xb), yBack * D, Math.abs(xb - xa), H - yBack * D);
     }
-    // The lit band under the crest, no deeper than a hundredth of the page:
-    // on the floor all along, in a trench only on the wall facing the light.
-    if (facing) {
-      const deep = plan.h * 0.007;
-      const M = 3;
-      ctx.fillStyle = night ? '#CFC6B4' : '#F3EEE2';
-      for (let s = 1; s <= M; s++) {
-        const band = new Path2D();
-        band.moveTo(crest[0], crest[1] - D);
-        for (let i = 2; i < crest.length; i += 2) band.lineTo(crest[i], crest[i + 1] - D);
-        for (let i = crest.length - 2; i >= 0; i -= 2) band.lineTo(crest[i], crest[i + 1] + ((deep * s) / M) * D);
-        band.closePath();
-        ctx.globalAlpha = (night ? 0.035 : 0.045) * (t ? 1.2 : 1);
-        ctx.fill(band);
-      }
-      ctx.globalAlpha = 1;
-    }
+    // (No lit band under the crest: a pale ribbon along it read as a snow
+    // line. The crest is one broken pen line, below, and nothing else.)
     // The beds: level strata cut by the ground, each a run of broken
     // strokes, close at the back and opening out coming forward, heavier
     // toward the foot of the page and away from the window's light: about
     // a stroke to a hundred square units, an engraver's tone, never a fill.
     const pen = new Strokes();
     // A trench's wall is a cliff: in the rocks' and the side walls' own hand.
-    if (t && side !== 0) trenchFace(ctx, plan, c, D, side, crest, view);
+    // On paper the floor is engraved stone too, the trench's walls' hand
+    // (`inkWall`) at the rocks' density; at night, its beds in the light ink.
+    if ((t && side !== 0) || (!t && !night)) trenchFace(ctx, plan, c, D, side, crest, view);
     else {
       const top = Math.min(...crest.filter((_, i) => i % 2 === 1)) / D;
       const rs = mulberry32(hash32(plan.seed, 'beds', side));
@@ -1913,8 +2083,8 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
               const away = Math.min(1, Math.abs(xm - plan.window.x) / (plan.w * 0.6));
               const dark = clampT(0.1 + 0.5 * k + 0.25 * away + 0.25 * set + (t && !facing ? 0.15 : 0));
               // (At night the beds are the light ink's, fewer and fainter where it is darker.)
-              const al = night ? 0.2 * (1.1 - dark) : 0.62 * (0.25 + 0.75 * dark);
-              pen.add(x * D, ya * D, (x + len) * D, yb * D, (0.3 + 0.5 * dark) * D, al);
+              const al = night ? 0.3 * (1.1 - dark) : 0.85 * (0.4 + 0.6 * dark);
+              pen.add(x * D, ya * D, (x + len) * D, yb * D, (night ? 0.3 + 0.5 * dark : 0.45 + 0.6 * dark) * D, al);
             }
             x += len + skip;
           }
@@ -2035,7 +2205,7 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
  * strong all the way down (it is the ground, not a wall going into the
  * haze). Drawn once to a layer and placed per strip.
  */
-function trenchFace(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, side: -1 | 1, crest: number[], view: View) {
+function trenchFace(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, side: -1 | 0 | 1, crest: number[], view: View) {
   const key = `trench|${side}|${D}`;
   let made = c.rocks.get(key);
   if (!made && typeof document !== 'undefined') {
@@ -2063,11 +2233,13 @@ function trenchFace(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
     body.lineTo(crest[crest.length - 2] - ox, H + 2 - oy);
     body.closePath();
     const night = plan.ground === 'night';
-    const t = plan.trench as NonNullable<Plan['trench']>;
-    const style = rockStyle(waterAtY(plan, c, t.top + (plan.h - t.top) * 0.3), night, D, 1, hash32(plan.seed, 'trench', side));
+    // (Side 0: the floor's own body, in the same hand.)
+    const top = plan.trench ? plan.trench.top : (plan.floor?.y ?? plan.h);
+    const style = rockStyle(waterAtY(plan, c, top + (plan.h - top) * 0.3), night, D, 1, hash32(plan.seed, 'trench', side));
     // Ground, not a rock in the water: a step darker than the stone.
-    if (!night) style.rock = mixHex(style.rock, '#1A1714', 0.55);
-    inkWall(o, body, { x0: 0, y0: 0, x1: cw, y1: chh }, style, D, hash32(plan.seed, 'trench-face', side), { side: side < 0 ? 'left' : 'right', fadeFrom: 0, fadeTo: chh * 3 });
+    // (The floor a step further: under open water it must stay darker than the water over it.)
+    if (!night) style.rock = mixHex(style.rock, '#1A1714', side === 0 ? 0.45 : 0.3);
+    inkWall(o, body, { x0: 0, y0: 0, x1: cw, y1: chh }, style, D, hash32(plan.seed, 'trench-face', side), { side: side < 0 || (side === 0 && plan.window.x > plan.w / 2) ? 'left' : 'right', fadeFrom: 0, fadeTo: chh * 3 });
     made = { canvas, x: ox, y: oy };
     c.rocks.set(key, made);
   }
@@ -2155,8 +2327,8 @@ function paintEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: Pla
   }
   if (!sees(view, layer.x, layer.y, layer.x + layer.w, layer.y + layer.h)) return;
   ctx.save();
-  // By night a shadow is barely darker than the dark water: a tenth or so.
-  if (e.kind === 'whale' && plan.ground === 'night') ctx.globalAlpha *= 0.72;
+  // (A gain under one is laid as the layer's strength.)
+  if (e.kind === 'whale') ctx.globalAlpha *= Math.min(1, plan.ground === 'paper' ? WHALE_GAIN.paper : WHALE_GAIN.night);
   if (layer.k === 1) {
     blit(ctx, layer.canvas, layer.x, layer.y, view);
     ctx.restore();
@@ -2273,33 +2445,39 @@ function whaleBackInto(o: CanvasRenderingContext2D, plan: Plan, e: PlacedEvent, 
   const nx = -Math.sin(phi);
   const ny = Math.cos(phi);
   const blur = WHALE_BLUR * Math.min(plan.w, plan.h);
+  // Only the top of its back is lost, over a seventh of its length: below
+  // that the body, the flipper and the flukes keep their edge.
   const from = -0.11 * at.len - blur * 2;
-  const to = -0.11 * at.len + 0.3 * at.len;
+  const to = -0.11 * at.len + 0.14 * at.len;
   const g = o.createLinearGradient((at.cx + nx * from) * D, (at.cy + ny * from) * D, (at.cx + nx * to) * D, (at.cy + ny * to) * D);
-  g.addColorStop(0, 'rgba(0, 0, 0, 0.88)');
-  g.addColorStop(0.3, 'rgba(0, 0, 0, 0.62)');
-  g.addColorStop(0.6, 'rgba(0, 0, 0, 0.3)');
+  g.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+  g.addColorStop(0.35, 'rgba(0, 0, 0, 0.4)');
+  g.addColorStop(0.7, 'rgba(0, 0, 0, 0.12)');
   g.addColorStop(1, 'rgba(0, 0, 0, 0)');
   o.save();
-  if (plan.ground === 'paper') {
-    // On paper, a quarter darker first: with its back lost, its body still
-    // reads 7 to 10 per cent under the water.
-    const copy = document.createElement('canvas');
-    copy.width = o.canvas.width;
-    copy.height = o.canvas.height;
-    copy.getContext('2d')?.drawImage(o.canvas, 0, 0);
-    o.save();
-    o.setTransform(1, 0, 0, 1, 0, 0);
-    o.globalAlpha = 0.28;
+  // Darker first, so its body reads 7 to 13 per cent under the water round
+  // it, by night as well (a shadow on dark water needs the more).
+  const gain = plan.ground === 'paper' ? WHALE_GAIN.paper : WHALE_GAIN.night;
+  const copy = document.createElement('canvas');
+  copy.width = o.canvas.width;
+  copy.height = o.canvas.height;
+  copy.getContext('2d')?.drawImage(o.canvas, 0, 0);
+  o.save();
+  o.setTransform(1, 0, 0, 1, 0, 0);
+  for (let left = gain - 1; left > 1e-3; left -= 1) {
+    o.globalAlpha = Math.min(1, left);
     o.drawImage(copy, 0, 0);
-    o.restore();
   }
+  o.restore();
   o.globalCompositeOperation = 'destination-out';
   o.fillStyle = g;
   const R = at.len * 0.8;
   o.fillRect((at.cx - R) * D, (at.cy - R) * D, R * 2 * D, R * 2 * D);
   o.restore();
 }
+
+/** How much darker than drawWhale lays it the picture's whale is laid, on each ground. */
+const WHALE_GAIN = { paper: 1.45, night: 0.8 };
 
 /** The rare thing itself, in the picture's device px. */
 function drawEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: PlacedEvent, D: number, ambient: number) {

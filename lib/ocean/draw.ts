@@ -1166,10 +1166,19 @@ export function drawStorm(ctx: CanvasRenderingContext2D, w: number, h: number, a
   ctx.restore();
 }
 
-/** Squid skin: a warm buff the depth has drained, laid as a half-strength wash. */
-const SQUID_SKIN = { light: '#A08E80', dark: '#5E5751' } as const;
-/** Its chromatophores: small sacs of red-brown pigment, some opened wider than others. */
-const CHROMATOPHORES = { light: ['#7C3E2A', '#6E3826', '#874A33'], dark: ['#74402F', '#6A3A2B', '#7E4836'] } as const;
+/**
+ * Squid skin: on paper a warm buff the depth has drained, laid thin; in the
+ * dark a near-neutral grey a shade off the night water, so the flank is
+ * known by its line and not by a colour.
+ */
+const SQUID_SKIN = { light: '#AA9888', dark: '#4A473F' } as const;
+/** How thick the skin is laid, so it stays within a few L* of the water. */
+const SQUID_WASH = { light: 0.13, dark: 0.2 } as const;
+/**
+ * Its chromatophores: sacs of red-brown pigment, never a solid fill. In the
+ * dark only their darkness is left (chroma under 10), never a red.
+ */
+const CHROMATOPHORES = { light: ['#7C3E2A', '#6E3826', '#874A33'], dark: ['#2A211C', '#33281F', '#241C17'] } as const;
 
 /** The still parts of an eye, drawn once round its middle and placed each frame. */
 interface EyeLayer {
@@ -1203,15 +1212,15 @@ function eyeLayer(x: number, y: number, w: number, h: number, q: number, paint: 
 }
 
 /**
- * The mantle patch's half width and half height, in eye radii, before its
- * ragged edge (which reaches PATCH_RAG further at most, and falls PATCH_RAG
- * short at least): at its narrowest more than two and a half eyes across.
+ * The hull the flank of mantle keeps to, in eye radii from the eye's middle:
+ * how far it reaches toward the page, and up and down. The picture reserves
+ * the same box (EYE_PATCH_* in picture/layout.ts).
  */
-const PATCH_RX = 3.5;
-const PATCH_RY = 3.0;
-const PATCH_RAG = 0.14;
-/** How far the patch's middle sits in from the eye's, toward the page, in eye radii. */
-const PATCH_IN = 0.3;
+const PATCH_IN = 4.3;
+const PATCH_UP = 3.35;
+const PATCH_DOWN = 3.5;
+/** How far the patch keeps its middle from the band's top and foot. */
+const PATCH_REACH = 3.52;
 /** How far in from the page's edge the eye's middle sits, in eye radii. */
 const EYE_INSET = 0.82;
 /** The eye's radius as a share of the page's short side: in a picture, and on a screen. */
@@ -1219,13 +1228,55 @@ const EYE_PICTURE = 0.025;
 const EYE_LIVE = 0.0375;
 
 /**
- * The patch of mantle round the eye: the animal's skin, not a halo. A warm
- * wash at half strength, its edge feathered by laying it a few times, each
- * a little smaller and ragged differently, the way a wet wash spreads; a
- * scatter of chromatophores in red-brown, some opened wider than others,
- * crowded on the back and thinning to the edge; the skin's turn from the
- * light in a few contour lines; the socket darker round the ball; and the
- * fold of the lid over it.
+ * The flank of the mantle the eye is set in, in eye radii with the eye at
+ * (0, 0) and the page's edge at u = -EYE_INSET (u runs into the page, v
+ * down): a stretch of one large ellipse, taller than it is deep, whose
+ * middle lies 5.2 to 6.2 radii beyond the page's edge (more than 1.5 of the
+ * hull's half height), tilted a little by the seed. Its contour runs 2.8 to
+ * 3.2 radii in from the eye at its fullest and curves back toward the edge
+ * above and below, past the hull's top and foot, where the drawing is let
+ * go. Returns the contour top to bottom, and the measure of a point in the
+ * ellipse's own frame (1 on its edge).
+ */
+function mantleFlank(seed: number): { pts: [number, number][]; local: (u: number, v: number) => [number, number] } {
+  const q = mulberry32(hash32('squid-mantle', seed));
+  const off = 5.2 + q() * 1.0;
+  const depth = 2.8 + q() * 0.4;
+  const b = 6 + q() * 1.5;
+  const rot = (q() - 0.5) * 0.24;
+  const cu0 = -EYE_INSET - off;
+  const cv0 = 0.075 + (q() - 0.5) * 0.6;
+  const a = off + EYE_INSET + depth;
+  const cr = Math.cos(rot);
+  const sr = Math.sin(rot);
+  const pts: [number, number][] = [];
+  for (let k = 0; k <= 240; k++) {
+    const t = -Math.PI / 2 + (k / 240) * Math.PI;
+    const x = Math.cos(t) * a;
+    const y = Math.sin(t) * b;
+    const u = cu0 + x * cr - y * sr;
+    const v = cv0 + x * sr + y * cr;
+    if (v > -PATCH_UP - 0.1 && v < PATCH_DOWN + 0.1) pts.push([Math.min(u, PATCH_IN - 0.3), v]);
+  }
+  const local = (u: number, v: number): [number, number] => {
+    const x = u - cu0;
+    const y = v - cv0;
+    return [(x * cr + y * sr) / a, (-x * sr + y * cr) / b];
+  };
+  return { pts, local };
+}
+
+/**
+ * The flank round the eye: the side of an animal far bigger than the page,
+ * passing its edge. One ink contour runs down the page side of the eye,
+ * full where it passes it and curving back toward the edge above and
+ * below; between it and the edge the skin is washed thin, darkening a
+ * little toward the edge where the body goes on, engraved with a few lines
+ * along the contour where it turns from the light. Its chromatophores vary
+ * in size and spacing, half opened into ragged stars and half closed to
+ * dots, crowded on the back and thinning toward the contour. Above and
+ * below the hull the drawing is let go, as a plate leaves off. Then the
+ * socket darker round the ball, and the fold of the lid.
  */
 function paintEyeSkin(ctx: CanvasRenderingContext2D, re: number, seed: number, px: number, dark: boolean, out: number): void {
   const r = mulberry32(hash32('squid-eye', seed, 'skin'));
@@ -1235,136 +1286,175 @@ function paintEyeSkin(ctx: CanvasRenderingContext2D, re: number, seed: number, p
   const light: [number, number] = dark ? [-LIGHT[0], -LIGHT[1]] : LIGHT;
   const skin = dark ? SQUID_SKIN.dark : SQUID_SKIN.light;
   const deep = mixHex(skin, dark ? '#0E0C0A' : '#2A2320', 0.45);
-  // Round the eye, a little more of it toward the page than off it.
-  const px0 = -out * re * PATCH_IN;
-  const py0 = re * 0.08;
-  const RX = re * PATCH_RX;
-  const RY = re * PATCH_RY;
   const lidW = Math.max(0.7 * px, re * 0.035);
-  // Its outline: ragged, never an ellipse's clean edge. Every layer of it
-  // shares the same lobes and differs only a little, so the wash's edge
-  // runs soft rather than in rings.
+  // From the flank's own frame (u into the page, v down) to the layer's.
+  const X = (u: number) => -out * u * re;
+  const Y = (v: number) => v * re;
+  const F = mantleFlank(seed);
+  const contour: number[] = [];
+  for (const [u, v] of F.pts) contour.push(X(u), Y(v));
+  // The skin: the contour closed by a run off the page.
+  const body = new Path2D();
+  body.moveTo(contour[0], contour[1]);
+  for (let i = 2; i < contour.length; i += 2) body.lineTo(contour[i], contour[i + 1]);
+  body.lineTo(X(-EYE_INSET - 2), contour[contour.length - 1]);
+  body.lineTo(X(-EYE_INSET - 2), contour[1]);
+  body.closePath();
+  const box = { x: Math.min(X(-EYE_INSET - 0.2), X(PATCH_IN)), y: -(PATCH_UP + 0.1) * re, w: (PATCH_IN + EYE_INSET + 0.2) * re, h: (PATCH_UP + PATCH_DOWN + 0.2) * re };
+  // How far a point lies toward the contour: 0 deep in the body, 1 on it.
+  const rimAt = (x: number, y: number) => Math.hypot(...F.local((-out * x) / re, y / re));
+  // How far toward the page: 0 at the edge, 1 at the contour's fullest.
+  const inward = (x: number) => Math.max(0, Math.min(1, ((-out * x) / re + EYE_INSET) / (EYE_INSET + 3)));
+
+  // All of the flank is laid on a sheet of its own, so it can be let go
+  // above and below.
+  const sheet = scratch(box.w, box.h);
+  const sg = sheet?.getContext('2d');
+  const g = sg ?? ctx;
+  g.save();
+  if (sg) sg.translate(-box.x, -box.y);
+  g.save();
+  g.clip(body);
+  // The wash, laid thin.
+  g.globalAlpha = dark ? SQUID_WASH.dark : SQUID_WASH.light;
+  g.fillStyle = skin;
+  g.fill(body);
+  // Paper tooth in it.
+  const gr = grain(g);
+  if (gr) {
+    gr.setTransform?.(new DOMMatrix([px, 0, 0, px, 0, 0]));
+    g.globalAlpha = dark ? 0.06 : 0.1;
+    g.fillStyle = gr;
+    g.fillRect(box.x, box.y, box.w, box.h);
+  }
+  // Darker by about 15% toward the edge, where the body goes on off the page.
+  const toward = g.createLinearGradient(X(3), 0, X(-EYE_INSET), 0);
+  toward.addColorStop(0, `${deep}00`);
+  toward.addColorStop(1, deep);
+  g.globalAlpha = dark ? 0.06 : 0.06;
+  g.fillStyle = toward;
+  g.fillRect(box.x, box.y, box.w, box.h);
+  // A little uneven, as skin is.
+  g.globalAlpha = 1;
+  mottle(g, body, box, deep, mixHex(skin, dark ? '#8E877A' : '#F2EADB', 0.35), dark ? 0.04 : 0.05, seed ^ 0x3077);
+  // The socket darker round the ball.
+  const sock = g.createRadialGradient(cx, cy, re * 0.95, cx, cy, re * 1.7);
+  sock.addColorStop(0, deep);
+  sock.addColorStop(1, `${deep}00`);
+  g.globalAlpha = dark ? 0.22 : 0.3;
+  g.fillStyle = sock;
+  g.fillRect(cx - re * 1.8, cy - re * 1.8, re * 3.6, re * 3.6);
+
+  // The turn from the light: a few engraved lines inside the contour along
+  // its shadow side, closer together toward it.
+  const offs = [0.12, 0.27, 0.45, 0.66];
+  offs.forEach((o, k) => {
+    let run: number[] = [];
+    const flush = () => {
+      if (run.length >= 8) inkLine(g, run, false, { width: Math.max(0.35 * px, re * 0.012), color: ink, alpha: (dark ? 0.16 : 0.26) * (1 - k / offs.length), taper: [0.3, 0.3], lost: 0, seed: seed ^ (0x7a0 + k) });
+      run = [];
+    };
+    for (let i = 0; i < F.pts.length; i += 2) {
+      const [u, v] = F.pts[i];
+      const x = X(u - o);
+      const y = Y(v);
+      // The outward normal, from how fast the ellipse's measure grows each way.
+      const e = 0.01 * re;
+      const m0 = rimAt(x, y);
+      const nx = rimAt(x + e, y) - m0;
+      const ny = rimAt(x, y + e) - m0;
+      const nl = Math.hypot(nx, ny) || 1;
+      if ((nx * light[0] + ny * light[1]) / nl > 0.1 + k * 0.08) run.push(x, y);
+      else flush();
+    }
+    flush();
+  });
+
+  // Chromatophores. Their spacing follows a slow field, crowding on the
+  // back (up, and deep in the body toward the edge) and thinning toward
+  // the contour; none in the socket.
+  const cols = dark ? CHROMATOPHORES.dark : CHROMATOPHORES.light;
+  const alphas = [0.35, 0.42, 0.5];
+  const dots = cols.map(() => new Path2D());
+  const cores = new Path2D();
   const q0 = mulberry32(hash32('squid-skin', seed, 0));
   const ph = [q0() * 6.28, q0() * 6.28, q0() * 6.28];
-  const blob = (scale: number, salt: number) => {
-    const pts: number[] = [];
-    const q = mulberry32(hash32('squid-skin', seed, salt));
-    const wob = q() * 6.28;
-    for (let k = 0; k < 48; k++) {
-      const a = (k / 48) * Math.PI * 2;
-      const rr = scale * (1 + 0.06 * Math.sin(a * 3 + ph[0]) + 0.04 * Math.sin(a * 7 + ph[1]) + 0.02 * Math.sin(a * 13 + ph[2]) + 0.012 * Math.sin(a * 5 + wob) + (q() - 0.5) * 0.016);
-      pts.push(px0 + Math.cos(a) * RX * rr, py0 + Math.sin(a) * RY * rr);
+  const crowd = (x: number, y: number) => 0.5 + 0.3 * Math.sin(x / (re * 0.8) + ph[1]) * Math.sin(y / (re * 0.7) + ph[2]) + 0.2 * Math.sin((x - y) / (re * 0.45) + ph[0]);
+  const gap = Math.max(3.2 * px, re * 0.13);
+  // Log-normal sizes, 2 to 5 of the page's px across.
+  const gauss = () => Math.sqrt(-2 * Math.log(1 - r() * 0.999)) * Math.cos(6.2832 * r());
+  for (let y = box.y; y < box.y + box.h; y += gap) {
+    for (let x = box.x; x < box.x + box.w; x += gap) {
+      const dx = x + (r() - 0.5) * gap * 1.1;
+      const dy = y + (r() - 0.5) * gap * 1.1;
+      const g0 = gauss();
+      const roll = r();
+      const open = r() < 0.5;
+      const pick = Math.floor(r() * cols.length);
+      const spin = r() * 6.28;
+      const rim = rimAt(dx, dy);
+      if (rim > 0.995 || Math.hypot(dx - cx, dy - cy) < re * 1.25) continue;
+      // The back: up the flank, and deep in it toward the edge.
+      const back = Math.max(0, Math.min(1, 0.55 - dy / re / 6));
+      const keep = (0.1 + 0.9 * back) * (0.35 + 0.65 * (1 - inward(dx))) * Math.min(1, (1 - rim) / 0.03) * Math.max(0, 0.8 * crowd(dx, dy) - 0.04);
+      if (roll > keep) continue;
+      const d = Math.max(2, Math.min(5, 3 * Math.exp(0.32 * g0))) * px;
+      const p = dots[pick];
+      if (!open) {
+        p.moveTo(dx + d / 2, dy);
+        p.ellipse(dx, dy, d / 2, d * 0.42, spin, 0, Math.PI * 2);
+        continue;
+      }
+      // Opened: pigment spread from the sac in a ragged, uneven blot, a few
+      // of its arms reaching further than the rest.
+      const R = d * 0.9;
+      const n = 7 + Math.floor(r() * 4);
+      const blot: number[] = [];
+      for (let i = 0; i < n; i++) {
+        const t = spin + ((i + (r() - 0.5) * 0.6) / n) * Math.PI * 2;
+        const reach = r();
+        const rr = R * (0.45 + 0.35 * reach + (reach > 0.8 ? 0.35 : 0));
+        blot.push(dx + Math.cos(t) * rr, dy + Math.sin(t) * rr);
+      }
+      p.addPath(smoothPath(blot, true, 8));
+      cores.moveTo(dx + d * 0.22, dy);
+      cores.arc(dx, dy, d * 0.22, 0, Math.PI * 2);
     }
-    return smoothPath(pts, true, 3);
-  };
-  const patch = blob(1, 0);
-  const box = { x: px0 - RX * (1 + PATCH_RAG), y: py0 - RY * (1 + PATCH_RAG), w: RX * 2 * (1 + PATCH_RAG), h: RY * 2 * (1 + PATCH_RAG) };
-  // How far out in the patch a point lies: 0 at its middle, 1 at its edge.
-  const outAt = (x: number, y: number) => Math.hypot((x - px0) / RX, (y - py0) / RY);
-
-  // The wash: laid thin many times, each a little smaller, so the middle
-  // comes to half strength and the edge is a soft run into the water.
-  ctx.fillStyle = skin;
-  const coats = 24;
-  for (let k = 0; k < coats; k++) {
-    ctx.globalAlpha = 1 - Math.pow(0.5, 1 / coats);
-    ctx.fill(k === 0 ? patch : blob(1 - k * 0.0125, k + 1));
   }
-  // What lies in the wash, the grain, the skin's turn from the light, its
-  // unevenness and the socket's dark, is laid on a sheet of its own and
-  // feathered with the wash's own edge, so none of it stops on a line.
-  const sheet = scratch(box.w, box.h);
-  const mask = scratch(box.w, box.h);
-  const g = sheet?.getContext('2d');
-  const mg = mask?.getContext('2d');
-  if (sheet && mask && g && mg) {
-    g.translate(-box.x, -box.y);
-    mg.translate(-box.x, -box.y);
-    // Paper tooth, so it is a wash and not a fill.
-    const gr = grain(g);
-    if (gr) {
-      gr.setTransform?.(new DOMMatrix([px, 0, 0, px, 0, 0]));
-      g.globalAlpha = 0.14;
-      g.fillStyle = gr;
-      g.fillRect(box.x, box.y, box.w, box.h);
-    }
-    // Darker low on the shadow side.
-    const sx = px0 + light[0] * RX * 0.55;
-    const sy = py0 + light[1] * RY * 0.55;
-    const turn = g.createRadialGradient(sx, sy, 0, sx, sy, RX * 0.9);
-    turn.addColorStop(0, deep);
-    turn.addColorStop(1, `${deep}00`);
-    g.globalAlpha = 0.28;
-    g.fillStyle = turn;
-    g.fillRect(box.x, box.y, box.w, box.h);
-    // Unevenly, as skin is: a few soft patches darker and a few lighter.
-    const all = new Path2D();
-    all.rect(box.x, box.y, box.w, box.h);
-    g.globalAlpha = 1;
-    mottle(g, all, box, deep, mixHex(skin, dark ? '#B8A898' : '#F2EADB', 0.35), 0.18, seed ^ 0x3077);
-    // The socket darker round the ball.
-    const sock = g.createRadialGradient(cx, cy, re * 0.95, cx, cy, re * 1.75);
-    sock.addColorStop(0, deep);
-    sock.addColorStop(1, `${deep}00`);
-    g.globalAlpha = 0.4;
-    g.fillStyle = sock;
-    g.fillRect(cx - re * 1.8, cy - re * 1.8, re * 3.6, re * 3.6);
-    // The wash's own feathered edge, brought up to full strength in the middle.
-    mg.fillStyle = '#000';
-    for (let k = 0; k < coats; k++) {
-      mg.globalAlpha = 0.16;
-      mg.fill(k === 0 ? patch : blob(1 - k * 0.0125, k + 1));
-    }
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.globalAlpha = 1;
-    g.globalCompositeOperation = 'destination-in';
-    g.drawImage(mask, 0, 0);
+  dots.forEach((p, i) => {
+    g.globalAlpha = alphas[i];
+    g.fillStyle = cols[i];
+    g.fill(p);
+  });
+  g.globalAlpha = 0.4;
+  g.fillStyle = mixHex(cols[0], '#140E0B', 0.4);
+  g.fill(cores);
+  g.restore();
+
+  // The contour: one line down the page side.
+  g.globalAlpha = 1;
+  inkLine(g, contour, false, { width: lidW * 0.85, color: ink, alpha: dark ? 0.42 : 0.72, taper: [0.08, 0.08], lost: 0, swell: 0.5, seed: seed ^ 0xf1a, light });
+  g.restore();
+  if (sheet && sg) {
+    // Let go above and below: a soft run out over the hull's last radius.
+    sg.setTransform(1, 0, 0, 1, 0, 0);
+    const fade = sg.createLinearGradient(0, 0, 0, box.h);
+    const top = (0.1 * re) / box.h;
+    const run = (1.15 * re) / box.h;
+    fade.addColorStop(0, 'rgba(0,0,0,0)');
+    fade.addColorStop(top, 'rgba(0,0,0,0)');
+    fade.addColorStop(top + run * 0.5, 'rgba(0,0,0,0.6)');
+    fade.addColorStop(top + run, 'rgba(0,0,0,1)');
+    fade.addColorStop(1 - top - run, 'rgba(0,0,0,1)');
+    fade.addColorStop(1 - top - run * 0.5, 'rgba(0,0,0,0.6)');
+    fade.addColorStop(1 - top, 'rgba(0,0,0,0)');
+    fade.addColorStop(1, 'rgba(0,0,0,0)');
+    sg.globalCompositeOperation = 'destination-in';
+    sg.fillStyle = fade;
+    sg.fillRect(0, 0, box.w, box.h);
     ctx.globalAlpha = 1;
     ctx.drawImage(sheet, box.x, box.y, box.w, box.h);
   }
-
-  // Chromatophores: sacs of red-brown, three to six of the page's px
-  // across, some opened, most closed to a point; crowded on the back and
-  // thinning out, none on the ball or in the fold over it.
-  const cols = dark ? CHROMATOPHORES.dark : CHROMATOPHORES.light;
-  const dotPaths = cols.map(() => new Path2D());
-  // The opened ones' pigment dried darker at its edge, as a dot of wash does.
-  const rims = new Path2D();
-  const gap = Math.max(4.5 * px, re * 0.17);
-  // Clustered as skin is, not spread like a pattern: a slow field of where
-  // the sacs crowd.
-  const crowd = (x: number, y: number) => 0.5 + 0.25 * Math.sin(x / (re * 0.9) + ph[1]) * Math.sin(y / (re * 0.75) + ph[2]) + 0.25 * Math.sin((x + y) / (re * 0.55) + ph[0]);
-  for (let y = box.y; y < box.y + box.h; y += gap) {
-    for (let x = box.x; x < box.x + box.w; x += gap) {
-      const dx = x + (r() - 0.5) * gap * 0.95;
-      const dy = y + (r() - 0.5) * gap * 0.95;
-      const o = outAt(dx, dy);
-      const keep = (1 - Math.pow(Math.min(1, o / 0.9), 2.2)) * (0.6 + 0.3 * Math.max(-1, Math.min(1, -(dy - py0) / RY))) * (0.25 + 1.1 * crowd(dx, dy));
-      const roll = r();
-      const big = r();
-      const tilt = r();
-      const pick = r();
-      if (roll > keep || Math.hypot(dx - cx, dy - cy) < re * 1.2) continue;
-      // Open ones larger and a little irregular, closed ones near round.
-      const rad = px * (1.5 + 1.5 * Math.pow(big, 2.6));
-      const dp = dotPaths[Math.floor(pick * dotPaths.length)];
-      dp.moveTo(dx + rad, dy);
-      dp.ellipse(dx, dy, rad, rad * (0.75 + 0.25 * tilt), tilt * 3, 0, Math.PI * 2);
-      if (rad > 2.1 * px) {
-        rims.moveTo(dx + rad * 0.92, dy);
-        rims.ellipse(dx, dy, rad * 0.92, rad * (0.75 + 0.25 * tilt) * 0.92, tilt * 3, 0, Math.PI * 2);
-      }
-    }
-  }
-  dotPaths.forEach((p, i) => {
-    ctx.globalAlpha = 0.6;
-    ctx.fillStyle = cols[i];
-    ctx.fill(p);
-  });
-  ctx.globalAlpha = 0.3;
-  ctx.strokeStyle = mixHex(cols[0], '#140E0B', 0.45);
-  ctx.lineWidth = 0.6 * px;
-  ctx.stroke(rims);
 
   // The fold of the lid over the eye: a flatter arc than the ball, a
   // shadow tucked under it and the skin catching the light along its top.
@@ -1386,21 +1476,23 @@ function paintEyeSkin(ctx: CanvasRenderingContext2D, re: number, seed: number, p
   for (let i = 2; i < fold.length; i += 2) under.lineTo(fold[i], fold[i + 1]);
   for (let i = 0; i < foldUnder.length; i += 2) under.lineTo(foldUnder[i], foldUnder[i + 1]);
   under.closePath();
-  ctx.globalAlpha = 0.35;
+  ctx.globalAlpha = dark ? 0.25 : 0.3;
   ctx.fillStyle = deep;
   ctx.fill(under);
-  const lit: number[] = [];
-  for (let i = 0; i < fold.length; i += 2) lit.push(fold[i], fold[i + 1] - re * 0.07);
-  inkLine(ctx, lit, false, { width: lidW * 0.9, color: dark ? '#4A4038' : '#E9DFCB', alpha: dark ? 0.35 : 0.45, taper: [0.4, 0.4], seed: seed ^ 0xf01c, light, plate: true });
+  if (!dark) {
+    const lit: number[] = [];
+    for (let i = 0; i < fold.length; i += 2) lit.push(fold[i], fold[i + 1] - re * 0.07);
+    inkLine(ctx, lit, false, { width: lidW * 0.9, color: '#E9DFCB', alpha: 0.4, taper: [0.4, 0.4], seed: seed ^ 0xf01c, light, plate: true });
+  }
   ctx.globalAlpha = 1;
-  inkLine(ctx, fold, false, { width: lidW, color: ink, alpha: dark ? 0.55 : 0.75, taper: [0.3, 0.3], seed: seed ^ 0xf01d, light, plate: true });
+  inkLine(ctx, fold, false, { width: lidW, color: ink, alpha: dark ? 0.45 : 0.75, taper: [0.3, 0.3], seed: seed ^ 0xf01d, light, plate: true });
   // And the crease under it, fainter and shorter.
   const crease: number[] = [];
   for (let i = 0; i <= 10; i++) {
     const a = Math.PI * (0.25 + (i / 10) * 0.5);
     crease.push(cx + Math.cos(a) * re * 1.42, cy - re * 0.1 + Math.sin(a) * re * 1.38);
   }
-  inkLine(ctx, crease, false, { width: lidW * 0.7, color: ink, alpha: dark ? 0.25 : 0.4, taper: [0.4, 0.4], seed: seed ^ 0xf01e, light, plate: true });
+  inkLine(ctx, crease, false, { width: lidW * 0.7, color: ink, alpha: dark ? 0.22 : 0.4, taper: [0.4, 0.4], seed: seed ^ 0xf01e, light, plate: true });
 }
 
 /** The ball itself, round and open: the lids are laid over it each frame. */
@@ -1544,7 +1636,7 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
   const cx = left ? re * EYE_INSET : w - re * EYE_INSET;
   // High on the page, clear of the clock and the controls; and the whole
   // patch inside what it was given, so no edge of it is ever cut straight.
-  const reach = re * (PATCH_RY * (1 + PATCH_RAG) + 0.1) + 2 * px;
+  const reach = re * PATCH_REACH + 2 * px;
   const want = h * (0.18 + ((seed >>> 6) % 100) / 100 * 0.2);
   const cy = h > reach * 2 ? Math.max(reach, Math.min(h - reach, want)) : h / 2;
   // One slow blink, just past the middle.
@@ -1561,7 +1653,7 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
   if (!layers) {
     layers = {
       key,
-      skin: eyeLayer(-(PATCH_RX * (1 + PATCH_RAG) + PATCH_IN + 0.1) * re, -(PATCH_RY * (1 + PATCH_RAG) + 0.1) * re, (PATCH_RX * 2 * (1 + PATCH_RAG) + 2 * PATCH_IN + 0.2) * re, (PATCH_RY * 2 * (1 + PATCH_RAG) + 0.3) * re, 1, (g) => paintEyeSkin(g, re, seed, px, dark, out)),
+      skin: eyeLayer((out > 0 ? -(PATCH_IN + 0.1) : -(EYE_INSET + 0.2)) * re, -(PATCH_UP + 0.1) * re, (PATCH_IN + EYE_INSET + 0.3) * re, (PATCH_UP + PATCH_DOWN + 0.2) * re, 1, (g) => paintEyeSkin(g, re, seed, px, dark, out)),
       ball: eyeLayer(-1.1 * re, -1.1 * re, 2.2 * re, 2.2 * re, 1, (g) => paintEyeBall(g, re, seed, px, dark)),
     };
     eyeLayers = [layers, ...eyeLayers].slice(0, 2);

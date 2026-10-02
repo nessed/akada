@@ -476,7 +476,12 @@ function comb(g: Genome, { P, C, vr }: Kit) {
  * so it lies on the floor as an animal does and never as a pinwheel.
  */
 function star(g: Genome, { P, C, T, vr, fine }: Kit) {
-  const n = g.armsN!;
+  // Five at the least, as a sea star has: a four-armed one reads as a cross.
+  const n = Math.max(5, g.armsN!);
+  // The more arms, the less each may bend: a sunflower star's many arms lie
+  // nearly straight out from its broad disc, and a ring of them curling
+  // every which way reads as a drawn sun.
+  const bend = n > 6 ? 0.4 : 1;
   const W = g.starW!, L = g.starL!;
   const gap = Math.tan((0.7 * Math.PI) / n);
   const R0 = Math.max(W * 1.05, (0.62 * W) / (0.85 * gap));
@@ -485,8 +490,8 @@ function star(g: Genome, { P, C, T, vr, fine }: Kit) {
   const arms = Array.from({ length: n }, (_, i) => ({
     a0: ((i + vr(-0.1, 0.1)) / n) * TAU - Math.PI / 2,
     len: L * vr(0.7, 1.15),
-    curl: Math.max(-1, Math.min(1, (vr(0, 1) < 0.5 ? -1 : 1) * Math.abs(curl) * vr(0.25, 1.3) + vr(-0.25, 0.25))) * Math.min(1.1, (0.75 * TAU) / n),
-    wave: vr(-0.3, 0.3) * Math.min(1, 6 / n),
+    curl: Math.max(-1, Math.min(1, (vr(0, 1) < 0.5 ? -1 : 1) * Math.abs(curl) * vr(0.25, 1.3) + vr(-0.25, 0.25))) * Math.min(1.1, (0.75 * TAU) / n) * bend,
+    wave: vr(-0.3, 0.3) * Math.min(1, 6 / n) * bend,
     thin: vr(0.8, 0.92),
   }));
   const pts: Pt[] = [];
@@ -932,11 +937,31 @@ function bilateral(g: Genome, kit: Kit): number {
       pairRays(P, base, edge.slice().reverse(), 7);
     }
   }
-  if (fish && !lk) {
+  if (fish && !lk && g.dorsal! > 0) {
+    // One dorsal fin, low and set well back, as a plate's fish carries it:
+    // two tall ones read as ears. The genome's count still rolls (and its
+    // dice are still spent, so nothing after moves); a second only makes
+    // the one fin longer at its foot. Its front edge stands at least 0.4 of
+    // the body back from the snout, and it rises at most 0.35 of the body's
+    // depth.
+    let jit = 0;
+    let span = 0;
     for (let d = 0; d < g.dorsal!; d++) {
-      const t0 = 0.3 + d * 0.28 + rr(-0.05, 0.05);
-      const t1 = t0 + rr(0.12, 0.3);
-      const H = A * 0.5 * g.dorsalH!;
+      const j = rr(-0.05, 0.05);
+      const s = rr(0.12, 0.3);
+      if (d === 0) {
+        jit = j;
+        span = s;
+      } else span = Math.min(0.34, span + s * 0.35);
+    }
+    const depth = Math.max(...spine.map((p) => p[2]));
+    {
+      // The front edge between 0.52 and 0.6 of the way from the tail.
+      const t1 = 0.56 + jit * 0.8;
+      const t0 = Math.max(0.2, t1 - span);
+      // The tallest point of each shape is brought to `top`.
+      const top = depth * (0.2 + 0.15 * Math.min(1, Math.max(0, (g.dorsalH! - 0.3) / 1)));
+      const H = g.dorsalShape === 'sail' ? top / 1.3 : g.dorsalShape === 'tri' ? top : g.dorsalShape === 'spines' ? top / (0.8 * 1.25) : g.dorsalShape === 'frill' ? top / 0.98 : top / 0.8;
       const f: Pt[] = [];
       for (let i = 0; i <= 10; i++) {
         const [x, y, w] = at(t0 + ((t1 - t0) * i) / 10);

@@ -72,6 +72,13 @@ export interface KelpOptions {
       taller picture. The live screen leaves it out and measures them
       against its own frame. */
   page?: number;
+  /** The water the forest's colours are taken toward (the light it is
+      drained by, the haze it goes back into, the dark it sinks in at
+      night). A picture that draws one forest a frame at a time, each frame
+      on its own water, passes one water for them all here, so the blades
+      do not change colour where one frame meets the next. By default the
+      frame's own `water`. */
+  inkWater?: Water;
 }
 
 /**
@@ -117,22 +124,29 @@ export function drawKelp(
     light: water.dark ? UNLIGHT : LIGHT,
   };
   // The light goes, and the colour with it: drained toward the water.
-  const fade = 0.45 + 0.55 * water.light;
-  const drain = (1 - water.light) * 0.45;
+  // (Drawn a frame at a time with no one water given, at night: the
+  // night's own at the forest's depth, the same for every frame.)
+  const iw = opts.inkWater ?? (opts.page != null && water.dark ? nightWater() : water);
+  const fade = 0.45 + 0.55 * iw.light;
+  const drain = (1 - iw.light) * 0.45;
   // What is behind the kelp, for laying it opaque: a stalk further back is
   // its colours taken toward the water, never the water seen through it.
-  const behind = mixHex(water.top, water.bottom, 0.5);
+  const behind = mixHex(iw.top, iw.bottom, 0.5);
+  // At night the blades sink toward one dark, the night's own at the
+  // forest's depth (as its ledge's stone is), not the frame's: a forest
+  // drawn a frame at a time must not step in colour at a frame's edge.
+  const night = water.dark ? nightWater().bottom : null;
   const inksAt = (layer: number): Inks => {
     const thin = 1 - ALPHA[layer] * fade;
     const into = (c: string) => {
-      let v = mixHex(c, water.bottom, drain + HAZE[layer] * 0.6);
-      if (water.dark) v = mixHex(v, water.bottom, 0.3);
+      let v = mixHex(c, iw.bottom, drain + HAZE[layer] * 0.6);
+      if (night) v = mixHex(v, night, 0.3);
       return mixHex(v, behind, thin);
     };
     return {
       gold: into(GOLD),
       brown: into(BROWN),
-      line: mixHex(mixHex(pen.line, water.bottom, HAZE[layer] * 0.7), behind, thin * 0.8),
+      line: mixHex(mixHex(pen.line, iw.bottom, HAZE[layer] * 0.7), behind, thin * 0.8),
       float: into(mixHex(GOLD, '#EAD9A6', 0.3)),
     };
   };
@@ -171,6 +185,10 @@ export function drawKelp(
   for (const s of kelp.stalks) if (s.layer > 0) draw(s);
   ctx.restore();
 }
+
+/** The night's water at the forest's depth, worked out once. */
+let nightAt: Water | null = null;
+const nightWater = () => (nightAt ??= waterAt(zoneMid(0), 'night', '#A8BCC9'));
 
 /** A stalk's own dice, off its phase, so the forest's rolls stay as they were. */
 const dice = (s: KelpStalk, k: number) => {

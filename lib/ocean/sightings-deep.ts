@@ -319,6 +319,13 @@ export function drawLure(ctx: CanvasRenderingContext2D, w: number, h: number, ag
 /** The dumbo's mantle, drawn once a size and placed. */
 let dumboMantles: { key: string; canvas: HTMLCanvasElement | null }[] = [];
 
+/**
+ * Where a dumbo's eyes sit down its mantle, from the mantle's middle in
+ * mantle heights: 0.35 of the whole animal's height (crown to the web's
+ * margin, about 1.55 mantle heights) down from its crown.
+ */
+const EYE_V = 0.04;
+
 /** A dumbo's pink, which the depth takes most of. */
 const DUMBO = '#D9A69A';
 
@@ -381,8 +388,8 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   const MH = MW * 1.3;
   const mcx = 0.02 * S;
   const mcy = -0.36 * S;
-  // Leaning a touch into the way it goes, crown first, as it swims.
-  const tilt = 0.08;
+  // Leaning into the way it goes, crown first, as it swims.
+  const tilt = 0.2;
   const mantle: number[] = [];
   for (let k = 0; k < 28; k++) {
     const t = (k / 28) * Math.PI * 2;
@@ -558,7 +565,7 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   // A point on the mantle's surface, from its own frame (u across, v down).
   const onMantle = (u: number, v: number): [number, number] => [mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt)];
   // The far fin, at ten o'clock, behind the mantle's edge.
-  const farRoot = onMantle(-MW * 0.36, -MH * 0.2);
+  const farRoot = onMantle(-MW * 0.34, -MH * 0.25);
   fin(farRoot[0], farRoot[1], -Math.PI + 0.4 - tilt - row, finLen * 0.9, finWid * 0.9, 0.75, 1);
   ctx.globalAlpha = base * 0.3;
   ctx.fillStyle = web;
@@ -597,7 +604,57 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
       const v = (MH / 2) * sn;
       dome.push(mcx + u * Math.cos(tilt) - v * Math.sin(tilt), mcy + u * Math.sin(tilt) + v * Math.cos(tilt));
     }
+    // The crown darker than the rest, as the living animal's is: a cap of
+    // deeper wash over the top of the mantle, run out by its middle.
+    const [tx0, ty0] = onMantle(0, -MH * 0.5);
+    const [tx1, ty1] = onMantle(0, -MH * 0.02);
+    const capG = g.createLinearGradient(tx0, ty0, tx1, ty1);
+    const capC = dark ? mixHex(wash, '#0E0C0A', 0.5) : mixHex(hue, '#4A2A24', 0.55);
+    capG.addColorStop(0, `${capC}E8`);
+    capG.addColorStop(0.35, `${capC}A0`);
+    capG.addColorStop(0.7, `${capC}30`);
+    capG.addColorStop(1, `${capC}00`);
+    g.save();
+    g.clip(mantlePath);
+    g.fillStyle = capG;
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.fillRect(mantleBox.x, mantleBox.y, mantleBox.w, mantleBox.h);
+    g.restore();
     inkLine(g, dome, false, { width: pw * 0.95, color: ink, alpha: 0.8, seed, light, taper: [0.12, 0.12], plate: true, min: 0.25 * px });
+    // The eyes: two, 0.35 of the animal's height down from its crown (the
+    // mantle's widest, under the fins), set wide on the sides of the head as
+    // a dumbo's are; seen a little from the front, so the near one sits
+    // toward the way it faces and the far one, near the far side's edge, is
+    // narrowed by the turn of the head. Each a dark ball 0.12 of the mantle across with
+    // one small catchlight, a ridge of skin over it: an animal's eye, never
+    // a face's.
+    const eyeR = MW * 0.06;
+    for (const [eu, sq, al] of [[-0.33, 0.62, 0.8], [0.3, 1, 1]] as const) {
+      const [ex, ey] = onMantle(MW * eu, EYE_V * MH);
+      const er = eyeR * (eu < 0 ? 0.92 : 1);
+      g.globalAlpha = 0.9 * al;
+      g.fillStyle = mixHex(hue, '#120E0C', 0.82);
+      g.beginPath();
+      g.ellipse(ex, ey, er * sq, er, tilt, 0, Math.PI * 2);
+      g.fill();
+      if (er >= 1.2 * px) {
+        g.globalAlpha = (dark ? 0.6 : 0.85) * al;
+        g.fillStyle = '#FBF8EF';
+        g.beginPath();
+        g.arc(ex - er * 0.3 * sq, ey - er * 0.32, Math.max(0.35 * px, er * 0.19), 0, Math.PI * 2);
+        g.fill();
+      }
+      if (er >= 1.6 * px) {
+        const ridge: number[] = [];
+        for (let k = 0; k <= 8; k++) {
+          const a = Math.PI * (1.15 + (k / 8) * 0.7) + tilt;
+          ridge.push(ex + Math.cos(a) * er * 1.7 * sq, ey + Math.sin(a) * er * 1.55);
+        }
+        inkLine(g, ridge, false, { width: pw * 0.55, color: ink, alpha: 0.45 * al, taper: [0.3, 0.3], seed: seed ^ (eu < 0 ? 0xe2 : 0xe1), light, plate: true, min: 0.25 * px });
+      }
+    }
+    g.globalAlpha = 1;
   };
   const pad = pw * 3;
   const mKey = `${seed}|${Math.round(S * 10)}|${px}|${dark ? 1 : 0}|${way}`;
@@ -663,31 +720,9 @@ export function drawDumbo(ctx: CanvasRenderingContext2D, w: number, h: number, a
   }
 
   // The near fin, at two o'clock, over the mantle's edge.
-  const nearRoot = onMantle(MW * 0.38, -MH * 0.2);
+  const nearRoot = onMantle(MW * 0.36, -MH * 0.25);
   fin(nearRoot[0], nearRoot[1], -0.4 + tilt + row, finLen, finWid, 0.9, 2);
 
-  // The eye: small, on the near side under the fin, a bulge of skin over
-  // it; dark, with no highlight, so it is an eye on an animal and never a
-  // face looking out.
-  const er = Math.max(0.8 * px, MW * 0.036);
-  const [ex, ey] = onMantle(MW * 0.3, MH * 0.1);
-  // Too small to show as an eye, it would only be a dot under two ears:
-  // left out.
-  if (er < 1.8 * px) {
-    ctx.restore();
-    return;
-  }
-  const bulge: number[] = [];
-  for (let k = 0; k <= 10; k++) {
-    const a = Math.PI * (1.1 + (k / 10) * 0.8);
-    bulge.push(ex + Math.cos(a) * er * 2.2, ey + Math.sin(a) * er * 1.8);
-  }
-  inkLine(ctx, bulge, false, { width: pw * 0.55, color: ink, alpha: base * 0.45, taper: [0.3, 0.3], seed: seed ^ 0xe1, light, plate: true, min: 0.25 * px });
-  ctx.globalAlpha = base * 0.7;
-  ctx.fillStyle = mixHex(hue, '#16120F', 0.7);
-  ctx.beginPath();
-  ctx.ellipse(ex, ey, er, er * 0.75, tilt, 0, Math.PI * 2);
-  ctx.fill();
   void r;
   ctx.restore();
 }

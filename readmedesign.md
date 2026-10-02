@@ -1103,7 +1103,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   rounds off and its tail narrows to a wrist, and every fish has a tail fin
   at least a fifth of its body long, since a body that tapers to a point
   reads as a lemon; its mouth is a shut,
-  level cleft with the corner turned down, never a smile. A fish with a
+  level cleft with the corner turned down, never a smile. A fish carries one dorsal fin, no higher than a third of its depth and
+  set well back from the snout; a sea star has five arms at the least, a
+  many-armed one's lying nearly straight. A fish with a
   lure is a dark hunter, never see-through: a globe-bodied angler with a
   jaw and needle teeth, or a long dragonfish with its light on a chin
   barbel; ribs show only faintly, over the belly of a glass fish. A
@@ -1244,10 +1246,15 @@ only ever grows, it never runs backwards, and none of it touches progress.
   seconds and never at once; less often a giant squid's eye opens at the edge
   of the page, high and clear of the clock, blinks once and goes: a striated
   iris darkening to its rim, the pupil a level lens the same above and
-  below, never bent into a mouth, set in a patch of mantle more than two
-  and a half eyes across: a half-strength wash of skin feathered at its
-  edge, red-brown chromatophores and the fold of a lid over it. Never a
-  halo, of stipple or of colour. The whale is always the
+  below, never bent into a mouth, set in the flank of an animal far bigger
+  than the page: one ink contour runs down the page side of it, from a body
+  whose middle lies well off the page, the skin a thin wash inside it with
+  a few engraved lines on its shadow side, and the drawing let go above and
+  below. Its chromatophores vary in size and spacing, half opened into
+  ragged blots and half closed to dots, crowded on the back. At night the
+  skin is a neutral grey close to the water's own value, no red and no
+  glow; the only light is the eye's catchlight. Never a halo, of stipple
+  or of colour. The whale is always the
   whole animal, head, flipper and flukes, one soft grey shape a little over
   half the page long. In the abyss,
   about one three-hour sitting in a hundred and fifty, something very large
@@ -1269,7 +1276,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   nearly upright at one side, silver, its red crest running the whole length
   of it. From the midnight down, a single light bobs in the dark, and for a
   moment the teeth behind it show. In the abyss, a dumbo octopus hovers by
-  on its two ear fins, an upright mantle rowing over a webbed skirt, no face;
+  on its two ear fins, an upright mantle rowing over a webbed skirt,
+  leaning a little forward, its crown darker, its two eyes dark dots with a
+  catchlight set wide on the sides of the head, as a plate draws them;
   and a whale fall can arrive on the floor: a skeleton half sunk in the silt,
   seen a little from above, a spine of vertebrae on a gentle S with paired
   ribs, some broken, the skull and its two jaws, and crabs working along it, which stays for the rest of the

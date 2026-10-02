@@ -260,12 +260,12 @@ export function rockShape(seed: number, span: number, thick: number, px: number,
   const Hr = Math.max(0.5 * S, Math.min(1.2 * S, thick));
   const boulders: Boulder[] = [];
   // `sq` is how square it is above and below its middle (`squareness`).
-  const add = (cx: number, top: number, rx: number, ry: number, sq: [number, number] = [2, 2]) => {
+  const add = (cx: number, top: number, rx: number, ry: number, sq: [number, number] = [2, 2], amp = 1) => {
     // Lumps at a few scales, coarse to fine, so the top breaks into knuckles.
     const n: number[] = [];
     const ks = [2, 3, 5, 7, 11, 17];
     const amps = [0.09, 0.07, 0.045, 0.028, 0.016, 0.009];
-    for (let i = 0; i < ks.length; i++) n.push(amps[i] * range(r, 0.5, 1.35), ks[i], range(r, 0, Math.PI * 2));
+    for (let i = 0; i < ks.length; i++) n.push(amps[i] * amp * range(r, 0.5, 1.35), ks[i], range(r, 0, Math.PI * 2));
     const cy = top + ry;
     const sqAt = (th: number) => squareness(th, Math.sin(th) < 0 ? sq[0] : sq[1]);
     const pts: number[] = [];
@@ -463,29 +463,39 @@ function buildGrammar(
   r: Rand,
   S: number,
   Hr: number,
-  add: (cx: number, top: number, rx: number, ry: number, sq?: [number, number]) => void,
+  add: (cx: number, top: number, rx: number, ry: number, sq?: [number, number], amp?: number) => void,
 ) {
   // The mass it all stands in, back into the wall and down past where the wash runs dry.
   const foot = (cx: number, top: number, rx: number) => add(cx, top, rx, Math.max(0.5 * Hr, (Hr * 1.3 - top) / 2), [2.2, 2.6]);
   if (g === 'slab') {
-    // Set back under the beds, so they overhang it, and up into them, so
-    // they never sit on a neck of it.
-    foot(0.06 * S, Hr * 0.2, 0.62 * S);
+    // Set back a little under the beds and up into them, so they never
+    // sit on a neck of it.
+    foot(0.06 * S, Hr * 0.2, 0.7 * S);
     // Beds from the lowest up, each laid over the one under it, thick and
-    // square-ended: one tabular mass whose bedding steps in and out.
+    // square-ended, and each stepping back toward the wall from the one
+    // under it: one tabular mass rising in benches, never a stack of
+    // pancakes each jutting further than the last.
     const beds = 2 + (r() < 0.6 ? 1 : 0);
     const ys: number[] = [];
     let y = -0.05 * Hr;
     for (let i = 0; i < beds; i++) {
-      const thick = Hr * range(r, 0.26, 0.36) * (i === 0 ? 1.1 : 1);
+      const thick = Hr * range(r, 0.3, 0.4) * (i === 0 ? 1.1 : 1);
       ys.push(y, thick);
       y += thick * range(r, 0.62, 0.78);
     }
+    const outs: number[] = [];
+    let out = S * range(r, 0.82, 1);
     for (let i = beds - 1; i >= 0; i--) {
-      // How far each bed runs out: one of the lower ones often furthest, a ledge.
-      const out = S * (i === 0 ? range(r, 0.6, 0.85) : range(r, 0.72, 1.02));
-      const rx = out * 0.5 + 0.12 * S;
-      add(out - rx * 0.96, ys[i * 2], rx, ys[i * 2 + 1] / 2, [3.2, 4.2]);
+      outs[i] = out;
+      out *= range(r, 0.78, 0.94);
+    }
+    // The lowest laid first, each bed over the one it sits on.
+    for (let i = beds - 1; i >= 0; i--) {
+      const rx = outs[i] * 0.5 + 0.12 * S;
+      const ry = ys[i * 2 + 1] / 2;
+      // A flat bed's lumps scaled to its thickness, not its length: on a
+      // long thin ellipse the full lumps push its end out into a tongue.
+      add(outs[i] - rx * 0.96, ys[i * 2], rx, ry, [3.2, 4.2], Math.max(0.35, Math.min(1, (1.6 * ry) / rx)));
     }
     return;
   }
@@ -560,7 +570,7 @@ export interface RockStyle {
   /**
    * Far off in the water: the wash taken `mix` of the way to `water`, no
    * shading but the wash's own, and only a broken thread of the pen round
-   * it (0.4 of its weight at 0.3, broken at least twice a boulder) and three
+   * it (half its weight at 0.45, broken at least twice a boulder) and three
    * to six strokes of the hatch where it is darkest, so it is a rock in the
    * haze and never a lineless smoke.
    */
@@ -615,10 +625,11 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
   const deep = mixHex(stone, dark ? '#000000' : '#2A2320', (dark ? 0.45 : 0.32) * (far ? 1 - 0.6 * far.mix : 1));
   const lift = mixHex(stone, k.paper, dark ? 0.22 : 0.42);
   const union = new Path2D();
-  // The foot let go of. The pen lets go first: its lines thin out from a
-  // little above where the wash starts to run dry and are gone a little
-  // below, along a ragged line, so the rock goes down into the water and
-  // never stands on a hem of its own. Its own dice, so the rest roll as before.
+  // The foot let go of. The pen lets go with the wash, along a ragged line:
+  // whole down to where the wash starts to run dry, and gone only where
+  // the wash is down to a third, so no part of a rock is wash without a
+  // line (a lineless lobe reads as glass or smoke, not stone). Its own
+  // dice, so the rest roll as before.
   const H = shape.height;
   const [fa, fb] = k.fade ?? FADE;
   const rf = mulberry32(k.seed ^ 0x7f4a7c15);
@@ -628,8 +639,8 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
     const u = (x - at.x0) * at.dir;
     return 0.6 * Math.sin(u / (0.13 * shape.span) + ph1) + 0.4 * Math.sin(u / (0.045 * shape.span) + ph2);
   };
-  const penFrom = fa - 0.16;
-  const penTo = fa + 0.12;
+  const penFrom = fa - 0.04;
+  const penTo = fa + 0.62 * (fb - fa);
   const lf = (x: number, y: number) => {
     const n0 = ragged(x);
     const a = Y((penFrom + 0.04 * n0) * H);
@@ -822,7 +833,7 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
       let left = b.rx * (on ? range(rf, 0.35, 1) : range(rf, 0.08, 0.3));
       const flush = () => {
         if (dash.length >= 6) {
-          inkLine(ctx, dash, false, { width: 0.4 * px, color: k.line, alpha: 0.3, swell: 0.3, lost: 0, taper: [0.2, 0.2], raw: true, light: dark ? UNLIGHT : LIGHT, min: 0.25 * px });
+          inkLine(ctx, dash, false, { width: 0.5 * px, color: k.line, alpha: 0.45, swell: 0.3, lost: 0, taper: [0.2, 0.2], raw: true, light: dark ? UNLIGHT : LIGHT, min: 0.25 * px });
         }
         dash = [];
       };
@@ -911,37 +922,54 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
     const m = pts.length / 2;
     const flags: boolean[] = [];
     for (let i = 0; i < m; i++) flags.push(covered(pts[i * 2], pts[i * 2 + 1]));
-    const pen = (run: number[], cleft: boolean, closed: boolean) =>
+    const pen = (run: number[], cleft: boolean, closed: boolean, a = 1) =>
       inkLine(ctx, run, closed, {
-        width: (cleft ? 0.75 : fine ? 1.15 : 1) * px,
+        width: (cleft ? 0.75 : fine ? 1.15 : 1) * px * (0.6 + 0.4 * a),
         color: k.line,
-        alpha: (dark ? 0.8 : 0.9) * (cleft ? 0.75 : 1),
+        alpha: (dark ? 0.8 : 0.9) * (cleft ? 0.75 : 1) * a,
         plate: true,
         seed: k.seed ^ (bi * 31 + run.length),
         light: dark ? UNLIGHT : LIGHT,
         min: 0.25 * px,
       });
-    // Where the pen has let go toward the foot, the line is broken off
-    // there and runs out thin into it.
+    // Toward the foot the line goes on down with the wash, at half its
+    // weight and strength once the wash is half gone, and is broken off
+    // only where the wash has all but gone.
     const fading = (run: number[], cleft: boolean, closed: boolean) => {
       const mm = run.length / 2;
-      const keep: boolean[] = [];
-      for (let i = 0; i < mm; i++) keep.push(lf(run[i * 2], run[i * 2 + 1]) >= 0.12);
-      if (keep.every(Boolean)) {
+      const lv: number[] = [];
+      for (let i = 0; i < mm; i++) {
+        const v = lf(run[i * 2], run[i * 2 + 1]);
+        lv.push(v < 0.12 ? 0 : v > 0.5 ? 2 : 1);
+      }
+      if (lv.every((v) => v === 2)) {
         pen(run, cleft, closed);
         return;
       }
-      const start = closed ? keep.findIndex((v) => !v) : 0;
-      let sub: number[] = [];
-      for (let q = 0; q < mm + (closed ? 1 : 0); q++) {
-        const i = (start + q) % mm;
-        if (keep[i]) sub.push(run[i * 2], run[i * 2 + 1]);
-        else {
-          if (sub.length >= 6) pen(sub, cleft, false);
-          sub = [];
-        }
+      const start = closed ? Math.max(0, lv.findIndex((v, i) => v !== lv[(i - 1 + mm) % mm])) : 0;
+      const n = mm + (closed ? 1 : 0);
+      const at = (q: number) => (start + q) % mm;
+      // Steps of one weight, as [from, to) in q; each drawn a few points
+      // into its neighbours (where they are drawn too), so the tapers at
+      // its ends lie under the next step's line and it runs on unbroken.
+      const steps: [number, number, number][] = [];
+      for (let q = 0; q < n; q++) {
+        const v = lv[at(q)];
+        const last = steps[steps.length - 1];
+        if (last && last[2] === v && last[1] === q) last[1] = q + 1;
+        else steps.push([q, q + 1, v]);
       }
-      if (sub.length >= 6) pen(sub, cleft, false);
+      const ALPHA = [0, 0.5, 1];
+      for (const [q0, q1, v] of steps) {
+        if (v === 0) continue;
+        let a = q0;
+        let b = q1;
+        for (let k = 0; k < 3 && a > 0 && lv[at(a - 1)] > 0; k++) a--;
+        for (let k = 0; k < 3 && b < n && lv[at(b)] > 0; k++) b++;
+        const sub: number[] = [];
+        for (let q = a; q < b; q++) sub.push(run[at(q) * 2], run[at(q) * 2 + 1]);
+        if (sub.length >= 6) pen(sub, cleft, false, ALPHA[v]);
+      }
     };
     if (!flags.some(Boolean)) fading(pts, false, true);
     else {
@@ -1117,8 +1145,6 @@ export function inkRock(ctx: CanvasRenderingContext2D, shape: RockShape, at: Roc
  * on the page, mirrored for no wall.
  */
 const HATCH_LEAN = (20 * Math.PI) / 180;
-/** The second set, laid across the first where it is darkest: 60° round from it. */
-const CROSS_LEAN = HATCH_LEAN - Math.PI / 3;
 
 /**
  * How many strokes to an area, by shade: in shadow one to every 80 square
@@ -1194,6 +1220,8 @@ interface HatchField {
   keep?: (x: number, y: number) => number;
   /** No cross-hatch (light ink on dark water: the brightest stays open). */
   noCross?: boolean;
+  /** The odds of a stroke by shade, if not the rocks' (`hatchOdds`). */
+  odds?: (s: number) => number;
 }
 
 /**
@@ -1208,16 +1236,40 @@ function hatchStrokes(
   into: Path2D | ((y: number) => Path2D),
   box: { x: number; y: number; w: number; h: number },
   f: HatchField,
-  o: { px: number; seed: number; len: number; width: number },
+  o: {
+    px: number;
+    seed: number;
+    len: number;
+    width: number;
+    /** Square px of pen to a stroke where darkest (80). */
+    area?: number;
+    /** The set's lean off the vertical (`HATCH_LEAN`); the cross 60° round from it. */
+    lean?: number;
+    /** How far each stroke may turn off its set, radians either way (0.035). */
+    jitter?: number;
+    /** How much a stroke's length varies, as a share either way (0.14). */
+    vary?: number;
+    /** Each lane's strokes started at its own place, not near its
+        neighbours': no stroke ends lining up into curves across the lanes
+        (on a wall, those read as rows of scales). */
+    scatter?: boolean;
+    /** How fat a stroke is at its ends, against its middle (0.22: a
+        graver's point). Fuller reads as a burin line at poster size,
+        not a needle. */
+    ends?: number;
+  },
 ): void {
   const { px } = o;
   const len = o.len;
   const gap = Math.max(1.5 * px, 0.16 * len);
   // One stroke to 80 square px of pen where it is darkest.
-  const lane = Math.max(1.6 * px, (80 * px * px) / (len + gap));
-  const sets: [number, boolean][] = [[HATCH_LEAN, false]];
+  const lane = Math.max(1.6 * px, ((o.area ?? 80) * px * px) / (len + gap));
+  const lean0 = o.lean ?? HATCH_LEAN;
+  const jit = 2 * (o.jitter ?? 0.035);
+  const vary = 2 * (o.vary ?? 0.14);
+  const sets: [number, boolean][] = [[lean0, false]];
   // Crossed only where the lanes are close enough to read as a tone.
-  if (!f.noCross && lane <= 4.6 * px) sets.push([CROSS_LEAN, true]);
+  if (!f.noCross && lane <= 4.6 * px) sets.push([lean0 - Math.PI / 3, true]);
   for (const [lean, cross] of sets) {
     // Along the stroke, and across it.
     const ax = Math.sin(lean);
@@ -1253,24 +1305,24 @@ function hatchStrokes(
       const li = Math.round(c / sp);
       const lr = mulberry32(ihash(salt, li, 0x3c6ef372));
       const off = c + (lr() - 0.5) * sp * 0.22;
-      const phase = period * (1.6 * valueNoise(salt, li * 0.21, 0.5) + (lr() - 0.5) * 0.1);
+      const phase = o.scatter ? period * lr() : period * (1.6 * valueNoise(salt, li * 0.21, 0.5) + (lr() - 0.5) * 0.1);
       for (let ai = Math.floor((a0 - phase) / period); ai * period + phase <= a1; ai++) {
         const a = ai * period + phase;
         // Each stroke its own dice, so a box drawn in pieces comes out the same.
         const sr = mulberry32(ihash(salt ^ 0x9e37, li, ai));
-        const l = len * (0.86 + 0.28 * sr());
+        const l = len * (1 - vary / 2 + vary * sr());
         const am = a + l / 2 + (sr() - 0.5) * gap * 0.3;
         const mx = am * ax + off * nx;
         const my = am * ay + off * ny;
         const roll = rollOf(valueNoise(salt ^ 0x55, am / (period * 1.4), li * 0.23), sr());
-        const lean2 = (sr() - 0.5) * 0.07;
+        const lean2 = (sr() - 0.5) * jit;
         const bow = (sr() - 0.5) * 0.016 * l;
         if (mx < box.x - len || mx > box.x + box.w + len || my < box.y - len || my > box.y + box.h + len) continue;
         if (f.inside && !f.inside(mx, my)) continue;
         const s = f.shade(mx, my);
         const kp = f.keep ? f.keep(mx, my) : 1;
         if (kp <= 0.02) continue;
-        const odds = cross ? clamp01((s - CROSS_FROM) / 0.1) : hatchOdds(s);
+        const odds = cross ? clamp01((s - CROSS_FROM) / 0.1) : (f.odds ?? hatchOdds)(s);
         if (roll > spread(odds * kp)) continue;
         // Its own few degrees off the set: 15 to 25° off the vertical in all.
         const ca = Math.cos(lean2);
@@ -1298,7 +1350,9 @@ function hatchStrokes(
         // Five points down it, the graver going in and lifting out at its ends.
         const L = t1 - t0;
         const tm = (t0 + t1) / 2;
-        const W = [0.22, 0.85, 1, 0.85, 0.22];
+        const e = o.ends ?? 0.22;
+        const w1 = 0.85 + 0.2 * (e - 0.22);
+        const W = [e, w1, 1, w1, e];
         const T = [0, 0.25, 0.5, 0.75, 1];
         const side = (k: number, sgn: number): [number, number] => {
           const t = tm + (T[k] - 0.5) * L;
@@ -1350,6 +1404,54 @@ function strataLine(x0: number, y0: number, x1: number, y1: number, r: Rand, px:
     pieces.push(pts);
   }
   return pieces;
+}
+
+/** A smooth step from `a` to `b`. */
+function ease(a: number, b: number, v: number): number {
+  const t = clamp01((v - a) / (b - a));
+  return t * t * (3 - 2 * t);
+}
+
+/** A colour's luminance, 0 to 1. */
+function lum(hex: string): number {
+  const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
+  return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+}
+
+/** How much of a face the hatch covers on the mean at its plain density (measured). */
+const HATCH_COVER = 0.25;
+
+/**
+ * An engraved ground on paper: the tint it is washed in, and how much more
+ * densely than plain it is hatched, so that the hatch (in `ink`) brings the
+ * tint down to `stone`'s tone on the mean. The tint is lighter than the
+ * stone, toward the paper, and always a clear step above the ink, so the
+ * strokes show on it however dark the stone is: a dark stone is a light
+ * tint under close, heavy hatching, as an engraver makes a dark.
+ */
+function engrave(stone: string, paper: string, ink: string): { tint: string; dense: number } {
+  const ls = lum(stone);
+  const lp = lum(paper);
+  const li = lum(ink);
+  // A quarter covered, the plain hatch; but never closer to the ink than this.
+  let lw = (ls - HATCH_COVER * li) / (1 - HATCH_COVER);
+  lw = Math.min(Math.max(lw, li + 0.22), lp - 0.05, ls + 0.6 * (lp - ls));
+  if (lw <= ls || lp - ls < 0.02) return { tint: stone, dense: 1 };
+  const cover = Math.min(0.55, (lw - ls) / Math.max(0.02, lw - li));
+  return { tint: mixHex(stone, paper, clamp01((lw - ls) / (lp - ls))), dense: Math.max(1, cover / HATCH_COVER) };
+}
+
+/** A wall's odds of a stroke by shade: one to 80 px² of pen in shadow, one
+    to about 280 on its lit faces (the rocks' go barer, to 650). */
+function wallOdds(s: number): number {
+  return 0.29 + 0.71 * ease(0.2, 0.62, s);
+}
+
+/** The same in light ink on dark water, which marks the light: its lit
+    faces close, and a stroke here and there in the shadow, so no part of
+    a wall is a blank of dark. */
+function nightWallOdds(s: number): number {
+  return 0.2 + 0.8 * ease(0.15, 0.6, s);
 }
 
 /** A scratch context with no transform, to ask a path what is inside it. */
@@ -1410,8 +1512,6 @@ export function inkWall(
     return 1 - 0.65 * t * t * (3 - 2 * t);
   };
   const stone = style.rock;
-  const deep = mixHex(stone, dark ? '#000000' : '#2A2320', dark ? 0.45 : 0.32);
-  const lift = mixHex(stone, style.paper, dark ? 0.18 : 0.32);
   const nearX = side === 'left' ? box.x0 : box.x1;
   const farX = side === 'left' ? box.x1 : box.x0;
 
@@ -1464,38 +1564,57 @@ export function inkWall(
   };
 
   // Bedding planes across it, near level (±8°), one a 40 to 90 px of pen
-  // down, each the lip of a ledge with its shadow under it.
+  // down, each the lip of a ledge with its shadow under it. A ledge comes
+  // and goes along its bed (its shadow deep in places, all but gone in
+  // others), so the beds never read as rows.
   const rs = mulberry32(hash32(seed, 'strata'));
-  const strata: { y: number; slope: number; x0: number; x1: number }[] = [];
+  const strata: { y: number; slope: number; x0: number; x1: number; salt: number }[] = [];
   for (let y = box.y0 + range(rs, 14, 44) * px; y < box.y1; y += range(rs, 40, 90) * px) {
     const slope = Math.tan(range(rs, -8, 8) * (Math.PI / 180));
     const e = edgeAt(y);
     const inset = range(rs, 0.05, 0.4) * Math.abs(e - nearX);
-    if (side === 'left') strata.push({ y, slope, x0: box.x0 - 2 * px, x1: e - inset });
-    else strata.push({ y, slope, x0: e + inset, x1: box.x1 + 2 * px });
+    const salt = hash32(seed, 'bed', strata.length);
+    if (side === 'left') strata.push({ y, slope, x0: box.x0 - 2 * px, x1: e - inset, salt });
+    else strata.push({ y, slope, x0: e + inset, x1: box.x1 + 2 * px, salt });
   }
   const lipAt = (st: (typeof strata)[number], x: number) => st.y + st.slope * (x - box.x0);
   const ledgeShadow = 7 * px;
-  const ph = (seed % 1000) * 0.0137;
+  const bedAmp = (st: (typeof strata)[number], x: number) => 0.25 + 0.75 * ease(0.3, 0.65, valueNoise(st.salt, x / (55 * px), 0.5));
   const shade = (x: number, y: number) => {
     const e = edgeAt(y);
     // Across the face: deeper back toward the page edge, where the face
     // turns away into the cleft; a left wall's face turned more from the light.
     const toward = clamp01(((e - x) * out) / Math.max(8 * px, bw));
-    let s = 0.26 + 0.42 * toward + (litEdge ? -0.08 : 0.04);
-    // A low roll in the rock, so the tone is not a ramp.
-    s += 0.2 * (valueNoise(seed, x / (40 * px), y / (55 * px)) - 0.5) + 0.1 * Math.sin(y / (37 * px) + ph) * Math.sin(x / (23 * px) + y / (61 * px) + ph * 3);
+    let s = 0.3 + 0.36 * toward + (litEdge ? -0.06 : 0.04);
+    // The stone's faces: blocks of it turned more or less from the light,
+    // a joint's width apart, and the roughness on them. Noise, never a
+    // period: anything regular across a wall reads as tiles or scales.
+    s += 0.56 * (ease(0.36, 0.64, valueNoise(seed, x / (44 * px), y / (31 * px))) - 0.5);
+    s += 0.16 * (valueNoise(seed ^ 0x51ed27, x / (15 * px), y / (11 * px)) - 0.5);
+    // And the joints between the blocks, wandering, in shadow.
+    const jn = Math.abs(valueNoise(seed ^ 0x2f6b1d, x / (70 * px), y / (48 * px)) - 0.5);
+    if (jn < 0.05) s += 0.4 * (1 - jn / 0.05);
     // Under each ledge its shadow, dark at the lip and lifting down the
     // face; over it, the ledge's top turned up to the light.
     for (const st of strata) {
       const d = y - lipAt(st, x);
-      if (d > 0 && d < ledgeShadow * 4) s += 0.55 * Math.exp(-d / (1.6 * ledgeShadow));
-      else if (d < 0 && d > -2.5 * ledgeShadow) s -= 0.3 * (1 + d / (2.5 * ledgeShadow));
+      if (d > ledgeShadow * 4 || d < -2.5 * ledgeShadow) continue;
+      const a = bedAmp(st, x);
+      if (d > 0) s += 0.5 * a * Math.exp(-d / (1.6 * ledgeShadow));
+      else s -= 0.26 * a * (1 + d / (2.5 * ledgeShadow));
     }
     return clamp01(s);
   };
   // Light ink on dark water marks only the faces most in the light.
   const inkShade = dark ? (x: number, y: number) => 0.85 * (1 - shade(x, y)) : shade;
+  // On paper the value is the engraver's: the wash a tint, lighter than the
+  // stone it stands for, and the hatch (in an ink a step blacker than the
+  // line) bringing it down to the stone's tone on the mean, so a wall reads
+  // as engraved stone and not a flat grey, however dark the stone it is.
+  const ink = dark ? style.line : mixHex(style.line, '#000000', 0.4);
+  const { tint, dense } = dark ? { tint: stone, dense: 1 } : engrave(stone, style.paper, ink);
+  const deepT = mixHex(tint, dark ? '#000000' : '#2A2320', dark ? 0.45 : 0.32);
+  const liftT = mixHex(tint, style.paper, dark ? 0.18 : 0.32);
 
   ctx.save();
   ctx.clip(outline);
@@ -1506,9 +1625,9 @@ export function inkWall(
   // edge faces the light the brush stops 2.5 px of pen short of it: bare
   // paper inside the line, nothing added.
   const g = ctx.createLinearGradient(farX, box.y0, nearX, box.y0 + bw * 0.6);
-  g.addColorStop(0, mixHex(stone, lift, 0.5));
-  g.addColorStop(0.55, stone);
-  g.addColorStop(1, mixHex(stone, deep, 0.55));
+  g.addColorStop(0, mixHex(tint, liftT, 0.5));
+  g.addColorStop(0.55, tint);
+  g.addColorStop(1, mixHex(tint, deepT, 0.55));
   let washPath: Path2D | null = null;
   if (litEdge && rows.length > 1) {
     washPath = new Path2D();
@@ -1542,7 +1661,7 @@ export function inkWall(
   const rm = mulberry32(hash32(seed, 'mottle'));
   for (let y = box.y0; y < box.y1; y += bw * 1.4) {
     const hgt = Math.min(bw * 1.8, box.y1 - y);
-    mottle(ctx, washPath ?? outline, { x: box.x0, y, w: bw, h: hgt }, deep, lift, (dark ? 0.2 : 0.26) * keep(y + hgt / 2), (rm() * 4294967296) >>> 0);
+    mottle(ctx, washPath ?? outline, { x: box.x0, y, w: bw, h: hgt }, deepT, liftT, (dark ? 0.2 : 0.26) * keep(y + hgt / 2), (rm() * 4294967296) >>> 0);
   }
   const gr = grain(ctx);
   if (gr) {
@@ -1561,19 +1680,18 @@ export function inkWall(
     const inset = (litEdge ? 5 * px : 0) * -out;
     pool.moveTo(edge[0] + inset, rows[0]);
     for (let i = 1; i < rows.length; i++) pool.lineTo(edge[i] + inset, rows[i]);
-    ctx.strokeStyle = deep;
+    ctx.strokeStyle = deepT;
     ctx.lineWidth = 5 * px;
     ctx.globalAlpha = dark ? 0.25 : 0.3;
     ctx.stroke(pool);
   }
   // The shadow under each ledge, in the wash: the ink comes after.
-  ctx.fillStyle = deep;
   for (const st of strata) {
     const xa = box.x0 - 4 * px;
     const xb = box.x1 + 4 * px;
     const sg = ctx.createLinearGradient(0, st.y, 0, st.y + ledgeShadow * 1.6);
-    sg.addColorStop(0, rgba(deep, 0.32));
-    sg.addColorStop(1, rgba(deep, 0));
+    sg.addColorStop(0, rgba(deepT, 0.32));
+    sg.addColorStop(1, rgba(deepT, 0));
     ctx.fillStyle = sg;
     ctx.globalAlpha = keep(st.y);
     ctx.beginPath();
@@ -1585,30 +1703,47 @@ export function inkWall(
     ctx.fill();
   }
   // The hatching, binned into bands down the wall so its alpha thins with
-  // depth as its strokes do.
-  const len = Math.max(14, Math.min(26, bw / (5 * px))) * px;
+  // depth. Depth takes the ink's strength more than its strokes: far down
+  // a wall is still hatched, only fainter.
+  const len = Math.max(20, Math.min(28, bw / (5 * px))) * px;
   const field: HatchField = {
     shade: inkShade,
-    keep: (x, y) => (litEdge && Math.abs(x - edgeAt(y)) < 4.5 * px ? 0 : keep(y)),
+    keep: (x, y) => (litEdge && Math.abs(x - edgeAt(y)) < 4.5 * px ? 0 : 0.72 + 0.28 * keep(y)),
     noCross: dark,
+    odds: dark ? nightWallOdds : wallOdds,
   };
   const bands = 24;
   const bins = Array.from({ length: bands }, () => new Path2D());
   const binOf = (y: number) => bins[Math.max(0, Math.min(bands - 1, Math.floor(((y - box.y0) / bh) * bands)))];
-  hatchStrokes(binOf, { x: box.x0, y: box.y0, w: bw, h: bh }, field, { px, seed: hash32(seed, 'hatch'), len, width: (dark ? 0.8 : 0.95) * px });
-  ctx.fillStyle = style.line;
+  hatchStrokes(binOf, { x: box.x0, y: box.y0, w: bw, h: bh }, field, {
+    px,
+    seed: hash32(seed, 'hatch'),
+    len,
+    // Closer and heavier where the stone is darker than a plain hatch makes it.
+    area: 80 / Math.pow(dense, 0.55),
+    width: (dark ? 0.8 : 1.05) * px * Math.pow(dense, 0.45),
+    scatter: true,
+    vary: dark ? 0.4 : 0.24,
+    jitter: 0.045,
+    ends: 0.6,
+  });
+  ctx.fillStyle = ink;
   bins.forEach((b, i) => {
-    ctx.globalAlpha = (dark ? 0.42 : 0.82) * keep(box.y0 + (bh * (i + 0.5)) / bands);
+    ctx.globalAlpha = (dark ? 0.35 : 0.85) * (0.45 + 0.55 * keep(box.y0 + (bh * (i + 0.5)) / bands));
     ctx.fill(b);
   });
-  // The bedding planes, broken, in the pen.
+  // The bedding planes, broken, in the pen. Light ink on dark water draws
+  // three at most, and faint: more, and the wall is ruled.
   ctx.globalAlpha = 1;
-  for (const st of strata) {
-    for (const piece of strataLine(st.x0, lipAt(st, st.x0), st.x1, lipAt(st, st.x1), rs, px)) {
+  const drawn = dark ? new Set(strata.map((st, i) => [valueNoise(st.salt, 0.5, 0.5), i]).sort((a, b) => a[0] - b[0]).slice(0, 3).map((v) => v[1])) : null;
+  strata.forEach((st, i) => {
+    const pieces = strataLine(st.x0, lipAt(st, st.x0), st.x1, lipAt(st, st.x1), rs, px);
+    if (drawn && !drawn.has(i)) return;
+    for (const piece of pieces) {
       inkLine(ctx, piece, false, {
         width: 1.1 * px,
         color: style.line,
-        alpha: (dark ? 0.6 : 0.9) * keep(st.y),
+        alpha: (dark ? 0.22 : 0.9) * keep(st.y),
         taper: [0.12, 0.2],
         raw: true,
         swell: 0,
@@ -1616,7 +1751,7 @@ export function inkWall(
         min: 0.25 * px,
       });
     }
-  }
+  });
   ctx.restore();
   // The open edge in one pressure line: heavy where the face turns from the
   // light (a left wall's), lighter and lifting where it faces it; broken
@@ -1658,6 +1793,238 @@ export function inkWall(
     }
     ctx.restore();
   }
+}
+
+/**
+ * A floor, or any level ground, in the walls' hand: the stone's wash (on
+ * paper a tint the hatch brings down to the stone's tone, as `inkWall`'s),
+ * its beds in strokes laid level (within a few degrees), sparse under its
+ * top and closing up and darkening toward the bottom, a few long broken
+ * bedding lines across it (the top ones following the crest's swells, the
+ * deeper ones forgetting them), and along its top one ink line, broken
+ * about a third of its length, with nothing lighter under it.
+ *
+ * `outline` is the ground in the context's coordinates and `box` its bounds.
+ * `crest`, flat x,y pairs left to right along its top, saves reading the
+ * outline for it. `wash: false` draws only the ink, over a ground already
+ * laid (it must then be light enough for the ink to show on). Below
+ * `fadeFrom` the ink thins to about a third at `fadeTo` (by default it holds
+ * all the way down). Deterministic from `seed`, `box` and `px`: drawn again,
+ * or in strips under a clip, it comes out the same, stroke for stroke.
+ */
+export function inkFloor(
+  ctx: CanvasRenderingContext2D,
+  outline: Path2D,
+  box: { x0: number; y0: number; x1: number; y1: number },
+  style: RockStyle,
+  px: number,
+  seed: number,
+  opts?: { crest?: number[]; wash?: boolean; fadeFrom?: number; fadeTo?: number },
+): void {
+  const bw = box.x1 - box.x0;
+  const bh = box.y1 - box.y0;
+  if (!(bw > 0 && bh > 0)) return;
+  const dark = style.dark;
+  // The crest: given, or read off the outline a column at a time.
+  const colStep = Math.max(1, 2 * Math.min(px, 2));
+  const cx: number[] = [];
+  const cy: number[] = [];
+  if (opts?.crest && opts.crest.length >= 4) {
+    for (let i = 0; i < opts.crest.length; i += 2) {
+      cx.push(opts.crest[i]);
+      cy.push(opts.crest[i + 1]);
+    }
+  } else {
+    const pc = probeCtx();
+    if (pc) {
+      const coarse = Math.max(2, 3 * px);
+      for (let x = box.x0 + colStep / 2; x < box.x1; x += colStep) {
+        let y = box.y0;
+        while (y < box.y1 && !pc.isPointInPath(outline, x, y)) y += coarse;
+        if (y >= box.y1) continue;
+        let a = Math.max(box.y0, y - coarse);
+        let b = y;
+        for (let it = 0; it < 6; it++) {
+          const m = (a + b) / 2;
+          if (pc.isPointInPath(outline, x, m)) b = m;
+          else a = m;
+        }
+        cx.push(x);
+        cy.push(b);
+      }
+    }
+  }
+  if (cx.length < 2) return;
+  const crestAt = (x: number) => {
+    if (x <= cx[0]) return cy[0];
+    if (x >= cx[cx.length - 1]) return cy[cy.length - 1];
+    let lo = 0;
+    let hi = cx.length - 1;
+    while (hi - lo > 1) {
+      const m = (lo + hi) >> 1;
+      if (cx[m] <= x) lo = m;
+      else hi = m;
+    }
+    const t = (x - cx[lo]) / Math.max(1e-6, cx[hi] - cx[lo]);
+    return cy[lo] + (cy[hi] - cy[lo]) * t;
+  };
+  let top = Infinity;
+  for (const v of cy) top = Math.min(top, v);
+  const fy0 = opts?.fadeFrom ?? box.y1;
+  const fy1 = Math.max(fy0 + 1, opts?.fadeTo ?? box.y1 + 1);
+  const keep = (y: number) => 1 - 0.65 * ease(0, 1, (y - fy0) / (fy1 - fy0));
+  // How far down the ground a point is, 0 at its crest to 1 at the bottom.
+  const down = (x: number, y: number) => clamp01((y - crestAt(x)) / Math.max(8 * px, box.y1 - top));
+
+  const stone = style.rock;
+  const ink = dark ? style.line : mixHex(style.line, '#000000', 0.4);
+  const { tint, dense } = dark ? { tint: stone, dense: 1 } : engrave(stone, style.paper, ink);
+  const deepT = mixHex(tint, dark ? '#000000' : '#2A2320', dark ? 0.45 : 0.32);
+  const liftT = mixHex(tint, style.paper, dark ? 0.15 : 0.25);
+
+  // The beds: a long broken line every 30 to 70 px of pen down, the upper
+  // ones following the crest's swells, the deeper ones level.
+  const rs = mulberry32(hash32(seed, 'floor-beds'));
+  const beds: { y: number; tilt: number; follow: number }[] = [];
+  for (let y = top + range(rs, 10, 26) * px; y < box.y1; y += range(rs, 30, 70) * px) {
+    const k = clamp01((y - top) / Math.max(1, bh));
+    beds.push({ y, tilt: Math.tan(range(rs, -3, 3) * (Math.PI / 180)), follow: (1 - k) * (1 - k) * range(rs, 0.7, 1) });
+  }
+  const bedAt = (b: (typeof beds)[number], x: number) => b.y + b.follow * (crestAt(x) - top) + b.tilt * (x - box.x0);
+
+  ctx.save();
+  ctx.clip(outline);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (opts?.wash !== false) {
+    const g = ctx.createLinearGradient(0, top, 0, box.y1);
+    g.addColorStop(0, mixHex(tint, liftT, 0.5));
+    g.addColorStop(0.35, tint);
+    g.addColorStop(1, mixHex(tint, deepT, 0.6));
+    ctx.fillStyle = g;
+    ctx.globalAlpha = 1;
+    ctx.fillRect(box.x0 - 2, box.y0 - 2, bw + 4, bh + 4);
+    const rm = mulberry32(hash32(seed, 'floor-mottle'));
+    const span = Math.max(bh, 40 * px) * 1.6;
+    for (let x = box.x0; x < box.x1; x += span) {
+      mottle(ctx, outline, { x, y: top, w: Math.min(span * 1.2, box.x1 - x), h: box.y1 - top }, deepT, liftT, dark ? 0.18 : 0.22, (rm() * 4294967296) >>> 0);
+    }
+    const gr = grain(ctx);
+    if (gr) {
+      gr.setTransform?.(new DOMMatrix([px, 0, 0, px, 0, 0]));
+      ctx.fillStyle = gr;
+      ctx.globalAlpha = dark ? 0.3 : 0.24;
+      ctx.fillRect(box.x0 - 2, box.y0 - 2, bw + 4, bh + 4);
+    }
+  }
+  // The strata, in level strokes: few under the crest, closing up and
+  // darker toward the bottom, in long lenses (a smooth noise drawn out
+  // along the beds) so they never read as ruled.
+  const shade = (x: number, y: number) => {
+    let s = 0.2 + 0.6 * down(x, y);
+    s += 0.36 * (ease(0.3, 0.7, valueNoise(seed, x / (90 * px), y / (16 * px))) - 0.5);
+    s += 0.14 * (valueNoise(seed ^ 0x3b9a, x / (30 * px), y / (7 * px)) - 0.5);
+    for (const b of beds) {
+      const d = y - bedAt(b, x);
+      if (d > 0 && d < 12 * px) s += 0.22 * Math.exp(-d / (4 * px));
+    }
+    return clamp01(s);
+  };
+  const field: HatchField = {
+    shade: dark ? (x, y) => 0.85 * (1 - 0.6 * shade(x, y)) * (0.4 + 0.6 * (1 - down(x, y))) : shade,
+    inside: (x, y) => y > crestAt(x) + 2.5 * px,
+    keep: (x, y) => 0.72 + 0.28 * keep(y),
+    noCross: true,
+    odds: (s) => 0.12 + 0.88 * ease(0.15, 0.75, s),
+  };
+  const bands = 16;
+  const bins = Array.from({ length: bands }, () => new Path2D());
+  const binOf = (y: number) => bins[Math.max(0, Math.min(bands - 1, Math.floor(((y - box.y0) / bh) * bands)))];
+  hatchStrokes(binOf, { x: box.x0, y: Math.max(box.y0, top - 2 * px), w: bw, h: box.y1 - Math.max(box.y0, top - 2 * px) }, field, {
+    px,
+    seed: hash32(seed, 'floor-hatch'),
+    len: 26 * px,
+    // One stroke to 110 px² of pen at the darkest: about 150 on the mean.
+    area: 110 / Math.pow(dense, 0.55),
+    width: (dark ? 0.75 : 0.95) * px * Math.pow(dense, 0.45),
+    lean: Math.PI / 2 + range(mulberry32(hash32(seed, 'floor-lean')), -0.04, 0.04),
+    jitter: 0.07,
+    vary: 0.5,
+    scatter: true,
+    ends: 0.5,
+  });
+  ctx.fillStyle = ink;
+  bins.forEach((b, i) => {
+    ctx.globalAlpha = (dark ? 0.3 : 0.8) * (0.45 + 0.55 * keep(box.y0 + (bh * (i + 0.5)) / bands));
+    ctx.fill(b);
+  });
+  // The bedding lines, broken; light ink draws three at most, and faint.
+  const drawn = dark ? new Set(beds.map((b, i) => [valueNoise(seed ^ i, 0.5, 0.5), i]).sort((a, b) => a[0] - b[0]).slice(0, 3).map((v) => v[1])) : null;
+  beds.forEach((b, i) => {
+    const pts: number[] = [];
+    const n = Math.max(4, Math.ceil(bw / (6 * px)));
+    for (let q = 0; q <= n; q++) {
+      const x = box.x0 + (bw * q) / n;
+      pts.push(x, bedAt(b, x));
+    }
+    const rb = mulberry32(hash32(seed, 'bed-line', i));
+    // Runs of it, each 60 to 220 px of pen, a gap between: most of it gone.
+    let u = rb() * 80 * px;
+    while (u < bw) {
+      const on = range(rb, 60, 220) * px;
+      const a = Math.floor((u / bw) * n);
+      const z = Math.min(n, Math.ceil(((u + on) / bw) * n));
+      if (z - a >= 2 && (!drawn || drawn.has(i))) {
+        const run = pts.slice(a * 2, z * 2 + 2);
+        const kd = down(run[0], run[1]);
+        inkLine(ctx, run, false, {
+          width: 0.9 * px,
+          color: style.line,
+          alpha: (dark ? 0.22 : 0.35 + 0.4 * kd) * keep(run[1]),
+          taper: [0.15, 0.2],
+          raw: true,
+          swell: 0,
+          lost: 0,
+          min: 0.25 * px,
+        });
+      }
+      u += on + range(rb, 40, 160) * px;
+    }
+  });
+  ctx.restore();
+  // Its top: one ink line, a third of it broken out in gaps, and nothing
+  // lighter under it.
+  const rc = mulberry32(hash32(seed, 'floor-crest'));
+  let run: number[] = [];
+  let on = rc() < 0.75;
+  let left = (on ? range(rc, 50, 160) : range(rc, 20, 70)) * px;
+  const flush = () => {
+    if (run.length >= 6) {
+      inkLine(ctx, run, false, {
+        width: 0.6 * px,
+        color: style.line,
+        alpha: dark ? 0.7 : 0.9,
+        swell: 0.6,
+        lost: 0,
+        taper: [0.08, 0.12],
+        raw: true,
+        seed: hash32(seed, 'crest', Math.round(run[0])),
+        light: dark ? UNLIGHT : LIGHT,
+        min: 0.3 * px,
+      });
+    }
+    run = [];
+  };
+  for (let i = 0; i < cx.length; i++) {
+    if (on) run.push(cx[i], cy[i]);
+    if (i + 1 < cx.length) left -= Math.hypot(cx[i + 1] - cx[i], cy[i + 1] - cy[i]);
+    if (left <= 0) {
+      if (on) flush();
+      on = !on;
+      left = (on ? range(rc, 50, 160) : range(rc, 20, 70)) * px;
+    }
+  }
+  flush();
 }
 
 /** `#rrggbb` as rgba() at `a`. */
@@ -2548,17 +2915,53 @@ const DRAW: Record<Growth['kind'], Drawer> = {
     ctx.fillStyle = ink.body;
   },
 
-  // Plate coral: shelves stacked up a short stalk, each ringed with its
-  // growth, the underside of each in shadow.
+  // Plate coral: one or two shelves held up on a stout stalk that grows
+  // out of the rock on a spreading foot (never more than two: three read
+  // as a cake stand, and a shelf with no stalk under it floats), each ringed
+  // with its growth, the underside of each in shadow.
   plate(ctx, H, ink, r, px, pen) {
-    const n = int(r, 2, 3);
+    const n = Math.min(2, int(r, 2, 3));
     const shelves = Array.from({ length: n }, (_, k) => {
       const rx = H * range(r, 0.45, 0.62) * (1 - 0.15 * k);
-      return { x: (k % 2 ? -1 : 1) * range(r, 0.05, 0.2) * H, y: -H * (0.25 + 0.28 * k), rx, ry: rx * 0.2 };
+      // The second shelf well above the first and off to the other side,
+      // so the stalk shows between them: a branching shelf, not a stack.
+      return { x: (k % 2 ? -1.6 : 1) * range(r, 0.05, 0.2) * H, y: -H * (0.42 + 0.4 * k), rx: rx * (k ? 0.85 : 1), ry: rx * (k ? 0.85 : 1) * 0.2 };
     });
-    const stalk: number[] = [0, 0];
-    for (const s of shelves) stalk.push(s.x * 0.3, s.y);
-    outline(ctx, stalk, false, ink, pen, 1.1, [0, 0.2]);
+    // The stalk: up from its foot through each shelf's middle to the top
+    // one, tapering, its foot flared into the rock (a little into it, so
+    // it is grown on and not stood on).
+    const spine: [number, number][] = [[0, H * 0.04]];
+    for (const s of shelves) spine.push([s.x * 0.6, s.y + s.ry * 0.5]);
+    const left: number[] = [];
+    const right: number[] = [];
+    const steps = 14;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const f = t * (spine.length - 1);
+      const j = Math.min(spine.length - 2, Math.floor(f));
+      const u = f - j;
+      const x = spine[j][0] + (spine[j + 1][0] - spine[j][0]) * u;
+      const y = spine[j][1] + (spine[j + 1][1] - spine[j][1]) * u;
+      // Stout at the foot and flaring into the rock over its last tenth.
+      const flare = t < 0.12 ? 0.11 * H * (1 - t / 0.12) ** 2 : 0;
+      const half = H * (0.065 - 0.03 * t) + flare;
+      left.push(x - half, y);
+      right.push(x + half, y);
+    }
+    const stalkPts = [...left];
+    for (let i = right.length - 2; i >= 0; i -= 2) stalkPts.push(right[i], right[i + 1]);
+    const stalkPath = pathOf(stalkPts);
+    const sb = boxOf(stalkPts);
+    const sg = ctx.createLinearGradient(sb.x, 0, sb.x + sb.w, 0);
+    sg.addColorStop(0, pen.dark ? ink.deep : ink.lit);
+    sg.addColorStop(0.45, ink.body);
+    sg.addColorStop(1, pen.dark ? ink.lit : ink.deep);
+    ctx.fillStyle = sg;
+    ctx.fill(stalkPath);
+    shadeIn(ctx, stalkPath, sb, ink, pen, { angle: 0.15, spacing: 1.8, cross: null });
+    outline(ctx, left, false, ink, pen, 0.9, [0.05, 0.1]);
+    outline(ctx, right, false, ink, pen, 1.1, [0.05, 0.1]);
+    ctx.fillStyle = ink.body;
     // Top shelf first, so the lower ones lie over its stalk.
     for (let k = n - 1; k >= 0; k--) {
       const s = shelves[k];

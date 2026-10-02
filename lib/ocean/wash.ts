@@ -164,10 +164,18 @@ function glazesFor(cssW: number, cssH: number, seed: number, soft = false): Glaz
     return { a: mid - wide / 2, b: mid + wide / 2 };
   });
   const fade = cssW * 0.1;
+  // And each edge swung up and down by a long, uneven wave, three hundredths
+  // of the page either way, so even the stretch a brush crossed is never
+  // ruled: a straight edge under a row of animals reads as a horizon. (Its
+  // own rolls, so the glazes above are laid where they always were.)
+  const jr = mulberry32(hash32('wash', seed, 'glaze-swing'));
+  const swing = Array.from({ length: n }, () => ({ l1: cssW * (0.3 + 0.25 * jr()), l2: cssW * (0.11 + 0.08 * jr()), p1: jr() * Math.PI * 2, p2: jr() * Math.PI * 2 }));
+  const swingAt = (k: number, X: number) => cssH * (0.022 * Math.sin((X / swing[k].l1) * Math.PI * 2 + swing[k].p1) + 0.008 * Math.sin((X / swing[k].l2) * Math.PI * 2 + swing[k].p2));
   return {
     n,
     at: (k, X) =>
       base[k] +
+      swingAt(k, X) +
       slant[k] * (X - (reach[k].a + reach[k].b) / 2) +
       (fbm(l, X / (cssW * 0.3) + k * 17.3, k * 5.1, 3) - 0.5) * cssH * 0.2 +
       (fbm(l, X / 45 + k * 31, k * 9.7, 2) - 0.5) * 16 +
@@ -201,9 +209,13 @@ function buildStain(cssW: number, cssH: number, seed: number, soft = false): HTM
   const foot = 0.6 + r() * 0.5;
   const glazes = glazesFor(cssW, cssH, seed, soft);
   const n = glazes.n;
-  // A soft glaze's edge is wide and its pooling faint.
-  const edgeW = soft ? 70 : 9;
+  // A soft glaze's edge is wide and its pooling faint: feathered over
+  // eight hundredths of the page, and its pooled pigment spread as wide, so
+  // no edge steps the water.
+  const edgeW = soft ? Math.max(70, cssH * 0.04) : 9;
   const poolK = soft ? 0.018 : 0.035;
+  const poolAt = soft ? cssH * 0.02 : 6;
+  const poolW = soft ? cssH * 0.03 : 16;
   // The glaze edges are a function of X alone: worked out a column at a time.
   const edges = new Float32Array(sw * n);
   const crisp = new Float32Array(sw * n);
@@ -227,13 +239,16 @@ function buildStain(cssW: number, cssH: number, seed: number, soft = false): HTM
       // Mottling, smaller, where the brush went over twice.
       const m = fbm(pool, ox + 90 + X / 110, oy + Y / 110, 2) - 0.5;
       // The brush's strokes: long, faint, across the page.
-      const stroke = fbm(bloom, ox + X / 520, oy + Y / 11, 2) - 0.5;
+      // (On a print a broader, fainter brush: thin dark strokes stacked
+      // across a page read, row by row, as ruled shelves.)
+      const stroke = (fbm(bloom, ox + X / 520, oy + Y / (soft ? 26 : 11), 2) - 0.5) * (soft ? 0.6 : 1);
       // Blooms: where the field rises past a level, water crept back and
       // pushed the pigment out to a crinkled rim. The fine octaves are the
       // cauliflower in the edge.
       const b = fbm(bloom, X / 170, Y / 170, 6);
-      const lift = smooth(0.63, 0.65, b);
-      const rim = Math.exp(-(((b - 0.633) / 0.009) ** 2));
+      // (On a print the bloom's edge is let go of more gently.)
+      const lift = soft ? smooth(0.61, 0.69, b) : smooth(0.63, 0.65, b);
+      const rim = soft ? Math.exp(-(((b - 0.64) / 0.025) ** 2)) * 0.5 : Math.exp(-(((b - 0.633) / 0.009) ** 2));
       // More at the page's edges, and most at its foot.
       const edge = Math.min(X, cssW - X, Y);
       const run = Math.pow(1 - smooth(0, 120, edge), 2) * 0.07 + Math.pow(1 - smooth(0, 170, cssH - Y), 2) * 0.07 * foot;
@@ -247,7 +262,7 @@ function buildStain(cssW: number, cssH: number, seed: number, soft = false): HTM
         laid += smooth(e - ew, e + ew, Y);
         // Pigment gathered just inside each glaze's edge as it dried.
         const below = Y - e;
-        if (cr > 0 && below > -10 && below < 60) pooled += Math.exp(-(((below - 6) / 16) ** 2)) * cr;
+        if (cr > 0 && below > poolAt - poolW * 2.5 && below < poolAt + poolW * 3.5) pooled += Math.exp(-(((below - poolAt) / poolW) ** 2)) * cr;
       }
       const stair = (laid + 0.5) / n - Y / cssH;
       const s = stair * (soft ? 0.32 : 0.55) + pooled * poolK + p * 0.17 + m * 0.05 + stroke * 0.05 - lift * 0.035 + rim * 0.03 + run;
@@ -375,8 +390,9 @@ export class Wash {
           if (lv >= 0) dark[lv].moveTo(x, yy);
           level = lv;
         } else if (lv >= 0) dark[lv].lineTo(x, yy);
-        // The breath of white goes only where the edge dried crisp.
-        const on = glazes.crisp(k, X) > 0.5;
+        // The breath of white goes only where the edge dried crisp; on a
+        // print, nowhere: a long pale line over a darker one is a shelf.
+        const on = !this.soft && glazes.crisp(k, X) > 0.5;
         if (on && lightOn) light.lineTo(x, (y - 5) * sy);
         else if (on) light.moveTo(x, (y - 5) * sy);
         lightOn = on;

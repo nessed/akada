@@ -5,8 +5,9 @@ import { depthAt } from '../depth';
 import { planPicture, type PictureInput } from './index';
 import { rollBiome } from '../biome';
 import { rollKelp } from '../kelp';
-import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, floorAt, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, PICTURE_KELP, STEM, wallAt, type Box, type Plan } from './layout';
-import { EYE_R, steepestFall, whaleHull } from './layout';
+import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, floorAt, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, PICTURE_KELP, STEM, wallAt, wallTouches, type Box, type Plan } from './layout';
+import { EYE_R, ROW_BAND, SIPHON_TILT, steepestFall, stepsApart, whaleHull } from './layout';
+import { siphonophoreReach } from '../sightings-shallow';
 import { KELP_SHADE, kelpShadeAt } from './paint';
 
 /** A sitting from a start and a list of stretches in minutes. */
@@ -200,7 +201,9 @@ test('the jellies: the hero large and low, the one before half its size, older o
       assert.ok(inked.length <= 4, `${c.name}: ${inked.length} inked jellies`);
       for (const j of plan.jellies.slice(0, -1)) {
         assert.ok(j.weight <= 0.8, `${c.name}: jelly ${j.block} drawn at the hero's weight`);
-        if (j.far) assert.ok(Math.abs(j.alpha - 0.35) < 1e-9);
+        // Past three siblings, a ghost: a quarter strength and a third the hero's size at most.
+        if (j.far) assert.ok(j.alpha <= 0.25 + 1e-9 && j.r <= hero.r * 0.35 + 1e-9, `${c.name}: ghost ${j.block} at ${j.alpha} strength, ${(j.r / hero.r).toFixed(2)} of the hero`);
+        assert.equal(j.far, plan.jellies.length - 1 - j.block > 3, `${c.name}: jelly ${j.block} far or near out of turn`);
       }
       if (plan.jellies.length >= 2) {
         const prev = plan.jellies[plan.jellies.length - 2];
@@ -239,9 +242,9 @@ test('hard rules: the hero kept clear, jellies apart, the window bare, the big r
         for (const a of plan.cast) assert.ok(boxGap(a.box, hero.box) >= CLEAR - 1e-6, `${tag}: ${a.id} in the hero's margin`);
         for (const e of plan.events) if (e.box && e.kind !== 'whalefall') assert.ok(boxGap(e.box, hero.box) >= CLEAR - 1e-6, `${tag}: the ${e.kind} in the hero's margin`);
         for (const j of plan.jellies) if (!j.hero) assert.ok(boxGap(j.box, hero.box) >= CLEAR - 1e-6, `${tag}: jelly ${j.block} in the hero's margin`);
-        // No jelly sits on a rock.
-        // (A far jelly may be behind a near rock, in the haze.)
-        for (const r of plan.rocks) for (const j of plan.jellies) if (!j.far || r.plane === 0) assert.ok(!rockTouches(r, plan.w, j.box), `${tag}: jelly ${j.block} on a ${r.kind} rock`);
+        // No jelly sits on a rock or its wall, a far ghost no more than a near one.
+        for (const r of plan.rocks) for (const j of plan.jellies) assert.ok(!rockTouches(r, plan.w, j.box), `${tag}: jelly ${j.block} on a ${r.kind} rock`);
+        for (const wl of plan.walls) for (const j of plan.jellies) assert.ok(!wallTouches(wl, plan.w, j.box), `${tag}: jelly ${j.block} on a wall`);
         // Nothing over the window of sky, and the window wholly on the page.
         const win = plan.windowBox;
         assert.ok(plan.window.y - plan.window.r * 0.46 * 1.04 >= plan.h * 0.015 - 1e-6, `${tag}: the window is cut by the top of the page`);
@@ -308,12 +311,18 @@ test('no rock floats: each stands out from a wall that goes down into the ground
         const ground = plan.floor ? floorAt(plan, wl.edge < 0 ? 4 : plan.w - 4) : plan.h;
         assert.ok(wl.bottom >= Math.min(plan.h, ground), `${tag}: the wall stops at ${(wl.bottom / plan.h).toFixed(2)} H`);
         // Its buttress: under the rock's body the wall is at least the rock's width on the page over 1.6.
+        // (At its underside, the deepest of it over the stretch the buttress stands under.)
         let low = 0;
-        for (const v of r.shape.solid) low = Math.max(low, v);
+        const prof = r.kind === 'kelp' ? r.shape.solid : r.shape.under;
+        const span = (r.off + r.reach) * plan.w;
+        const n = prof.length - 1;
+        const ua = Math.floor((r.off * plan.w * n) / span);
+        const ub = Math.ceil(((r.off * plan.w + (r.reach * plan.w) / STEM) * n) / span);
+        for (let i = Math.max(0, Math.min(n, ua)); i <= Math.min(n, ub); i++) low = Math.max(low, prof[i]);
         const y = r.y + low * r.height;
         const f = wallAt(wl, y) ?? 0;
-        const crowded = plan.jellies.some((j) => j.box.y0 - CLEAR - 2 < y && j.box.y1 + CLEAR + 2 > y && (r.edge < 0 ? j.box.x0 : plan.w - j.box.x1) - CLEAR - 1 < (r.reach * plan.w) / STEM);
-        if (!crowded) assert.ok((r.reach * plan.w) / Math.max(1e-6, f) <= STEM + 0.05, `${tag}: a cap ${(r.reach * plan.w).toFixed(0)} wide on a stem ${f.toFixed(0)}`);
+        // (Never excused by a jelly near it: a rock whose buttress a jelly would crowd is not placed.)
+        assert.ok((r.reach * plan.w) / Math.max(1e-6, f) <= STEM + 0.05, `${tag}: a cap ${(r.reach * plan.w).toFixed(0)} wide on a stem ${f.toFixed(0)}`);
       }
       for (const wl of plan.walls) {
         // A narrow strip (0.04 to 0.09 W, rough) where nothing stands out from it.
@@ -445,6 +454,12 @@ test('siblings: each apart from the hero in two ways a print shows, none in anot
         ].filter(Boolean).length;
         assert.ok(ways >= 2, `${tag}: jelly ${j.block} differs from the hero in ${ways} way(s)`);
       }
+      // Never a staircase: each step down the family unlike the next, by 0.4 of the larger, across and down.
+      for (let i = 2; i < J.length; i++) {
+        const a = { dx: J[i - 1].x - J[i - 2].x, dy: J[i - 1].y - J[i - 2].y };
+        const b = { dx: J[i].x - J[i - 1].x, dy: J[i].y - J[i - 1].y };
+        assert.ok(stepsApart(a, b), `${tag}: jellies ${i - 2}, ${i - 1} and ${i} step alike (${a.dx.toFixed(0)},${a.dy.toFixed(0)}) then (${b.dx.toFixed(0)},${b.dy.toFixed(0)})`);
+      }
       for (let i = 0; i < J.length; i++) {
         for (let k = i + 1; k < J.length; k++) {
           assert.ok(boxGap(J[i].box, J[k].box) >= CLEAR - 1e-6, `${tag}: jellies ${i} and ${k} ${boxGap(J[i].box, J[k].box).toFixed(0)} apart`);
@@ -474,6 +489,51 @@ test('the rare things keep 0.02 S from rocks, jellies and each other; the whale\
         for (const j of plan.jellies) if (!j.far) assert.equal(inter(at.body, j.box) + inter(at.flipper, j.box), 0, `${tag}: jelly ${j.block} in the whale's shadow`);
         const steep = steepestFall(plan.zStops, plan.h);
         if (steep != null) assert.ok(Math.abs(at.dorsal - steep) >= plan.h * 0.04, `${tag}: the whale's back on the steepest fall`);
+      }
+    }
+  }
+});
+
+test('the cast never lines up: two at most of the middle and near in a band 0.06 H tall, at three depths 0.1 H apart, 0.02 S between any two and from the jellies', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES.slice(0, 2)) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const S = Math.min(plan.w, plan.h);
+      const mid = plan.cast.filter((a) => a.layer > 0 && !a.floor);
+      const ys = [...mid.map((a) => a.y), ...plan.events.filter((v) => v.box && !v.far && ['turtle', 'dumbo', 'lure'].includes(v.kind)).map((v) => ((v.box as Box).y0 + (v.box as Box).y1) / 2)].sort((a, b) => a - b);
+      for (let k = 0; k + 2 < ys.length; k++) assert.ok(ys[k + 2] - ys[k] >= plan.h * ROW_BAND - 1e-6, `${tag}: three animals within ${((ys[k + 2] - ys[k]) / plan.h).toFixed(3)} H of each other at ${ys[k].toFixed(0)}`);
+      if (ys.length >= 3) {
+        let bands = 0;
+        let last = -Infinity;
+        for (const y of ys) if (y >= last + plan.h * 0.1) {
+          bands++;
+          last = y;
+        }
+        assert.ok(bands >= 3, `${tag}: the cast at only ${bands} depths`);
+      }
+      for (let i = 0; i < plan.cast.length; i++) {
+        const a = plan.cast[i];
+        for (const b of plan.cast.slice(i + 1)) if (a.layer > 0 || b.layer > 0) assert.ok(boxGap(a.box, b.box) >= CLEAR - 1e-6, `${tag}: ${a.id} and ${b.id} ${(boxGap(a.box, b.box) / S).toFixed(3)} S apart`);
+        for (const j of plan.jellies) if (!j.far) assert.ok(boxGap(a.box, j.box) >= CLEAR - 1e-6, `${tag}: ${a.id} in jelly ${j.block}'s reach`);
+      }
+    }
+  }
+});
+
+test('one anglerfish to a picture at most, and the siphonophore hung at a tilt with room for it', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const biome = rollBiome(plan.key, plan.courseKey);
+      const byId = new Map(biome.pools.flat().map((sp) => [sp.id, sp]));
+      const anglers = plan.cast.filter((a) => byId.get(a.id)?.genome.lure).length + plan.events.filter((e) => e.kind === 'lure').length;
+      assert.ok(anglers <= 1, `${tag}: ${anglers} anglerfish`);
+      for (const e of plan.events.filter((v) => v.kind === 'siphonophore')) {
+        const lie = Math.abs(e.lie ?? 0);
+        assert.ok(lie >= SIPHON_TILT[0] - 1e-9 && lie <= SIPHON_TILT[1] + 1e-9 && lie >= 0.26 && lie <= 0.7, `${tag}: the siphonophore lies at ${lie.toFixed(2)}`);
+        assert.ok(Math.abs(siphonophoreReach(e.rw, e.rh, e.seed, e.lie as number).tilt - lie) < 1e-6, `${tag}: the siphonophore's region too shallow for its tilt`);
       }
     }
   }
