@@ -32,7 +32,7 @@ import { Wash } from '@/lib/ocean/wash';
 import { outcropsInView } from '@/lib/ocean/outcrop';
 import { drawOutcrops, OutcropCache } from '@/lib/ocean/outcrop-sprite';
 import { drawDumbo, drawLure, drawWhaleFall } from '@/lib/ocean/sightings-deep';
-import { drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/ocean/sightings-shallow';
+import { drawManOWar, drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/ocean/sightings-shallow';
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
 import { hash32 } from '@/lib/ocean/random';
@@ -348,6 +348,7 @@ export default function OceanScene({
         else if (event.kind === 'turtle') drawTurtle(bctx, W, H, age, event.seed, px, ambient, water.dark, jelly);
         else if (event.kind === 'siphonophore') drawSiphonophore(bctx, W, H, age, event.seed, px, ambient, water.dark);
         else if (event.kind === 'oarfish') drawOarfish(bctx, W, H, age, event.seed, px, ambient, water.dark);
+        else if (event.kind === 'manowar') drawManOWar(bctx, W, H, age, event.seed, px, ambient, water.dark);
         else if (event.kind === 'lure') drawLure(bctx, W, H, age, event.seed, px, ambient, water.dark);
         else if (event.kind === 'dumbo') drawDumbo(bctx, W, H, age, event.seed, px, ambient, water.dark);
       }

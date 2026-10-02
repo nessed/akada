@@ -1322,6 +1322,26 @@ only ever grows, it never runs backwards, and none of it touches progress.
   bone lying on or in front of the floor's line, and crabs working along it, which stays for the rest of the
   sitting once it has come. The recap names whichever was rarest, as it does
   the others.
+- **And a third roll** (`drawManOWar` in `sightings-shallow.ts`), landing
+  only in minutes both rolls before it left well alone, for the same
+  reason. In the sunlit water only, since it lives at the surface, about one
+  sitting in seven, a Portuguese man o' war drifts over: blown in off its
+  side of the page along the top, it slows in the outer third, clear of the
+  clock, and goes up and out of the light as the reader sinks away from it.
+  It is a colony, kin to the siphonophore, and drawn as one: a lopsided
+  float of blue glass, its front end narrowing and turned up, clear on top
+  and bluer underneath, with a low frilled crest along its back, pleated and
+  rose at its edge, rocking on the swell; under the float a crowd of
+  polyps, small lavender sacs and tight curls; and its fishing lines, six
+  to nine, one far longer than the rest and hanging nearly to the foot of
+  the page, each an ink line over a blue wash, beaded with stinging cells
+  closer together near the top, coiled tight under the float on most of
+  them, tapering to a hair. The wind has it, not the water, so its lines
+  trail behind it on a slant (hanging nearer straight on a narrow page,
+  never off it), and each draws itself up now and then and lets go, the way
+  they reel in what they catch. It is the bluest thing in the sea and still
+  a pastel. A picture leaves it out: it lives at the surface, and the top
+  of a picture is kept for the window of sky.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
   appears in the Sound menu and plays a tank heard from
   across a room: a low bed of water that swells slowly, a thin shimmer, the
