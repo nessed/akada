@@ -556,7 +556,8 @@ export function rockOfKind(seed: number, kind: number, want: number, exact = tru
 export function rockOfRatio(shape: RockShape, want: number): RockShape {
   let k = 1;
   let s = shape;
-  for (let i = 0; i < 1; i++) {
+  // (Again while it is short of half as tall as it is wide: never a sliver.)
+  for (let i = 0; i < 1 || (i < 4 && s.ratio < 0.5 && want >= 0.5); i++) {
     k = Math.max(0.3, Math.min(1.6, k * (want / Math.max(0.05, s.ratio))));
     k = Math.round(k * 50) / 50;
     s = rockSilhouette(shape.parts.map((p) => ({ ...p, thick: p.thick * k, dy: p.dy * k })));
@@ -806,14 +807,14 @@ function buildWalls(
     let best: { edge: -1 | 1; y: number; score: number } | null = null;
     // On the page's one wall; on the other side only if that wall has no room left.
     // (Closer together on it, a little, before the other side.)
-    for (const [edge, need, from] of [[e.side, 0.05, 0.1], [e.side, 0.036, 0.1], [e.side, 0.03, 0.06], [-e.side, 0.05, 0.15]] as [-1 | 1, number, number][]) {
+    for (const [edge, need, from] of [[e.side, 0.05, 0.1], [e.side, 0.036, 0.1], [e.side, 0.03, 0.06], [e.side, 0.024, 0.05], [-e.side, 0.05, 0.15]] as [-1 | 1, number, number][]) {
       if (best) break;
-      for (let k = 0; k <= 50; k++) {
+      for (let k = 0; k <= 90; k++) {
         const y = clamp(x.y + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * h * 0.02, h * from, Math.min(h * 0.9, e.groundY(edge < 0 ? 0 : w) - h * 0.06));
         const room = roomAtY(edge, y);
         if (room < h * need) continue;
         // Never in the kelp forest, nor over the window.
-        if (e.kelpBottom != null && rocks.some((o) => o.kind === 'kelp' && o.edge === edge) && y < e.kelpBottom) continue;
+        if (rocks.some((o) => o.kind === 'kelp' && o.edge === edge && y < o.y + o.height)) continue;
         if (y < e.winBox.y1 + h * 0.03 && (edge < 0 ? e.winBox.x0 < w * 0.15 : e.winBox.x1 > w * 0.85)) continue;
         // Near its depth, on the wall that has one already, toward its jelly.
         // (Above the wall's top rock it would carry the wall up the page with it.)
@@ -836,7 +837,9 @@ function buildWalls(
     const tops = [...side.map((k) => buttressOf(k, w, h).y0), ...lg.map((l) => l.y - h * 0.03)];
     const top = Math.min(...tops);
     const topRock = side.length ? side.reduce((a, k) => (buttressOf(k, w, h).y0 < buttressOf(a, w, h).y0 ? k : a)) : null;
-    const plane: 0 | 1 | 2 = topRock && (!lg.length || buttressOf(topRock, w, h).y0 <= lg[0].y) ? topRock.plane : side.some((k) => k.plane > 0) ? 1 : side.length ? 0 : 1;
+    // (A wall on the far side holding only the ledges the page's wall had no
+    // room for stands far off in the water, so the open side stays open.)
+    const plane: 0 | 1 | 2 = topRock && (!lg.length || buttressOf(topRock, w, h).y0 <= lg[0].y) ? topRock.plane : side.some((k) => k.plane > 0) ? 1 : side.length || edge !== e.side ? 0 : 1;
     // Into the ground: the floor's line (or the trench wall's top) a little in from the edge.
     const gx = edge < 0 ? base : w - base;
     // (And at least under each of its rocks, one resting low on the ground too.)
@@ -1659,9 +1662,6 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     if (i >= 0) events.splice(i, 1);
   }
 
-  // ---- No floor closes a short sitting's page: one near animal comes
-  // down into its foot, so the lowest fifth is never an empty wash.
-  // if (!floor) footAnimal(cast.cast, { w, h, jellies, rocks, events });
 
   // ---- The bubbles: a faint trail rising off the way down, never a line.
   const bubbles = trail(path, jellies, rocks, mulberry32(hash32(seed, 'bubbles')), h, w);
@@ -1708,55 +1708,6 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
     contentBottom,
     fit: cast.score,
   };
-}
-
-/**
- * With no floor, the foot of the page (0.8 to 0.92 of it down) holds one
- * animal on the near plane, at full size and nearly full ink: the near
- * animal nearest it, not a school and not the rare one, moved down there,
- * as far across from the hero as it can be and clear of everything by
- * 0.02 of the short side. If the foot has an animal already, or none fits,
- * nothing moves.
- */
-function footAnimal(cast: PlacedAnimal[], e: { w: number; h: number; jellies: PlacedJelly[]; rocks: PlacedRock[]; events: PlacedEvent[] }): void {
-  const { w, h } = e;
-  const band = { y0: h * 0.8, y1: h * 0.92 };
-  if (cast.some((a) => !a.floor && a.layer > 0 && (a.box.y0 + a.box.y1) / 2 > band.y0 && (a.box.y0 + a.box.y1) / 2 < band.y1)) return;
-  const hero = e.jellies[e.jellies.length - 1];
-  const pick = cast
-    .filter((a) => !a.rare && !a.members && !a.floor && a.layer > 0)
-    .sort((a, b) => b.layer - a.layer || b.y - a.y)[0];
-  if (!pick || !hero) return;
-  // At the near plane's size.
-  const k = pick.layer === 2 ? 1 : LAYER_SCALE[2] / LAYER_SCALE[pick.layer];
-  const hw = ((pick.box.x1 - pick.box.x0) / 2) * k;
-  const hh = ((pick.box.y1 - pick.box.y0) / 2) * k;
-  const fixed: Box[] = [...e.jellies.map((j) => j.box), ...e.events.filter((v) => v.box && !v.far).map((v) => v.box as Box), ...cast.filter((a) => a !== pick).map((a) => a.box)];
-  let best: { x: number; y: number; cost: number } | null = null;
-  const cy = Math.min((band.y0 + band.y1) / 2, h * (1 - MARGIN) - hh - 2);
-  for (let i = 0; i <= 40; i++) {
-    const x = w * MARGIN + hw + 2 + ((w * (1 - 2 * MARGIN) - 2 * hw - 4) * i) / 40;
-    for (const y of [cy, cy - h * 0.02, cy + h * 0.015]) {
-      const b = { x0: x - hw, x1: x + hw, y0: y - hh, y1: y + hh };
-      if (b.y1 > h * (1 - MARGIN) || b.y0 < band.y0 - hh) continue;
-      if (fixed.some((f) => boxGap(f, b) < CLEAR)) continue;
-      if (e.rocks.some((r) => rockTouches(r, w, b, CLEAR))) continue;
-      if (rowCrowded(y, cast.filter((a) => a !== pick && a.layer > 0 && !a.floor).map((a) => a.y), h)) continue;
-      // Across from the hero, but in open water, not pressed to a wall.
-      const walled = e.rocks.some((r) => rockTouches(r, w, b, 0.08 * Math.min(w, h)));
-      const cost = -Math.min(Math.abs(x - hero.x), w * 0.35) + Math.abs(y - cy) * 0.5 + (walled ? w * 0.3 : 0);
-      if (!best || cost < best.cost) best = { x, y, cost };
-    }
-  }
-  if (!best) return;
-  const mx = (pick.box.x0 + pick.box.x1) / 2;
-  const my = (pick.box.y0 + pick.box.y1) / 2;
-  pick.x = best.x + (pick.x - mx) * k;
-  pick.y = best.y + (pick.y - my) * k;
-  pick.len *= k;
-  pick.layer = 2;
-  pick.alpha = 0.9;
-  pick.box = { x0: best.x - hw, x1: best.x + hw, y0: best.y - hh, y1: best.y + hh };
 }
 
 function kelpSides(rocks: PlacedRock[]): (-1 | 1)[] {
@@ -2334,12 +2285,12 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       // Its whole silhouette, never cut: drawWhale makes it 0.6 of its
       // region's width and fits it inside the region's height, so a square
       // region a little bigger than the whale holds all of it (the flukes,
-      // the flipper, the head's taper). It is 0.45 to 0.6 of the page's
+      // the flipper, the head's taper). It is 0.42 to 0.5 of the page's
       // width, caught at the middle of its pass (full strength), inside the
       // page and on the side away from the way down.
       // (Never longer than 0.6 to 0.7 of the short side: on a wide page a
       // whale across most of it would leave no water calm under it.)
-      const len = Math.min(w * (0.48 + 0.1 * (((sd >>> 3) % 100) / 100)), M * (0.6 + 0.1 * (((sd >>> 3) % 100) / 100)));
+      const len = Math.min(w * (0.42 + 0.08 * (((sd >>> 3) % 100) / 100)), M * (0.55 + 0.1 * (((sd >>> 3) % 100) / 100)));
       const rw = len / 0.6;
       const rh = rw * 0.8;
       // The body runs from 0.6 of its length behind the middle to 0.5 ahead.
@@ -3057,6 +3008,10 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
         let cost = Math.abs(y - gy) / h + (inCalm(zone) ? 2 + inter(zone, calmPad) / area(zone) : 0);
         for (const o of groups) if (Math.hypot(o.x - x, o.y - y) < Math.min(w, h) * 0.3) cost += 0.6;
         for (const j of e.jellies) if (j.hero && boxGap(zone, j.box) < CLEAR) cost += 0.4;
+        // Rather out from the hero toward the open side than packed in by the wall.
+        if (e.calmSide * (x - hero.x) < 0) cost += 0.5;
+        const fromWall = e.calmSide > 0 ? x : w - x;
+        if (fromWall < w * 0.22) cost += (0.8 * (w * 0.22 - fromWall)) / (w * 0.22);
         if (!pick || cost < pick.cost) pick = { x, y, cost };
       }
       if (pick) groups.push({ x: pick.x, y: pick.y });
@@ -3137,13 +3092,16 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       items.push({ pick: p, sp, layer, len, bw, bh, x: w / 2, y: ty, ty, ya, yb, dir, members, phase: r() * Math.PI * 2, floor: false, gx, gy });
     }
 
-    // Within a group each has a place of its own: a loose zigzag down it,
-    // a fifteenth of the page between them, so none lines up with another.
+    // Within a group each has a place of its own, round its middle on a
+    // loose spiral (each a golden turn on from the last, a little further
+    // out), so a group is a clump: never a ladder down the page, never a row.
     for (const g of groups) {
       const mine = items.filter((it) => it.gx === g.x && it.gy != null).sort((a, b) => a.ty - b.ty);
-      const m = mine.length;
+      const turn = r() * TAU;
       mine.forEach((it, k) => {
-        const want = g.y + (k - (m - 1) / 2) * h * 0.075;
+        const ang = turn + k * 2.39996;
+        const rad = Math.sqrt(k + 0.6);
+        const want = g.y + Math.sin(ang) * rad * h * 0.05;
         const lo = Math.max(Math.max(my, e.winBox.y1) + it.bh / 2, it.ya - h * 0.06);
         const hi = Math.min(floorTop != null ? floorTop - it.bh / 2 - h * 0.01 : h - my - it.bh / 2, it.yb + h * 0.06);
         const y = clamp(want, lo, Math.max(lo, hi));
@@ -3151,7 +3109,7 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
         it.yb = Math.max(it.yb, y);
         it.ty = y;
         it.gy = y;
-        it.gx = g.x + (k % 2 ? 1 : -1) * w * (0.03 + 0.03 * r());
+        it.gx = g.x + Math.cos(ang) * rad * w * 0.065;
       });
     }
 
@@ -3230,6 +3188,8 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       // both are far off in the haze.
       if ((it.layer > 0 || o.layer > 0) && boxGap(b, boxOf(o)) < CLEAR) return false;
     }
+    // Nor three stacked in a column, a ladder down the page.
+    if (it.layer > 0 && others.filter((o) => o !== it && o.layer > 0 && Math.abs(o.x - it.x) < w * 0.07 && Math.abs(o.y - it.y) < h * 0.2).length >= 2) return false;
     // Never three of the middle and near cast on one line across the page.
     if (it.layer > 0 && rowCrowded(it.y, [...others.filter((o) => o !== it && o.layer > 0).map((o) => o.y), ...rowEvents], h)) return false;
     // Nor does one touch a rare thing in the water.
@@ -3274,7 +3234,6 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
     if (ok) kept.push(it);
   }
 
-  if (typeof process !== 'undefined' && process.env?.PICDEBUG) console.log('cast', items.length, 'legal', kept.length, 'groups', items.map((i) => (i.gx ?? -1).toFixed(0) + ',' + (i.gy ?? -1).toFixed(0)).join(' '), 'calm', JSON.stringify(open));
   // No lone specks: each but the rarest within LONE_GAP of another of the
   // cast, moved in beside the nearest if it is not, and left out if it
   // cannot be.

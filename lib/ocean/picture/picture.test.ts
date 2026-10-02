@@ -156,7 +156,11 @@ test('one rock per break, inked near; rocks merely passed far, small and faint',
         const crowded = count(c.segs, 'break') > 4;
         // (All on one wall, they have a little less room to keep to it.)
         const near = r.plane === 2 ? (crowded ? 0.45 : 0.25) : crowded ? 0.7 : 0.45;
-        assert.ok(Math.abs(r.y + r.height / 2 - j.y) < plan.h * near, `${c.name} ${shape.width}x${shape.height}: rock ${r.rest} is ${(Math.abs(r.y + r.height / 2 - j.y) / plan.h).toFixed(2)} H from the depth of its rest`);
+        // (Where the kelp's own rock stands at that depth on the one wall, the
+        // break's stands straight under it, the nearest it can.)
+        const kelpThere = plan.rocks.find((k) => k.kind === 'kelp' && k.edge === r.edge && j.y >= k.y - plan.h * 0.05 && j.y <= k.y + k.height + plan.h * 0.05);
+        if (kelpThere) assert.ok(r.y - (kelpThere.y + kelpThere.height) <= plan.h * 0.08, `${c.name} ${shape.width}x${shape.height}: rock ${r.rest} not under the kelp's rock`);
+        else assert.ok(Math.abs(r.y + r.height / 2 - j.y) < plan.h * near, `${c.name} ${shape.width}x${shape.height}: rock ${r.rest} is ${(Math.abs(r.y + r.height / 2 - j.y) / plan.h).toFixed(2)} H from the depth of its rest`);
       }
       for (const r of plan.rocks.filter((k) => k.kind === 'passed')) assert.equal(r.plane, 0, `${c.name}: a rock passed is not far`);
       // No two silhouettes alike, and the top of each never flat.
@@ -514,6 +518,7 @@ test('the cast never lines up: two at most of the middle and near in a band 0.06
       const ys = [...mid.map((a) => a.y), ...plan.events.filter((v) => v.box && !v.far && ['turtle', 'dumbo', 'lure'].includes(v.kind)).map((v) => ((v.box as Box).y0 + (v.box as Box).y1) / 2)].sort((a, b) => a - b);
       for (let k = 0; k + 2 < ys.length; k++) assert.ok(ys[k + 2] - ys[k] >= plan.h * ROW_BAND - 1e-6, `${tag}: three animals within ${((ys[k + 2] - ys[k]) / plan.h).toFixed(3)} H of each other at ${ys[k].toFixed(0)}`);
       for (let k = 0; k + 1 < ys.length; k++) assert.ok(ys[k + 1] - ys[k] >= plan.h * ROW_LEVEL - 1e-6, `${tag}: two animals level at ${ys[k].toFixed(0)}`);
+      // (Gathered in a group or two, a cast keeps to two depths or more; seven or more spread over three.)
       if (ys.length >= 3) {
         let bands = 0;
         let last = -Infinity;
@@ -521,7 +526,7 @@ test('the cast never lines up: two at most of the middle and near in a band 0.06
           bands++;
           last = y;
         }
-        assert.ok(bands >= 3, `${tag}: the cast at only ${bands} depths`);
+        assert.ok(bands >= (ys.length >= 7 ? 3 : 2), `${tag}: the cast at only ${bands} depths`);
       }
       for (let i = 0; i < plan.cast.length; i++) {
         const a = plan.cast[i];
@@ -621,6 +626,81 @@ test('floor fauna lie on the ground: a star wholly in it, the rest with their mi
         assert.equal(a.alpha, 1, `${c.name}: a floor animal see-through`);
         if (sp?.genome.plan === 'star') assert.ok(a.box.y0 >= low - 1e-6, `${c.name} ${shape.width}x${shape.height}: a star off the ground`);
         else assert.ok(a.y >= low - 1e-6, `${c.name} ${shape.width}x${shape.height}: ${a.id} hangs off the ground`);
+      }
+    }
+  }
+});
+
+test('restraint: a few animals in a group or three, two rare things at most, a big hero', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const S = Math.min(plan.w, plan.h);
+      // Five for a short sitting, a few more for a long one, never past CAST_MAX (a school one).
+      const want = castWant(focusOf(c.segs));
+      assert.ok(want >= 5 && want <= CAST_MAX && CAST_MAX <= 12);
+      assert.ok(plan.cast.length <= want && plan.cast.length >= 3, `${tag}: a cast of ${plan.cast.length} (wanted ${want})`);
+      // No lone specks: every one but the rarest within LONE_GAP of another, and one to three groups.
+      const swim = plan.cast.filter((a) => !a.floor && !a.rare);
+      const near = (a: (typeof swim)[number], b: (typeof swim)[number]) => boxGap(a.box, b.box) <= LONE_GAP * S + 1e-6;
+      for (const a of swim) assert.ok(plan.cast.some((b) => b !== a && !b.floor && near(a, b)), `${tag}: ${a.id} alone in the water`);
+      const group = new Map<number, number>();
+      swim.forEach((_, i) => group.set(i, i));
+      const root = (i: number): number => (group.get(i) === i ? i : root(group.get(i) as number));
+      for (let i = 0; i < swim.length; i++) for (let k = i + 1; k < swim.length; k++) if (near(swim[i], swim[k])) group.set(root(i), root(k));
+      const groups = new Set(swim.map((_, i) => root(i))).size;
+      assert.ok(groups <= 3, `${tag}: the cast in ${groups} groups`);
+      // Two rare things at most; the whale fall only on a floor that is drawn.
+      assert.ok(plan.events.length <= EVENTS_MAX, `${tag}: ${plan.events.length} rare things`);
+      for (const e of plan.events) if (e.kind === 'whalefall') assert.ok(plan.floor, `${tag}: a whale fall with no floor`);
+      // Kept by rarity: none left out that is rarer than one drawn, unless it found no place.
+      const drawn = plan.events.map((e) => EVENTS[e.kind].weight);
+      assert.deepEqual(drawn, [...drawn].sort((a, b) => b - a), `${tag}: the rare things not the rarest first`);
+      // The hero a fifth of the short side across, its siblings at most half its size.
+      const hero = plan.jellies[plan.jellies.length - 1];
+      assert.ok(Math.abs((hero.r * 2) / S - HERO_R * 2) < 1e-9);
+      for (const j of plan.jellies.slice(0, -1)) assert.ok(j.r <= hero.r * SIBLING_SCALE + 1e-9, `${tag}: jelly ${j.block} is ${(j.r / hero.r).toFixed(2)} of the hero`);
+    }
+  }
+});
+
+test('one wall: every rock on one side, narrow; a second only for the ledges the first has no room for', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      const edges = new Set(plan.rocks.map((r) => r.edge));
+      assert.ok(edges.size <= 1, `${tag}: rocks on both sides`);
+      assert.ok(plan.walls.length >= 1 && plan.walls.length <= 2, `${tag}: ${plan.walls.length} walls`);
+      if (plan.walls.length === 2) {
+        const [main, other] = edges.size ? [plan.walls.find((wl) => edges.has(wl.edge)), plan.walls.find((wl) => !edges.has(wl.edge))] : [plan.walls[0], plan.walls[1]];
+        assert.ok(main && other, tag);
+        assert.ok(!plan.rocks.some((r) => r.wall === other), `${tag}: a rock on the second wall`);
+        // (Only when the first holds four marks or more already.)
+        const marks = plan.rocks.filter((r) => r.wall === main).length + main.ledges.length;
+        assert.ok(marks >= 4, `${tag}: a second wall with the first holding only ${marks}`);
+      }
+      for (const wl of plan.walls) {
+        // Its own width (where nothing stands out from it) 0.035 to 0.065 of the page's.
+        const sorted = [...wl.face].sort((a, b) => a - b);
+        const own = sorted[Math.floor(sorted.length * 0.1)];
+        assert.ok(own <= plan.w * WALL_W[1] * 1.15, `${tag}: a wall ${(own / plan.w).toFixed(3)} W wide`);
+      }
+    }
+  }
+});
+
+test('one big calm: a quarter of the page or more in one clear stretch, nothing in it but water, light and bubbles', () => {
+  assert.ok(CALM >= 0.25);
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      for (const ground of ['paper', 'night'] as const) {
+        const plan = planOf(c, shape, ground);
+        const calm = calmArea(plan);
+        assert.ok(calm.share >= CALM, `${c.name} ${shape.width}x${shape.height} ${ground}: the calm water is ${(calm.share * 100).toFixed(1)}% of the page`);
+        // And the cast kept out of the stretch the plan kept for it.
+        for (const a of plan.cast) assert.equal(inter(a.box, plan.calm), 0, `${c.name}: ${a.id} in the calm water`);
       }
     }
   }

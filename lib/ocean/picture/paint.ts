@@ -128,6 +128,29 @@ const PAPER_SEA: [number, string][] = [
   [1, '#2B3554'],
 ];
 
+/* ---- Strips ---- */
+
+/**
+ * An ellipse (or an arc of one) laid as straight steps, no more than a tenth
+ * of a device px off the curve: Skia steps a curve differently where a clip
+ * cuts it, so a curve drawn across a strip's edge would not meet itself.
+ */
+function oval(p: CanvasRenderingContext2D | Path2D, cx: number, cy: number, rx: number, ry: number, rot: number, a0: number, a1: number): void {
+  const r = Math.max(Math.abs(rx), Math.abs(ry), 0.2);
+  const n = Math.max(8, Math.min(256, Math.ceil(((a1 - a0) / (2 * Math.PI)) * (Math.PI / Math.acos(Math.max(-1, 1 - 0.1 / r))))));
+  const c = Math.cos(rot);
+  const sn = Math.sin(rot);
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    const x = Math.cos(a) * rx;
+    const y = Math.sin(a) * ry;
+    const px = cx + x * c - y * sn;
+    const py = cy + x * sn + y * c;
+    if (i === 0) p.moveTo(px, py);
+    else p.lineTo(px, py);
+  }
+}
+
 /* ---- Colour ---- */
 
 function rgbOf(hex: string): [number, number, number] {
@@ -1095,7 +1118,7 @@ function paintJelly(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, j: Pla
     const bh = j.r * 0.42 * j.aspect * D;
     const box = { x: j.x * D - bw, y: j.y * D - bh, w: bw * 2, h: bh * 2 };
     const region = new Path2D();
-    region.ellipse(j.x * D, j.y * D, bw, bh, 0, Math.PI, Math.PI * 2);
+    oval(region, j.x * D, j.y * D, bw, bh, 0, Math.PI, Math.PI * 2);
     region.closePath();
     causticsOn(ctx, region, box, strength, D, hash32(plan.seed, 'jelly', j.block));
   }
@@ -1248,7 +1271,8 @@ function paintBubbles(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: n
     if (!inSight(b.x - b.r, b.y - b.r, b.x + b.r, b.y + b.r, 2)) continue;
     const water = waterAtY(plan, c, b.y);
     ctx.beginPath();
-    ctx.arc(b.x * D, b.y * D, b.r * D, 0, Math.PI * 2);
+    oval(ctx, b.x * D, b.y * D, b.r * D, b.r * D, 0, 0, Math.PI * 2);
+    ctx.closePath();
     ctx.fillStyle = water.dark ? 'rgba(232, 224, 207, 0.12)' : 'rgba(255, 255, 255, 0.4)';
     ctx.fill();
     ctx.strokeStyle = water.dark ? 'rgba(232, 224, 207, 0.55)' : 'rgba(43, 38, 32, 0.45)';
@@ -1339,16 +1363,18 @@ function paintKelp(ctx: CanvasRenderingContext2D, plan: Plan, kelp: Kelp, c: Cac
         if (i === 0) shape.moveTo(x, y);
         else shape.lineTo(x, y);
       }
-      for (let i = pts.length - 2; i >= 0; i -= 2) shape.lineTo(pts[i] * D, (pts[i + 1] + 1.5) * D);
+      // (Back along the cut as far as the lip, never on past it into the water.)
+      for (let i = N * 2; i >= 0; i -= 2) shape.lineTo(pts[i] * D, (pts[i + 1] + 1.5) * D);
       shape.closePath();
       const [L, A, B] = labOf(waterTone(plan, c, r.y + r.height * 0.5));
       ctx.save();
       ctx.clip(shape);
       ctx.globalCompositeOperation = 'multiply';
       const g = ctx.createLinearGradient(0, r.y * D, 0, (r.y + r.height) * D);
-      g.addColorStop(0, hexOfLab(Math.min(100, L + 2), A, B));
-      g.addColorStop(0.35, hexOfLab(L - 10, A, B));
-      g.addColorStop(1, hexOfLab(L - 16, A, B));
+      // (A neutral glaze, a little of the water's hue: the stone stays grey, never the water's green.)
+      g.addColorStop(0, hexOfLab(Math.min(100, L + 4), A * 0.3, B * 0.3));
+      g.addColorStop(0.35, hexOfLab(L - 4, A * 0.3, B * 0.3));
+      g.addColorStop(1, hexOfLab(L - 10, A * 0.3, B * 0.3));
       ctx.fillStyle = g;
       ctx.fillRect(r.box.x0 * D - 20 * D, (r.y - 10) * D, (r.box.x1 - r.box.x0 + 40) * D, (r.height + 20) * D);
       ctx.restore();
@@ -2255,18 +2281,18 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
           ctx.globalAlpha = night ? 0.35 : 0.22;
           ctx.fillStyle = night ? '#000000' : INK;
           ctx.beginPath();
-          ctx.ellipse((x + rx * 0.35) * D, (y + ry * 0.55) * D, rx * 1.05 * D, ry * 0.5 * D, rot, 0, Math.PI * 2);
+          oval(ctx, (x + rx * 0.35) * D, (y + ry * 0.55) * D, rx * 1.05 * D, ry * 0.5 * D, rot, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = 0.9;
           ctx.fillStyle = stone;
           ctx.beginPath();
-          ctx.ellipse(x * D, y * D, rx * D, ry * D, rot, 0, Math.PI * 2);
+          oval(ctx, x * D, y * D, rx * D, ry * D, rot, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = night ? 0.35 : 0.55;
           ctx.strokeStyle = rim;
           ctx.lineWidth = (0.35 + 0.25 * k) * D;
           ctx.beginPath();
-          ctx.ellipse(x * D, y * D, rx * D, ry * D, rot, Math.PI * 0.05, Math.PI * 0.95);
+          oval(ctx, x * D, y * D, rx * D, ry * D, rot, Math.PI * 0.05, Math.PI * 0.95);
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
