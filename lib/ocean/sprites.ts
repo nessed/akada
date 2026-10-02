@@ -393,6 +393,11 @@ const PAPER = '#FBF8EF';
 const DARK = '#1A1714';
 /** The gonads' wash, through a clear bell: a soft rose. */
 const GONAD = '#E8C9D4';
+/**
+ * A crown jelly's stomach and the stain of its pedalia: the deep's wine red,
+ * dark on any water (red is the first light the deep takes away).
+ */
+const CROWN_GUT = { light: '#5B1E2E', dark: '#4A1A2A' } as const;
 /** The play of light down a comb row, on dark water. */
 const IRIDESCENT = ['#8FE3FF', '#B9F7C4', '#FFE79A', '#FFB0D6', '#BBA6FF', '#8FE3FF'];
 
@@ -634,12 +639,34 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
   }
   plain('guts', 0.55, 0.45);
   inBody(() => {
-    if (L.gutFill.length) {
+    if (o.plan === 'bell') {
+      // A crown jelly's: the stomach and gonads deep wine through the clear
+      // bell, the pedalia's band stained thinly with the same.
+      const wine = dark ? CROWN_GUT.dark : CROWN_GUT.light;
+      if (L.pat.length) {
+        ctx.globalAlpha = dark ? 0.3 : 0.2;
+        ctx.fillStyle = wine;
+        ctx.fill(shapes('pat'));
+      }
+      if (L.gutFill.length) {
+        const p = shapes('gutFill');
+        ctx.globalAlpha = dark ? 0.6 : 0.48;
+        ctx.fillStyle = wine;
+        ctx.fill(p);
+        if (!tiny) {
+          ctx.globalAlpha = 0.35;
+          ctx.strokeStyle = mixHex(wine, DARK, 0.4);
+          ctx.lineWidth = Math.max(0.25, 0.4 * base);
+          ctx.stroke(p);
+        }
+      }
+      ctx.globalAlpha = 1;
+    } else if (L.gutFill.length) {
       ctx.globalAlpha = 0.4;
       ctx.fillStyle = ink.pat;
       ctx.fill(shapes('gutFill'));
     }
-    if (L.pat.length && bodyBox) {
+    if (L.pat.length && bodyBox && o.plan !== 'bell') {
       // Markings in wash, stronger on the back than the belly.
       const p = shapes('pat');
       const gr = ctx.createLinearGradient(0, bodyBox.y, 0, bodyBox.y + bodyBox.h);

@@ -1112,7 +1112,10 @@ only ever grows, it never runs backwards, and none of it touches progress.
   siphonophore is a colony, not a string of beads: overlapping glass bells
   at its head, a tapering stem with its groups unevenly spaced, trailing
   15 to 40 degrees below level. Jellies are always glass, never a solid
-  dome or a flat saucer; a comb jelly's
+  dome or a flat saucer; below the midnight line every bell is a crown
+  jelly, an Atolla (a flat disc with a coronal groove, rim lobes and one
+  long trailing tentacle) or a Periphylla (a helmet), its stomach showing
+  wine red through the bell; a comb jelly's
   mouth end is one soft curve with its lobes drawn inside it, never a
   notch. Drawn big, the solid ones
   are shaded in contour hatching that runs with the spine, only in the
@@ -1257,15 +1260,18 @@ only ever grows, it never runs backwards, and none of it touches progress.
   of the page, high and clear of the clock, blinks once and goes: a striated
   iris darkening to its rim, the pupil a level lens the same above and
   below, never bent into a mouth, set in the flank of an animal far bigger
-  than the page: one ink contour runs down the page side of it, from a body
-  whose middle lies well off the page, the skin a thin wash inside it with
-  a few engraved lines on its shadow side, and the drawing let go above and
-  below. Its chromatophores vary in size and spacing, half opened into
+  than the page: a long, flat stretch of it lying along the page's edge,
+  never a disc, its one ink contour a piece of a curve at least three times
+  as long as what shows, the skin a thin wash inside it with a few fold
+  lines running with the contour, and the whole flank let go over the last
+  quarter at each end. There is no ring round the eye. Its chromatophores vary in size and spacing, half opened into
   ragged blots and half closed to dots, crowded on the back. At night the
   skin is a neutral grey close to the water's own value, no red and no
   glow; the only light is the eye's catchlight. Never a halo, of stipple
   or of colour. The whale is always the
-  whole animal, head, flipper and flukes, one soft grey shape a little over
+  whole animal, head, flipper and flukes, the flukes level and seen edge-on
+  as a thin blade off the tail stock, never an upright fork, the dorsal a
+  small low hump two thirds of the way back, one soft grey shape a little over
   half the page long. In the abyss,
   about one three-hour sitting in a hundred and fifty, something very large
   goes past behind everything, a dark flank with lights along it; no head, no
@@ -1291,7 +1297,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   catchlight set wide on the sides of the head, as a plate draws them;
   and a whale fall can arrive on the floor: a skeleton half sunk in the silt,
   seen a little from above, a spine of vertebrae on a gentle S with paired
-  ribs, some broken, the skull and its two jaws, and crabs working along it, which stays for the rest of the
+  ribs, some broken, a rorqual's skull (a broad flat rostrum, the nostrils
+  in their recess, the wings over the orbits) and its two bowed jaws, every
+  bone lying on or in front of the floor's line, and crabs working along it, which stays for the rest of the
   sitting once it has come. The recap names whichever was rarest, as it does
   the others.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"

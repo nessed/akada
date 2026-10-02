@@ -1109,6 +1109,12 @@ export function drawSnowDeep(
     maxSize?: number;
     /** Only these rows are drawn (a strip of a bigger picture): the rest are rolled, so every speck lands where it would, but not drawn. */
     rows?: { y0: number; y1: number };
+    /**
+     * How much of the snow stays at a point, 0 to 1 (a denser fall in some
+     * water than in other): decided by a roll of its own, so every speck
+     * still lands where it would without it.
+     */
+    keep?: (x: number, y: number) => number;
   },
 ): void {
   if (w <= 0 || h <= 0 || !(o.density > 0)) return;
@@ -1118,6 +1124,8 @@ export function drawSnowDeep(
   const ry1 = (o.rows?.y1 ?? Infinity) + 8 * px;
   const shown = (y: number) => y >= ry0 && y <= ry1;
   const r = mulberry32(hash32('snow-deep', o.seed));
+  const rk = mulberry32(hash32('snow-keep', o.seed));
+  const kept = (x: number, y: number) => !o.keep || rk() < o.keep(x, y);
   const css = (w * h) / (px * px);
   const lit = (x: number, y: number) => (o.litBy ? 0.45 + 1.0 * clamp01(o.litBy(x, y)) : 1);
   const [cr, cg, cb] = rgbOf(o.color);
@@ -1145,7 +1153,7 @@ export function drawSnowDeep(
       const y = r() * h;
       const rad = Math.min(most / 2, px * (0.3 + 0.35 * r()));
       const base = 0.1 + 0.18 * r();
-      if (!shown(y)) continue;
+      if (!kept(x, y) || !shown(y)) continue;
       const a = Math.min(1, base * lit(x, y));
       // As straight steps, never an arc: a curve is stepped differently where
       // a strip's clip cuts it, and a picture drawn in strips would not join.
@@ -1164,7 +1172,7 @@ export function drawSnowDeep(
       const y = r() * h;
       const size = Math.min(most / 3.4, px * (0.6 + 1.6 * Math.pow(r(), 2.2)));
       const base = 0.3 + 0.5 * r();
-      const vis = shown(y);
+      const vis = kept(x, y) && shown(y);
       const a = vis ? Math.min(1, base * lit(x, y)) : 0;
       const sides = 8 + Math.floor(r() * 3);
       const turn = r() * TAU;

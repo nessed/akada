@@ -19,7 +19,7 @@ import { kelpDescent } from './kelp';
 import { HUES } from './palette';
 import { chance, hash32, int, mulberry32, pickIndex, range, type Rand } from './random';
 
-export type GrowthKind = 'branch' | 'brain' | 'fan' | 'anemone' | 'tube' | 'urchin' | 'plate' | 'whip' | 'glass' | 'seapen';
+export type GrowthKind = 'branch' | 'brain' | 'fan' | 'anemone' | 'tube' | 'urchin' | 'plate' | 'whip' | 'glass' | 'seapen' | 'crinoid' | 'brittlestar';
 
 export interface Growth {
   kind: GrowthKind;

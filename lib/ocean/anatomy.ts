@@ -17,7 +17,7 @@
  */
 
 import type { Genome } from './genome';
-import { mulberry32, range } from './random';
+import { hash32, mulberry32, range } from './random';
 
 export type LayerName =
   | 'glowBack'
@@ -126,7 +126,9 @@ export function buildAnatomy(g: Genome, seed: number): Anatomy {
     vr: (a, b) => range(lr, a, b),
   };
   let tailRays = 0;
-  if (g.plan === 'bell') bell(g, k);
+  const crown = crownOf(g, seed);
+  if (crown) coronate(g, k, crown);
+  else if (g.plan === 'bell') bell(g, k);
   else if (g.plan === 'comb') comb(g, k);
   else if (g.plan === 'star') star(g, k);
   else if (g.plan === 'chain') chain(g, k);
@@ -346,6 +348,183 @@ function bell(g: Genome, { P, C, vr, fine }: Kit) {
       const x = (-bw + (i / 9) * 2 * bw) * vr(0.95, 1);
       C('dotGlow', x, bh + 1, 3);
       C('dots', x, bh + 1, 1.1);
+    }
+  }
+}
+
+/** How deep a bell must live to be a crown jelly: the midnight zone and below. */
+export const CROWN_Z = 0.6;
+
+/**
+ * Which crown jelly a bell is, if it is one: below CROWN_Z every bell is a
+ * coronate, as the deep's are, an Atolla (a flat disc ringed by a deep
+ * groove) or a Periphylla (a tall helmet), the taller bells leaning to the
+ * helmet. Read from the genome and the species' seed, never a roll of its
+ * own, so the same species is the same animal in the live sea and in a
+ * picture, and every roll after it is where it was.
+ */
+export function crownOf(g: Genome, seed: number): 'atolla' | 'periphylla' | null {
+  if (g.plan !== 'bell' || g.z < CROWN_Z) return null;
+  const ratio = g.bh! / g.bw!;
+  const helmet = Math.max(0.2, Math.min(0.8, ratio - 0.45));
+  return (hash32('crown', seed) % 1000) / 1000 < helmet ? 'periphylla' : 'atolla';
+}
+
+/**
+ * A crown jelly, side on and seen a little from below. Both kinds have the
+ * coronal groove, a deep furrow right round the bell that cuts the dome off
+ * from the thick pads of the pedalia below it, and a margin of rounded
+ * lobes with a stiff tentacle between each two; through the clear bell the
+ * stomach shows, a dark wine red, and the band of the pedalia is stained
+ * with it. An Atolla is a flat disc, its dome a low lens, its pedalia
+ * flaring out as a brim, its twenty short tentacles held out like spokes
+ * and one of them grown far longer and thicker than the rest, trailing. A
+ * Periphylla is a tall helmet, a blunt cone above the groove, its twelve
+ * tentacles curving out and up at their tips.
+ */
+function coronate(g: Genome, { P, C, vr, fine }: Kit, form: 'atolla' | 'periphylla') {
+  const W = g.bw!;
+  const ratio = Math.max(0.3, Math.min(2, g.bh! / g.bw!));
+  const tall = form === 'periphylla';
+  // The dome's height, the groove's depth below it, where the pedalia end at the rim.
+  const Ht = tall ? W * (1.7 + 0.35 * Math.max(0, Math.min(1, (ratio - 0.8) / 0.8))) : W * (0.56 + 0.08 * Math.min(1, ratio));
+  const Hg = tall ? Ht * 0.64 : W * (0.3 + 0.06 * Math.min(1, ratio));
+  const Wg = tall ? W * 0.8 : W * 0.66;
+  const Wp = tall ? W * 0.84 : W * 0.68;
+  const bow = tall ? Math.min(6, W * 0.12) : Math.min(7, W * 0.16);
+  const n = tall ? 16 : 20;
+  const pow = tall ? 1.4 : 0.85;
+  const pts: Pt[] = [];
+  // The dome, left to right over the top.
+  for (let i = 0; i <= 40; i++) {
+    const a = Math.PI - (i / 40) * Math.PI;
+    const h = Math.max(0, Math.sin(a));
+    pts.push([Math.cos(a) * Wg, Hg - Hg * Math.pow(h, pow)]);
+  }
+  // Down the right side: into the groove and out, the pedalia's pad swelling to the rim.
+  const notch = W * 0.05;
+  const side = (sgn: number): Pt[] => {
+    const out: Pt[] = [[sgn * Wg * 0.93, Hg + notch * 0.6], [sgn * Wp, Hg + notch * 1.4]];
+    for (let k = 1; k <= 6; k++) {
+      const t = k / 6;
+      const pad = Math.sin(t * Math.PI) * W * 0.04;
+      out.push([sgn * (Wp + (W - Wp) * Math.pow(t, 0.7) + pad), Hg + notch * 1.4 + (Ht - Hg - notch * 1.4) * t]);
+    }
+    return out;
+  };
+  pts.push(...side(1));
+  // The margin's lobes, round the front of the rim, each a rounded tongue.
+  for (let i = 1; i < n * 4; i++) {
+    const x = W - (i / (n * 4)) * 2 * W;
+    const near = bow * Math.sqrt(Math.max(0, 1 - Math.pow(x / W, 2)));
+    const dip = Math.pow(Math.abs(Math.sin((i / 4) * Math.PI)), 0.6) * Math.min(tall ? 5 : 6, ((2 * W) / n) * (tall ? 0.45 : 0.6));
+    pts.push([x, Ht + dip + near]);
+  }
+  pts.push(...side(-1).reverse());
+  P('body', pts, true);
+  C('glowBack', 0, Ht * 0.55, W * 1.3, Math.max(Ht * 0.8, W * 0.6));
+
+  // The groove's front, and the furrows between the pedalia down to the margin.
+  const groove: Pt[] = [];
+  for (let i = 0; i <= 16; i++) {
+    const th = (i / 16) * Math.PI;
+    groove.push([Math.cos(th) * Wg * 0.95, Hg + notch + bow * 0.75 * Math.sin(th)]);
+  }
+  P('detail', groove);
+  const ped = tall ? 12 : 20;
+  for (let k = 0; k < ped; k++) {
+    const th = ((k + 0.5) / ped) * Math.PI * 2;
+    const sn = Math.sin(th);
+    if (sn < 0.2) continue;
+    const c = Math.cos(th);
+    P('detail', [[c * Wp * 1.02, Hg + notch * 1.6 + bow * 0.8 * sn], [c * (Wp + W) * 0.5 * 1.03, (Hg + Ht) * 0.5 + notch + bow * 0.9 * sn], [c * W * 0.98, Ht - W * 0.02 + bow * sn]]);
+  }
+
+  // The pedalia's band, stained: from the groove down to the margin, at the front.
+  const band: Pt[] = [];
+  for (let i = 0; i <= 16; i++) {
+    const th = (i / 16) * Math.PI;
+    band.push([Math.cos(th) * Wp, Hg + notch * 1.4 + bow * 0.8 * Math.sin(th)]);
+  }
+  for (let i = 16; i >= 0; i--) {
+    const th = (i / 16) * Math.PI;
+    band.push([Math.cos(th) * W * 0.99, Ht + bow * Math.sin(th)]);
+  }
+  P('pat', band, true);
+  // The stomach, dark wine red, seen through the dome; and the gonads at
+  // the groove, beans of the same.
+  if (tall) {
+    // A blunt cone in the helmet, broad at its foot, which bows with the rim.
+    const st: Pt[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const a = Math.PI - (i / 24) * Math.PI;
+      const h = Math.max(0, Math.sin(a));
+      st.push([Math.cos(a) * Wg * 0.46, Hg * 0.92 - Hg * 0.62 * Math.pow(h, 2.2)]);
+    }
+    for (let i = 1; i < 12; i++) {
+      const x = Wg * 0.46 - (i / 12) * Wg * 0.92;
+      st.push([x, Hg * 0.92 + bow * 0.45 * Math.sqrt(Math.max(0, 1 - Math.pow(x / (Wg * 0.46), 2)))]);
+    }
+    P('gutFill', st, true);
+  } else {
+    P('gutFill', blob(0, Hg * 0.8, W * 0.38, W * 0.12, 0, vr, 13), true);
+  }
+  for (const t of [0.22, 0.42, 0.62, 0.8]) {
+    const th = t * Math.PI;
+    P('gutFill', blob(Math.cos(th) * (tall ? Wg * 0.62 : W * 0.5), Hg + notch * (tall ? -1.6 : 0.6) + bow * 0.5 * Math.sin(th), W * 0.075, W * 0.035, Math.cos(th) * 0.4, vr, 9), true);
+  }
+
+  // The tentacles, one between each two pedalia, stiff, the near ones over
+  // the bell and the far ones behind it.
+  const nT = tall ? 12 : 20;
+  // Off one side of the disc, never from under its middle, where it would be a stalk.
+  const hyper = tall ? -1 : (vr(0, 1) < 0.5 ? Math.floor(nT * 0.02) : Math.floor(nT * 0.48));
+  for (let k = 0; k < nT; k++) {
+    const th = (k / nT) * Math.PI * 2 + 0.13;
+    const c = Math.cos(th);
+    const sn = Math.sin(th);
+    const x0 = c * W * 0.96;
+    const y0 = Ht - W * 0.05 + bow * sn;
+    if (k === hyper) {
+      // Grown far longer and thicker than the rest, trailing.
+      // Out from the rim and swept back in a long lazy S, as it trails.
+      const len = W * vr(2.3, 2.9);
+      const line = hang(x0, y0, len, Math.PI / 2 - Math.sign(c) * vr(0.55, 0.8), { wave: vr(0.18, 0.26), freq: vr(0.025, 0.035), ph: vr(0, TAU), curl: Math.sign(c) * vr(1.2, 2), drift: Math.sign(c) * vr(0.5, 0.8) });
+      const left: Pt[] = [];
+      const right: Pt[] = [];
+      for (let i = 0; i < line.length; i++) {
+        const a = line[Math.max(0, i - 1)];
+        const b = line[Math.min(line.length - 1, i + 1)];
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const d = Math.hypot(dx, dy) || 1;
+        const t = i / Math.max(1, line.length - 1);
+        const wdt = W * 0.05 * Math.pow(1 - t, 0.75) + 0.35;
+        left.push([line[i][0] - (dy / d) * wdt, line[i][1] + (dx / d) * wdt]);
+        right.unshift([line[i][0] + (dy / d) * wdt, line[i][1] - (dx / d) * wdt]);
+      }
+      P('fin', left.concat(right), true);
+      marks(line, 7, fine, ([x, y], t) => C('nodes', x, y, 0.3 + 0.7 * (1 - t)), 0.1);
+      continue;
+    }
+    const len = W * (tall ? vr(1.1, 1.6) : vr(0.45, 0.85));
+    const out = tall ? 0.9 : 1.15;
+    const line = hang(x0, y0, len, Math.PI / 2 - c * out, { wave: vr(0.02, 0.05), freq: vr(0.06, 0.1), ph: vr(0, TAU), curl: tall ? -c * vr(1.6, 2.6) : -c * vr(0, 0.8), drift: -c * (tall ? 0.45 : 0.25) });
+    P(sn > 0 ? 'tentF' : 'tentB', line);
+    if (g.lit && sn > 0 && vr(0, 1) < 0.35 && line.length) {
+      const e = line[line.length - 1];
+      C('dotGlow', e[0], e[1], 2.5);
+      C('dots', e[0], e[1], 1);
+    }
+  }
+  // Its light: a ring of points round the groove, the deep's alarm.
+  if (g.lit) {
+    for (let i = 0; i < 10; i++) {
+      const th = ((i + 0.5) / 10) * Math.PI;
+      const x = Math.cos(th) * Wg * 0.96;
+      const y = Hg + notch + bow * 0.75 * Math.sin(th);
+      C('dotGlow', x, y, 3);
+      C('dots', x, y, 1.1);
     }
   }
 }

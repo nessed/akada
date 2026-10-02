@@ -955,6 +955,12 @@ function topOf(tops: Pt[], x: number): number {
 
 /** How much the floor is foreshortened: we look down on it at about 20°. */
 const FORE = 0.35;
+/** The least the spine lies in front of the floor's line, in shares of the whale's length on the floor. */
+const SPINE_BACK = 0.072;
+/** How far the far ribs reach back across the floor, against the near ones: fallen in under the spine. */
+const FAR_RIBS = 0.5;
+/** The canvas the bones are kept on, about the skull's tip on the floor line, in shares of the length. */
+const FALL_BOX = { left: -0.07, right: 1.08, top: -0.09, bottom: 0.125 };
 
 /**
  * The bones, in the drawing's own frame: the skull's tip at the origin on
@@ -962,9 +968,15 @@ const FORE = 0.35;
  * shows a skeleton lying where it fell: the spine a long gentle curve of
  * separate blocks, shrinking to the tail and sinking into the silt as they
  * go; the ribs in pairs either side of it, arcs lying splayed on the floor
- * (the far ones behind the spine, the near ones toward the reader), some of
- * the far ones still arched up off it, some snapped with the piece lying by;
- * the skull a broad flat wedge, its two long jaws bowed out either side.
+ * (the far ones fallen in behind the spine, the near ones toward the
+ * reader), some of the far ones still arched up off it, some snapped with
+ * the piece lying by; the skull a rorqual's, swung a little toward the
+ * reader: a broad flat rostrum, the nostrils in their recess, the wings
+ * over the orbits, the occipital and its condyles, and the two lower jaws
+ * bowed out either side. Everything that lies on the floor lies on or in
+ * front of its line, never behind it over the water: from 0.04 of the
+ * length above the line (the tallest rib, the skull's wings) to 0.11 below
+ * it (the near ribs and jaw).
  *
  * A point on the floor is (X along the whale, Z toward the reader, H up),
  * all in shares of L, and lands on the page at (X, Z · FORE − H).
@@ -992,13 +1004,18 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   // to the tail.
   const X0 = 0.275;
   const X1 = 0.975;
-  // It lies just in front of the floor's line, so the far ribs reach back
-  // to about the line and the near ones come forward over the floor.
-  const bend = 0.055 + r() * 0.02;
+  // It lies in front of the floor's line, its nearest to the line
+  // SPINE_BACK in front of it, so the far ribs (fallen in under it) and the
+  // far jaw reach back to the line and never past it: nothing that lies on
+  // the floor is drawn above the line, over the water beyond.
+  const bend = 0.04 + r() * 0.015;
   const ph0 = (r() - 0.5) * 0.6;
+  const wave = (u: number) => Math.sin(Math.PI * 1.15 * u + ph0) - Math.sin(ph0);
+  let low = 0;
+  for (let k = 0; k <= 40; k++) low = Math.min(low, wave(k / 40));
   const zs = (X: number) => {
     const u = (X - X0) / (X1 - X0);
-    return 0.05 + bend * (Math.sin(Math.PI * 1.15 * u + ph0) - Math.sin(ph0) - 0.3);
+    return SPINE_BACK + bend * (wave(u) - low);
   };
   const slope = (X: number) => (zs(X + 0.005) - zs(X - 0.005)) / 0.01;
   const ZS = zs(X0);
@@ -1063,7 +1080,9 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
       const tz = s / nn;
       const stand = !near && fate < 0.22 ? 1 : 0;
       const sweep = 0.55 + sway;
-      const out = (u: number, w: number): [number, number] => [v.X + nx * u + tx * w, v.Z + nz * u + tz * w];
+      const k = near ? 1 : FAR_RIBS;
+      // Never back past the floor's line.
+      const out = (u: number, w: number): [number, number] => [v.X + nx * u + tx * w, Math.max(0.004, v.Z + nz * u * k + tz * w)];
       const h0 = v.hv * 0.7 - v.sink;
       const pts: [number, number, number][] = stand
         ? [
@@ -1088,71 +1107,130 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
       if (broken) {
         // The piece that fell, lying on the floor just past the break.
         const [ex, ez] = out(length * (0.6 + end * 0.35), length * sweep * end + 0.015);
-        const fa = (q() - 0.5) * 1.2 + Math.atan2(nz, nx);
+        const fa = (q() - 0.5) * 1.2 + Math.atan2(nz * k, nx);
         const fl = length * (1 - end) * (0.8 + q() * 0.3);
+        const fz = (t: number) => Math.max(0.004, ez + Math.sin(fa) * fl * t);
         const frag = C([
           [ex, ez, 0.002],
-          [ex + Math.cos(fa) * fl * 0.33, ez + Math.sin(fa) * fl * 0.33, 0.004],
-          [ex + Math.cos(fa) * fl * 0.66 + 0.006, ez + Math.sin(fa) * fl * 0.66, 0.003],
-          [ex + Math.cos(fa) * fl + 0.01, ez + Math.sin(fa) * fl, 0],
+          [ex + Math.cos(fa) * fl * 0.33, fz(0.33), 0.004],
+          [ex + Math.cos(fa) * fl * 0.66 + 0.006, fz(0.66), 0.003],
+          [ex + Math.cos(fa) * fl + 0.01, fz(1), 0],
         ]);
         bone(b, along(frag, 0, 1, 8), w0 * 0.65, w1, i * 2 + (near ? 151 : 51));
       }
     }
   };
 
-  // The skull, a broad flat wedge seen from above and the near side: its top
-  // a long triangle of rostrum running out to the tip, wide at the back
-  // where the braincase is; its near wall below that edge; the far jaw
-  // lying bowed out behind it, the near jaw in front.
-  const skullTop: [number, number, number][] = [
-    [0, 0, 0.008], [0.05, 0.021, 0.013], [0.11, 0.035, 0.02], [0.165, 0.05, 0.027], [0.205, 0.07, 0.032], [0.232, 0.062, 0.036], [0.258, 0.034, 0.04], [0.27, 0, 0.042],
-    [0.258, -0.034, 0.04], [0.232, -0.062, 0.036], [0.205, -0.07, 0.032], [0.165, -0.05, 0.027], [0.11, -0.035, 0.02], [0.05, -0.021, 0.013],
+  // The skull of a rorqual lying on its palate, seen from above and the
+  // near side: a long, broad, flat rostrum (the maxillae its wide outer
+  // plates, the premaxillae two strips down its middle with the groove
+  // between) running back to the bony nostrils, sunk in a recess at its
+  // root; behind them the supraorbital processes spread out either side as
+  // wings with the orbits under them, and the occipital shield rises
+  // behind to the two condyles. The far jaw lies bowed out behind it, the
+  // near jaw in front. All of it rests in the silt: its foot is below the
+  // floor's line, never above it.
+  const half: [number, number, number][] = [
+    // The rostrum, broad to a blunt rounded tip, its sides a little full.
+    [-0.006, 0.007, 0.005], [0.004, 0.017, 0.005], [0.025, 0.025, 0.006], [0.06, 0.034, 0.008], [0.1, 0.043, 0.01], [0.138, 0.05, 0.012], [0.162, 0.054, 0.014],
+    // The supraorbital process: a broad plate swept out sideways, round its
+    // tip and back in.
+    [0.17, 0.064, 0.016], [0.176, 0.082, 0.018], [0.184, 0.1, 0.02], [0.195, 0.112, 0.021], [0.208, 0.116, 0.022], [0.22, 0.11, 0.023], [0.226, 0.094, 0.025], [0.23, 0.074, 0.028],
+    // The occipital's side, in to the condyle.
+    [0.244, 0.052, 0.033], [0.259, 0.033, 0.036], [0.27, 0.019, 0.033], [0.276, 0.01, 0.029],
   ];
-  const onSkull = (X: number, Z: number, H: number) => P(X, ZS + Z, H);
-  const farJaw = C([[0.252, ZS - 0.082, 0.004], [0.19, ZS - 0.135, 0.004], [0.07, ZS - 0.1, 0.003], [0.008, ZS - 0.03, 0.002]]);
-  const nearJaw = C([[0.256, ZS + 0.08, 0.004], [0.19, ZS + 0.14, 0.004], [0.07, ZS + 0.11, 0.003], [0.006, ZS + 0.035, 0.002]]);
+  const skullTop: [number, number, number][] = [
+    ...half,
+    // The notch over the foramen between the condyles.
+    [0.27, 0, 0.032],
+    ...half.slice().reverse().map(([X, Z, H]): [number, number, number] => [X, -Z, H]),
+  ];
+  // Fallen a little askew of the spine, its snout swung toward the reader
+  // about the condyles, so the breadth of the rostrum and the wings show.
+  const yaw = -(0.42 + mulberry32(hash32('skull-yaw', seed))() * 0.14);
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const XC = 0.276;
+  const onSkull = (X: number, Z: number, H: number) => P(XC + (X - XC) * cy - Z * sy, ZS + (X - XC) * sy + Z * cy, H);
+  /** The rostrum's line on the page, for what lies along it. */
+  const along0 = onSkull(0, 0, 0);
+  const along1 = onSkull(XC, 0, 0);
+  const axis = Math.atan2(along1[1] - along0[1], along1[0] - along0[0]);
+  const line = (pts: [number, number, number][], o: { width: number; alpha: number; salt: number; taper?: [number, number] }) => {
+    const out: number[] = [];
+    for (const [X, Z, H] of pts) out.push(...onSkull(X, Z, H));
+    inkLine(ctx, out, false, { width: Math.max(0.45 * px, L * o.width), color: ink, alpha: o.alpha, seed: seed ^ o.salt, light, taper: o.taper ?? [0.2, 0.2], plate: true, min: 0.3 * px });
+  };
+  const jaw = (pts: [number, number, number][]) => pts.flatMap(([X, Z, H]) => onSkull(X, Z, H));
+  const farJaw = jaw([[0.24, -0.072, 0.003], [0.18, -0.128, 0.004], [0.05, -0.1, 0.003], [-0.012, -0.022, 0.002]]);
+  const nearJaw = jaw([[0.244, 0.08, 0.003], [0.18, 0.14, 0.004], [0.05, 0.11, 0.003], [-0.012, 0.028, 0.002]]);
   const paintSkull = () => {
-    // The near wall: from the top's near edge down into the silt.
-    const nearEdge = skullTop.slice(0, 8);
+    // The near wall: from the top's near edge down into the silt, low under
+    // the rostrum and deeper under the braincase.
+    const nearEdge = half.slice(0, 15);
     const wall: number[] = [];
     for (const [Xs, Zk, H] of nearEdge) wall.push(...onSkull(Xs, Zk, H));
     for (let i = nearEdge.length - 1; i >= 0; i--) {
       const [Xs, Zk] = nearEdge[i];
       wall.push(...onSkull(Xs, Zk, -0.006));
     }
-    mass(b, wall, { angle: Math.PI / 2 - 0.2, bow: 0.4, spacing: L * 0.0042, from: 0.3, cross: 0.7, wash: shade, salt: 9002 });
+    mass(b, wall, { angle: Math.PI / 2 - 0.2, bow: 0.4, spacing: L * 0.0038, from: 0.25, cross: 0.6, wash: shade, salt: 9002 });
     // The top: pale, lit, shaded only toward its far edge.
     const top: number[] = [];
     for (const [Xs, Zk, H] of skullTop) top.push(...onSkull(Xs, Zk, H));
-    mass(b, top, { angle: -0.08, bow: 0.4, spacing: L * 0.0045, from: 0.55, wash: pale, stip: true, salt: 9001 });
-    // The ridge down the rostrum's middle, the nasal opening, and the
-    // occipital shield's edge.
-    const mid: number[] = [];
-    for (let i = 0; i <= 8; i++) {
-      const Xs = 0.02 + (i / 8) * 0.17;
-      mid.push(...onSkull(Xs, 0, 0.009 + 0.024 * (Xs / 0.19) + 0.002));
-    }
-    inkLine(ctx, mid, false, { width: Math.max(0.5 * px, L * 0.0012), color: ink, alpha: 0.55, seed: seed ^ 0x72, light, taper: [0.3, 0.2], plate: true });
-    const nasal = lump(...onSkull(0.178, 0, 0.031), 0.012 * L, 0.004 * L, 0, r, 0.8, 12);
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = mixHex(wash, dark ? '#000000' : '#2A2320', 0.55);
-    ctx.fill(smoothPath(nasal, true, 4));
+    const topPath = mass(b, top, { angle: -0.06, bow: 0.3, spacing: L * 0.0042, from: 0.58, wash: pale, stip: true, salt: 9001 });
+    // The occipital shield, rising behind the nostrils to the condyles:
+    // turned from the light, so hatched across its slope.
+    const shield: [number, number, number][] = [[0.186, 0, 0.03], [0.205, 0.032, 0.03], [0.23, 0.064, 0.028], [0.244, 0.052, 0.033], [0.259, 0.031, 0.036], [0.27, 0.019, 0.033], [0.27, 0, 0.032], [0.27, -0.019, 0.033], [0.259, -0.033, 0.036], [0.244, -0.052, 0.033], [0.23, -0.064, 0.028], [0.205, -0.032, 0.03]];
+    const sh: number[] = [];
+    for (const [Xs, Zk, H] of shield) sh.push(...onSkull(Xs, Zk, H));
+    const shPath = smoothPath(sh, true, 4);
+    const sb = boundsOf(sh);
+    ctx.save();
+    ctx.clip(topPath);
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = wash;
+    ctx.fill(shPath);
     ctx.globalAlpha = 1;
-    inkLine(ctx, nasal, true, { width: Math.max(0.5 * px, L * 0.0011), color: ink, alpha: 0.7, seed: seed ^ 0x71, light, plate: true });
-    const shield = [...onSkull(0.2, -0.05, 0.034), ...onSkull(0.212, 0, 0.037), ...onSkull(0.2, 0.05, 0.034)];
-    inkLine(ctx, shield, false, { width: Math.max(0.5 * px, L * 0.0013), color: ink, alpha: 0.6, seed: seed ^ 0x73, light, taper: [0.2, 0.2], plate: true });
-    // The near orbit: a hollow in shadow under the back corner, not a dark disc.
-    const orbit = lump(...onSkull(0.212, 0.07, 0.016), 0.014 * L, 0.0075 * L, 0.1, r, 0.8, 14);
+    hatch(ctx, shPath, sb, { spacing: Math.max(1.4 * px, L * 0.0042), angle: 1.35, bow: 0.8, shade: (x, y) => 0.25 + 0.35 * ((x - sb.x) / sb.w) + 0.3 * (1 - (y - sb.y) / sb.h), from: 0.4, color: ink, width: Math.max(0.4 * px, L * 0.0007), alpha: 0.4, seed: seed ^ 0x5e1 });
+    ctx.restore();
+    line([[0.188, 0.006, 0.03], [0.205, 0.032, 0.03], [0.23, 0.064, 0.028]], { width: 0.0013, alpha: 0.6, salt: 0x73 });
+    line([[0.188, -0.006, 0.03], [0.205, -0.032, 0.03], [0.23, -0.064, 0.028]], { width: 0.0011, alpha: 0.45, salt: 0x74 });
+    // The premaxillae: two strips down the rostrum's middle, from the tip to
+    // the nostrils; the groove between them; and each maxilla's inner edge.
+    for (const sgn of [1, -1]) {
+      line([[0.012, 0.004 * sgn, 0.006], [0.06, 0.008 * sgn, 0.009], [0.11, 0.012 * sgn, 0.012], [0.16, 0.016 * sgn, 0.015]], { width: 0.0011, alpha: sgn > 0 ? 0.6 : 0.45, salt: 0x80 + sgn });
+      line([[0.03, 0.013 * sgn, 0.007], [0.08, 0.021 * sgn, 0.01], [0.13, 0.03 * sgn, 0.013], [0.168, 0.036 * sgn, 0.016]], { width: 0.0009, alpha: 0.35, salt: 0x84 + sgn, taper: [0.4, 0.3] });
+    }
+    line([[0.02, 0, 0.0055], [0.08, 0, 0.0085], [0.14, 0, 0.012], [0.163, 0, 0.014]], { width: 0.0009, alpha: 0.5, salt: 0x72, taper: [0.4, 0.1] });
+    // The bony nostrils in their recess at the rostrum's root: a dark hollow,
+    // longer than wide, with its lip lit on the far side.
+    const nares = lump(...onSkull(0.176, 0, 0.022), 0.015 * L, 0.0045 * L, axis, r, 0.85, 14);
+    const naresPath = smoothPath(nares, true, 4);
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = mixHex(wash, dark ? '#000000' : '#2A2320', 0.65);
+    ctx.fill(naresPath);
+    ctx.globalAlpha = 1;
+    const nb = boundsOf(nares);
+    hatch(ctx, naresPath, nb, { spacing: Math.max(1.2 * px, L * 0.0018), angle: 0.9, shade: (_x, y) => 0.7 - 0.4 * ((y - nb.y) / nb.h), from: 0.3, color: ink, width: Math.max(0.4 * px, L * 0.0006), alpha: 0.6, seed: seed ^ 0x0a });
+    inkLine(ctx, nares, true, { width: Math.max(0.5 * px, L * 0.0012), color: ink, alpha: 0.75, seed: seed ^ 0x71, light, plate: true, min: 0.3 * px });
+    // The near orbit: a hollow in shadow in the wall under the wing, not a
+    // dark disc.
+    const orbit = lump(...onSkull(0.206, 0.108, 0.009), 0.012 * L, 0.006 * L, axis, r, 0.8, 14);
     const orbitPath = smoothPath(orbit, true, 4);
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = mixHex(wash, dark ? '#000000' : '#2A2320', 0.5);
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = mixHex(wash, dark ? '#000000' : '#2A2320', 0.55);
     ctx.fill(orbitPath);
     ctx.globalAlpha = 1;
     const ob = boundsOf(orbit);
     hatch(ctx, orbitPath, ob, { spacing: Math.max(1.2 * px, L * 0.0022), angle: 0.9, shade: (_x, y) => 0.5 + 0.5 * ((y - ob.y) / ob.h), from: 0.3, cross: 0.7, color: ink, width: Math.max(0.4 * px, L * 0.0006), alpha: 0.6, seed: seed ^ 0x0b });
     inkLine(ctx, orbit.slice(0, 16), false, { width: Math.max(0.5 * px, L * 0.0013), color: ink, alpha: 0.7, seed: seed ^ 0x0c, light, taper: [0.2, 0.3], plate: true });
-    tops.push(onSkull(0.06, 0, 0.012), onSkull(0.12, 0, 0.022), onSkull(0.18, 0, 0.032), onSkull(0.24, 0, 0.04));
+    // The condyles: two rounded knobs at the back, either side of the foramen.
+    for (const sgn of [1, -1]) {
+      const knob = lump(...onSkull(0.274, 0.012 * sgn, 0.03), 0.007 * L, 0.0055 * L, 0, r, 0.9, 12);
+      mass(b, knob, { angle: 0.4, bow: 0.6, spacing: L * 0.0028, from: 0.55, wash: pale, salt: 9010 + sgn });
+    }
+    tops.push(onSkull(0.03, 0, 0.007), onSkull(0.08, 0, 0.009), onSkull(0.13, 0, 0.012), onSkull(0.2, 0.08, 0.02), onSkull(0.24, 0, 0.034));
   };
 
   // A vertebra: the far process, the drum with its end face turned to the
@@ -1208,7 +1286,7 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
 
   // The shoulder blade, fallen flat on the near side behind the skull: a fan.
   const sc = mulberry32(hash32('scapula', seed));
-  const scapF: [number, number][] = [[0.27, 0.035], [0.285, 0.05], [0.31, 0.075], [0.338, 0.085], [0.36, 0.075], [0.362, 0.05], [0.34, 0.04], [0.3, 0.032]];
+  const scapF: [number, number][] = [[0.3, 0.035], [0.315, 0.05], [0.34, 0.075], [0.368, 0.085], [0.39, 0.075], [0.392, 0.05], [0.37, 0.04], [0.33, 0.032]];
   const scap: number[] = [];
   for (const [Xs, Zs] of scapF) scap.push(...P(Xs + (sc() - 0.5) * 0.003, ZS + Zs + (sc() - 0.5) * 0.004, 0.003));
 
@@ -1250,7 +1328,7 @@ function paintBones(ctx: CanvasRenderingContext2D, L: number, seed: number, px: 
   inkLine(ctx, heap, false, { width: Math.max(0.5 * px, L * 0.0012), color: dark ? IRON_GALL.dark : crest, alpha: dark ? 0.35 : 0.7, seed: seed ^ 0x52, light, taper: [0.05, 0.05], plate: true, min: 0.3 * px });
 
   mass(b, scap, { angle: -1.1, bow: 0.6, spacing: L * 0.004, from: 0.45, stip: true, salt: 9100 });
-  inkLine(ctx, [...P(0.285, ZS + 0.04, 0.004), ...P(0.31, ZS + 0.06, 0.004), ...P(0.335, ZS + 0.078, 0.004)], false, { width: Math.max(0.6 * px, L * 0.0016), color: ink, alpha: 0.65, seed: seed ^ 0x5c, light, plate: true });
+  inkLine(ctx, [...P(0.315, ZS + 0.04, 0.004), ...P(0.34, ZS + 0.06, 0.004), ...P(0.365, ZS + 0.078, 0.004)], false, { width: Math.max(0.6 * px, L * 0.0016), color: ink, alpha: 0.65, seed: seed ^ 0x5c, light, plate: true });
   ribs(true);
   bone(b, along(nearJaw, 0, 1, 24), L * 0.0105, L * 0.007, 9200);
   // The flipper's small bones, scattered in front of the shoulder.
@@ -1350,10 +1428,10 @@ export function drawWhaleFall(
   if (!fall) {
     // The canvas spans the bones from a little before the skull to a little
     // past the tail, and from above the tallest rib to into the near silt.
-    const left = -0.07 * L;
-    const right = 1.08 * L;
-    const top = -0.15 * L;
-    const bottom = 0.085 * L;
+    const left = FALL_BOX.left * L;
+    const right = FALL_BOX.right * L;
+    const top = FALL_BOX.top * L;
+    const bottom = FALL_BOX.bottom * L;
     const canvas = scratch(right - left, bottom - top);
     const g = canvas?.getContext('2d');
     const tops: Pt[] = [];
