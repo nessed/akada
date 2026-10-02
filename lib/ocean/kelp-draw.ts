@@ -265,6 +265,57 @@ function drawLedge(
   ctx.restore();
 }
 
+/*
+ * Curves laid as straight steps, fine enough (a tenth of a device px off
+ * the curve at most) to read as the curve. A curve left in a path is
+ * chopped where a clip crosses it, and Skia flattens the chopped piece in
+ * other steps than the whole: a picture printed in strips clips every
+ * strip at its edge, so a blade or a root across that edge came out a
+ * different shape in each strip from the whole page's, up to 41/255 off.
+ * A polygon cut by a clip is the same polygon.
+ */
+const TOL = 0.1;
+
+/** A quadratic from (ax, ay) through (cx, cy) to (bx, by), the start already in `p`. */
+function quadTo(p: Path2D, ax: number, ay: number, cx: number, cy: number, bx: number, by: number) {
+  const m = Math.hypot(ax - 2 * cx + bx, ay - 2 * cy + by);
+  const n = Math.min(24, Math.max(1, Math.ceil(Math.sqrt(m / (4 * TOL)))));
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const u = 1 - t;
+    p.lineTo(u * u * ax + 2 * u * t * cx + t * t * bx, u * u * ay + 2 * u * t * cy + t * t * by);
+  }
+}
+
+/** A cubic from (ax, ay) through (c1x, c1y) and (c2x, c2y) to (bx, by), the start already in `p`. */
+function cubicTo(p: Path2D, ax: number, ay: number, c1x: number, c1y: number, c2x: number, c2y: number, bx: number, by: number) {
+  const m = Math.max(Math.hypot(ax - 2 * c1x + c2x, ay - 2 * c1y + c2y), Math.hypot(c1x - 2 * c2x + bx, c1y - 2 * c2y + by));
+  const n = Math.min(32, Math.max(1, Math.ceil(Math.sqrt((0.75 * m) / TOL))));
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    const u = 1 - t;
+    p.lineTo(
+      u * u * u * ax + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * bx,
+      u * u * u * ay + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * by,
+    );
+  }
+}
+
+/** An ellipse, rotated by `rot`, as a closed polygon of its own. */
+function ellipseOf(p: Path2D, x: number, y: number, rx: number, ry: number, rot: number) {
+  const n = Math.min(48, Math.max(8, Math.ceil(Math.PI / Math.acos(Math.max(0, 1 - TOL / Math.max(rx, ry, TOL))))));
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const ex = rx * Math.cos(a);
+    const ey = ry * Math.sin(a);
+    if (i) p.lineTo(x + ex * c - ey * s, y + ex * s + ey * c);
+    else p.moveTo(x + ex * c - ey * s, y + ex * s + ey * c);
+  }
+  p.closePath();
+}
+
 /* A stalk's centreline for one frame, reused across stalks and frames. */
 let lineX = new Float64Array(0);
 let lineY = new Float64Array(0);
@@ -520,29 +571,30 @@ function drawStalk(
   // The canopy keeps more of its blades than the stipe below: it is a mat.
   const onTop = (b: KelpStalk['blades'][number]) => canopy && b.t * total > upright;
   const topStride = Math.max(1, stride - 1);
-  const trace = (target: Path2D, edge: [number, number][], back: boolean) => {
+  // Each edge smoothed through its points' midpoints, from (sx, sy).
+  const trace = (target: Path2D, edge: [number, number][], back: boolean, sx: number, sy: number) => {
     if (!back) {
       for (let k = 1; k <= SEG; k++) {
         const [ax, ay] = edge[k - 1];
         const [qx, qy] = edge[k];
-        target.quadraticCurveTo(ax, ay, (ax + qx) / 2, (ay + qy) / 2);
+        quadTo(target, sx, sy, ax, ay, (sx = (ax + qx) / 2), (sy = (ay + qy) / 2));
       }
       target.lineTo(edge[SEG][0], edge[SEG][1]);
     } else {
       for (let k = SEG - 1; k >= 0; k--) {
         const [ax, ay] = edge[k + 1];
         const [qx, qy] = edge[k];
-        target.quadraticCurveTo(ax, ay, (ax + qx) / 2, (ay + qy) / 2);
+        quadTo(target, sx, sy, ax, ay, (sx = (ax + qx) / 2), (sy = (ay + qy) / 2));
       }
     }
   };
   const outlineOf = (g: { bx: number; by: number }, path: Path2D, shadow: Path2D, aDark: boolean) => {
     path.moveTo(g.bx, g.by);
-    trace(path, edgeA, false);
-    trace(path, edgeB, true);
+    trace(path, edgeA, false, g.bx, g.by);
+    trace(path, edgeB, true, edgeA[SEG][0], edgeA[SEG][1]);
     path.closePath();
     shadow.moveTo(g.bx, g.by);
-    trace(shadow, aDark ? edgeA : edgeB, false);
+    trace(shadow, aDark ? edgeA : edgeB, false, g.bx, g.by);
     for (let k = SEG; k >= 0; k--) shadow.lineTo(mid[k][0], mid[k][1]);
     shadow.closePath();
   };
@@ -642,8 +694,10 @@ function drawStalk(
       const [mx, my] = mid[k];
       const [qx, qy] = edge[Math.min(SEG, k + 1)];
       const f0 = 0.2 + v;
-      folds.moveTo(mx + (qx - mx) * f0, my + (qy - my) * f0);
-      folds.quadraticCurveTo(mx + (qx - mx) * (f0 + 0.25) + (mid[k + 1][0] - mx) * 0.3, my + (qy - my) * (f0 + 0.25) + (mid[k + 1][1] - my) * 0.3, mx + (qx - mx) * 0.85, my + (qy - my) * 0.85);
+      const fx0 = mx + (qx - mx) * f0;
+      const fy0 = my + (qy - my) * f0;
+      folds.moveTo(fx0, fy0);
+      quadTo(folds, fx0, fy0, mx + (qx - mx) * (f0 + 0.25) + (mid[k + 1][0] - mx) * 0.3, my + (qy - my) * (f0 + 0.25) + (mid[k + 1][1] - my) * 0.3, mx + (qx - mx) * 0.85, my + (qy - my) * 0.85);
     }
     ctx.strokeStyle = ink.line;
     ctx.lineWidth = 0.55 * px * scale;
@@ -669,15 +723,15 @@ function drawStalk(
   };
   /* Its bladder: a little bead of gas, lit on top. */
   const floatOf = (g: { fx: number; fy: number; fr: number; d0x: number; d0y: number }, a: number) => {
-    ctx.beginPath();
-    ctx.ellipse(g.fx, g.fy, g.fr, g.fr * 0.72, Math.atan2(g.d0y, g.d0x), 0, Math.PI * 2);
+    const bead = new Path2D();
+    ellipseOf(bead, g.fx, g.fy, g.fr, g.fr * 0.72, Math.atan2(g.d0y, g.d0x));
     ctx.globalAlpha = a;
     ctx.fillStyle = ink.float;
-    ctx.fill();
+    ctx.fill(bead);
     ctx.strokeStyle = ink.line;
     ctx.lineWidth = (near ? 0.6 : 0.45) * px;
     ctx.globalAlpha = a * 0.85;
-    ctx.stroke();
+    ctx.stroke(bead);
     ctx.globalAlpha = 1;
   };
   /* Small, a side's blades are laid in one pass each, opaque: the wash,
@@ -697,8 +751,7 @@ function drawStalk(
       any = true;
       outlineOf(g, g.faint ? faint : plain, g.faint ? shFaint : shPlain, g.aDark);
       if (detail) corrugations(veins, j);
-      floats.moveTo(g.fx + g.d0x * g.fr, g.fy + g.d0y * g.fr);
-      floats.ellipse(g.fx, g.fy, g.fr, g.fr * 0.72, Math.atan2(g.d0y, g.d0x), 0, Math.PI * 2);
+      ellipseOf(floats, g.fx, g.fy, g.fr, g.fr * 0.72, Math.atan2(g.d0y, g.d0x));
     }
     if (!any) return;
     for (const [path, shadow, a] of [
@@ -760,14 +813,14 @@ function drawStalk(
       const ey = foot + (1 + Math.abs(a) * 2.5) * k * px;
       const sy = foot - (5 + (i % 3) * 1.5) * k * px;
       roots.moveTo(fx + dx * 0.08, sy);
-      roots.bezierCurveTo(fx + dx * 0.3, sy + 1.5 * k * px, fx + dx * 0.75, foot - 1.5 * k * px, ex, ey);
+      cubicTo(roots, fx + dx * 0.08, sy, fx + dx * 0.3, sy + 1.5 * k * px, fx + dx * 0.75, foot - 1.5 * k * px, ex, ey);
       // Each root forks twice as it takes hold, the forks finer.
       for (const f of [0.55, 0.8]) {
         const ax = fx + dx * f;
         const ay = foot + (Math.abs(a) * f * 1.6 - 1.2) * k * px;
         const side = (i + (f > 0.6 ? 1 : 0)) % 2 ? 1 : -1;
         fine.moveTo(ax, ay);
-        fine.quadraticCurveTo(ax + dx * 0.15 + side * 2 * k * px, ay + 1.2 * k * px, ax + dx * 0.22 + side * 3 * k * px, ay + (2.5 + (i % 2)) * k * px);
+        quadTo(fine, ax, ay, ax + dx * 0.15 + side * 2 * k * px, ay + 1.2 * k * px, ax + dx * 0.22 + side * 3 * k * px, ay + (2.5 + (i % 2)) * k * px);
       }
     });
     ctx.globalAlpha = 1;

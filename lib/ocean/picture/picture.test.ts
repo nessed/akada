@@ -8,6 +8,8 @@ import { rollKelp } from '../kelp';
 import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, floorAt, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, PICTURE_KELP, STEM, wallAt, wallTouches, type Box, type Plan } from './layout';
 import { EYE_R, ROW_BAND, ROW_LEVEL, SIPHON_TILT, steepestFall, stepsApart, whaleHull } from './layout';
 import { partExt, rockSpan, rockX, WALL_STEP } from './layout';
+import { calmArea, CALM, CAST_MAX, castWant, EVENTS_MAX, GHOST_ROW, HERO_R, LONE_GAP, SIBLING_SCALE, TRENCH_TOP, WALL_W } from './layout';
+import { EVENTS } from '../events';
 import { rockShape } from '../outcrop-sprite';
 import { siphonophoreReach } from '../sightings-shallow';
 import { KELP_SHADE, kelpShadeAt } from './paint';
@@ -152,7 +154,8 @@ test('one rock per break, inked near; rocks merely passed far, small and faint',
         const j = plan.jellies[c.segs.length && r.rest >= 0 ? Math.min(plan.jellies.length - 1, r.rest) : 0];
         // Many breaks on one page cannot all keep to their depth with room between them: the older give way.
         const crowded = count(c.segs, 'break') > 4;
-        const near = r.plane === 2 ? (crowded ? 0.45 : 0.2) : crowded ? 0.7 : 0.45;
+        // (All on one wall, they have a little less room to keep to it.)
+        const near = r.plane === 2 ? (crowded ? 0.45 : 0.25) : crowded ? 0.7 : 0.45;
         assert.ok(Math.abs(r.y + r.height / 2 - j.y) < plan.h * near, `${c.name} ${shape.width}x${shape.height}: rock ${r.rest} is ${(Math.abs(r.y + r.height / 2 - j.y) / plan.h).toFixed(2)} H from the depth of its rest`);
       }
       for (const r of plan.rocks.filter((k) => k.kind === 'passed')) assert.equal(r.plane, 0, `${c.name}: a rock passed is not far`);
@@ -196,7 +199,8 @@ test('the jellies: the hero large and low, the one before half its size, older o
       const S = Math.min(plan.w, plan.h);
       const hero = plan.jellies[plan.jellies.length - 1];
       const bell = (hero.r * 2) / S;
-      assert.ok(bell >= 0.16 && bell <= 0.19, `${c.name}: hero bell ${bell.toFixed(3)} S`);
+      // A fifth of the short side across: it owns the page.
+      assert.ok(bell >= 0.19 && bell <= 0.21, `${c.name}: hero bell ${bell.toFixed(3)} S`);
       if (plan.tall) assert.ok(hero.y >= plan.h * 0.6 && hero.y <= plan.h * 0.7, `${c.name}: hero at ${(hero.y / plan.h).toFixed(2)} H`);
       assert.equal(hero.weight, 1);
       const inked = plan.jellies.filter((j) => !j.far);
@@ -209,7 +213,7 @@ test('the jellies: the hero large and low, the one before half its size, older o
       }
       if (plan.jellies.length >= 2) {
         const prev = plan.jellies[plan.jellies.length - 2];
-        assert.ok(prev.r <= hero.r * 0.55 + 1e-9, `${c.name}: the jelly before is ${(prev.r / hero.r).toFixed(2)} of the hero`);
+        assert.ok(prev.r <= hero.r * 0.5 + 1e-9, `${c.name}: the jelly before is ${(prev.r / hero.r).toFixed(2)} of the hero`);
       }
       // Siblings differ at a glance: the bell's shape, or its trails.
       for (let i = 1; i < plan.jellies.length; i++) {
@@ -288,7 +292,7 @@ test('the floor: a few things on it, spread out and small; the trench clear of c
         const t = plan.trench;
         const gap = (t.gap / plan.w);
         assert.ok(gap >= 0.25 && gap <= 0.4, `${c.name}: the cleft is ${gap.toFixed(2)} W`);
-        assert.ok(Math.abs(t.top - plan.h * 0.7) < 1e-6);
+        assert.ok(Math.abs(t.top - plan.h * (plan.tall ? TRENCH_TOP[0] : TRENCH_TOP[1])) < 1e-6);
         assert.ok(Math.abs(hero.x - t.x) < t.gap / 2, `${c.name}: the hero is not over the cleft`);
         const fall = plan.events.find((e) => e.kind === 'whalefall');
         if (fall && fall.box) assert.ok(fall.box.x1 <= t.x - t.gap / 2 || fall.box.x0 >= t.x + t.gap / 2, `${c.name}: the whale fall is in the cleft`);
@@ -457,7 +461,9 @@ test('siblings: each apart from the hero in two ways a print shows, none in anot
         assert.ok(ways >= 2, `${tag}: jelly ${j.block} differs from the hero in ${ways} way(s)`);
       }
       // Never a staircase: each step down the family unlike the next, by 0.4 of the larger, across and down.
+      // (Three ghosts far off in a row are held to nothing: only a step through a jelly counts.)
       for (let i = 2; i < J.length; i++) {
+        if (J[i - 1].far) continue;
         const a = { dx: J[i - 1].x - J[i - 2].x, dy: J[i - 1].y - J[i - 2].y };
         const b = { dx: J[i].x - J[i - 1].x, dy: J[i].y - J[i - 1].y };
         assert.ok(stepsApart(a, b), `${tag}: jellies ${i - 2}, ${i - 1} and ${i} step alike (${a.dx.toFixed(0)},${a.dy.toFixed(0)}) then (${b.dx.toFixed(0)},${b.dy.toFixed(0)})`);
@@ -465,7 +471,8 @@ test('siblings: each apart from the hero in two ways a print shows, none in anot
       for (let i = 0; i < J.length; i++) {
         for (let k = i + 1; k < J.length; k++) {
           assert.ok(boxGap(J[i].box, J[k].box) >= CLEAR - 1e-6, `${tag}: jellies ${i} and ${k} ${boxGap(J[i].box, J[k].box).toFixed(0)} apart`);
-          assert.ok(Math.abs(J[i].y - J[k].y) >= plan.h * 0.05 - 1e-6, `${tag}: jellies ${i} and ${k} at one depth`);
+          // (Two ghosts far off a little closer.)
+          assert.ok(Math.abs(J[i].y - J[k].y) >= plan.h * (J[i].far && J[k].far ? GHOST_ROW : 0.05) - 1e-6, `${tag}: jellies ${i} and ${k} at one depth`);
         }
       }
     }

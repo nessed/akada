@@ -33,7 +33,7 @@ import { SpriteCache, type Sprite } from '../sprites';
 import { Wash } from '../wash';
 import { causticsOn } from '../caustics';
 import type { Growth, GrowthKind } from '../outcrop';
-import { drawGrowth, inkFloor, inkRock, inkWall, rockFoot, rockShape, rockStyle } from '../outcrop-sprite';
+import { drawGrowth, inkFloor, inkRock, inkWall, rockFoot, rockShape, rockStyle, type RockStyle } from '../outcrop-sprite';
 import { floorAt, partExt, PICTURE_KELP, REF, rockOutline, rockX, wallAt, WALL_STEP, WHALE_BLUR, WHALE_PITCH, whaleHull, type PlacedEvent, type PlacedJelly, type PlacedRock, type Plan, type Wall } from './layout';
 
 interface Caches {
@@ -52,6 +52,7 @@ interface Caches {
   dither: HTMLCanvasElement | null;
   rays: { key: string; canvas: HTMLCanvasElement } | null;
   window: { key: string; canvas: HTMLCanvasElement } | null;
+  fan: { key: string; canvas: HTMLCanvasElement } | null;
   fall: Fall | null;
   column: string[] | null;
 }
@@ -81,6 +82,7 @@ function cachesOf(plan: Plan): Caches {
         dither: null,
         rays: null,
         window: null,
+        fan: null,
         fall: null,
         column: null,
       } satisfies Caches,
@@ -423,7 +425,8 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number, row
   const rays = {
     source: { x: (plan.window.x * D) / rs, y: (plan.window.y * D) / rs },
     occluder,
-    strength: 0.5 + 0.55 * Math.max(0, 1 - plan.zMax / 0.6),
+    // (On paper a shaft is screened onto pale water and must be laid harder to be as present as by night.)
+    strength: (0.5 + 0.55 * Math.max(0, 1 - plan.zMax / 0.6)) * (night ? 1 : 1.35),
     sun,
     px: D / rs,
     seed: plan.seed,
@@ -439,8 +442,10 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number, row
     ctx.restore();
   }
   // ---- The window's light in the water under it, long and soft, carried
-  // on down to a quarter of the page so the light has no edge.
+  // on down to a quarter of the page so the light has no edge; on paper the
+  // water is lighter all down the shafts' path too.
   paintSkyGlow(ctx, plan, D, view, night, sun);
+  if (!night) paintFan(ctx, plan, c, W, H, D, lit, sun, view);
   // ---- Far: the big shapes behind everything, the rocks passed, the old
   // jellies far off, the far animals.
   for (const e of plan.events) if (e.far) paintEvent(ctx, plan, c, e, D, ambient, inSight, view);
@@ -533,6 +538,61 @@ function paintSkyGlow(ctx: CanvasRenderingContext2D, plan: Plan, D: number, view
   ctx.fillStyle = gr;
   ctx.fillRect(-ry * D, -ry * D, ry * 2 * D, ry * 2 * D);
   ctx.restore();
+}
+
+/**
+ * On paper, the water lighter where the light goes down through it: one
+ * soft fan from the window at the sun's lean, as wide as the shafts spread,
+ * screened, strongest under the window and gone by where the light is
+ * swallowed. The shafts are drawn in it; this is the water they light.
+ * Laid once, small and blurred, and stretched over the page.
+ */
+function paintFan(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, W: number, H: number, D: number, lit: number, sun: ReturnType<typeof sunFor>, view: View) {
+  if (typeof document === 'undefined') return;
+  const key = `${W}|${H}`;
+  if (!c.fan || c.fan.key !== key) {
+    c.fan = null;
+    const k = 640 / Math.max(plan.w, plan.h);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(plan.w * k));
+    canvas.height = Math.max(1, Math.round(plan.h * k));
+    const o = canvas.getContext('2d');
+    if (!o) return;
+    o.scale(k, k);
+    const sx = plan.window.x;
+    const sy = plan.window.y;
+    const reach = Math.max(plan.h * 0.5, lit * 1.05);
+    const half = 0.32;
+    const glow = sun.night ? 0.45 + 0.55 * (plan.moon == null ? 0 : moonLit(plan.moon)) : 0.55 + 0.45 * sun.strength;
+    const [r, g, b] = rgbOf(mixHex(sun.warmth, '#FFFFFF', 0.45));
+    const a = 0.34 * glow;
+    const gr = o.createRadialGradient(sx, sy, 0, sx, sy, reach);
+    gr.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`);
+    gr.addColorStop(0.25, `rgba(${r}, ${g}, ${b}, ${(a * 0.7).toFixed(3)})`);
+    gr.addColorStop(0.55, `rgba(${r}, ${g}, ${b}, ${(a * 0.32).toFixed(3)})`);
+    gr.addColorStop(0.8, `rgba(${r}, ${g}, ${b}, ${(a * 0.1).toFixed(3)})`);
+    gr.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+    o.filter = `blur(${(plan.w * 0.045 * k).toFixed(1)}px)`;
+    o.fillStyle = gr;
+    o.beginPath();
+    o.moveTo(sx - plan.window.r * 0.6, sy);
+    o.lineTo(sx + plan.window.r * 0.6, sy);
+    const a1 = sun.tilt + half;
+    const a0 = sun.tilt - half;
+    for (let i = 0; i <= 16; i++) {
+      const ang = a1 + ((a0 - a1) * i) / 16;
+      o.lineTo(sx + Math.sin(ang) * reach, sy + Math.cos(ang) * reach);
+    }
+    o.closePath();
+    o.fill();
+    o.filter = 'none';
+    c.fan = { key, canvas };
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  drawSlice(ctx, c.fan.canvas, W, H, view);
+  ctx.restore();
+  void D;
 }
 
 /* ---- Light and noise, without reading the canvas back ---- */
@@ -1265,6 +1325,35 @@ function paintKelp(ctx: CanvasRenderingContext2D, plan: Plan, kelp: Kelp, c: Cac
     ctx.restore();
   }
   const night = plan.ground === 'night';
+  if (!night) {
+    // On paper the ledge is the wall's stone, never paler than the water:
+    // kelp-draw's pale wash taken down under a glaze of the water's own
+    // tone a step darker, the pen and the holdfasts left to read through.
+    for (const { r, pts } of cuts) {
+      if (!inSight(r.box.x0, r.box.y0 - 10, r.box.x1, r.box.y1 + 4)) continue;
+      const N = r.shape.top.length - 1;
+      const shape = new Path2D();
+      for (let i = 0; i <= N; i++) {
+        const x = rockX(r, plan.w, i / N) * D;
+        const y = (r.y + r.shape.top[i] * r.height) * D;
+        if (i === 0) shape.moveTo(x, y);
+        else shape.lineTo(x, y);
+      }
+      for (let i = pts.length - 2; i >= 0; i -= 2) shape.lineTo(pts[i] * D, (pts[i + 1] + 1.5) * D);
+      shape.closePath();
+      const [L, A, B] = labOf(waterTone(plan, c, r.y + r.height * 0.5));
+      ctx.save();
+      ctx.clip(shape);
+      ctx.globalCompositeOperation = 'multiply';
+      const g = ctx.createLinearGradient(0, r.y * D, 0, (r.y + r.height) * D);
+      g.addColorStop(0, hexOfLab(Math.min(100, L + 2), A, B));
+      g.addColorStop(0.35, hexOfLab(L - 10, A, B));
+      g.addColorStop(1, hexOfLab(L - 16, A, B));
+      ctx.fillStyle = g;
+      ctx.fillRect(r.box.x0 * D - 20 * D, (r.y - 10) * D, (r.box.x1 - r.box.x0 + 40) * D, (r.height + 20) * D);
+      ctx.restore();
+    }
+  }
   for (const { r, pts } of cuts) {
     if (!inSight(r.box.x0, r.box.y0, r.box.x1, r.box.y1 + 4)) continue;
     // Where the ledge kelp-draw lays really is stone (its own rock, placed
@@ -1357,6 +1446,53 @@ const REEF = HUES.map((_, i) => i).filter((i) => HUES[i] !== '#9AA3AB');
 const GROWTH_ROOM = 70;
 
 /* ---- The walls ---- */
+
+/**
+ * On paper, stone is never the palest thing on the page: its lit faces are
+ * lifted only to the water's own tone round it, never toward the cream, and
+ * its body is a step under the water, so a wall or a ledge reads darker than
+ * the sea it stands in and the pen carries it. (`deeper`: L* further down.)
+ */
+function paperStone(style: RockStyle, water: string, deeper = 0): RockStyle {
+  if (style.dark) return style;
+  const [L, A, B] = labOf(water);
+  return { ...style, paper: hexOfLab(L - 3, A, B), rock: mixHex(hexOfLab(L - 17 - deeper, A * 0.7, B * 0.7), '#5E5244', 0.25) };
+}
+
+/**
+ * A layer of stone made at one depth's water carried down the page: its
+ * colours multiplied, row by row, by how much darker the water is there
+ * than at `yRef`, so a cliff falls into the dark with the sea round it and
+ * is never left paler than the water below. Its own alpha is kept.
+ */
+function relight(o: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, oy: number, cw: number, chh: number, yRef: number): void {
+  if (typeof document === 'undefined') return;
+  const ref = rgbOf(waterTone(plan, c, yRef));
+  const tmp = document.createElement('canvas');
+  tmp.width = cw;
+  tmp.height = chh;
+  const t = tmp.getContext('2d');
+  if (!t) return;
+  t.drawImage(o.canvas, 0, 0);
+  const g = t.createLinearGradient(0, 0, 0, chh);
+  for (let s = 0; s <= 12; s++) {
+    const y = (oy + (chh * s) / 12) / D;
+    const wt = rgbOf(waterTone(plan, c, Math.max(yRef, y)));
+    const m = wt.map((v, i) => Math.max(0.25, Math.min(1, v / Math.max(1, ref[i]))) * 255);
+    g.addColorStop(s / 12, `rgb(${m[0].toFixed(0)}, ${m[1].toFixed(0)}, ${m[2].toFixed(0)})`);
+  }
+  t.globalCompositeOperation = 'multiply';
+  t.fillStyle = g;
+  t.fillRect(0, 0, cw, chh);
+  t.globalCompositeOperation = 'destination-in';
+  t.drawImage(o.canvas, 0, 0);
+  o.save();
+  o.setTransform(1, 0, 0, 1, 0, 0);
+  o.globalCompositeOperation = 'copy';
+  o.globalAlpha = 1;
+  o.drawImage(tmp, 0, 0);
+  o.restore();
+}
 
 const clampT = (v: number) => Math.max(0, Math.min(1, v));
 
@@ -1454,8 +1590,11 @@ function renderWall(plan: Plan, c: Caches, wall: Wall, D: number, ux0: number, u
   const keep = (y: number) => 1 - 0.3 * clampT((y - yStart) / Math.max(1, wall.bottom - yStart));
   o.lineCap = 'round';
   o.lineJoin = 'round';
-  const style = rockStyle(waterAtY(plan, c, yStart + plan.h * 0.1), night, D, wall.plane === 0 ? 0.4 : wall.plane === 1 ? 0.75 : 1, wall.seed);
-  inkWall(o, region, { x0: 0, y0: Math.max(0, Y(yStart) - 2), x1: cw, y1: chh }, style, D, wall.seed, { side: wall.edge < 0 ? 'left' : 'right', fadeFrom: Y(yStart), fadeTo: Y(wall.bottom) + 2 * (Y(wall.bottom) - Y(yStart)) });
+  // (On paper the wall's stone is laid at its top's water and carried down
+  // the page with it, `relight`, below; at night the engine fades it.)
+  const refY = night ? yStart + plan.h * 0.1 : yStart;
+  const style = paperStone(rockStyle(waterAtY(plan, c, refY), night, D, wall.plane === 0 ? 0.4 : wall.plane === 1 ? 0.75 : 1, wall.seed), waterTone(plan, c, refY));
+  inkWall(o, region, { x0: 0, y0: Math.max(0, Y(yStart) - 2), x1: cw, y1: chh }, style, D, wall.seed, { side: wall.edge < 0 ? 'left' : 'right', fadeFrom: Y(yStart), fadeTo: night ? Y(wall.bottom) + 2 * (Y(wall.bottom) - Y(yStart)) : Y(wall.bottom) + 12 * (Y(wall.bottom) - Y(yStart)) });
   // The shadow under each rock and each ledge, going on into the wall: a
   // soft dark band hung under the underside, laid as copies slid down.
   o.save();
@@ -1498,6 +1637,7 @@ function renderWall(plan: Plan, c: Caches, wall: Wall, D: number, ux0: number, u
     const pts = [X(f * 0.35), Y(l.y), X(f * 0.7), Y(l.y - 0.4), X(f), Y(l.y + 1.2)];
     inkLine(o, pts, false, { width: 0.8 * D, color: ink, alpha: (night ? 0.45 : 0.65) * keep(l.y), lost: 0.15, swell: 0.4, taper: [0.2, 0.1], seed: hash32(wall.seed, 'bench', l.rest) });
   }
+  if (!night) relight(o, plan, c, D, oy, cw, chh, refY);
   // The water between, by its plane, as the rocks are taken by it.
   const haze = wall.plane === 0 ? FAR_ROCK_MIX : wall.plane === 1 ? MID_MIX : 0;
   if (haze > 0) {
@@ -1712,7 +1852,7 @@ function renderRock(plan: Plan, c: Caches, k: PlacedRock, D: number): { canvas: 
     const y0 = (k.y + (k.shape.lift + part.dy) * span) * D - oy;
     target.lineCap = 'round';
     target.lineJoin = 'round';
-    const style = rockStyle(water, night, pen, detail, hash32(k.seed, 'part', i));
+    const style = paperStone(rockStyle(water, night, pen, detail, hash32(k.seed, 'part', i)), water.top);
     // Far off: the engine's own haze, a broken thread of pen round it.
     // (A whole one is drawn as the near ones are and taken by the water as its wall is, below.)
     if (k.plane === 0 && !whole) style.far = { water: water.top, mix: FAR_ROCK_MIX };
@@ -2230,7 +2370,7 @@ function trenchFace(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
     const style = rockStyle(waterAtY(plan, c, top + (plan.h - top) * 0.3), night, D, 1, hash32(plan.seed, 'trench', side));
     // Ground, not a rock in the water: a step darker than the stone.
     // (The floor a step further: it lies under open water, and must stay darker than it.)
-    if (!night) style.rock = mixHex(style.rock, '#1A1714', side === 0 ? 0.6 : 0.3);
+    if (!night) Object.assign(style, paperStone(style, waterTone(plan, c, top + (plan.h - top) * 0.3), side === 0 ? 8 : 4));
     if (side === 0) {
       // The floor: its beds level, its crest one broken line, nothing pale under it.
       const top2: number[] = [];
