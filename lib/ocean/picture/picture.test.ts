@@ -482,6 +482,7 @@ test('the rare things keep 0.02 S from rocks, jellies and each other; the whale\
       for (const e of near) {
         const b = e.box as Box;
         for (const r of plan.rocks) assert.ok(!rockTouches(r, plan.w, b, e.kind === 'eye' ? 40 - 1e-6 : CLEAR - 1e-6), `${tag}: the ${e.kind} by a ${r.kind} rock`);
+        for (const wl of plan.walls) assert.ok(!wallTouches(wl, plan.w, b, e.kind === 'eye' ? 40 - 1e-6 : CLEAR - 1e-6), `${tag}: the ${e.kind} by a wall`);
         for (const j of plan.jellies) assert.ok(boxGap(b, j.box) >= CLEAR - 1e-6, `${tag}: the ${e.kind} by jelly ${j.block}`);
         for (const o of near) if (o !== e) assert.ok(boxGap(b, o.box as Box) >= CLEAR - 1e-6, `${tag}: the ${e.kind} by the ${o.kind}`);
       }

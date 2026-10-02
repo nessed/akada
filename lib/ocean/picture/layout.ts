@@ -1537,7 +1537,7 @@ export function plan(s: Session, color: string, ground: 'paper' | 'night', shape
   const kelpBoxes: Box[] = kelp
     ? kelpSides(rocks).map((edge) => (edge < 0 ? { x0: 0, x1: Math.max(inL, w * 0.06), y0: 0, y1: kelp.bottom } : { x0: w - Math.max(inR, w * 0.06), x1: w, y0: 0, y1: kelp.bottom }))
     : [];
-  settleEvents(events, { w, h, M, jellies, rocks, winBox, floorTop: floor ? (trench ? trench.top : floor.y) : null, kelp: kelpBoxes, steepY: steepestFall(zStops, h), current: s.biome.env.current });
+  settleEvents(events, { w, h, M, jellies, rocks, walls, winBox, floorTop: floor ? (trench ? trench.top : floor.y) : null, kelp: kelpBoxes, steepY: steepestFall(zStops, h), current: s.biome.env.current });
 
   // ---- The cast.
   const cast = solveCast(s, {
@@ -2443,6 +2443,9 @@ function flipEvent(e: PlacedEvent, w: number): void {
 /** The tilt, radians below level, a picture hangs its siphonophore at: well inside the colony's own 0.26 to 0.7. */
 export const SIPHON_TILT: [number, number] = [0.38, 0.63];
 
+/** The least gap a rare thing laid by the looser rules keeps from a rock, a wall, a jelly (0.01 S). */
+const LOOSE = 0.01 * REF;
+
 /** The big rare things that must never touch the hero, each other or a rock. */
 const LONE: EventKind[] = ['lure', 'siphonophore', 'oarfish'];
 
@@ -2454,7 +2457,7 @@ const LONE: EventKind[] = ['lure', 'siphonophore', 'oarfish'];
  */
 function settleEvents(
   events: PlacedEvent[],
-  e: { w: number; h: number; M: number; jellies: PlacedJelly[]; rocks: PlacedRock[]; winBox: Box; floorTop: number | null; kelp: Box[]; steepY: number | null; current: 1 | -1 },
+  e: { w: number; h: number; M: number; jellies: PlacedJelly[]; rocks: PlacedRock[]; walls: Wall[]; winBox: Box; floorTop: number | null; kelp: Box[]; steepY: number | null; current: 1 | -1 },
 ): void {
   const { w, h } = e;
   const hero = e.jellies[e.jellies.length - 1];
@@ -2471,21 +2474,18 @@ function settleEvents(
     if (strict) {
       // The eye is padded by the dark it sits in.
       for (const k of e.rocks) if (rockTouches(k, w, b, v.kind === 'eye' ? 40 : CLEAR)) return true;
+      for (const wl of e.walls) if (wallTouches(wl, w, b, v.kind === 'eye' ? 40 : CLEAR)) return true;
       for (const k of e.kelp) if (inter(b, grow(k, CLEAR)) > 0) return true;
       for (const j of e.jellies) if (!j.hero && boxGap(b, j.box) < CLEAR) return true;
       for (const o of done) if (o.box && !o.far && o.kind !== 'whalefall' && boxGap(o.box, b) < CLEAR) return true;
       return false;
     }
     for (const o of done) if (o.box && !o.far && o.kind !== 'whalefall' && boxGap(o.box, b) < CLEAR) return true;
-    // Even loosely, never on a rock or its wall.
-    if (v.kind === 'turtle') return e.rocks.some((k) => rockTouches(k, w, b, 0));
-    for (const j of e.jellies) if (!j.hero && v.kind !== 'eye' && inter(b, j.box) > 0) return true;
-    if (LONE.includes(v.kind) || v.kind === 'eye' || v.kind === 'dumbo') {
-      for (const k of e.rocks) if (rockTouches(k, w, b, v.kind === 'eye' ? 40 : LONE.includes(v.kind) ? 6 : 0)) return true;
-    }
-    if (LONE.includes(v.kind)) {
-      for (const o of done) if (o.box && LONE.includes(o.kind) && boxGap(o.box, b) < 6) return true;
-    }
+    // Even loosely, never on a rock or a wall, nor touching a jelly: a
+    // hundredth of the short side at the least.
+    for (const k of e.rocks) if (rockTouches(k, w, b, v.kind === 'eye' ? 40 : LOOSE)) return true;
+    for (const wl of e.walls) if (wallTouches(wl, w, b, v.kind === 'eye' ? 40 : LOOSE)) return true;
+    for (const j of e.jellies) if (!j.hero && v.kind !== 'eye' && boxGap(b, j.box) < LOOSE) return true;
     return false;
   };
   for (const v of events) if (v.kind === 'whale') settleWhale(v, e);
