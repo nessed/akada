@@ -10,6 +10,7 @@ const grow = (b: Box, d: number): Box => ({ x0: b.x0 - d, y0: b.y0 - d, x1: b.x1
 import { EYE_R, ROW_BAND, ROW_LEVEL, SIPHON_TILT, steepestFall, stepsApart, whaleHull } from './layout';
 import { partExt, rockSpan, rockX, WALL_STEP } from './layout';
 import { calmArea, CALM, CAST_MAX, castWant, EVENTS_MAX, GHOST_ROW, HERO_R, LONE_GAP, SIBLING_SCALE, TRENCH_TOP, WALL_W } from './layout';
+import { EYE_BAND, mirrorKelp } from './layout';
 import { ACROSS, BELL_APART, CAST_BY_WALL, emptyShare, HERO_FROM_WALL, RARE_BELL, SHOAL_SCALE, SIBLINGS_TALL, SIBLINGS_WIDE, TRENCH_RISE, WHALE_CLEAR, WHALEFALL_LEVEL, WHALEFALL_LEVEL_TRENCH } from './layout';
 import { EVENTS } from '../events';
 import { rockShape } from '../outcrop-sprite';
@@ -214,7 +215,7 @@ test('the jellies: the hero large and low, the one before half its size, older o
       if (plan.tall) assert.ok(hero.y >= plan.h * 0.54 - 1e-6 && hero.y <= plan.h * 0.7, `${c.name}: hero at ${(hero.y / plan.h).toFixed(2)} H`);
       assert.equal(hero.weight, 1);
       // The family: the hero and two elders on a tall page, three on a wide one, ghosts included; the rest a far shoal.
-      const kin = plan.tall ? SIBLINGS_TALL : SIBLINGS_WIDE;
+      const kin = plan.tall || plan.trench ? SIBLINGS_TALL : SIBLINGS_WIDE;
       const inked = plan.jellies.filter((j) => !j.far);
       assert.ok(inked.length <= kin + 1, `${c.name}: ${inked.length} inked jellies`);
       for (const j of plan.jellies.slice(0, -1)) {
@@ -355,7 +356,7 @@ test('no rock floats: each stands out from a wall that goes down into the ground
       }
       // The kelp: three stalks a side or none.
       if (plan.kelp) {
-        const kelp = rollKelp(rollBiome(plan.key, plan.courseKey).key, PICTURE_KELP);
+        const kelp = mirrorKelp(rollKelp(rollBiome(plan.key, plan.courseKey).key, PICTURE_KELP), plan.kelp.mirror);
         for (const edge of [-1, 1]) {
           const n = plan.kelp.keep.filter((i) => (kelp.stalks[i].x < 0.5 ? -1 : 1) === edge).length;
           assert.ok(n === 0 || n >= 3, `${tag}: ${n} kelp stalks on a side`);
@@ -740,8 +741,9 @@ test('not one layout twice: the hero out toward the open side, the family round 
       assert.ok(fam.length - 1 <= (plan.tall ? SIBLINGS_TALL : SIBLINGS_WIDE), `${tag}: ${fam.length - 1} elders`);
       if (fam.length > 1) assert.ok(fam.some((j) => !j.hero && Math.abs(j.x - hero.x) >= plan.w * ACROSS - 1e-6), `${tag}: no elder across the hero's axis`);
       const biome = rollBiome(plan.key, plan.courseKey);
-      const bells = [...fam.map((j) => j.x), ...plan.cast.filter((a) => biome.pools[a.zone]?.[a.slot]?.genome.plan === 'bell').map((a) => a.x)];
-      for (let i = 0; i < bells.length; i++) for (let k = i + 1; k < bells.length; k++) assert.ok(Math.abs(bells[i] - bells[k]) >= plan.w * BELL_APART - 1e-6, `${tag}: two bells ${(Math.abs(bells[i] - bells[k]) / plan.w).toFixed(3)} W apart across`);
+      for (let i = 0; i < fam.length; i++) for (let k = i + 1; k < fam.length; k++) assert.ok(Math.abs(fam[i].x - fam[k].x) >= plan.w * BELL_APART - 1e-6, `${tag}: two bells ${(Math.abs(fam[i].x - fam[k].x) / plan.w).toFixed(3)} W apart across`);
+      // (A rare jelly too, unless a fifth of the page under or over.)
+      for (const a of plan.cast.filter((q) => biome.pools[q.zone]?.[q.slot]?.genome.plan === 'bell')) for (const j of fam) if (Math.abs(j.y - a.y) < plan.h * 0.2) assert.ok(Math.abs(j.x - a.x) >= plan.w * BELL_APART - 1e-6, `${tag}: a rare jelly in line with jelly ${j.block}`);
       // The cast not all by the wall: three in five at most in its third of the page, and one of it over the page's middle.
       const water = plan.cast.filter((a) => !a.floor);
       if (water.length >= 2) {
@@ -815,6 +817,11 @@ test('nothing overlaps or floats: 0.02 S between the animals, what grows, the gr
         assert.ok(hi - lo <= (plan.trench ? WHALEFALL_LEVEL_TRENCH : WHALEFALL_LEVEL) * REF + 1e-6, `${tag}: the ground under the whale fall rises ${(hi - lo).toFixed(1)}`);
         // Every bone rests on it: the bones' line no higher than the ground anywhere under them.
         assert.ok(fall.y >= hi - 1e-6, `${tag}: whale-fall bones over open water`);
+      }
+      // The squid's eye looks in low on the page (0.45 to 0.8 of it), a quarter of the width or more from the window.
+      for (const e of plan.events.filter((v) => v.kind === 'eye')) {
+        assert.ok(e.y >= plan.h * EYE_BAND[0] - 1e-6 && e.y <= plan.h * EYE_BAND[1] + 1e-6, `${tag}: the eye at ${(e.y / plan.h).toFixed(2)} H`);
+        assert.ok(Math.abs(e.x - plan.window.x) >= plan.w * 0.25 - plan.window.r * 0.08 - 1e-6, `${tag}: the eye by the window`);
       }
       // A rare jelly glows low: 0.7 to 0.95 of the page, or as low as the ground lets it.
       const biome = rollBiome(plan.key, plan.courseKey);

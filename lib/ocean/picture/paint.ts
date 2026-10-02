@@ -34,7 +34,7 @@ import { Wash } from '../wash';
 import { causticsOn } from '../caustics';
 import type { Growth, GrowthKind } from '../outcrop';
 import { drawGrowth, inkFloor, inkRock, inkWall, rockFoot, rockShape, rockStyle, type RockStyle } from '../outcrop-sprite';
-import { floorAt, partExt, PICTURE_KELP, REF, rockKey, rockOutline, rockX, snowAt, wallAt, WALL_STEP, WHALE_BLUR, WHALE_PITCH, whaleHull, type PlacedEvent, type PlacedJelly, type PlacedLife, type PlacedRock, type Plan, type Wall } from './layout';
+import { floorAt, mirrorKelp, partExt, PICTURE_KELP, REF, rockKey, rockOutline, rockX, snowAt, wallAt, WALL_STEP, WHALE_BLUR, WHALE_PITCH, whaleHull, type PlacedEvent, type PlacedJelly, type PlacedLife, type PlacedRock, type Plan, type Wall } from './layout';
 
 interface Caches {
   biome: Biome;
@@ -67,7 +67,7 @@ function cachesOf(plan: Plan): Caches {
       writable: true,
       value: {
         biome,
-        kelp: plan.kelp ? rollKelp(biome.key, PICTURE_KELP) : null,
+        kelp: plan.kelp ? mirrorKelp(rollKelp(biome.key, PICTURE_KELP), plan.kelp.mirror) : null,
         // Line weights and hatching judged against the page (1000 units to its short side), as for print.
         sprites: new SpriteCache(320e6, { page: 1000, print: true }),
         wash: new Wash(true),
@@ -482,13 +482,13 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number, row
   // ---- The middle: the kelp, the middle rocks, the floor, the rare things
   // in the water, the middle animals.
   for (const wl of plan.walls ?? []) if (wl.plane > 0) paintWall(ctx, plan, c, wl, D, view);
-  paintLife(ctx, plan, c, D, 'wall', inSight);
+  paintLife(ctx, plan, c, D, 'wall', inSight, view);
   if (c.kelp && plan.kelp) paintKelp(ctx, plan, c.kelp, c, D, ambient, inSight);
   for (const r of plan.rocks) if (r.plane === 1 && r.kind !== 'kelp') paintRock(ctx, plan, c, r, D, inSight, view);
   if (plan.floor) {
     const top = plan.trench ? plan.trench.top : plan.floor.y;
     if (inSight(0, top - plan.h * 0.08, plan.w, plan.h)) paintFloor(ctx, plan, c, D, view);
-    paintLife(ctx, plan, c, D, 'floor', inSight);
+    paintLife(ctx, plan, c, D, 'floor', inSight, view);
   }
   for (const e of plan.events) if (!e.far && e.kind !== 'eye') paintEvent(ctx, plan, c, e, D, ambient, inSight, view);
   paintCast(ctx, plan, c, D, ambient, 1, inSight);
@@ -2671,80 +2671,57 @@ function rayLight(plan: Plan, sun: ReturnType<typeof sunFor>): ReturnType<typeof
   return { ...sun, strength: Math.max(sun.strength, least) };
 }
 
-/** One growth or star, its foot at the origin, in device px. */
+/** One growth, its foot at the origin, in device px. */
 function drawLife(o: CanvasRenderingContext2D, g: PlacedLife, night: boolean, D: number): void {
   if (g.lean) o.rotate(g.lean);
-  if (g.kind === 'brittle') {
-    drawBrittle(o, g, night, D);
-    return;
-  }
   drawGrowth(o, { kind: g.kind, at: 0, size: g.size, hue: g.hue, seed: g.seed }, g.zone, night, D);
 }
 
-/** The wall's or the floor's life, straight onto the page (each culled to the strip in sight). */
-function paintLife(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, on: 'wall' | 'floor', inSight: InSight): void {
-  const night = plan.ground === 'night';
-  for (const g of plan.life ?? []) {
-    if (g.on !== on || !inSight(g.box.x0, g.box.y0, g.box.x1, g.box.y1, 4)) continue;
-    ctx.save();
-    // On cream, deep down, a growth is taken a little by the water, as the stone is.
-    const z = zAt(plan, g.y);
-    ctx.globalAlpha = night ? 1 : 1 - 0.25 * Math.max(0, Math.min(1, (z - 0.5) / 0.4));
-    ctx.translate(g.x * D, g.y * D);
-    drawLife(ctx, g, night, D);
-    ctx.restore();
-  }
-  void c;
-}
-
 /**
- * A brittle star lying on the floor, seen low: a small disc and five long
- * thin arms, each curling its own way, in the pen and a wash of its colour.
+ * The wall's or the floor's life, laid once into a layer of its own at the
+ * picture's scale and placed per strip (drawn strip by strip, a growth's
+ * curves are stepped differently where a strip's edge cuts them).
  */
-function drawBrittle(o: CanvasRenderingContext2D, g: PlacedLife, night: boolean, D: number): void {
-  const r = mulberry32(g.seed);
-  const R = (g.size / 2) * D;
-  const body = night ? mixHex(HUES[g.hue] ?? '#C9A88E', '#E8E0CF', 0.35) : mixHex(HUES[g.hue] ?? '#C9A88E', '#6B4A3A', 0.45);
-  const ink = night ? INK_NIGHT : INK;
-  const turn = r() * TAU;
-  o.save();
-  o.scale(1, 0.42);
-  o.lineCap = 'round';
-  o.lineJoin = 'round';
-  for (let a = 0; a < 5; a++) {
-    const ang = turn + (a / 5) * TAU + (r() - 0.5) * 0.3;
-    const curl = (r() - 0.5) * 2.4;
-    const pts: number[] = [];
-    for (let k = 0; k <= 10; k++) {
-      const t = k / 10;
-      const aa = ang + curl * t * t;
-      const d = R * (0.16 + 0.84 * t);
-      pts.push(Math.cos(aa) * d, Math.sin(aa) * d);
-    }
-    for (const [width, color, alpha] of [
-      [1.5, ink, night ? 0.5 : 0.75],
-      [0.9, body, 1],
-    ] as const) {
-      o.strokeStyle = color;
-      o.globalAlpha = alpha;
-      for (let k = 0; k < 10; k++) {
-        o.lineWidth = Math.max(0.4, width * D * (1 - k / 11) * Math.max(0.5, R / (14 * D)));
-        o.beginPath();
-        o.moveTo(pts[k * 2], pts[k * 2 + 1]);
-        o.lineTo(pts[k * 2 + 2], pts[k * 2 + 3]);
-        o.stroke();
-      }
-    }
+function paintLife(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, on: 'wall' | 'floor', inSight: InSight, view: View): void {
+  const items = (plan.life ?? []).filter((g) => g.on === on);
+  if (!items.length || typeof document === 'undefined') return;
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const g of items) {
+    x0 = Math.min(x0, g.box.x0);
+    y0 = Math.min(y0, g.box.y0);
+    x1 = Math.max(x1, g.box.x1);
+    y1 = Math.max(y1, g.box.y1);
   }
-  o.globalAlpha = 1;
-  o.fillStyle = body;
-  o.strokeStyle = ink;
-  o.lineWidth = 0.5 * D;
-  o.beginPath();
-  oval(o, 0, 0, R * 0.2, R * 0.2, 0, 0, TAU);
-  o.closePath();
-  o.fill();
-  o.globalAlpha = night ? 0.5 : 0.8;
-  o.stroke();
-  o.restore();
+  const pad = 8;
+  if (!inSight(x0, y0, x1, y1, pad)) return;
+  const key = `life|${on}|${D}`;
+  let made = c.rocks.get(key);
+  if (!made) {
+    const ox = Math.floor((x0 - pad) * D);
+    const oy = Math.floor((y0 - pad) * D);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.ceil((x1 + pad) * D) - ox);
+    canvas.height = Math.max(1, Math.ceil((y1 + pad) * D) - oy);
+    const o = canvas.getContext('2d');
+    if (!o) return;
+    const night = plan.ground === 'night';
+    o.lineCap = 'round';
+    o.lineJoin = 'round';
+    for (const g of items) {
+      o.save();
+      // On cream, deep down, a growth is taken a little by the water, as the stone is.
+      // (By night a little under the pen's full light, so the floor is a field and not a scatter of sparks.)
+      const z = zAt(plan, g.y);
+      o.globalAlpha = night ? 0.72 : 1 - 0.25 * Math.max(0, Math.min(1, (z - 0.5) / 0.4));
+      o.translate(g.x * D - ox, g.y * D - oy);
+      drawLife(o, g, night, D);
+      o.restore();
+    }
+    made = { canvas, x: ox, y: oy };
+    c.rocks.set(key, made);
+  }
+  blit(ctx, made.canvas, made.x, made.y, view);
 }
