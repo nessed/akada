@@ -1110,7 +1110,11 @@ function paintCast(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: numb
       const sprite = c.sprites.get(sp, p.len, dark, D, a.rare);
       if (!sprite) continue;
       const use: Sprite = haze ? { canvas: hazedCanvas(c, sprite.canvas, haze, FAR_MIX), w: sprite.w, h: sprite.h } : sprite;
-      const v: Visitor = { key: a.id, species: sp, layer: a.layer, x: p.x, y: p.y, len: p.len, dir: a.dir, age: 0.5, alpha: a.alpha, phase: p.phase };
+      // What lies on the ground is drawn whole: no blink of its lights (it
+      // would show the floor through it) and no bob off the ground.
+      const still = a.floor ? { ...sp, genome: { ...sp.genome, lit: false } } : sp;
+      const bob = a.floor ? Math.sin(ambient * 0.7 + p.phase) * p.len * 0.04 : 0;
+      const v: Visitor = { key: a.id, species: still, layer: a.layer, x: p.x, y: p.y - bob, len: p.len, dir: a.dir, age: 0.5, alpha: a.alpha, phase: p.phase };
       drawVisitor(ctx, use, v, D, ambient, a.alpha, a.floor ? 1 : 6);
     }
   }

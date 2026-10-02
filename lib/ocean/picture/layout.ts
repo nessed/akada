@@ -1087,10 +1087,6 @@ export function jellyHull(j: { x: number; y: number; r: number; len: number; asp
 export const HERO_R = 0.1;
 /** The largest a sibling may be, against the hero. */
 export const SIBLING_SCALE = 0.5;
-/** The largest a ghost may be, against the hero (the shoal's bells are far smaller). */
-export const GHOST_SCALE = 0.33;
-/** How far apart in depth two ghosts hang, at the least, a share of the page (two jellies: a twentieth). */
-export const GHOST_ROW = 0.035;
 
 /** How many of the hero's elders are drawn as jellies, on a tall page and a wide one; older blocks are a far shoal. */
 export const SIBLINGS_TALL = 2;
@@ -2867,7 +2863,7 @@ export const WHALE_CLEAR = 0.05;
 /** The most of the cast by the wall: its third of the page. */
 export const CAST_BY_WALL = 0.6;
 /** Where a rare jelly hangs, shares of the page's height. */
-export const RARE_BELL: [number, number] = [0.7, 0.95];
+export const RARE_BELL: [number, number] = [0.72, 0.92];
 
 /** How far the ground under a whale fall may rise and fall along it, a share of the short side: level enough that every bone rests on it. */
 export const WHALEFALL_LEVEL = 0.006;
@@ -3473,9 +3469,10 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
         ya = Math.min(ya, yb);
       }
       if (p.rare && bell) {
-        // A rare jelly glows where its glow means something: low, 0.7 to 0.95 of the page.
-        const lo = h * RARE_BELL[0] + bh / 2;
-        const hi = Math.min(h * RARE_BELL[1] - bh / 2, floorTop != null ? floorTop - bh / 2 - CLEAR : h * (1 - MARGIN) - bh / 2);
+        // A rare jelly glows where its glow means something: low, 0.72 to
+        // 0.92 of the page (over a trench, down in its cleft).
+        const lo = h * RARE_BELL[0];
+        const hi = Math.min(h * RARE_BELL[1], (e.trench ? h * (1 - MARGIN) : floorTop != null ? floorTop - CLEAR : h * (1 - MARGIN)) - bh / 2);
         ya = Math.min(lo, hi);
         yb = Math.max(ya, hi);
         ty = (ya + yb) / 2;
@@ -3579,12 +3576,15 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
   const items = (best as { items: Item[]; score: number }).items;
   // The rare things that are animals in the water, for the rows.
   const rowEvents = e.events.filter((v) => v.box && !v.far && (v.kind === 'turtle' || v.kind === 'dumbo' || v.kind === 'lure')).map((v) => ((v.box as Box).y0 + (v.box as Box).y1) / 2);
+  /** A rare jelly over a trench may hang down in its cleft; nothing else goes below the trench's lip. */
+  const deepBell = (it: Item) => e.trench != null && it.pick.rare && it.sp.genome.plan === 'bell';
+  const bottomOf = (it: Item) => (deepBell(it) ? h * (1 - MARGIN) : (floorTop ?? h * (1 - MARGIN)));
   const legal = (it: Item, others: Item[]): boolean => {
     const b = boxOf(it);
     if (boxGap(b, hero.box) < CLEAR) return false;
     if (inter(b, grow(e.winBox, 4)) > 0) return false;
     if (b.x0 < w * MARGIN - 0.5 || b.x1 > w * (1 - MARGIN) + 0.5 || b.y0 < h * MARGIN - 0.5 || b.y1 > h * (1 - MARGIN) + 0.5) return false;
-    if (floorTop != null && b.y1 > floorTop) return false;
+    if (floorTop != null && b.y1 > floorTop && !deepBell(it)) return false;
     // Clear of the ground by 0.02 S, as of everything else.
     if (b.y1 > groundUnder(b) - CLEAR) return false;
     if (it.layer > 0 && whales.some((q) => inter(b, q) > 0)) return false;
@@ -3635,8 +3635,8 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       // (Past eighty tries, a little further from the depth it was met at, as the calm water needs.)
       const give = !it.pick.rare && t >= 80 ? h * 0.15 : 0;
       const lo = Math.max(Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2, it.ya - give);
-      const hi = Math.min((floorTop ?? h * (1 - MARGIN)) - it.bh / 2, it.yb + give);
-      it.y = clamp(y0 + gauss(fr) * h * 0.04 * spread * (give ? 3 : 1), loose ? Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2 : lo, loose ? (floorTop ?? h * (1 - MARGIN)) - it.bh / 2 : hi);
+      const hi = Math.min(bottomOf(it) - it.bh / 2, it.yb + give);
+      it.y = clamp(y0 + gauss(fr) * h * 0.04 * spread * (give ? 3 : 1), loose ? Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2 : lo, loose ? bottomOf(it) - it.bh / 2 : hi);
       ok = legal(it, kept);
     }
     if (!ok && it.pick.rare) {
@@ -3648,7 +3648,8 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
           it.x = clampX(w * (a / 40), it, w);
           // (A rare jelly as low as it can be, if not where it should.)
           const bellLow = it.sp.genome.plan === 'bell';
-          it.y = clamp(h * (b / 60), bellLow ? Math.max(Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2, it.ya - h * 0.3) : Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2, bellLow ? it.yb : (floorTop ?? h * (1 - MARGIN)) - it.bh / 2);
+          // (A rare jelly no higher than a little over its band: high in the water its glow means nothing.)
+          it.y = clamp(h * (b / 60), bellLow ? Math.max(Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2, it.ya - h * 0.04) : Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2, bellLow ? it.yb : bottomOf(it) - it.bh / 2);
           const d = (bellLow ? (3 * Math.max(0, it.ya - it.y)) / h : Math.abs(it.y - it.ty) / h) + (Math.abs(it.x - x0) / w) * 0.3;
           if ((!best || d < best.d) && legal(it, kept)) best = { x: it.x, y: it.y, d };
         }
@@ -4381,7 +4382,8 @@ function placeLife(e: LifeEnv): { life: PlacedLife[]; edge: number } {
     // floor's face in front of its line, a few on the line itself: a colony,
     // never a fence along the crest. Each a little taller or shorter than
     // the next (four tenths either way).
-    const want = Math.max(2, Math.round((t ? w - t.gap : w) / sp));
+    // (After hours more of them, a second row's worth on the face.)
+    const want = Math.max(2, Math.round(((t ? w - t.gap : w) / sp) * (1 + 0.6 * front)));
     const share = FLOOR_FACE[0] + (FLOOR_FACE[1] - FLOOR_FACE[0]) * front;
     for (let guard = 0, made = 0; made < want && guard < want * 5; guard++) {
       const cx = w * 0.02 + r() * w * 0.96;

@@ -11,7 +11,7 @@ import type { Env } from './biome';
 import type { Depth } from './depth';
 import { KELP_ROCK, kelpDescent, kelpInView, type Kelp, type KelpLedge, type KelpStalk } from './kelp';
 import { IRON_GALL, kelpInk, type KelpInk, type Water } from './palette';
-import { contourHatch, detailFor, grain, hatch, inkLine, LIGHT, mottle, shadeAcross, smooth, smoothPath, stipple, washFill } from './pen';
+import { contourHatch, detailFor, hatch, inkLine, LIGHT, shadeAcross, smooth, smoothPath, stipple, washFill } from './pen';
 import { hash32, mulberry32 } from './random';
 import type { Visitor } from './schedule';
 import type { Sprite } from './sprites';
@@ -957,28 +957,30 @@ function envelope(age: number, rise: number, fall: number): number {
  * A whale's outline, side on, head at +x, in shares of its length about its
  * middle: a rorqual's long body, the head tapering flat to the snout, the
  * throat full under it, a small low dorsal hump two thirds of the way back,
- * the tail stock narrowing to the flukes, and a long pectoral flipper hanging
- * back from under the chest. The flukes are level, as a whale's are, so
- * from the side they are seen all but edge-on: a thin blade flaring back
- * off the stock, its tips lifted a little, no thicker than a twelfth of the
- * body's depth. Never a shark's upright fork.
+ * the tail stock narrowing to a deep, keeled peduncle (a quarter of the
+ * body's depth where the flukes leave it, so that blurred it still reads as
+ * a tail, never a needle), and a long pectoral flipper hanging back from
+ * under the chest. The flukes are level, as a whale's are, so from the side
+ * they are seen all but edge-on: a wedge flaring back off the peduncle, its
+ * tips lifted a little, a quarter of the body's depth across at the
+ * trailing edge, with a slight notch between the lobes. Never a shark's
+ * upright fork.
  */
 const WHALE_BODY: number[] = [
   // The snout, and the flat head rising from it.
   0.5, 0.014, 0.488, -0.002, 0.455, -0.017, 0.4, -0.033, 0.33, -0.05, 0.24, -0.063, 0.12, -0.071, 0.0, -0.07, -0.08, -0.064, -0.13, -0.058,
   // The dorsal fin: a small low hump, hooked back.
   -0.15, -0.063, -0.163, -0.068, -0.171, -0.067, -0.18, -0.057, -0.2, -0.051,
-  // The tail stock, deep and keeled, narrowing hard to the flukes' root.
-  -0.25, -0.047, -0.3, -0.04, -0.36, -0.031, -0.41, -0.021, -0.44, -0.013, -0.458, -0.0072, -0.468, -0.0056,
-  // The flukes edge-on: the upper edge out to the tips, lifted a little,
-  // flaring from the root's narrow to twice it.
-  -0.488, -0.0078, -0.51, -0.0105, -0.532, -0.0135, -0.552, -0.0162,
+  // The tail stock, deep and keeled, narrowing to the peduncle.
+  -0.25, -0.047, -0.3, -0.041, -0.36, -0.034, -0.41, -0.027, -0.44, -0.0225, -0.458, -0.0195, -0.47, -0.018,
+  // The flukes edge-on: the upper edge out to the tips, lifted a little.
+  -0.49, -0.0195, -0.515, -0.0225, -0.537, -0.0265, -0.553, -0.0295,
   // The trailing edge, with the notch between the lobes.
-  -0.557, -0.0132, -0.55, -0.0094, -0.555, -0.0054,
+  -0.557, -0.024, -0.549, -0.012, -0.544, -0.0045, -0.552, 0.003, -0.556, 0.0085,
   // The lower edge back to the root.
-  -0.534, -0.0036, -0.51, -0.0012, -0.488, 0.0006, -0.468, 0.0012,
+  -0.54, 0.0115, -0.515, 0.0135, -0.49, 0.0155, -0.47, 0.017,
   // The stock's keel, and the belly forward to the throat and the jaw.
-  -0.456, 0.0042, -0.44, 0.0095, -0.41, 0.017, -0.36, 0.026, -0.3, 0.035, -0.25, 0.044, -0.2, 0.053, -0.08, 0.068, 0.05, 0.078, 0.17, 0.081, 0.28, 0.074, 0.37, 0.058, 0.44, 0.039, 0.485, 0.025,
+  -0.456, 0.019, -0.44, 0.0215, -0.41, 0.025, -0.36, 0.03, -0.3, 0.037, -0.25, 0.044, -0.2, 0.053, -0.08, 0.068, 0.05, 0.078, 0.17, 0.081, 0.28, 0.074, 0.37, 0.058, 0.44, 0.039, 0.485, 0.025,
 ];
 const WHALE_FLIPPER: number[] = [
   0.29, 0.05, 0.262, 0.096, 0.21, 0.148, 0.14, 0.194, 0.088, 0.22, 0.072, 0.214, 0.112, 0.176, 0.162, 0.13, 0.186, 0.094, 0.18, 0.058,
@@ -1194,7 +1196,7 @@ const EYE_LIVE = 0.0375;
  * shade under the night water, so it is known there by its lines. `near`
  * is the wash's strength at the head's contour, `far` at the page's edge.
  */
-const SQUID_WASH = { paper: { rgb: '42, 28, 21', near: 0.09, far: 0.18 }, deep: { rgb: '42, 28, 21', near: 0.2, far: 0.3 }, night: { rgb: '5, 4, 3', near: 0.14, far: 0.34 } } as const;
+const SQUID_WASH = { paper: { rgb: '42, 28, 21', near: 0.09, far: 0.18 }, deep: { rgb: '42, 28, 21', near: 0.17, far: 0.28 }, night: { rgb: '5, 4, 3', near: 0.14, far: 0.34 } } as const;
 /**
  * Its chromatophores: sacs of red-brown pigment, never a solid fill. In the
  * dark only their darkness is left (chroma under 10), never a red.
@@ -1225,6 +1227,8 @@ interface EyeLayers {
   key: string;
   skin: EyeLayer | null;
   ball: EyeLayer | null;
+  /** What is still to be drawn of the skin, on a screen a few steps a frame; it is placed once there is none. */
+  pending: (() => void)[];
 }
 
 let eyeLayers: EyeLayers[] = [];
@@ -1328,13 +1332,13 @@ function windingOf(p: number[]): number {
 }
 
 /** A closed path through points, wound the way `wind` asks, so that shapes added together fill as one. */
-function woundPath(p: number[], wind: number, into = new Path2D()): Path2D {
+function woundPath(p: number[], wind: number, into = new Path2D(), steps = 4): Path2D {
   const s = windingOf(p) === wind ? p : (() => {
     const r: number[] = [];
     for (let i = p.length - 2; i >= 0; i -= 2) r.push(p[i], p[i + 1]);
     return r;
   })();
-  const sm = smooth(s, true, 4);
+  const sm = steps > 1 ? smooth(s, true, steps) : s;
   into.moveTo(sm[0], sm[1]);
   for (let i = 2; i < sm.length; i += 2) into.lineTo(sm[i], sm[i + 1]);
   into.closePath();
@@ -1353,26 +1357,32 @@ function outside(p: Path2D): Path2D {
  * The squid round the eye, drawn once a size and placed: the head and the
  * arm bases of an animal far bigger than the page, coming in at its edge.
  *
- * - The skin one thin wash, clipped to the body: darker toward the page's
- *   edge where the body goes on, a little uneven, grain in it.
+ * - The skin one thin wash over the whole body, laid once: darker toward
+ *   the page's edge where the body goes on, a soft darker cloud on the back.
  * - Engraved: the turn of the head in three lines inside its contour and
- *   along it; ruled hatching, crossed nearest the edge, on the side going
- *   away; each arm in lines along it on its shadowed side.
- * - The mantle's collar a line across the body behind the eye, its edge
- *   lifted a little off the head.
+ *   along it; ruled hatching in the shadow's own dark, crossed nearest the
+ *   edge, on the side going away; each arm in lines along it on its
+ *   shadowed side.
+ * - The mantle's collar a short line in from the contour behind the eye,
+ *   its edge lifted a little off the head.
  * - The eye's socket a shade darker, with the lid folds round it in
- *   tapering arcs, two over and two under.
+ *   tapering arcs, two over and two under, drawn out toward the animal's
+ *   front to a corner (the sinus) and rounded toward its back.
  * - The front arm's suckers along its inner edge, smaller toward the tip.
  * - Chromatophores, half opened into ragged stars and half closed to dots,
  *   crowded on the back and toward the edge, thinning toward the contour
  *   and down the arms: rust on paper, grey-brown at night.
  * - One ink contour, mantle to arm tip, swelling on its shadowed side.
  *
- * The arms are let go along the way they reach (ARM_FADE), over two eye
- * radii; nothing else is faded, and nothing is clipped to a box: the page's
- * edge is the one straight edge it has.
+ * The mantle is let go up its length and the arms down theirs (MANTLE_FADE,
+ * ARM_FADE), each over two eye radii; nothing is clipped to a box: the
+ * page's edge is the one straight edge it has.
+ *
+ * Returned as steps, the last of which lays it all on `ctx`: on a screen
+ * they are taken a few a frame (`staged`, each finished off as it is made),
+ * so the eye's arrival is never one long frame.
  */
-function paintSquid(ctx: CanvasRenderingContext2D, re: number, seed: number, px: number, dark: boolean, out: number, rust = !dark): void {
+function squidSteps(ctx: CanvasRenderingContext2D, re: number, seed: number, px: number, dark: boolean, out: number, rust: boolean, staged: boolean): (() => void)[] {
   const r = mulberry32(hash32('squid-eye', seed, 'skin'));
   const E = EYE_HULL.edge;
   const ink = dark ? IRON_GALL.dark : IRON_GALL.light;
@@ -1394,9 +1404,10 @@ function paintSquid(ctx: CanvasRenderingContext2D, re: number, seed: number, px:
   const arms = S.arms.map((a) => ({ outer: map(a.outer), inner: map(a.inner), poly: map(a.poly) }));
   const wind = windingOf(head);
   const headPath = woundPath(head, wind);
-  const armPaths = arms.map((a) => woundPath(a.poly, wind));
+  // (The arms are sampled finely enough as they are.)
+  const armPaths = arms.map((a) => woundPath(a.poly, wind, new Path2D(), 1));
   const body = woundPath(head, wind);
-  for (const a of arms) woundPath(a.poly, wind, body);
+  for (const a of arms) woundPath(a.poly, wind, body, 1);
   // How far a point is toward the page's edge: 0 at the head's contour, 1 at the edge.
   // The contour's reach into the page down the head, looked up by v.
   const lut = new Float32Array(65);
@@ -1424,7 +1435,9 @@ function paintSquid(ctx: CanvasRenderingContext2D, re: number, seed: number, px:
   const fine = Math.max(0.4, re * 0.016);
 
   const sheet = scratch(box.w, box.h);
-  const sg = sheet?.getContext('2d') ?? null;
+  // Built a step a frame on a screen, so kept where it can be finished off
+  // (rasterised) at the end of each, a few milliseconds at a time.
+  const sg = sheet?.getContext('2d', { willReadFrequently: staged }) ?? null;
   const g = sg ?? ctx;
   g.save();
   if (sg) {
@@ -1433,292 +1446,307 @@ function paintSquid(ctx: CanvasRenderingContext2D, re: number, seed: number, px:
     sg.lineJoin = 'round';
   }
 
-  // The wash: the body once (its parts are wound alike, so where they
-  // overlap it is still laid once), thickening toward the edge.
-  const strength = g.createLinearGradient(X(2.6), 0, X(-E), 0);
-  strength.addColorStop(0, `rgba(${wash.rgb}, ${wash.near})`);
-  strength.addColorStop(0.55, `rgba(${wash.rgb}, ${(wash.near + wash.far) / 2})`);
-  strength.addColorStop(1, `rgba(${wash.rgb}, ${wash.far})`);
-  g.fillStyle = strength;
-  g.fill(body);
-  // A little uneven, as skin is, and the paper's tooth in it.
-  mottle(g, body, box, dark ? '#000000' : '#24170F', dark ? '#4A443B' : '#B79C86', dark ? 0.04 : 0.05, seed ^ 0x3077);
-  const gr = grain(g);
-  if (gr) {
-    gr.setTransform?.(new DOMMatrix([Math.max(px, re / 30), 0, 0, Math.max(px, re / 30), 0, 0]));
-    g.save();
-    g.globalAlpha = dark ? 0.08 : 0.12;
-    g.fillStyle = gr;
-    g.clip(body);
-    g.fillRect(box.x, box.y, box.w, box.h);
-    g.restore();
-  }
-  g.globalAlpha = 1;
-
-  // The socket a shade darker round the ball: soft, with no edge to it.
   const deep = dark ? '#050403' : '#2A1C16';
-  const sock = g.createRadialGradient(0, 0, re * 0.96, 0, 0, re * 1.75);
-  sock.addColorStop(0, `${deep}`);
-  sock.addColorStop(1, `${deep}00`);
-  g.globalAlpha = dark ? 0.14 : 0.14;
-  g.fillStyle = sock;
-  g.fillRect(-re * 1.8, -re * 1.8, re * 3.6, re * 3.6);
-  g.globalAlpha = 1;
-
-  // Ruled hatching on the side going away, toward the edge, crossed nearest
-  // it; none in the socket. Along the body's length, mantle to arms.
   const d = detailFor(re * 6);
-  const along = Math.atan2(0.9, -out * 0.45);
-  g.save();
-  g.clip(body);
-  const socket = new Path2D();
-  socket.arc(0, 0, re * 1.7, 0, Math.PI * 2);
-  g.clip(outside(socket), 'evenodd');
-  hatch(g, body, box, {
-    spacing: Math.max(1.6, re * 0.11),
-    angle: along,
-    bow: 0.8,
-    shade: (x, y) => 0.25 + 0.75 * toEdge(x, y),
-    from: 0.58,
-    cross: d > 0.1 ? 0.88 : undefined,
-    // In the shadow's own dark, whatever the water: on dark water a pale
-    // line here would lighten the side that goes away.
-    color: deep,
-    width: fine * 1.3,
-    // As light where the spacing has hit its floor, so a small one is no darker.
-    alpha: (dark ? 0.34 : 0.3) * Math.min(1, (re * 0.11) / 1.6),
-    seed: seed ^ 0x5a7,
-  });
-  g.restore();
+  const steps: (() => void)[] = [];
+  steps.push(() => {
+    // The wash: the body once (its parts are wound alike, so where they
+    // overlap it is still laid once), thickening toward the edge.
+    const strength = g.createLinearGradient(X(2.6), 0, X(-E), 0);
+    strength.addColorStop(0, `rgba(${wash.rgb}, ${wash.near})`);
+    strength.addColorStop(0.55, `rgba(${wash.rgb}, ${(wash.near + wash.far) / 2})`);
+    strength.addColorStop(1, `rgba(${wash.rgb}, ${wash.far})`);
+    g.fillStyle = strength;
+    g.fill(body);
+    // A little uneven, as skin is: a soft darker cloud on the back.
+    const cloud = g.createRadialGradient(X(-0.6), Y(-2.6), re * 0.4, X(-0.6), Y(-2.6), re * 3.4);
+    cloud.addColorStop(0, `rgba(${wash.rgb}, ${dark ? 0.1 : 0.08})`);
+    cloud.addColorStop(1, `rgba(${wash.rgb}, 0)`);
+    g.fillStyle = cloud;
+    g.fill(body);
 
-  // The turn of the head: three lines inside its contour and along it, each
-  // over its own stretch, fainter the further in.
-  const fq = mulberry32(hash32('squid-folds', seed));
-  const prof = smooth(S.profile, false, 4);
-  [0.26, 0.58, 0.95].forEach((o, k) => {
-    const v0 = -3.7 + k * 0.4 + fq() * 0.5;
-    const v1 = 1.3 - k * 0.35 - fq() * 0.4;
-    const run: number[] = [];
-    for (let i = 2; i < prof.length - 2; i += 2) {
-      const v = prof[i + 1];
-      if (v < v0 || v > v1) continue;
-      const tl = Math.hypot(prof[i + 2] - prof[i - 2], prof[i + 3] - prof[i - 1]) || 1;
-      // In from the contour, square to it.
-      let nu = (prof[i + 3] - prof[i - 1]) / tl;
-      let nv = -(prof[i + 2] - prof[i - 2]) / tl;
-      if (nu > 0) {
-        nu = -nu;
-        nv = -nv;
-      }
-      const oo = o * (1 + (fq() - 0.5) * 0.04);
-      run.push(X(prof[i] + nu * oo), Y(v + nv * oo));
-    }
-    if (run.length >= 6) inkLine(g, run, false, { width: fine * (1.3 - k * 0.2), color: ink, alpha: (dark ? 0.3 : 0.45) * (1 - k * 0.22), taper: [0.3, 0.3], seed: seed ^ (0x7a0 + k), light, plate: true, min: 0.3, raw: true });
+    // The socket a shade darker round the ball: soft, with no edge to it.
+    const sock = g.createRadialGradient(0, 0, re * 0.96, 0, 0, re * 1.75);
+    sock.addColorStop(0, `${deep}`);
+    sock.addColorStop(1, `${deep}00`);
+    g.globalAlpha = dark ? 0.14 : 0.14;
+    g.fillStyle = sock;
+    g.fillRect(-re * 1.8, -re * 1.8, re * 3.6, re * 3.6);
+    g.globalAlpha = 1;
   });
-
-  // The arms, back to front: each shaded along its length on its shadowed
-  // side, its edges inked where nothing in front of it hides them.
-  arms.forEach((a, i) => {
-    const ahead = armPaths.slice(i + 1);
+  steps.push(() => {
+    // Ruled hatching on the side going away, toward the edge, crossed nearest
+    // it; none in the socket. Along the body's length, mantle to arms.
+    const along = Math.atan2(0.9, -out * 0.45);
     g.save();
-    for (const p of ahead) g.clip(outside(p), 'evenodd');
-    if (re * 0.08 >= 1.2) {
-      contourHatch(g, armPaths[i], [{ a: a.outer, b: a.inner }], {
-        spacing: Math.max(1.3, re * 0.085),
-        shade: () => 0.7,
-        reach: 0.5,
-        width: fine * 1.4,
-        color: ink,
-        alpha: dark ? 0.3 : 0.4,
-        seed: seed ^ (0xa40 + i),
-        light,
-      });
-    }
-    g.clip(outside(headPath), 'evenodd');
-    const edgeAlpha = dark ? 0.4 : 0.66;
-    if (i < arms.length - 1) inkLine(g, a.outer, false, { width: lineW * 0.75, color: ink, alpha: edgeAlpha, taper: [0.05, 0.4], seed: seed ^ (0xa50 + i), light, plate: true, min: 0.3 });
-    inkLine(g, a.inner, false, { width: lineW * 0.7, color: ink, alpha: edgeAlpha, taper: [0.05, 0.4], seed: seed ^ (0xa60 + i), light, plate: true, min: 0.3 });
+    const socket = new Path2D();
+    socket.arc(0, 0, re * 1.7, 0, Math.PI * 2);
+    g.clip(outside(socket), 'evenodd');
+    // (Only the edge's side of the body ever passes the shade it starts at.)
+    const hbox = { x: Math.min(X(-E - 0.05), X(0.75)), y: box.y, w: (E + 0.8) * re, h: box.h };
+    hatch(g, body, hbox, {
+      spacing: Math.max(1.6, re * 0.125),
+      angle: along,
+      bow: 0.8,
+      shade: (x, y) => 0.25 + 0.75 * toEdge(x, y),
+      from: 0.58,
+      cross: d > 0.1 ? 0.88 : undefined,
+      // In the shadow's own dark, whatever the water: on dark water a pale
+      // line here would lighten the side that goes away.
+      color: deep,
+      width: fine * 1.3,
+      // As light where the spacing has hit its floor, so a small one is no darker.
+      alpha: (dark ? 0.36 : 0.32) * Math.min(1, (re * 0.125) / 1.6),
+      seed: seed ^ 0x5a7,
+    });
     g.restore();
   });
-  // The crown the arms come out of, showing between them.
-  g.save();
-  for (const p of armPaths) g.clip(outside(p), 'evenodd');
-  inkLine(g, map(S.crown), false, { width: lineW * 0.6, color: ink, alpha: dark ? 0.32 : 0.5, taper: [0.1, 0.1], seed: seed ^ 0xc70, light, plate: true, min: 0.3 });
-  g.restore();
-
-  // The front arm's suckers, cups along its inner edge, smaller to the tip.
-  const A = arms[arms.length - 1];
-  const SA = S.arms[S.arms.length - 1];
-  if (re * 0.11 >= 0.8) {
-    const cups = new Path2D();
-    const rims = new Path2D();
-    const n = SA.inner.length / 2;
-    let along0 = 0;
-    for (let k = 1; k < n; k++) {
-      const t = k / (n - 1);
-      along0 += Math.hypot(SA.inner[k * 2] - SA.inner[k * 2 - 2], SA.inner[k * 2 + 1] - SA.inner[k * 2 - 1]);
-      const rad = (0.13 - 0.075 * t) * re;
-      if (t < 0.16 || t > 0.86 || along0 < 0.3) continue;
-      along0 = 0;
-      // Out past the edge a little, away from the arm.
-      const nx = A.inner[k * 2] - A.outer[k * 2];
-      const ny = A.inner[k * 2 + 1] - A.outer[k * 2 + 1];
-      const nd = Math.hypot(nx, ny) || 1;
-      const cx = A.inner[k * 2] + (nx / nd) * rad * 0.15;
-      const cy = A.inner[k * 2 + 1] + (ny / nd) * rad * 0.15;
-      cups.moveTo(cx + rad, cy);
-      cups.ellipse(cx, cy, rad, rad * 0.8, Math.atan2(ny, nx), 0, Math.PI * 2);
-      rims.moveTo(cx + rad * 0.45, cy);
-      rims.arc(cx, cy, rad * 0.45, 0, Math.PI * 2);
-    }
-    g.globalAlpha = dark ? 0.32 : 0.55;
-    g.fillStyle = dark ? '#3A362F' : '#B7A08C';
-    g.fill(cups);
-    g.globalAlpha = dark ? 0.45 : 0.7;
-    g.strokeStyle = ink;
-    g.lineWidth = Math.max(0.35, re * 0.012);
-    g.stroke(cups);
-    g.globalAlpha = dark ? 0.3 : 0.45;
-    g.fillStyle = dark ? '#0A0908' : '#3A2A22';
-    g.fill(rims);
-    g.globalAlpha = 1;
-  }
-
-  // Chromatophores. Their spacing follows a slow field, crowding on the
-  // back (up, and toward the edge) and thinning toward the contour and
-  // down the arms; none in the socket.
-  const cols = rust ? CHROMATOPHORES.light : CHROMATOPHORES.dark;
-  const alphas = [0.38, 0.45, 0.52];
-  const dots = cols.map(() => new Path2D());
-  const cores = new Path2D();
-  const q0 = mulberry32(hash32('squid-skin', seed, 0));
-  const ph = [q0() * 6.28, q0() * 6.28, q0() * 6.28];
-  const crowd = (x: number, y: number) => 0.5 + 0.3 * Math.sin(x / (re * 0.8) + ph[1]) * Math.sin(y / (re * 0.7) + ph[2]) + 0.2 * Math.sin((x - y) / (re * 0.45) + ph[0]);
-  const gap = Math.max(1.3, re * 0.095);
-  const unit = Math.max(0.45, re / 22);
-  const gauss = () => Math.sqrt(-2 * Math.log(1 - r() * 0.999)) * Math.cos(6.2832 * r());
-  for (let y = box.y; y < box.y + box.h; y += gap) {
-    for (let x = box.x; x < box.x + box.w; x += gap) {
-      const dx = x + (r() - 0.5) * gap * 1.1;
-      const dy = y + (r() - 0.5) * gap * 1.1;
-      const g0 = gauss();
-      const roll = r();
-      const open = r() < 0.5;
-      const pick = Math.floor(r() * cols.length);
-      const spin = r() * 6.28;
-      if (Math.hypot(dx, dy) < re * 1.65) continue;
-      const v = dy / re;
-      // Out in the water past the contour: nothing to lay.
-      if (U(dx) > contourU(v) + 0.9) continue;
-      // The back: up the mantle, and toward the edge; fewer down the arms.
-      const backness = Math.max(0, Math.min(1, 0.6 - v / 8)) * (v > 1.9 ? 0.5 : 1);
-      const keep = (0.12 + 0.88 * backness) * (0.3 + 0.7 * toEdge(dx, dy)) * Math.max(0, 0.85 * crowd(dx, dy) - 0.02);
-      if (roll > keep) continue;
-      const dd = Math.max(1.6, Math.min(4.5, 2.8 * Math.exp(0.32 * g0))) * unit;
-      const p = dots[pick];
-      if (!open) {
-        p.moveTo(dx + dd / 2, dy);
-        p.ellipse(dx, dy, dd / 2, dd * 0.42, spin, 0, Math.PI * 2);
-        continue;
+  steps.push(() => {
+    // The turn of the head: three lines inside its contour and along it, each
+    // over its own stretch, fainter the further in.
+    const fq = mulberry32(hash32('squid-folds', seed));
+    const prof = smooth(S.profile, false, 4);
+    [0.26, 0.58, 0.95].forEach((o, k) => {
+      const v0 = -3.7 + k * 0.4 + fq() * 0.5;
+      const v1 = 1.3 - k * 0.35 - fq() * 0.4;
+      const run: number[] = [];
+      for (let i = 2; i < prof.length - 2; i += 2) {
+        const v = prof[i + 1];
+        if (v < v0 || v > v1) continue;
+        const tl = Math.hypot(prof[i + 2] - prof[i - 2], prof[i + 3] - prof[i - 1]) || 1;
+        // In from the contour, square to it.
+        let nu = (prof[i + 3] - prof[i - 1]) / tl;
+        let nv = -(prof[i + 2] - prof[i - 2]) / tl;
+        if (nu > 0) {
+          nu = -nu;
+          nv = -nv;
+        }
+        const oo = o * (1 + (fq() - 0.5) * 0.04);
+        run.push(X(prof[i] + nu * oo), Y(v + nv * oo));
       }
-      // Opened: pigment spread from the sac in a ragged, uneven blot, a few
-      // of its arms reaching further than the rest.
-      const R = dd * 0.9;
-      const n = 7 + Math.floor(r() * 4);
-      const blot: number[] = [];
-      for (let i = 0; i < n; i++) {
-        const t = spin + ((i + (r() - 0.5) * 0.6) / n) * Math.PI * 2;
-        const reach = r();
-        const rr = R * (0.45 + 0.35 * reach + (reach > 0.8 ? 0.35 : 0));
-        blot.push(dx + Math.cos(t) * rr, dy + Math.sin(t) * rr);
-      }
-      p.addPath(smoothPath(blot, true, 4));
-      cores.moveTo(dx + dd * 0.22, dy);
-      cores.arc(dx, dy, dd * 0.22, 0, Math.PI * 2);
-    }
-  }
-  g.save();
-  g.clip(body);
-  dots.forEach((p, i) => {
-    g.globalAlpha = alphas[i] * (rust && dark ? 0.85 : 1);
-    g.fillStyle = cols[i];
-    g.fill(p);
+      if (run.length >= 6) inkLine(g, run, false, { width: fine * (1.3 - k * 0.2), color: ink, alpha: (dark ? 0.3 : 0.45) * (1 - k * 0.22), taper: [0.3, 0.3], seed: seed ^ (0x7a0 + k), light, plate: true, min: 0.3, raw: true });
+    });
   });
-  g.globalAlpha = 0.4;
-  g.fillStyle = mixHex(cols[0], '#140E0B', 0.4);
-  g.fill(cores);
-  g.restore();
-  g.globalAlpha = 1;
-
-  // The collar: the mantle's free edge, lifted a little off the head, with
-  // the shade it throws on the head side of it.
-  const collar = map(S.collar);
-  g.save();
-  g.clip(body);
-  g.translate(X(0.08) - X(0), Y(0.14));
-  inkLine(g, collar, false, { width: lineW * 2.4, color: deep, alpha: dark ? 0.25 : 0.18, taper: [0.05, 0.7], seed: seed ^ 0xc01 });
-  g.restore();
-  g.save();
-  g.clip(body);
-  inkLine(g, collar, false, { width: lineW * 0.85, color: ink, alpha: dark ? 0.42 : 0.66, taper: [0.02, 0.6], seed: seed ^ 0xc02, light, plate: true, min: 0.3 });
-  g.restore();
-
-  // The lid folds: tapering arcs round the eye, two over and two under,
-  // the inner ones the stronger.
-  const fold = (rad: number, a0: number, a1: number, wd: number, alpha: number, salt: number) => {
-    const pts: number[] = [];
-    for (let i = 0; i <= 16; i++) {
-      const a = a0 + ((a1 - a0) * i) / 16;
-      const k = 1 + 0.05 * Math.sin(i * 0.9 + salt);
-      pts.push(Math.cos(a) * rad * re * k, Math.sin(a) * rad * re * 0.94 * k - re * 0.04);
-    }
-    inkLine(g, pts, false, { width: wd, color: ink, alpha, taper: [0.35, 0.35], seed: seed ^ salt, light, plate: true, min: 0.3 });
-  };
-  const lidA = dark ? 0.45 : 0.72;
-  // Toward the page and the arms (the animal's front) the folds draw out
-  // to a corner, the sinus; toward its back they round off.
-  const arc = (a: number) => (out > 0 ? Math.PI - a : a);
-  fold(1.24, arc(Math.PI + 0.2), arc(Math.PI * 2 - 0.35), lineW * 0.9, lidA, 0x1f1);
-  fold(1.52, arc(Math.PI + 0.55), arc(Math.PI * 2 - 0.15), lineW * 0.6, lidA * 0.6, 0x1f2);
-  fold(1.17, arc(0.3), arc(Math.PI - 0.55), lineW * 0.7, lidA * 0.75, 0x1f3);
-  fold(1.42, arc(0.2), arc(Math.PI - 1.1), lineW * 0.5, lidA * 0.45, 0x1f4);
-  // The sinus: a short crease out from the folds' front corner.
-  const sx = -out;
-  inkLine(g, [sx * re * 1.22, re * 0.12, sx * re * 1.48, re * 0.3, sx * re * 1.7, re * 0.42], false, { width: lineW * 0.6, color: ink, alpha: lidA * 0.6, taper: [0.2, 0.5], seed: seed ^ 0x1f6, light, plate: true, min: 0.3 });
-  // A paler ridge just inside the upper fold, where it stands off the ball.
-  if (!dark) {
-    const ridge: number[] = [];
-    for (let i = 0; i <= 12; i++) {
-      const a = Math.PI + 0.45 + ((Math.PI - 0.9) * i) / 12;
-      ridge.push(Math.cos(a) * re * 1.13, Math.sin(a) * re * 1.07 - re * 0.04);
-    }
-    inkLine(g, ridge, false, { width: lineW * 0.9, color: '#EFE6D3', alpha: 0.22, taper: [0.4, 0.4], seed: seed ^ 0x1f5 });
-  }
-
-  // The contour: one line, mantle to the front arm's tip, swelling on its
-  // shadowed side.
-  inkLine(g, map(S.contour), false, { width: lineW, color: ink, alpha: dark ? 0.5 : 0.8, taper: [0, 0.35], seed: seed ^ 0xf1a, light, plate: true, min: 0.35 });
-  g.restore();
-
-  if (sheet && sg) {
-    // The mantle let go up its length and the arms down theirs, eased,
-    // each over two radii: never a straight cut but the page's edge.
-    sg.setTransform(1, 0, 0, 1, 0, 0);
-    sg.globalCompositeOperation = 'destination-in';
-    for (const [[a0, a1], [wu, wv]] of [[MANTLE_FADE, MANTLE_WAY], [ARM_FADE, ARM_WAY]] as const) {
-      const fx = (k: number) => X(wu * k) - box.x;
-      const fy = (k: number) => Y(wv * k) - box.y;
-      const fade = sg.createLinearGradient(fx(a0), fy(a0), fx(a1), fy(a1));
-      for (let k = 0; k <= 8; k++) {
-        const t = k / 8;
-        fade.addColorStop(t, `rgba(0,0,0,${(1 - t * t * (3 - 2 * t)).toFixed(3)})`);
+  steps.push(() => {
+    // The arms, back to front: each shaded along its length on its shadowed
+    // side, its edges inked where nothing in front of it hides them.
+    arms.forEach((a, i) => {
+      const ahead = armPaths.slice(i + 1);
+      g.save();
+      for (const p of ahead) g.clip(outside(p), 'evenodd');
+      if (i > 0 && re * 0.08 >= 1.2) {
+        contourHatch(g, armPaths[i], [{ a: a.outer, b: a.inner }], {
+          spacing: Math.max(1.3, re * 0.085),
+          shade: () => 0.7,
+          reach: 0.5,
+          width: fine * 1.4,
+          color: ink,
+          alpha: dark ? 0.3 : 0.4,
+          seed: seed ^ (0xa40 + i),
+          light,
+        });
       }
-      sg.fillStyle = fade;
-      sg.fillRect(0, 0, box.w, box.h);
+      g.clip(outside(headPath), 'evenodd');
+      const edgeAlpha = dark ? 0.4 : 0.66;
+      if (i < arms.length - 1) inkLine(g, a.outer, false, { width: lineW * 0.75, color: ink, alpha: edgeAlpha, taper: [0.05, 0.4], seed: seed ^ (0xa50 + i), light, plate: true, min: 0.3 });
+      inkLine(g, a.inner, false, { width: lineW * 0.7, color: ink, alpha: edgeAlpha, taper: [0.05, 0.4], seed: seed ^ (0xa60 + i), light, plate: true, min: 0.3 });
+      g.restore();
+    });
+  });
+  steps.push(() => {
+    // The crown the arms come out of, showing between them.
+    g.save();
+    for (const p of armPaths) g.clip(outside(p), 'evenodd');
+    inkLine(g, map(S.crown), false, { width: lineW * 0.6, color: ink, alpha: dark ? 0.32 : 0.5, taper: [0.1, 0.1], seed: seed ^ 0xc70, light, plate: true, min: 0.3 });
+    g.restore();
+
+    // The front arm's suckers, cups along its inner edge, smaller to the tip.
+    const A = arms[arms.length - 1];
+    const SA = S.arms[S.arms.length - 1];
+    if (re * 0.11 >= 0.8) {
+      const cups = new Path2D();
+      const rims = new Path2D();
+      const n = SA.inner.length / 2;
+      let along0 = 0;
+      for (let k = 1; k < n; k++) {
+        const t = k / (n - 1);
+        along0 += Math.hypot(SA.inner[k * 2] - SA.inner[k * 2 - 2], SA.inner[k * 2 + 1] - SA.inner[k * 2 - 1]);
+        const rad = (0.13 - 0.075 * t) * re;
+        if (t < 0.16 || t > 0.86 || along0 < 0.3) continue;
+        along0 = 0;
+        // Out past the edge a little, away from the arm.
+        const nx = A.inner[k * 2] - A.outer[k * 2];
+        const ny = A.inner[k * 2 + 1] - A.outer[k * 2 + 1];
+        const nd = Math.hypot(nx, ny) || 1;
+        const cx = A.inner[k * 2] + (nx / nd) * rad * 0.15;
+        const cy = A.inner[k * 2 + 1] + (ny / nd) * rad * 0.15;
+        cups.moveTo(cx + rad, cy);
+        cups.ellipse(cx, cy, rad, rad * 0.8, Math.atan2(ny, nx), 0, Math.PI * 2);
+        rims.moveTo(cx + rad * 0.45, cy);
+        rims.arc(cx, cy, rad * 0.45, 0, Math.PI * 2);
+      }
+      g.globalAlpha = dark ? 0.32 : 0.55;
+      g.fillStyle = dark ? '#3A362F' : '#B7A08C';
+      g.fill(cups);
+      g.globalAlpha = dark ? 0.45 : 0.7;
+      g.strokeStyle = ink;
+      g.lineWidth = Math.max(0.35, re * 0.012);
+      g.stroke(cups);
+      g.globalAlpha = dark ? 0.3 : 0.45;
+      g.fillStyle = dark ? '#0A0908' : '#3A2A22';
+      g.fill(rims);
+      g.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
-    ctx.drawImage(sheet, box.x, box.y, box.w, box.h);
-  }
+  });
+  steps.push(() => {
+    // Chromatophores. Their spacing follows a slow field, crowding on the
+    // back (up, and toward the edge) and thinning toward the contour and
+    // down the arms; none in the socket.
+    const cols = rust ? CHROMATOPHORES.light : CHROMATOPHORES.dark;
+    const alphas = [0.38, 0.45, 0.52];
+    const dots = cols.map(() => new Path2D());
+    const cores = new Path2D();
+    const q0 = mulberry32(hash32('squid-skin', seed, 0));
+    const ph = [q0() * 6.28, q0() * 6.28, q0() * 6.28];
+    const crowd = (x: number, y: number) => 0.5 + 0.3 * Math.sin(x / (re * 0.8) + ph[1]) * Math.sin(y / (re * 0.7) + ph[2]) + 0.2 * Math.sin((x - y) / (re * 0.45) + ph[0]);
+    const gap = Math.max(1.3, re * 0.11);
+    const unit = Math.max(0.45, re / 22);
+    const gauss = () => Math.sqrt(-2 * Math.log(1 - r() * 0.999)) * Math.cos(6.2832 * r());
+    for (let y = box.y; y < box.y + box.h; y += gap) {
+      for (let x = box.x; x < box.x + box.w; x += gap) {
+        const dx = x + (r() - 0.5) * gap * 1.1;
+        const dy = y + (r() - 0.5) * gap * 1.1;
+        const g0 = gauss();
+        const roll = r();
+        const open = r() < 0.5;
+        const pick = Math.floor(r() * cols.length);
+        const spin = r() * 6.28;
+        if (Math.hypot(dx, dy) < re * 1.65) continue;
+        const v = dy / re;
+        // Out in the water past the contour: nothing to lay.
+        if (U(dx) > contourU(v) + 0.9) continue;
+        // The back: up the mantle, and toward the edge; fewer down the arms.
+        const backness = Math.max(0, Math.min(1, 0.6 - v / 8)) * (v > 1.9 ? 0.5 : 1);
+        const keep = (0.12 + 0.88 * backness) * (0.3 + 0.7 * toEdge(dx, dy)) * Math.max(0, 0.85 * crowd(dx, dy) - 0.02);
+        if (roll > keep) continue;
+        const dd = Math.max(1.6, Math.min(4.5, 2.8 * Math.exp(0.32 * g0))) * unit;
+        const p = dots[pick];
+        if (!open) {
+          p.moveTo(dx + dd / 2, dy);
+          p.ellipse(dx, dy, dd / 2, dd * 0.42, spin, 0, Math.PI * 2);
+          continue;
+        }
+        // Opened: pigment spread from the sac in a ragged, uneven blot, a few
+        // of its arms reaching further than the rest.
+        const R = dd * 0.9;
+        const n = 7 + Math.floor(r() * 4);
+        const blot: number[] = [];
+        for (let i = 0; i < n; i++) {
+          const t = spin + ((i + (r() - 0.5) * 0.6) / n) * Math.PI * 2;
+          const reach = r();
+          const rr = R * (0.45 + 0.35 * reach + (reach > 0.8 ? 0.35 : 0));
+          blot.push(dx + Math.cos(t) * rr, dy + Math.sin(t) * rr);
+        }
+        p.addPath(smoothPath(blot, true, 2));
+        cores.moveTo(dx + dd * 0.22, dy);
+        cores.arc(dx, dy, dd * 0.22, 0, Math.PI * 2);
+      }
+    }
+    g.save();
+    g.clip(body);
+    dots.forEach((p, i) => {
+      g.globalAlpha = alphas[i] * (rust && dark ? 0.85 : 1);
+      g.fillStyle = cols[i];
+      g.fill(p);
+    });
+    g.globalAlpha = 0.4;
+    g.fillStyle = mixHex(cols[0], '#140E0B', 0.4);
+    g.fill(cores);
+    g.restore();
+    g.globalAlpha = 1;
+  });
+  steps.push(() => {
+    // The collar: the mantle's free edge, lifted a little off the head, with
+    // the shade it throws on the head side of it.
+    const collar = map(S.collar);
+    g.save();
+    g.clip(body);
+    g.translate(X(0.08) - X(0), Y(0.14));
+    inkLine(g, collar, false, { width: lineW * 2.4, color: deep, alpha: dark ? 0.25 : 0.18, taper: [0.05, 0.7], seed: seed ^ 0xc01 });
+    g.restore();
+    g.save();
+    g.clip(body);
+    inkLine(g, collar, false, { width: lineW * 0.85, color: ink, alpha: dark ? 0.42 : 0.66, taper: [0.02, 0.6], seed: seed ^ 0xc02, light, plate: true, min: 0.3 });
+    g.restore();
+
+    // The lid folds: tapering arcs round the eye, two over and two under,
+    // the inner ones the stronger.
+    const fold = (rad: number, a0: number, a1: number, wd: number, alpha: number, salt: number) => {
+      const pts: number[] = [];
+      for (let i = 0; i <= 16; i++) {
+        const a = a0 + ((a1 - a0) * i) / 16;
+        const k = 1 + 0.05 * Math.sin(i * 0.9 + salt);
+        pts.push(Math.cos(a) * rad * re * k, Math.sin(a) * rad * re * 0.94 * k - re * 0.04);
+      }
+      inkLine(g, pts, false, { width: wd, color: ink, alpha, taper: [0.35, 0.35], seed: seed ^ salt, light, plate: true, min: 0.3 });
+    };
+    const lidA = dark ? 0.45 : 0.72;
+    // Toward the page and the arms (the animal's front) the folds draw out
+    // to a corner, the sinus; toward its back they round off.
+    const arc = (a: number) => (out > 0 ? Math.PI - a : a);
+    fold(1.24, arc(Math.PI + 0.2), arc(Math.PI * 2 - 0.35), lineW * 0.9, lidA, 0x1f1);
+    fold(1.52, arc(Math.PI + 0.55), arc(Math.PI * 2 - 0.15), lineW * 0.6, lidA * 0.6, 0x1f2);
+    fold(1.17, arc(0.3), arc(Math.PI - 0.55), lineW * 0.7, lidA * 0.75, 0x1f3);
+    fold(1.42, arc(0.2), arc(Math.PI - 1.1), lineW * 0.5, lidA * 0.45, 0x1f4);
+    // The sinus: a short crease out from the folds' front corner.
+    const sx = -out;
+    inkLine(g, [sx * re * 1.22, re * 0.12, sx * re * 1.48, re * 0.3, sx * re * 1.7, re * 0.42], false, { width: lineW * 0.6, color: ink, alpha: lidA * 0.6, taper: [0.2, 0.5], seed: seed ^ 0x1f6, light, plate: true, min: 0.3 });
+    // A paler ridge just inside the upper fold, where it stands off the ball.
+    if (!dark) {
+      const ridge: number[] = [];
+      for (let i = 0; i <= 12; i++) {
+        const a = Math.PI + 0.45 + ((Math.PI - 0.9) * i) / 12;
+        ridge.push(Math.cos(a) * re * 1.13, Math.sin(a) * re * 1.07 - re * 0.04);
+      }
+      inkLine(g, ridge, false, { width: lineW * 0.9, color: '#EFE6D3', alpha: 0.22, taper: [0.4, 0.4], seed: seed ^ 0x1f5 });
+    }
+  });
+  steps.push(() => {
+    // The contour: one line, mantle to the front arm's tip, swelling on its
+    // shadowed side.
+    inkLine(g, map(S.contour), false, { width: lineW, color: ink, alpha: dark ? 0.5 : 0.8, taper: [0, 0.35], seed: seed ^ 0xf1a, light, plate: true, min: 0.35 });
+    g.restore();
+
+    if (sheet && sg) {
+      // The mantle let go up its length and the arms down theirs, eased,
+      // each over two radii: never a straight cut but the page's edge.
+      sg.setTransform(1, 0, 0, 1, 0, 0);
+      sg.globalCompositeOperation = 'destination-in';
+      for (const [[a0, a1], [wu, wv]] of [[MANTLE_FADE, MANTLE_WAY], [ARM_FADE, ARM_WAY]] as const) {
+        const fx = (k: number) => X(wu * k) - box.x;
+        const fy = (k: number) => Y(wv * k) - box.y;
+        const fade = sg.createLinearGradient(fx(a0), fy(a0), fx(a1), fy(a1));
+        for (let k = 0; k <= 8; k++) {
+          const t = k / 8;
+          fade.addColorStop(t, `rgba(0,0,0,${(1 - t * t * (3 - 2 * t)).toFixed(3)})`);
+        }
+        sg.fillStyle = fade;
+        sg.fillRect(0, 0, box.w, box.h);
+      }
+      ctx.globalAlpha = 1;
+      ctx.drawImage(sheet, box.x, box.y, box.w, box.h);
+    }
+  });
+  // Each step finished off as it is made, when there is a frame between them.
+  return staged && sg ? steps.map((step) => () => {
+    step();
+    sg.getImageData(0, 0, 1, 1);
+  }) : steps;
+}
+
+/** The squid round the eye, all at once. */
+function paintSquid(ctx: CanvasRenderingContext2D, re: number, seed: number, px: number, dark: boolean, out: number, rust = !dark): void {
+  for (const step of squidSteps(ctx, re, seed, px, dark, out, rust, false)) step();
 }
 
 /** The ball itself, round and open: the lids are laid over it each frame. */
@@ -1875,12 +1903,35 @@ export function drawEye(ctx: CanvasRenderingContext2D, w: number, h: number, age
   let layers = eyeLayers.find((l) => l.key === key);
   if (!layers) {
     const x0 = out > 0 ? -(H.in + 0.15) * re : -(H.edge + 0.1) * re;
+    // On a screen the squid is drawn over a few frames while the eye is
+    // still all but transparent, a few milliseconds each, rather than in one
+    // stall as it arrives; in a picture, at once.
+    const staged = page === undefined;
+    let pending: (() => void)[] = [];
     layers = {
       key,
-      skin: eyeLayer(x0, -(H.up + 0.1) * re, (H.in + H.edge + 0.25) * re, (H.up + H.down + 0.2) * re, 1, (g) => paintSquid(g, re, seed, px, dark, out, rust)),
-      ball: eyeLayer(-1.1 * re, -1.1 * re, 2.2 * re, 2.2 * re, 1, (g) => paintEyeBall(g, re, seed, px, dark)),
+      skin: eyeLayer(x0, -(H.up + 0.1) * re, (H.in + H.edge + 0.25) * re, (H.up + H.down + 0.2) * re, 1, (g) => {
+        pending = squidSteps(g, re, seed, px, dark, out, rust, staged);
+      }),
+      ball: null,
+      pending,
     };
+    const made = layers;
+    // The ball last, as a step of its own.
+    made.pending = [...pending, () => {
+      made.ball = eyeLayer(-1.1 * re, -1.1 * re, 2.2 * re, 2.2 * re, 1, (g) => paintEyeBall(g, re, seed, px, dark));
+    }];
     eyeLayers = [layers, ...eyeLayers].slice(0, 2);
+  }
+  if (layers.pending.length) {
+    // A few milliseconds of it a frame on a screen; all of it otherwise.
+    const staged = page === undefined && typeof performance !== 'undefined';
+    const t0 = staged ? performance.now() : 0;
+    while (layers.pending.length) {
+      layers.pending.shift()?.();
+      if (staged && performance.now() - t0 >= 4) break;
+    }
+    if (layers.pending.length) return;
   }
 
   ctx.save();
