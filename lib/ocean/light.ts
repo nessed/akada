@@ -1177,40 +1177,54 @@ export function drawSnowDeep(
     }
   }
 
-  // Between: crisp flakes, ragged, a few with a tail.
+  // Between: flakes, ragged and of every size, most of them small and a few
+  // up to four pixels across (a long tail of sizes, never a field of like
+  // dots, which reads as stars), a third drawn out two or three times their
+  // width along the slow drift they share, the larger ones soft at the edge.
+  // Every roll is made for each flake whether it is drawn or not, so a
+  // picture drawn in strips is the picture drawn whole.
   {
     const n = Math.round((css / 2600) * o.density);
+    const drift = -Math.PI / 2 + (hash32('snow-drift', o.seed) % 1000) / 1000 - 0.5;
+    const k0 = px / 1.2;
     for (let i = 0; i < n; i++) {
       const x = r() * w;
       const y = r() * h;
-      const size = Math.min(most / 3.4, px * (0.6 + 1.6 * Math.pow(r(), 2.2)));
-      const base = 0.3 + 0.5 * r();
-      const vis = kept(x, y) && shown(y);
-      const a = vis ? Math.min(1, base * lit(x, y)) : 0;
+      const size = Math.min(most / 2, k0 * (0.5 + 1.5 * Math.pow(r(), 2.6)));
+      const base = 0.25 + 0.45 * r();
       const sides = 8 + Math.floor(r() * 3);
-      const turn = r() * TAU;
-      const stretch = 1 + r() * 0.6;
-      const pts: number[] = [];
-      for (let k = 0; k < sides; k++) {
-        const ang = turn + (k / sides) * TAU;
-        const rad = size * (0.75 + 0.35 * r());
-        pts.push(x + Math.cos(ang) * rad * stretch, y + Math.sin(ang) * rad);
-      }
-      if (!vis) {
-        // Rolled as it would be, and passed over.
-        if (r() < 0.15) {
-          r();
-          r();
+      const long = r() < 0.3;
+      const stretch = long ? 2 + r() : 1 + r() * 0.3;
+      const turn = drift + (r() - 0.5) * 0.5;
+      const radii: number[] = [];
+      for (let k = 0; k < 10; k++) radii.push(0.75 + 0.35 * r());
+      const wisp = r() < 0.12;
+      const wispLen = 2 + r() * 3;
+      const wispAng = (r() - 0.5) * 1.2;
+      if (!kept(x, y) || !shown(y)) continue;
+      const a = Math.min(0.7, Math.max(0.25, base * lit(x, y)));
+      const ca = Math.cos(turn);
+      const sa = Math.sin(turn);
+      const shape = (grow: number, dx = 0, dy = 0) => {
+        const pts: number[] = [];
+        for (let k = 0; k < sides; k++) {
+          const ang = (k / sides) * TAU;
+          const u = Math.cos(ang) * size * radii[k] * stretch * grow;
+          const v = Math.sin(ang) * size * radii[k] * grow;
+          pts.push(x + u * ca - v * sa + dx, y + u * sa + v * ca + dy);
         }
-        continue;
-      }
+        return pts;
+      };
+      // Over three pixels across, a soft edge: a wider, fainter ring under it.
+      const soft = size * 2 * Math.sqrt(stretch) > 3 * k0;
       // (Its shadow under it on paper, then the flake, then its wisp.)
-      if (!o.dark) fillOne(pts.map((v, k) => v + (k % 2 ? px * 0.6 : px * 0.5)), `rgba(52, 64, 62, ${level(a) * 0.4})`);
-      fillOne(pts, `rgba(${cr}, ${cg}, ${cb}, ${level(a)})`);
-      if (r() < 0.15) {
+      if (!o.dark) fillOne(shape(1, px * 0.5, px * 0.6), `rgba(52, 64, 62, ${level(a) * 0.3})`);
+      if (soft) fillOne(shape(1.45), `rgba(${cr}, ${cg}, ${cb}, ${level(a * 0.35)})`);
+      fillOne(shape(1), `rgba(${cr}, ${cg}, ${cb}, ${level(soft ? a * 0.85 : a)})`);
+      if (wisp) {
         // A trailing wisp: snow is clumped stuff, mucus and all.
-        const tail = Math.min(most * 0.6, size * (2 + r() * 3));
-        const ang = -Math.PI / 2 + (r() - 0.5) * 1.2;
+        const tail = Math.min(most * 0.6, size * wispLen);
+        const ang = drift + Math.PI + wispAng;
         fillOne([x, y, x + Math.cos(ang) * tail - px * 0.3, y + Math.sin(ang) * tail, x + Math.cos(ang) * tail + px * 0.3, y + Math.sin(ang) * tail], `rgba(${cr}, ${cg}, ${cb}, ${level(a * 0.5)})`);
       }
     }

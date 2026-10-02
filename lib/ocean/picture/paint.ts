@@ -1046,16 +1046,38 @@ function occluderOf(plan: Plan, c: Caches): HTMLCanvasElement | null {
       o.restore();
     }
   }
+  // An animal in the shafts casts its shadow down them, never round itself:
+  // a faint strip from its middle along the light's own line, three body
+  // lengths and more, thinning as it goes (a blot round the body reads as a
+  // smudge laid behind it).
   for (const a of plan.cast) {
     if (a.layer === 0) continue;
-    o.globalAlpha = a.layer === 2 ? 0.7 : 0.4;
     const parts = a.members ? a.members.map((m) => ({ x: a.x + m.dx, y: a.y + m.dy, len: m.len })) : [{ x: a.x, y: a.y, len: a.len }];
     for (const p of parts) {
+      const dx = p.x - plan.window.x;
+      const dy = Math.max(1, p.y - plan.window.y);
+      const d = Math.hypot(dx, dy);
+      const ux = dx / d;
+      const uy = dy / d;
+      const reach = p.len * 3.6;
+      const half = p.len * 0.14;
+      const g = o.createLinearGradient(p.x, p.y, p.x + ux * reach, p.y + uy * reach);
+      const k = a.layer === 2 ? 0.16 : 0.09;
+      g.addColorStop(0, `rgba(0, 0, 0, ${k})`);
+      g.addColorStop(0.5, `rgba(0, 0, 0, ${k * 0.5})`);
+      g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      o.globalAlpha = 1;
+      o.fillStyle = g;
       o.beginPath();
-      o.ellipse(p.x, p.y, p.len * 0.42, p.len * 0.16, 0, 0, Math.PI * 2);
+      o.moveTo(p.x - uy * half, p.y + ux * half);
+      o.lineTo(p.x + uy * half, p.y - ux * half);
+      o.lineTo(p.x + ux * reach + uy * half * 1.6, p.y + uy * reach - ux * half * 1.6);
+      o.lineTo(p.x + ux * reach - uy * half * 1.6, p.y + uy * reach + ux * half * 1.6);
+      o.closePath();
       o.fill();
     }
   }
+  o.fillStyle = '#000';
   c.occluder = { key, canvas };
   return canvas;
 }

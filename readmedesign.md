@@ -1144,7 +1144,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   ones large and in full ink, and never more than four near. Schools cross as
   one flock. Swimmers undulate, bells beat, rays flap, and the floor has a
   few things shuffling on it once the abyss is reached, with vents breathing
-  where the sitting rolled them. Anything that wanders over the header, the
+  where the sitting rolled them, each a black smoker: a knobbly mineral
+  spire with side spurs and one-sided flanges, engraved up its shadow side
+  and crusted in stipple, never stacked rings or a turret. Anything that wanders over the header, the
   face or the controls goes faint there, so the clock always reads.
 - **The jelly has a family.** In the deep the jelly's own body is rolled too
   (tentacles, arms, fringe, the height of its bell, a lean toward another
@@ -1271,20 +1273,19 @@ only ever grows, it never runs backwards, and none of it touches progress.
   in four that reaches the twilight). From the midnight zone down the water
   sometimes lights up, a cloud of tiny animals flashing that comes up over
   seconds and never at once; less often a giant squid's eye opens at the edge
-  of the page, high and clear of the clock, blinks once and goes: a striated
-  iris darkening to its rim, the pupil a level lens the same above and
-  below, never bent into a mouth, set in the flank of an animal far bigger
-  than the page: a long, flat stretch of it lying along the page's edge,
-  never a disc, its one ink contour a piece of a curve at least three times
-  as long as what shows, the skin a thin wash inside it with a few fold
-  lines running with the contour, and the whole flank let go over the last
-  quarter at each end. There is no ring round the eye. Its chromatophores vary in size and spacing, half opened into
-  ragged blots and half closed to dots, crowded on the back. At night the
-  skin is a neutral grey close to the water's own value, no red and no
-  glow; the only light is the eye's catchlight. Never a halo, of stipple
-  or of colour. The whale is always the
-  whole animal, head, flipper and flukes, the flukes level and seen edge-on
-  as a thin blade off the tail stock, never an upright fork, the dorsal a
+  of the page, high and clear of the clock, blinks once and goes. It is seen as a plate would show it at
+  the trim: the eye fully on the page, round-pupilled with one small sharp
+  catchlight, set in the head of an animal far bigger than the page; the
+  mantle runs up and off, a collar line sits behind the eye, the lid folds
+  come to a corner toward its front, and below it a bundle of arms curves
+  in, the front one with its suckers. The page's edge is its only straight
+  edge; the mantle and arms are let go along their length, never cut. Its
+  skin is one thin umber wash, darker toward the trim and hatched there,
+  with rust chromatophores on the cream paper and grey-brown at night,
+  within a few L* of the water. Nothing round it glows. The whale is always the
+  whole animal, head, flipper and flukes, the flukes level and seen edge-on,
+  the tail stock narrowing to a peduncle and flaring again into a notched
+  wedge, never an upright fork and never a needle, the dorsal a
   small low hump two thirds of the way back, one soft grey shape a little over
   half the page long. In the abyss,
   about one three-hour sitting in a hundred and fifty, something very large
