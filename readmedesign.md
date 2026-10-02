@@ -1334,8 +1334,10 @@ only ever grows, it never runs backwards, and none of it touches progress.
   wherever the gain is, so a tap mid-fade turns around without a step).
 - **The Sound menu** (`components/SoundMenu.tsx`) is the one speaker button in
   the timer's header, drawn only in the deep, in the soft ink and not the faint one so it can be found
-  on either paper, with a dot in the course colour while anything plays. It
-  opens a small paper card under the button: a switch for the tank, and
+  on either paper, with a dot in the course colour while anything plays. One
+  click plays or stops the tank (that first click is the gesture the browser
+  wants, so there is never a second one in the way). Press and hold, or right
+  click, or ArrowDown, opens a small paper card under the button: a switch for the tank, and
   under it a volume line, a pencil rule that fills with ink as it
   rises, a round paper knob, and the level as mono digits. The line is
   `.pl-volume` in `globals.css`; it takes the card's ink, track and knob as

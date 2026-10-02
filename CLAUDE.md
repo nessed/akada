@@ -90,8 +90,8 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   does.
 - **Destructive actions** ask through `components/ConfirmSheet.tsx`. Never
   `window.confirm()` or `prompt()`.
-- **The Sound menu** (speaker button in the timer's header, only in the deep, with the
-  tank's volume) is `components/SoundMenu.tsx`. **Keep the picture** (the
+- **The Sound menu** (speaker button in the timer's header, only in the deep, click plays the tank, hold opens
+  its volume) is `components/SoundMenu.tsx`. **Keep the picture** (the
   timer's picture button, the finish sheet's link, the mark on a sitting in
   Stats) is `components/SavePicture.tsx`. "This moment" is
   `lib/wallpaper.ts`; any canvas that should be in it registers a layer
