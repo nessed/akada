@@ -6,7 +6,9 @@ import { planPicture, type PictureInput } from './index';
 import { rollBiome } from '../biome';
 import { rollKelp } from '../kelp';
 import { BUBBLE_MAX, boxGap, CLEAR, crestDiff, floorAt, inter, MARGIN, overlapShare, REF, rockIoU, rockTouches, sameRock, PICTURE_KELP, STEM, wallAt, wallTouches, type Box, type Plan } from './layout';
-import { EYE_R, ROW_BAND, SIPHON_TILT, steepestFall, stepsApart, whaleHull } from './layout';
+import { EYE_R, ROW_BAND, ROW_LEVEL, SIPHON_TILT, steepestFall, stepsApart, whaleHull } from './layout';
+import { partExt, rockSpan, rockX, WALL_STEP } from './layout';
+import { rockShape } from '../outcrop-sprite';
 import { siphonophoreReach } from '../sightings-shallow';
 import { KELP_SHADE, kelpShadeAt } from './paint';
 
@@ -503,6 +505,7 @@ test('the cast never lines up: two at most of the middle and near in a band 0.06
       const mid = plan.cast.filter((a) => a.layer > 0 && !a.floor);
       const ys = [...mid.map((a) => a.y), ...plan.events.filter((v) => v.box && !v.far && ['turtle', 'dumbo', 'lure'].includes(v.kind)).map((v) => ((v.box as Box).y0 + (v.box as Box).y1) / 2)].sort((a, b) => a - b);
       for (let k = 0; k + 2 < ys.length; k++) assert.ok(ys[k + 2] - ys[k] >= plan.h * ROW_BAND - 1e-6, `${tag}: three animals within ${((ys[k + 2] - ys[k]) / plan.h).toFixed(3)} H of each other at ${ys[k].toFixed(0)}`);
+      for (let k = 0; k + 1 < ys.length; k++) assert.ok(ys[k + 1] - ys[k] >= plan.h * ROW_LEVEL - 1e-6, `${tag}: two animals level at ${ys[k].toFixed(0)}`);
       if (ys.length >= 3) {
         let bands = 0;
         let last = -Infinity;
@@ -534,6 +537,82 @@ test('one anglerfish to a picture at most, and the siphonophore hung at a tilt w
         const lie = Math.abs(e.lie ?? 0);
         assert.ok(lie >= SIPHON_TILT[0] - 1e-9 && lie <= SIPHON_TILT[1] + 1e-9 && lie >= 0.26 && lie <= 0.7, `${tag}: the siphonophore lies at ${lie.toFixed(2)}`);
         assert.ok(Math.abs(siphonophoreReach(e.rw, e.rh, e.seed, e.lie as number).tilt - lie) < 1e-6, `${tag}: the siphonophore's region too shallow for its tilt`);
+      }
+    }
+  }
+});
+
+test('no rock debris: every rock drawn whole and inked to its underside, never cut square, never a block of wall in its crest', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES.slice(0, 2)) {
+      const plan = planOf(c, shape);
+      const tag = `${c.name} ${shape.width}x${shape.height}`;
+      for (const r of plan.rocks) {
+        if (r.kind === 'kelp') continue;
+        // Whole: drawn with no foot let go of, cut at its underside and the cut inked (paint's `underside`).
+        assert.ok(r.shape.parts.every((p) => p.whole), `${tag}: a ${r.kind} rock let go of at its foot (a see-through lobe)`);
+        const N = r.shape.under.length - 1;
+        for (let i = 0; i <= N; i++) assert.ok(r.shape.under[i] >= r.shape.top[i] - 1e-9, `${tag}: a rock's underside over its top`);
+        // Its underside rises from the wall to the lip: no boulder hangs under the lip as a tail.
+        for (let i = 1; i <= N; i++) assert.ok(r.shape.under[i] <= r.shape.under[i - 1] + 0.012 / r.shape.ratio + 1e-6 || r.shape.under[i] - r.shape.top[i] < 1e-6, `${tag}: a tail under a rock`);
+        // Every boulder inside the layer it is drawn into (paint's `renderRock`: its box, 30 units either side): no square cut.
+        const span = (r.off + r.reach) * plan.w;
+        for (const part of r.shape.parts) {
+          const ext = partExt(part);
+          const ps = (part.span * span) / ext;
+          const rock = rockShape(part.seed, ps, part.thick * ps, 1, part.grammar ?? 'heap');
+          const x0 = rockX(r, plan.w, part.at);
+          const dir = r.edge < 0 ? 1 : -1;
+          const xs = [x0 + dir * rock.lo, x0 + dir * rock.hi].filter((x) => x > 0 && x < plan.w);
+          for (const x of xs) assert.ok(x >= r.box.x0 - 30 - 1e-6 && x <= r.box.x1 + 30 + 1e-6, `${tag}: a boulder at ${x.toFixed(0)} past its rock's layer (${r.box.x0.toFixed(0)}..${r.box.x1.toFixed(0)})`);
+        }
+        // Its wall never stands out past the rock's crest as a block: where
+        // the face is wider than the wall's own, inside the rock's height,
+        // the rock covers it.
+        const wl = r.wall;
+        if (!wl) continue;
+        // (Its own width: the widest it stands where no rock or ledge is.)
+        const mine = plan.rocks.filter((k) => k.wall === wl);
+        const free = wl.face.filter((_, i) => {
+          const y = wl.top + i * WALL_STEP;
+          return !mine.some((k) => y > k.y - 10 && y < k.y + k.height * 2.2) && !wl.ledges.some((l) => Math.abs(y - l.y) < plan.h * 0.05);
+        });
+        if (!free.length) continue;
+        // (The wall starts inside the rock it comes down from, under its crest: paint's `renderWall`.)
+        if (wl.top <= r.y + r.height * 0.6 && !mine.some((k) => k !== r && k.y < r.y)) continue;
+        // (Or as wide as it comes down from above the rock, a cliff the rock stands out of.)
+        let above = 0;
+        for (let y = r.y - plan.h * 0.05; y <= r.y; y += 2) above = Math.max(above, wallAt(wl, y) ?? 0);
+        const own = Math.max(...free, above) * 1.15 + 2;
+        let low = 0;
+        for (const v of r.shape.under) low = Math.max(low, v);
+        // (At the face's own samples: between them it is a straight line.)
+        for (let i = 0; i < wl.face.length; i++) {
+          const y = wl.top + i * WALL_STEP;
+          if (y < r.y + r.height * 0.3 || y > r.y + low * r.height) continue;
+          const f = wallAt(wl, y);
+          if (f == null || f <= own) continue;
+          const x = r.edge < 0 ? f - 2 : plan.w - f + 2;
+          const s = rockSpan(r, plan.w, x);
+          assert.ok(s && s[0] <= y + 3, `${tag}: the wall a block beside its rock (${r.edge} ${r.y.toFixed(0)}+${r.height.toFixed(0)}) at ${x.toFixed(0)}, ${y.toFixed(0)}, face ${f.toFixed(0)} over its own ${own.toFixed(0)}`);
+        }
+      }
+    }
+  }
+});
+
+test('floor fauna lie on the ground: a star wholly in it, the rest with their middles below its line', () => {
+  for (const c of CASES) {
+    for (const shape of SHAPES) {
+      const plan = planOf(c, shape);
+      const biome = rollBiome(plan.key, plan.courseKey);
+      for (const a of plan.cast.filter((q) => q.floor)) {
+        const sp = biome.pools[a.zone]?.[a.slot];
+        let low = -Infinity;
+        for (let q = 0; q <= 6; q++) low = Math.max(low, floorAt(plan, a.box.x0 + ((a.box.x1 - a.box.x0) * q) / 6));
+        assert.equal(a.alpha, 1, `${c.name}: a floor animal see-through`);
+        if (sp?.genome.plan === 'star') assert.ok(a.box.y0 >= low - 1e-6, `${c.name} ${shape.width}x${shape.height}: a star off the ground`);
+        else assert.ok(a.y >= low - 1e-6, `${c.name} ${shape.width}x${shape.height}: ${a.id} hangs off the ground`);
       }
     }
   }

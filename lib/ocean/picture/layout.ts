@@ -2190,7 +2190,7 @@ function turtleAt(e: { kind: EventKind; seed: number; start: number }, jel: Plac
  */
 export const WHALE_BLUR = 0.01;
 /** And how it pitches, head up, as it rises: so its back is never level across the page. */
-export const WHALE_PITCH = 0.07;
+export const WHALE_PITCH = 0.1;
 
 /**
  * The whale's measure, as drawWhale lays it in its region: its length, the
@@ -2269,7 +2269,7 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       // the level clothesline a shallow one reads as), and its region deep
       // enough for that tilt whole: drawSiphonophore eases the tilt down to
       // fit a shallower region, so the region is grown until it need not.
-      const rw = w * 0.48;
+      const rw = w * 0.52;
       const tilt = SIPHON_TILT[0] + (SIPHON_TILT[1] - SIPHON_TILT[0]) * (((sd >>> 5) % 1000) / 1000);
       const lie = side * tilt;
       let rh = Math.min(h * 0.55, rw * 0.5);
@@ -2425,6 +2425,13 @@ function shiftEvent(e: PlacedEvent, dy: number): void {
   if (e.box) e.box = { ...e.box, y0: e.box.y0 + dy, y1: e.box.y1 + dy };
 }
 
+/** Across the page by dx, its hull measured again (what of it the page shows changes). */
+function slideEvent(e: PlacedEvent, dx: number, w: number): void {
+  e.rx += dx;
+  e.x += dx;
+  e.box = eventHull(e, w);
+}
+
 /** Across the page to the other side: the region mirrored about the middle. */
 function flipEvent(e: PlacedEvent, w: number): void {
   e.mirror = !e.mirror;
@@ -2469,7 +2476,7 @@ function settleEvents(
       for (const o of done) if (o.box && !o.far && o.kind !== 'whalefall' && boxGap(o.box, b) < CLEAR) return true;
       return false;
     }
-    for (const o of done) if (o.box && !o.far && o.kind !== 'whalefall' && boxGap(o.box, b) < 0) return true;
+    for (const o of done) if (o.box && !o.far && o.kind !== 'whalefall' && boxGap(o.box, b) < CLEAR) return true;
     // Even loosely, never on a rock or its wall.
     if (v.kind === 'turtle') return e.rocks.some((k) => rockTouches(k, w, b, 0));
     for (const j of e.jellies) if (!j.hero && v.kind !== 'eye' && inter(b, j.box) > 0) return true;
@@ -2483,12 +2490,13 @@ function settleEvents(
   };
   for (const v of events) if (v.kind === 'whale') settleWhale(v, e);
   /** One settling of `list` in place: how many had to be laid by the looser rules (and ten for each given up). */
-  const attempt = (list: PlacedEvent[], eyeFirst: boolean): number => {
+  const attempt = (list: PlacedEvent[], how: 0 | 1 | 2): number => {
   let loose = 0;
   const done: PlacedEvent[] = [];
   // The ones with the least room to move go first (or the eye before all,
-  // held as it is to the page's edge and kept off the rocks by its dark).
-  const rank = (v: PlacedEvent) => (eyeFirst && v.kind === 'eye' ? 2 : LONE.includes(v.kind) ? 1 : 0);
+  // held as it is to the page's edge and kept off the rocks by its dark; or
+  // the eye, then the rest, and the big ones last).
+  const rank = (v: PlacedEvent) => (how > 0 && v.kind === 'eye' ? 3 : LONE.includes(v.kind) ? (how === 2 ? 0 : 2) : 1);
   const order = [...list].sort((a, b) => rank(b) - rank(a));
   for (const v of order) {
     if (v.kind === 'whalefall' || v.far || !v.box) {
@@ -2524,13 +2532,22 @@ function settleEvents(
         }
       } else {
         const canFlip = v.kind !== 'dumbo';
+        // A siphonophore may also come further in off its edge, its tail
+        // then ending in the water rather than off the page.
+        const slides = v.kind === 'siphonophore' ? [0, 0.1, 0.2, 0.3] : [0];
         for (const flip of canFlip ? [false, true] : [false]) {
           if (flip) flipEvent(v, w);
-          for (let k = 1; k <= 170 && !fixed; k++) {
-            const dy = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * h * 0.012;
-            shiftEvent(v, dy);
-            if (!bad(v, done, strict)) fixed = true;
-            else shiftEvent(v, -dy);
+          for (const slide of slides) {
+            const dx = (v.x < w / 2 ? 1 : -1) * slide * w;
+            if (dx) slideEvent(v, dx, w);
+            for (let k = 1; k <= 170 && !fixed; k++) {
+              const dy = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * h * 0.012;
+              shiftEvent(v, dy);
+              if (!bad(v, done, strict)) fixed = true;
+              else shiftEvent(v, -dy);
+            }
+            if (fixed) break;
+            if (dx) slideEvent(v, -dx, w);
           }
           if (fixed) break;
           if (flip) flipEvent(v, w);
@@ -2556,10 +2573,15 @@ function settleEvents(
   // instead, kept if that lays fewer loosely.
   const copy = () => events.map((v) => ({ ...v, box: v.box ? { ...v.box } : null, look: v.look ? { ...v.look } : undefined }));
   let best = copy();
-  const worst = attempt(best, false);
-  if (worst > 0 && events.some((v) => v.kind === 'eye')) {
+  let worst = attempt(best, 0);
+  for (const how of [1, 2] as const) {
+    if (worst <= 0) break;
     const other = copy();
-    if (attempt(other, true) < worst) best = other;
+    const score = attempt(other, how);
+    if (score < worst) {
+      best = other;
+      worst = score;
+    }
   }
   events.length = 0;
   events.push(...best);
@@ -2656,9 +2678,13 @@ interface Pick {
 
 /** How tall a band across the page may hold no more than two animals of the middle and near cast. */
 export const ROW_BAND = 0.06;
+/** And how near in depth two of them may be: never level. */
+export const ROW_LEVEL = 0.025;
 
 /** Whether an animal at `y` makes a third in some band ROW_BAND of the page tall, with the others at `ys`. */
 export function rowCrowded(y: number, ys: number[], h: number): boolean {
+  // Nor two level with each other: a pair at one depth is the start of a row.
+  if (ys.some((v) => Math.abs(v - y) < h * ROW_LEVEL)) return true;
   const near = ys.filter((v) => Math.abs(v - y) < h * ROW_BAND);
   if (near.length < 2) return false;
   near.push(y);
@@ -3092,7 +3118,14 @@ function floorFauna(picks: Pick[], e: CastEnv, hero: PlacedJelly, cast: Box[]): 
       const g = e.groundY(x);
       if (g > h * 0.98) continue;
       if (e.trench && (Math.abs(x - e.trench.x) < e.trench.gap / 2 + bw || g > e.trench.top + (h - e.trench.top) * 0.45)) continue;
-      const y = clamp(g + (r() - 0.35) * h * 0.04 - bh * 0.35, 0, h * (1 - MARGIN) - bh / 2);
+      let y = clamp(g + (r() - 0.35) * h * 0.04 - bh * 0.35, 0, h * (1 - MARGIN) - bh / 2);
+      // On the ground, never off it: a star lies wholly on it (below its
+      // line all across), what crawls has its middle below the line all
+      // across, so neither hangs half off a slope into the water.
+      let low = g;
+      for (let q = 0; q <= 6; q++) low = Math.max(low, e.groundY(x - bw / 2 + (bw * q) / 6));
+      y = Math.max(y, sp.genome.plan === 'star' ? low + bh / 2 + 1 : low);
+      if (y > h * (1 - MARGIN) - bh / 2 || low > h * 0.98) continue;
       const box = { x0: x - bw / 2, x1: x + bw / 2, y0: y - bh / 2, y1: y + bh / 2 };
       if (avoid.some((b) => inter(b, box) > 0) || cast.some((b) => boxGap(b, box) < CLEAR)) continue;
       if (boxGap(box, hero.box) < CLEAR) continue;

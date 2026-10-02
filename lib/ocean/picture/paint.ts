@@ -19,7 +19,7 @@ import { mixHex } from '../../fan';
 import { buildJelly, drawJelly, jellyInk, type JellyShape } from '../../jelly';
 import { rollBiome, type Biome, type Species } from '../biome';
 import { drawChimney, drawEye, drawLeviathan, drawPlume, drawStorm, drawVisitor, drawWhale } from '../draw';
-import { rollKelp, type Kelp } from '../kelp';
+import { KELP_ROCK, rollKelp, type Kelp } from '../kelp';
 import { drawKelp } from '../kelp-draw';
 import { drawGodRays, drawSnellWindow, drawSnowDeep, godRayLight, moonLit, sunFor } from '../light';
 import { jellyForBlock } from '../lineage';
@@ -33,7 +33,7 @@ import { SpriteCache, type Sprite } from '../sprites';
 import { Wash } from '../wash';
 import { causticsOn } from '../caustics';
 import type { Growth, GrowthKind } from '../outcrop';
-import { drawGrowth, inkRock, inkWall, rockFoot, rockShape, rockStyle } from '../outcrop-sprite';
+import { drawGrowth, inkFloor, inkRock, inkWall, rockFoot, rockShape, rockStyle } from '../outcrop-sprite';
 import { floorAt, partExt, PICTURE_KELP, REF, rockOutline, rockX, wallAt, WALL_STEP, WHALE_BLUR, WHALE_PITCH, whaleHull, type PlacedEvent, type PlacedJelly, type PlacedRock, type Plan, type Wall } from './layout';
 
 interface Caches {
@@ -1229,7 +1229,13 @@ function paintKelp(ctx: CanvasRenderingContext2D, plan: Plan, kelp: Kelp, c: Cac
     const pts: number[] = [];
     for (let i = 0; i <= N + 6; i++) {
       const j = Math.min(N, i);
-      const v = r.shape.solid[j] + 0.5 * (r.shape.under[j] - r.shape.solid[j]);
+      // Rising from the wall to the lip as a ledge's underside does, a
+      // little rough, never a level line; within its stone, and never
+      // thinner than a fifth of it.
+      const q = j / N;
+      const ph = (r.seed % 628) / 100;
+      const rise = 0.76 - 0.28 * q ** 1.3 + 0.03 * Math.sin(q * 8.3 + ph) + 0.015 * Math.sin(q * 21 + ph * 1.7);
+      const v = Math.max(r.shape.top[j], Math.min(r.shape.under[j], Math.max(rise, r.shape.top[j] + 0.22)));
       pts.push(rockX(r, plan.w, i / N), r.y + v * r.height);
     }
     return { r, pts };
@@ -1266,12 +1272,52 @@ function paintKelp(ctx: CanvasRenderingContext2D, plan: Plan, kelp: Kelp, c: Cac
   }
   const night = plan.ground === 'night';
   for (const { r, pts } of cuts) {
-    // Only as far as the ledge reaches: past its lip the line would float.
-    const run: number[] = [];
-    const N = r.shape.under.length - 1;
-    for (let i = 0; i <= N; i++) if (r.shape.under[i] - r.shape.top[i] > 0.04) run.push(pts[i * 2] * D, pts[i * 2 + 1] * D);
-    if (run.length >= 8 && inSight(r.box.x0, r.box.y0, r.box.x1, r.box.y1 + 4))
-      inkLine(ctx, run, false, { width: 0.9 * D, color: rockStyle(waterAtY(plan, c, r.y), night, D, 1, r.seed).line, alpha: night ? 0.6 : 0.8, swell: 0.45, lost: 0.08, taper: [0.04, 0.1], seed: hash32(r.seed, 'kelp-cut') });
+    if (!inSight(r.box.x0, r.box.y0, r.box.x1, r.box.y1 + 4)) continue;
+    // Where the ledge kelp-draw lays really is stone (its own rock, placed
+    // as it places it: from a wall 3% of the frame off the page, its top
+    // the ledge's in the frame), so the line runs only where the cut went
+    // through stone, never on past the lip into the water.
+    const ledge = kelp.ledges.find((l) => l.edge === r.edge);
+    if (!ledge) continue;
+    const span = (ledge.reach + 0.03) * fw;
+    const rock = rockShape(ledge.seed, span * D, Math.max(KELP_ROCK * hf * D, 0.75 * span * D), D);
+    const dir = r.edge < 0 ? 1 : -1;
+    const x0 = r.edge < 0 ? -0.03 * fw : plan.w + 0.03 * fw;
+    const y0 = top + ledge.top * hf;
+    const stone = (x: number, y: number) => {
+      const u = (x - x0) * dir * D;
+      const v = (y - y0) * D;
+      return rock.boulders.some((b) => {
+        let inside = false;
+        const n = b.pts.length / 2;
+        for (let i = 0, j = n - 1; i < n; j = i++) {
+          const xi = b.pts[i * 2];
+          const yi = b.pts[i * 2 + 1];
+          const xj = b.pts[j * 2];
+          const yj = b.pts[j * 2 + 1];
+          if (yi > v !== yj > v && u < ((xj - xi) * (v - yi)) / (yj - yi) + xi) inside = !inside;
+        }
+        return inside;
+      });
+    };
+    const runs: number[][] = [[]];
+    for (let i = 0; i < pts.length; i += 2) {
+      // Finer than the silhouette's samples, so the line stops where the stone does.
+      const xa = pts[i];
+      const ya = pts[i + 1];
+      const xb = i + 2 < pts.length ? pts[i + 2] : xa;
+      const yb = i + 2 < pts.length ? pts[i + 3] : ya;
+      for (let q = 0; q < 4; q++) {
+        const x = xa + ((xb - xa) * q) / 4;
+        const y = ya + ((yb - ya) * q) / 4;
+        if (stone(x, y - 1.5)) runs[runs.length - 1].push(x * D, y * D);
+        else if (runs[runs.length - 1].length) runs.push([]);
+      }
+    }
+    const line = rockStyle(waterAtY(plan, c, r.y), night, D, 1, r.seed).line;
+    runs.forEach((run, ri) => {
+      if (run.length >= 8) inkLine(ctx, run, false, { width: 0.9 * D, color: line, alpha: night ? 0.6 : 0.8, swell: 0.45, lost: 0.08, taper: [0.04, 0.1], seed: hash32(r.seed, 'kelp-cut', ri) });
+    });
   }
 }
 
@@ -1303,35 +1349,6 @@ const REEF = HUES.map((_, i) => i).filter((i) => HUES[i] !== '#9AA3AB');
 const GROWTH_ROOM = 70;
 
 /* ---- The walls ---- */
-
-/** Short pen strokes gathered by weight and strength, laid in a few draws: thousands of strokes, a handful of strokes of the canvas. */
-class Strokes {
-  private sets = new Map<number, Path2D>();
-  add(x0: number, y0: number, x1: number, y1: number, width: number, alpha: number): void {
-    const key = Math.max(1, Math.min(40, Math.round(width * 4))) * 100 + Math.max(0, Math.min(20, Math.round(alpha * 20)));
-    let p = this.sets.get(key);
-    if (!p) {
-      p = new Path2D();
-      this.sets.set(key, p);
-    }
-    p.moveTo(x0, y0);
-    p.lineTo(x1, y1);
-  }
-  draw(ctx: CanvasRenderingContext2D, color: string): void {
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineCap = 'round';
-    const base = ctx.globalAlpha;
-    for (const [key, p] of this.sets) {
-      const a = (key % 100) / 20;
-      if (a <= 0) continue;
-      ctx.lineWidth = Math.floor(key / 100) / 4;
-      ctx.globalAlpha = base * a;
-      ctx.stroke(p);
-    }
-    ctx.restore();
-  }
-}
 
 const clampT = (v: number) => Math.max(0, Math.min(1, v));
 
@@ -1946,7 +1963,6 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
   const water = waterTone(plan, c, yBack);
   const r = mulberry32(hash32(plan.seed, 'silt'));
   const ink = night ? INK_NIGHT : INK;
-  const lightInk = night ? 'rgba(232, 224, 207, ' : 'rgba(243, 238, 226, ';
   const step = 4;
   const lineAt = (x: number) => Math.min(plan.h + 2, floorAt(plan, x));
   const { back, front } = siltColors(plan, c);
@@ -2048,51 +2064,9 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
     }
     // (No lit band under the crest: a pale ribbon along it read as a snow
     // line. The crest is one broken pen line, below, and nothing else.)
-    // The beds: level strata cut by the ground, each a run of broken
-    // strokes, close at the back and opening out coming forward, heavier
-    // toward the foot of the page and away from the window's light: about
-    // a stroke to a hundred square units, an engraver's tone, never a fill.
-    const pen = new Strokes();
-    // A trench's wall is a cliff: in the rocks' and the side walls' own hand.
-    // On paper the floor is engraved stone too, the trench's walls' hand
-    // (`inkWall`) at the rocks' density; at night, its beds in the light ink.
-    if ((t && side !== 0) || (!t && !night)) trenchFace(ctx, plan, c, D, side, crest, view);
-    else {
-      const top = Math.min(...crest.filter((_, i) => i % 2 === 1)) / D;
-      const rs = mulberry32(hash32(plan.seed, 'beds', side));
-      const tilt = ((hash32(plan.seed, 'strata') % 100) / 100 - 0.5) * 0.02;
-      let y = top + 1.5;
-      // The swells' own line, which the beds near the top follow and the deeper ones forget.
-      const lift = (x: number) => lineAt(x) - top;
-      for (let li = 0; y < plan.h + 4 && li < 3000; li++) {
-        const k = clampT((y - yBack) / Math.max(1, plan.h - yBack));
-        // Beds come in sets, some heavier than others, never evenly ruled.
-        const set = 0.5 + 0.5 * Math.sin(li * 0.37 + side * 1.3) * Math.sin(li * 0.11 + 2.1);
-        const gap = (2.4 + 5 * k) * (0.55 + 0.9 * rs()) * (1.25 - 0.5 * set);
-        if (y > vy0 - 40 && y < vy1 + 40) {
-          const rb = mulberry32(hash32(plan.seed, 'bed', side, li));
-          const follow = (1 - k) ** 2 * (0.75 + 0.25 * rb());
-          let x = x0 - rb() * 24;
-          while (x < x1) {
-            const len = (5 + 22 * rb() * rb()) * (0.7 + 0.7 * k) * (0.7 + 0.6 * set);
-            const skip = (3 + 14 * rb()) * (1.2 - 0.5 * k) * (1.3 - 0.6 * set);
-            const xm = x + len / 2;
-            const ya = y + follow * lift(x) + tilt * (x - plan.w / 2) + 0.6 * Math.sin(x * 0.027 + li);
-            const yb = y + follow * lift(x + len) + tilt * (x + len - plan.w / 2) + 0.6 * Math.sin((x + len) * 0.027 + li) + (rb() - 0.5) * 0.6;
-            if (Math.min(ya, yb) > lineAt(xm) + 1.5) {
-              const away = Math.min(1, Math.abs(xm - plan.window.x) / (plan.w * 0.6));
-              const dark = clampT(0.1 + 0.5 * k + 0.25 * away + 0.25 * set + (t && !facing ? 0.15 : 0));
-              // (At night the beds are the light ink's, fewer and fainter where it is darker.)
-              const al = night ? 0.3 * (1.1 - dark) : 0.85 * (0.4 + 0.6 * dark);
-              pen.add(x * D, ya * D, (x + len) * D, yb * D, (night ? 0.3 + 0.5 * dark : 0.45 + 0.6 * dark) * D, al);
-            }
-            x += len + skip;
-          }
-        }
-        y += gap;
-      }
-    }
-    pen.draw(ctx, night ? INK_NIGHT : INK);
+    // The ground in the rocks' hand: a trench's wall a cliff (`inkWall`),
+    // the floor its level beds (`inkFloor`, its crest line with them).
+    trenchFace(ctx, plan, c, D, side, crest, view);
     // Pebbles in loose clusters of three to seven where the current dropped
     // them, the clusters spread apart, the stones larger coming forward.
     {
@@ -2142,8 +2116,9 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
       }
     }
     ctx.restore();
-    // The crest in one pen line, broken for about a third of its length.
-    {
+    // The crest in one pen line, broken for about a third of its length
+    // (the floor's is `inkFloor`'s own).
+    if (side !== 0) {
       const ink = night ? INK_NIGHT : INK;
       const rl = hash32(plan.seed, 'crest', bi);
       const ph = (rl % 1000) / 159;
@@ -2237,9 +2212,14 @@ function trenchFace(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
     const top = plan.trench ? plan.trench.top : (plan.floor?.y ?? plan.h);
     const style = rockStyle(waterAtY(plan, c, top + (plan.h - top) * 0.3), night, D, 1, hash32(plan.seed, 'trench', side));
     // Ground, not a rock in the water: a step darker than the stone.
-    // (The floor a step further: under open water it must stay darker than the water over it.)
-    if (!night) style.rock = mixHex(style.rock, '#1A1714', side === 0 ? 0.45 : 0.3);
-    inkWall(o, body, { x0: 0, y0: 0, x1: cw, y1: chh }, style, D, hash32(plan.seed, 'trench-face', side), { side: side < 0 || (side === 0 && plan.window.x > plan.w / 2) ? 'left' : 'right', fadeFrom: 0, fadeTo: chh * 3 });
+    // (The floor a step further: it lies under open water, and must stay darker than it.)
+    if (!night) style.rock = mixHex(style.rock, '#1A1714', side === 0 ? 0.6 : 0.3);
+    if (side === 0) {
+      // The floor: its beds level, its crest one broken line, nothing pale under it.
+      const top2: number[] = [];
+      for (let i = 0; i < crest.length; i += 2) top2.push(crest[i] - ox, crest[i + 1] - oy);
+      inkFloor(o, body, { x0: 0, y0: 0, x1: cw, y1: chh }, style, D, hash32(plan.seed, 'floor-face'), { crest: top2 });
+    } else inkWall(o, body, { x0: 0, y0: 0, x1: cw, y1: chh }, style, D, hash32(plan.seed, 'trench-face', side), { side: side < 0 ? 'left' : 'right', fadeFrom: 0, fadeTo: chh * 3 });
     made = { canvas, x: ox, y: oy };
     c.rocks.set(key, made);
   }
@@ -2445,14 +2425,14 @@ function whaleBackInto(o: CanvasRenderingContext2D, plan: Plan, e: PlacedEvent, 
   const nx = -Math.sin(phi);
   const ny = Math.cos(phi);
   const blur = WHALE_BLUR * Math.min(plan.w, plan.h);
-  // Only the top of its back is lost, over a seventh of its length: below
-  // that the body, the flipper and the flukes keep their edge.
+  // Only its back is lost, over a quarter of its length: below that the
+  // belly, the flipper and the flukes keep their edge.
   const from = -0.11 * at.len - blur * 2;
-  const to = -0.11 * at.len + 0.14 * at.len;
+  const to = -0.11 * at.len + 0.36 * at.len;
   const g = o.createLinearGradient((at.cx + nx * from) * D, (at.cy + ny * from) * D, (at.cx + nx * to) * D, (at.cy + ny * to) * D);
-  g.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
-  g.addColorStop(0.35, 'rgba(0, 0, 0, 0.4)');
-  g.addColorStop(0.7, 'rgba(0, 0, 0, 0.12)');
+  g.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+  g.addColorStop(0.3, 'rgba(0, 0, 0, 0.66)');
+  g.addColorStop(0.65, 'rgba(0, 0, 0, 0.28)');
   g.addColorStop(1, 'rgba(0, 0, 0, 0)');
   o.save();
   // Darker first, so its body reads 7 to 13 per cent under the water round
@@ -2477,7 +2457,7 @@ function whaleBackInto(o: CanvasRenderingContext2D, plan: Plan, e: PlacedEvent, 
 }
 
 /** How much darker than drawWhale lays it the picture's whale is laid, on each ground. */
-const WHALE_GAIN = { paper: 1.45, night: 0.8 };
+const WHALE_GAIN = { paper: 1.75, night: 0.95 };
 
 /** The rare thing itself, in the picture's device px. */
 function drawEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: PlacedEvent, D: number, ambient: number) {
