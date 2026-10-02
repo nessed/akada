@@ -458,7 +458,7 @@ export function paint(ctx: CanvasRenderingContext2D, plan: Plan, px: number, row
     // Laid as light on a clear layer: the layer is then screened onto paper.
     dark: true,
     // And a second sheaf over the open water, if the page has one.
-    sheaf: plan.sheaf ? { x: (plan.sheaf.x * D) / rs, y: (plan.sheaf.y * D) / rs, strength: SHEAF_STRENGTH, width: (plan.w * 0.16 * D) / rs } : null,
+    sheaf: plan.sheaf ? { x: (plan.sheaf.x * D) / rs, y: (plan.sheaf.y * D) / rs, strength: SHEAF_STRENGTH[night ? 1 : 0], width: (plan.w * 0.16 * D) / rs } : null,
   };
   const layer = rayLayer(plan, c, W, H, rs, lit * D, rays);
   if (layer && sees(view, 0, 0, W, lit * D)) {
@@ -2718,8 +2718,8 @@ function drawEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: Plac
 
 /* ---- What grows ---- */
 
-/** The second sheaf of light, against the window's own. */
-const SHEAF_STRENGTH = 0.6;
+/** The second sheaf of light, against the window's own: on cream (screened onto pale water, it must be laid harder) and by night. */
+const SHEAF_STRENGTH: [number, number] = [0.8, 0.5];
 
 /** The second fall of snow at its thickest, against the first (`snowAt` says how much of it falls where). */
 const SNOW_MORE = 0.9;

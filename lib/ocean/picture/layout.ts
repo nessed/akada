@@ -1978,7 +1978,8 @@ export function planIn(s: Session, color: string, ground: 'paper' | 'night', sha
     for (const j of jellies) if (!j.hero && !j.shoal) take(j.box);
     if (cloud) take(cloud.box);
     for (const a of cast.cast) if (!a.floor) take(a.box, a.layer === 0 ? 0.5 : 1);
-    for (const v of eventSolids(events, M, s.biome.env.current)) take(v);
+    // (The whale's soft shadow far off holds it only a little.)
+    for (const v of events) take(v.kind === 'whale' ? whaleHull(v, M, s.biome.env.current).box : v.far ? null : v.box, v.kind === 'whale' ? 0.25 : 1);
     if (held < OPEN_HELD) {
       const tilt = comp.lean ?? lean;
       const at = { x: fromWall(SHEAF_AT), y: h * 0.38 };
