@@ -5,6 +5,7 @@ import type { Course, Task } from '@/lib/data';
 import { addSessionOptimistic } from '@/lib/data-hooks';
 import { isoDate } from '@/lib/utils';
 import { useLeaving } from './Leaving';
+import { useEnterKey } from '@/lib/use-enter-key';
 import DatePicker from './DatePicker';
 import { ButtonSpinner } from './LoadingIndicator';
 
@@ -68,6 +69,7 @@ export default function LogTimeSheet({
   }, [open, onClose]);
 
   const [shown, leaving] = useLeaving(open);
+  useEnterKey(open, () => void save());
   if (!shown) return null;
 
   const typedMinutes = typed.trim() ? Math.round(Number(typed)) : null;
@@ -212,7 +214,14 @@ export default function LogTimeSheet({
             onClick={save}
             className="flex-1 rounded-[10px] bg-primary py-3.5 text-sm font-medium text-primary-contrast disabled:opacity-40"
           >
-            {saving ? <ButtonSpinner /> : 'Save'}
+            {saving ? (
+              <ButtonSpinner />
+            ) : (
+              <>
+                Save
+                <span aria-hidden="true" className="key-hint ml-2 text-[12px] opacity-60">↵</span>
+              </>
+            )}
           </button>
         </div>
       </section>

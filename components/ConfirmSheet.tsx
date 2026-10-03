@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ButtonSpinner } from './LoadingIndicator';
 import { useLeaving } from './Leaving';
+import { useEnterKey } from '@/lib/use-enter-key';
 
 interface Props {
   open: boolean;
@@ -59,9 +60,12 @@ export default function ConfirmSheet({
 
   const [shown, leaving] = useLeaving(open);
 
-  if (!shown) return null;
-
   const armed = !busy && (!requirePhrase || typed.trim().toLowerCase() === requirePhrase.toLowerCase());
+
+  // The typed-phrase field already confirms on its own Enter.
+  useEnterKey(open && !requirePhrase && armed, onConfirm);
+
+  if (!shown) return null;
 
   return (
     <div className={`sheet-lift fixed inset-0 z-[95] flex items-end ${leaving ? 'sheet-leaving' : 'animate-fade-in'}`}>
@@ -121,7 +125,10 @@ export default function ConfirmSheet({
                 {confirmLabel}
               </span>
             ) : (
-              confirmLabel
+              <>
+                {confirmLabel}
+                <span aria-hidden="true" className="key-hint ml-2 text-[12px] opacity-60">↵</span>
+              </>
             )}
           </button>
         </div>

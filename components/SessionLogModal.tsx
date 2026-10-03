@@ -11,6 +11,7 @@ import TallyMarks from '@/components/progression/TallyMarks';
 import { ButtonSpinner } from './LoadingIndicator';
 import { useLeaving } from './Leaving';
 import { usePreferences } from '@/lib/preferences';
+import { useEnterKey } from '@/lib/use-enter-key';
 
 // Quick-reflection tag chips. Tapping appends `#tag` into the note so the
 // data shape stays the same, no schema migration needed for this flourish.
@@ -124,6 +125,8 @@ export default function SessionLogModal({
   }, [open]);
 
   const [shown, leaving] = useLeaving(open);
+  const canSaveNow = open && isLoggableDuration(durationSeconds) && !saving;
+  useEnterKey(canSaveNow, () => onSave(note, markDone, keep, practice));
 
   if (!shown || !course) return null;
   const canSave = isLoggableDuration(durationSeconds) && !saving;
@@ -530,7 +533,14 @@ export default function SessionLogModal({
             className="flex-1 min-h-[50px] py-3.5 rounded-[10px] bg-primary text-primary-contrast text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-35"
           >
             <HandCheck size={14} color="currentColor" />
-            {saving ? <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving…</span> : 'Save'}
+            {saving ? (
+              <span className="flex items-center justify-center gap-2"><ButtonSpinner />Saving…</span>
+            ) : (
+              <>
+                Save
+                <span aria-hidden="true" className="key-hint text-[12px] opacity-60">↵</span>
+              </>
+            )}
           </button>
         </div>
       </div>

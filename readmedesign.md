@@ -2332,12 +2332,24 @@ the one screen that looked like a spreadsheet. It is now a planner spread.
   there with the date or course already filled in. New task and `N` still
   open it at the top of the list.
 
+### Enter answers the sheet
+Finishing a sitting (Finish, `F`, `K`, the dock's stop button) and discarding
+one both ask through `ConfirmSheet`, and so does reset. Every confirm and every
+save sheet (the log sheet, Log time) answers to **Enter**, through
+`lib/use-enter-key.ts`: plain Enter from anywhere on the sheet except a button
+or link (which it presses) or a note (where Enter is a new line, so a note
+takes ⌘/Ctrl+Enter). The main button carries a faint ↵ after its label to say
+so, in `.key-hint`, so it is hidden on a touch screen. A sheet that asks for a
+typed phrase keeps its own Enter on the field.
+
 ### Keys for the running clock
 Four more, and they work from every screen rather than from the timer. `R`
-resets the sitting: it opens the same `ConfirmSheet` every destructive
-question uses ("Reset this sitting? The time so far won't be saved."), and
-only the sheet's Reset button throws the clock away, so a stray key never
-does. The timer screen's key hint names it too ("R reset"), since that is
+starts the sitting over: it opens the same `ConfirmSheet` every destructive
+question uses ("Start this sitting over? The time so far won't be saved."),
+and only the sheet's Reset button throws the clock away, so a stray key never
+does. Confirming cancels and starts again in one step on the same course,
+task and block length, so the reader stays on the timer at zero rather than
+being sent home. The timer screen's key hint names it too ("R reset"), since that is
 where a reader looks for the keys. `B` takes a break; on a held block it
 counts the pause as the break (see "The pause"), and on a break it does
 nothing, since ending one is `P`'s. It used to be the timer screen's own
@@ -2348,7 +2360,7 @@ back to their book. The timer's own keys (Space, F) only exist on the
 timer screen, which is the one screen a reader mid-chapter is least likely to
 be looking at, so stopping meant finding the dock with a mouse. `P` and `K`
 reach the clock from wherever they are: `P` holds it or lets it go, and means
-**end break** while a break runs (the next block starts running); `K` finishes the sitting and the log sheet
+**end break** while a break runs (the next block starts running); `K` asks "Finish this sitting?" and, once answered, finishes it and the log sheet
 opens on the spot, because `PageShell` already carries one on every tab. On
 the few screens that carry neither sheet nor shell, `K` opens the timer
 instead, so the key never ends a sitting with nothing to show for it.
