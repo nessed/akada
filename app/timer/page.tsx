@@ -15,6 +15,7 @@ import {
 } from '@/lib/session-safety';
 import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
 import ConfirmSheet from '@/components/ConfirmSheet';
+import { announceEnded } from '@/lib/timer-ended';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import { useNotice } from '@/components/Notice';
 import StudyFan from '@/components/StudyFan';
@@ -265,6 +266,7 @@ export default function TimerPage() {
     }
     const durationSeconds = clampSessionSeconds(result.durationSeconds);
     if (!isLoggableDuration(durationSeconds)) {
+      announceEnded('That sitting was too short to log.');
       clearPendingLog();
       router.replace('/dashboard');
     }
@@ -285,6 +287,7 @@ export default function TimerPage() {
       return;
     }
     if (timerCourseId && courses.length > 0 && !course) {
+      announceEnded('The timer was for a course that no longer exists, so it was cleared.');
       cancel();
       clearPendingLog();
       router.replace('/dashboard');
