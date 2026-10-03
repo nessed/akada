@@ -857,6 +857,38 @@ export default function TimerPage() {
     </div>
   );
 
+  /* Finish and Discard ask through these. Both layouts (the block screen and
+     the night one) render them, since both carry the buttons. */
+  const confirmSheets = (
+    <>
+      <ConfirmSheet
+        open={asking === 'finish'}
+        title="Finish this sitting?"
+        body="The clock stops and you'll log it next."
+        confirmLabel="Finish"
+        cancelLabel="Keep going"
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          setAsking(null);
+          handleStop();
+        }}
+      />
+      <ConfirmSheet
+        open={asking === 'discard'}
+        title="Discard this sitting?"
+        body="The time so far won't be saved."
+        confirmLabel="Discard"
+        cancelLabel="Keep going"
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          setAsking(null);
+          cancel();
+          router.replace('/dashboard');
+        }}
+      />
+    </>
+  );
+
   /* Open mode goes to the night paper and lets the fan fill the whole screen.
      It is the one place in the app that inverts, and it does it because a
      long sitting in a dark room is what the mode is for. */
@@ -1035,6 +1067,7 @@ export default function TimerPage() {
             <div>{controls}</div>
           </div>
         </div>
+        {confirmSheets}
         <PendingSessionLogSheet />
         {pictureSheet}
       </div>
@@ -1230,31 +1263,7 @@ export default function TimerPage() {
         </p>
       </div>
 
-      <ConfirmSheet
-        open={asking === 'finish'}
-        title="Finish this sitting?"
-        body="The clock stops and you'll log it next."
-        confirmLabel="Finish"
-        cancelLabel="Keep going"
-        onCancel={() => setAsking(null)}
-        onConfirm={() => {
-          setAsking(null);
-          handleStop();
-        }}
-      />
-      <ConfirmSheet
-        open={asking === 'discard'}
-        title="Discard this sitting?"
-        body="The time so far won't be saved."
-        confirmLabel="Discard"
-        cancelLabel="Keep going"
-        onCancel={() => setAsking(null)}
-        onConfirm={() => {
-          setAsking(null);
-          cancel();
-          router.replace('/dashboard');
-        }}
-      />
+      {confirmSheets}
       <PendingSessionLogSheet />
       {pictureSheet}
     </div>
