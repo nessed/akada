@@ -51,8 +51,9 @@ function blinkPage() {
 
 export default function TimerHotkeys() {
   const router = useRouter();
-  const { active, onBreak, endBreak, startBreak, pause, resume, stop, cancel } = useTimerState();
+  const { active, onBreak, endBreak, startBreak, pause, resume, stop, cancel, start } = useTimerState();
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [confirmingFinish, setConfirmingFinish] = useState(false);
 
   useEffect(() => {
     if (!active) return;
@@ -82,9 +83,9 @@ export default function TimerHotkeys() {
         blinkPage();
         startBreak();
       } else if (key === 'k') {
+        // Ends the sitting, so it asks first.
         event.preventDefault();
-        stop();
-        if (!isLogSheetMounted()) router.push('/timer');
+        setConfirmingFinish(true);
       } else if (key === 'r') {
         // Throws the sitting away, so it asks first. The key only opens the
         // question; the sheet's own button is what does it.
@@ -95,20 +96,40 @@ export default function TimerHotkeys() {
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, onBreak, endBreak, startBreak, pause, resume, stop, router]);
+  }, [active, onBreak, endBreak, startBreak, pause, resume]);
 
   return (
-    <ConfirmSheet
-      open={confirmingReset && !!active}
-      title="Reset this sitting?"
-      body="The time so far won't be saved."
-      confirmLabel="Reset"
-      cancelLabel="Keep going"
-      onCancel={() => setConfirmingReset(false)}
-      onConfirm={() => {
-        setConfirmingReset(false);
-        cancel();
-      }}
-    />
+    <>
+      <ConfirmSheet
+        open={confirmingReset && !!active}
+        title="Start this sitting over?"
+        body="The time so far won't be saved. The clock starts again from zero on the same task."
+        confirmLabel="Reset"
+        cancelLabel="Keep going"
+        onCancel={() => setConfirmingReset(false)}
+        onConfirm={() => {
+          setConfirmingReset(false);
+          // Cancel and start in one go, so no screen sees the gap between
+          // them and sends the reader home.
+          if (!active) return;
+          const { courseId, taskId, targetSeconds } = active;
+          cancel();
+          start(courseId, taskId, targetSeconds);
+        }}
+      />
+      <ConfirmSheet
+        open={confirmingFinish && !!active}
+        title="Finish this sitting?"
+        body="The clock stops and you'll log it next."
+        confirmLabel="Finish"
+        cancelLabel="Keep going"
+        onCancel={() => setConfirmingFinish(false)}
+        onConfirm={() => {
+          setConfirmingFinish(false);
+          stop();
+          if (!isLogSheetMounted()) router.push('/timer');
+        }}
+      />
+    </>
   );
 }

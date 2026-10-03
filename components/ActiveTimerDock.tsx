@@ -6,6 +6,7 @@ import { useCourses } from '@/lib/data-hooks';
 import { breakStartsAt, useTimer } from '@/lib/timer-context';
 import { formatHHMMSS, formatHM, resolveTint } from '@/lib/utils';
 import { hasEarlierBlock, stretchFace } from '@/lib/timer-face';
+import ConfirmSheet from './ConfirmSheet';
 
 export default function ActiveTimerDock() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function ActiveTimerDock() {
      is held. What Break would do changes with the length of the hold, and
      the button's label has to keep up with it. */
   const [, setHeldRedraw] = useState(0);
+  const [confirmingFinish, setConfirmingFinish] = useState(false);
   const held = Boolean(active?.isPaused);
   useEffect(() => {
     if (!held) return;
@@ -61,11 +63,13 @@ export default function ActiveTimerDock() {
   }
 
   function stopAndLog() {
+    setConfirmingFinish(false);
     stop();
     router.push('/timer');
   }
 
   return (
+    <>
     <div
       /* Floats over the page at every size. On a phone it sits at the top,
          where the content's own 64px of head room leaves it a lane. On
@@ -192,7 +196,7 @@ export default function ActiveTimerDock() {
             )}
             <button
               type="button"
-              onClick={stopAndLog}
+              onClick={() => setConfirmingFinish(true)}
               aria-label="Stop the timer and log the session"
               title="Finish (K)"
               className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-transparent"
@@ -206,5 +210,15 @@ export default function ActiveTimerDock() {
         </div>
       </div>
     </div>
+    <ConfirmSheet
+      open={confirmingFinish}
+      title="Finish this sitting?"
+      body="The clock stops and you'll log it next."
+      confirmLabel="Finish"
+      cancelLabel="Keep going"
+      onCancel={() => setConfirmingFinish(false)}
+      onConfirm={stopAndLog}
+    />
+    </>
   );
 }

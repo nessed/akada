@@ -14,6 +14,7 @@ import {
   isLoggableDuration,
 } from '@/lib/session-safety';
 import PendingSessionLogSheet from '@/components/PendingSessionLogSheet';
+import ConfirmSheet from '@/components/ConfirmSheet';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import { useNotice } from '@/components/Notice';
 import StudyFan from '@/components/StudyFan';
@@ -123,6 +124,9 @@ export default function TimerPage() {
     clearPendingLog,
     stop,
   } = useTimer();
+
+  /* Finish and Discard both end the sitting, so both ask first. */
+  const [asking, setAsking] = useState<'finish' | 'discard' | null>(null);
 
   const { courses } = useCourses();
   const { tasks } = useTasks();
@@ -344,6 +348,7 @@ export default function TimerPage() {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (asking) return;
       if (e.key === ' ') {
         e.preventDefault();
         // On a break the one thing Space can mean is ending it. Pausing a
@@ -354,7 +359,7 @@ export default function TimerPage() {
         else pause();
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
-        handleStop();
+        setAsking('finish');
       } else if (e.key === 'Escape') {
         if (immersive) toggleImmersive();
         else router.push('/dashboard');
@@ -362,7 +367,7 @@ export default function TimerPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [endBreak, handleStop, immersive, liveActive, onBreak, pause, resume, router, toggleImmersive]);
+  }, [asking, endBreak, immersive, liveActive, onBreak, pause, resume, router, toggleImmersive]);
 
   if (!hydrated || (!course && !pendingLog)) {
     return (
@@ -636,15 +641,12 @@ export default function TimerPage() {
     </button>
   );
 
-  const finishButton = secondary('Finish', handleStop);
+  const finishButton = secondary('Finish', () => setAsking('finish'));
 
   const discardButton = (
     <button
       type="button"
-      onClick={() => {
-        cancel();
-        router.replace('/dashboard');
-      }}
+      onClick={() => setAsking('discard')}
       style={night ? { color: '#CC8462' } : undefined}
       className="h-11 rounded-[10px] px-4 text-[13px] font-medium text-warn transition-[background-color,transform] duration-200 ease-out hover:bg-warnTint active:scale-[0.97]"
     >
@@ -1225,6 +1227,31 @@ export default function TimerPage() {
         </p>
       </div>
 
+      <ConfirmSheet
+        open={asking === 'finish'}
+        title="Finish this sitting?"
+        body="The clock stops and you'll log it next."
+        confirmLabel="Finish"
+        cancelLabel="Keep going"
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          setAsking(null);
+          handleStop();
+        }}
+      />
+      <ConfirmSheet
+        open={asking === 'discard'}
+        title="Discard this sitting?"
+        body="The time so far won't be saved."
+        confirmLabel="Discard"
+        cancelLabel="Keep going"
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          setAsking(null);
+          cancel();
+          router.replace('/dashboard');
+        }}
+      />
       <PendingSessionLogSheet />
       {pictureSheet}
     </div>
