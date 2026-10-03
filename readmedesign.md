@@ -2332,6 +2332,17 @@ the one screen that looked like a spreadsheet. It is now a planner spread.
   there with the date or course already filled in. New task and `N` still
   open it at the top of the list.
 
+### The clock says why it stopped
+Whenever the timer ends a sitting the reader did not end (a break past its
+45 minute limit, the page closed too long, no sign of anybody, the 18 hour
+limit, a pause over two hours) or drops one with nothing in it to log (all
+break, too short, a deleted course), it says so on the notice slip at that
+moment, one plain sentence, through `lib/timer-ended.ts`
+(`announceEnded`, read out by `components/TimerEndedNotice.tsx`). A sitting
+that has hours in it also opens the log sheet, which gives the same reason in
+its notice line. Nothing leaves the clock silently: a new way for the timer to
+stop adds its sentence there in the same commit.
+
 ### Enter answers the sheet
 Finishing a sitting (Finish, `F`, `K`, the dock's stop button) and discarding
 one both ask through `ConfirmSheet`, and so does reset. Every confirm and every

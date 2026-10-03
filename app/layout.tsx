@@ -9,6 +9,7 @@ import ClaudeSheetProvider from '@/components/claude/ClaudeSheet';
 import SWRRoot from '@/components/SWRRoot';
 import TimerDocumentTitle from '@/components/TimerDocumentTitle';
 import TimerHotkeys from '@/components/TimerHotkeys';
+import TimerEndedNotice from '@/components/TimerEndedNotice';
 import PaperDoodle from '@/components/notebook/PaperDoodle';
 import SmoothScroll from '@/components/SmoothScroll';
 import TapSounds from '@/components/TapSounds';
@@ -170,6 +171,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 component: they bind nothing unless a sitting is running. */}
             <TimerHotkeys />
             <NoticeProvider>
+              <TimerEndedNotice />
               <UndoProvider>
                 <ClaudeSheetProvider>{children}</ClaudeSheetProvider>
               </UndoProvider>

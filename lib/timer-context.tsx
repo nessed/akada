@@ -23,6 +23,7 @@ import { cancelChime, flushChime, primeChime, ringChime, scheduleChime } from '.
 import { playSound } from './sounds';
 import { logSessionFollowed } from './progression/log';
 import { idleTripped, quietPoint } from './timer-idle';
+import { announceEnded, endedMessage } from './timer-ended';
 import { isoDate } from './utils';
 
 interface TimerState {
@@ -808,6 +809,7 @@ function loadActiveSnapshot(): { active: TimerState | null; pendingLog: PendingT
     const idle = !staleRunning && !breakOverrun && !maxReached && idleTripped(parsed, now);
     if (idle) {
       const pendingLog = buildPendingLog(parsed, now, 'idle');
+      announceEnded(endedMessage('idle', pendingLog != null));
       saveActive(null);
       savePendingLog(pendingLog);
       return { active: null, pendingLog };
@@ -828,6 +830,7 @@ function loadActiveSnapshot(): { active: TimerState | null; pendingLog: PendingT
             ? 'pause'
             : 'max';
       const pendingLog = buildPendingLog(parsed, stoppedAt, reason);
+      announceEnded(endedMessage(reason, pendingLog != null));
       saveActive(null);
       savePendingLog(pendingLog);
       return { active: null, pendingLog };
@@ -983,6 +986,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       cancelChime();
       breakNoticeRef.current = null;
       const log = buildPendingLog(current, stoppedAt, reason);
+      announceEnded(endedMessage(reason, log != null));
       activeRef.current = null;
       setActive(null);
       saveActive(null);
@@ -1328,6 +1332,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
     const log = buildPendingLog(safeState, safeState.lastSeenAt, 'away');
+    announceEnded(endedMessage('away', log != null));
     activeRef.current = null;
     setActive(null);
     saveActive(null);
@@ -1420,6 +1425,10 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       pendingLogRef.current = result;
       setPendingLog(result);
       savePendingLog(result);
+    } else {
+      // Finishing something that was all break leaves no sheet to open, and
+      // used to leave the reader on a screen that quietly sent them home.
+      announceEnded('That sitting had no study time in it, so there was nothing to log.');
     }
     return result;
   }, [recoverStaleRunningTimer]);

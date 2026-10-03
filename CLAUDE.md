@@ -102,6 +102,8 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   fills) is `lib/ocean/pen.ts`. Anything new drawn in the sea uses it.
 - **Audio hooks** are `lib/use-*.ts` (`use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
   files, so they work on iOS and offline.
+- **Why the timer stopped on its own** is `lib/timer-ended.ts` (`announceEnded`).
+  Any new way for the clock to end or drop a sitting calls it.
 - **Timer state and actions** (`pause`, `stop`, `cancel`, breaks) are in
   `lib/timer-context.tsx`; read them with `useTimerState()`.
 

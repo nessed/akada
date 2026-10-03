@@ -1,5 +1,6 @@
 'use client';
 
+import { announceEnded } from '@/lib/timer-ended';
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
@@ -168,6 +169,7 @@ export default function PendingSessionLogSheet() {
 
   useEffect(() => {
     if (pendingLog && !coursesLoading && courses.length > 0 && !course) {
+      announceEnded('That sitting was for a course that no longer exists, so it was cleared.');
       clearPendingLog();
     }
   }, [clearPendingLog, course, courses.length, coursesLoading, pendingLog]);
@@ -383,7 +385,7 @@ function LogNotice({
     log.recoveryReason === 'away'
       ? `The timer on ${courseCode} was left running while the page was closed, so it stopped where it was last open.`
       : log.recoveryReason === 'break'
-        ? `The break ran past 45 minutes, so the ${courseCode} session was closed where it began.`
+        ? `The break hit its 45 minute limit, so the ${courseCode} sitting was closed there. Time on break is kept apart and never counted as study.`
         : log.recoveryReason === 'max'
           ? `The ${courseCode} session reached the 18 hour limit and stopped there.`
           : log.recoveryReason === 'pause'
