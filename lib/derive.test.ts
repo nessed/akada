@@ -75,15 +75,22 @@ test('a group always loses exactly size minus keep, whichever pieces are back', 
     grading: { dropRules: [{ group: 'rp', keep: 5 }] },
   });
   // Best 5 of 7 at 6 each is 30, so the course is 100 at every point in term.
-  // The last two back while the first five are not: both marks stay.
-  const late = gradeStanding(course([null, null, null, null, null, 9, 9]));
+  // The worst marks already in go first, and one mark always stays: of two
+  // back, the lower goes, and the other drop comes off a paper still to come.
+  const late = gradeStanding(course([null, null, null, null, null, 9, 12]));
   assert.equal(late.total, 100);
-  assert.deepEqual(late.dropped, ['p1', 'p2']);
-  // Six of seven back: the worst mark goes, and so does the one still out.
+  assert.deepEqual(late.dropped.sort(), ['p1', 'p6']);
+  // Six of seven back: the two worst marks go, whatever is still out counts.
   const six = gradeStanding(course([2, 10, 10, 10, 10, 10, null]));
   assert.equal(six.total, 100);
-  assert.deepEqual(six.dropped.sort(), ['p1', 'p7']);
+  assert.deepEqual(six.dropped.sort(), ['p1', 'p2']);
   assert.equal(six.percent, 83);
+  // Four back, two of them bad: those two are the dropped ones, not the
+  // papers that have not happened.
+  const four = gradeStanding(course([6, 2, 12, 12, null, null, null]));
+  assert.equal(four.total, 100);
+  assert.deepEqual(four.dropped.sort(), ['p1', 'p2']);
+  assert.equal(four.percent, 100);
 });
 
 test('the reading rate says when it is only the default', () => {

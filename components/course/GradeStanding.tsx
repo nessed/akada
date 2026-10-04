@@ -656,16 +656,16 @@ export default function GradeStanding({
         })}
       </div>
 
-      {/* A piece that has not come back cannot be ranked, so until enough have,
-          the ones furthest out sit out and the marks already held all count.
-          Struck through and called "dropped" read as a verdict on a paper that
-          has not happened. */}
+      {/* Drops land on the lowest marks already in. Only when there are not
+          enough marks to take them does one fall on a paper still to come,
+          and that is called "held out": "dropped" would read as a verdict on
+          a paper that has not happened. */}
       {standing.rows.some(
         (row) => standing.dropped.includes(row.id) && (row.score === null || !row.outOf),
       ) && (
         <p className="m-0 mt-3 font-serif text-[13px] italic leading-[1.5] text-muted">
-          The lowest scores are only dropped once enough have come back to say which.
-          Until then, the ones still to come are held out.
+          Not enough have come back to drop the lowest yet, so the ones still to
+          come are held out for now.
         </p>
       )}
 
