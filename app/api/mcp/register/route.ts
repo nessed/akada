@@ -16,7 +16,8 @@ export async function POST(request: NextRequest) {
   const redirectUris = Array.isArray(body.redirect_uris)
     ? body.redirect_uris.filter((uri): uri is string => typeof uri === 'string')
     : [];
-  const clientName = redirectUris.length === 1 ? matchKnownCallback(redirectUris[0]) : null;
+  const names = redirectUris.map(matchKnownCallback);
+  const clientName = redirectUris.length > 0 && names.every((name) => name && name === names[0]) ? names[0] : null;
   if (!clientName) {
     return oauthError(
       'invalid_redirect_uri',

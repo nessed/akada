@@ -72,6 +72,10 @@ test('register: Claude and any-port loopback callbacks are accepted, others are 
   assert.equal((await register([CLAUDE_CALLBACK])).status, 201);
   assert.equal((await register(['http://localhost:3118/callback'])).status, 201);
   assert.equal((await register(['http://127.0.0.1:49152/callback'])).status, 201);
+  assert.equal((await register(['https://chatgpt.com/connector/oauth/abc_123-XYZ'])).status, 201);
+  assert.equal((await register(['https://chatgpt.com/connector_platform_oauth_redirect', 'https://platform.openai.com/apps-manage/oauth'])).status, 201);
+  assert.equal((await register(['https://chatgpt.com/connector/oauth/abc/../evil'])).status, 400);
+  assert.equal((await register([CLAUDE_CALLBACK, 'https://evil.example/callback'])).status, 400);
   assert.equal((await register(['https://evil.example/callback'])).status, 400);
 });
 
