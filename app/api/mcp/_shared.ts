@@ -24,7 +24,15 @@ function isLoopbackCallback(uri: string) {
 // every run, so it's matched by shape instead of an exact string).
 const KNOWN_CALLBACKS: KnownCallback[] = [
   { name: 'Claude', test: (uri) => uri === 'https://claude.ai/api/mcp/auth_callback' },
-  { name: 'ChatGPT', test: (uri) => uri === 'https://chatgpt.com/connector_platform_oauth_redirect' },
+  {
+    name: 'ChatGPT',
+    // The plugin dialog hands each connector its own /connector/oauth/<id>
+    // callback; the older apps flow and OpenAI's review tool use fixed ones.
+    test: (uri) =>
+      uri === 'https://chatgpt.com/connector_platform_oauth_redirect' ||
+      uri === 'https://platform.openai.com/apps-manage/oauth' ||
+      /^https:\/\/chatgpt\.com\/connector\/oauth\/[A-Za-z0-9_-]+$/.test(uri),
+  },
   {
     name: 'Gemini',
     test: (uri) => uri === 'https://vertexaisearch.cloud.google.com/oauth-redirect' || isLoopbackCallback(uri),

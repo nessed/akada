@@ -25,7 +25,7 @@ AES-256-GCM under `AKADA_MCP_TOKEN_SECRET` (`lib/mcp-auth.ts`).
 | --- | --- |
 | Protected resource metadata (RFC 9728) | `/.well-known/oauth-protected-resource/mcp`, also `/.well-known/oauth-protected-resource/api/mcp` and `/.well-known/oauth-protected-resource` for clients that probe |
 | Authorization server metadata (RFC 8414) | `/.well-known/oauth-authorization-server`, issuer = `NEXT_PUBLIC_SITE_URL` |
-| Dynamic client registration (RFC 7591) | `POST /api/mcp/register`. Only known callbacks: `https://claude.ai/api/mcp/auth_callback`, ChatGPT's, Gemini's, and `http://localhost` / `127.0.0.1` `/callback` or `/oauth/callback` on any port (Claude Code, Gemini CLI) |
+| Dynamic client registration (RFC 7591) | `POST /api/mcp/register`. Only known callbacks: `https://claude.ai/api/mcp/auth_callback`, ChatGPT's (`https://chatgpt.com/connector/oauth/<id>`, `…/connector_platform_oauth_redirect`, `platform.openai.com/apps-manage/oauth`), Gemini's, and `http://localhost` / `127.0.0.1` `/callback` or `/oauth/callback` on any port (Claude Code, Gemini CLI) |
 | Authorization + consent | `GET/POST /api/mcp/authorize`. PKCE S256 required. The user must be signed in to Akada, then confirms their password, which starts a Supabase session that only the connector refreshes |
 | Token | `POST /api/mcp/token`, form-encoded, public client (`none`). `authorization_code` and `refresh_token` grants |
 
