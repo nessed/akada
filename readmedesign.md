@@ -2717,8 +2717,10 @@ syllabi that drop the worst quizzes (`lib/grading-drop.ts`). It adds an
 "Ignore the lowest" block: a stepper (digits in mono) for how many go, and the
 pieces as outlined chips, tapped to put in or out. Pieces that share a stem
 ("Quiz 1" to "Quiz 7") are picked already. Under it a serif line says it back,
-"Of the 7, the best 5 count.". The score decides which ones go, and only among
-pieces that have come back; at least one piece always counts. Stored as the
+"Of the 7, the best 5 count.". The score decides which ones go, worst first
+among the pieces already back, so the lowest marks in hand are the ones struck
+through and "dropped"; one mark always stays counting. A drop with no mark to
+land on yet comes off a paper still to come, marked "held out". Stored as the
 same `{ group, keep }` rules Claude's proposals use, so the two are one thing.
 
 ### Log time

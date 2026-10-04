@@ -551,8 +551,9 @@ silently do nothing and the student would have no way to see why.
 
 A group's total is the `keep` heaviest pieces in it, so seven 5% quizzes
 keeping six come to 30%. Which piece is dropped is decided by score, worst
-first, and only among pieces that have come back: until more than `keep` have
-been marked, nothing the student already holds is thrown away.
+first, among the pieces that have come back, so the lowest marks already in
+are the ones dropped. One mark always stays counting, and any drops left over
+come off the pieces still to come.
 
 ### 9. `delete_course`
 - **Title**: Delete an Akada course

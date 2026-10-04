@@ -48,10 +48,10 @@ export function gradeStanding(course: Pick<Course, 'assessments' | 'grading'>) {
  *
  * A group always loses exactly `size - keep` pieces, which is what makes seven
  * 5% quizzes keeping six come to 30% rather than 35%. Which pieces go is
- * decided by score, worst first, but only once more than `keep` have come
- * back, because a quiz that has not happened cannot be ranked. Until then the
- * pieces still outstanding are the ones set aside, so no mark already held is
- * thrown away.
+ * decided by score, worst first, among the ones that have come back, so "drop
+ * my lowest two" takes effect on the two lowest marks already in. A mark that
+ * would be the last one counting stays, and any drops left over come off the
+ * pieces still to come.
  *
  * A group named by no rule, or a piece in no group, is returned untouched.
  */
@@ -68,25 +68,23 @@ function countedAssessments(rows: Assessment[], dropRules: DropRule[]): Assessme
     // so the group always totals what the outline states.
     const marked = members.filter((row) => row.score !== null && row.outOf);
     const outstanding = members.filter((row) => row.score === null || !row.outOf);
-    if (marked.length > keep) {
-      // Enough have come back to say which are the worst. Drop those, and
-      // every piece still out with them: the best `keep` marks already fill
-      // the group, so nothing outstanding can count until it beats one.
-      const byRatio = [...marked].sort(
-        (a, b) =>
-          (b.score as number) / (b.outOf as number) - (a.score as number) / (a.outOf as number),
-      );
-      byRatio.slice(keep).forEach((row) => dropped.add(row.id));
-      outstanding.forEach((row) => dropped.add(row.id));
-    } else {
-      // Not yet. Trim the group's total instead, taking the lightest pieces
-      // still outstanding so no mark the student already holds is thrown
-      // away. There are always enough: at most `keep` have come back.
-      [...outstanding]
-        .sort((a, b) => a.weight - b.weight)
-        .slice(0, members.length - keep)
-        .forEach((row) => dropped.add(row.id));
-    }
+    const toDrop = members.length - keep;
+    // The worst marks already in go first, as a student reads the rule: the
+    // lowest two of what has come back. A later paper that does worse takes
+    // its place in the dropped. One mark always stays, so a single quiz is
+    // never struck out on its own.
+    const byRatio = [...marked].sort(
+      (a, b) =>
+        (a.score as number) / (a.outOf as number) - (b.score as number) / (b.outOf as number),
+    );
+    const fromMarked = Math.min(toDrop, Math.max(0, marked.length - 1));
+    byRatio.slice(0, fromMarked).forEach((row) => dropped.add(row.id));
+    // Any drops left over come off the lightest pieces still to come, so the
+    // group's total is always what the outline states.
+    [...outstanding]
+      .sort((a, b) => a.weight - b.weight)
+      .slice(0, toDrop - fromMarked)
+      .forEach((row) => dropped.add(row.id));
   }
 
   return dropped.size === 0 ? rows : rows.filter((row) => !dropped.has(row.id));

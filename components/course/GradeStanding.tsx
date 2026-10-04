@@ -621,7 +621,7 @@ export default function GradeStanding({
                 {row.label}
                 {isDropped && (
                   <span className="ml-1.5 font-serif text-[12px] italic text-muted no-underline">
-                    dropped
+                    {marked ? 'dropped' : 'held out'}
                   </span>
                 )}
                 {upcoming && !isDropped && (
@@ -655,6 +655,19 @@ export default function GradeStanding({
           );
         })}
       </div>
+
+      {/* Drops land on the lowest marks already in. Only when there are not
+          enough marks to take them does one fall on a paper still to come,
+          and that is called "held out": "dropped" would read as a verdict on
+          a paper that has not happened. */}
+      {standing.rows.some(
+        (row) => standing.dropped.includes(row.id) && (row.score === null || !row.outOf),
+      ) && (
+        <p className="m-0 mt-3 font-serif text-[13px] italic leading-[1.5] text-muted">
+          Not enough have come back to drop the lowest yet, so the ones still to
+          come are held out for now.
+        </p>
+      )}
 
       {standing.unmarked > 0 && (
         <p className="m-0 mt-3 font-serif text-[13px] italic leading-[1.5] text-muted">
