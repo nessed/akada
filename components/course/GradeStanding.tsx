@@ -10,6 +10,15 @@ import { useNotice } from '@/components/Notice';
 import { ButtonSpinner } from '@/components/LoadingIndicator';
 import ReorderList from '@/components/ReorderList';
 import { daysBetween } from '@/lib/utils';
+import {
+  applyDrafts,
+  draftRules,
+  draftsFrom,
+  maxDrop,
+  NEW_GROUP,
+  suggestMembers,
+  type DropDraft,
+} from '@/lib/grading-drop';
 
 /**
  * Where the grade stands, and where it gets entered.
@@ -50,7 +59,11 @@ export default function GradeStanding({
   const standing = useMemo(() => gradeStanding(course), [course]);
   // Out of what counts once drop rules apply, not the sum of every row: seven
   // 6% papers keeping five are 30% of the course, not 42.
-  const draftTotal = gradeStanding({ assessments: rows, grading: course.grading }).total;
+  const [drafts, setDrafts] = useState<DropDraft[]>([]);
+  const draftTotal = gradeStanding({
+    assessments: rows,
+    grading: { ...course.grading, dropRules: draftRules(rows, drafts) },
+  }).total;
   const pending = course.grading?.pending ?? null;
   const carried = useMemo(
     () => (pending ? carryMarks(course.assessments ?? [], pending.assessments) : null),
@@ -60,12 +73,50 @@ export default function GradeStanding({
   function open() {
     // Nothing yet: the usual pieces of a course, weights left blank, so
     // typing a scheme in is filling five numbers rather than building rows.
-    setRows(
-      course.assessments?.length
-        ? course.assessments
-        : USUAL_PIECES.map((label, index) => ({ ...blankRow(index), label })),
-    );
+    const start = course.assessments?.length
+      ? course.assessments
+      : USUAL_PIECES.map((label, index) => ({ ...blankRow(index), label }));
+    setRows(start);
+    setDrafts(draftsFrom(start, course.grading?.dropRules ?? []));
     setEditing(true);
+  }
+
+  /** A new rule, with the pieces that look like one family (Quiz 1 to Quiz 7) already picked. */
+  function addDrop() {
+    const group = `${NEW_GROUP}${Date.now().toString(36)}`;
+    const members = new Set(suggestMembers(rows));
+    setRows((current) => current.map((r) => (members.has(r.id) ? { ...r, group } : r)));
+    setDrafts((current) => [...current, { group, drop: 1 }]);
+  }
+
+  function toggleMember(group: string, id: string) {
+    setRows((current) =>
+      current.map((r) => {
+        if (r.id !== id) return r;
+        if (r.group === group) {
+          const { group: _gone, ...rest } = r;
+          void _gone;
+          return rest;
+        }
+        return r.group ? r : { ...r, group };
+      }),
+    );
+  }
+
+  function setDrop(group: string, drop: number) {
+    setDrafts((current) => current.map((d) => (d.group === group ? { ...d, drop } : d)));
+  }
+
+  function removeDrop(group: string) {
+    setRows((current) =>
+      current.map((r) => {
+        if (r.group !== group) return r;
+        const { group: _gone, ...rest } = r;
+        void _gone;
+        return rest;
+      }),
+    );
+    setDrafts((current) => current.filter((d) => d.group !== group));
   }
 
   function patch(id: string, next: Partial<Assessment>) {
@@ -96,8 +147,15 @@ export default function GradeStanding({
     if (saving) return;
     setSaving(true);
     try {
+      const kept = rows.filter((r) => r.label.trim() && r.weight > 0);
+      const { rows: saved, dropRules } = applyDrafts(kept, drafts);
       await updateCourseOptimistic(course.id, {
-        assessments: rows.filter((r) => r.label.trim() && r.weight > 0),
+        assessments: saved,
+        grading: {
+          basis: course.grading?.basis,
+          dropRules,
+          pending: course.grading?.pending ?? null,
+        },
       });
       setEditing(false);
     } catch (error) {
@@ -254,6 +312,85 @@ export default function GradeStanding({
           className="mt-2 bg-transparent p-0 font-serif text-[13px] italic text-muted transition-colors hover:text-ink"
         >
           + another piece…
+        </button>
+
+        {/* "My worst two quizzes don't count." Said the way a syllabus says
+            it: pick the pieces, say how many go. Marks already in decide
+            which ones, so nothing here is a choice about a particular quiz. */}
+        {drafts.map((draft) => {
+          const members = rows.filter((r) => r.group === draft.group);
+          const drop = Math.min(draft.drop, maxDrop(members.length));
+          return (
+            <div key={draft.group} className="mt-4 border-t border-line-soft pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="eyebrow m-0">Ignore the lowest</p>
+                <button
+                  type="button"
+                  onClick={() => removeDrop(draft.group)}
+                  className="bg-transparent p-0 font-serif text-[12px] italic text-muted transition-colors hover:text-ink"
+                >
+                  remove
+                </button>
+              </div>
+              <div className="mt-2 flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setDrop(draft.group, Math.max(1, drop - 1))}
+                  disabled={drop <= 1}
+                  aria-label="Ignore one fewer"
+                  className="grid h-8 w-8 touch:h-10 touch:w-10 place-items-center rounded-[10px] border border-line-strong bg-transparent font-mono text-[15px] text-ink disabled:opacity-30"
+                >
+                  −
+                </button>
+                <span className="tnum w-5 text-center font-mono text-[17px] font-semibold">{drop}</span>
+                <button
+                  type="button"
+                  onClick={() => setDrop(draft.group, Math.min(maxDrop(members.length), drop + 1))}
+                  disabled={drop >= maxDrop(members.length)}
+                  aria-label="Ignore one more"
+                  className="grid h-8 w-8 touch:h-10 touch:w-10 place-items-center rounded-[10px] border border-line-strong bg-transparent font-mono text-[15px] text-ink disabled:opacity-30"
+                >
+                  +
+                </button>
+                <span className="font-serif text-[13px] italic text-muted">of these</span>
+              </div>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {rows
+                  .filter((r) => r.label.trim() && (!r.group || r.group === draft.group))
+                  .map((r) => {
+                    const on = r.group === draft.group;
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleMember(draft.group, r.id)}
+                        className={`h-8 touch:h-10 rounded-[10px] border px-2.5 text-[12px] transition-colors ${
+                          on
+                            ? 'border-line-strong bg-bg-tint text-ink'
+                            : 'border-line bg-transparent text-muted'
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    );
+                  })}
+              </div>
+              <p className="m-0 mt-2 font-serif text-[12px] italic text-muted">
+                {members.length < 2
+                  ? 'Pick at least two pieces.'
+                  : `Of the ${members.length}, the best ${members.length - drop} count.`}
+              </p>
+            </div>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={addDrop}
+          className="mt-3 block bg-transparent p-0 font-serif text-[13px] italic text-muted transition-colors hover:text-ink"
+        >
+          + ignore the lowest scores…
         </button>
 
         {draftTotal > 100 && (
