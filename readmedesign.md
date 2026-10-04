@@ -2712,6 +2712,15 @@ hands the outline to Claude. The primary button used to copy a prompt to the
 clipboard without a word of what it had done, with typing it in as an
 italic afterthought under it.
 
+The editor ends with a serif italic **+ ignore the lowest scores…** for
+syllabi that drop the worst quizzes (`lib/grading-drop.ts`). It adds an
+"Ignore the lowest" block: a stepper (digits in mono) for how many go, and the
+pieces as outlined chips, tapped to put in or out. Pieces that share a stem
+("Quiz 1" to "Quiz 7") are picked already. Under it a serif line says it back,
+"Of the 7, the best 5 count.". The score decides which ones go, and only among
+pieces that have come back; at least one piece always counts. Stored as the
+same `{ group, keep }` rules Claude's proposals use, so the two are one thing.
+
 ### Log time
 Time spent away from the timer, a chapter on paper or a problem set at the
 library, gets in through **Log time**, a serif link in the header of a course
