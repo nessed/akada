@@ -42,6 +42,14 @@ interface Props<T> {
   label: string;
   shape?: Shape;
   carry?: CarryStart;
+  /**
+   * Rows only: the grip is the item's place in the list, written in the
+   * margin in mono, and the strokes show under a cursor on the number itself.
+   * The number takes a 22px lane of its own in the flow, so it reaches a
+   * phone too, where a grip hung out past the row would be off the glass.
+   * While an item is carried every number reads where it would land.
+   */
+  numbered?: boolean;
   /** Spacing between items, as the caller's own list would set it. */
   className?: string;
 }
@@ -160,6 +168,7 @@ export default function ReorderList<T>({
   label,
   shape = 'sheet',
   carry: carryStart = 'press',
+  numbered = false,
   className = 'gap-3',
 }: Props<T>) {
   const reducedMotion = usePrefersReducedMotion();
@@ -481,6 +490,14 @@ export default function ReorderList<T>({
     return 0;
   }
 
+  /** The place an item reads as, counting from 1, where it would be if let go now. */
+  function placeFor(index: number): number {
+    if (!carry || !carry.slots[carry.from] || index >= carry.slots.length) return index + 1;
+    if (index === carry.from) return carry.to + 1;
+    const shift = shiftFor(index);
+    return shift < 0 ? index : shift > 0 ? index + 2 : index + 1;
+  }
+
   const landingTop = (() => {
     if (!carry) return 0;
     const { from, to, slots, listTop } = carry;
@@ -492,6 +509,7 @@ export default function ReorderList<T>({
 
   const ease = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
   const sheet = shape === 'sheet';
+  const lane = numbered && !sheet;
 
   return (
     <div className="relative">
@@ -530,7 +548,7 @@ export default function ReorderList<T>({
               ref={(node) => {
                 itemRefs.current[index] = node;
               }}
-              className="group/reorder relative"
+              className={`group/reorder relative ${lane ? 'flex items-stretch' : ''}`}
               onPointerDown={(event) => handlePointerDown(event, index)}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
@@ -567,7 +585,56 @@ export default function ReorderList<T>({
                   event until then, so on a touch screen, where nothing ever
                   hovers, a tap in that spot still does what it always did and
                   a finger rearranges by pressing and holding. Under `grip`
-                  there is nothing else to press, so they stay faintly there. */}
+                  there is nothing else to press, so they stay faintly there.
+                  A numbered row writes its place there instead, and the
+                  number is what is taken hold of. */}
+              {lane ? (
+                <button
+                  type="button"
+                  data-reorder-grip
+                  aria-label={`Reorder ${getLabel(item)}, ${index + 1} of ${ordered.length}`}
+                  aria-keyshortcuts="ArrowUp ArrowDown"
+                  title="Drag, or press the up and down arrow keys"
+                  onKeyDown={(event) => handleGripKey(event, index)}
+                  className="group/grip relative z-20 w-[22px] shrink-0 bg-transparent p-0"
+                  style={{ cursor: carried ? 'grabbing' : 'grab', touchAction: 'none' }}
+                >
+                  <span
+                    aria-hidden
+                    className={`absolute inset-0 flex items-center justify-center font-mono text-[11.5px] tabular-nums transition-[opacity,color] duration-150 ${
+                      carried
+                        ? 'font-semibold text-ink'
+                        : `${carry ? '' : '[@media(hover:hover)]:group-hover/grip:opacity-0 group-focus-visible/grip:opacity-0'} ${
+                            placeFor(index) === 1 ? 'text-ink-soft' : 'text-muted'
+                          }`
+                    }`}
+                  >
+                    {placeFor(index)}
+                  </span>
+                  {/* The carried row keeps its number, the place it would land. */}
+                  <span
+                    aria-hidden
+                    className={`absolute inset-0 flex items-center justify-center text-muted opacity-0 transition-opacity duration-150 ${
+                      carry ? '' : '[@media(hover:hover)]:group-hover/grip:opacity-100 group-focus-visible/grip:opacity-100'
+                    }`}
+                  >
+                    <svg width="9" height="18" viewBox="0 0 9 18" fill="none" aria-hidden>
+                      <path
+                        d="M3.1 2.5 Q2.2 6.5 3 10 T2.7 15.5"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M6.4 2.8 Q5.6 7 6.3 10.5 T6 15.2"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </span>
+                </button>
+              ) : (
               <button
                 type="button"
                 data-reorder-grip
@@ -618,7 +685,8 @@ export default function ReorderList<T>({
                   </svg>
                 )}
               </button>
-              {renderItem(item, index)}
+              )}
+              {lane ? <div className="min-w-0 flex-1">{renderItem(item, index)}</div> : renderItem(item, index)}
             </li>
           );
         })}
