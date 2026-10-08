@@ -2422,6 +2422,20 @@ Both paths have a keyboard twin: the grip is a real button, and up and down
 arrows move the item one place, with every move said out loud through a
 polite live region.
 
+A row list can be **numbered** (`numbered`), and the course page's open tasks
+are. The grip is then the item's place, written in mono (digits, so mono is
+right) in a 22px lane of its own: `1` in `ink-soft`, the rest `muted`. Under
+a cursor on the number it gives way to the two pencil strokes; on a touch
+screen nothing hovers, so the number simply stays and is what a finger takes
+hold of. The lane is in the flow rather than hung off the row, because a grip
+hung 18px past a row that is already pulled into the gutter sat off the glass
+on a phone, which left a course's tasks with no way to be reordered there.
+From `md` the list is pulled back by the lane so the numbers sit in the page
+margin and the rows keep the column; below `md` they take the lane, and the
+finished rows under them step in to match. While a row is carried every
+number reads the place it would land in, the carried one in `ink` at 600,
+so the new order is visible before letting go.
+
 ### Study: the reader
 
 `/notes` is Markd folded into the app, a reader for long study notes written
@@ -2702,6 +2716,14 @@ the page reads, in one column on a phone and down the left column from `xl`:
 vocabulary, which used to open the page), then **Weak points** once Claude
 has recorded any. The right column carries **Practice** (once there is a
 paper) and **Sessions** with Log time; below `xl` they follow in that order.
+
+**Tasks** is numbered once it holds two open tasks, and the numbers carry
+them (see Rearranging by hand). Beside the `.eyebrow` and its count, a few
+words in Caveat say which order the numbers are: "most pressing first" until
+anything has been placed, "in your order" after, read off whether any open
+task has a position (a drag here, or Claude's `reorder_tasks`). Until then a
+`FirstNote` under the header says what the order is and that dragging a
+number changes it, and it goes for good with the first placement.
 
 **Where the grade stands**, on a course with no scheme, says "Akada does not
 know how ECON 100 is marked yet." over two equal buttons. **Type it in**

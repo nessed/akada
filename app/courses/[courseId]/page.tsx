@@ -11,6 +11,7 @@ import { useRecall } from '@/lib/recall/use-recall';
 import Marginalia from '@/components/progression/Marginalia';
 import { useProgression } from '@/lib/progression/use-progression';
 import ConfirmSheet from '@/components/ConfirmSheet';
+import FirstNote from '@/components/FirstNote';
 import DatePicker from '@/components/DatePicker';
 import DueDateBadge from '@/components/DueDateBadge';
 import LoadingIndicator from '@/components/LoadingIndicator';
@@ -68,7 +69,7 @@ import {
  * It deliberately does not become a second Tasks screen. The task list here
  * is this course's list and nothing else, with no filters and no sort toggle:
  * it reads in the order the student dragged it into (what matters, until they
- * do). The cross-course list, with its filters, its editing and its reading
+ * do), each open task numbered in the margin, and the number is the handle. The cross-course list, with its filters, its editing and its reading
  * view, is still Tasks, and there is a link through to it at the foot of the
  * section.
  */
@@ -142,6 +143,15 @@ export default function CoursePage() {
         .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || '')),
     };
   }, [courseTasks]);
+
+  // The open list is numbered, and the numbers are what carry a task, as soon
+  // as there are two to put in order.
+  const numbered = open.length > 1;
+  // Placed by hand (or by Claude's reorder_tasks) at least once.
+  const arranged = open.some((task) => typeof task.position === 'number');
+  // Rows outside the numbered list step in to its lane on a phone, where the
+  // numbers cannot hang out in the margin.
+  const lane = numbered ? 'pl-[22px] md:pl-0' : '';
 
   function openRow(task: Task, course: Course) {
     return (
@@ -463,11 +473,23 @@ export default function CoursePage() {
               drop the course column they would otherwise all repeat. */}
           <section>
             <div className="flex items-baseline justify-between gap-3 pb-2">
-              <p className="eyebrow m-0">
-                Tasks
-                <span className="ml-1.5 font-mono tracking-normal text-ink-soft">
-                  {open.length}
+              <p className="m-0 flex items-baseline gap-2.5">
+                <span className="eyebrow">
+                  Tasks
+                  <span className="ml-1.5 font-mono tracking-normal text-ink-soft">
+                    {open.length}
+                  </span>
                 </span>
+                {/* Which order the numbers are, in the margin: the student's
+                    own once anything has been placed, "what matters" until. */}
+                {numbered && (
+                  <span
+                    className="font-hand text-[15px] leading-none text-muted"
+                    style={{ transform: 'rotate(-2deg)' }}
+                  >
+                    {arranged ? 'in your order' : 'most pressing first'}
+                  </span>
+                )}
               </p>
               {done.length > 0 && (
                 <button
@@ -481,40 +503,57 @@ export default function CoursePage() {
               )}
             </div>
 
+            {/* Gone for good the moment anything has been placed, read off
+                the tasks themselves rather than a dismissed flag. */}
+            {numbered && !arranged && (
+              <FirstNote className="mb-4 mt-2">
+                These read most pressing first: high priority, then soonest due. Drag
+                a number to put them in the order you mean to do them. The order
+                stays, here and for Claude.
+              </FirstNote>
+            )}
+
             {/* The rows are written on the page; their wash reaches a little
                 past the column on either side, the way a highlighter does. */}
             <div className="-mx-[15px]">
-              {/* Carried from the grip in the margin: every other part of a
-                  row already does something when pressed. */}
-              {open.length > 1 ? (
-                <ReorderList
-                  items={open}
-                  getId={(task) => task.id}
-                  getLabel={(task) => task.title}
-                  label={`${course.code} tasks, in the order you arranged them`}
-                  shape="row"
-                  carry="grip"
-                  className=""
-                  onReorder={moveTask}
-                  renderItem={(task) => openRow(task, course)}
-                />
+              {/* Carried from the number in the margin: every other part of a
+                  row already does something when pressed. From `md` the
+                  numbers hang out in the page margin so the rows keep the
+                  column; on a phone there is no margin to spare, so they take
+                  a lane and the rows below step in to match. */}
+              {numbered ? (
+                <div className="md:-ml-[22px]">
+                  <ReorderList
+                    items={open}
+                    getId={(task) => task.id}
+                    getLabel={(task) => task.title}
+                    label={`${course.code} tasks, in the order you arranged them`}
+                    shape="row"
+                    carry="grip"
+                    numbered
+                    className=""
+                    onReorder={moveTask}
+                    renderItem={(task) => openRow(task, course)}
+                  />
+                </div>
               ) : (
                 open.map((task) => <div key={task.id}>{openRow(task, course)}</div>)
               )}
 
               {showDone &&
                 done.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    course={course}
-                    hideCourse
-                    onToggle={toggleTask}
-                    onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
-                    onOpen={openTask}
-                    onDelete={(t) => removeTask(t.id)}
-                    ground="page"
-                  />
+                  <div key={task.id} className={lane}>
+                    <TaskRow
+                      task={task}
+                      course={course}
+                      hideCourse
+                      onToggle={toggleTask}
+                      onStartTimer={(t, el) => setStartTarget({ task: t, course, anchor: el })}
+                      onOpen={openTask}
+                      onDelete={(t) => removeTask(t.id)}
+                      ground="page"
+                    />
+                  </div>
                 ))}
 
               {open.length === 0 && !showDone && !adding && (
