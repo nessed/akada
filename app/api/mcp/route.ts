@@ -57,9 +57,14 @@ import { registerWeakPointTools } from './weak-point-tools';
 import { registerBriefingTool } from './briefing-tool';
 import { SERVER_INSTRUCTIONS } from './instructions';
 import { registerPrompts } from './prompts';
+import { endListenAfterAcknowledgement, listenRequestId } from './listen';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Every exchange here is a few database reads and writes. The cap is a
+// backstop, not the fix: a stream nobody closes is cut at a minute instead
+// of the platform's five (see ./listen.ts for the one that did).
+export const maxDuration = 60;
 
 const MAX_TASKS_PER_REQUEST = 20;
 const MAX_TASKS_PER_READ = 100;
@@ -3282,7 +3287,8 @@ function unauthorized() {
 export async function POST(request: NextRequest) {
   const auth = await authenticate(request);
   if (!auth) return unauthorized();
-  return handler.fetch(request, {
+  const listenId = await listenRequestId(request);
+  const response = await handler.fetch(request, {
     authInfo: {
       token: auth.token,
       clientId: auth.payload.clientId,
@@ -3292,6 +3298,7 @@ export async function POST(request: NextRequest) {
       extra: { payload: auth.payload },
     },
   });
+  return listenId === undefined ? response : endListenAfterAcknowledgement(response, listenId, serverInfo());
 }
 
 export function OPTIONS() {
