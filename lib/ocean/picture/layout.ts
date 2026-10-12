@@ -205,8 +205,9 @@ export interface PlacedEvent {
 }
 
 export interface PlacedAnimal {
-  /** The pool and the place in it. */
+  /** Its zone, and the leg's pool and the place in it. */
   zone: number;
+  leg: number;
   slot: number;
   id: string;
   layer: 0 | 1 | 2;
@@ -3783,8 +3784,57 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
   // (And none left alone by the moves.)
   unalone();
 
+  // In three groups at most: the smallest of a fourth is moved in beside
+  // the nearest of another group (legally), and left out if it cannot be,
+  // so long as three of the cast are left.
+  const groupsOf = () => {
+    const swim = kept.filter((it) => !it.pick.rare);
+    const root = swim.map((_, i) => i);
+    const find = (i: number): number => (root[i] === i ? i : (root[i] = find(root[i])));
+    for (let i = 0; i < swim.length; i++) for (let k = i + 1; k < swim.length; k++) if (boxGap(boxOf(swim[i]), boxOf(swim[k])) <= LONE_GAP * S) root[find(i)] = find(k);
+    const by = new Map<number, Item[]>();
+    swim.forEach((it, i) => by.set(find(i), [...(by.get(find(i)) ?? []), it]));
+    return [...by.values()].sort((a, b) => a.length - b.length);
+  };
+  for (let guard = 0; guard < 6; guard++) {
+    const groups = groupsOf();
+    if (groups.length <= 3) break;
+    const small = groups[0];
+    const rest = kept.filter((o) => !small.includes(o));
+    const was = small.map((it) => ({ x: it.x, y: it.y }));
+    let ok = true;
+    for (const it of small) {
+      const near = rest.filter((o) => !o.pick.rare).sort((a, b) => boxGap(boxOf(a), boxOf(it)) - boxGap(boxOf(b), boxOf(it)));
+      let placed = false;
+      for (const o of near.slice(0, 3)) {
+        for (let t = 0; t < 80 && !placed; t++) {
+          const ang = fr() * TAU;
+          const d = (0.5 * (o.bw + it.bw) + S * (0.03 + 0.06 * fr())) * (0.7 + 0.3 * Math.abs(Math.cos(ang)));
+          it.x = clampX(o.x + Math.cos(ang) * d, it, w);
+          it.y = clamp(o.y + Math.sin(ang) * d * 0.6, Math.max(h * MARGIN, e.winBox.y1) + it.bh / 2, (floorTop ?? h * (1 - MARGIN)) - it.bh / 2);
+          const others = kept.filter((q) => q !== it);
+          placed = legal(it, others) && gapTo(it, rest) <= LONE_GAP * S;
+        }
+        if (placed) break;
+      }
+      if (!placed) {
+        ok = false;
+        break;
+      }
+      rest.push(it);
+    }
+    if (ok) continue;
+    small.forEach((it, i) => {
+      it.x = was[i].x;
+      it.y = was[i].y;
+    });
+    if (kept.length - small.length < 3) break;
+    for (const it of small) kept.splice(kept.indexOf(it), 1);
+  }
+
   const out = kept.map<PlacedAnimal>((it) => ({
     zone: it.pick.met.zone,
+    leg: it.pick.met.leg,
     slot: it.pick.met.slot,
     id: it.sp.id,
     layer: it.layer,
@@ -3844,6 +3894,7 @@ function floorFauna(picks: Pick[], e: CastEnv, hero: PlacedJelly, cast: Box[]): 
       if (boxGap(box, hero.box) < CLEAR) continue;
       out.push({
         zone: p.met.zone,
+        leg: p.met.leg,
         slot: p.met.slot,
         id: sp.id,
         layer: p.rare ? 2 : 1,

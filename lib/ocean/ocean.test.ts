@@ -11,6 +11,9 @@ import { hash32, mulberry32 } from './random';
 import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type EventKind } from './events';
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
 import { outcropAtSlot, outcropsInView } from './outcrop';
+import { legAt, legMark, minuteAt, PLACES, routeOf } from './places';
+import { POOL_SIZE } from './pool';
+import { wallReach } from './walls';
 import { drained } from './palette';
 import { diveRecap } from './recap';
 import { populationAt, spawnAt, visitorsAt } from './schedule';
@@ -300,7 +303,13 @@ test('rocks: the same every time, at the edges, and what grows on them follows t
       assert.ok(o.reach <= 0.3, 'a rock reached into the middle of the page');
       const kinds = o.growths.map((g) => g.kind);
       if (o.zone === 0) assert.ok(!kinds.some((g) => g === 'glass' || g === 'seapen'), 'deep things in the light');
-      if (o.zone >= 2) assert.ok(kinds.every((g) => g === 'glass' || g === 'seapen' || g === 'whip'), `coral in the dark: ${kinds}`);
+      // A place with its own kit grows only that; elsewhere the dark grows only its pale ghosts.
+      const kit = PLACES[o.place].kit;
+      if (kit) assert.ok(kinds.every((g) => kit.some(([k]) => k === g)), `${o.place} grew ${kinds}`);
+      else if (o.zone >= 2) assert.ok(kinds.every((g) => g === 'glass' || g === 'seapen' || g === 'whip'), `coral in the dark: ${kinds}`);
+      // Never reef colour in the dark, whatever the place.
+      if (o.zone >= 2) assert.ok(!kinds.some((g) => g === 'brain' || g === 'anemone' || g === 'tube' || g === 'urchin'), `reef in the dark: ${kinds}`);
+      assert.ok(PLACES[o.place].rocks, `a rock in ${o.place}`);
       // Kelp and coral never share a sea.
       if (o.zone === 0) assert.equal(outcropAtSlot(oceanKey('rock', k), slot, true), null);
     }
@@ -369,4 +378,122 @@ test('every fish has a tail, an angler is a globe, and a chain never lies level'
   if (Number.isFinite(minHW)) assert.ok(minHW >= 0.6, `flattest angler ${minHW.toFixed(2)}`);
   assert.ok(tilts.length > 0);
   assert.ok(Math.min(...tilts) >= 12 && Math.max(...tilts) <= 42, `chain tilt ${Math.min(...tilts).toFixed(1)}–${Math.max(...tilts).toFixed(1)}°`);
+});
+
+test('places: the dive is cut at round depths, and every leg is somewhere that lives there', () => {
+  assert.equal(minuteAt(0), 0);
+  assert.equal(minuteAt(200), 15);
+  assert.equal(minuteAt(4000), 110);
+  assert.equal(minuteAt(6000), 180);
+  assert.ok(Math.abs(minuteAt(6500) - 222) < 1e-9);
+  for (let k = 0; k < 300; k++) {
+    const key = oceanKey('pl', k);
+    const route = routeOf(key, false);
+    assert.deepEqual(route.map((l) => l.place.id), routeOf(key, false).map((l) => l.place.id));
+    assert.equal(route[0].from, 0);
+    for (let i = 0; i < route.length; i++) {
+      const leg = route[i];
+      assert.equal(leg.place.zone, leg.zone, `${leg.place.id} out of its zone`);
+      assert.ok(leg.m >= leg.place.m0 && leg.m < leg.place.m1, `${leg.place.id} at ${leg.m} m`);
+      assert.equal(depthAt(leg.from * 60).zone, leg.zone);
+      if (i > 0) {
+        assert.ok(leg.from > route[i - 1].from);
+        assert.notEqual(leg.place.id, route[i - 1].place.id, 'the same place twice running');
+      }
+    }
+    assert.equal(route[route.length - 1].place.id, 'deep');
+    assert.notEqual(route[0].place.id, 'kelp');
+    assert.equal(routeOf(key, true)[0].place.id, 'kelp');
+    assert.deepEqual(routeOf(key, true).slice(1).map((l) => l.place.id), route.slice(1).map((l) => l.place.id));
+    assert.equal(legAt(route, 0), 0);
+    assert.equal(route[legAt(route, 180 * 60)].m, 6000);
+    assert.equal(route[legAt(route, 180 * 60 - 1)].m, 5000);
+  }
+});
+
+test('places: a long sitting keeps arriving somewhere new, and sittings do not all go the same way', () => {
+  const ways = new Set<string>();
+  for (let k = 0; k < 200; k++) {
+    const route = routeOf(oceanKey('long', k), false);
+    // Three hours to seven: a new place every 42 minutes.
+    const late = route.filter((l) => l.from >= 180 && l.from < 420);
+    assert.equal(late.length, 6);
+    assert.ok(new Set(late.map((l) => l.place.id)).size >= 2);
+    ways.add(route.map((l) => l.place.id).join());
+  }
+  assert.ok(ways.size > 150, `only ${ways.size} routes in 200 sittings`);
+  // Every place but the forest (which is the kelp's) comes up somewhere.
+  const seen = new Set<string>();
+  for (let k = 0; k < 400; k++) for (const l of routeOf(oceanKey('any', k), false)) seen.add(l.place.id);
+  for (const id of Object.keys(PLACES)) if (id !== 'kelp') assert.ok(seen.has(id), `${id} never came up`);
+});
+
+test('places: the margin names the place, and the zone as it is entered', () => {
+  const route = routeOf(oceanKey('mark', 1), false);
+  for (const leg of route) {
+    const mark = legMark(leg);
+    assert.ok(mark.endsWith(`${leg.m.toLocaleString('en-US')} m`), mark);
+    if (leg.first) assert.ok(mark.startsWith(ZONES[leg.zone].name), mark);
+    if (leg.place.name !== ZONES[leg.zone].name) assert.ok(mark.includes(leg.place.name), mark);
+  }
+  const trench = route.find((l) => l.m === 6000)!;
+  assert.equal(legMark(trench), `trench · ${trench.place.name} · 6,000 m`);
+});
+
+test('pools: one to a leg, turning over as the dive goes on, and a zone opens on the animals it always had', () => {
+  const key = oceanKey('pool', 4);
+  const ck = courseKey('pool');
+  const biome = rollBiome(key, ck);
+  assert.equal(biome.pools.length, biome.route.length);
+  biome.pools.forEach((pool, i) => {
+    assert.equal(pool.length, POOL_SIZE);
+    for (const sp of pool) {
+      assert.equal(sp.leg, i);
+      assert.equal(sp.zone, biome.route[i].zone);
+    }
+  });
+  // A zone's first leg rolls the seeds its one pool always did.
+  for (const leg of biome.route.filter((l) => l.first)) {
+    biome.pools[leg.index].forEach((sp, i) => assert.equal(sp.seed, hash32(i % 2 === 0 ? ck : key, 'species', leg.zone, i)));
+  }
+  // The next leg in the same zone is new animals.
+  for (let i = 1; i < biome.route.length; i++) {
+    if (biome.route[i].first) continue;
+    const before = new Set(biome.pools[i - 1].map((sp) => sp.id));
+    assert.ok(biome.pools[i].every((sp) => !before.has(sp.id)), `leg ${i} kept the last leg's animals`);
+  }
+  // What swims by is from the pool of the leg it swam by in.
+  for (let s = 0; s < 6 * 3600; s += 97) {
+    const sp = spawnAt(biome, s);
+    if (sp) assert.equal(sp.leg, legAt(biome.route, s));
+  }
+});
+
+test('walls: the trench is walled both sides from its top and closes in, and the middle is always open', () => {
+  const world = (min: number) => kelpDescent(min * 60) + 0.6;
+  for (let k = 0; k < 40; k++) {
+    const key = oceanKey('wall', k);
+    const route = routeOf(key, false);
+    for (const side of [-1, 1] as const) {
+      // Nothing before the walled places.
+      for (let min = 0; min < 15; min += 1) assert.equal(wallReach(route, key, side, world(min)), 0);
+      // The trench: in from its first moment, both sides, never into the middle.
+      assert.ok(wallReach(route, key, side, world(180)) < 0.02, 'a wall cut off flat at its top');
+      let shallow = 0;
+      let deep = 0;
+      for (let min = 200; min < 600; min += 3) {
+        const r = wallReach(route, key, side, world(min));
+        assert.ok(r > 0.04 && r < 0.34, `${r} at ${min} min`);
+        if (min < 260) shallow += r;
+        if (min > 520) deep += r;
+      }
+      assert.ok(deep > shallow, 'the trench did not close in');
+      // A one-sided wall only on its own side.
+      for (const leg of route.filter((l) => l.place.walls === 1)) {
+        const mid = world((leg.from + leg.to) / 2);
+        assert.ok(wallReach(route, key, leg.side, mid) > 0.05);
+        assert.equal(wallReach(route, key, leg.side === 1 ? -1 : 1, mid), 0);
+      }
+    }
+  }
 });
