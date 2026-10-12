@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { buildAnatomy, LAYERS, lureKind } from './anatomy';
 import { rollBiome } from './biome';
 import { depthAt, ZONES } from './depth';
-import { mutate, rollGenome } from './genome';
+import { FISH_FORMS, FORMS, formsIn, mutate, rollGenome, type FishForm } from './genome';
 import { courseKey, oceanKey, oceanKeyFromSegments } from './key';
 import { childOf, DEFAULT_JELLY, jellyForBlock } from './lineage';
 import { speciesName } from './names';
@@ -333,6 +333,61 @@ test('colour drains with depth, the reds first', () => {
   assert.ok(sat(drained(blue, 0.4)) / sat(blue) > sat(drained(red, 0.4)) / sat(red));
 });
 
+const NO_CAUDAL = new Set<FishForm>(['grenadier', 'sunfish', 'cusk', 'snailfish', 'eelpout', 'gulper']);
+
+test('every form rolls and builds a body with real numbers in it, its own every time', () => {
+  for (const form of FISH_FORMS) {
+    const [lo, hi] = FORMS[form].zones;
+    for (let seed = 1; seed <= 300; seed++) {
+      const z = ZONES[lo].z0 + ((ZONES[hi].z1 - ZONES[lo].z0) * (seed % 7)) / 6;
+      const g = mutate(rollGenome(seed, z, 'fish', form), seed, seed % 3);
+      assert.equal(g.form, form);
+      assert.equal(g.plan, FORMS[form].plan);
+      const a = buildAnatomy(g, seed);
+      for (const n of [a.minX, a.minY, a.maxX, a.maxY]) assert.ok(Number.isFinite(n), `bounds of ${form} ${seed}`);
+      assert.ok(a.maxX > a.minX && a.maxY > a.minY);
+      for (const k of LAYERS) {
+        for (const s of a.layers[k]) {
+          if (s.kind === 'disc') assert.ok(Number.isFinite(s.x + s.y + s.rx + s.ry), `${k} of ${form} ${seed}`);
+          else for (const v of s.pts) assert.ok(Number.isFinite(v), `${k} of ${form} ${seed}`);
+        }
+      }
+      assert.ok(a.layers.body.length > 0 && (a.layers.eye.length > 0 || g.eyes === 0), `${form} ${seed} has a body and an eye`);
+      assert.deepEqual(buildAnatomy(rollGenome(seed, z, 'fish', form), seed).layers.body, buildAnatomy(rollGenome(seed, z, 'fish', form), seed).layers.body);
+    }
+  }
+  // A form is a different animal, not the same one in another colour: the
+  // bodies' shapes (depth for length) differ between forms.
+  const aspect = (form: FishForm) => {
+    const a = buildAnatomy(rollGenome(5, ZONES[FORMS[form].zones[0]].z0 + 0.05, 'fish', form), 5);
+    return (a.maxY - a.minY) / (a.maxX - a.minX);
+  };
+  assert.ok(aspect('disc') > aspect('jack') * 1.8, 'a disc is far deeper than a jack');
+  assert.ok(aspect('barracuda') < aspect('jack'), 'a barracuda is slimmer than a jack');
+});
+
+test('a form only lives inside its depth, and a pool names its fish by their form', () => {
+  for (let k = 0; k < 160; k++) {
+    const biome = rollBiome(oceanKey(`c${k % 9}`, 1000 + k * 7919), courseKey(`c${k % 9}`));
+    biome.pools.forEach((pool, zone) => {
+      for (const sp of pool) {
+        const f = sp.genome.form;
+        if (sp.genome.plan === 'fish') assert.ok(f, `a fish with no form in zone ${zone}`);
+        if (!f) continue;
+        const [lo, hi] = FORMS[f].zones;
+        assert.ok(zone >= lo && zone <= hi, `${f} in zone ${zone}`);
+        assert.ok(!FORMS[f].floor, `${f} lies on a floor the pool has not given it`);
+      }
+    });
+  }
+  for (let zone = 0; zone < ZONES.length; zone++) assert.ok(formsIn(zone).length >= 3, `zone ${zone} has a few kinds of fish`);
+  // A mutated line keeps its form.
+  const g = rollGenome(3, 0.45, 'fish', 'hatchet');
+  assert.equal(mutate(g, 3, 30).form, 'hatchet');
+  // Two forms read as two animals on the label too.
+  assert.notEqual(speciesName(rollGenome(8, 0.45, 'fish', 'lantern'), 8).split(' ')[0], speciesName(rollGenome(8, 0.45, 'fish', 'hatchet'), 8).split(' ')[0]);
+});
+
 test('every fish has a tail, an angler is a globe, and a chain never lies level', () => {
   let minFin = Infinity;
   let minHW = Infinity;
@@ -341,6 +396,9 @@ test('every fish has a tail, an angler is a globe, and a chain never lies level'
     for (const z of [0.1, 0.4, 0.7, 0.95]) {
       const g = mutate(rollGenome(seed, z, 'fish'), seed, seed % 3);
       const a = buildAnatomy(g, seed);
+      // The forms with no tail fin of their own: a rattail's point, a mola's
+      // clavus, and the soft ones whose fins run round the back end.
+      if (NO_CAUDAL.has(g.form!)) continue;
       // The fins reaching back past the tail end (x < 0, on a body 100 long).
       let fx = 0;
       for (const s of a.layers.fin) {

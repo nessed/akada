@@ -1094,7 +1094,12 @@ only ever grows, it never runs backwards, and none of it touches progress.
   sitting (`lib/ocean/genome.ts`): nine body plans (jelly, comb jelly,
   siphonophore chain, fish, eel, ray, squid, and on the floor starfish and
   crawlers) and dozens of traits, with the depth leaning on the dice, so the
-  deep ones come out clear-bodied, big-eyed or blind, lit, lured. They are
+  deep ones come out clear-bodied, big-eyed or blind, lit, lured. A fish
+  also comes in a **form** (`FORMS` in `genome.ts`): a real family with its
+  own silhouette, fins and way of moving, each living only at its own
+  depths, so the fish in a sea are different kinds of fish and not one fish
+  in different colours. Size, colour, markings, lights and glass still roll
+  inside a form, so two species of one form still differ. They are
   drawn like a plate (`lib/ocean/pen.ts`, `sprites.ts`): one iron-gall ink
   for every line in the sea (`IRON_GALL`, near-black on a light ground,
   warm off-white on the night one), colour only in the washes; outlines are
@@ -1107,13 +1112,77 @@ only ever grows, it never runs backwards, and none of it touches progress.
   that bare paper and the thinner line on the lit side. A fish's snout
   rounds off and its tail narrows to a wrist, and every fish has a tail fin
   at least a fifth of its body long, since a body that tapers to a point
-  reads as a lemon; its mouth is a shut,
-  level cleft with the corner turned down, never a smile. A fish carries one dorsal fin, no higher than a third of its depth and
-  set well back from the snout; a sea star has five arms at the least, a
-  many-armed one's lying nearly straight. A fish with a
-  lure is a dark hunter, never see-through: a globe-bodied angler with a
-  jaw and needle teeth, or a long dragonfish with its light on a chin
-  barbel; ribs show only faintly, over the belly of a glass fish. A
+  reads as a lemon. The only fish without one are the forms that truly have
+  none: the grenadier's rat tail, the sunfish's clavus, and the soft ones
+  (cusk-eel, snailfish, eelpout, and the gulper on the eel's plan) whose
+  fins run round the back end to meet in a point. A fish's mouth is a shut,
+  level cleft with the corner turned down, never a smile, except where the
+  form is its mouth: the angler's and the dragonfish's open jaws, the
+  viperfish's and the fangtooth's fangs, the gulper's gape. A jack carries
+  one dorsal fin, no higher than a third of its depth and set well back from
+  the snout; the other forms carry their own family's (the disc's and the
+  sunfish's tall ones, the barracuda's two set far back, the grenadier's
+  tall first and ribbon second), never two tall ones side by side, which
+  read as ears. A sea star has five arms at the least, a many-armed one's
+  lying nearly straight. A fish with a lure is a dark hunter, never
+  see-through: a globe-bodied angler with a jaw and needle teeth, a long
+  dragonfish with its light on a chin barbel, or a viperfish; the fangtooth
+  and the gulper are dark too. Ribs show only faintly, over the belly of a
+  glass fish. Each form is drawn as its family (`formed` in `anatomy.ts`):
+  - **jack**: today's fish, a torpedo with a forked or crescent tail; the
+    **sardine** the same body slim, small and silver, the tail deeply forked.
+  - **disc**: a tall flat disc, the dorsal and anal fins rising from behind
+    the head and sweeping back past the tail's root, to a point on an
+    angelfish and a rounded lobe on a butterflyfish (which has a short snout
+    tube), a small mouth, a long pelvic streamer, often a bar through the eye.
+  - **puffer**: round (a puffer, fine prickles on its belly) or boxy (a
+    boxfish, a ridge along its back and belly), tiny fins far back, a small
+    round tail on a short stalk, a beak of two plates, a big high eye.
+  - **barracuda**: long and slim, the lower jaw jutting past the snout to a
+    point, a few teeth along the cleft, a small spined dorsal and a second
+    over the anal fin, both far back.
+  - **sunfish**: a great disc cut off behind, tall blade-like dorsal and anal
+    fins at the back, and where a tail would be the clavus, a scalloped
+    frill with a ray to each lobe; a small pursed mouth, a small eye.
+  - **lantern**: small and blunt, the eye huge, an oblique mouth, a row of
+    lights along the belly and a short one above it, a light by the eye and
+    a gland on top of the tail's stalk; a small soft adipose fin.
+  - **hatchet**: the belly a deep keel stepping up sharply to a thread of a
+    tail stalk, silver, a bony blade before the dorsal, the eye a tube up
+    through the top of the head with its lens looking up, lights along the
+    keel's edge pointing down.
+  - **barreleye**: a clear dome over the head with the eyes inside it, two
+    green barrels looking up; the nostrils in front of it like a second pair
+    of eyes; the pectoral and pelvic fins big and spread flat.
+  - **bristlemouth**: tiny and slim, the jaw running back past the eye with
+    fine teeth along it, rows of lights down the belly.
+  - **viper**: long, the fangs of the lower jaw curving up past the snout and
+    the upper ones down outside it, the first ray of the dorsal grown long
+    and arched forward over the head with a light at its tip.
+  - **fangtooth**: short and heavy, the head most of it, a steep brow, a great
+    shut upturned gape with two huge fangs from the lower jaw, pits along
+    the head, a small eye.
+  - **gulper**: a mouth on a whip, the lower jaw a loose pouch, open a little
+    and dark inside; a tiny eye at the tip of the snout, a light and a few
+    threads at the tip of the tail.
+  - **grenadier**: a big head with a big eye, a pointed snout over an
+    underslung mouth and a chin barbel, a tall first dorsal with a stout
+    spine, the second dorsal and the anal running as ribbons out to the
+    point of a rat tail with no fin.
+  - **tripod**: slim, standing on two long rays of its pelvic fins and one of
+    its tail, its pectoral rays held up and forward over its head like
+    feelers, its eye tiny.
+  - **cusk-eel**: long and soft, tapering to a point inside one fin that runs
+    round the back end, two threads under the chin for pelvic fins; the
+    **eelpout** thicker, with a big rounded pectoral and fleshy lips.
+  - **snailfish**: a tadpole of glass, pale pink, the head big and soft, the
+    body tapering inside a low fin, a big pectoral notched into two lobes,
+    no scales and no lateral line.
+  - **flatfish**: lying on the floor and seen from above as a plate shows one,
+    an oval with a fringe of fin all round, both eyes on its top side, the
+    lateral line arched over the pectoral.
+
+  A
   siphonophore is a colony, not a string of beads: overlapping glass bells
   at its head, a tapering stem with its groups unevenly spaced, trailing
   15 to 40 degrees below level. Jellies are always glass, never a solid
@@ -1147,7 +1216,8 @@ only ever grows, it never runs backwards, and none of it touches progress.
 - **It fills as you sit.** A handful at the start, about thirty by the hour,
   about sixty by two, capped. Far animals are small, faint and slow, near
   ones large and in full ink, and never more than four near. Schools cross as
-  one flock. Swimmers undulate, bells beat, rays flap, and the floor has a
+  one flock, and only the forms that school come in one (jacks, sardines,
+  lanternfish, bristlemouths): a puffer, a disc or a mola comes alone. Swimmers undulate, bells beat, rays flap, and the floor has a
   few things shuffling on it once the abyss is reached, with vents breathing
   where the sitting rolled them, each a black smoker: a knobbly mineral
   spire with side spurs and one-sided flanges, engraved up its shadow side

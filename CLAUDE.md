@@ -100,6 +100,11 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   sizes).
 - **The deep's pen** (one ink, pressure lines, hatching, stipple, watercolour
   fills) is `lib/ocean/pen.ts`. Anything new drawn in the sea uses it.
+- **Fish forms** (which kind of fish: jack, disc, hatchet, grenadier…) are
+  `FORMS` in `lib/ocean/genome.ts`, with their depths, schooling and
+  weights; each is drawn by `formed()` in `lib/ocean/anatomy.ts` (jack,
+  sardine, angler and dragon by `bilateral()`), and named from its own
+  roots in `names.ts`.
 - **Audio hooks** are `lib/use-*.ts` (`use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
   files, so they work on iOS and offline.
 - **Why the timer stopped on its own** is `lib/timer-ended.ts` (`announceEnded`).

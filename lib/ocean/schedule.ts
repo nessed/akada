@@ -18,6 +18,7 @@
 import { sceneAtFocus } from '../wood/clock';
 import type { Biome, Species } from './biome';
 import { depthAt } from './depth';
+import { schoolOf } from './genome';
 import { hash32, mulberry32, pickIndex, range } from './random';
 
 export interface View {
@@ -105,6 +106,8 @@ function membersPerSpawn(pool: Species[]): number {
     let n = 0;
     for (const s of pool) {
       w += s.abundance;
+      // (The pool's own roll, not the form's: so which second sets off
+      // what stays as it was rolled, whatever comes alone.)
       n += s.abundance * Math.max(1, s.school);
     }
     m = w > 0 ? n / w : 1;
@@ -146,9 +149,10 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
     const pool = biome.pools[zone];
     if (r() >= rateAt(slot, scale, membersPerSpawn(pool))) continue;
     const species = pool[pickIndex(r, pool.map((s) => s.abundance))];
+    const school = schoolOf(species);
     let layer = (species.floor ? 1 : pickIndex(r, LAYER_ODDS)) as Layer;
     if (layer === 0 && r() > quality) continue;
-    if (species.school && layer === 2) layer = 1;
+    if (school && layer === 2) layer = 1;
     const slow = 1.3 - 0.3 * Math.min(1.5, species.speed);
     const life = Math.min(LIFE_MAX, (species.floor ? 100 : LIFE[layer] * slow) * range(r, 0.9, 1.1));
     const age = swimAge(now, slot, swim) / life;
@@ -212,8 +216,8 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
       y = y0 + Math.sin(age * Math.PI * range(r, 1, 3) + phase) * view.height * 0.03;
     }
     const key = `${slot}`;
-    if (species.school) {
-      for (let m = 0; m < species.school; m++) {
+    if (school) {
+      for (let m = 0; m < school; m++) {
         const rm = mulberry32(hash32(biome.key, 'slot', slot, 'm', m));
         const mlen = len * range(rm, 0.55, 0.75);
         out.push({

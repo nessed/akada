@@ -19,6 +19,7 @@
 import { buildAnatomy } from '../anatomy';
 import type { Species } from '../biome';
 import { depthAt, ZONES } from '../depth';
+import { schoolOf } from '../genome';
 import { EVENTS, type EventKind, type OceanEvent } from '../events';
 import { KELP_ROCK, rollKelp, type Kelp } from '../kelp';
 import { siphonophoreReach } from '../sightings-shallow';
@@ -3388,10 +3389,10 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       const sp = p.met.species;
       let layer: 0 | 1 | 2 = 1;
       if (p.rare) layer = 2;
-      else if (near < 2 && !sp.school) {
+      else if (near < 2 && !schoolOf(sp)) {
         layer = 2;
         near++;
-      } else if (far < 1 && sp.school && ranked.length > 4) {
+      } else if (far < 1 && schoolOf(sp) && ranked.length > 4) {
         layer = 0;
         far++;
       }
@@ -3458,8 +3459,8 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       let bw = len * prop.w;
       let bh = len * prop.h;
       let members: PlacedAnimal['members'] = null;
-      if (sp.school) {
-        const m = Math.min(sp.school, layer === 0 ? 7 : 9);
+      if (schoolOf(sp)) {
+        const m = Math.min(schoolOf(sp), layer === 0 ? 7 : 9);
         members = [];
         const ml = len * SCHOOL_K;
         const rx = ml * (1.6 + m * 0.12);

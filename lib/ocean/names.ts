@@ -4,7 +4,7 @@
  * plate, invented enough that nobody mistakes it for a real animal.
  */
 
-import type { Genome } from './genome';
+import type { FishForm, Genome } from './genome';
 import { mulberry32 } from './random';
 
 const ROOTS: Record<Genome['plan'], string[]> = {
@@ -18,6 +18,34 @@ const ROOTS: Record<Genome['plan'], string[]> = {
   squid: ['teuthis', 'loligo'],
   crawler: ['caris', 'podus'],
 };
+/**
+ * A fish's root is its form's, so two kinds of fish read as two kinds of
+ * animal on the label too. Built to sound like their families, never to be
+ * them.
+ */
+const FORM_ROOTS: Record<FishForm, string[]> = {
+  jack: ['ichthys', 'carangus', 'scombrus'],
+  sardine: ['clupis', 'sardella'],
+  disc: ['chaetus', 'pomacis', 'disca'],
+  puffer: ['tetrodus', 'ostracis'],
+  barracuda: ['sphyrus', 'belonis'],
+  sunfish: ['mola', 'molina'],
+  lantern: ['myctum', 'lampis'],
+  hatchet: ['sternus', 'argyris'],
+  barreleye: ['opisthis', 'pinnula'],
+  bristlemouth: ['cyclis', 'stomula'],
+  viper: ['chaulis', 'odontus'],
+  dragon: ['stomis', 'dracis'],
+  fangtooth: ['anoplis', 'odus'],
+  angler: ['lophis', 'ceratis'],
+  gulper: ['saccis', 'pharyngus'],
+  grenadier: ['coryphus', 'macrurus'],
+  tripod: ['podops', 'stylis'],
+  cusk: ['ophidis', 'brotis'],
+  snailfish: ['liparis', 'proctus'],
+  eelpout: ['zoarcis', 'lycis'],
+  flatfish: ['pleuris', 'soleus'],
+};
 const PLAIN = ['Neo', 'Pseudo', 'Micro', 'Thalasso', 'Bathy'];
 
 export function speciesName(g: Genome, seed: number): string {
@@ -25,7 +53,7 @@ export function speciesName(g: Genome, seed: number): string {
   const pick = <T,>(a: T[]) => a[Math.floor(r() * a.length)];
   const traits: string[] = [];
   if (g.plan === 'eel' || (g.tentL ?? 0) > 130) traits.push('Longi');
-  if (g.plan === 'ray') traits.push('Plati');
+  if (g.plan === 'ray' || g.form === 'flatfish' || g.form === 'disc') traits.push('Plati');
   if (g.armor) traits.push('Lorica');
   if (g.lure) traits.push('Hami');
   if ((g.eyes ?? 1) > 1) traits.push('Poly');
@@ -42,5 +70,5 @@ export function speciesName(g: Genome, seed: number): string {
   if (g.z > 0.7) epithets.push('abyssalis', 'profunda');
   if (g.z < 0.3) epithets.push('solaris', 'littoralis');
   epithets.push('vesper', 'errans', 'placida', 'mira', 'somnia');
-  return `${prefix}${pick(ROOTS[g.plan])} ${pick(epithets)}`;
+  return `${prefix}${pick(g.form ? FORM_ROOTS[g.form] : ROOTS[g.plan])} ${pick(epithets)}`;
 }
