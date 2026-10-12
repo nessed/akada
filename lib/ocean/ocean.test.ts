@@ -12,7 +12,7 @@ import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type Event
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
 import { outcropAtSlot, outcropsInView } from './outcrop';
 import { legAt, legMark, minuteAt, PLACES, routeOf } from './places';
-import { POOL_SIZE } from './pool';
+import { FISH_BUDGET, FISH_FLOOR, POOL_SIZE } from './pool';
 import { wallReach } from './walls';
 import { drained } from './palette';
 import { diveRecap } from './recap';
@@ -386,7 +386,7 @@ test('a form only lives inside its depth, and a pool names its fish by their for
         if (!f) continue;
         const [lo, hi] = FORMS[f].zones;
         assert.ok(zone >= lo && zone <= hi, `${f} in zone ${zone}`);
-        assert.ok(!FORMS[f].floor, `${f} lies on a floor the pool has not given it`);
+        if (FORMS[f].floor) assert.ok(sp.floor && zone >= 3, `${f} off the floor, or on one the zone has not got`);
       }
     });
   }
@@ -396,6 +396,43 @@ test('a form only lives inside its depth, and a pool names its fish by their for
   assert.equal(mutate(g, 3, 30).form, 'hatchet');
   // Two forms read as two animals on the label too.
   assert.notEqual(speciesName(rollGenome(8, 0.45, 'fish', 'lantern'), 8).split(' ')[0], speciesName(rollGenome(8, 0.45, 'fish', 'hatchet'), 8).split(' ')[0]);
+});
+
+test('a pool carries two fish at least and its zone\'s budget at most, every one a different kind', () => {
+  const counts = [0, 0, 0, 0, 0];
+  const pools = [0, 0, 0, 0, 0];
+  for (let k = 0; k < 400; k++) {
+    const course = `c${k % 37}`;
+    const biome = rollBiome(oceanKey(course, 5000 + k * 104729), courseKey(course));
+    for (const pool of biome.pools) {
+      const zone = pool[0].zone;
+      const fish = pool.filter((sp) => sp.genome.form);
+      assert.ok(fish.length >= FISH_FLOOR, `${fish.length} fish in a zone ${zone} pool`);
+      assert.ok(fish.length <= FISH_BUDGET[zone], `${fish.length} fish in a zone ${zone} pool, over its ${FISH_BUDGET[zone]}`);
+      counts[zone] += fish.length;
+      pools[zone]++;
+      const byForm = new Map<string, typeof fish>();
+      for (const sp of fish) byForm.set(sp.genome.form!, [...(byForm.get(sp.genome.form!) ?? []), sp]);
+      for (const [f, same] of byForm) {
+        if (same.length === 1) continue;
+        assert.ok(FORMS[f as FishForm].school && same.length === 2, `${same.length} of ${f} in one pool`);
+        const [a, b] = same;
+        assert.ok(a.genome.hue !== b.genome.hue && a.genome.pattern !== b.genome.pattern, `two ${f} that look alike`);
+      }
+      // Nothing on the sunlit or twilight floor: there is none to lie on.
+      if (zone < 3) assert.ok(pool.every((sp) => !sp.floor));
+    }
+  }
+  // Still a sea, not an aquarium: the deep keeps fewer fish than the light.
+  const mean = counts.map((c, i) => c / pools[i]);
+  assert.ok(mean[0] > mean[4], `fish per pool ${mean.map((m) => m.toFixed(1)).join(' ')}`);
+});
+
+test('a course\'s regulars are the same fish in every sitting, form and name', () => {
+  const a = rollBiome(oceanKey('c3', 1000), courseKey('c3'));
+  const b = rollBiome(oceanKey('c3', 999_999), courseKey('c3'));
+  const regs = (x: typeof a) => x.pools.map((p) => p.filter((sp) => sp.regular).map((sp) => `${sp.id} ${sp.genome.form ?? sp.genome.plan} ${sp.name}`));
+  assert.deepEqual(regs(a), regs(b));
 });
 
 test('every fish has a tail, an angler is a globe, and a chain never lies level', () => {

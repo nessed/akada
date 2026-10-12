@@ -244,10 +244,11 @@ export function rollPlan(r: Rand, z: number, floor = false): Plan {
 
 /**
  * A creature rolled from its seed at depth z. A fish (and now and then an
- * eel) also gets a form: the one asked for, or one that lives at that depth.
- * The form has dice of its own, so choosing it never moves another trait.
+ * eel) also gets a form: the one asked for, or one that lives at that depth
+ * (`null` asks for none: a plain eel). The form has dice of its own, so
+ * choosing it never moves another trait.
  */
-export function rollGenome(seed: number, z: number, plan?: Plan, form?: FishForm): Genome {
+export function rollGenome(seed: number, z: number, plan?: Plan, form?: FishForm | null): Genome {
   const r = mulberry32(seed * 7919 + 13);
   const rr = (a: number, b: number) => range(r, a, b);
   const ri = (a: number, b: number) => int(r, a, b);
@@ -350,7 +351,7 @@ export function rollGenome(seed: number, z: number, plan?: Plan, form?: FishForm
     });
     g.photo = g.lit && chance(r, 0.8);
     const fr = mulberry32(seed * 6151 + 29);
-    const f = form ?? rollForm(fr, z, p);
+    const f = form === null && p !== 'fish' ? undefined : form ?? rollForm(fr, z, p);
     if (f) shapeForm(g, f, fr);
   }
   return g;
