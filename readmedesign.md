@@ -1248,6 +1248,17 @@ only ever grows, it never runs backwards, and none of it touches progress.
   from the sitting and is never seen again. A zone's first leg rolls the
   seeds the zone's one pool always did, so every zone opens on the animals
   it always had. A few species in a pool are common and most are rare.
+  The fish in a pool are chosen as a set (`composePool`): at most six in the
+  light and the twilight, five at midnight, four in the abyss and the
+  trench, and never fewer than two, so no stretch of the dive is fishless;
+  and every one a different kind, except that a schooling kind (a sardine,
+  a lanternfish, a bristlemouth) may come twice as two species that look
+  different. The course's regulars choose their kinds first, from their own
+  dice, so they are the same fish in every sitting; the sitting's own lean
+  toward the kinds its place is known for (`fishForms` in `places.ts`). In
+  the abyss a thing on the floor is now and then a fish lying there, a
+  flatfish or an eelpout. A form keeps its own pace: a mola barely moves, a
+  barracuda is the quickest thing in the water.
 - **It fills as you sit.** A handful at the start, about thirty by the hour,
   about sixty by two, capped. Far animals are small, faint and slow, near
   ones large and in full ink, and never more than four near. Schools cross as
