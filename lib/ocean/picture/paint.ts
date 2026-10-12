@@ -1084,8 +1084,8 @@ function occluderOf(plan: Plan, c: Caches): HTMLCanvasElement | null {
 
 /* ---- The animals ---- */
 
-function speciesOf(c: Caches, zone: number, slot: number): Species | null {
-  return c.biome.pools[zone]?.[slot] ?? null;
+function speciesOf(c: Caches, leg: number, slot: number): Species | null {
+  return c.biome.pools[leg]?.[slot] ?? null;
 }
 
 /** A canvas's own pixels mixed toward a colour, kept: how the far plane is taken by the water. */
@@ -1117,7 +1117,7 @@ function paintCast(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: numb
   for (const a of plan.cast) {
     if (a.layer !== layer) continue;
     if (!inSight(a.box.x0, a.box.y0, a.box.x1, a.box.y1, a.len * 0.6 + 10)) continue;
-    const sp = speciesOf(c, a.zone, a.slot);
+    const sp = speciesOf(c, a.leg, a.slot);
     if (!sp) continue;
     const water = waterAtY(plan, c, a.y);
     // What lives on the floor is drawn in its own colour on paper, solid on
@@ -1351,7 +1351,7 @@ function lightsOf(plan: Plan, c: Caches, D: number): Light[] {
   let lit = 0;
   for (const a of [...plan.cast].sort((p, q) => q.layer - p.layer || q.len - p.len)) {
     if (lit >= 4) break;
-    const sp = speciesOf(c, a.zone, a.slot);
+    const sp = speciesOf(c, a.leg, a.slot);
     if (!sp || !sp.genome.lit || a.layer === 0) continue;
     lit++;
     const z = zAt(plan, a.y);

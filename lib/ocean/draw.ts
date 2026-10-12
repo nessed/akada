@@ -233,6 +233,7 @@ export function drawSnow(
   current: number,
   px: number,
   scale = 1,
+  fade = 1,
 ) {
   ctx.fillStyle = color;
   const disc = blurDisc(color);
@@ -247,12 +248,12 @@ export function drawSnow(
     if (s.s > 2.55 && disc) {
       // Near: big and soft, as the eye would see it.
       const big = rad * 3.6;
-      ctx.globalAlpha = Math.min(1, s.o * 0.32 * edge * caught);
+      ctx.globalAlpha = Math.min(1, s.o * 0.32 * edge * caught) * fade;
       ctx.drawImage(disc, x - big, y - big, big * 2, big * 2);
       continue;
     }
     const far = s.s < 1.55;
-    ctx.globalAlpha = Math.min(1, s.o * edge * caught * (far ? 0.6 : 1));
+    ctx.globalAlpha = Math.min(1, s.o * edge * caught * (far ? 0.6 : 1)) * fade;
     ctx.beginPath();
     ctx.arc(x, y, far ? rad * 0.6 : rad, 0, Math.PI * 2);
     ctx.fill();
@@ -529,13 +530,16 @@ export function drawPlume(ctx: CanvasRenderingContext2D, x: number, y: number, w
   ctx.restore();
 }
 
-/** Where a sitting's vents stand on the floor, and how wide each is, as shares of the page. */
-function ventsOf(env: Env, w: number): { x: number; wid: number; seed: number }[] {
-  if (!env.vents) return [];
-  return [0, 1].map((v) => {
+/** Where a floor's vents stand, and how wide each is, as shares of the page:
+    a sitting's own two, or a vent field's four, kept off the middle where the
+    jelly's trails hang. */
+function ventsOf(env: Env, w: number, n: number): { x: number; wid: number; seed: number }[] {
+  const at = n > 2 ? [0.09, 0.29, 0.71, 0.91] : [0.22, 0.77];
+  return at.slice(0, n).map((x, v) => {
     const seed = hash32('floor-vent', v, env.shafts, env.shaftTilt);
     const r = mulberry32(seed);
-    return { x: w * (0.22 + v * 0.55), wid: w * (0.012 + 0.008 * r()), seed };
+    const wid = w * (0.012 + 0.008 * r());
+    return { x: w * (x + (n > 2 ? (r() - 0.5) * 0.04 : 0)), wid, seed };
   });
 }
 
@@ -563,9 +567,9 @@ function rgbOf(hex: string): [number, number, number] {
  * densely toward the viewer, with stones lying about, small far back and
  * larger near, each with its shadow and its line.
  */
-function floorSprite(w: number, h: number, env: Env, water: Water, px: number): FloorSprite | null {
+function floorSprite(w: number, h: number, env: Env, water: Water, px: number, vents: number): FloorSprite | null {
   const rgb = rgbOf(water.bottom);
-  const key = `${w}|${h}|${px}|${env.shafts}|${env.shaftTilt}|${env.vents ? 1 : 0}`;
+  const key = `${w}|${h}|${px}|${env.shafts}|${env.shaftTilt}|${vents}`;
   const hit = floorSprites.find((s) => s.key === key && s.rgb.every((v, i) => Math.abs(v - rgb[i]) <= 4));
   if (hit) return hit;
   const top = h * 0.05 + 30 * px;
@@ -708,8 +712,8 @@ function floorSprite(w: number, h: number, env: Env, water: Water, px: number): 
     g.fill(stone);
     inkLine(g, pts, true, { width: 0.9 * px, color: ink, alpha: 0.55, lost: 0.5, seed: hash32('stone', i), min: 0.3 * px });
   }
-  // The vents' chimneys, if the sitting rolled them: still, so drawn once.
-  for (const v of ventsOf(env, w)) {
+  // The vents' chimneys, if the sitting or the place has them: still, so drawn once.
+  for (const v of ventsOf(env, w, vents)) {
     const foot = yAt(v.x) + 2 * px;
     const shape = drawChimney(g, v.x, foot, v.wid, px, v.seed, true, top * 0.85);
     mouths.push({ x: v.x + shape.mx, dy: foot - top + shape.my, wid: v.wid, seed: v.seed });
@@ -724,7 +728,9 @@ function floorSprite(w: number, h: number, env: Env, water: Water, px: number): 
  * minutes of the zone and then stays. A far bank fades back into the water,
  * the near floor has a pen line along its edge, silt ripples and stipple,
  * and stones lying about; vents here and there breathe a little. All but the
- * breath is drawn once and placed.
+ * breath is drawn once and placed. `vents` is how many chimneys stand on it
+ * (the sitting's two, a vent field's four, or none); `alpha` lays it over
+ * the floor before it as one place hands over to the next.
  */
 export function drawFloor(
   ctx: CanvasRenderingContext2D,
@@ -736,11 +742,14 @@ export function drawFloor(
   focusSeconds: number,
   ambient: number,
   px: number,
+  vents = env.vents ? 2 : 0,
+  alpha = 1,
 ) {
-  if (depth.zone < 3) return;
+  if (depth.zone < 3 || alpha <= 0) return;
   const base = floorLine(depth, focusSeconds, h);
-  const sprite = floorSprite(w, h, env, water, px);
+  const sprite = floorSprite(w, h, env, water, px, vents);
   ctx.save();
+  ctx.globalAlpha = alpha;
   if (sprite) {
     ctx.drawImage(sprite.canvas, 0, Math.round(base - sprite.top));
     // Below the sprite, should a tall page show more floor than it holds.

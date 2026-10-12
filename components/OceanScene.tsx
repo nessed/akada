@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { mixHex } from '@/lib/fan';
 import { buildJelly, drawJelly, jellyBeat, jellyInk, type JellyShape } from '@/lib/jelly';
 import { rollBiome } from '@/lib/ocean/biome';
-import { depthAt, ZONES } from '@/lib/ocean/depth';
+import { depthAt } from '@/lib/ocean/depth';
 import {
   drawEye,
   drawFloor,
@@ -34,10 +34,12 @@ import { drawOutcrops, OutcropCache } from '@/lib/ocean/outcrop-sprite';
 import { drawDumbo, drawLure, drawWhaleFall } from '@/lib/ocean/sightings-deep';
 import { drawManOWar, drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/ocean/sightings-shallow';
 import { jellyForBlock } from '@/lib/ocean/lineage';
-import { HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
+import { hazed, HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
+import { legAt, legMark } from '@/lib/ocean/places';
 import { hash32 } from '@/lib/ocean/random';
 import { swimAge, visitorsAt, type Swim } from '@/lib/ocean/schedule';
 import { SpriteCache } from '@/lib/ocean/sprites';
+import { drawWalls, WallCache } from '@/lib/ocean/walls';
 import { registerWallpaperLayer } from '@/lib/wallpaper';
 import { BREAK_PACE } from '@/lib/wood/clock';
 
@@ -114,7 +116,8 @@ export default function OceanScene({
   const frontRef = useRef<HTMLCanvasElement | null>(null);
   const markRef = useRef<HTMLSpanElement | null>(null);
   const biome = useMemo(() => rollBiome(sittingKey, courseKey), [sittingKey, courseKey]);
-  const snow = useMemo(() => ({ back: rollSnow(sittingKey, 60), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
+  // Enough far snow for the thickest place's; a place draws as much of it as its water holds.
+  const snow = useMemo(() => ({ back: rollSnow(sittingKey, 140), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
   const kelp = useMemo(() => (biome.env.kelp ? rollKelp(biome.key) : null), [biome]);
   // Where the hero jelly is, written by StudyFan every frame it moves.
   const jellyAt = useMemo(() => ({ current: null as JellyAt | null }), []);
@@ -136,6 +139,7 @@ export default function OceanScene({
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const sprites = new SpriteCache();
     const outcrops = new OutcropCache();
+    const walls = new WallCache();
     const wash = new Wash();
     const caustics = new Caustics();
     const sparkles = new Sparkles();
@@ -187,18 +191,20 @@ export default function OceanScene({
     let res = 1;
     let ema = 4;
     let water: Water = waterAt(depthAt(shown).z, live.current.ground, live.current.color);
-    let waterZ = -1;
+    let waterKey = '';
     /* A wallpaper being drawn: a pixel density of its own, and none of the
        page's chrome. Only ever true inside one synchronous render. */
     let override: number | null = null;
     let overrideSize: { w: number; h: number } | null = null;
     let saved: { quality: number; held: number } | null = null;
-    /* A zone crossing: when it happened on the ambient clock. The first
-       paint only notes where the sitting already is, so a reload or a still
-       never announces a crossing it did not see. */
-    let zoneSeen = -1;
+    /* A crossing into a new place: when it happened on the ambient clock,
+       and when the last zone crossing did (the shimmer is the zones' only).
+       The first paint only notes where the sitting already is, so a reload
+       or a still never announces a crossing it did not see. */
+    let legSeen = -1;
     let crossedAt = -1e9;
-    let crossedZone = 0;
+    let crossedMark = '';
+    let shimmerAt = -1e9;
 
     const fit = () => {
       const rect = overrideSize ? { width: overrideSize.w, height: overrideSize.h } : box.getBoundingClientRect();
@@ -233,17 +239,28 @@ export default function OceanScene({
       const W = back.width;
       const H = back.height;
       const depth = depthAt(shown);
-      if (Math.abs(depth.z - waterZ) > 0.002 || waterZ < 0) {
-        water = waterAt(depth.z, L.ground, L.color);
-        waterZ = depth.z;
+      // The place, and the one before it while this one eases in (a minute
+      // and a half of focus): its haze, its snow, its floor.
+      const li = legAt(biome.route, shown);
+      const leg = biome.route[li];
+      const prev = li > 0 ? biome.route[li - 1] : leg;
+      const ease = Math.min(1, Math.max(0, (shown - leg.from * 60) / 90));
+      const wk = `${depth.z.toFixed(3)}|${li}|${ease.toFixed(2)}|${L.ground}|${L.color}`;
+      if (wk !== waterKey) {
+        const base = waterAt(depth.z, L.ground, L.color);
+        const was = hazed(base, prev.place.haze);
+        const now = hazed(base, leg.place.haze);
+        water = { ...now, top: mixHex(was.top, now.top, ease), bottom: mixHex(was.bottom, now.bottom, ease) };
+        waterKey = wk;
       }
 
       // Reduced motion has no clock to fade the name out on, so it gets none.
-      if (zoneSeen < 0 || L.still || reduced) zoneSeen = depth.zone;
-      else if (depth.zone > zoneSeen) {
-        zoneSeen = depth.zone;
+      if (legSeen < 0 || L.still || reduced) legSeen = li;
+      else if (li > legSeen) {
+        legSeen = li;
         crossedAt = ambient;
-        crossedZone = depth.zone;
+        crossedMark = legMark(leg);
+        if (leg.first) shimmerAt = ambient;
       }
 
       // The far water: the wash, the light, the snow, the floor.
@@ -260,6 +277,8 @@ export default function OceanScene({
       if (L.rules) drawRules(bctx, W, H, depth.z, px, water.dark ? '#FFFFFF' : '#8C8576');
       // Under the paper's bleeds, so the corners still read through a forest.
       if (kelp) drawKelp(bctx, W, H, kelp, shown, water, ambient, biome.env.current, px, L.clear, quality > 0.7);
+      // The walls first, so a rock juts out of one.
+      drawWalls(bctx, W, H, biome.route, biome.key, shown, walls, water.dark, px, L.clear);
       const rocks = outcropsInView(biome.key, biome.env.kelp, shown);
       drawOutcrops(bctx, W, H, rocks, outcrops, water, px, L.clear);
       const eelsMoving = eels.draw(bctx, W, H, rocks, ambient, now, px, water.dark, L.clear);
@@ -285,8 +304,16 @@ export default function OceanScene({
       }
       drawSurface(bctx, W, H, shown, ambient, px);
       drawShafts(bctx, W, H, biome.env, water, ambient);
-      drawSnow(bctx, W, H, snow.back, water.snow, ambient, biome.env.current, px, biome.env.visibility);
-      drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px);
+      // As much snow as the place's water holds, the change eased in a speck at a time.
+      const flakes = 60 * (prev.place.snow + (leg.place.snow - prev.place.snow) * ease);
+      const whole = Math.min(snow.back.length, Math.floor(flakes));
+      drawSnow(bctx, W, H, snow.back.slice(0, whole), water.snow, ambient, biome.env.current, px, biome.env.visibility);
+      if (whole < snow.back.length) drawSnow(bctx, W, H, snow.back.slice(whole, whole + 1), water.snow, ambient, biome.env.current, px, biome.env.visibility, flakes - whole);
+      // The floor: a vent field's own chimneys, or the sitting's; a new
+      // place's laid over the last one's as it eases in.
+      const ventsOf = (p: typeof leg.place) => p.vents ?? (biome.env.vents ? 2 : 0);
+      if (ease < 1 && ventsOf(prev.place) !== ventsOf(leg.place)) drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px, ventsOf(prev.place));
+      drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px, ventsOf(leg.place), ease < 1 && ventsOf(prev.place) !== ventsOf(leg.place) ? ease : 1);
       const swim: Swim = { scene, segments: L.clock.segments ?? [] };
       const minute = Math.floor(shown / 60);
       if (minute !== fallMinute) {
@@ -338,6 +365,13 @@ export default function OceanScene({
       }
       bctx.globalAlpha = 1;
       drawDarkness(bctx, W, H, jelly, darkness, px, L.color);
+      // The walls stay faintly seen in the dark, the way found things do:
+      // what the trench is made of is the one thing that never goes.
+      if (darkness > 0.05) {
+        bctx.globalAlpha = Math.min(0.45, darkness * 0.55);
+        drawWalls(bctx, W, H, biome.route, biome.key, shown, walls, water.dark, px, L.clear);
+        bctx.globalAlpha = 1;
+      }
       // Found things stay findable: the whale fall is drawn over the dark, faint.
       if (fall && fall.start <= shown && depth.zone >= 3) {
         const appear = Math.min(1, swimAge(shown, fall.start, swim) / fall.seconds);
@@ -382,17 +416,17 @@ export default function OceanScene({
       const sparking = sparkles.draw(fctx, now, px);
       transient = sparking || eelsMoving;
 
-      // The crossing: the shimmer rises through for four seconds, and the
-      // zone's name is written in the margin for six, then goes.
+      // The crossing: into a new zone the shimmer rises through for four
+      // seconds; into any new place its name is written in the margin for
+      // six, then goes.
       const since = ambient - crossedAt;
-      if (!reduced) drawShimmer(fctx, front.width, front.height, since / 4, ambient, px, water.dark ? 'rgba(239,233,220,1)' : 'rgba(255,255,255,1)');
+      if (!reduced) drawShimmer(fctx, front.width, front.height, (ambient - shimmerAt) / 4, ambient, px, water.dark ? 'rgba(239,233,220,1)' : 'rgba(255,255,255,1)');
       const mark = markRef.current;
       if (mark) {
         const showing = since >= 0 && since < 6;
         const a = showing ? Math.min(1, since / 0.8, (6 - since) / 1.2) : 0;
         if (showing) {
-          const zn = ZONES[crossedZone];
-          mark.textContent = `${zn.name} · ${zn.m0.toLocaleString('en-US')} m`;
+          mark.textContent = crossedMark;
           mark.style.color = water.dark ? '#C8C0B0' : '#6B6459';
         }
         mark.style.opacity = String(a);

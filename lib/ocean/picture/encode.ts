@@ -36,8 +36,9 @@ export interface Rest {
 
 export interface Met {
   species: Species;
-  /** Which pool, and where in it: how the plan names it without carrying it. */
+  /** Its zone, and which leg's pool and where in it: how the plan names it without carrying it. */
   zone: number;
+  leg: number;
   slot: number;
   /** How many times it set off, and the focus seconds of the first, the middle and the last. */
   count: number;
@@ -125,8 +126,7 @@ export function readSession(courseId: string, segments: SessionSegment[], focusS
     if (!sp) continue;
     let m = byId.get(sp.id);
     if (!m) {
-      const zone = sp.zone;
-      m = { species: sp, zone, slot: biome.pools[zone].indexOf(sp), count: 0, first: slot, mid: slot, last: slot };
+      m = { species: sp, zone: sp.zone, leg: sp.leg, slot: biome.pools[sp.leg].indexOf(sp), count: 0, first: slot, mid: slot, last: slot };
       byId.set(sp.id, m);
     }
     m.count++;

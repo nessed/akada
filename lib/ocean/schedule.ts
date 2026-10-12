@@ -17,7 +17,7 @@
 
 import { sceneAtFocus } from '../wood/clock';
 import type { Biome, Species } from './biome';
-import { depthAt } from './depth';
+import { legAt } from './places';
 import { hash32, mulberry32, pickIndex, range } from './random';
 
 export interface View {
@@ -91,7 +91,7 @@ export function areaScale(view: View): number {
 function rateAt(slot: number, scale: number, members: number): number {
   const target = populationAt(slot / 60) * scale;
   // Mean crossing time across the layers, and how many animals a set-off
-  // brings on average in this zone (a school is one set-off, many fish).
+  // brings on average in this leg (a school is one set-off, many fish).
   const meanLife = LIFE[0] * LAYER_ODDS[0] + LIFE[1] * LAYER_ODDS[1] + LIFE[2] * LAYER_ODDS[2];
   return Math.min(0.9, target / (meanLife * members * 1.25));
 }
@@ -120,8 +120,7 @@ function membersPerSpawn(pool: Species[]): number {
  */
 export function spawnAt(biome: Biome, slot: number): Species | null {
   const r = mulberry32(hash32(biome.key, 'slot', slot));
-  const zone = depthAt(slot).zone;
-  const pool = biome.pools[zone];
+  const pool = biome.pools[legAt(biome.route, slot)];
   if (r() >= rateAt(slot, 1, membersPerSpawn(pool))) return null;
   return pool[pickIndex(r, pool.map((s) => s.abundance))];
 }
@@ -142,8 +141,7 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
   let floorCount = 0;
   for (let slot = first; slot <= Math.floor(now); slot++) {
     const r = mulberry32(hash32(biome.key, 'slot', slot));
-    const zone = depthAt(slot).zone;
-    const pool = biome.pools[zone];
+    const pool = biome.pools[legAt(biome.route, slot)];
     if (r() >= rateAt(slot, scale, membersPerSpawn(pool))) continue;
     const species = pool[pickIndex(r, pool.map((s) => s.abundance))];
     let layer = (species.floor ? 1 : pickIndex(r, LAYER_ODDS)) as Layer;

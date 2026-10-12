@@ -639,7 +639,7 @@ test('floor fauna lie on the ground: a star wholly in it, the rest with their mi
       const plan = planOf(c, shape);
       const biome = rollBiome(plan.key, plan.courseKey);
       for (const a of plan.cast.filter((q) => q.floor)) {
-        const sp = biome.pools[a.zone]?.[a.slot];
+        const sp = biome.pools[a.leg]?.[a.slot];
         let low = -Infinity;
         for (let q = 0; q <= 6; q++) low = Math.max(low, floorAt(plan, a.box.x0 + ((a.box.x1 - a.box.x0) * q) / 6));
         assert.equal(a.alpha, 1, `${c.name}: a floor animal see-through`);
@@ -747,7 +747,7 @@ test('not one layout twice: the hero out toward the open side, the family round 
       const biome = rollBiome(plan.key, plan.courseKey);
       for (let i = 0; i < fam.length; i++) for (let k = i + 1; k < fam.length; k++) assert.ok(Math.abs(fam[i].x - fam[k].x) >= plan.w * BELL_APART - 1e-6, `${tag}: two bells ${(Math.abs(fam[i].x - fam[k].x) / plan.w).toFixed(3)} W apart across`);
       // (A rare jelly too, unless a fifth of the page under or over.)
-      for (const a of plan.cast.filter((q) => biome.pools[q.zone]?.[q.slot]?.genome.plan === 'bell')) for (const j of fam) if (Math.abs(j.y - a.y) < plan.h * 0.2) assert.ok(Math.abs(j.x - a.x) >= plan.w * BELL_APART - 1e-6, `${tag}: a rare jelly in line with jelly ${j.block}`);
+      for (const a of plan.cast.filter((q) => biome.pools[q.leg]?.[q.slot]?.genome.plan === 'bell')) for (const j of fam) if (Math.abs(j.y - a.y) < plan.h * 0.2) assert.ok(Math.abs(j.x - a.x) >= plan.w * BELL_APART - 1e-6, `${tag}: a rare jelly in line with jelly ${j.block}`);
       // The cast not all by the wall: three in five at most in its third of the page, and one of it over the page's middle.
       const water = plan.cast.filter((a) => !a.floor);
       if (water.length >= 2) {
@@ -829,7 +829,7 @@ test('nothing overlaps or floats: 0.02 S between the animals, what grows, the gr
       }
       // A rare jelly glows low: 0.72 to 0.92 of the page (over a trench, down in its cleft), or on a floor as low as it lets it.
       const biome = rollBiome(plan.key, plan.courseKey);
-      for (const a of plan.cast.filter((q) => q.rare && biome.pools[q.zone]?.[q.slot]?.genome.plan === 'bell')) {
+      for (const a of plan.cast.filter((q) => q.rare && biome.pools[q.leg]?.[q.slot]?.genome.plan === 'bell')) {
         const lowest = plan.floor && !plan.trench ? plan.floor.y - CLEAR : plan.h * (1 - MARGIN);
         assert.ok(a.y >= plan.h * RARE_BELL[0] - 1e-6 || a.box.y1 >= lowest - plan.h * 0.02, `${tag}: a rare jelly high, at ${(a.y / plan.h).toFixed(2)} H`);
         assert.ok(a.y <= plan.h * RARE_BELL[1] + 1e-6);
