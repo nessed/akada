@@ -157,6 +157,7 @@ function render(species: Species, lenCss: number, dark: boolean, dpr: number, vi
     // (A sea star is never glass: it is a solid animal on the ground.)
     clear: (g.clear && !jawed(g) && g.plan !== 'star') || g.plan === 'bell' || g.plan === 'comb' || g.plan === 'chain',
     plan: g.plan,
+    form: g.form ?? null,
     crown: crownOf(g, species.seed),
     jawed: jawed(g),
     lit: g.lit,
@@ -384,6 +385,8 @@ interface Paint {
   /** See-through: stippled rather than hatched, with a lit rim on dark water. */
   clear: boolean;
   plan: string;
+  /** Which kind of fish, for a fish. */
+  form: string | null;
   /** A crown jelly's form, if it is one. */
   crown: 'atolla' | 'periphylla' | null;
   /** One of the jawed hunters (an angler, a dragonfish): one dark wash. */
@@ -402,6 +405,8 @@ const GONAD = '#E8C9D4';
  * dark on any water (red is the first light the deep takes away).
  */
 const CROWN_GUT = { light: '#5B1E2E', dark: '#4A1A2A' } as const;
+/** A barreleye's eyes: green glass, the green its lenses filter the light through. */
+const LENS = { light: '#9CC4A0', dark: '#6E9A78' } as const;
 /** The play of light down a comb row, on dark water. */
 const IRIDESCENT = ['#8FE3FF', '#B9F7C4', '#FFE79A', '#FFB0D6', '#BBA6FF', '#8FE3FF'];
 
@@ -725,6 +730,42 @@ function paint(ctx: CanvasRenderingContext2D, a: Anatomy, ink: CreatureInk, o: P
       ctx.stroke(p);
     }
     ctx.restore();
+  }
+  // Fins held out in front of the body (a pectoral spread flat, a fleshy
+  // lip): the fins' own wash and rays, over the body.
+  const frontLines = lines('finF');
+  if (frontLines.length) {
+    const region = pathOf(frontLines);
+    const box = boxOf(frontLines);
+    wash(region, box, ink.fin, Math.min(1, ink.finAlpha + 0.1), 0.28, 0.22);
+    if (fine > 0 && L.raysF.length) {
+      ctx.save();
+      ctx.clip(region);
+      plain('raysF', 2.4, 0.16 * fine, mixHex(ink.fin, pen, 0.35));
+      plain('raysF', 0.38, 0.55 * fine);
+      ctx.restore();
+    }
+    penLines(frontLines, 0.68);
+  }
+  // A barreleye's head: a dome of glass, and inside it the eyes, green tubes.
+  const domeLines = lines('dome');
+  if (domeLines.length) {
+    const region = pathOf(domeLines);
+    ctx.save();
+    ctx.globalAlpha = dark ? 0.12 : 0.16;
+    ctx.fillStyle = mixHex(ink.body, ink.paper ?? PAPER, 0.6);
+    ctx.fill(region);
+    ctx.restore();
+    penLines(domeLines, 0.5, 0.75);
+  }
+  const lensLines = lines('lens');
+  if (lensLines.length) {
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = dark ? LENS.dark : LENS.light;
+    ctx.fill(pathOf(lensLines));
+    ctx.restore();
+    penLines(lensLines, 0.55, 0.85);
   }
   combRows(ctx, L.rowB, L.rowF, o, ink, tiny, steps);
   strand('tentF', 0.95, 1, [0.04, 0.6]);

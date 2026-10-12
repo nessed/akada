@@ -10,7 +10,7 @@
  */
 
 import { mixHex } from '../fan';
-import type { Genome } from './genome';
+import { darkHunter, type Genome } from './genome';
 
 export type Ground = 'night' | 'paper';
 
@@ -170,9 +170,10 @@ export function creatureInk(g: Genome, dark: boolean, vivid = false): CreatureIn
   const glow = GLOWS[Math.max(0, Math.min(3, Math.round(g.glow)))];
   const ink = dark ? mixHex(hue, '#FFFFFF', 0.45) : mixHex(hue, '#1A1714', 0.62);
   const water = dark ? '#1A1815' : '#FBF8EF';
-  // A fish with a lure (an angler, a dragonfish) is a dark animal on any
-  // water: one deep wash, so its jaw and its light are what show.
-  const angler = g.plan === 'fish' && !!g.lure;
+  // A fish with a lure (an angler, a dragonfish, a viper), and the other
+  // hunters of the deep, are dark animals on any water: one deep wash, so
+  // the jaw and the light are what show.
+  const angler = darkHunter(g) || (g.plan === 'fish' && !g.form && !!g.lure);
   return {
     ink,
     pen: dark ? IRON_GALL.dark : IRON_GALL.light,

@@ -100,6 +100,11 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   sizes).
 - **The deep's pen** (one ink, pressure lines, hatching, stipple, watercolour
   fills) is `lib/ocean/pen.ts`. Anything new drawn in the sea uses it.
+- **Fish forms** (which kind of fish: jack, disc, hatchet, grenadier…) are
+  `FORMS` in `lib/ocean/genome.ts`, with their depths, schooling and
+  weights; each is drawn by `formed()` in `lib/ocean/anatomy.ts` (jack,
+  sardine, angler and dragon by `bilateral()`), and named from its own
+  roots in `names.ts`.
 - **The places a dive passes** (the legs it is cut into, each place's name,
   walls, rock growth, haze and snow) are `lib/ocean/places.ts`. Each leg's
   animals are rolled in `lib/ocean/pool.ts` (`composePool`); the trench's and

@@ -19,6 +19,7 @@
 import { buildAnatomy } from '../anatomy';
 import type { Species } from '../biome';
 import { depthAt, ZONES } from '../depth';
+import { schoolOf } from '../genome';
 import { EVENTS, type EventKind, type OceanEvent } from '../events';
 import { KELP_ROCK, rollKelp, type Kelp } from '../kelp';
 import { siphonophoreReach } from '../sightings-shallow';
@@ -3389,10 +3390,10 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       const sp = p.met.species;
       let layer: 0 | 1 | 2 = 1;
       if (p.rare) layer = 2;
-      else if (near < 2 && !sp.school) {
+      else if (near < 2 && !schoolOf(sp)) {
         layer = 2;
         near++;
-      } else if (far < 1 && sp.school && ranked.length > 4) {
+      } else if (far < 1 && schoolOf(sp) && ranked.length > 4) {
         layer = 0;
         far++;
       }
@@ -3450,17 +3451,20 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       const bell = sp.genome.plan === 'bell';
       if (bell && !p.rare) continue;
       const layer = layerOf.get(p) ?? 0;
+      const prop = proportions(sp);
       const [a, b] = NEAR_LEN[sp.genome.plan] ?? NEAR_LEN.fish;
       const size = clamp(Math.sqrt(sp.genome.size), 0.85, 1.15);
-      let len = (a + (b - a) * r()) * size * LAYER_SCALE[layer];
+      // A slim fish (a dragonfish, a barracuda, a bristlemouth) is drawn
+      // longer, as an eel is: by length alone a near one is a sliver.
+      const slim = sp.genome.plan === 'fish' ? clamp(Math.sqrt(0.32 / prop.h), 1, 1.35) : 1;
+      let len = (a + (b - a) * r()) * size * slim * LAYER_SCALE[layer];
       if (sp.genome.plan === 'comb') len = Math.min(len, COMB_MAX);
       if (p.rare) len = Math.max(120, (140 + 26 * r()) * size * (bell ? 0.85 : 1));
-      const prop = proportions(sp);
       let bw = len * prop.w;
       let bh = len * prop.h;
       let members: PlacedAnimal['members'] = null;
-      if (sp.school) {
-        const m = Math.min(sp.school, layer === 0 ? 7 : 9);
+      if (schoolOf(sp)) {
+        const m = Math.min(schoolOf(sp), layer === 0 ? 7 : 9);
         members = [];
         const ml = len * SCHOOL_K;
         const rx = ml * (1.6 + m * 0.12);
@@ -3536,7 +3540,7 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
       mine.forEach((it, k) => {
         const ang = turn + k * 2.39996;
         const rad = Math.sqrt(k + 0.6);
-        const want = g.y + Math.sin(ang) * rad * h * 0.05;
+        const want = g.y + Math.sin(ang) * rad * h * 0.065;
         const lo = Math.max(Math.max(my, e.winBox.y1) + it.bh / 2, it.ya - h * 0.06);
         const hi = Math.min(floorTop != null ? floorTop - it.bh / 2 - h * 0.01 : h - my - it.bh / 2, it.yb + h * 0.06);
         const y = clamp(want, lo, Math.max(lo, hi));
