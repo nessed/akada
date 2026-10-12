@@ -76,6 +76,17 @@ export function waterAt(z: number, ground: Ground, courseColor: string): Water {
   };
 }
 
+/**
+ * The water leaning toward a place's haze (`places.ts`): silt over a plain,
+ * murk over a vent field. Only the wash moves; the ink and the snow stay the
+ * water's own, so nothing drawn in it changes colour with the place.
+ */
+export function hazed(water: Water, haze: [string, number] | undefined, k = 1): Water {
+  if (!haze || !(k > 0)) return water;
+  const [color, amount] = haze;
+  return { ...water, top: mixHex(water.top, color, amount * k), bottom: mixHex(water.bottom, color, amount * k) };
+}
+
 /** The course pastels, which the ocean's creatures are coloured from. */
 export const HUES = ['#A8B89B', '#D4A5A5', '#B5A8C9', '#E2B594', '#A8BCC9', '#C99B7E', '#D9C58C', '#9FC1B0', '#9AA3AB', '#B89BAA'];
 const GLOWS = ['#9FE8FF', '#B8FFD9', '#FFD9A0', '#E3C2FF'];

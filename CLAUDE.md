@@ -105,6 +105,10 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   weights; each is drawn by `formed()` in `lib/ocean/anatomy.ts` (jack,
   sardine, angler and dragon by `bilateral()`), and named from its own
   roots in `names.ts`.
+- **The places a dive passes** (the legs it is cut into, each place's name,
+  walls, rock growth, haze and snow) are `lib/ocean/places.ts`. Each leg's
+  animals are rolled in `lib/ocean/pool.ts` (`composePool`); the trench's and
+  the drop-off's walls are `lib/ocean/walls.ts`.
 - **Audio hooks** are `lib/use-*.ts` (`use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
   files, so they work on iOS and offline.
 - **Why the timer stopped on its own** is `lib/timer-ended.ts` (`announceEnded`).

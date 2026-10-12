@@ -1060,6 +1060,38 @@ only ever grows, it never runs backwards, and none of it touches progress.
   (to 4,000 m), **abyss** to 180 (to 6,000 m), and past three hours the
   **trench**, which is sunk into slowly. Open mode says the depth after
   "since", mono digits in the serif line: `since 14:20 · 1,240 m down`.
+- **The dive passes places** (`lib/ocean/places.ts`). The zones say how
+  deep; a place says what this stretch of the sea is. The dive is cut into
+  legs at round depths (each zone's top, the twilight again at 500 m, the
+  midnight at 2,500, the abyss at 5,000, and the trench every 500 m, which
+  is a new place every 42 minutes past three hours), and each leg is one
+  real piece of the deep sea, rolled for the sitting from the ones that
+  live at that depth and never the one it just left: in the light the reef,
+  the kelp forest or open water with no rock in it; in the twilight its
+  open water or the drop-off, a wall down one side; in the midnight its
+  open water, the cold-water coral mounds or a seamount's flank; in the
+  abyss the abyssal plain or a vent field (four black smokers, not the
+  sitting's two); and in the trench the trench wall, the rubble slope or
+  the hadal floor, until the last leg, which is always challenger deep. A
+  place has its own animals (a pool to a leg), its own rock growth, its
+  own walls or floor, and a haze and a weight of snow in its water, which
+  ease in over a minute and a half as it begins. Its haze is held within a
+  few steps of the zone's colour: the deep stays dark, and a place is told
+  by what is in it, not by a tint. A long sitting keeps arriving somewhere
+  it has not been, and two long sittings do not go the same way.
+- **The trench has walls** (`lib/ocean/walls.ts`): from its first metre,
+  cliffs stand down both edges of the page and close in as it deepens, a
+  tenth of the width each side at 6,000 m, a quarter and more at the bottom,
+  the middle always open for the jelly (and more of it open on a narrow
+  page). The drop-off and the seamount have one, down one side. A wall
+  slides up with the rocks, grows in from the page's edge where its place
+  begins and goes back into it where the place ends (unless the next place
+  is walled there too, when it runs on), and its line steps out in ledges
+  and leans back under them, so it reads as broken rock, never a hem. It is
+  engraved as every rock is (`inkWall`), drawn in strips that share one
+  seed and the wall's own coordinates, so nothing on it repeats and no join
+  shows. In the dark it stays faintly seen beyond the jelly's light, the
+  way found things do.
 - **The water is a wash, not a blue.** Sea-glass grey-green under the
   surface, through slate, settling by the midnight zone on the night paper
   (`#1A1815`) and then the desk colour (`#110F0D`) in the abyss: sinking is
@@ -1209,17 +1241,20 @@ only ever grows, it never runs backwards, and none of it touches progress.
   pixel size, so the mid and near cast are engraved like the big ones. The rocks,
   coral, kelp, eels, the sightings and the jelly are drawn with the same pen
   and the same ink, so the whole sea is one hand's.
-- **An ecosystem, not a zoo.** Each zone has a pool of species; half of every
-  pool is rolled from the course and comes back every sitting of it (a
-  course's sea has its regulars), half from the sitting and is never seen
-  again. A few species in a pool are common and most are rare.
+- **An ecosystem, not a zoo.** Each leg of the dive has a pool of twelve
+  species (`lib/ocean/pool.ts`), so the animals turn over as one place
+  gives way to the next; half of every pool is rolled from the course and
+  comes back every sitting of it (a course's sea has its regulars), half
+  from the sitting and is never seen again. A zone's first leg rolls the
+  seeds the zone's one pool always did, so every zone opens on the animals
+  it always had. A few species in a pool are common and most are rare.
 - **It fills as you sit.** A handful at the start, about thirty by the hour,
   about sixty by two, capped. Far animals are small, faint and slow, near
   ones large and in full ink, and never more than four near. Schools cross as
   one flock, and only the forms that school come in one (jacks, sardines,
   lanternfish, bristlemouths): a puffer, a disc or a mola comes alone. Swimmers undulate, bells beat, rays flap, and the floor has a
   few things shuffling on it once the abyss is reached, with vents breathing
-  where the sitting rolled them, each a black smoker: a knobbly mineral
+  where the sitting rolled them (four of them in a vent field), each a black smoker: a knobbly mineral
   spire with side spurs and one-sided flanges, engraved up its shadow side
   and crusted in stipple, never stacked rings or a turret. Anything that wanders over the header, the
   face or the controls goes faint there, so the clock always reads.
@@ -1250,10 +1285,13 @@ only ever grows, it never runs backwards, and none of it touches progress.
 - **The way down is marked.** For the first minute and a half the surface
   shows from below, a bright rippling ceiling at the top of the water that
   rises out of view. Crossing into a new zone is a moment: a faint shimmer
-  (the thermocline) rises through the water over four seconds, and the zone's
-  name and depth are written in the margin in the hand, `twilight · 200 m`,
-  for six seconds, then go. Only a crossing actually watched is marked: a
-  reload, a still or reduced motion never announces one.
+  (the thermocline) rises through the water over four seconds. Crossing
+  into a new place, its name and depth are written in the margin in the
+  hand for six seconds, then go: with the zone's name as a zone is entered
+  (`abyss · the vent field · 4,000 m`, or just `twilight · 200 m` where the
+  place is the zone's own open water), and alone within one
+  (`the rubble slope · 7,000 m`). Only a crossing actually watched is
+  marked: a reload, a still or reduced motion never announces one.
 - **The water answers a hand, without taking it.** In the dark, a tap
   lights a ring of plankton that spreads and dies away, and a finger dragged
   through the water leaves a wake of it (`lib/ocean/sparkle.ts`), the way
@@ -1296,7 +1334,12 @@ only ever grows, it never runs backwards, and none of it touches progress.
   in the course pastels; in the twilight, plate coral, fans and whips with the
   colour draining out of them, since the sea takes the reds first; from the
   midnight down, glass sponges, sea pens and black coral, pale as bone, the
-  sea pens' few lights the only colour. A sitting that started in kelp has no
+  sea pens' few lights the only colour. A place can grow its own: the
+  cold-water coral mounds grow white branching coral (it is real, down to
+  about 3,000 m) among sponges, lilies and brittle stars; the seamount and
+  the trench wall, sponges and sea lilies; the rubble slope, little but
+  brittle stars. Reef colour never grows in the dark, whatever the place.
+  Open water has no rock at all. A sitting that started in kelp has no
   coral in the sunlit water, since the two never grow in the same sea.
   Some rocks in the light and the twilight carry a patch of sand with a
   colony of garden eels standing up out of it, leaning into the current;
@@ -1492,8 +1535,8 @@ water from the start. The wash thins back to bare paper in oval bleeds under
 the frame's three corners (the course code, the time range, the tally), and
 animals keep out of them, so what is written there reads at any depth. The
 pencil sketch and the ground are the jellyfish's, unchanged. Geometry is in `lib/ocean/` (`depth`, `genome`,
-`anatomy`, `biome`, `schedule`, `lineage`, `palette`, `events`, `recap`, `kelp`, `outcrop`), the drawing in
-`lib/ocean/draw.ts`, `sprites.ts`, `outcrop-sprite.ts`, the two `sightings` files, `wash`, `caustics`, `glow`, `sparkle` and `garden-eels` (with `jelly-at`, through which `StudyFan` tells the scene where the bell is), the scene in `components/OceanScene.tsx`,
+`anatomy`, `biome`, `places`, `pool`, `schedule`, `lineage`, `palette`, `events`, `recap`, `kelp`, `outcrop`), the drawing in
+`lib/ocean/draw.ts`, `sprites.ts`, `outcrop-sprite.ts`, `walls.ts`, the two `sightings` files, `wash`, `caustics`, `glow`, `sparkle` and `garden-eels` (with `jelly-at`, through which `StudyFan` tells the scene where the bell is), the scene in `components/OceanScene.tsx`,
 which draws the far water behind the hero `StudyFan` and the near animals in
 front of it. The kelp is drawn by `kelp-draw.ts`, the still-only light (the
 sky seen from below, the shafts with their shadows, things that glow
@@ -1602,7 +1645,9 @@ room, never the jellies' path. The rest is weighed: nothing cut by the edge,
 no three things in a row at one height (no more than two of the middle
 and near cast in any band a sixteenth of the page tall, none level with
 another, over two depths or more, three for seven or more, any two animals a fiftieth of
-the short side apart, nose to tail), the cast in a few loose groups with
+the short side apart, nose to tail), the cast in a few loose groups (each
+loose enough in depth that even three in one group lie at two depths, and a
+slim fish drawn longer, as an eel is, so a near one is never a sliver) with
 one wide calm stretch of water left open, near, middle and far each its own,
 and things far off made hazy in their own colour, never set on a pale
 backing. The page darkens to its foot whatever the length, so even a short

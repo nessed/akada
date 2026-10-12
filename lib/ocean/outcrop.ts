@@ -5,8 +5,10 @@
  * from one edge with a few growths standing on it. What grows there is the
  * depth's: reef coral and anemones in the sunlit water, plates and whips as
  * the colour drains in the twilight, and in the dark only the pale ghosts of
- * the deep, glass sponges and sea pens. Nothing on it moves, which is true
- * of coral and is also why each one can be inked once and only placed.
+ * the deep, glass sponges and sea pens; unless the place it is passed in
+ * (`places.ts`) has its own, like the white coral of the cold-water mounds.
+ * Open water has no rock at all. Nothing on it moves, which is true of coral
+ * and is also why each one can be inked once and only placed.
  *
  * Focus time is cut into eight-minute slots and each slot may roll one. They
  * slide up at the kelp's pace (`kelpDescent`), so a reef and the forest above
@@ -17,6 +19,7 @@
 import { depthAt } from './depth';
 import { kelpDescent } from './kelp';
 import { HUES } from './palette';
+import { legAt, routeOf, type Place, type PlaceId } from './places';
 import { chance, hash32, int, mulberry32, pickIndex, range, type Rand } from './random';
 
 export type GrowthKind = 'branch' | 'brain' | 'fan' | 'anemone' | 'tube' | 'urchin' | 'plate' | 'whip' | 'glass' | 'seapen' | 'crinoid' | 'brittlestar';
@@ -41,8 +44,9 @@ export interface Outcrop {
   reach: number;
   /** How thick it is at the page edge, in frame heights. */
   thick: number;
-  /** The zone it is in when it crosses the middle of the page. */
+  /** The zone it is in when it crosses the middle of the page, and the place. */
   zone: number;
+  place: PlaceId;
   growths: Growth[];
   /** Boulders along its top, -1 to 1 each. */
   bumps: number[];
@@ -83,8 +87,9 @@ const KITS: [GrowthKind, number][][] = [
 /** The sunlit reef's colours: the course pastels, but not the grey. */
 const REEF = HUES.map((_, i) => i).filter((i) => HUES[i] !== '#9AA3AB');
 
-function rollGrowths(r: Rand, zone: number): Growth[] {
-  const kit = KITS[Math.min(2, zone)];
+function rollGrowths(r: Rand, zone: number, place: Place): Growth[] {
+  // The place's own, where it has one: a coral mound grows coral in the dark.
+  const kit = place.kit ?? KITS[Math.min(2, zone)];
   const n = int(r, 2, 5);
   // Two or three colours to a rock, the way a reef patch keeps to a few.
   const hues = Array.from({ length: int(r, 2, 3) }, () => REEF[int(r, 0, REEF.length - 1)]);
@@ -147,6 +152,11 @@ function roll(key: string, slot: number): Outcrop | null {
   // Mid-screen is when its middle has risen to half the page.
   const mid = enter + (0.5 + thick / 2) / RATE;
   const zone = depthAt(mid * 60).zone;
+  // The place it is passed in. The sunlit leg's place hangs on the kelp, and
+  // a kelp sitting's sunlit rocks are dropped anyway, so it is read as if none.
+  const route = routeOf(key, false);
+  const place = route[legAt(route, mid * 60)].place;
+  if (!place.rocks) return null;
   const o: Outcrop = {
     id: `oc${hash32(key, 'outcrop', slot).toString(36)}-${slot}`,
     slot,
@@ -154,7 +164,8 @@ function roll(key: string, slot: number): Outcrop | null {
     reach: range(r, 0.14, 0.28),
     thick,
     zone,
-    growths: rollGrowths(r, zone),
+    place: place.id,
+    growths: rollGrowths(r, zone, place),
     bumps: Array.from({ length: 6 }, () => range(r, -1, 1)),
     specks: Array.from({ length: 14 }, () => ({ x: r(), y: r(), r: range(r, 0.6, 1.4) })),
     worldY,
