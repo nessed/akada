@@ -644,6 +644,7 @@ test('floor fauna lie on the ground: a star wholly in it, the rest with their mi
         for (let q = 0; q <= 6; q++) low = Math.max(low, floorAt(plan, a.box.x0 + ((a.box.x1 - a.box.x0) * q) / 6));
         assert.equal(a.alpha, 1, `${c.name}: a floor animal see-through`);
         if (sp?.genome.plan === 'star') assert.ok(a.box.y0 >= low - 1e-6, `${c.name} ${shape.width}x${shape.height}: a star off the ground`);
+        else if (sp?.genome.form === 'tripod') assert.ok(a.box.y1 >= low - 1e-6, `${c.name} ${shape.width}x${shape.height}: a tripod fish not standing on the ground`);
         else assert.ok(a.y >= low - 1e-6, `${c.name} ${shape.width}x${shape.height}: ${a.id} hangs off the ground`);
       }
     }

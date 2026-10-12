@@ -61,6 +61,8 @@ export interface FormSpec {
   floor?: boolean;
   /** Swims in schools. */
   school?: boolean;
+  /** Keeps near the floor, swimming low over it. */
+  low?: boolean;
   /** A dark hunter: one deep wash, never see-through. */
   dark?: boolean;
   /** How often it comes up where it lives, against the others there. */
@@ -83,10 +85,10 @@ export const FORMS: Record<FishForm, FormSpec> = {
   fangtooth: { zones: [2, 3], plan: 'fish', dark: true, weight: 0.8 },
   angler: { zones: [2, 3], plan: 'fish', dark: true, weight: 0.9 },
   gulper: { zones: [2, 3], plan: 'eel', dark: true, weight: 0.6 },
-  grenadier: { zones: [2, 4], plan: 'fish', weight: 1 },
+  grenadier: { zones: [2, 4], plan: 'fish', low: true, weight: 1 },
   tripod: { zones: [3, 3], plan: 'fish', floor: true, weight: 1 },
-  cusk: { zones: [3, 4], plan: 'fish', weight: 1 },
-  snailfish: { zones: [4, 4], plan: 'fish', weight: 1.6 },
+  cusk: { zones: [3, 4], plan: 'fish', low: true, weight: 1 },
+  snailfish: { zones: [4, 4], plan: 'fish', low: true, weight: 1.6 },
   eelpout: { zones: [3, 3], plan: 'fish', floor: true, weight: 0.8 },
   flatfish: { zones: [0, 3], plan: 'fish', floor: true, weight: 0.8 },
 };
