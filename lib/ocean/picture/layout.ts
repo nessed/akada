@@ -3892,6 +3892,8 @@ function floorFauna(picks: Pick[], e: CastEnv, hero: PlacedJelly, cast: Box[]): 
       let low = g;
       for (let q = 0; q <= 6; q++) low = Math.max(low, e.groundY(x - bw / 2 + (bw * q) / 6));
       y = Math.max(y, sp.genome.plan === 'star' ? low + bh / 2 + 1 : low);
+      // A tripod fish stands on its stilts: their feet in the silt, not its middle.
+      if (sp.genome.form === 'tripod') y = low - bh / 2 + bh * 0.03;
       if (y > h * (1 - MARGIN) - bh / 2 || low > h * 0.98) continue;
       const box = { x0: x - bw / 2, x1: x + bw / 2, y0: y - bh / 2, y1: y + bh / 2 };
       if (avoid.some((b) => inter(b, box) > 0) || cast.some((b) => boxGap(b, box) < CLEAR)) continue;

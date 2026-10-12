@@ -1313,7 +1313,15 @@ only ever grows, it never runs backwards, and none of it touches progress.
   their side, circle the jelly once or twice, wide of the bell, turning edge-on
   as they come round rather than flipping, and leave the other way. Lit
   species blink, each in its own rhythm, a flash that dies away and then the
-  wait.
+  wait. And each kind of fish moves as its family does, still a pure
+  function of its second: a barracuda hangs still and then darts, three
+  times across the page; a snailfish or a barreleye hovers, drifting on
+  between long pauses; a grenadier swims head down, low over the floor, as
+  the cusk-eel and the snailfish keep low too (none of them comes over to
+  look at the jelly); a mola rolls slowly as it goes; on the floor a tripod
+  fish stands on its stilts where it came down, facing the current, and
+  never moves, a flatfish lies still and now and then shuffles on, and an
+  eelpout barely stirs.
 - **Kelp, where the light is.** About half of sittings start at the edge of
   a kelp forest (`lib/ocean/kelp.ts`, drawn by `kelp-draw.ts`): five to nine
   winding stalks at three depths, the far ones smaller, paler and hazier, on

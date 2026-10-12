@@ -17,7 +17,7 @@
 
 import { sceneAtFocus } from '../wood/clock';
 import type { Biome, Species } from './biome';
-import { schoolOf } from './genome';
+import { FORMS, schoolOf } from './genome';
 import { legAt } from './places';
 import { hash32, mulberry32, pickIndex, range } from './random';
 
@@ -62,6 +62,29 @@ export interface Visitor {
   phase: number;
   /** Which way it faces, -1 to 1, when that is not `dir`: 0 is edge-on, mid-turn. */
   face?: number;
+}
+
+/** A way across in `n` darts: still most of each stretch, then quick. Rises from 0 to 1. */
+function dart(age: number, n: number): number {
+  const k = Math.min(n - 1e-9, age * n);
+  const i = Math.floor(k);
+  const f = k - i;
+  const go = f < 0.72 ? 0.06 * (f / 0.72) : 0.06 + 0.94 * ((f - 0.72) / 0.28) * ((f - 0.72) / 0.28) * (3 - 2 * ((f - 0.72) / 0.28));
+  return (i + go) / n;
+}
+
+/** A way across with `n` long pauses in it, drifting between them. Rises from 0 to 1. */
+function hover(age: number, n: number): number {
+  return age - (Math.sin(2 * Math.PI * n * age) / (2 * Math.PI * n)) * 0.85;
+}
+
+/** Lying still, then a shuffle on, `n` times over. Rises from 0 to 1. */
+function shuffle(age: number, n: number): number {
+  const k = Math.min(n - 1e-9, age * n);
+  const i = Math.floor(k);
+  const f = k - i;
+  const t = Math.max(0, (f - 0.8) / 0.2);
+  return (i + t * t * (3 - 2 * t)) / n;
 }
 
 /** Seconds of focus a crossing takes, far to near: far things are slow. */
@@ -173,8 +196,15 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
       // Floor-dwellers keep to the bottom and only shuffle along it,
       // fading in and out rather than crossing the whole page.
       const x0 = range(r, 0.1, 0.9) * view.width;
-      x = x0 + dir * age * view.width * 0.18;
+      const form = species.genome.form;
+      // A tripod fish stands where it came down, facing the current, and does
+      // not move at all; a flatfish lies still and now and then shuffles on;
+      // an eelpout barely stirs.
+      const way = form === 'tripod' ? 0 : form === 'flatfish' ? shuffle(age, 3) * 0.06 : form === 'eelpout' ? age * 0.03 : age * 0.18;
+      x = x0 + dir * way * view.width;
       y = view.height * range(r, 0.9, 0.96);
+      // (Standing on its stilts: its feet on the floor, not its middle.)
+      if (form === 'tripod') y -= len * 0.46;
       alpha *= Math.min(1, age / 0.08, (1 - age) / 0.08);
     } else if (species.curious && layer > 0) {
       // Curious: comes in from its side, circles the jelly once or twice,
@@ -209,8 +239,16 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
     } else {
       const margin = len * 0.9;
       const travel = view.width + margin * 2;
-      x = dir > 0 ? -margin + age * travel : view.width + margin - age * travel;
-      const y0 = range(r, 0.06, 0.9) * view.height;
+      const form = species.genome.form;
+      // How far across it has got: steadily for most; a barracuda hangs
+      // still and then darts; a snailfish or a barreleye hovers, drifting on
+      // between long pauses.
+      const way = form === 'barracuda' ? dart(age, 3) : form === 'snailfish' || form === 'barreleye' ? hover(age, 2) : age;
+      x = dir > 0 ? -margin + way * travel : view.width + margin - way * travel;
+      // What keeps near the floor swims low (a grenadier, head down, a cusk-eel, a snailfish).
+      const low = !!form && !!FORMS[form].low;
+      const u = range(r, 0, 1);
+      const y0 = (low ? 0.55 + 0.37 * u : 0.06 + 0.84 * u) * view.height;
       y = y0 + Math.sin(age * Math.PI * range(r, 1, 3) + phase) * view.height * 0.03;
     }
     const key = `${slot}`;

@@ -435,6 +435,45 @@ test('a course\'s regulars are the same fish in every sitting, form and name', (
   assert.deepEqual(regs(a), regs(b));
 });
 
+test('each form moves its own way: a tripod stands still, a barracuda waits and darts, the floor swimmers keep low', () => {
+  const seen = { tripod: 0, barracuda: 0, low: 0 };
+  const track = new Map<string, { form: string; x: number; y: number; t: number }[]>();
+  for (let k = 0; k < 60 && (seen.tripod < 3 || seen.barracuda < 3 || seen.low < 3); k++) {
+    const biome = rollBiome(oceanKey(`c${k}`, 7000 + k * 7919), courseKey(`c${k}`));
+    const forms = new Set(biome.pools.flat().map((sp) => sp.genome.form));
+    if (!forms.has('tripod') && !forms.has('barracuda') && !forms.has('grenadier')) continue;
+    track.clear();
+    for (const t0 of [5 * 60, 130 * 60]) {
+      for (let t = t0; t < t0 + 120; t += 2) {
+        for (const v of visitorsAt(biome, t, VIEW)) {
+          const f = v.species.genome.form;
+          if (f !== 'tripod' && f !== 'barracuda' && f !== 'grenadier' && f !== 'cusk' && f !== 'snailfish') continue;
+          const key = `${t0}:${v.key}`;
+          track.set(key, [...(track.get(key) ?? []), { form: f, x: v.x, y: v.y, t }]);
+        }
+      }
+    }
+    for (const pts of track.values()) {
+      const f = pts[0].form;
+      if (f === 'tripod') {
+        seen.tripod++;
+        for (const p of pts) assert.ok(Math.abs(p.x - pts[0].x) < 1e-9, 'a tripod fish moved');
+        // Standing: its middle above the floor strip, its feet on it.
+        assert.ok(pts[0].y < VIEW.height * 0.96 - 10, "a tripod fish lying down");
+      } else if (f === 'barracuda' && pts.length > 20) {
+        seen.barracuda++;
+        const steps = pts.slice(1).map((p, i) => Math.abs(p.x - pts[i].x));
+        const most = Math.max(...steps);
+        assert.ok(Math.min(...steps) < most * 0.15, 'a barracuda that never waits');
+      } else if (f !== 'barracuda') {
+        seen.low++;
+        for (const p of pts) assert.ok(p.y > VIEW.height * 0.45, `a ${f} up in the open water`);
+      }
+    }
+  }
+  assert.ok(seen.tripod > 0 && seen.barracuda > 0 && seen.low > 0, `seen ${JSON.stringify(seen)}`);
+});
+
 test('every fish has a tail, an angler is a globe, and a chain never lies level', () => {
   let minFin = Infinity;
   let minHW = Infinity;

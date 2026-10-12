@@ -104,7 +104,7 @@ function speciesOf(s: Slot, leg: Leg, twin: Genome | null): Species {
     name: speciesName(genome, seed),
     abundance: 1,
     school: schooling ? int(r, 6, 14) : 0,
-    curious: (plan === 'fish' || plan === 'squid' || plan === 'ray') && !(form && FORMS[form].floor) && chance(r, 0.18),
+    curious: (plan === 'fish' || plan === 'squid' || plan === 'ray') && !(form && (FORMS[form].floor || FORMS[form].low)) && chance(r, 0.18),
     speed: (form ? FORM_SPEED[form] ?? 1 : SPEED[plan]) * range(r, 0.85, 1.15),
     floor: FLOOR_PLANS.includes(plan) || (!!form && !!FORMS[form].floor),
     blink: range(r, 1.4, 5),
@@ -129,8 +129,6 @@ function chooseFish(slots: Slot[], leg: Leg, place: Place) {
   const pick = (s: Slot, floor: boolean): FishForm | null => {
     const r = mulberry32(hash32(s.seed, 'form'));
     const can = formsIn(zone, floor).filter((f) => {
-      // The tripod stands, and is not drawn standing yet.
-      if (f === 'tripod') return false;
       const n = used.get(f) ?? 0;
       return n === 0 || (n === 1 && FORMS[f].school);
     });
