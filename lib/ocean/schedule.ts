@@ -17,7 +17,7 @@
 
 import { sceneAtFocus } from '../wood/clock';
 import type { Biome, Species } from './biome';
-import { FORMS, schoolOf } from './genome';
+import { FORMS, schoolOf, type FishForm } from './genome';
 import { legAt } from './places';
 import { hash32, mulberry32, pickIndex, range } from './random';
 
@@ -77,6 +77,9 @@ function dart(age: number, n: number): number {
 function hover(age: number, n: number): number {
   return age - (Math.sin(2 * Math.PI * n * age) / (2 * Math.PI * n)) * 0.85;
 }
+
+/** The forms that hover, hanging in the water between drifts on. */
+const HOVER = new Set<FishForm>(['snailfish', 'ethereal', 'barreleye', 'grouper', 'trumpet']);
 
 /** Lying still, then a shuffle on, `n` times over. Rises from 0 to 1. */
 function shuffle(age: number, n: number): number {
@@ -198,9 +201,11 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
       const x0 = range(r, 0.1, 0.9) * view.width;
       const form = species.genome.form;
       // A tripod fish stands where it came down, facing the current, and does
-      // not move at all; a flatfish lies still and now and then shuffles on;
-      // an eelpout barely stirs.
-      const way = form === 'tripod' ? 0 : form === 'flatfish' ? shuffle(age, 3) * 0.06 : form === 'eelpout' ? age * 0.03 : age * 0.18;
+      // not move at all; a flatfish lies still and now and then shuffles on,
+      // a lizardfish lies in wait and twice lunges a little way; an eelpout
+      // barely stirs.
+      const way =
+        form === 'tripod' ? 0 : form === 'flatfish' ? shuffle(age, 3) * 0.06 : form === 'lizard' ? shuffle(age, 2) * 0.04 : form === 'eelpout' ? age * 0.03 : age * 0.18;
       x = x0 + dir * way * view.width;
       y = view.height * range(r, 0.9, 0.96);
       // (Standing on its stilts: its feet on the floor, not its middle.)
@@ -241,11 +246,11 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
       const travel = view.width + margin * 2;
       const form = species.genome.form;
       // How far across it has got: steadily for most; a barracuda hangs
-      // still and then darts; a snailfish or a barreleye hovers, drifting on
-      // between long pauses.
-      const way = form === 'barracuda' ? dart(age, 3) : form === 'snailfish' || form === 'barreleye' ? hover(age, 2) : age;
+      // still and then darts; a snailfish, a barreleye, a grouper or a
+      // trumpetfish hovers, drifting on between long pauses.
+      const way = form === 'barracuda' ? dart(age, 3) : form && HOVER.has(form) ? hover(age, 2) : age;
       x = dir > 0 ? -margin + way * travel : view.width + margin - way * travel;
-      // What keeps near the floor swims low (a grenadier, head down, a cusk-eel, a snailfish).
+      // What keeps near the floor swims low (a grenadier, head down, a cusk-eel, a snailfish, a chimaera, a cutthroat eel).
       const low = !!form && !!FORMS[form].low;
       const u = range(r, 0, 1);
       const y0 = (low ? 0.55 + 0.37 * u : 0.06 + 0.84 * u) * view.height;

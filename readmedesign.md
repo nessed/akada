@@ -1145,21 +1145,25 @@ only ever grows, it never runs backwards, and none of it touches progress.
   rounds off and its tail narrows to a wrist, and every fish has a tail fin
   at least a fifth of its body long, since a body that tapers to a point
   reads as a lemon. The only fish without one are the forms that truly have
-  none: the grenadier's rat tail, the sunfish's clavus, and the soft ones
-  (cusk-eel, snailfish, eelpout, and the gulper on the eel's plan) whose
+  none: the grenadier's rat tail, the chimaera's whip, the oarfish's ribbon,
+  the sunfish's clavus, and the soft ones (cusk-eel, the two snailfish,
+  eelpout, and the gulper, snipe eel and cutthroat on the eel's plan) whose
   fins run round the back end to meet in a point. A fish's mouth is a shut,
   level cleft with the corner turned down, never a smile, except where the
   form is its mouth: the angler's and the dragonfish's open jaws, the
-  viperfish's and the fangtooth's fangs, the gulper's gape. A jack carries
+  viperfish's and the fangtooth's fangs, the gulper's gape, the needles
+  along the swallower's and the lizardfish's jaws, the snipe eel's bill, the
+  whalefish's long bow of a mouth. A jack carries
   one dorsal fin, no higher than a third of its depth and set well back from
   the snout; the other forms carry their own family's (the disc's and the
   sunfish's tall ones, the barracuda's two set far back, the grenadier's
-  tall first and ribbon second), never two tall ones side by side, which
-  read as ears. A sea star has five arms at the least, a many-armed one's
+  tall first and ribbon second, the swordfish's one tall sickle, the
+  oarfish's one fin the length of its back), never two tall ones side by
+  side, which read as ears. A sea star has five arms at the least, a many-armed one's
   lying nearly straight. A fish with a lure is a dark hunter, never
   see-through: a globe-bodied angler with a jaw and needle teeth, a long
-  dragonfish with its light on a chin barbel, or a viperfish; the fangtooth
-  and the gulper are dark too. Ribs show only faintly, over the belly of a
+  dragonfish with its light on a chin barbel, or a viperfish; the fangtooth,
+  the gulper and the black swallower are dark too. Ribs show only faintly, over the belly of a
   glass fish. Each form is drawn as its family (`formed` in `anatomy.ts`):
   - **jack**: today's fish, a torpedo with a forked or crescent tail; the
     **sardine** the same body slim, small and silver, the tail deeply forked.
@@ -1213,6 +1217,43 @@ only ever grows, it never runs backwards, and none of it touches progress.
   - **flatfish**: lying on the floor and seen from above as a plate shows one,
     an oval with a fringe of fin all round, both eyes on its top side, the
     lateral line arched over the pectoral.
+  - **grouper**: heavy, the head big and the mouth bigger, the lower jaw past
+    the upper; a long dorsal notched between its spines in front and soft
+    and rounded behind, spines on the gill cover, a round tail.
+  - **trigger**: a rhombus, the deep head running straight down to a small
+    mouth with its front teeth showing, the eye far back up it with a groove
+    in front; the trigger (a stout spine and two short ones), behind it the
+    second dorsal and the anal mirrored, low and long, a crescent tail.
+  - **flying**: slim and silver, the pectorals two long wings narrow at the
+    root and broad behind, the pelvics a second smaller pair, the tail's
+    lower lobe reaching on past the upper.
+  - **trumpet**: a stick of a fish, the snout a long tube flaring at the
+    mouth with a barbel under it, a row of free spines down the back and
+    the soft dorsal and anal set opposite each other far back.
+  - **swordfish**: the bill a flat blade a third of its length again, a tall
+    sickle of a dorsal and long sickle pectorals, no pelvic fins, a great
+    crescent tail on a keeled stalk.
+  - **oarfish**: a long silver ribbon, one fin the length of its back, a
+    crest of long rays streaming back from the nape with a scrap of fin at
+    each tip, and the pelvic fins two long oars, each ending in a blade.
+  - **swallower**: slim and black, long jaws with needles along them, and in
+    most species the belly a pale stretched sac hung under it with a fish
+    curled up inside, bigger than the swallower.
+  - **snipe**: an eel's thread of a body, the eye big, the jaws a bird's bill
+    flaring apart at the tips, the upper curving up and the lower down.
+  - **whalefish**: a whale's shape with a round blunt head, the mouth a long
+    bow back past a speck of an eye, the lateral line a row of great hollow
+    pores, the dorsal and anal opposite each other far back.
+  - **chimaera**: a big blunt head and a big eye, a rabbit's two plates under
+    the snout, wings for pectorals, a tall first dorsal with a spine before
+    it, the lateral line wavering down the side, the body running out to a
+    whip.
+  - **lizard**: a deep-sea lizardfish on the floor, long and round, the head
+    flat and the jaw full of needles, propped on its pelvic fins.
+  - **cutthroat**: a plain pale eel, its fin round the back end, its gill
+    slit low on the throat under the pectoral.
+  - **ethereal**: a snailfish of the trench, glass, its pectoral a wide fan
+    with long free rays trailing back under it like a gown.
 
   A
   siphonophore is a colony, not a string of beads: overlapping glass bells
@@ -1248,22 +1289,28 @@ only ever grows, it never runs backwards, and none of it touches progress.
   from the sitting and is never seen again. A zone's first leg rolls the
   seeds the zone's one pool always did, so every zone opens on the animals
   it always had. A few species in a pool are common and most are rare.
-  The fish in a pool are chosen as a set (`composePool`): at most six in the
-  light and the twilight, five at midnight, four in the abyss and the
-  trench, and never fewer than two, so no stretch of the dive is fishless;
-  and every one a different kind, except that a schooling kind (a sardine,
-  a lanternfish, a bristlemouth) may come twice as two species that look
-  different. The course's regulars choose their kinds first, from their own
+  The fish in a pool are chosen as a set (`composePool`): at most seven in
+  the light and the twilight, six at midnight, five in the abyss and four in
+  the trench, and never fewer than two, so no stretch of the dive is
+  fishless; and every one a different kind, except that a schooling kind (a
+  sardine, a flying fish, a lanternfish, a bristlemouth) may come twice as
+  two species that look different. The course's regulars choose their kinds first, from their own
   dice, so they are the same fish in every sitting; the sitting's own lean
-  toward the kinds its place is known for (`fishForms` in `places.ts`). In
-  the abyss a thing on the floor is now and then a fish lying there, a
-  flatfish or an eelpout. A form keeps its own pace: a mola barely moves, a
-  barracuda is the quickest thing in the water.
+  toward the kinds its place is known for (`fishForms` in `places.ts`). An
+  eel is now and then one of the eel forms that live at its depth (a snipe
+  eel, a gulper, a cutthroat). In the abyss and the trench a thing on the
+  floor is now and then a fish lying there: a tripod fish, a flatfish, a
+  lizardfish or an eelpout, and in the trench only an eelpout, less often.
+  Where only one kind could take a place (one eel form, one floor fish),
+  it takes it less readily, so that one kind is not in every pool. A form
+  keeps its own pace: a mola and an oarfish barely move, a swordfish is the
+  quickest thing in the water, a barracuda close behind.
 - **It fills as you sit.** A handful at the start, about thirty by the hour,
   about sixty by two, capped. Far animals are small, faint and slow, near
   ones large and in full ink, and never more than four near. Schools cross as
   one flock, and only the forms that school come in one (jacks, sardines,
-  lanternfish, bristlemouths): a puffer, a disc or a mola comes alone. Swimmers undulate, bells beat, rays flap, and the floor has a
+  flying fish, lanternfish, bristlemouths): a puffer, a disc or a mola comes
+  alone. Swimmers undulate, bells beat, rays flap, and the floor has a
   few things shuffling on it once the abyss is reached, with vents breathing
   where the sitting rolled them (four of them in a vent field), each a black smoker: a knobbly mineral
   spire with side spurs and one-sided flanges, engraved up its shadow side
@@ -1315,13 +1362,16 @@ only ever grows, it never runs backwards, and none of it touches progress.
   species blink, each in its own rhythm, a flash that dies away and then the
   wait. And each kind of fish moves as its family does, still a pure
   function of its second: a barracuda hangs still and then darts, three
-  times across the page; a snailfish or a barreleye hovers, drifting on
-  between long pauses; a grenadier swims head down, low over the floor, as
-  the cusk-eel and the snailfish keep low too (none of them comes over to
-  look at the jelly); a mola rolls slowly as it goes; on the floor a tripod
-  fish stands on its stilts where it came down, facing the current, and
-  never moves, a flatfish lies still and now and then shuffles on, and an
-  eelpout barely stirs.
+  times across the page; a snailfish, an ethereal snailfish, a barreleye, a
+  grouper or a trumpetfish hovers, drifting on between long pauses; a
+  grenadier swims head down, low over the floor, as the cusk-eel, the
+  cutthroat, the chimaera and the snailfish keep low too (none of them comes
+  over to look at the jelly); a mola rolls slowly as it goes; an oarfish
+  rides head up, slanted, the fin along its back rippling; on the floor a
+  tripod fish stands on its stilts where it came down, facing the current,
+  and never moves, a flatfish lies still and now and then shuffles on, a
+  lizardfish lies in wait and twice lunges a little way, and an eelpout
+  barely stirs.
 - **Kelp, where the light is.** About half of sittings start at the edge of
   a kelp forest (`lib/ocean/kelp.ts`, drawn by `kelp-draw.ts`): five to nine
   winding stalks at three depths, the far ones smaller, paler and hazier, on

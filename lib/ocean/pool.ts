@@ -44,17 +44,19 @@ export const POOL_SIZE = 12;
 const SPEED: Record<Genome['plan'], number> = {
   fish: 1, eel: 0.7, ray: 0.8, squid: 1.1, bell: 0.35, comb: 0.3, chain: 0.25, star: 0.05, crawler: 0.1,
 };
-/** A form's own pace, against a jack's: a mola barely moves, a barracuda darts. */
+/** A form's own pace, against a jack's: a mola barely moves, a barracuda darts, a swordfish is the fastest thing in the sea. */
 const FORM_SPEED: Partial<Record<FishForm, number>> = {
   sunfish: 0.4, puffer: 0.55, disc: 0.7, barracuda: 1.3, barreleye: 0.45, hatchet: 0.6, snailfish: 0.5,
   grenadier: 0.6, cusk: 0.6, fangtooth: 0.7, angler: 0.6, gulper: 0.5, eelpout: 0.12, flatfish: 0.08, tripod: 0.05,
+  grouper: 0.55, trigger: 0.65, flying: 1.25, trumpet: 0.45, swordfish: 1.45, oarfish: 0.35, swallower: 0.6,
+  snipe: 0.5, whalefish: 0.6, chimaera: 0.55, lizard: 0.06, cutthroat: 0.65, ethereal: 0.45,
 };
 
 /**
  * Most fish a pool carries, by zone: the deep has fewer kinds, and a pool's
  * fish are different kinds of fish, not more of them.
  */
-export const FISH_BUDGET = [6, 6, 5, 4, 4];
+export const FISH_BUDGET = [7, 7, 6, 5, 4];
 /** And never fewer: no stretch of the dive is fishless. */
 export const FISH_FLOOR = 2;
 
@@ -120,6 +122,15 @@ function speciesOf(s: Slot, leg: Leg, twin: Genome | null): Species {
  * own dice alone, so they are the same animals in every sitting; the
  * sitting's own then lean toward the kinds its place is known for.
  */
+/**
+ * How readily a slot becomes one of a few kinds, against the odds a slot
+ * gets where there are `full` weights' worth of them: so where only one kind
+ * could be it, that one kind is not in every pool.
+ */
+function kinds(forms: FishForm[], full: number): number {
+  return Math.min(1, forms.reduce((w, f) => w + FORMS[f].weight, 0) / full);
+}
+
 function chooseFish(slots: Slot[], leg: Leg, place: Place) {
   const zone = leg.zone;
   const budget = FISH_BUDGET[zone] ?? 4;
@@ -145,14 +156,20 @@ function chooseFish(slots: Slot[], leg: Leg, place: Place) {
   for (const s of order) {
     const r = mulberry32(hash32(s.seed, 'fish'));
     if (s.ground) {
-      // Now and then something on the floor is a fish lying there.
-      const f = fish < budget && r() < 0.35 ? pick(s, true) : null;
+      // Now and then something on the floor is a fish lying there: less
+      // often where only one kind lies on it.
+      const f = fish < budget && r() < 0.35 * kinds(formsIn(zone, true), 2) ? pick(s, true) : null;
       if (f) take(s, f);
       continue;
     }
     if (s.plan === 'eel') {
-      const gulper = FORMS.gulper;
-      if (zone >= gulper.zones[0] && zone <= gulper.zones[1] && fish < budget && !used.get('gulper') && r() < 0.35) take(s, 'gulper');
+      // Now and then an eel is one of the eel forms that live here (a
+      // gulper, a snipe eel, a cutthroat); the rest stay plain eels.
+      const eels = formsIn(zone).filter((f) => FORMS[f].plan === 'eel' && !used.get(f));
+      if (eels.length && fish < budget && r() < 0.35 * kinds(eels, 1.2)) {
+        const fr = mulberry32(hash32(s.seed, 'form'));
+        take(s, weighted(fr, eels.map((f) => [f, FORMS[f].weight * (!s.regular && wish.has(f) ? 3 : 1)] as [FishForm, number])));
+      }
       continue;
     }
     if (s.plan !== 'fish') continue;
