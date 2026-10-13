@@ -59,6 +59,8 @@ export class Sparkles {
   private lastY = 0;
   private lastT = -1e9;
   private carry = 0;
+  /** How brightly the water here answers a hand, against the usual: the leg's own plankton. */
+  glow = 1;
 
   private spawn(x: number, y: number, vx: number, vy: number, born: number, life: number, size: number, peak: number) {
     const i = this.head;
@@ -69,7 +71,7 @@ export class Sparkles {
     this.born[i] = born;
     this.life[i] = life;
     this.size[i] = size;
-    this.peak[i] = peak;
+    this.peak[i] = Math.min(1, peak * (0.7 + 0.3 * this.glow));
     this.hue[i] = this.rand() < 0.22 ? 1 : 0;
     this.head = (i + 1) % CAP;
     if (this.count < CAP) this.count++;
@@ -78,7 +80,8 @@ export class Sparkles {
   /** A tap at (x, y) device px: a burst of plankton lighting up, spreading out in a ring and fading over about 1.6 s. `now` in ms (performance.now()). */
   poke(x: number, y: number, now: number, px: number): void {
     const r = this.rand;
-    const n = POKE_MIN + Math.floor(r() * (POKE_MAX - POKE_MIN + 1));
+    // More of them, and brighter, where the leg's water is rich in plankton.
+    const n = Math.round((POKE_MIN + Math.floor(r() * (POKE_MAX - POKE_MIN + 1))) * this.glow);
     const ring = 34 * px;
     for (let k = 0; k < n; k++) {
       const ang = r() * Math.PI * 2;

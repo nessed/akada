@@ -1081,6 +1081,14 @@ only ever grows, it never runs backwards, and none of it touches progress.
   animals (a pool to a leg), its own rock growth, its own walls or floor,
   and a haze and a weight of snow in its water, which ease in over a
   minute and a half as it begins.
+- **Each leg has its own water** (`Leg.water` in `places.ts`), rolled for
+  it: in about a third of them the current runs the other way to the
+  sitting's, so most of what swims there swims the other way; the water is
+  a little clearer or murkier than the sitting's; it holds more or less
+  snow than its place usually does; and its plankton answers a hand more
+  or less brightly. All of it eases in over the minute and a half a place
+  takes to arrive. The snow keeps drifting with the sitting's own current,
+  so it never jumps. The first leg's water is the sitting's.
 - **Some floors have something on them** (`lib/ocean/floor-life.ts`,
   `Place.floor`), all of it real and all of it still, drawn once with the
   floor: a cold seep's mats of bacteria, white with a little ochre, clam

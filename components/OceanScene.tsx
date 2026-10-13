@@ -119,7 +119,7 @@ export default function OceanScene({
   const markRef = useRef<HTMLSpanElement | null>(null);
   const biome = useMemo(() => rollBiome(sittingKey, courseKey), [sittingKey, courseKey]);
   // Enough far snow for the thickest place's; a place draws as much of it as its water holds.
-  const snow = useMemo(() => ({ back: rollSnow(sittingKey, 140), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
+  const snow = useMemo(() => ({ back: rollSnow(sittingKey, 170), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
   const kelp = useMemo(() => (biome.env.kelp ? rollKelp(biome.key) : null), [biome]);
   // Where the hero jelly is, written by StudyFan every frame it moves.
   const jellyAt = useMemo(() => ({ current: null as JellyAt | null }), []);
@@ -306,11 +306,16 @@ export default function OceanScene({
       }
       drawSurface(bctx, W, H, shown, ambient, px);
       drawShafts(bctx, W, H, biome.env, water, ambient);
-      // As much snow as the place's water holds, the change eased in a speck at a time.
-      const flakes = 60 * (prev.place.snow + (leg.place.snow - prev.place.snow) * ease);
+      // As much snow as the place's water holds, and the leg's own share of
+      // it, the change eased in a speck at a time; and the leg's own
+      // clarity, the specks finer where the water is clearer.
+      const mixW = (a: number, b: number) => a + (b - a) * ease;
+      const flakes = 60 * mixW(prev.place.snow * prev.water.snow, leg.place.snow * leg.water.snow);
+      const clarity = Math.max(0.5, Math.min(1, biome.env.visibility * mixW(prev.water.clarity, leg.water.clarity)));
+      sparkles.glow = mixW(prev.water.glow, leg.water.glow);
       const whole = Math.min(snow.back.length, Math.floor(flakes));
-      drawSnow(bctx, W, H, snow.back.slice(0, whole), water.snow, ambient, biome.env.current, px, biome.env.visibility);
-      if (whole < snow.back.length) drawSnow(bctx, W, H, snow.back.slice(whole, whole + 1), water.snow, ambient, biome.env.current, px, biome.env.visibility, flakes - whole);
+      drawSnow(bctx, W, H, snow.back.slice(0, whole), water.snow, ambient, biome.env.current, px, clarity);
+      if (whole < snow.back.length) drawSnow(bctx, W, H, snow.back.slice(whole, whole + 1), water.snow, ambient, biome.env.current, px, clarity, flakes - whole);
       // The floor: a vent field's own chimneys, or the sitting's, and what
       // else lies on it; a new place's laid over the last one's as it eases in.
       const ventsOf = (p: typeof leg.place) => p.vents ?? (biome.env.vents ? 2 : 0);
