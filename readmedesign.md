@@ -1071,7 +1071,7 @@ only ever grows, it never runs backwards, and none of it touches progress.
   ones that live at that depth and never the one it just left nor the one
   before that, so a long night never goes back and forth between two: in
   the light the reef,
-  the kelp forest or open water with no rock in it; in the twilight its
+  the kelp forest, open water with no rock in it, or the wreck; in the twilight its
   open water, the drop-off (a wall down one side), the canyon (walls both
   sides, further apart than the trench's, grown with fans and whips) or the
   scattering layer (open water so thick with lanternfish and hatchetfish
@@ -1079,7 +1079,8 @@ only ever grows, it never runs backwards, and none of it touches progress.
   hold, nearly all in schools, heavy snow, plankton quick to light, and
   pinpricks of light hanging in it, each lighting for a breath on its own
   slow beat); in the midnight its
-  open water, the cold-water coral mounds or a seamount's flank; in the
+  open water, the cold-water coral mounds, a seamount's flank or the brine
+  pool; in the
   abyss the abyssal plain, a vent field (four black smokers, not the
   sitting's two) or a nodule field; and in the trench the trench wall, the
   rubble slope, the hadal floor, a cold seep, the sea cucumber flats, a
@@ -1097,6 +1098,27 @@ only ever grows, it never runs backwards, and none of it touches progress.
   animals (a pool to a leg), its own rock growth, its own walls or floor,
   and a haze and a weight of snow in its water, which ease in over a
   minute and a half as it begins.
+- **Two places have a landmark** (`lib/ocean/landmarks.ts`, inked by
+  `landmark-draw.ts`), passed once, out from one edge of the page, its
+  middle crossing the middle of the page at the middle of its leg, sliding
+  up at the kelp's pace with the rocks, which keep to the other edge while
+  it is there; and a landmark comes once a sitting at most, since twice and
+  it is not one. **The wreck**, in the light: a steel ship lying on the
+  reef's slope, bow raised, her stern run into the page edge and her keel
+  let go of into the boulders drawn over it, so she lies in the reef and not
+  on it; plated and riveted, hatched down her side, rust running from her
+  rivets, a row of portholes with the glass gone from some, a hole torn in
+  her side, a broken rail, the stump of her deckhouse, a mast leaning out
+  over the bow with a stay sagging from it, and the reef's own coral and
+  fans grown up from her deck. **The brine pool**, at midnight: a ledge of
+  the slope with a lake lying in a hollow of its top, filled to the lowest
+  point of its rim, dark and glossy, its shore line sharp (brine and sea do
+  not mix), a faint haze lying on it, mussels packed along its near shore
+  and thinner on the far, and brine spilling out of its end, along the rock
+  and over the lip, down the face. Its surface glints, a glint sliding
+  slowly along it, and streaks run down the spill; over the dark it stays
+  findable, as the walls do, and its glints catch the jelly's light. Neither
+  is in a kept picture yet.
 - **The sea follows the calendar** (`lib/ocean/season.ts`), read off the
   day the sitting started, so a sitting dived again is in its own season.
   In spring the plankton blooms in the light: from late March to May the

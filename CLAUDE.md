@@ -120,7 +120,9 @@ Saves searching. If one of these moves, fix the line here in the same commit.
 - **The places a dive passes** (the legs it is cut into, each place's name,
   walls, rock growth, haze and snow) are `lib/ocean/places.ts`. Each leg's
   animals are rolled in `lib/ocean/pool.ts` (`composePool`); the trench's and
-  the drop-off's walls are `lib/ocean/walls.ts`; what lies on a place's floor
+  the drop-off's walls are `lib/ocean/walls.ts`; a place's landmark (the
+  wreck, the brine pool) is `lib/ocean/landmarks.ts`, inked by
+  `landmark-draw.ts`; what lies on a place's floor
   (a seep, nodules, xenophyophores, sea cucumbers) is
   `lib/ocean/floor-life.ts`; the sea's calendar (the spring bloom, the
   regulars turning over a week at a time) is `lib/ocean/season.ts`; the
