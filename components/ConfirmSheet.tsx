@@ -14,6 +14,14 @@ interface Props {
   confirmLabel: string;
   cancelLabel?: string;
   /**
+   * A second way to answer, beside the main one: an outlined button between
+   * cancel and confirm. Only for a question with two real answers, like a
+   * reset that can go back to the last break or to the start. Enter stays
+   * with the main button.
+   */
+  altLabel?: string;
+  onAlt?: () => void;
+  /**
    * When set, the exact words that have to be typed before the confirm button
    * comes alive. Reserved for the two actions that delete a term's work.
    */
@@ -36,6 +44,8 @@ export default function ConfirmSheet({
   body,
   confirmLabel,
   cancelLabel = 'Cancel',
+  altLabel,
+  onAlt,
   requirePhrase,
   busy = false,
   onConfirm,
@@ -113,6 +123,16 @@ export default function ConfirmSheet({
           >
             {cancelLabel}
           </button>
+          {altLabel && onAlt && (
+            <button
+              type="button"
+              disabled={!armed}
+              onClick={onAlt}
+              className="flex-1 rounded-[10px] border border-line-strong bg-transparent py-3.5 text-sm font-medium text-ink disabled:opacity-30"
+            >
+              {altLabel}
+            </button>
+          )}
           <button
             type="button"
             disabled={!armed}

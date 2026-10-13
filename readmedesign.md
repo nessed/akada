@@ -2607,7 +2607,14 @@ question uses ("Start this sitting over? The time so far won't be saved."),
 and only the sheet's Reset button throws the clock away, so a stray key never
 does. Confirming cancels and starts again in one step on the same course,
 task and block length, so the reader stays on the timer at zero rather than
-being sent home. The timer screen's key hint names it too ("R reset"), since that is
+being sent home. Once a break has gone by, and only in a block, the sheet asks
+"Start over from where?" with two answers: **This block** (the main one, on
+Enter) puts the block in progress back to zero and keeps every block and
+break before it; **Whole sitting** is the old reset. That second answer is
+`ConfirmSheet`'s outlined `altLabel` button, between cancel and confirm, and
+it is for a question with two real answers only. On a break, or before the
+first one, there is nothing to go back to and the sheet asks the one question.
+Discard has no such choice: it ends the sitting outright. The timer screen's key hint names it too ("R reset"), since that is
 where a reader looks for the keys. `B` takes a break; on a held block it
 counts the pause as the break (see "The pause"), and on a break it does
 nothing, since ending one is `P`'s. It used to be the timer screen's own
