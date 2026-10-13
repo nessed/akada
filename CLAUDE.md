@@ -117,6 +117,12 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   is logged) is written by `components/LiveSittingSync.tsx` onto
   `user_settings.live_sitting`; the snapshot and its reading are
   `lib/live-sitting.ts`, the tool `app/api/mcp/live-tool.ts`.
+- **What the browser keeps for an account** (the timer, the pending sitting,
+  the ledgers) is cleared on sign-out and tied to the account that wrote it
+  by `claimDeviceStorage` in `lib/session-cleanup.ts`, called from the
+  Supabase adapter's auth listener. Anything new stored on the device goes
+  under the `akada.` or `lums.` prefix so both of those reach it. Sign-out
+  is this device only (`scope: 'local'`).
 - **Timer state and actions** (`pause`, `stop`, `cancel`, breaks) are in
   `lib/timer-context.tsx`; read them with `useTimerState()`.
 

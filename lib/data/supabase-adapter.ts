@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase';
 import type { DataProvider } from './data-provider';
 import { sortCourses } from './course-order';
+import { claimDeviceStorage } from '@/lib/session-cleanup';
 import type {
   Course,
   RecallRecord,
@@ -457,6 +458,22 @@ function recallWriteError(error: { code?: string; message?: string }): Error {
   return error as unknown as Error;
 }
 
+/**
+ * A session that ends while a page is open, because it was signed out from
+ * another device or its refresh token stopped being accepted, used to leave
+ * the page in place with every read failing under it. The reader saw errors
+ * and no reason. It goes to sign in instead, and comes back to the page it
+ * was on. Nothing stored on the device is touched, so a running sitting is
+ * still there afterwards. A sign-out from Settings navigates on its own and
+ * wins; on a public page there is nothing to protect and nowhere to go.
+ */
+function sendToSignIn() {
+  if (typeof window === 'undefined') return;
+  const { pathname, search } = window.location;
+  if (pathname === '/' || pathname.startsWith('/auth')) return;
+  window.location.replace(`/auth?next=${encodeURIComponent(pathname + search)}`);
+}
+
 export class SupabaseAdapter implements DataProvider {
   private supabase = createClient();
 
@@ -483,8 +500,10 @@ export class SupabaseAdapter implements DataProvider {
     // A user id that outlived its session would read one account's rows
     // under another's, so any change in who is signed in throws both away.
     // A token refresh is the same person and keeps them.
-    this.supabase.auth.onAuthStateChange((event) => {
+    this.supabase.auth.onAuthStateChange((event, session) => {
       if (event !== 'TOKEN_REFRESHED') this.forget();
+      if (session?.user) claimDeviceStorage(session.user.id);
+      if (event === 'SIGNED_OUT') sendToSignIn();
     });
   }
 
