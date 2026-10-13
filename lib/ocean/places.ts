@@ -85,6 +85,10 @@ export interface Place {
   crowd?: number;
   /** Its plankton answers a hand more brightly than the usual, on top of the leg's own. */
   glow?: number;
+  /** More rock than the usual, as the odds of a second rock half a slot out of step with the first (`outcrop.ts`). */
+  rocky?: number;
+  /** A great school turning slowly in its water the whole leg long (`vortex.ts`). */
+  vortex?: boolean;
   /** The one big thing it is known for, passed once in its leg (`landmarks.ts`). */
   landmark?: LandmarkKind;
   /** Pinpricks of light hanging in its water, blinking on and off, how many against a full page's worth. */
@@ -104,8 +108,8 @@ export const PLACES: Record<PlaceId, Place> = {
   // The sunlit water: kelp where the sitting rolled it, otherwise a reef, or
   // now and then open blue with no rock in it at all.
   kelp: { id: 'kelp', name: 'the kelp forest', zone: 0, m0: 0, m1: 200, weight: 0, walls: 0, rocks: true, snow: 1, fishForms: ['jack', 'sardine', 'barracuda', 'grouper'] },
-  reef: { id: 'reef', name: 'the reef', zone: 0, m0: 0, m1: 200, weight: 3, walls: 0, rocks: true, snow: 1, fishForms: ['disc', 'puffer', 'trigger', 'grouper', 'trumpet', 'flatfish'] },
-  blue: { id: 'blue', name: 'open water', zone: 0, m0: 0, m1: 200, weight: 1.2, walls: 0, rocks: false, snow: 0.7, fishForms: ['sardine', 'jack', 'sunfish', 'flying', 'swordfish'] },
+  reef: { id: 'reef', name: 'the reef', zone: 0, m0: 0, m1: 200, weight: 3, walls: 0, rocks: true, rocky: 0.95, snow: 1, fishForms: ['disc', 'puffer', 'trigger', 'grouper', 'trumpet', 'flatfish'] },
+  blue: { id: 'blue', name: 'open water', zone: 0, m0: 0, m1: 200, weight: 1.2, walls: 0, rocks: false, vortex: true, snow: 0.7, fishForms: ['sardine', 'jack', 'sunfish', 'flying', 'swordfish'] },
   // A wreck on the reef: a steel ship lying on her side on the slope, her
   // plates and rails grown over with coral and fans, the big fish of the
   // reef living in and around her.
@@ -144,7 +148,7 @@ export const PLACES: Record<PlaceId, Place> = {
   // Cold-water coral: heaps of white branching coral (Lophelia, Desmophyllum)
   // with sponges and lilies among them, real down to about 3,000 m.
   mounds: {
-    id: 'mounds', name: 'the coral mounds', zone: 2, m0: 1000, m1: 3000, weight: 1.6, walls: 0, rocks: true,
+    id: 'mounds', name: 'the coral mounds', zone: 2, m0: 1000, m1: 3000, weight: 1.6, walls: 0, rocks: true, rocky: 0.6,
     kit: [['branch', 4], ['glass', 2], ['crinoid', 1.5], ['brittlestar', 1]],
     snow: 1.2, fishForms: ['grenadier', 'fangtooth', 'viper', 'chimaera'],
   },

@@ -179,18 +179,58 @@ function roll(key: string, slot: number): Outcrop | null {
   return o;
 }
 
+/**
+ * A rocky place's second rock, half a slot out of step with the first, on
+ * its own dice: so the reef has rock on the page most of the time while
+ * every rock the first series rolled stays where it was. Only where the
+ * place it would cross in is rocky (`Place.rocky`, its odds), and off the
+ * edge the first series' rock of the same slot came from.
+ */
+function rollMore(key: string, slot: number): Outcrop | null {
+  if (slot < 0 || !Number.isFinite(slot)) return null;
+  const r = mulberry32(hash32(key, 'outcrop-more', slot));
+  const enter = SLOT * slot + SLOT / 2 + range(r, 0.5, 3);
+  const thick = range(r, 0.1, 0.18);
+  const mid = enter + (0.5 + thick / 2) / RATE;
+  const route = routeOf(key, false);
+  const li = legAt(route, mid * 60);
+  const place = route[li].place;
+  if (!place.rocks || !place.rocky || !chance(r, place.rocky)) return null;
+  const zone = depthAt(mid * 60).zone;
+  const first = roll(key, slot);
+  const shy = landmarkEdgeNear(key, route, li, mid);
+  const rolled: -1 | 1 = chance(r, 0.5) ? -1 : 1;
+  const o: Outcrop = {
+    id: `om${hash32(key, 'outcrop-more', slot).toString(36)}-${slot}`,
+    slot,
+    edge: shy ? (-shy as -1 | 1) : first ? (-first.edge as -1 | 1) : rolled,
+    reach: range(r, 0.16, 0.3),
+    thick,
+    zone,
+    place: place.id,
+    growths: rollGrowths(r, zone, place),
+    bumps: Array.from({ length: 6 }, () => range(r, -1, 1)),
+    specks: Array.from({ length: 14 }, () => ({ x: r(), y: r(), r: range(r, 0.6, 1.4) })),
+    worldY: kelpDescent(enter * 60) + 1,
+  };
+  // Its eels on a stream of their own, apart from the first series'.
+  const eels = rollEels(key, slot + 100000, o);
+  if (eels) o.eels = eels;
+  return o;
+}
+
 // The few slots on the page are asked for every frame; keep their rolls
 // rather than roll them again. Small, since only three or so are ever live.
 const memo = new Map<string, Outcrop | null>();
 
-/** The outcrop slot `slot` rolls for the sitting, if any. */
-export function outcropAtSlot(key: string, slot: number, kelp: boolean): Outcrop | null {
-  const k = `${key}|${slot}`;
+/** The outcrop slot `slot` rolls for the sitting, if any; `more` for a rocky place's second series. */
+export function outcropAtSlot(key: string, slot: number, kelp: boolean, more = false): Outcrop | null {
+  const k = `${key}|${slot}|${more ? 1 : 0}`;
   let o = memo.get(k);
   if (o === undefined) {
-    o = roll(key, slot);
+    o = more ? rollMore(key, slot) : roll(key, slot);
     memo.set(k, o);
-    if (memo.size > 16) memo.delete(memo.keys().next().value as string);
+    if (memo.size > 24) memo.delete(memo.keys().next().value as string);
   }
   // Kelp and reef coral don't grow together: a kelp sitting's sunlit water is the forest's.
   if (o && kelp && o.zone === 0) return null;
@@ -212,10 +252,12 @@ export function outcropsInView(
   const last = Math.max(0, Math.floor((now + 1) / SLOT));
   const out: { outcrop: Outcrop; top: number }[] = [];
   for (let k = first; k <= last; k++) {
-    const o = outcropAtSlot(key, k, kelp);
-    if (!o) continue;
-    const top = o.worldY - down;
-    if (top < 1.05 && top + o.thick + GROWN > -0.05) out.push({ outcrop: o, top });
+    for (const more of [false, true]) {
+      const o = outcropAtSlot(key, k, kelp, more);
+      if (!o) continue;
+      const top = o.worldY - down;
+      if (top < 1.05 && top + o.thick + GROWN > -0.05) out.push({ outcrop: o, top });
+    }
   }
   return out;
 }
