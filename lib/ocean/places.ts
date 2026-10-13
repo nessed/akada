@@ -3,14 +3,16 @@
  *
  * The zones say how deep the water is; a place says what this stretch of it
  * is like. The dive is cut into legs at round depths (the long zones cut
- * again, the trench every 500 m), and each leg is one place: a real piece of
+ * again, the abyss every 500 m, the trench every 250 m), and each leg is one
+ * place: a real piece of
  * the deep sea with its own name in the margin, its own walls or floor, what
  * grows on its rocks, the haze and snow in its water, and its own animals.
  * So a long night keeps arriving somewhere it has not been yet, instead of
  * spending six hours in one trench.
  *
  * A sitting rolls its own route: each leg picks a place from the ones that
- * live at that depth, never the one it just left. Like the rest of the ocean
+ * live at that depth, never the one it just left nor the one before that.
+ * Like the rest of the ocean
  * it is a pure function of the sitting's key, so a reload or a dive again
  * passes the same places. The zones are untouched: a place sits inside one.
  */
@@ -30,10 +32,23 @@ export type PlaceId =
   | 'seamount'
   | 'plain'
   | 'vents'
+  | 'nodules'
   | 'wall'
   | 'rubble'
   | 'hadal'
+  | 'seep'
+  | 'flats'
+  | 'xeno'
+  | 'narrows'
+  | 'overhang'
   | 'deep';
+
+/**
+ * What lies on a place's floor besides the silt and the stones: a cold
+ * seep's mats, clams and tube worms; manganese nodules; xenophyophores, the
+ * giant single cells; sea cucumbers and the tracks they leave.
+ */
+export type FloorDress = 'seep' | 'nodules' | 'xeno' | 'flats';
 
 export interface Place {
   id: PlaceId;
@@ -53,6 +68,12 @@ export interface Place {
   kit?: [GrowthKind, number][];
   /** Vents on the floor: forced on with a count, or left to the sitting's roll. */
   vents?: number;
+  /** What else lies on its floor (`floor-life.ts`). */
+  floor?: FloorDress;
+  /** How much further in its walls stand than the trench's own, as a share of the page. */
+  narrow?: number;
+  /** Its wall on the leg's side leans out over the water, undercut beneath. */
+  overhang?: boolean;
   /** A colour its water leans toward, and how far (kept small: the deep stays dark). */
   haze?: [string, number];
   /** Marine snow against the usual. */
@@ -71,13 +92,13 @@ export const PLACES: Record<PlaceId, Place> = {
   reef: { id: 'reef', name: 'the reef', zone: 0, m0: 0, m1: 200, weight: 3, walls: 0, rocks: true, snow: 1, fishForms: ['disc', 'puffer', 'trigger', 'grouper', 'trumpet', 'flatfish'] },
   blue: { id: 'blue', name: 'open water', zone: 0, m0: 0, m1: 200, weight: 1.2, walls: 0, rocks: false, snow: 0.7, fishForms: ['sardine', 'jack', 'sunfish', 'flying', 'swordfish'] },
 
-  twilight: { id: 'twilight', name: 'twilight', zone: 1, m0: 200, m1: 1000, weight: 2, walls: 0, rocks: true, snow: 1, fishForms: ['lantern', 'hatchet', 'bristlemouth', 'oarfish', 'swallower'] },
+  twilight: { id: 'twilight', name: 'twilight', zone: 1, m0: 200, m1: 1000, weight: 2, walls: 0, rocks: true, snow: 1, fishForms: ['lantern', 'hatchet', 'bristlemouth', 'swallower'] },
   // A wall down one side that the reader sinks along, the reef's slope going
   // over the edge into the dark: fans and whips, the colour leaving them.
   dropoff: {
     id: 'dropoff', name: 'the drop-off', zone: 1, m0: 200, m1: 1000, weight: 1.6, walls: 1, rocks: true,
     kit: [['plate', 3], ['fan', 3], ['whip', 2]],
-    snow: 1.1, fishForms: ['hatchet', 'barreleye', 'lantern', 'oarfish', 'snipe'],
+    snow: 1.1, fishForms: ['hatchet', 'barreleye', 'lantern', 'snipe'],
   },
 
   midnight: { id: 'midnight', name: 'midnight', zone: 2, m0: 1000, m1: 4000, weight: 2, walls: 0, rocks: true, snow: 1, fishForms: ['viper', 'lantern', 'bristlemouth', 'angler', 'whalefish', 'swallower'] },
@@ -106,6 +127,12 @@ export const PLACES: Record<PlaceId, Place> = {
     id: 'vents', name: 'the vent field', zone: 3, m0: 4000, m1: 6000, weight: 1.5, walls: 0, rocks: true, vents: 4,
     haze: ['#3B2E25', 0.14], snow: 1.2, fishForms: ['eelpout', 'cusk', 'cutthroat', 'whalefish'],
   },
+  // A plain paved with manganese nodules: black lumps the size of a fist,
+  // grown a few millimetres in a million years, half sunk in the ooze.
+  nodules: {
+    id: 'nodules', name: 'the nodule field', zone: 3, m0: 4000, m1: 6000, weight: 1.6, walls: 0, rocks: false, floor: 'nodules',
+    haze: ['#33302A', 0.1], snow: 1.1, fishForms: ['grenadier', 'tripod', 'cusk', 'flatfish'],
+  },
 
   // The trench: walls on both sides from here down, closing in as it deepens.
   wall: {
@@ -125,6 +152,41 @@ export const PLACES: Record<PlaceId, Place> = {
     kit: [['glass', 1], ['seapen', 2], ['brittlestar', 1.5]],
     haze: ['#3A3731', 0.12], snow: 1.8, fishForms: ['snailfish', 'ethereal', 'cusk', 'eelpout'],
   },
+  // A cold seep: methane and sulphide leaking from the sediment, white and
+  // ochre mats of bacteria on it, clam beds and thin tube worms at their
+  // edges. Found in the trenches down to 9,500 m.
+  seep: {
+    id: 'seep', name: 'the cold seep', zone: 4, m0: 6000, m1: 9750, weight: 1.4, walls: 2, rocks: true, floor: 'seep',
+    kit: [['glass', 1], ['seapen', 1], ['brittlestar', 1]],
+    haze: ['#3A3626', 0.14], snow: 1, fishForms: ['snailfish', 'eelpout', 'cusk'],
+  },
+  // A flat of soft ooze where the sea cucumbers are most of what lives,
+  // grazing it a mouthful at a time and leaving their tracks across it.
+  flats: {
+    id: 'flats', name: 'the sea cucumber flats', zone: 4, m0: 6000, m1: 10500, weight: 1.5, walls: 2, rocks: false, floor: 'flats',
+    haze: ['#38342E', 0.1], snow: 1.5, fishForms: ['snailfish', 'ethereal', 'grenadier'],
+  },
+  // Xenophyophores: single cells the size of a fist, crumpled lace of
+  // their own grains, standing on the ooze. Seen at 10,600 m.
+  xeno: {
+    id: 'xeno', name: 'the xenophyophore field', zone: 4, m0: 7000, m1: 10500, weight: 1.2, walls: 2, rocks: true, floor: 'xeno',
+    kit: [['glass', 2], ['seapen', 1]],
+    haze: ['#36332D', 0.1], snow: 1.4, fishForms: ['snailfish', 'ethereal', 'cusk'],
+  },
+  // Where the trench pinches in: the walls close on both sides and the
+  // water between them is darker for it.
+  narrows: {
+    id: 'narrows', name: 'the narrows', zone: 4, m0: 6500, m1: 10500, weight: 1.2, walls: 2, rocks: true, narrow: 0.08,
+    kit: [['whip', 1], ['crinoid', 1.5], ['glass', 1]],
+    haze: ['#2B2926', 0.18], snow: 1.3, fishForms: ['cusk', 'cutthroat', 'snailfish'],
+  },
+  // One wall leaning out over the water, undercut beneath, its underside
+  // hung with what grows out of the light.
+  overhang: {
+    id: 'overhang', name: 'the overhang', zone: 4, m0: 6000, m1: 10500, weight: 1.1, walls: 2, rocks: true, overhang: true,
+    kit: [['glass', 2], ['crinoid', 2], ['whip', 1]],
+    haze: ['#33302B', 0.12], snow: 1.1, fishForms: ['grenadier', 'snailfish', 'ethereal'],
+  },
   // The bottom of the deepest trench. Few sittings ever get here.
   deep: {
     id: 'deep', name: 'challenger deep', zone: 4, m0: 10500, m1: 11000, weight: 1, walls: 2, rocks: true,
@@ -133,8 +195,23 @@ export const PLACES: Record<PlaceId, Place> = {
   },
 };
 
-/** Where the legs are cut, in metres: every zone's top, the long zones again, the trench every 500 m. */
-const CUTS = [0, 200, 500, 1000, 2500, 4000, 5000, 6000, 6500, 7000, 7500, 8000, 8500, 9000, 9500, 10000, 10500];
+/** How much higher up the page a place's floor sits, a share of its height:
+    a little, where there is something on it to see. */
+export function floorLift(place: Place): number {
+  return place.floor ? 0.07 : 0;
+}
+
+/**
+ * Where the legs are cut, in metres: every zone's top, the long zones again,
+ * the abyss every 500 m and the trench every 250 m, so a long night arrives
+ * somewhere new every twenty minutes or so; the last, challenger deep, from
+ * 10,500 m to the bottom.
+ */
+const CUTS = [
+  0, 200, 500, 1000, 2500, 4000, 4500, 5000, 5500,
+  ...Array.from({ length: 18 }, (_, i) => 6000 + i * 250),
+  10500,
+];
 
 export interface Leg {
   index: number;
@@ -182,6 +259,7 @@ export function routeOf(key: string, kelp: boolean): Leg[] {
   if (hit) return hit;
   const legs: Leg[] = [];
   let prev: PlaceId | null = null;
+  let prev2: PlaceId | null = null;
   for (let i = 0; i < CUTS.length; i++) {
     const m = CUTS[i];
     const zone = zoneOf(m);
@@ -189,8 +267,11 @@ export function routeOf(key: string, kelp: boolean): Leg[] {
     if (i === 0 && kelp) place = PLACES.kelp;
     else {
       const can = Object.values(PLACES).filter((p) => p.zone === zone && p.weight > 0 && m >= p.m0 && m < p.m1);
-      // Never the place it just left, if there is anywhere else to be.
-      const fresh = can.length > 1 ? can.filter((p) => p.id !== prev) : can;
+      // Never the place it just left, nor the one before that, if there is
+      // anywhere else to be: so a long stretch never goes back and forth.
+      const notPrev = can.filter((p) => p.id !== prev);
+      const notEither = notPrev.filter((p) => p.id !== prev2);
+      const fresh = notEither.length ? notEither : notPrev.length ? notPrev : can;
       const r = mulberry32(hash32(key, 'route', i));
       place = fresh[pickIndex(r, fresh.map((p) => p.weight))];
     }
@@ -205,6 +286,7 @@ export function routeOf(key: string, kelp: boolean): Leg[] {
       first: i === 0 || zoneOf(CUTS[i - 1]) !== zone,
       side: r() < 0.5 ? -1 : 1,
     });
+    prev2 = prev;
     prev = place.id;
   }
   routes.set(memo, legs);

@@ -41,7 +41,6 @@ const FORM_ROOTS: Record<FishForm, string[]> = {
   bristlemouth: ['cyclis', 'stomula'],
   viper: ['chaulis', 'odontus'],
   dragon: ['stomis', 'dracis'],
-  oarfish: ['regalis', 'remiges'],
   swallower: ['chiasmis', 'glutta'],
   snipe: ['nemis', 'avocis'],
   fangtooth: ['anoplis', 'odus'],

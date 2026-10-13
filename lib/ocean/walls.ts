@@ -75,14 +75,44 @@ export function wallReach(route: Leg[], key: string, side: -1 | 1, worldY: numbe
   if (!walled(route[i - 1], side)) k = Math.min(k, smoothstep((worldY - worldOf(leg.from)) / RAMP));
   if (Number.isFinite(leg.to) && !walled(route[i + 1], side)) k = Math.min(k, smoothstep((worldOf(leg.to) - worldY) / RAMP));
   if (k <= 0) return 0;
-  const reach = reachOf(leg, depthAt(minutes * 60).meters);
+  // The narrows pinch in, eased in and out over the leg's ends so the
+  // cliff swings in rather than stepping.
+  let reach = reachOf(leg, depthAt(minutes * 60).meters);
+  const span = Number.isFinite(leg.to) ? worldOf(leg.to) - worldOf(leg.from) : Infinity;
+  const inLeg = Math.min(1, smoothstep((worldY - worldOf(leg.from)) / RAMP), Number.isFinite(span) ? smoothstep((worldOf(leg.to) - worldY) / RAMP) : 1);
+  if (leg.place.narrow) reach += leg.place.narrow * inLeg;
+  // The overhang: the cliff on the leg's side leans out a long way over the
+  // water and is cut back in under it, twice down the leg.
+  const lean = leg.place.overhang && side === leg.side ? overhangAt(key, worldY - worldOf(leg.from), span) * inLeg : 0;
   // The cliff's line, in and out: long swells and smaller ones on them, on
   // the wall's own phases, so no two walls and no two stretches of one match.
   const p = hash32(key, 'wall-edge', side);
   const ph = [(p & 1023) / 163, ((p >>> 10) & 1023) / 163, ((p >>> 20) & 1023) / 163];
   const rough = 0.02 * Math.sin(worldY * 4.7 + ph[0]) + 0.009 * Math.sin(worldY * 12.9 + ph[1]) + 0.004 * Math.sin(worldY * 37.3 + ph[2]);
-  // Never past a third of the page, ledge and all.
-  return Math.max(0, Math.min(0.33, reach + rough + ledgeAt(key, side, worldY)) * k);
+  // Never past a third of the page, ledge and all; an overhang a little
+  // further, since the water under it is open.
+  return Math.max(0, Math.min(lean > 0 ? 0.4 : 0.33, reach + rough + ledgeAt(key, side, worldY) + lean) * k);
+}
+
+/**
+ * An overhang's lean at a point `y` page heights into its leg: the cliff
+ * runs out over the water, its top a steep step and its underside a long
+ * hollow back in to the wall, twice down the leg.
+ */
+function overhangAt(key: string, y: number, span: number): number {
+  const len = Number.isFinite(span) ? span : 1.2;
+  const h = hash32(key, 'overhang', Math.round(len * 1000));
+  const out = 0.12 + 0.05 * ((h & 255) / 255);
+  let lean = 0;
+  for (const at of [0.22, 0.64]) {
+    // From its top: out in a short sharp step, then back under itself.
+    const u = (y - at * len) / Math.min(0.7, 0.16 * len);
+    if (u < 0 || u > 1) continue;
+    // A lip: out in a few hundredths of a page, then the underside hollowed
+    // back in toward the wall, quickly at first.
+    lean = Math.max(lean, out * Math.min(1, u / 0.06) * Math.pow(1 - u, 1.8));
+  }
+  return lean;
 }
 
 /** Every fifth of a page or so, a ledge: the cliff steps out sharply at its

@@ -108,7 +108,9 @@ Saves searching. If one of these moves, fix the line here in the same commit.
 - **The places a dive passes** (the legs it is cut into, each place's name,
   walls, rock growth, haze and snow) are `lib/ocean/places.ts`. Each leg's
   animals are rolled in `lib/ocean/pool.ts` (`composePool`); the trench's and
-  the drop-off's walls are `lib/ocean/walls.ts`.
+  the drop-off's walls are `lib/ocean/walls.ts`; what lies on a place's floor
+  (a seep, nodules, xenophyophores, sea cucumbers) is
+  `lib/ocean/floor-life.ts`.
 - **Audio hooks** are `lib/use-*.ts` (`use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
   files, so they work on iOS and offline.
 - **Why the timer stopped on its own** is `lib/timer-ended.ts` (`announceEnded`).

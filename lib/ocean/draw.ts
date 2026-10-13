@@ -9,9 +9,11 @@
 import { mixHex } from '../fan';
 import type { Env } from './biome';
 import type { Depth } from './depth';
+import { drawFloorLife as inkFloorLife } from './floor-life';
 import { KELP_ROCK, kelpDescent, kelpInView, type Kelp, type KelpLedge, type KelpStalk } from './kelp';
 import { IRON_GALL, kelpInk, type KelpInk, type Water } from './palette';
 import { contourHatch, detailFor, hatch, inkLine, LIGHT, shadeAcross, smooth, smoothPath, stipple, washFill } from './pen';
+import type { FloorDress } from './places';
 import { hash32, mulberry32 } from './random';
 import type { Visitor } from './schedule';
 import type { Sprite } from './sprites';
@@ -262,12 +264,14 @@ export function drawSnow(
 }
 
 /** Where the floor's silt line sits, in device pixels: rising into view over
-    the first minutes of the abyss, then staying. Below the page before then. */
-export function floorLine(depth: Depth, focusSeconds: number, h: number): number {
+    the first minutes of the abyss, then staying. Below the page before then.
+    `lift` raises it further, a share of the page, where a place has
+    something on its floor worth seeing (`floorLift`). */
+export function floorLine(depth: Depth, focusSeconds: number, h: number, lift = 0): number {
   if (depth.zone < 3) return h * 1.04;
   const into = depth.zone === 3 ? Math.min(1, (focusSeconds / 60 - 110) / 6) : 1;
   const ease = 1 - (1 - into) * (1 - into);
-  return h * (1.04 - 0.1 * ease);
+  return h * (1.04 - (0.1 + lift) * ease);
 }
 
 /** The floor's front edge, relative to its line, as flat [x, y] points: the same low swell every frame. */
@@ -551,6 +555,8 @@ interface FloorSprite {
   top: number;
   /** The vents' mouths: x, and how far below the floor's line. */
   mouths: { x: number; dy: number; wid: number; seed: number }[];
+  /** What else lies on the floor (a seep's mats, nodules...), on its own layer. */
+  life: HTMLCanvasElement | null;
 }
 
 let floorSprites: FloorSprite[] = [];
@@ -567,9 +573,9 @@ function rgbOf(hex: string): [number, number, number] {
  * densely toward the viewer, with stones lying about, small far back and
  * larger near, each with its shadow and its line.
  */
-function floorSprite(w: number, h: number, env: Env, water: Water, px: number, vents: number): FloorSprite | null {
+function floorSprite(w: number, h: number, env: Env, water: Water, px: number, vents: number, dress: FloorDress | null = null): FloorSprite | null {
   const rgb = rgbOf(water.bottom);
-  const key = `${w}|${h}|${px}|${env.shafts}|${env.shaftTilt}|${vents}`;
+  const key = `${w}|${h}|${px}|${env.shafts}|${env.shaftTilt}|${vents}|${dress ?? ''}`;
   const hit = floorSprites.find((s) => s.key === key && s.rgb.every((v, i) => Math.abs(v - rgb[i]) <= 4));
   if (hit) return hit;
   const top = h * 0.05 + 30 * px;
@@ -718,8 +724,15 @@ function floorSprite(w: number, h: number, env: Env, water: Water, px: number, v
     const shape = drawChimney(g, v.x, foot, v.wid, px, v.seed, true, top * 0.85);
     mouths.push({ x: v.x + shape.mx, dy: foot - top + shape.my, wid: v.wid, seed: v.seed });
   }
-  const sprite: FloorSprite = { key, rgb, canvas: c, top, mouths };
-  floorSprites = [sprite, ...floorSprites].slice(0, 2);
+  // What lies on it, on its own layer, so it can be laid over the dark.
+  let life: HTMLCanvasElement | null = null;
+  if (dress) {
+    life = scratch(w, top + depth);
+    const lg = life?.getContext('2d');
+    if (lg) inkFloorLife({ g: lg, w, yAt, depth, px, ground, silt, ink, seed: hash32('floor-life', dress, env.shafts, env.shaftTilt) }, dress);
+  }
+  const sprite: FloorSprite = { key, rgb, canvas: c, top, mouths, life };
+  floorSprites = [sprite, ...floorSprites].slice(0, 4);
   return sprite;
 }
 
@@ -744,10 +757,12 @@ export function drawFloor(
   px: number,
   vents = env.vents ? 2 : 0,
   alpha = 1,
+  dress: FloorDress | null = null,
+  lift = 0,
 ) {
   if (depth.zone < 3 || alpha <= 0) return;
-  const base = floorLine(depth, focusSeconds, h);
-  const sprite = floorSprite(w, h, env, water, px, vents);
+  const base = floorLine(depth, focusSeconds, h, lift);
+  const sprite = floorSprite(w, h, env, water, px, vents, dress);
   ctx.save();
   ctx.globalAlpha = alpha;
   if (sprite) {
@@ -763,6 +778,35 @@ export function drawFloor(
     // Only the vents' breath moves.
     for (const m of sprite.mouths) drawPlume(ctx, m.x, Math.round(base - sprite.top) + sprite.top + m.dy, m.wid, px, ambient, m.seed, true, env.current);
   }
+  ctx.restore();
+}
+
+/**
+ * What lies on a place's floor (`floor-life.ts`), laid over the dark the way
+ * a whale fall is: found things stay findable. Drawn with the same floor
+ * the caller drew, so it sits on it exactly.
+ */
+export function drawFloorLife(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  depth: Depth,
+  env: Env,
+  water: Water,
+  focusSeconds: number,
+  px: number,
+  vents: number,
+  dress: FloorDress | null,
+  alpha = 1,
+  lift = 0,
+) {
+  if (!dress || depth.zone < 3 || alpha <= 0) return;
+  const sprite = floorSprite(w, h, env, water, px, vents, dress);
+  if (!sprite?.life) return;
+  const base = floorLine(depth, focusSeconds, h, lift);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(sprite.life, 0, Math.round(base - sprite.top));
   ctx.restore();
 }
 
@@ -805,11 +849,9 @@ export function drawVisitor(
   } else {
     ctx.scale(v.face ?? v.dir, 1);
     // How a form holds itself: a grenadier swims head down, nosing along the
-    // floor; a mola rolls slowly as it goes, its fins rowing it; an oarfish
-    // rides head up, slanted, rippling the fin along its back.
+    // floor; a mola rolls slowly as it goes, its fins rowing it.
     if (g.form === 'grenadier') ctx.rotate(0.36);
     else if (g.form === 'sunfish') ctx.rotate(Math.sin(ambient * 0.35 + v.phase) * 0.2);
-    else if (g.form === 'oarfish') ctx.rotate(-0.42 + Math.sin(ambient * 0.25 + v.phase) * 0.06);
     if (g.plan === 'ray') {
       const flap = 1 + 0.1 * Math.sin(ambient * 2 + v.phase);
       ctx.scale(1, flap);
