@@ -3386,19 +3386,30 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
     const ranked = [...water].sort((a, b) => (b.rare ? 1 : 0) - (a.rare ? 1 : 0) || b.score - a.score);
     let near = 0;
     let far = 0;
+    let nearEel = false;
     for (const p of ranked) {
       const sp = p.met.species;
       let layer: 0 | 1 | 2 = 1;
       if (p.rare) layer = 2;
-      else if (near < 2 && !schoolOf(sp)) {
+      else if (near < 2 && !schoolOf(sp) && !(sp.genome.plan === 'eel' && nearEel)) {
+        // (One long eel near at most: two of them want the same open band.)
         layer = 2;
         near++;
+        if (sp.genome.plan === 'eel') nearEel = true;
       } else if (far < 1 && schoolOf(sp) && ranked.length > 4) {
         layer = 0;
         far++;
       }
       layerOf.set(p, layer);
     }
+  }
+
+  // Where in the deepest water each of its animals goes, a share of it:
+  // evenly spaced down it, in an order rolled from their ids.
+  const spreadOf = new Map<Pick, number>();
+  {
+    const deepest = water.filter((p) => p.met.zone >= depthAt(e.F).zone).sort((a, b) => hash32(a.met.species.id, 'spread') - hash32(b.met.species.id, 'spread'));
+    deepest.forEach((p, i) => spreadOf.set(p, (i + 0.5) / deepest.length));
   }
 
   // The calm water is kept: nothing of the cast stands in it.
@@ -3487,7 +3498,9 @@ function solveCast(s: Session, e: CastEnv): { cast: PlacedAnimal[]; score: numbe
         // The deepest water reached is the rest of the page: its animals
         // spread down it, each given its own depth in it.
         yb = Math.max(yb, floorTop != null ? floorTop - bh : h * 0.92);
-        const k = (hash32(sp.id, 'spread') % 1000) / 1000;
+        // Spread evenly down it, in an order of their own: rolled one by
+        // one, three of them could all land in the same strip.
+        const k = spreadOf.get(p) ?? (hash32(sp.id, 'spread') % 1000) / 1000;
         ty = ya + (yb - ya) * (0.15 + 0.85 * k);
       }
       ya -= h * 0.05;

@@ -1089,6 +1089,16 @@ only ever grows, it never runs backwards, and none of it touches progress.
   animals (a pool to a leg), its own rock growth, its own walls or floor,
   and a haze and a weight of snow in its water, which ease in over a
   minute and a half as it begins.
+- **The sea follows the calendar** (`lib/ocean/season.ts`), read off the
+  day the sitting started, so a sitting dived again is in its own season.
+  In spring the plankton blooms in the light: from late March to May the
+  snow up there thickens by up to half again and the lit water greens a
+  little (a haze over the place's own, fading out through the twilight);
+  about six weeks after, what the bloom made has fallen, and the deep's
+  snow is heavier by up to two fifths. All of it eases with depth, so
+  nothing steps at a zone's edge. The timing is a northern sea's; nothing
+  on the page names a season. (Sightings do not follow it: their rolls are
+  fixed so no saved sitting's ever move.)
 - **Each leg has its own water** (`Leg.water` in `places.ts`), rolled for
   it: in about a third of them the current runs the other way to the
   sitting's, so most of what swims there swims the other way; the water is
@@ -1334,9 +1344,15 @@ only ever grows, it never runs backwards, and none of it touches progress.
   species (`lib/ocean/pool.ts`), so the animals turn over as one place
   gives way to the next; half of every pool is rolled from the course and
   comes back every sitting of it (a course's sea has its regulars), half
-  from the sitting and is never seen again. A zone's first leg rolls the
-  seeds the zone's one pool always did, so every zone opens on the animals
-  it always had. A few species in a pool are common and most are rare.
+  from the sitting and is never seen again. The regulars turn over slowly
+  (`lib/ocean/season.ts`): each of a pool's six regular places has a
+  generation six weeks long, staggered, so each week one of them is someone
+  new and stays six weeks; the course's sea keeps its character while the
+  faces in it change, and someone sitting every day does not meet the same
+  sea on day twenty as on day one. A regular's look (which of two species
+  of a schooling kind it is) is settled among the regulars alone, never by
+  the sitting's own animals. A few species in a pool are common and most
+  are rare.
   The fish in a pool are chosen as a set (`composePool`): at most seven in
   the light and the twilight, six at midnight, five in the abyss and four in
   the trench, and never fewer than two, so no stretch of the dive is

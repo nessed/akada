@@ -39,6 +39,7 @@ import { drawManOWar, drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/oc
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { hazed, HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
 import { floorLift, legAt, legMark } from '@/lib/ocean/places';
+import { seasonHaze, seasonOf, seasonSnow } from '@/lib/ocean/season';
 import { hash32 } from '@/lib/ocean/random';
 import { swimAge, visitorsAt, type Swim } from '@/lib/ocean/schedule';
 import { drawFishFall, drawMudslide, drawSnailfishGathering, drawSupergiant } from '@/lib/ocean/sightings-hadal';
@@ -120,8 +121,9 @@ export default function OceanScene({
   const frontRef = useRef<HTMLCanvasElement | null>(null);
   const markRef = useRef<HTMLSpanElement | null>(null);
   const biome = useMemo(() => rollBiome(sittingKey, courseKey), [sittingKey, courseKey]);
+  const season = useMemo(() => seasonOf(sittingKey), [sittingKey]);
   // Enough far snow for the thickest place's; a place draws as much of it as its water holds.
-  const snow = useMemo(() => ({ back: rollSnow(sittingKey, 170), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
+  const snow = useMemo(() => ({ back: rollSnow(sittingKey, 230), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
   const kelp = useMemo(() => (biome.env.kelp ? rollKelp(biome.key) : null), [biome]);
   // Where the hero jelly is, written by StudyFan every frame it moves.
   const jellyAt = useMemo(() => ({ current: null as JellyAt | null }), []);
@@ -252,8 +254,10 @@ export default function OceanScene({
       const wk = `${depth.z.toFixed(3)}|${li}|${ease.toFixed(2)}|${L.ground}|${L.color}`;
       if (wk !== waterKey) {
         const base = waterAt(depth.z, L.ground, L.color);
-        const was = hazed(base, prev.place.haze);
-        const now = hazed(base, leg.place.haze);
+        // The place's haze, and over the light the season's: a spring bloom's green.
+        const bloom = seasonHaze(season, depth.z);
+        const was = hazed(hazed(base, prev.place.haze), bloom);
+        const now = hazed(hazed(base, leg.place.haze), bloom);
         water = { ...now, top: mixHex(was.top, now.top, ease), bottom: mixHex(was.bottom, now.bottom, ease) };
         waterKey = wk;
       }
@@ -312,7 +316,7 @@ export default function OceanScene({
       // it, the change eased in a speck at a time; and the leg's own
       // clarity, the specks finer where the water is clearer.
       const mixW = (a: number, b: number) => a + (b - a) * ease;
-      const flakes = 60 * mixW(prev.place.snow * prev.water.snow, leg.place.snow * leg.water.snow);
+      const flakes = 60 * mixW(prev.place.snow * prev.water.snow, leg.place.snow * leg.water.snow) * seasonSnow(season, depth.z);
       const clarity = Math.max(0.5, Math.min(1, biome.env.visibility * mixW(prev.water.clarity, leg.water.clarity)));
       sparkles.glow = mixW(prev.water.glow, leg.water.glow);
       const whole = Math.min(snow.back.length, Math.floor(flakes));
@@ -621,7 +625,7 @@ export default function OceanScene({
       unregister();
       unregisterFront();
     };
-  }, [biome, kelp, snow, sittingKey, jellyAt]);
+  }, [biome, kelp, snow, season, sittingKey, jellyAt]);
 
   // Every render hands the loop the page's latest, and wakes it if it had
   // parked (a pause settling, a still): a resume, a break or the sheet coming
