@@ -1555,6 +1555,30 @@ only ever grows, it never runs backwards, and none of it touches progress.
   they reel in what they catch. It is the bluest thing in the sea and still
   a pastel. A picture leaves it out: it lives at the surface, and the top
   of a picture is kept for the window of sky.
+- **And a fourth, for the trench** (`lib/ocean/sightings-hadal.ts`), landing
+  only in minutes all three rolls before it left well alone. The trench is
+  most of a long night, and before this roll it saw a sighting about once
+  in six hours; now it is about one an hour, each something a lander's
+  camera has really caught down there, and the animals in them are the
+  sea's own, inked by the same sprites as everything that swims by:
+  - **a fish fall**: a dead fish sinks and lands on its side with a puff of
+    silt; the amphipods come in along curving paths from every side and
+    cover it, busy there; the snailfish come in low and hang near, lunging
+    at them now and then; and as they all go, the fish is a skeleton, a
+    spine, ribs down to the floor, the skull with its socket.
+  - **a slide of silt** off one wall: billows roll out low across the floor
+    and rise and spread as they go, the lower water goes thick, then it
+    settles. Wash only, no line: it is a cloud.
+  - **a supergiant amphipod**, a hand long and pale, walking across the
+    floor from one side to the other, bobbing with its steps, puffs of silt
+    where its feet come down.
+  - **the snailfish gathering**: a loose crowd of them, two kinds, coming in
+    low from both sides to hang over one spot, milling, then drifting off.
+  - and the dumbo octopus gets a second chance in the trench, at a rate of
+    its own.
+
+  A picture leaves these out for now: what sits on a picture's floor is
+  placed by its own rules, and these will join the whale fall there.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
   appears in the Sound menu and plays a tank heard from
   across a room: a low bed of water that swells slowly, a thin shimmer, the

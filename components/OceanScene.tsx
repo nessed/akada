@@ -39,6 +39,7 @@ import { hazed, HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palet
 import { floorLift, legAt, legMark } from '@/lib/ocean/places';
 import { hash32 } from '@/lib/ocean/random';
 import { swimAge, visitorsAt, type Swim } from '@/lib/ocean/schedule';
+import { drawFishFall, drawMudslide, drawSnailfishGathering, drawSupergiant } from '@/lib/ocean/sightings-hadal';
 import { SpriteCache } from '@/lib/ocean/sprites';
 import { drawWalls, WallCache } from '@/lib/ocean/walls';
 import { registerWallpaperLayer } from '@/lib/wallpaper';
@@ -396,6 +397,11 @@ export default function OceanScene({
         else if (event.kind === 'manowar') drawManOWar(bctx, W, H, age, event.seed, px, ambient, water.dark);
         else if (event.kind === 'lure') drawLure(bctx, W, H, age, event.seed, px, ambient, water.dark);
         else if (event.kind === 'dumbo') drawDumbo(bctx, W, H, age, event.seed, px, ambient, water.dark);
+        // The trench's own, on its floor.
+        else if (event.kind === 'fishfall') drawFishFall(bctx, W, H, age, event.seed, px, ambient, water.dark, floorLine(depth, shown, H, lift));
+        else if (event.kind === 'mudslide') drawMudslide(bctx, W, H, age, event.seed, px, ambient, water.dark, floorLine(depth, shown, H, lift));
+        else if (event.kind === 'supergiant') drawSupergiant(bctx, W, H, age, event.seed, px, ambient, water.dark, floorLine(depth, shown, H, lift));
+        else if (event.kind === 'snailfish') drawSnailfishGathering(bctx, W, H, age, event.seed, px, ambient, water.dark, floorLine(depth, shown, H, lift));
       }
 
       // The animals. Anything that wanders over the clock goes faint there.
