@@ -660,3 +660,51 @@ test('walls: the trench is walled both sides from its top and closes in, and the
     }
   }
 });
+
+/*
+ * The long night. A 7 to 9 hour sitting spends most of itself in the
+ * trench, so that is where the sea has to keep changing: this is the
+ * measure that once found it going back and forth between two places, with
+ * a handful of the same kinds of fish and a sighting every six hours.
+ */
+test('a nine-hour sitting keeps changing every hour, all the way down', () => {
+  const N = 12;
+  const hours = 9;
+  const places: number[] = Array(hours).fill(0);
+  const species: number[] = Array(hours).fill(0);
+  const kinds: number[] = Array(hours).fill(0);
+  const sightings: number[] = Array(hours).fill(0);
+  for (let k = 0; k < N; k++) {
+    const biome = rollBiome(oceanKey('night', 1e6 + k * 7919), courseKey(`night${k % 4}`));
+    for (let hr = 0; hr < hours; hr++) {
+      const ids = new Set<string>();
+      const kind = new Set<string>();
+      const where = new Set<string>();
+      for (let t = hr * 3600; t < (hr + 1) * 3600; t += 2) {
+        where.add(biome.route[legAt(biome.route, t)].place.id);
+        const sp = spawnAt(biome, t);
+        if (!sp) continue;
+        ids.add(sp.id);
+        const g = sp.genome;
+        kind.add(g.form ?? (g.plan === 'cucumber' ? `cucumber:${g.cuke}` : g.amphi ? 'amphipod' : g.plan));
+      }
+      places[hr] += where.size;
+      species[hr] += ids.size;
+      kinds[hr] += kind.size;
+    }
+    for (const e of eventsUpTo(biome, hours * 3600)) sightings[Math.floor(e.start / 3600)]++;
+    // Never back and forth between two places, wherever there are more.
+    const r = biome.route;
+    for (let i = 2; i < r.length; i++) if (r[i].zone === 4 && r[i - 2].zone === 4 && r[i].place.id !== 'deep') assert.notEqual(r[i].place.id, r[i - 2].place.id, `back and forth at ${r[i].m} m`);
+  }
+  // Hours four to nine are the trench's.
+  for (let hr = 3; hr < hours; hr++) {
+    const tag = `hour ${hr + 1}`;
+    assert.ok(places[hr] / N >= 3, `${tag}: ${(places[hr] / N).toFixed(1)} places`);
+    assert.ok(species[hr] / N >= 30, `${tag}: ${(species[hr] / N).toFixed(1)} species`);
+    assert.ok(kinds[hr] / N >= 9, `${tag}: ${(kinds[hr] / N).toFixed(1)} kinds of animal`);
+  }
+  // And something rare most hours down there, across the six of them.
+  const trench = sightings.slice(3).reduce((a, b) => a + b, 0) / (N * 6);
+  assert.ok(trench >= 0.7, `${trench.toFixed(2)} sightings an hour in the trench`);
+});
