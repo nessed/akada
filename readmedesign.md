@@ -1632,7 +1632,14 @@ only ever grows, it never runs backwards, and none of it touches progress.
   string, all of it pitched low (an octave under where it first sat, which
   read as a little bright). Synthesised (`lib/use-aquarium-sound.ts`), so it works on iOS and
   offline, and a lowpass follows the depth: open at the surface, a low hush on
-  the floor. It eases in over about a second and a half and out over a
+  the floor. The bubbles thin out as it sinks. And it hears the place and the
+  moment, quietly, each a layer of the same water well under the bed and
+  faded over seconds (`tankScene` in `lib/ocean/tank.ts`, read off the same
+  sitting the scene draws): at a cold seep a faint high fizz and many more,
+  smaller bubbles; in the vent field a low roar, and a little of it on any
+  floor with the sitting's own vents; while a slide of silt passes, a rumble
+  lower still that comes on in a few seconds and dies away slowly. It is
+  still a tank heard from across a room. It eases in over about a second and a half and out over a
   little more than one (`lib/audio-fade.ts`, a cosine curve that picks up from
   wherever the gain is, so a tap mid-fade turns around without a step).
 - **The Sound menu** (`components/SoundMenu.tsx`) is the one speaker button in
