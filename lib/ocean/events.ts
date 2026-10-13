@@ -24,7 +24,11 @@ export type EventKind =
   | 'dumbo'
   | 'whalefall'
   | 'oarfish'
-  | 'manowar';
+  | 'manowar'
+  | 'fishfall'
+  | 'mudslide'
+  | 'supergiant'
+  | 'snailfish';
 
 interface Spec {
   zones: number[];
@@ -51,6 +55,12 @@ export const EVENTS: Record<EventKind, Spec> = {
   oarfish: { zones: [1, 2], perHour: 0.006, seconds: 60, phrase: 'an oarfish, hanging in the dark', weight: 1100 },
   // A surface animal, so only in the first of the light.
   manowar: { zones: [0], perHour: 0.8, seconds: 50, phrase: "a Portuguese man o' war drifted over", weight: 250 },
+  // The trench's own (`sightings-hadal.ts`), so a long night down there has
+  // something happen most hours.
+  fishfall: { zones: [4], perHour: 0.3, seconds: 90, phrase: 'a dead fish fell, and the amphipods came for it', weight: 650 },
+  mudslide: { zones: [4], perHour: 0.2, seconds: 75, phrase: 'a slide of silt came down the wall', weight: 550 },
+  supergiant: { zones: [4], perHour: 0.15, seconds: 70, phrase: 'a supergiant amphipod walked by', weight: 600 },
+  snailfish: { zones: [4], perHour: 0.2, seconds: 80, phrase: 'the snailfish gathered', weight: 500 },
 };
 const ORDER: EventKind[] = ['leviathan', 'eye', 'storm', 'whale'];
 /* The second roll, added after the first had been out in the world: its
@@ -60,6 +70,17 @@ const LATER: EventKind[] = ['oarfish', 'whalefall', 'siphonophore', 'dumbo', 'lu
 /* The third, the same again: only in minutes both rolls before it left
    well alone, so nothing either of them put in a sitting moves. */
 const LATEST: EventKind[] = ['manowar'];
+/* The fourth, for the trench, the same again: only in minutes all three
+   rolls before it left well alone. It also gives the dumbo a second chance
+   down there, at a rate of its own, since the trench is where a long night
+   spends its hours. */
+const DEEPEST: [EventKind, number][] = [
+  ['fishfall', EVENTS.fishfall.perHour],
+  ['mudslide', EVENTS.mudslide.perHour],
+  ['supergiant', EVENTS.supergiant.perHour],
+  ['snailfish', EVENTS.snailfish.perHour],
+  ['dumbo', 0.15],
+];
 const GAP_MINUTES = 8;
 const MAX_SECONDS = 90;
 
@@ -82,6 +103,17 @@ function laterAt(biome: Biome, minute: number): EventKind | null {
 
 function latestAt(biome: Biome, minute: number): EventKind | null {
   return rollAt(biome, minute, 'event-latest', LATEST);
+}
+
+function deepestAt(biome: Biome, minute: number): EventKind | null {
+  if (depthAt(minute * 60).zone !== 4) return null;
+  const u = hash32(biome.key, 'event-deepest', minute) / 4294967296;
+  let edge = 0;
+  for (const [kind, perHour] of DEEPEST) {
+    edge += perHour / 60;
+    if (u < edge) return kind;
+  }
+  return null;
 }
 
 function rollAt(biome: Biome, minute: number, salt: string, kinds: EventKind[]): EventKind | null {
@@ -109,7 +141,7 @@ export interface OceanEvent {
 /** The event that begins in a given minute, if any. */
 export function eventAtMinute(biome: Biome, minute: number): OceanEvent | null {
   if (minute < 1) return null;
-  const kind = rawAt(biome, minute) ?? laterEventAt(biome, minute) ?? latestEventAt(biome, minute);
+  const kind = rawAt(biome, minute) ?? laterEventAt(biome, minute) ?? latestEventAt(biome, minute) ?? deepestEventAt(biome, minute);
   if (!kind) return null;
   // Raw hits, not kept ones, so the rule never needs to look further back.
   if (rawAt(biome, minute)) for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (rawAt(biome, m)) return null;
@@ -132,6 +164,15 @@ function latestEventAt(biome: Biome, minute: number): EventKind | null {
   if (!kind) return null;
   for (let m = Math.max(1, minute - GAP_MINUTES); m <= minute + GAP_MINUTES; m++) if (rawAt(biome, m) || laterAt(biome, m)) return null;
   for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (latestAt(biome, m)) return null;
+  return kind;
+}
+
+/** The fourth roll's event, kept only with all three rolls before it quiet for the gap either side. */
+function deepestEventAt(biome: Biome, minute: number): EventKind | null {
+  const kind = deepestAt(biome, minute);
+  if (!kind) return null;
+  for (let m = Math.max(1, minute - GAP_MINUTES); m <= minute + GAP_MINUTES; m++) if (rawAt(biome, m) || laterAt(biome, m) || latestAt(biome, m)) return null;
+  for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (deepestAt(biome, m)) return null;
   return kind;
 }
 

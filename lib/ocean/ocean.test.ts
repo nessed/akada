@@ -174,8 +174,12 @@ test('rare events keep their gap, stay in their zones, and are rare', () => {
     for (let i = 1; i < all.length; i++) assert.ok(all[i].start - all[i - 1].start >= 8 * 60, 'events too close');
     for (const e of all) assert.ok(EVENTS[e.kind].zones.includes(depthAt(Math.floor(e.start / 60) * 60).zone), `${e.kind} out of its zone`);
   }
-  // Somewhere around a few in ten hours; never a parade.
-  assert.ok(total / hours < 0.5, `${total} events in ${hours} hours`);
+  // Above the trench, somewhere around a few in ten hours; never a parade.
+  // (The trench has its own roll and its own rate: see the next test.)
+  const above = (k: number) => eventsUpTo(rollBiome(oceanKey('ev', k), courseKey('ev')), 180 * 60).length;
+  let sum = 0;
+  for (let k = 0; k < 60; k++) sum += above(k);
+  assert.ok(sum / 60 < 2, `${sum} events in 60 sittings' first three hours`);
   assert.ok(total > 0, 'no events at all in 240 hours');
 });
 
@@ -253,12 +257,25 @@ test('kelp only slides up the page, and is gone by the end of the sunlit water',
   assert.ok(!kelpInView(6 * 3600));
 });
 
+test('the trench has something happen about once an hour, and nothing earlier moves for it', () => {
+  let trench = 0;
+  for (let k = 0; k < 120; k++) {
+    const biome = rollBiome(oceanKey('hadal', k), courseKey('hadal'));
+    const all = eventsUpTo(biome, 540 * 60);
+    for (let i = 1; i < all.length; i++) assert.ok(all[i].start - all[i - 1].start >= 8 * 60, 'events too close');
+    trench += all.filter((e) => e.start >= 180 * 60).length;
+  }
+  // Six hours of trench in each.
+  const perHour = trench / (120 * 6);
+  assert.ok(perHour > 0.7 && perHour < 1.4, `${perHour.toFixed(2)} trench sightings an hour`);
+});
+
 test('the later sightings all turn up, and the first roll never hears of them', () => {
   const seen = new Set<EventKind>();
-  for (let k = 0; k < 600 && seen.size < 10; k++) {
-    for (const e of eventsUpTo(rollBiome(oceanKey('later', k), courseKey('later')), 4 * 3600)) seen.add(e.kind);
+  for (let k = 0; k < 600 && seen.size < 14; k++) {
+    for (const e of eventsUpTo(rollBiome(oceanKey('later', k), courseKey('later')), 7 * 3600)) seen.add(e.kind);
   }
-  for (const kind of ['turtle', 'siphonophore', 'lure', 'dumbo', 'whalefall', 'manowar'] as EventKind[]) assert.ok(seen.has(kind), `no ${kind} in 600 sittings`);
+  for (const kind of ['turtle', 'siphonophore', 'lure', 'dumbo', 'whalefall', 'manowar', 'fishfall', 'mudslide', 'supergiant', 'snailfish'] as EventKind[]) assert.ok(seen.has(kind), `no ${kind} in 600 sittings`);
   // Golden: a first-roll event that was there before the later roll existed is still there.
   const biome = rollBiome(oceanKey('gold', 1), courseKey('gold'));
   const first = eventsUpTo(biome, 4 * 3600).filter((e) => ['whale', 'storm', 'eye', 'leviathan'].includes(e.kind));
