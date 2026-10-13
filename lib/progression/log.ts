@@ -154,6 +154,10 @@ export async function logImpression(surface: string, reading: NextMarkReading): 
 
   try {
     const supabase = createClient();
+    // Nobody signed in, as on the way out of a sign-out, means nobody to log
+    // it for. Asking anyway only earns a 401.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
     const { data } = await supabase
       .from('mark_candidates')
       .insert({

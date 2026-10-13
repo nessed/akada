@@ -162,7 +162,10 @@ export default function SettingsPage() {
 
   async function signOut() {
     try {
-      await createClient().auth.signOut();
+      // This device only. The SDK's default is every device at once, so
+      // signing out of a library computer used to sign the laptop at home
+      // out mid-session too, and its open pages started failing.
+      await createClient().auth.signOut({ scope: 'local' });
     } catch {
       // Includes the local adapter, where there is no Supabase to sign out of.
       // Falls through either way: a failed server sign-out must not leave
@@ -214,6 +217,7 @@ export default function SettingsPage() {
       <ConfirmSheet
         open={confirming === 'signOut'}
         title="Sign out?"
+        body={email ? `${email}, on this device only.` : 'On this device only.'}
         confirmLabel="Sign out"
         cancelLabel="Stay"
         onCancel={() => setConfirming(null)}
