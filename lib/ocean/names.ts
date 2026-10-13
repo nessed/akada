@@ -17,6 +17,7 @@ const ROOTS: Record<Genome['plan'], string[]> = {
   ray: ['batis', 'raja'],
   squid: ['teuthis', 'loligo'],
   crawler: ['caris', 'podus'],
+  cucumber: ['holothis', 'elpida', 'psychropus'],
 };
 /**
  * A fish's root is its form's, so two kinds of fish read as two kinds of
@@ -73,6 +74,8 @@ export function speciesName(g: Genome, seed: number): string {
   if (g.plan === 'bell' && (g.tentN ?? 0) > 20) traits.push('Myrio');
   if (g.spines || g.dorsalShape === 'spines') traits.push('Acantho');
   if (g.plan === 'chain') traits.push('Catena');
+  if (g.amphi) traits.push('Hirundo');
+  if (g.cuke === 'veiled') traits.push('Velo');
   const prefix = pick(traits.length ? traits.concat(pick(PLAIN)) : PLAIN);
   const epithets: string[] = [];
   if (g.lit) epithets.push('lucens', 'noctiluca');

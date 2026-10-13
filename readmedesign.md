@@ -1145,10 +1145,24 @@ only ever grows, it never runs backwards, and none of it touches progress.
   `palette.ts`). Their own lights keep their colour, since they are made on
   the spot.
 - **The animals are generated.** Every one is a genome rolled from the
-  sitting (`lib/ocean/genome.ts`): nine body plans (jelly, comb jelly,
-  siphonophore chain, fish, eel, ray, squid, and on the floor starfish and
-  crawlers) and dozens of traits, with the depth leaning on the dice, so the
-  deep ones come out clear-bodied, big-eyed or blind, lit, lured. A fish
+  sitting (`lib/ocean/genome.ts`): ten body plans (jelly, comb jelly,
+  siphonophore chain, fish, eel, ray, squid, and on the floor starfish,
+  crawlers and sea cucumbers) and dozens of traits, with the depth leaning
+  on the dice, so the deep ones come out clear-bodied, big-eyed or blind,
+  lit, lured. The trench keeps to what really lives there: no skates below
+  6,000 m and squid only now and then; its crawlers are amphipods (a curled
+  body of segments, the tail bent under, side plates hanging like scallops
+  along the belly, thin jointed legs, two pairs of feelers, the forked
+  uropods), on the floor and in the water in small swarms; and its floor is
+  mostly sea cucumbers, as real hadal floors are (a third of a trench pool's
+  places are on the floor, a quarter in the abyss). A sea cucumber is a sea
+  pig (plump, higher at the front, its cone feet in a row under it and its
+  feelers curving up off the front of its back), a small glassy elpidiid
+  with its gut a loop in it and two pairs of small papillae, or, in the
+  water, the swimming one: a bag of pink glass with a webbed veil standing up
+  off its front and a brim behind (`settle` in `genome.ts` puts each where
+  its pool did). On the floor a sea cucumber grazes along a mouthful at a
+  time. A fish
   also comes in a **form** (`FORMS` in `genome.ts`): a real family with its
   own silhouette, fins and way of moving, each living only at its own
   depths, so the fish in a sea are different kinds of fish and not one fish
