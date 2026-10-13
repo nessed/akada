@@ -1887,7 +1887,7 @@ export function planIn(s: Session, color: string, ground: 'paper' | 'night', sha
   const jellyBoxes = [...jellies.filter((j) => !j.shoal).map((j) => j.box), ...(cloud ? [cloud.box] : [])];
   const calmBoxes = jellies.filter((j) => !j.shoal).map((j) => j.box);
   const calmWith = (extra: Box[]) => calmOf({ w, h, boxes: [winBox, ...calmBoxes, ...kelpBoxes, ...extra], rocks, walls, ground: floor ? groundY : null }).share;
-  const settleEnv = { w, h, M, jellies, cloud: cloud?.box ?? null, rocks, walls, winBox, floorTop: floor ? (trench ? trench.top : floor.y) : null, kelp: kelpBoxes, steepY: steepestFall(zStops, h), current: s.biome.env.current, calmWith, groundUnder: floor ? groundUnder : undefined };
+  const settleEnv = { w, h, M, jellies, cloud: cloud?.box ?? null, rocks, walls, winBox, floorTop: floor ? (trench ? trench.top : floor.y) : null, kelp: kelpBoxes, steepY: steepestFall(zStops, h), current: s.biome.env.current, calmWith, groundUnder: floor ? groundUnder : undefined, groundY: floor ? groundY : undefined };
   let events: PlacedEvent[] = [];
   for (let take = Math.min(EVENTS_MAX, kinds.length); take <= kinds.length; take++) {
     const list: PlacedEvent[] = [];
@@ -2746,6 +2746,14 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       const yy = clamp(y, h * 0.2, (o.floorY ?? h) - S * 1.2);
       return { ...base, age: 0.5, rx: want - w * startX, ry: yy - rh * baseY, rw: w, rh, x: want, y: yy, far: false, box: { x0: want - S * 1.1, x1: want + S * 1.1, y0: yy - S * 0.9, y1: yy + S * 0.75 } };
     }
+    case 'fishfall':
+    case 'supergiant':
+    case 'snailfish': {
+      // On the floor, toward the side away from the way down; settled along
+      // the ground later, clear of the rest.
+      if (o.floorY == null) return null;
+      return groundEvent(e, w * (side > 0 ? 0.68 : 0.32), o.groundY, w, h);
+    }
     case 'whalefall': {
       if (o.floorY == null) return null;
       // On the floor, half sunk; in a trench, on the bench beside the cleft,
@@ -2896,6 +2904,43 @@ export const EVENTS_MAX = 2;
 /** The big rare things that must never touch the hero, each other or a rock. */
 const LONE: EventKind[] = ['lure', 'siphonophore', 'oarfish'];
 
+/** The trench's sightings that sit on the floor (`sightings-hadal.ts`): laid on the ground like the whale fall, but kept clear of everything as the rest are. */
+const HADAL_FLOOR: EventKind[] = ['fishfall', 'supergiant', 'snailfish'];
+const onFloor = (kind: EventKind) => kind === 'whalefall' || HADAL_FLOOR.includes(kind);
+
+/**
+ * A trench sighting set down on the ground at x: its region, where it is
+ * caught, and the box it takes up, all from where the ground is there. How
+ * far through it the picture catches it is its fullest moment: the fish
+ * covered and the snailfish come, the amphipod mid-walk, the gathering whole.
+ */
+function groundEvent(v: { kind: EventKind; seed: number; start: number }, x: number, groundY: (x: number) => number, w: number, h: number, k = 1): PlacedEvent {
+  const S = Math.min(w, h) * k;
+  const y = groundY(x);
+  const base = { kind: v.kind, seed: v.seed, start: v.start, mirror: false, edge: false, far: false, x, y };
+  if (v.kind === 'fishfall') {
+    // A square region about it, the fish a fifth of its side long.
+    const R = S;
+    const L = R * 0.2;
+    return { ...base, age: 0.6, rx: x - R / 2, ry: y - R * 0.8, rw: R, rh: R, box: { x0: x - L * 1.3, x1: x + L * 1.3, y0: y - L * 0.65, y1: y + L * 0.05 } };
+  }
+  if (v.kind === 'supergiant') {
+    // A square region with the amphipod at its middle at half way: it is 0.3 of it long.
+    const R = S * 0.6;
+    const L = R * 0.3;
+    return { ...base, age: 0.5, rx: x - R / 2, ry: y - R, rw: R, rh: R, box: { x0: x - L * 0.62, x1: x + L * 0.62, y0: y - L * 0.68, y1: y + L * 0.03 } };
+  }
+  // The gathering: a third of the page wide and two fifths of its height, over the spot.
+  const rw = w * 0.34 * k;
+  const rh = h * 0.4 * k;
+  // (Its fish are sized by the page, `paint.ts`: their length reaches past the spread.)
+  const fish = Math.min(w, h) * 0.7 * 0.105;
+  return { ...base, age: 0.5, rx: x - rw / 2, ry: y - rh, rw, rh, box: { x0: x - rw * 0.375 - fish / 2, x1: x + rw * 0.375 + fish / 2, y0: y - rh * 0.33 - fish, y1: y } };
+}
+
+/** The sizes a floor sighting is tried at, largest first, until it finds ground level enough. */
+const GROUND_SIZES = [1, 0.8, 0.65];
+
 /**
  * The hard rules for the rare things: none over the window, none within the
  * hero's margin; the lure, the siphonophore and the oarfish touching nothing
@@ -2904,7 +2949,7 @@ const LONE: EventKind[] = ['lure', 'siphonophore', 'oarfish'];
  */
 function settleEvents(
   events: PlacedEvent[],
-  e: { w: number; h: number; M: number; jellies: PlacedJelly[]; cloud?: Box | null; rocks: PlacedRock[]; walls: Wall[]; winBox: Box; floorTop: number | null; kelp: Box[]; steepY: number | null; current: 1 | -1; calmWith: (extra: Box[]) => number; groundUnder?: (b: Box) => number },
+  e: { w: number; h: number; M: number; jellies: PlacedJelly[]; cloud?: Box | null; rocks: PlacedRock[]; walls: Wall[]; winBox: Box; floorTop: number | null; kelp: Box[]; steepY: number | null; current: 1 | -1; calmWith: (extra: Box[]) => number; groundUnder?: (b: Box) => number; groundY?: (x: number) => number },
 ): void {
   const { w, h } = e;
   const hero = e.jellies[e.jellies.length - 1];
@@ -2922,8 +2967,15 @@ function settleEvents(
     if ((v.kind === 'turtle' || v.kind === 'dumbo') && (b.x0 < w * MARGIN || b.x1 > w * (1 - MARGIN))) return true;
     // The squid's eye low on the page, and never under the window.
     if (v.kind === 'eye' && (v.y < h * EYE_BAND[0] || v.y > h * EYE_BAND[1] || Math.abs(v.x - (e.winBox.x0 + e.winBox.x1) / 2) < w * 0.25)) return true;
-    if (v.kind !== 'whalefall' && v.kind !== 'oarfish' && e.floorTop != null && b.y1 > e.floorTop) return true;
-    if (v.kind !== 'whalefall' && v.kind !== 'oarfish' && e.groundUnder && b.y1 > e.groundUnder(b) - CLEAR) return true;
+    if (!onFloor(v.kind) && v.kind !== 'oarfish' && e.floorTop != null && b.y1 > e.floorTop) return true;
+    if (!onFloor(v.kind) && v.kind !== 'oarfish' && e.groundUnder && b.y1 > e.groundUnder(b) - CLEAR) return true;
+    // One on the floor sits on ground that is there and near enough level
+    // under it: never down in the cleft, nor across a step.
+    if (HADAL_FLOOR.includes(v.kind) && e.groundY) {
+      const g0 = e.groundY(b.x0 + (b.x1 - b.x0) * 0.3);
+      const g1 = e.groundY(b.x1 - (b.x1 - b.x0) * 0.3);
+      if (v.y > h * 0.985 || Math.abs(g1 - g0) > (b.y1 - b.y0) * 0.5 || b.x0 < w * 0.02 || b.x1 > w * 0.98) return true;
+    }
     // Nothing of the middle water in the whale's shadow.
     if (v.kind !== 'whale' && v.kind !== 'whalefall' && !v.far) {
       for (const o of events) {
@@ -2968,6 +3020,31 @@ function settleEvents(
       continue;
     }
     let fixed = false;
+    if (HADAL_FLOOR.includes(v.kind)) {
+      // Along the ground, the least way from where it was set, either side:
+      // strictly, since one pressed onto a rock or the hero is worse than none.
+      const groundY = e.groundY;
+      const from = v.x;
+      for (const size of GROUND_SIZES) {
+        for (let k = 0; groundY && k <= 80 && !fixed; k++) {
+          const x = from + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * w * 0.012;
+          const t = groundEvent(v, x, groundY, w, h, size);
+          if (!bad(t, done, true)) {
+            Object.assign(v, t);
+            fixed = true;
+          }
+        }
+        if (fixed) break;
+      }
+      if (!fixed) {
+        const i = list.indexOf(v);
+        if (i >= 0) list.splice(i, 1);
+        loose += 10 + EVENTS[v.kind].weight / 1e4;
+        continue;
+      }
+      done.push(v);
+      continue;
+    }
     // The big rare things and the eye are laid strictly or not at all: one
     // on a cliff, or two pressed together, is worse than one fewer.
     for (const strict of LONE.includes(v.kind) || v.kind === 'eye' ? [true] : [true, false]) {

@@ -24,10 +24,13 @@ import { drawKelp } from '../kelp-draw';
 import { drawGodRays, drawSnellWindow, drawSnowDeep, godRayLight, moonLit, sunFor } from '../light';
 import { jellyForBlock } from '../lineage';
 import { drained, HUES, waterAt, type Water } from '../palette';
+import { drawFloorLife } from '../floor-life';
 import { inkLine, smoothPath } from '../pen';
+import { legAt, routeOf, type FloorDress } from '../places';
 import { hash32, mulberry32, type Rand } from '../random';
 import type { Visitor } from '../schedule';
 import { drawDumbo, drawLure, drawWhaleFall } from '../sightings-deep';
+import { drawFishFall, drawSnailfishGathering, drawSupergiant } from '../sightings-hadal';
 import { drawOarfish, drawSiphonophore, drawTurtle } from '../sightings-shallow';
 import { SpriteCache, type Sprite } from '../sprites';
 import { Wash } from '../wash';
@@ -2217,6 +2220,12 @@ function siltAt(plan: Plan, c: Caches, y: number): string {
   return t < 0.3 ? mixHex(back, mixHex(back, front, 0.45), t / 0.3) : mixHex(mixHex(back, front, 0.45), front, (t - 0.3) / 0.7);
 }
 
+/** What lies on the floor of the place the sitting ended in, if anything. */
+function endingFloor(plan: Plan): FloorDress | null {
+  const route = routeOf(plan.key, false);
+  return route[legAt(route, plan.focus)].place.floor ?? null;
+}
+
 function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: number, view: View) {
   if (!plan.floor) return;
   const H = plan.h * D;
@@ -2349,6 +2358,32 @@ function paintFloor(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, D: num
           ctx.globalAlpha = 1;
         }
       }
+    }
+    // What lies on the floor where the sitting ended (a seep's mats, the
+    // nodules, xenophyophores, sea cucumbers and their tracks), laid along
+    // this stretch of ground and short of its ends, so the cleft cuts none.
+    const dress = endingFloor(plan);
+    if (dress && x1 - x0 > 80) {
+      const pad = 24;
+      const from = x0 + pad;
+      const span = x1 - x0 - pad * 2;
+      ctx.save();
+      ctx.translate(from * D, 0);
+      drawFloorLife(
+        {
+          g: ctx,
+          w: span * D,
+          yAt: (x) => lineAt(from + x / D) * D,
+          depth: Math.max(10, (plan.h - yBack) * 0.7) * D,
+          px: D * (Math.min(plan.w, plan.h) / 900),
+          ground: front,
+          silt: mixHex(back, '#FFFFFF', night ? 0.2 : 0.35),
+          ink: night ? INK_NIGHT : INK,
+          seed: hash32(plan.seed, 'floor-life', side),
+        },
+        dress,
+      );
+      ctx.restore();
     }
     ctx.restore();
     // The crest in one pen line, broken for about a third of its length
@@ -2737,6 +2772,17 @@ function drawEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: Plac
       break;
     case 'whalefall':
       drawWhaleFall(ctx, w, h, 1, e.seed, D, ambient, dark, e.y * D, siltAt(plan, c, e.y));
+      break;
+    // The trench's own, set on the ground where the layout put them.
+    case 'fishfall':
+      drawFishFall(ctx, w, h, e.age, e.seed, D, ambient, dark, (e.y - e.ry) * D, (e.x - e.rx) * D);
+      break;
+    case 'supergiant':
+      drawSupergiant(ctx, w, h, e.age, e.seed, D, ambient, dark, (e.y - e.ry) * D);
+      break;
+    case 'snailfish':
+      // Sized by the page, not its region: a gathering is many fish of the trench's own size.
+      drawSnailfishGathering(ctx, w, h, e.age, e.seed, D, ambient, dark, (e.y - e.ry) * D, (e.x - e.rx) * D, Math.min(plan.w, plan.h) * D * 0.7);
       break;
   }
   ctx.restore();

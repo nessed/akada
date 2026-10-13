@@ -935,3 +935,24 @@ test('a sighting is kept where the page can have it: the dawn turtle beside the 
     assert.ok(plan.events.some((e) => e.kind === 'turtle'), `${shape.width}x${shape.height} ${ground}: no turtle`);
   }
 });
+
+test('the trench\'s own sightings sit on the ground in a picture, never in the cleft, clear of the hero', () => {
+  const parts: ['focus' | 'break', number][] = [];
+  for (let i = 0; i < 8; i++) parts.push(['focus', 55], ['break', 10]);
+  const seen = new Set<string>();
+  for (const k of [0, 2, 3, 5]) {
+    const c = { name: `long ${k}`, course: `c${k % 4}`, segs: sitting(new Date(Date.parse('2026-09-01T00:00:00Z') + k * 29 * 3600e3).toISOString(), parts) };
+    const plan = planOf(c, { width: 1920, height: 1200 });
+    const hero = plan.jellies[plan.jellies.length - 1];
+    for (const e of plan.events) {
+      if (!['fishfall', 'supergiant', 'snailfish'].includes(e.kind)) continue;
+      seen.add(e.kind);
+      const b = e.box as Box;
+      assert.ok(plan.floor, `${c.name}: a ${e.kind} with no floor`);
+      assert.ok(Math.abs(e.y - floorAt(plan, e.x)) < 1e-6, `${c.name}: the ${e.kind} off the ground`);
+      assert.ok(e.y < plan.h * 0.985, `${c.name}: the ${e.kind} down in the cleft`);
+      assert.ok(boxGap(b, hero.box) >= CLEAR - 1e-6, `${c.name}: the ${e.kind} in the hero's margin`);
+    }
+  }
+  assert.ok(seen.size >= 2, `only ${[...seen].join(', ') || 'none'} of the trench's sightings in four long pictures`);
+});

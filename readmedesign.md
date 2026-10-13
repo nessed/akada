@@ -1119,8 +1119,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   coils along them. A floor with something on it sits a little higher up
   the page, so there is room to see it, easing up and down as places
   change; and what lies on it is laid over the dark as the walls are, so
-  it stays findable beyond the jelly's light. Prints keep their own floor
-  and do not carry it. Its haze is held within a
+  it stays findable beyond the jelly's light. A picture lays the floor of
+  the place the sitting ended in along its own ground, its tracks
+  following the ground's line and kept short of the trench's cleft. Its haze is held within a
   few steps of the zone's colour: the deep stays dark, and a place is told
   by what is in it, not by a tint. A long sitting keeps arriving somewhere
   it has not been, and two long sittings do not go the same way.
@@ -1623,8 +1624,14 @@ only ever grows, it never runs backwards, and none of it touches progress.
   - and the dumbo octopus gets a second chance in the trench, at a rate of
     its own.
 
-  A picture leaves these out for now: what sits on a picture's floor is
-  placed by its own rules, and these will join the whale fall there.
+  A picture carries the fish fall, the amphipod and the gathering, caught
+  at their fullest (the fish covered and the snailfish come, the amphipod
+  mid-walk, the gathering whole): each set on the ground on the side away
+  from the way down and slid along it the least way to where it is clear
+  of the hero, the jellies, the rocks, the walls and the other rare things,
+  on ground level enough under it and never in the cleft, tried smaller if
+  it will not fit, and left out if it still will not. The slide of silt is
+  left out, a passing cloud as the man o' war is a passing float.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
   appears in the Sound menu and plays a tank heard from
   across a room: a low bed of water that swells slowly, a thin shimmer, the
