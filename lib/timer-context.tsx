@@ -165,6 +165,12 @@ interface TimerContextValue {
   pause: () => void;
   resume: () => void;
   cancel: () => void;
+  /**
+   * Throw away the block in progress and run it again from zero, keeping
+   * every block and break before it. Only means anything in a block that
+   * follows a break; before the first one it is the same as starting over.
+   */
+  restartBlock: () => void;
   clearPendingLog: () => void;
   clearTimerState: () => void;
   stop: () => PendingTimerLog | null;
@@ -1407,6 +1413,24 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     setElapsed(0);
   }, []);
 
+  const restartBlock = useCallback(() => {
+    const current = activeRef.current;
+    if (!current || current.phase !== 'focus') return;
+    const now = Date.now();
+    primeChime();
+    playSound('start');
+    breakNoticeRef.current = null;
+    applyActive({
+      ...current,
+      startedAt: now,
+      stretchStartedAt: now,
+      accumulatedMs: 0,
+      isPaused: false,
+      pausedAt: null,
+      lastSeenAt: now,
+    });
+  }, [applyActive]);
+
   const stop = useCallback(() => {
     const current = activeRef.current;
     if (!current) return null;
@@ -1486,6 +1510,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       pause,
       resume,
       cancel,
+      restartBlock,
       clearPendingLog,
       clearTimerState,
       stop,
@@ -1506,6 +1531,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       pause,
       resume,
       cancel,
+      restartBlock,
       clearPendingLog,
       clearTimerState,
       stop,

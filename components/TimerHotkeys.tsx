@@ -21,6 +21,10 @@ import { isLogSheetMounted } from './PendingSessionLogSheet';
  * held block it files the hold as the break it was (see breakStartsAt), so
  * "paused, walked off, came back" can still be put right on the way back.
  *
+ * `R` asks before it throws anything away. Once a break has gone by it
+ * offers two answers: this block back to zero with the blocks before it
+ * kept, or the whole sitting over.
+ *
  * `P` is the dock's left button and does exactly what it does: on a break it
  * ends it and sets out the next block held, otherwise it holds the clock or lets it go again. `K` is
  * the dock's right button: it ends the sitting and the log sheet opens on the
@@ -51,7 +55,7 @@ function blinkPage() {
 
 export default function TimerHotkeys() {
   const router = useRouter();
-  const { active, onBreak, endBreak, startBreak, pause, resume, stop, cancel, start } = useTimerState();
+  const { active, onBreak, endBreak, startBreak, pause, resume, stop, cancel, start, restartBlock } = useTimerState();
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [confirmingFinish, setConfirmingFinish] = useState(false);
 
@@ -98,24 +102,42 @@ export default function TimerHotkeys() {
     return () => window.removeEventListener('keydown', onKey);
   }, [active, onBreak, endBreak, startBreak, pause, resume]);
 
+  // Once a break has gone by, a reset can go back to where it ended rather
+  // than throwing the blocks already done away with this one. On a break
+  // there is no block to go back to, so it is the whole sitting or nothing.
+  const afterBreak = active?.phase === 'focus' && active.segments.length > 0;
+
+  function resetBlock() {
+    setConfirmingReset(false);
+    restartBlock();
+  }
+
+  function resetSitting() {
+    setConfirmingReset(false);
+    // Cancel and start in one go, so no screen sees the gap between them and
+    // sends the reader home.
+    if (!active) return;
+    const { courseId, taskId, targetSeconds } = active;
+    cancel();
+    start(courseId, taskId, targetSeconds);
+  }
+
   return (
     <>
       <ConfirmSheet
         open={confirmingReset && !!active}
-        title="Start this sitting over?"
-        body="The time so far won't be saved. The clock starts again from zero on the same task."
-        confirmLabel="Reset"
+        title={afterBreak ? 'Start over from where?' : 'Start this sitting over?'}
+        body={
+          afterBreak
+            ? 'This block goes back to zero and the blocks before it stay. Or the whole sitting goes, and none of it is saved.'
+            : "The time so far won't be saved. The clock starts again from zero on the same task."
+        }
+        confirmLabel={afterBreak ? 'This block' : 'Reset'}
         cancelLabel="Keep going"
+        altLabel={afterBreak ? 'Whole sitting' : undefined}
+        onAlt={afterBreak ? resetSitting : undefined}
         onCancel={() => setConfirmingReset(false)}
-        onConfirm={() => {
-          setConfirmingReset(false);
-          // Cancel and start in one go, so no screen sees the gap between
-          // them and sends the reader home.
-          if (!active) return;
-          const { courseId, taskId, targetSeconds } = active;
-          cancel();
-          start(courseId, taskId, targetSeconds);
-        }}
+        onConfirm={afterBreak ? resetBlock : resetSitting}
       />
       <ConfirmSheet
         open={confirmingFinish && !!active}
