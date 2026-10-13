@@ -105,7 +105,8 @@ function speciesOf(s: Slot, leg: Leg, twin: Genome | null): Species {
     genome.patN = Math.max(4, genome.patN ?? 6);
   }
   // Schools: the forms that school, and amphipods swarming in the water.
-  const schooling = (!!form && !!FORMS[form].school && chance(r, 0.6)) || (plan === 'crawler' && !!genome.swims && chance(r, 0.8));
+  // (In a crowded place, the scattering layer, nearly all of them come in schools.)
+  const schooling = (!!form && !!FORMS[form].school && chance(r, leg.place.crowd ? 0.9 : 0.6)) || (plan === 'crawler' && !!genome.swims && chance(r, 0.8));
   return {
     id: `${zone}:${seed}`,
     seed,

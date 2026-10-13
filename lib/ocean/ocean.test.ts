@@ -719,6 +719,66 @@ test('a nine-hour sitting keeps changing every hour, all the way down', () => {
   assert.ok(trench >= 0.7, `${trench.toFixed(2)} sightings an hour in the trench`);
 });
 
+/*
+ * The first two hours. Every sitting starts here, so this is the water a
+ * reader sees most: it once spent half an hour at a time in one place, with
+ * whole quarter hours that brought nobody new.
+ */
+test('the first two hours arrive somewhere new every quarter hour, and every quarter hour brings someone new', () => {
+  const N = 16;
+  const quarters = 8;
+  const fresh: number[] = Array(quarters).fill(0);
+  for (let k = 0; k < N; k++) {
+    const biome = rollBiome(oceanKey('early', 2e6 + k * 104729), courseKey(`early${k % 4}`));
+    // From the twilight to the abyss, no leg longer than a quarter hour.
+    for (const leg of biome.route.filter((l) => l.from >= 15 && l.from < 110)) assert.ok(leg.to - leg.from <= 15 + 1e-9, `${leg.place.id} at ${leg.m} m runs ${(leg.to - leg.from).toFixed(1)} min`);
+    const seen = new Set<string>();
+    for (let q = 0; q < quarters; q++) {
+      for (let t = q * 900; t < (q + 1) * 900; t++) {
+        const sp = spawnAt(biome, t);
+        if (!sp || seen.has(sp.id)) continue;
+        seen.add(sp.id);
+        fresh[q]++;
+      }
+    }
+  }
+  for (let q = 0; q < quarters; q++) assert.ok(fresh[q] / N >= 6, `minutes ${q * 15} to ${q * 15 + 15}: ${(fresh[q] / N).toFixed(1)} new species`);
+});
+
+test('the twilight\'s places: a canyon walled both sides but wider than the trench, and a scattering layer thick with life', () => {
+  const world = (min: number) => kelpDescent(min * 60) + 0.6;
+  let canyons = 0;
+  let layer = 0;
+  let open = 0;
+  let layerMin = 0;
+  let openMin = 0;
+  for (let k = 0; k < 300 && (canyons < 10 || layerMin < 200); k++) {
+    const key = oceanKey('twi', k);
+    const biome = rollBiome(key, courseKey('twi'));
+    for (const leg of biome.route.filter((l) => l.zone === 1)) {
+      const mid = (leg.from + leg.to) / 2;
+      if (leg.place.id === 'canyon') {
+        canyons++;
+        for (const side of [-1, 1] as const) {
+          const r = wallReach(biome.route, key, side, world(mid));
+          assert.ok(r > 0.03 && r < 0.17, `a canyon wall at ${r}`);
+        }
+      }
+      // Animals set off per minute, the layer against the twilight's other places, over the same minutes.
+      for (let t = Math.ceil(leg.from * 60); t < leg.to * 60; t++) {
+        const sp = spawnAt(biome, t);
+        if (leg.place.id === 'layer') layer += sp ? 1 : 0;
+        else open += sp ? 1 : 0;
+      }
+      if (leg.place.id === 'layer') layerMin += leg.to - leg.from;
+      else openMin += leg.to - leg.from;
+    }
+  }
+  assert.ok(canyons >= 10, `only ${canyons} canyons`);
+  assert.ok(layer / layerMin > 1.3 * (open / openMin), `the layer ${(layer / layerMin).toFixed(2)} a minute, elsewhere ${(open / openMin).toFixed(2)}`);
+  assert.ok(PLACES.layer.lights && PLACES.layer.lights > 0 && !PLACES.canyon.lights);
+});
+
 test('each leg has its own water, and the first is the sitting\'s', () => {
   let flips = 0;
   let legs = 0;

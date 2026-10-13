@@ -27,6 +27,8 @@ export type PlaceId =
   | 'blue'
   | 'twilight'
   | 'dropoff'
+  | 'canyon'
+  | 'layer'
   | 'midnight'
   | 'mounds'
   | 'seamount'
@@ -76,6 +78,12 @@ export interface Place {
   overhang?: boolean;
   /** Past the last fish: nothing with a backbone has been found living this deep. */
   fishless?: boolean;
+  /** More animals in its water than the minute would otherwise hold, against the usual. */
+  crowd?: number;
+  /** Its plankton answers a hand more brightly than the usual, on top of the leg's own. */
+  glow?: number;
+  /** Pinpricks of light hanging in its water, blinking on and off, how many against a full page's worth. */
+  lights?: number;
   /** A colour its water leans toward, and how far (kept small: the deep stays dark). */
   haze?: [string, number];
   /** Marine snow against the usual. */
@@ -101,6 +109,23 @@ export const PLACES: Record<PlaceId, Place> = {
     id: 'dropoff', name: 'the drop-off', zone: 1, m0: 200, m1: 1000, weight: 1.6, walls: 1, rocks: true,
     kit: [['plate', 3], ['fan', 3], ['whip', 2]],
     snow: 1.1, fishForms: ['hatchet', 'barreleye', 'lantern', 'snipe'],
+  },
+  // A submarine canyon: a gorge cut into the continental slope, walls on
+  // both sides as the trench has but further apart, grown with the
+  // twilight's fans and whips, the current running hard down it.
+  canyon: {
+    id: 'canyon', name: 'the canyon', zone: 1, m0: 200, m1: 1000, weight: 1.4, walls: 2, rocks: true,
+    kit: [['fan', 3], ['whip', 3], ['plate', 1.5]],
+    haze: ['#2E3A40', 0.08], snow: 1.3, fishForms: ['hatchet', 'snipe', 'swallower', 'barreleye'],
+  },
+  // The deep scattering layer: the band of the twilight so thick with
+  // lanternfish, hatchetfish, krill and siphonophores that a ship's sonar
+  // takes it for the bottom. Open water, crowded, schools in it everywhere,
+  // the snow thick and the plankton quick to light.
+  layer: {
+    id: 'layer', name: 'the scattering layer', zone: 1, m0: 300, m1: 1000, weight: 1.3, walls: 0, rocks: false,
+    crowd: 1.8, glow: 1.6, lights: 1,
+    haze: ['#2F3B3A', 0.06], snow: 1.7, fishForms: ['lantern', 'bristlemouth', 'hatchet'],
   },
 
   midnight: { id: 'midnight', name: 'midnight', zone: 2, m0: 1000, m1: 4000, weight: 2, walls: 0, rocks: true, snow: 1, fishForms: ['viper', 'lantern', 'bristlemouth', 'angler', 'whalefish', 'swallower'] },
@@ -208,13 +233,14 @@ export function floorLift(place: Place): number {
 }
 
 /**
- * Where the legs are cut, in metres: every zone's top, the long zones again,
- * the abyss every 500 m and the trench every 250 m, so a long night arrives
- * somewhere new every twenty minutes or so; the last, challenger deep, from
- * 10,500 m to the bottom.
+ * Where the legs are cut, in metres: every zone's top, the twilight again at
+ * 500 and 750 m, the midnight every 750 m, the abyss every 500 m and the
+ * trench every 250 m, so the first two hours arrive somewhere new every
+ * eleven to fifteen minutes and a long night every twenty or so; the last,
+ * challenger deep, from 10,500 m to the bottom.
  */
 const CUTS = [
-  0, 200, 500, 1000, 2500, 4000, 4500, 5000, 5500,
+  0, 200, 500, 750, 1000, 1750, 2500, 3250, 4000, 4500, 5000, 5500,
   ...Array.from({ length: 18 }, (_, i) => 6000 + i * 250),
   10500,
 ];
