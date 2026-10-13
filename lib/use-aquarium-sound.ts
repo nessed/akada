@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FADE_IN, FADE_OUT, fadeTo } from './audio-fade';
+import type { TankScene } from './ocean/tank';
 
 /**
  * The sound of the deep, for the sea timer: a tank heard from across a room.
@@ -31,6 +32,12 @@ const readVolume = () => {
   }
 };
 
+/* The layers at full, against the bed's 0.55: kept well under it, since it
+   is still a tank heard from across a room. */
+const FIZZ = 0.018;
+const ROAR = 0.22;
+const RUMBLE = 0.32;
+
 export function useAquariumSound() {
   const [on, setOn] = useState(false);
   // 0 to 1. Read after mount, so the server and the first paint agree.
@@ -49,6 +56,11 @@ export function useAquariumSound() {
   const stopLayersRef = useRef<(() => void) | null>(null);
   const startingRef = useRef(false);
   const depthRef = useRef<number | null>(null);
+  /* Where the sitting is and what is happening there: a seep fizzes, a vent
+     field roars low, a slide of silt rumbles while it passes. Each is a
+     quiet layer of its own, faded in and out over seconds. */
+  const sceneRef = useRef<TankScene>({ fizz: 0, roar: 0, rumble: 0 });
+  const layersRef = useRef<{ fizz: GainNode; roar: GainNode; rumble: GainNode } | null>(null);
   // A tank still fading out after being turned off, and how to close it now.
   const fadingRef = useRef<{ timer: number; close: () => void } | null>(null);
 
@@ -62,6 +74,19 @@ export function useAquariumSound() {
     const filter = filterRef.current;
     const context = contextRef.current;
     if (filter && context) filter.frequency.setTargetAtTime(cutoffFor(z), context.currentTime, 1.5);
+  }, []);
+
+  const setScene = useCallback((next: TankScene) => {
+    const was = sceneRef.current;
+    if (was.fizz === next.fizz && was.roar === next.roar && was.rumble === next.rumble) return;
+    sceneRef.current = next;
+    const layers = layersRef.current;
+    const context = contextRef.current;
+    if (!layers || !context) return;
+    layers.fizz.gain.setTargetAtTime(FIZZ * next.fizz, context.currentTime, 2.5);
+    layers.roar.gain.setTargetAtTime(ROAR * next.roar, context.currentTime, 2.5);
+    // A slide comes on quicker than it goes.
+    layers.rumble.gain.setTargetAtTime(RUMBLE * next.rumble, context.currentTime, next.rumble > was.rumble ? 2 : 6);
   }, []);
 
   const setVolume = useCallback((v: number) => {
@@ -84,6 +109,7 @@ export function useAquariumSound() {
     levelRef.current = null;
     masterRef.current = null;
     filterRef.current = null;
+    layersRef.current = null;
     contextRef.current?.close();
     contextRef.current = null;
   }, []);
@@ -114,6 +140,7 @@ export function useAquariumSound() {
       stopLayersRef.current = null;
       masterRef.current = null;
       filterRef.current = null;
+      layersRef.current = null;
       contextRef.current = null;
       const close = () => {
         stopLayers?.();
@@ -228,14 +255,42 @@ export function useAquariumSound() {
         oscillators.push(hum);
       }
 
+      // The place's own, each from the same water: a fizz high up (a seep's
+      // gas coming through), a low roar (a vent field), a rumble lower still
+      // (a slide of silt), all silent until the scene asks for them.
+      const layer = (type: BiquadFilterType, freq: number, q: number, level: number) => {
+        const src = context.createBufferSource();
+        src.buffer = noise;
+        src.loop = true;
+        src.playbackRate.value = 0.93 + Math.random() * 0.1;
+        const f = context.createBiquadFilter();
+        f.type = type;
+        f.frequency.value = freq;
+        f.Q.value = q;
+        const g = context.createGain();
+        g.gain.value = level;
+        src.connect(f);
+        f.connect(g);
+        g.connect(master);
+        src.start();
+        return { src, g };
+      };
+      const scene = sceneRef.current;
+      const fizz = layer('bandpass', 1900, 1.4, FIZZ * scene.fizz);
+      const roar = layer('lowpass', 95, 0.7, ROAR * scene.roar);
+      const rumble = layer('lowpass', 55, 0.9, RUMBLE * scene.rumble);
+      layersRef.current = { fizz: fizz.g, roar: roar.g, rumble: rumble.g };
+
       // Bubbles: a sine that climbs quickly in pitch as it rises, with a soft
-      // edge on either side. Alone, or now and then a short string of them.
+      // edge on either side. Alone, or now and then a short string of them;
+      // fewer the deeper it goes, and at a seep many more and smaller.
       const bubble = (at: number) => {
         const osc = context.createOscillator();
         const gain = context.createGain();
         const pan = context.createStereoPanner();
-        const base = 130 + Math.random() * 350;
-        const length = 0.05 + Math.random() * 0.1;
+        const small = sceneRef.current.fizz > 0.5 && Math.random() < 0.6;
+        const base = small ? 380 + Math.random() * 300 : 130 + Math.random() * 350;
+        const length = small ? 0.03 + Math.random() * 0.05 : 0.05 + Math.random() * 0.1;
         osc.type = 'sine';
         osc.frequency.setValueAtTime(base, at);
         osc.frequency.exponentialRampToValueAtTime(base * (1.7 + Math.random() * 0.9), at + length);
@@ -260,7 +315,9 @@ export function useAquariumSound() {
           bubble(at);
           at += 0.07 + Math.random() * 0.16;
         }
-        timer = window.setTimeout(schedule, 700 + Math.random() * 3800);
+        const z = depthRef.current ?? 0;
+        const spread = (1 + 0.8 * Math.max(0, z - 0.5)) * (sceneRef.current.fizz > 0.5 ? 0.35 : 1);
+        timer = window.setTimeout(schedule, (700 + Math.random() * 3800) * spread);
       };
       timer = window.setTimeout(schedule, 800);
 
@@ -273,11 +330,12 @@ export function useAquariumSound() {
             // Already stopped.
           }
         }
-        try {
-          bed.stop();
-          shimmer.stop();
-        } catch {
-          // Already stopped.
+        for (const src of [bed, shimmer, fizz.src, roar.src, rumble.src]) {
+          try {
+            src.stop();
+          } catch {
+            // Already stopped.
+          }
         }
         master.disconnect();
       };
@@ -301,6 +359,8 @@ export function useAquariumSound() {
     toggle,
     /** Muffles the sound as the sitting sinks; null leaves it open. */
     setDepth,
+    /** What the place and the moment add, each 0 to 1 (`tankScene`). */
+    setScene,
     /** How loud the tank is, 0 to 1, remembered between visits. */
     volume,
     setVolume,

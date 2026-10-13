@@ -25,8 +25,10 @@ import { successionAt } from '@/lib/wood/succession';
 import dynamic from 'next/dynamic';
 import type { ClearRect, OceanClock } from '@/components/OceanScene';
 import { mixHex } from '@/lib/fan';
+import { rollBiome } from '@/lib/ocean/biome';
 import { depthAt } from '@/lib/ocean/depth';
 import { courseKey, oceanKey, oceanKeyFromSegments } from '@/lib/ocean/key';
+import { QUIET, tankScene } from '@/lib/ocean/tank';
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { HUES } from '@/lib/ocean/palette';
 import SessionChain from '@/components/SessionChain';
@@ -216,6 +218,18 @@ export default function TimerPage() {
 
   const timerCourseId = active?.courseId ?? pendingLog?.courseId ?? null;
   const timerTaskId = active?.taskId ?? pendingLog?.taskId ?? null;
+  // The tank hears the place and the moment too: a seep, a vent field, a
+  // slide of silt. (The sitting's sea, keyed as the scene's is below.)
+  const tankKey =
+    timerDrawing === 'ocean' && timerCourseId
+      ? active?.sittingStartedAt != null && Number.isFinite(active.sittingStartedAt)
+        ? oceanKey(timerCourseId, active.sittingStartedAt)
+        : oceanKeyFromSegments(timerCourseId, pendingLog?.segments)
+      : null;
+  const tankBiome = useMemo(() => (tankKey && timerCourseId ? rollBiome(tankKey, courseKey(timerCourseId)) : null), [tankKey, timerCourseId]);
+  const tank = tankBiome ? tankScene(tankBiome, focusSeconds) : QUIET;
+  const setAquariumScene = aquarium.setScene;
+  useEffect(() => setAquariumScene({ fizz: tank.fizz, roar: tank.roar, rumble: tank.rumble }), [setAquariumScene, tank.fizz, tank.roar, tank.rumble]);
 
   const course = useMemo(
     () => (timerCourseId ? courses.find((c) => c.id === timerCourseId) ?? null : null),

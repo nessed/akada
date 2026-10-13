@@ -827,3 +827,31 @@ test('the long sitting in words: an hour in the margin, and the way it went on t
   const recap = diveRecap(oceanKey('words', 7), courseKey('words'), 9 * 3600);
   assert.equal(recap.route, line);
 });
+
+test('the tank hears the place: a seep fizzes, a vent field roars, a slide of silt rumbles while it passes', async () => {
+  const { tankScene } = await import('./tank');
+  let seep = 0;
+  let vents = 0;
+  let rumble = 0;
+  for (let k = 0; k < 40; k++) {
+    const biome = rollBiome(oceanKey('tank', k), courseKey('tank'));
+    for (const leg of biome.route) {
+      const mid = ((leg.from + (Number.isFinite(leg.to) ? leg.to : leg.from + 20)) / 2) * 60;
+      const s = tankScene(biome, mid);
+      assert.equal(s.fizz, leg.place.floor === 'seep' ? 1 : 0, leg.place.id);
+      if (leg.place.vents) assert.equal(s.roar, 1);
+      if (leg.place.floor === 'seep') seep++;
+      if (leg.place.vents) vents++;
+      // The light is quiet.
+      if (leg.zone < 3) assert.deepEqual(s, { fizz: 0, roar: 0, rumble: 0 });
+    }
+    for (const e of eventsUpTo(biome, 9 * 3600)) {
+      if (e.kind !== 'mudslide') continue;
+      const during = tankScene(biome, e.start + e.seconds * 0.3).rumble;
+      const after = tankScene(biome, e.start + e.seconds + 30).rumble;
+      assert.ok(during > 0.5 && after === 0, `${during} then ${after}`);
+      rumble++;
+    }
+  }
+  assert.ok(seep > 0 && vents > 0 && rumble > 0, `${seep} seeps, ${vents} vent fields, ${rumble} slides`);
+});
