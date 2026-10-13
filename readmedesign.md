@@ -1077,7 +1077,15 @@ only ever grows, it never runs backwards, and none of it touches progress.
   rubble slope, the hadal floor, a cold seep, the sea cucumber flats, a
   xenophyophore field, the narrows (the walls pinched in, the water darker)
   or the overhang (one wall leaning out over the water, undercut beneath),
-  until the last leg, which is always challenger deep. A place has its own
+  until the last leg, which is always challenger deep: an arrival, nine
+  hours and eighteen minutes of focus down, its margin note saying so
+  (`the bottom of the sea · challenger deep · 10,500 m`). It is past the
+  last fish, as the real one is (none has been seen below about 8,400 m):
+  where its pool would have had a fish there is an amphipod swarm or a
+  swimming sea cucumber, half its places are on the floor, the walls stand
+  at their narrowest, and its floor is the bottom's own, pale ooze with a
+  few xenophyophores, a sea cucumber or two and their tracks, and the
+  amphipods in little crowds picking over it. A place has its own
   animals (a pool to a leg), its own rock growth, its own walls or floor,
   and a haze and a weight of snow in its water, which ease in over a
   minute and a half as it begins.
