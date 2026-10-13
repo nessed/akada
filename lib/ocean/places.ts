@@ -67,69 +67,69 @@ export interface Place {
 export const PLACES: Record<PlaceId, Place> = {
   // The sunlit water: kelp where the sitting rolled it, otherwise a reef, or
   // now and then open blue with no rock in it at all.
-  kelp: { id: 'kelp', name: 'the kelp forest', zone: 0, m0: 0, m1: 200, weight: 0, walls: 0, rocks: true, snow: 1, fishForms: ['jack', 'sardine', 'barracuda'] },
-  reef: { id: 'reef', name: 'the reef', zone: 0, m0: 0, m1: 200, weight: 3, walls: 0, rocks: true, snow: 1, fishForms: ['disc', 'puffer', 'jack', 'flatfish'] },
-  blue: { id: 'blue', name: 'open water', zone: 0, m0: 0, m1: 200, weight: 1.2, walls: 0, rocks: false, snow: 0.7, fishForms: ['sardine', 'jack', 'sunfish', 'barracuda'] },
+  kelp: { id: 'kelp', name: 'the kelp forest', zone: 0, m0: 0, m1: 200, weight: 0, walls: 0, rocks: true, snow: 1, fishForms: ['jack', 'sardine', 'barracuda', 'grouper'] },
+  reef: { id: 'reef', name: 'the reef', zone: 0, m0: 0, m1: 200, weight: 3, walls: 0, rocks: true, snow: 1, fishForms: ['disc', 'puffer', 'trigger', 'grouper', 'trumpet', 'flatfish'] },
+  blue: { id: 'blue', name: 'open water', zone: 0, m0: 0, m1: 200, weight: 1.2, walls: 0, rocks: false, snow: 0.7, fishForms: ['sardine', 'jack', 'sunfish', 'flying', 'swordfish'] },
 
-  twilight: { id: 'twilight', name: 'twilight', zone: 1, m0: 200, m1: 1000, weight: 2, walls: 0, rocks: true, snow: 1, fishForms: ['lantern', 'hatchet', 'bristlemouth'] },
+  twilight: { id: 'twilight', name: 'twilight', zone: 1, m0: 200, m1: 1000, weight: 2, walls: 0, rocks: true, snow: 1, fishForms: ['lantern', 'hatchet', 'bristlemouth', 'oarfish', 'swallower'] },
   // A wall down one side that the reader sinks along, the reef's slope going
   // over the edge into the dark: fans and whips, the colour leaving them.
   dropoff: {
     id: 'dropoff', name: 'the drop-off', zone: 1, m0: 200, m1: 1000, weight: 1.6, walls: 1, rocks: true,
     kit: [['plate', 3], ['fan', 3], ['whip', 2]],
-    snow: 1.1, fishForms: ['hatchet', 'barreleye', 'lantern'],
+    snow: 1.1, fishForms: ['hatchet', 'barreleye', 'lantern', 'oarfish', 'snipe'],
   },
 
-  midnight: { id: 'midnight', name: 'midnight', zone: 2, m0: 1000, m1: 4000, weight: 2, walls: 0, rocks: true, snow: 1, fishForms: ['viper', 'lantern', 'bristlemouth', 'angler'] },
+  midnight: { id: 'midnight', name: 'midnight', zone: 2, m0: 1000, m1: 4000, weight: 2, walls: 0, rocks: true, snow: 1, fishForms: ['viper', 'lantern', 'bristlemouth', 'angler', 'whalefish', 'swallower'] },
   // Cold-water coral: heaps of white branching coral (Lophelia, Desmophyllum)
   // with sponges and lilies among them, real down to about 3,000 m.
   mounds: {
     id: 'mounds', name: 'the coral mounds', zone: 2, m0: 1000, m1: 3000, weight: 1.6, walls: 0, rocks: true,
     kit: [['branch', 4], ['glass', 2], ['crinoid', 1.5], ['brittlestar', 1]],
-    snow: 1.2, fishForms: ['grenadier', 'fangtooth', 'viper'],
+    snow: 1.2, fishForms: ['grenadier', 'fangtooth', 'viper', 'chimaera'],
   },
   // A seamount's flank down one side: sponge gardens and sea lilies.
   seamount: {
     id: 'seamount', name: 'the seamount', zone: 2, m0: 1000, m1: 4000, weight: 1.4, walls: 1, rocks: true,
     kit: [['glass', 3], ['crinoid', 2.5], ['seapen', 1.5], ['whip', 1.5]],
-    snow: 1.1, fishForms: ['grenadier', 'gulper', 'angler'],
+    snow: 1.1, fishForms: ['grenadier', 'gulper', 'angler', 'chimaera', 'snipe'],
   },
 
   // The abyssal plain: open ooze to the edge of sight, silt in the water.
   plain: {
     id: 'plain', name: 'the abyssal plain', zone: 3, m0: 4000, m1: 6000, weight: 2, walls: 0, rocks: true,
-    haze: ['#3A3833', 0.1], snow: 1.4, fishForms: ['tripod', 'grenadier', 'cusk'],
+    haze: ['#3A3833', 0.1], snow: 1.4, fishForms: ['tripod', 'lizard', 'grenadier', 'cusk', 'cutthroat'],
   },
   // A field of black smokers, more of them than a sitting's vents, and the
   // water over them a little murky and warm.
   vents: {
     id: 'vents', name: 'the vent field', zone: 3, m0: 4000, m1: 6000, weight: 1.5, walls: 0, rocks: true, vents: 4,
-    haze: ['#3B2E25', 0.14], snow: 1.2, fishForms: ['eelpout', 'cusk'],
+    haze: ['#3B2E25', 0.14], snow: 1.2, fishForms: ['eelpout', 'cusk', 'cutthroat', 'whalefish'],
   },
 
   // The trench: walls on both sides from here down, closing in as it deepens.
   wall: {
     id: 'wall', name: 'the trench wall', zone: 4, m0: 6000, m1: 10500, weight: 2, walls: 2, rocks: true,
     kit: [['glass', 2], ['crinoid', 2.5], ['whip', 1], ['seapen', 1]],
-    snow: 1.1, fishForms: ['snailfish', 'grenadier', 'cusk'],
+    snow: 1.1, fishForms: ['snailfish', 'ethereal', 'grenadier', 'cusk'],
   },
   // A landslide's scar: broken rock come down the wall, little growing on it.
   rubble: {
     id: 'rubble', name: 'the rubble slope', zone: 4, m0: 6000, m1: 10500, weight: 1.3, walls: 2, rocks: true,
     kit: [['glass', 1], ['brittlestar', 2], ['whip', 1]],
-    haze: ['#35322C', 0.12], snow: 1.6, fishForms: ['cusk', 'snailfish'],
+    haze: ['#35322C', 0.12], snow: 1.6, fishForms: ['cusk', 'cutthroat', 'snailfish', 'eelpout'],
   },
   // The trench's own floor: soft sediment, silt hanging in the water.
   hadal: {
     id: 'hadal', name: 'the hadal floor', zone: 4, m0: 6500, m1: 10500, weight: 1.5, walls: 2, rocks: true,
     kit: [['glass', 1], ['seapen', 2], ['brittlestar', 1.5]],
-    haze: ['#3A3731', 0.12], snow: 1.8, fishForms: ['snailfish', 'cusk'],
+    haze: ['#3A3731', 0.12], snow: 1.8, fishForms: ['snailfish', 'ethereal', 'cusk', 'eelpout'],
   },
   // The bottom of the deepest trench. Few sittings ever get here.
   deep: {
     id: 'deep', name: 'challenger deep', zone: 4, m0: 10500, m1: 11000, weight: 1, walls: 2, rocks: true,
     kit: [['seapen', 1], ['brittlestar', 1]],
-    haze: ['#33302B', 0.14], snow: 2, fishForms: ['snailfish'],
+    haze: ['#33302B', 0.14], snow: 2, fishForms: ['snailfish', 'ethereal'],
   },
 };
 

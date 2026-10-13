@@ -342,7 +342,7 @@ test('colour drains with depth, the reds first', () => {
   assert.ok(sat(drained(blue, 0.4)) / sat(blue) > sat(drained(red, 0.4)) / sat(red));
 });
 
-const NO_CAUDAL = new Set<FishForm>(['grenadier', 'sunfish', 'cusk', 'snailfish', 'eelpout', 'gulper']);
+const NO_CAUDAL = new Set<FishForm>(['grenadier', 'sunfish', 'cusk', 'snailfish', 'ethereal', 'eelpout', 'gulper', 'snipe', 'cutthroat', 'oarfish', 'chimaera']);
 
 test('every form rolls and builds a body with real numbers in it, its own every time', () => {
   for (const form of FISH_FORMS) {
@@ -390,7 +390,7 @@ test('a form only lives inside its depth, and a pool names its fish by their for
       }
     });
   }
-  for (let zone = 0; zone < ZONES.length; zone++) assert.ok(formsIn(zone).length >= 3, `zone ${zone} has a few kinds of fish`);
+  for (let zone = 0; zone < ZONES.length; zone++) assert.ok(formsIn(zone).length >= 5, `zone ${zone} has a few kinds of fish`);
   // A mutated line keeps its form.
   const g = rollGenome(3, 0.45, 'fish', 'hatchet');
   assert.equal(mutate(g, 3, 30).form, 'hatchet');

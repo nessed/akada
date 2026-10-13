@@ -805,9 +805,11 @@ export function drawVisitor(
   } else {
     ctx.scale(v.face ?? v.dir, 1);
     // How a form holds itself: a grenadier swims head down, nosing along the
-    // floor; a mola rolls slowly as it goes, its fins rowing it.
+    // floor; a mola rolls slowly as it goes, its fins rowing it; an oarfish
+    // rides head up, slanted, rippling the fin along its back.
     if (g.form === 'grenadier') ctx.rotate(0.36);
     else if (g.form === 'sunfish') ctx.rotate(Math.sin(ambient * 0.35 + v.phase) * 0.2);
+    else if (g.form === 'oarfish') ctx.rotate(-0.42 + Math.sin(ambient * 0.25 + v.phase) * 0.06);
     if (g.plan === 'ray') {
       const flap = 1 + 0.1 * Math.sin(ambient * 2 + v.phase);
       ctx.scale(1, flap);

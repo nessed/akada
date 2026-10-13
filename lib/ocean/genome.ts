@@ -36,19 +36,32 @@ export type FishForm =
   | 'puffer'
   | 'barracuda'
   | 'sunfish'
+  | 'grouper'
+  | 'trigger'
+  | 'flying'
+  | 'trumpet'
+  | 'swordfish'
   | 'lantern'
   | 'hatchet'
   | 'barreleye'
   | 'bristlemouth'
   | 'viper'
   | 'dragon'
+  | 'oarfish'
+  | 'swallower'
+  | 'snipe'
   | 'fangtooth'
   | 'angler'
   | 'gulper'
+  | 'whalefish'
+  | 'chimaera'
   | 'grenadier'
   | 'tripod'
+  | 'lizard'
   | 'cusk'
+  | 'cutthroat'
   | 'snailfish'
+  | 'ethereal'
   | 'eelpout'
   | 'flatfish';
 
@@ -76,20 +89,33 @@ export const FORMS: Record<FishForm, FormSpec> = {
   puffer: { zones: [0, 0], plan: 'fish', weight: 0.8 },
   barracuda: { zones: [0, 1], plan: 'fish', weight: 0.7 },
   sunfish: { zones: [0, 1], plan: 'fish', weight: 0.25 },
+  grouper: { zones: [0, 0], plan: 'fish', weight: 0.8 },
+  trigger: { zones: [0, 0], plan: 'fish', weight: 0.7 },
+  flying: { zones: [0, 0], plan: 'fish', school: true, weight: 0.6 },
+  trumpet: { zones: [0, 0], plan: 'fish', weight: 0.5 },
+  swordfish: { zones: [0, 1], plan: 'fish', weight: 0.35 },
   lantern: { zones: [1, 2], plan: 'fish', school: true, weight: 1.2 },
   hatchet: { zones: [1, 1], plan: 'fish', weight: 1 },
   barreleye: { zones: [1, 1], plan: 'fish', weight: 0.5 },
   bristlemouth: { zones: [1, 2], plan: 'fish', school: true, weight: 0.9 },
   viper: { zones: [1, 2], plan: 'fish', dark: true, weight: 0.7 },
   dragon: { zones: [1, 2], plan: 'fish', dark: true, weight: 0.7 },
+  oarfish: { zones: [1, 1], plan: 'fish', weight: 0.4 },
+  swallower: { zones: [1, 2], plan: 'fish', dark: true, weight: 0.5 },
+  snipe: { zones: [1, 2], plan: 'eel', weight: 0.4 },
   fangtooth: { zones: [2, 3], plan: 'fish', dark: true, weight: 0.8 },
   angler: { zones: [2, 3], plan: 'fish', dark: true, weight: 0.9 },
   gulper: { zones: [2, 3], plan: 'eel', dark: true, weight: 0.6 },
+  whalefish: { zones: [2, 3], plan: 'fish', weight: 0.6 },
+  chimaera: { zones: [2, 2], plan: 'fish', low: true, weight: 0.7 },
   grenadier: { zones: [2, 4], plan: 'fish', low: true, weight: 1 },
   tripod: { zones: [3, 3], plan: 'fish', floor: true, weight: 1 },
+  lizard: { zones: [3, 3], plan: 'fish', floor: true, weight: 0.8 },
   cusk: { zones: [3, 4], plan: 'fish', low: true, weight: 1 },
+  cutthroat: { zones: [3, 4], plan: 'eel', low: true, weight: 0.5 },
   snailfish: { zones: [4, 4], plan: 'fish', low: true, weight: 1.6 },
-  eelpout: { zones: [3, 3], plan: 'fish', floor: true, weight: 0.8 },
+  ethereal: { zones: [4, 4], plan: 'fish', low: true, weight: 0.8 },
+  eelpout: { zones: [3, 4], plan: 'fish', floor: true, weight: 0.8 },
   flatfish: { zones: [0, 3], plan: 'fish', floor: true, weight: 0.8 },
 };
 
@@ -112,7 +138,7 @@ export function schoolOf(sp: { school: number; genome: Genome }): number {
   return f && !FORMS[f].school ? 0 : sp.school;
 }
 
-/** A dark hunter (an angler, a dragon, a viper, a fangtooth, a gulper): one deep wash, never glass. */
+/** A dark hunter (an angler, a dragon, a viper, a fangtooth, a gulper, a swallower): one deep wash, never glass. */
 export function darkHunter(g: Genome): boolean {
   return !!g.form && !!FORMS[g.form].dark;
 }
@@ -133,7 +159,8 @@ function zonesAt(z: number): number[] {
 /**
  * A form for a fish (or an eel) rolled at depth z, when the caller has not
  * chosen one: one that lives at every zone z could be, weighted. An eel is
- * only now and then a gulper; the rest stay plain eels.
+ * only now and then one of the eel forms (a gulper, a snipe eel, a
+ * cutthroat); the rest stay plain eels.
  */
 export function rollForm(r: Rand, z: number, plan: Plan): FishForm | undefined {
   if (plan !== 'fish' && plan !== 'eel') return undefined;
@@ -142,8 +169,8 @@ export function rollForm(r: Rand, z: number, plan: Plan): FishForm | undefined {
     const s = FORMS[f];
     return s.plan === plan && !s.floor && zones.every((zn) => zn >= s.zones[0] && zn <= s.zones[1]);
   });
-  if (plan === 'eel') return fits.length && r() < 0.35 ? fits[0] : undefined;
-  if (!fits.length) return 'jack';
+  if (!fits.length) return plan === 'eel' ? undefined : 'jack';
+  if (plan === 'eel' && r() >= 0.35) return undefined;
   return weighted(r, fits.map((f) => [f, FORMS[f].weight] as [FishForm, number]));
 }
 
@@ -369,8 +396,16 @@ function shapeForm(g: Genome, form: FishForm, r: Rand) {
   const ri = (a: number, b: number) => int(r, a, b);
   g.form = form;
   if (FORMS[form].plan === 'eel') {
-    // A gulper: a mouth on a whip, black, the tip of its tail lit.
-    Object.assign(g, { A: rr(5, 7), size: rr(1.2, 1.8), lure: false, lit: true, photo: false, clear: false, pattern: 'none', eyes: 1, eyeBig: false, wave: rr(6, 11) });
+    if (form === 'snipe') {
+      // A snipe eel: a thread of a body, the jaws a bird's bill flaring apart.
+      Object.assign(g, { A: rr(2.6, 3.4), size: rr(1.3, 1.9), lure: false, lit: false, photo: false, clear: false, pattern: 'none', eyes: 1, eyeBig: true, wave: rr(5, 9) });
+    } else if (form === 'cutthroat') {
+      // A cutthroat eel: plain and pale, its gill slits low under the throat.
+      Object.assign(g, { A: rr(5, 6.5), size: rr(1.1, 1.6), lure: false, lit: false, photo: false, clear: false, pattern: 'none', eyes: 1, eyeBig: false, wave: rr(5, 9), hue: [4, 7, 8][ri(0, 2)] });
+    } else {
+      // A gulper: a mouth on a whip, black, the tip of its tail lit.
+      Object.assign(g, { A: rr(5, 7), size: rr(1.2, 1.8), lure: false, lit: true, photo: false, clear: false, pattern: 'none', eyes: 1, eyeBig: false, wave: rr(6, 11) });
+    }
     return;
   }
   const lured = form === 'angler' || form === 'dragon' || form === 'viper';
@@ -482,6 +517,96 @@ function shapeForm(g: Genome, form: FishForm, r: Rand) {
         patN: ri(5, 10),
       });
       break;
+    case 'grouper':
+      // A grouper: heavy, big-mouthed, a long spiny dorsal and a round tail.
+      Object.assign(g, {
+        A: rr(30, 36),
+        skew: rr(0.9, 1.1),
+        blunt: rr(0.6, 0.75),
+        size: rr(1.1, 1.6),
+        tail: 'round',
+        tailSize: rr(0.9, 1.1),
+        barbels: 0,
+        teeth: false,
+        clear: false,
+        lit: false,
+        photo: false,
+        pattern: weighted<Pattern>(r, [['spots', 1.4], ['reticulate', 0.7], ['bands', 0.5], ['none', 0.3]]),
+        patN: ri(9, 16),
+      });
+      break;
+    case 'trigger':
+      // A triggerfish: a rhombus, the eye far back up the deep head, the
+      // second dorsal and the anal mirrored, a crescent tail.
+      Object.assign(g, {
+        A: rr(48, 56),
+        size: rr(0.7, 1),
+        tail: 'lunate',
+        tailSize: rr(0.9, 1.1),
+        barbels: 0,
+        teeth: false,
+        clear: false,
+        lit: false,
+        photo: false,
+        pattern: weighted<Pattern>(r, [['stripes', 1], ['spots', 1], ['bands', 0.6], ['none', 0.5]]),
+        patN: ri(3, 8),
+      });
+      break;
+    case 'flying':
+      // A flying fish: slim and silver, the pectorals long wings.
+      Object.assign(g, {
+        A: rr(16, 19),
+        skew: rr(0.9, 1.05),
+        blunt: rr(0.75, 0.9),
+        size: rr(0.55, 0.8),
+        barbels: 0,
+        teeth: false,
+        clear: false,
+        lit: false,
+        photo: false,
+        eyeBig: true,
+        hue: silver(),
+        pattern: weighted<Pattern>(r, [['none', 1], ['spots', 0.3]]),
+        patN: ri(4, 8),
+        lateral: false,
+      });
+      break;
+    case 'trumpet':
+      // A trumpetfish: a stick with a tube for a snout, its fins far back.
+      Object.assign(g, {
+        A: rr(6.5, 8.5),
+        size: rr(1.3, 1.8),
+        tail: weighted<Tail>(r, [['round', 1], ['filament', 0.8]]),
+        tailSize: rr(1, 1.3),
+        barbels: 1,
+        teeth: false,
+        clear: false,
+        lit: false,
+        photo: false,
+        eyeBig: false,
+        pattern: weighted<Pattern>(r, [['stripes', 1], ['spots', 0.8], ['none', 0.5]]),
+        patN: ri(8, 14),
+      });
+      break;
+    case 'swordfish':
+      // A swordfish: the bill, a tall sickle of a dorsal, a great crescent tail.
+      Object.assign(g, {
+        A: rr(17, 20),
+        skew: rr(0.95, 1.15),
+        blunt: rr(0.7, 0.85),
+        size: rr(1.6, 2.2),
+        tail: 'lunate',
+        tailSize: rr(1.2, 1.4),
+        barbels: 0,
+        teeth: false,
+        clear: false,
+        lit: false,
+        photo: false,
+        eyeBig: true,
+        hue: chance(r, 0.6) ? silver() : g.hue,
+        pattern: 'none',
+      });
+      break;
     case 'lantern':
       Object.assign(g, {
         A: rr(20, 25),
@@ -559,6 +684,93 @@ function shapeForm(g: Genome, form: FishForm, r: Rand) {
     case 'angler':
       Object.assign(g, { blunt: Math.max(g.blunt!, 0.85) });
       break;
+    case 'oarfish':
+      // An oarfish: a silver ribbon, a fin the length of its back and a crest
+      // of long rays on its head; the pelvic fins two long oars.
+      Object.assign(g, {
+        A: rr(5, 6.5),
+        size: rr(2.2, 3),
+        tail: 'none',
+        barbels: 0,
+        teeth: false,
+        clear: false,
+        lit: false,
+        photo: false,
+        eyeBig: true,
+        hue: silver(),
+        pattern: weighted<Pattern>(r, [['spots', 1], ['stripes', 0.6], ['none', 0.5]]),
+        patN: ri(10, 18),
+        wave: rr(2, 4),
+      });
+      break;
+    case 'swallower':
+      // A black swallower: slim, long-jawed, and now and then a fish bigger
+      // than itself curled in the sac of its belly.
+      Object.assign(g, { A: rr(14, 17), size: rr(0.8, 1.1), tail: 'fork', tailSize: rr(0.9, 1.1), lit: false, photo: false, barbels: 0, teeth: true, eyeBig: false, pattern: 'none' });
+      break;
+    case 'whalefish':
+      // A whalefish: a whale's shape, the mouth most of the head, the eye a
+      // speck, the lateral line great pores; its fins far back.
+      Object.assign(g, {
+        A: rr(26, 32),
+        skew: rr(1.1, 1.3),
+        blunt: rr(0.55, 0.7),
+        size: rr(0.8, 1.2),
+        tail: 'round',
+        tailSize: rr(0.9, 1.1),
+        barbels: 0,
+        teeth: false,
+        clear: false,
+        lit: false,
+        photo: false,
+        eyeBig: false,
+        hue: [3, 1, 5][ri(0, 2)],
+        pattern: 'none',
+      });
+      break;
+    case 'chimaera':
+      // A chimaera, a ratfish: a big head and eye, wings for pectorals, a
+      // spine before its first dorsal, and the body running out to a whip.
+      Object.assign(g, {
+        A: rr(22, 27),
+        size: rr(1.1, 1.5),
+        tail: 'none',
+        barbels: 0,
+        teeth: false,
+        clear: false,
+        lit: false,
+        photo: false,
+        eyeBig: true,
+        pattern: weighted<Pattern>(r, [['none', 1], ['spots', 0.6]]),
+        patN: ri(8, 14),
+        wave: rr(1, 2.5),
+      });
+      break;
+    case 'lizard':
+      // A deep-sea lizardfish: long and round, a flat crocodile's head full
+      // of needles, resting on its pelvic fins on the ooze.
+      Object.assign(g, { A: rr(12, 15), size: rr(0.9, 1.3), tail: 'fork', tailSize: rr(0.9, 1.1), lit: false, photo: false, clear: false, barbels: 0, teeth: true, eyeBig: false, hue: [4, 7, 8][ri(0, 2)], pattern: weighted<Pattern>(r, [['none', 1], ['bands', 0.4]]), patN: ri(4, 7), wave: 0 });
+      break;
+    case 'ethereal':
+      // The ethereal snailfish: glass and soft, its pectorals long trailing
+      // wings of free rays.
+      Object.assign(g, {
+        A: rr(26, 32),
+        size: rr(0.9, 1.3),
+        tail: 'none',
+        barbels: 0,
+        teeth: false,
+        clear: true,
+        lit: false,
+        photo: false,
+        eyes: 1,
+        eyeBig: false,
+        hue: [2, 9, 8][ri(0, 2)],
+        pattern: 'none',
+        lateral: false,
+        wave: rr(1, 2.5),
+      });
+      break;
     case 'fangtooth':
       Object.assign(g, { A: rr(40, 50), size: rr(0.6, 0.9), tail: 'fork', tailSize: rr(0.8, 1), lit: false, photo: false, barbels: 0, eyeBig: false, pattern: 'none' });
       break;
@@ -620,7 +832,7 @@ function shapeForm(g: Genome, form: FishForm, r: Rand) {
       });
       break;
   }
-  if (form === 'disc' || form === 'puffer' || form === 'sunfish' || form === 'hatchet' || form === 'flatfish' || form === 'tripod') g.wave = Math.min(g.wave!, 0.6);
+  if (['disc', 'puffer', 'sunfish', 'hatchet', 'flatfish', 'tripod', 'trigger', 'flying', 'swordfish', 'lizard'].includes(form)) g.wave = Math.min(g.wave!, 0.6);
 }
 
 const OPTIONS: Partial<Record<keyof Genome, readonly string[]>> = {

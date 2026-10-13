@@ -1733,6 +1733,36 @@ function paddle(k: Kit, root: Pt, len: number, wid: number, ang: number, layer: 
   return pts;
 }
 
+/**
+ * A wing of a fin, as a flying fish holds its pectoral: narrow at the root,
+ * widening to a broad, gently rounded trailing end, its rays fanning out
+ * from the root the length of it.
+ */
+function wing(k: Kit, root: Pt, len: number, wid: number, ang: number, layer: LayerName) {
+  const c = Math.cos(ang);
+  const s = Math.sin(ang);
+  const at = (u: number, v: number): Pt => [root[0] + u * c - v * s, root[1] + u * s + v * c];
+  const lead: Pt[] = [];
+  const trail: Pt[] = [];
+  const n = 12;
+  for (let i = 0; i <= n; i++) {
+    const u = (i / n) * len;
+    const q = i / n;
+    // The leading edge nearly straight; the trailing one bellies out behind.
+    lead.push(at(u, -wid * 0.12 * Math.sin(Math.PI * q * 0.9)));
+    trail.push(at(u * 0.96, wid * Math.pow(q, 0.7) * (1 - 0.25 * Math.pow(q, 6))));
+  }
+  const end = quad(lead[n], at(len * 1.02, wid * 0.55), trail[n], 6).slice(1, -1);
+  const pts = [root, ...lead.slice(1), ...end, ...trail.slice(1).reverse()];
+  k.P(layer, pts, true);
+  const edge = [lead[n], ...end, ...trail.slice(Math.round(n * 0.4)).reverse()];
+  fanRays(k.P, root, edge, 12, layer === 'finF' ? 'raysF' : 'rays');
+  for (let q = 1; q < 6; q++) {
+    const [ex, ey] = along(edge, q / 6);
+    k.P('finRay', [root, [root[0] + (ex - root[0]) * 0.9, root[1] + (ey - root[1]) * 0.9]]);
+  }
+}
+
 /** A needle tooth, from its root toward `ang`, bending back a little along its length. */
 function fang(P: PathFn, root: Pt, len: number, ang: number, bend: number, layer: LayerName = 'teeth') {
   const bw = Math.max(0.5, len * 0.12);
@@ -2427,11 +2457,511 @@ function formed(g: Genome, kit: Kit): number {
     return tailRays;
   }
 
-  if (form === 'cusk' || form === 'snailfish' || form === 'eelpout') {
+  if (form === 'grouper') {
+    // A grouper: heavy, the head big and the mouth bigger, the lower jaw
+    // past the upper; a long dorsal, spines in front and soft behind.
+    const F = frameOf((t) => {
+      let p = fusiform(t, g.skew!, g.blunt!);
+      if (t < 0.16) p = Math.max(p, 0.36);
+      if (t > 0.84) p *= 1 - Math.pow((t - 0.84) / 0.16, 1.6) * 0.4;
+      return [-A * 0.44 * p, A * 0.56 * p];
+    }, sway(g.wave! * 0.5));
+    // The spiny part notched between its spines, the soft part rounded.
+    finAlong(kit, F, 0.4, 0.74, -1, (q) => A * 0.2 * Math.min(1, 0.4 + q * 3) * (0.8 + 0.2 * Math.cos(q * 14 * Math.PI)), 0.3, 0, 'fin', true);
+    finAlong(kit, F, 0.17, 0.41, -1, (q) => A * 0.27 * Math.sin(Math.PI * (0.25 + 0.75 * Math.pow(q, 0.8))), 0.45, 9);
+    finAlong(kit, F, 0.17, 0.33, 1, (q) => A * 0.27 * Math.sin(Math.PI * (0.15 + 0.85 * Math.pow(q, 0.7))), 0.45, 7);
+    const pv = F.dn(0.68);
+    paddle(kit, [pv[0], pv[1] - 0.8], A * 0.42, A * 0.2, Math.PI * 0.72, 'fin', 5);
+    tail(F, F.depth * 0.95);
+    const [sx, sy, sw] = F.at(1);
+    // The lower jaw out past the upper.
+    hull(kit, F, [[sx + 1.8, sy + sw * 0.24], [sx - 0.5, sy + sw * 0.48]]);
+    mark(F);
+    lateralLine(P, F, 0.12, 0.74, 0.24, false);
+    // The gill cover with its spines, and the edge of the cheek in front.
+    gillAt(P, F, 0.72, 0.42);
+    const [gx, gy, gw] = F.at(0.72);
+    for (let q = 0; q < 3; q++) P('detail', [[gx + 1, gy - gw * (0.08 - q * 0.08)], [gx - 2.2, gy - gw * (0.06 - q * 0.08)]]);
+    const [kx, ky, kw] = F.at(0.79);
+    P('detail', quad([kx + 2, ky - kw * 0.12], [kx - 1.5, ky + kw * 0.1], [kx + 3, ky + kw * 0.34], 6));
+    const [cx, cy, cw] = F.at(0.84);
+    cleft(P, [sx + 1.4, sy + sw * 0.22], [cx, cy + cw * 0.2]);
+    const pc = F.at(0.7);
+    paddle(kit, [pc[0], pc[1] + pc[2] * 0.12], A * 0.5, A * 0.34, Math.PI * 0.9, 'finF', 9);
+    see(F);
+    const [ex, ey, ew] = F.at(0.88);
+    eyeAt(C, ex, ey - ew * 0.24, ew * 0.11);
+    return tailRays;
+  }
+
+  if (form === 'trigger') {
+    // A triggerfish: a rhombus, the deep head running straight down to a
+    // small mouth, the eye far back up it; the trigger, and behind it the
+    // second dorsal and the anal fin mirrored.
+    const F = frameOf((t) => {
+      const ped = t < 0.16 ? A * (0.07 + 0.3 * t) : 0;
+      const up = t < 0.6 ? Math.pow(smoothstep(0.06, 0.6, t), 0.8) : 1 - ((t - 0.6) / 0.4) * 0.86;
+      const dn = t < 0.54 ? Math.pow(smoothstep(0.08, 0.54, t), 0.8) : 1 - ((t - 0.54) / 0.46) * 0.84;
+      return [-Math.max(A * 0.5 * up, ped), Math.max(A * 0.5 * dn, ped)];
+    }, () => 0);
+    // The trigger: a stout spine and two short ones behind it, a web between.
+    finAlong(kit, F, 0.56, 0.64, -1, (q) => A * 0.3 * Math.pow(1 - q, 0.9) + 0.6, 0.55, 0, 'fin', true);
+    const [s0x, s0y] = F.up(0.64);
+    P('finRay', [[s0x, s0y], [s0x - A * 0.16, s0y - A * 0.3]]);
+    finAlong(kit, F, 0.14, 0.46, -1, (q) => A * 0.19 * Math.sin(Math.PI * (0.3 + 0.7 * Math.pow(q, 0.8))), 0.6, 12);
+    finAlong(kit, F, 0.14, 0.44, 1, (q) => A * 0.18 * Math.sin(Math.PI * (0.3 + 0.7 * Math.pow(q, 0.8))), 0.6, 12);
+    tail(F, A * 0.42, 28);
+    hull(kit, F);
+    mark(F);
+    // The pelvic is only a knob of spines at the back of the belly's keel.
+    const [kx, ky] = F.dn(0.52);
+    P('detail', [[kx + 2, ky - 0.5], [kx - 1, ky + 2], [kx - 3, ky + 0.5]]);
+    const pc = F.at(0.66);
+    paddle(kit, [pc[0], pc[1] + pc[2] * 0.02], A * 0.16, A * 0.1, Math.PI * 0.92, 'finF', 6);
+    const [gx, gy, gw] = F.at(0.69);
+    P('detail', [[gx + 0.5, gy - gw * 0.12], [gx - 0.4, gy + gw * 0.02]]);
+    const [sx, sy] = F.at(1);
+    const [ex] = F.at(0.75);
+    const [, ty] = F.up(0.75);
+    const ey = ty + A * 0.14;
+    // The groove from the eye down toward the mouth.
+    P('detail', quad([ex + A * 0.05, ey + A * 0.04], [ex + A * 0.18, ey + A * 0.12], [sx - A * 0.06, sy - A * 0.02], 6));
+    // A small mouth, the front teeth showing between the lips.
+    P('detail', [[sx + 0.5, sy - A * 0.012], [sx - 2.2, sy + A * 0.006], [sx - 3, sy + A * 0.02]]);
+    fang(P, [sx - 0.3, sy - A * 0.006], A * 0.035, Math.PI * 0.5, 0);
+    fang(P, [sx - 0.3, sy + A * 0.01], A * 0.03, -Math.PI * 0.5, 0);
+    eyeAt(C, ex, ey, A * 0.05);
+    return tailRays;
+  }
+
+  if (form === 'flying') {
+    // A flying fish: slim and silver, the pectorals two long wings and the
+    // pelvics a second pair, the tail's lower lobe the longer.
+    const F = frameOf((t) => {
+      let p = fusiform(t, g.skew!, g.blunt!);
+      if (t < 0.14) p = Math.max(p, 0.3);
+      return [-A * 0.46 * p, A * 0.54 * p];
+    }, sway(g.wave! * 0.4));
+    // The far wing, behind the body.
+    const [px, py, pw] = F.at(0.76);
+    const root: Pt = [px, py - pw * 0.18];
+    wing(kit, [root[0] + 2, root[1] - 1], 48, 15, Math.PI * 1.1, 'fin');
+    finAlong(kit, F, 0.17, 0.3, -1, (q) => A * 0.5 * Math.sin(Math.PI * Math.pow(q, 0.6)), 0.5, 7);
+    finAlong(kit, F, 0.15, 0.27, 1, (q) => A * 0.45 * Math.sin(Math.PI * Math.pow(q, 0.6)), 0.5, 6);
+    const pv = F.dn(0.46);
+    paddle(kit, [pv[0], pv[1] - 0.5], 26, 9, Math.PI * 0.94, 'fin', 6);
+    // The tail, forked, the lower lobe reaching on past the upper.
+    const [tx, ty] = F.spine[0];
+    const H = Math.max(9, A * 0.9);
+    const tf: Pt[] = [[tx + 2, ty - 1.2], [tx - 9, ty - H * 0.55], [tx - 23, ty - H], [tx - 16, ty - H * 0.45], [tx - 11, ty + H * 0.05], [tx - 21, ty + H * 0.6], [tx - 34, ty + H * 1.2], [tx - 12, ty + H * 0.55], [tx + 2, ty + 1.2]];
+    P('fin', tf, true);
+    fanRays(P, [tx + 1, ty], tf.slice(2, 7), 14);
+    for (let q = -3; q <= 3; q++) P('finRay', [[tx, ty], [tx - 16, ty + q * H * 0.22 + (q > 0 ? q * 1.2 : 0)]]);
+    tailRays = 7;
+    hull(kit, F);
+    mark(F);
+    lateralLine(P, F, 0.1, 0.78, 0.86, false);
+    gillAt(P, F, 0.8, 0.42);
+    const [sx, sy, sw] = F.at(1);
+    const [cx, cy, cw] = F.at(0.92);
+    cleft(P, [sx + 0.2, sy - sw * 0.05], [cx, cy + cw * 0.05]);
+    // The near wing, spread out over the flank.
+    wing(kit, root, 54, 14, Math.PI * 1.03, 'finF');
+    see(F);
+    const [ex, ey, ew] = F.at(0.88);
+    eyeAt(C, ex, ey - ew * 0.06, ew * 0.22);
+    return tailRays;
+  }
+
+  if (form === 'trumpet') {
+    // A trumpetfish: a stick of a fish, the snout a long tube flaring at the
+    // mouth, a row of free spines down its back and the soft fins far back.
+    const F = frameOf((t) => {
+      let p = 0.3 + 0.7 * smoothstep(0, 0.5, t);
+      if (t > 0.62) p *= 1 - 0.5 * smoothstep(0.62, 0.8, t);
+      if (t > 0.96) p *= 1 + 0.35 * smoothstep(0.96, 1, t);
+      return [-A * 0.5 * p, A * 0.5 * p];
+    }, sway(g.wave! * 0.5, 1.4));
+    finAlong(kit, F, 0.12, 0.24, -1, (q) => A * 1.5 * Math.sin(Math.PI * Math.pow(q, 0.6)), 0.5, 7);
+    finAlong(kit, F, 0.12, 0.23, 1, (q) => A * 1.4 * Math.sin(Math.PI * Math.pow(q, 0.6)), 0.5, 7);
+    for (let q = 0; q < 9; q++) {
+      const [x, y] = F.up(0.32 + q * 0.03);
+      P('finRay', [[x, y + 0.3], [x - 0.9, y - A * 0.42]]);
+    }
+    const pv = F.dn(0.42);
+    paddle(kit, [pv[0], pv[1] - 0.3], A * 0.9, A * 0.35, Math.PI * 0.85, 'fin', 3, 0);
+    tail(F, A * 1.3, 22);
+    hull(kit, F);
+    mark(F);
+    gillAt(P, F, 0.6, 0.4);
+    const pc = F.at(0.58);
+    paddle(kit, [pc[0], pc[1] + pc[2] * 0.1], A * 0.9, A * 0.5, Math.PI * 0.9, 'finF', 5);
+    const [sx, sy, sw] = F.at(1);
+    P('detail', [[sx + 0.4, sy - sw * 0.1], [sx - 2.2, sy + sw * 0.2], [sx - 3, sy + sw * 0.32]]);
+    const [bx, by] = F.dn(0.97);
+    P('barbel', hang(bx, by - 0.2, A * 0.55, Math.PI * 0.55, { wave: 0.05, freq: 0.3, ph: vr(0, TAU), curl: 0.4, drift: 0.2 }, 0.8));
+    see(F);
+    const [ex, ey, ew] = F.at(0.64);
+    eyeAt(C, ex, ey - ew * 0.12, ew * 0.24);
+    return tailRays;
+  }
+
+  if (form === 'swordfish') {
+    // A swordfish: the bill a flat blade a third of its length again, a tall
+    // sickle of a dorsal, long sickle pectorals, a great crescent tail on a
+    // keeled stalk; no pelvic fins and no scales to speak of.
+    const F = frameOf((t) => {
+      let p = fusiform(t, g.skew!, g.blunt!);
+      if (t < 0.12) p = Math.max(p, 0.22);
+      return [-A * 0.46 * p, A * 0.54 * p];
+    }, sway(g.wave! * 0.3));
+    const sickle = (side: -1 | 1, tf: number, tb: number, h: number) => {
+      const f = side < 0 ? F.up(tf) : F.dn(tf);
+      const b = side < 0 ? F.up(tb) : F.dn(tb);
+      const tip: Pt = [b[0] - h * 0.18, f[1] + side * h];
+      const front = cubic([f[0], f[1] - side], [f[0] - 1, f[1] + side * h * 0.55], [tip[0] + h * 0.3, tip[1] - side * h * 0.08], tip, 12);
+      const back = quad(tip, [b[0] + h * 0.12, b[1] + side * h * 0.3], [b[0], b[1] - side], 8).slice(1);
+      const base: Pt[] = [];
+      for (let i = 0; i <= 8; i++) base.push(side < 0 ? F.up(tb + (tf - tb) * (i / 8)) : F.dn(tb + (tf - tb) * (i / 8)));
+      P('fin', front.concat(back, base.map(([x, y]) => [x, y - side] as Pt)), true);
+      pairRays(P, base.slice().reverse(), front, 7);
+    };
+    sickle(-1, 0.74, 0.62, A * 1.15);
+    sickle(1, 0.42, 0.34, A * 0.5);
+    finAlong(kit, F, 0.11, 0.15, -1, (q) => A * 0.22 * Math.sin(Math.PI * q), 0.5, 0);
+    finAlong(kit, F, 0.11, 0.15, 1, (q) => A * 0.2 * Math.sin(Math.PI * q), 0.5, 0);
+    tail(F, A * 1.6, 34);
+    const [sx, sy, sw] = F.at(1);
+    // The bill: a flat blade from the upper jaw, out to a point.
+    const L = 30 + vr(0, 8);
+    const bw = Math.max(sw, A * 0.2);
+    hull(kit, F, [[sx - 0.5, sy - bw * 0.4], [sx + L * 0.4, sy - bw * 0.22], [sx + L, sy - bw * 0.04], [sx + L * 0.4, sy + bw * 0.06], [sx - 0.2, sy + bw * 0.2]]);
+    P('detail', [[sx + 1, sy - bw * 0.1], [sx + L * 0.8, sy - bw * 0.06]]);
+    // The keel along the tail's stalk.
+    const [k0x, k0y] = F.at(0.02);
+    const [k1x, k1y] = F.at(0.13);
+    P('detail', [[k0x, k0y - 0.3], [k1x, k1y]]);
+    const [cx, cy, cw] = F.at(0.9);
+    cleft(P, [sx - 0.5, sy + sw * 0.2], [cx, cy + cw * 0.25]);
+    gillAt(P, F, 0.8, 0.44);
+    const pc = F.at(0.77);
+    paddle(kit, [pc[0], pc[1] + pc[2] * 0.3], A * 1.7, A * 0.32, Math.PI * 0.8, 'finF', 6, 0);
+    see(F);
+    const [ex, ey, ew] = F.at(0.93);
+    eyeAt(C, ex, ey - ew * 0.08, ew * 0.22);
+    return tailRays;
+  }
+
+  if (form === 'oarfish') {
+    // An oarfish: a long silver ribbon, a fin the length of its back with a
+    // crest of long rays over its head, and the pelvic fins two long oars.
+    const F = frameOf((t) => {
+      const p = t < 0.9 ? 0.04 + 0.96 * Math.pow(t / 0.9, 0.6) : Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.9) / 0.12, 2) * 0.85));
+      return [-A * 0.5 * p, A * 0.5 * p];
+    }, (t) => Math.sin(t * Math.PI * 2.4 + g.segs!) * g.wave! * (1 - t * 0.7));
+    finAlong(kit, F, 0, 0.93, -1, (q) => A * 0.55 * Math.min(1, (1 - q) * 25 + 0.1) * (1 - q * 0.4), 0.12, 46);
+    hull(kit, F);
+    mark(F);
+    lateralLine(P, F, 0.04, 0.9, 0.68, false);
+    // The crest: long rays rising from the nape and streaming back, each with
+    // a scrap of fin at its tip.
+    const ph = vr(0, TAU);
+    for (let q = 0; q < 6; q++) {
+      const [x, y] = F.up(0.95 - q * 0.012);
+      const ray = hang(x, y + 0.3, A * (2.2 + q * 0.3) + vr(-1.5, 1.5), -Math.PI * (0.52 + q * 0.04), { wave: 0.05, freq: 0.2, ph: ph + q, curl: 0, drift: -0.9 }, 1.2);
+      P('barbel', ray);
+      const [rx, ry] = ray[ray.length - 1];
+      const [qx, qy] = ray[ray.length - 3];
+      P('finF', blob(rx, ry, 1.6, 0.6, Math.atan2(ry - qy, rx - qx), vr, 7), true);
+    }
+    // The oars: two long rays from under the throat, each ending in a blade.
+    const [bx, by] = F.dn(0.9);
+    for (let q = 0; q < 2; q++) {
+      const oar = hang(bx - q * 1.5, by - 0.3, A * (6 + q) + vr(-3, 3), Math.PI * (0.72 + q * 0.06), { wave: 0.04, freq: 0.12, ph: vr(0, TAU), curl: 0, drift: 0.35 }, 1.5);
+      P('barbel', oar);
+      const [ox, oy] = oar[oar.length - 1];
+      const [qx, qy] = oar[oar.length - 3];
+      P('finF', blob(ox, oy, 3.2, 1.4, Math.atan2(oy - qy, ox - qx), vr, 8), true);
+    }
+    const pc = F.at(0.88);
+    paddle(kit, [pc[0], pc[1] + pc[2] * 0.15], A * 0.8, A * 0.45, Math.PI * 0.85, 'finF', 5);
+    const [sx, sy, sw] = F.at(1);
+    cleft(P, [sx + 0.3, sy - sw * 0.05], [sx - A * 0.35, sy + sw * 0.18]);
+    const [ex, ey, ew] = F.at(0.955);
+    eyeAt(C, ex, ey - ew * 0.12, ew * 0.2);
+    return 0;
+  }
+
+  if (form === 'swallower') {
+    // A black swallower: slim and black, long jaws full of needles, and now
+    // and then the sac of its belly stretched round a fish bigger than it.
+    const F = frameOf((t) => {
+      let p = fusiform(t, 0.9, 0.85);
+      if (t < 0.12) p = Math.max(p, 0.28);
+      return [-A * 0.46 * p, A * 0.54 * p];
+    }, sway(g.wave! * 0.6));
+    finAlong(kit, F, 0.56, 0.64, -1, (q) => A * 0.4 * Math.sin(Math.PI * Math.pow(q, 0.6)), 0.4, 0, 'fin', true);
+    finAlong(kit, F, 0.16, 0.5, -1, (q) => A * 0.3 * Math.sin(Math.PI * Math.pow(q, 0.4)), 0.4, 14);
+    finAlong(kit, F, 0.15, 0.46, 1, (q) => A * 0.3 * Math.sin(Math.PI * Math.pow(q, 0.4)), 0.4, 14);
+    tail(F, F.depth * 1.1, 24);
+    const [sx, sy, sw] = F.at(1);
+    hull(kit, F, [[sx + 1.4, sy + sw * 0.3], [sx - 0.6, sy + sw * 0.56]]);
+    const [cx, cy, cw] = F.at(0.78);
+    cleft(P, [sx + 1, sy + sw * 0.26], [cx, cy + cw * 0.2]);
+    for (let q = 0; q < 6; q++) {
+      const [x, y] = along([[sx, sy + sw * 0.26], [cx, cy + cw * 0.2]], 0.08 + q * 0.14);
+      fang(P, [x, y - 0.4], A * vr(0.1, 0.22) * (q === 0 ? 1.8 : 1), Math.PI * 0.5, 0.05);
+      fang(P, [x - 1, y + 0.4], A * vr(0.08, 0.16), -Math.PI * 0.5, -0.05);
+    }
+    gillAt(P, F, 0.74, 0.42);
+    const pc = F.at(0.7);
+    paddle(kit, [pc[0], pc[1] + pc[2] * 0.15], A * 0.6, A * 0.24, Math.PI * 0.88, 'finF', 6);
+    if (g.segs! % 3 !== 0) {
+      // The sac: the belly stretched thin and pale, hung under the body, and
+      // in it the swallowed fish, curled round on itself.
+      const a = F.dn(0.68);
+      const b = F.dn(0.3);
+      const deep = A * 1.6;
+      const sac = cubic(a, [a[0] + 2, a[1] + deep * 1.1], [b[0] - 4, b[1] + deep * 1.1], b, 18);
+      const belly: Pt[] = [];
+      for (let i = 1; i < 10; i++) belly.push(F.dn(0.3 + 0.38 * (i / 10)));
+      P('dome', sac.concat(belly), true);
+      const mx = (a[0] + b[0]) / 2;
+      const my = (a[1] + b[1]) / 2 + deep * 0.5;
+      const rad = Math.min((a[0] - b[0]) * 0.32, deep * 0.32);
+      const outer: Pt[] = [];
+      const inner: Pt[] = [];
+      const turn = vr(0, 0.6);
+      for (let i = 0; i <= 18; i++) {
+        const u = i / 18;
+        const ang = Math.PI * (0.1 + turn) + u * Math.PI * 1.5;
+        const w = rad * 0.34 * Math.sin(Math.PI * (0.08 + 0.84 * Math.pow(u, 0.8)));
+        outer.push([mx + Math.cos(ang) * (rad + w), my + Math.sin(ang) * (rad + w) * 0.8]);
+        inner.push([mx + Math.cos(ang) * (rad - w), my + Math.sin(ang) * (rad - w) * 0.8]);
+      }
+      P('guts', outer.concat(inner.slice().reverse()), true);
+      // Its tail at the one end, its eye at the other.
+      const [t0x, t0y] = outer[0];
+      const [t1x, t1y] = inner[0];
+      const tm: Pt = [(t0x + t1x) / 2, (t0y + t1y) / 2];
+      const back = Math.PI * (0.1 + turn) - Math.PI / 2;
+      P('guts', [[tm[0], tm[1]], [tm[0] + Math.cos(back - 0.4) * rad * 0.4, tm[1] + Math.sin(back - 0.4) * rad * 0.32], [tm[0] + Math.cos(back) * rad * 0.25, tm[1] + Math.sin(back) * rad * 0.2], [tm[0] + Math.cos(back + 0.4) * rad * 0.4, tm[1] + Math.sin(back + 0.4) * rad * 0.32], [tm[0], tm[1]]], true);
+      const [h0x, h0y] = outer[15];
+      const [h1x, h1y] = inner[15];
+      C('detail', h0x * 0.55 + h1x * 0.45, h0y * 0.55 + h1y * 0.45, Math.max(0.5, rad * 0.06));
+    }
+    const [ex, ey, ew] = F.at(0.9);
+    eyeAt(C, ex, ey - ew * 0.16, ew * 0.15);
+    return tailRays;
+  }
+
+  if (form === 'snipe' || form === 'cutthroat') {
+    // The eel forms on a plain eel's body. A snipe eel: a thread of a body,
+    // the jaws a bird's bill flaring apart at the tips, the eye big. A
+    // cutthroat eel: plain and pale, its gill slits low under the throat.
+    const snipe = form === 'snipe';
+    const F = frameOf((t) => {
+      let p = snipe ? 0.02 + 0.98 * Math.pow(t, 0.45) : t < 0.7 ? 0.02 + 0.98 * Math.pow(t / 0.7, 0.55) : 1;
+      if (t > 0.9) p *= Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.9) / 0.1, 2) * (snipe ? 0.5 : 0.75)));
+      return [-A * 0.48 * p, A * 0.52 * p];
+    }, (t) => Math.sin(t * Math.PI * (snipe ? 3.4 : 2.6) + g.segs!) * g.wave! * Math.pow(1 - t, 1.2) * 0.8);
+    // The fin: along the back, round the point and forward under the belly.
+    const n0 = Math.round(F.N * (snipe ? 0.86 : 0.7));
+    const v0 = Math.round(F.N * (snipe ? 0.8 : 0.6));
+    const H = A * (snipe ? 0.55 : 0.45);
+    const outer: Pt[] = [];
+    const baseTop: Pt[] = [];
+    const baseBot: Pt[] = [];
+    for (let i = n0; i >= 0; i--) {
+      const [x, y, w] = F.spine[i];
+      outer.push([x, y - w * 0.46 - H * Math.min(1, (n0 - i) / 4)]);
+      baseTop.push([x, y - w * 0.46 + 0.3]);
+    }
+    const [tx, ty] = F.spine[0];
+    outer.push([tx - H * 1.4, ty]);
+    for (let i = 0; i <= v0; i++) {
+      const [x, y, w] = F.spine[i];
+      outer.push([x, y + w * 0.54 + H * 0.9 * Math.min(1, (v0 - i) / 4)]);
+      baseBot.push([x, y + w * 0.54 - 0.3]);
+    }
+    P('fin', outer.concat(baseBot.slice().reverse(), baseTop.slice().reverse()), true);
+    pairRays(P, baseTop, outer.slice(0, baseTop.length), Math.round(baseTop.length * 0.6));
+    pairRays(P, baseBot, outer.slice(baseTop.length + 1), Math.round(baseBot.length * 0.6));
+    const [sx, sy, sw] = F.at(1);
+    if (snipe) {
+      // The bill: the two jaws long and thin, apart at the root and curving
+      // away from each other at the tips, the upper up and the lower down.
+      const L = 18 + vr(0, 5);
+      hull(kit, F, [
+        [sx, sy - sw * 0.34],
+        [sx + L * 0.5, sy - sw * 0.42],
+        [sx + L * 0.9, sy - sw * 0.5 - 1.6],
+        [sx + L, sy - sw * 0.5 - 3.2],
+        [sx + L * 0.88, sy - sw * 0.2 - 1.5],
+        [sx + L * 0.45, sy - sw * 0.12],
+        [sx + 0.8, sy + sw * 0.02],
+        [sx + L * 0.45, sy + sw * 0.18 + 0.6],
+        [sx + L * 0.86, sy + sw * 0.3 + 2.4],
+        [sx + L * 0.96, sy + sw * 0.42 + 4],
+        [sx + L * 0.8, sy + sw * 0.56 + 2.4],
+        [sx + L * 0.4, sy + sw * 0.6],
+        [sx - 0.5, sy + sw * 0.56],
+      ]);
+      const [ex, ey, ew] = F.at(0.975);
+      eyeAt(C, ex, ey - ew * 0.04, ew * 0.36);
+      return 0;
+    }
+    hull(kit, F);
+    lateralLine(P, F, 0.04, 0.86, 0.38, false);
+    // The cut throat: the gill slit low on the belly, under the pectoral.
+    const [ax, ay] = F.dn(0.82);
+    const [bx2, by2, bw2] = F.at(0.86);
+    P('detail', [[ax, ay - 0.6], [bx2, by2 + bw2 * 0.3]]);
+    const pc = F.at(0.87);
+    paddle(kit, [pc[0], pc[1] + pc[2] * 0.05], A * 1.2, A * 0.8, Math.PI * 0.88, 'finF', 6);
+    const [cx, cy, cw] = F.at(0.94);
+    cleft(P, [sx + 0.3, sy + sw * 0.1], [cx, cy + cw * 0.2]);
+    const [ex, ey, ew] = F.at(0.955);
+    eyeAt(C, ex, ey - ew * 0.2, ew * 0.17);
+    return 0;
+  }
+
+  if (form === 'whalefish') {
+    // A whalefish: a whale's shape, the mouth running back most of the head,
+    // the eye a speck, the lateral line a row of great hollow pores; the
+    // dorsal and the anal set opposite each other far back.
+    const F = frameOf((t) => {
+      // Deep to the head, then round at the front: a whale's blunt snout.
+      const head = fusiform(0.78, g.skew!, g.blunt!);
+      let p = t < 0.78 ? fusiform(t, g.skew!, g.blunt!) : head * Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.78) / 0.22, 2) * 0.96));
+      if (t < 0.14) p = Math.max(p, 0.3);
+      return [-A * 0.44 * p, A * 0.56 * p];
+    }, sway(g.wave! * 0.5));
+    finAlong(kit, F, 0.14, 0.3, -1, (q) => A * 0.32 * Math.sin(Math.PI * Math.pow(q, 0.6)), 0.45, 8);
+    finAlong(kit, F, 0.14, 0.3, 1, (q) => A * 0.3 * Math.sin(Math.PI * Math.pow(q, 0.6)), 0.45, 8);
+    tail(F, F.depth * 0.9);
+    hull(kit, F);
+    mark(F);
+    // The great pores along the lateral line, hollow and dark inside.
+    const pores: Pt[] = [];
+    for (let i = Math.round(F.N * 0.1); i <= Math.round(F.N * 0.76); i++) {
+      const [x, y, w] = F.spine[i];
+      pores.push([x, y - w * 0.46 + w * 0.32]);
+    }
+    P('detail', pores);
+    for (let q = 0; q < 8; q++) {
+      const [x, y] = along(pores, 0.06 + q * 0.125);
+      C('detail', x, y, A * 0.045, A * 0.032);
+      C('gape', x, y + 0.2, A * 0.025, A * 0.016);
+    }
+    const [sx, sy, sw] = F.at(1);
+    const [cx, cy, cw] = F.at(0.7);
+    // The mouth: from the snout back past the speck of an eye, in a long bow.
+    const mouth = quad([sx + 0.4, sy + sw * 0.02], [cx + (sx - cx) * 0.5, cy + cw * 0.22], [cx, cy + cw * 0.12], 10);
+    P('detail', mouth.concat([[cx - 1.2, cy + cw * 0.18]]));
+    gillAt(P, F, 0.66, 0.44);
+    const pc = F.at(0.64);
+    paddle(kit, [pc[0], pc[1] + pc[2] * 0.2], A * 0.32, A * 0.16, Math.PI * 0.86, 'finF', 6);
+    const [ex, ey, ew] = F.at(0.86);
+    eyeAt(C, ex, ey - ew * 0.26, Math.max(0.6, A * 0.022));
+    return tailRays;
+  }
+
+  if (form === 'chimaera') {
+    // A chimaera, a ratfish: a big blunt head with a big eye, wings for
+    // pectorals, a tall first dorsal with a spine before it, and the body
+    // running out to a whip with a low fin over and under it.
+    const F = frameOf((t) => {
+      const p = 0.012 + 0.988 * Math.pow(Math.min(1, t / 0.66), 1.4);
+      let up = A * 0.44 * p;
+      let dn = A * 0.56 * p;
+      if (t > 0.84) up *= 1 - Math.pow((t - 0.84) / 0.16, 2) * 0.62;
+      if (t > 0.8) dn *= 1 - Math.pow((t - 0.8) / 0.2, 1.5) * 0.7;
+      return [-up, Math.max(dn, -up + 1)];
+    }, sway(g.wave! * 0.6, 1.4));
+    // The far pectoral, behind.
+    const pc = F.at(0.7);
+    paddle(kit, [pc[0] + 2, pc[1] + pc[2] * 0.1], A * 1.4, A * 0.9, Math.PI * 0.86, 'fin', 10);
+    finAlong(kit, F, 0.6, 0.7, -1, (q) => A * 0.72 * Math.pow(1 - q, 0.6) * Math.min(1, q * 10 + 0.4), 0.45, 7);
+    const [spx, spy] = F.up(0.7);
+    fang(P, [spx, spy + 0.5], A * 0.8, -Math.PI * 0.62, -0.08, 'fin');
+    finAlong(kit, F, 0.1, 0.57, -1, (q) => A * 0.14 * Math.min(1, q * 8 + 0.2) * Math.min(1, (1 - q) * 6), 0.25, 20);
+    finAlong(kit, F, 0.02, 0.24, 1, (q) => A * 0.12 * Math.min(1, q * 6 + 0.3) * Math.min(1, (1 - q) * 5), 0.25, 10);
+    const pv = F.dn(0.5);
+    paddle(kit, [pv[0], pv[1] - 1], A * 0.6, A * 0.36, Math.PI * 0.82, 'fin', 6);
+    hull(kit, F);
+    mark(F);
+    // The whip.
+    const [tx, ty] = F.spine[0];
+    const ph = vr(0, TAU);
+    const whip: Pt[] = [];
+    for (let s = 0; s <= 30; s += 2) whip.push([tx - s, ty + Math.sin(s / 9 + ph) * 2 * Math.min(1, s / 10)]);
+    P('tentF', whip);
+    // Its lateral line wavering down the side, and the canals of the head.
+    const ll: Pt[] = [];
+    for (let i = Math.round(F.N * 0.06); i <= Math.round(F.N * 0.82); i++) {
+      const [x, y, w] = F.spine[i];
+      ll.push([x, y - w * 0.46 + w * 0.36 + Math.sin(i * 1.3) * w * 0.025]);
+    }
+    P('detail', ll);
+    const [hx, hy, hw] = F.at(0.9);
+    P('detail', quad([hx - 6, hy + hw * 0.1], [hx + 2, hy + hw * 0.32], [hx + 7, hy + hw * 0.05], 8));
+    P('detail', quad([hx - 3, hy - hw * 0.34], [hx + 4, hy - hw * 0.44], [hx + 7.5, hy - hw * 0.12], 8));
+    gillAt(P, F, 0.76, 0.3);
+    // The near pectoral, a wing spread over the flank.
+    paddle(kit, [pc[0], pc[1] + pc[2] * 0.22], A * 1.6, A * 1, Math.PI * 0.8, 'finF', 12);
+    // The small mouth under the snout, a rabbit's two plates in front.
+    const [mx, my] = F.dn(0.95);
+    P('detail', [[mx + 2, my - 0.4], [mx - 0.5, my + 0.2], [mx - 2.5, my - 0.2]]);
+    fang(P, [mx + 1.4, my - 0.2], A * 0.05, Math.PI * 0.5, 0);
+    const [ex, ey] = F.at(0.86);
+    eyeAt(C, ex, ey - A * 0.07, A * 0.12);
+    return 0;
+  }
+
+  if (form === 'lizard') {
+    // A deep-sea lizardfish lying on the ooze: long and round, the head
+    // flat as a crocodile's and its jaw full of needles, propped on its
+    // pelvic fins.
+    const F = frameOf((t) => {
+      let up = 0.38 + 0.62 * smoothstep(0, 0.42, t);
+      let dn = up;
+      if (t > 0.62) up *= 1 - smoothstep(0.62, 1, t) * 0.72;
+      if (t > 0.8) dn *= 1 - smoothstep(0.8, 1, t) * 0.4;
+      return [-A * 0.5 * up, A * 0.5 * dn];
+    }, () => 0);
+    finAlong(kit, F, 0.48, 0.6, -1, (q) => A * 0.65 * Math.sin(Math.PI * Math.pow(q, 0.6)), 0.4, 8);
+    finAlong(kit, F, 0.14, 0.19, -1, (q) => A * 0.22 * Math.sin(Math.PI * q), 0.4, 0);
+    finAlong(kit, F, 0.16, 0.3, 1, (q) => A * 0.4 * Math.sin(Math.PI * Math.pow(q, 0.6)), 0.45, 7);
+    tail(F, F.depth * 1.1, 24);
+    hull(kit, F);
+    mark(F);
+    lateralLine(P, F, 0.08, 0.76, 0.42, false);
+    gillAt(P, F, 0.74, 0.42);
+    const [sx, sy, sw] = F.at(1);
+    const [cx, cy, cw] = F.at(0.76);
+    cleft(P, [sx + 0.3, sy + sw * 0.1], [cx, cy + cw * 0.22]);
+    for (let q = 0; q < 9; q++) {
+      const [x, y] = along([[sx, sy + sw * 0.1], [cx, cy + cw * 0.22]], 0.05 + q * 0.1);
+      fang(P, [x, y - 0.3], A * vr(0.1, 0.18), Math.PI * 0.5, 0.06);
+    }
+    // The pelvic fins, under it and down to the floor: what it rests on.
+    const pv = F.dn(0.6);
+    paddle(kit, [pv[0], pv[1] - 0.6], A * 0.85, A * 0.3, Math.PI * 0.62, 'finF', 6, 0);
+    const pc = F.at(0.72);
+    paddle(kit, [pc[0], pc[1] - pc[2] * 0.1], A * 0.7, A * 0.26, Math.PI * 1.06, 'finF', 6);
+    const [ex, ey, ew] = F.at(0.88);
+    eyeAt(C, ex, ey - ew * 0.22, ew * 0.13);
+    return tailRays;
+  }
+
+  if (form === 'cusk' || form === 'snailfish' || form === 'eelpout' || form === 'ethereal') {
     // The soft ones whose fins run round the back end: a cusk-eel, long and
-    // tapering; a snailfish, a tadpole of glass; an eelpout, thick, lipped.
+    // tapering; a snailfish, a tadpole of glass (the ethereal one with wings
+    // of free rays trailing from its pectorals); an eelpout, thick, lipped.
     const cusk = form === 'cusk';
-    const snail = form === 'snailfish';
+    const ether = form === 'ethereal';
+    const snail = form === 'snailfish' || ether;
     const F = frameOf((t) => {
       let p: number;
       if (snail) {
@@ -2474,7 +3004,17 @@ function formed(g: Genome, kit: Kit): number {
     pairRays(P, baseBot, outer.slice(baseTop.length + 1), Math.round(baseBot.length * 0.5));
     hull(kit, F);
     if (!snail) mark(F);
-    if (snail) {
+    if (ether) {
+      // Its pectoral: a wide fan, and from its lower edge the free rays,
+      // long, trailing back under it like a gown.
+      const pc = F.at(0.68);
+      const fan = paddle(kit, [pc[0], pc[1] + pc[2] * 0.1], A * 0.6, A * 0.6, Math.PI * 0.86, 'finF', 10);
+      const ph = vr(0, TAU);
+      for (let q = 0; q < 9; q++) {
+        const [x, y] = fan[Math.min(fan.length - 1, 2 + q)];
+        P('barbel', hang(x, y, A * (1.5 + q * 0.1) + vr(-3, 3), Math.PI * (0.9 + q * 0.008), { wave: 0.06, freq: 0.14, ph: ph + q * 0.7, curl: 0.3, drift: 0.12 }, 1.5));
+      }
+    } else if (snail) {
       // Its pectoral: big and round, notched into two lobes.
       const pc = F.at(0.68);
       paddle(kit, [pc[0], pc[1] + pc[2] * 0.12], A * 0.42, A * 0.36, Math.PI * 0.82, 'finF', 9);
