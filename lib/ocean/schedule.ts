@@ -170,7 +170,8 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
   let floorCount = 0;
   for (let slot = first; slot <= Math.floor(now); slot++) {
     const r = mulberry32(hash32(biome.key, 'slot', slot));
-    const pool = biome.pools[legAt(biome.route, slot)];
+    const li = legAt(biome.route, slot);
+    const pool = biome.pools[li];
     if (r() >= rateAt(slot, scale, membersPerSpawn(pool))) continue;
     const species = pool[pickIndex(r, pool.map((s) => s.abundance))];
     const school = schoolOf(species);
@@ -186,7 +187,9 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
     if (layer === 2 && near >= NEAR_CAP) layer = 1;
     if (layer === 2) near++;
 
-    const dir: 1 | -1 = r() < 0.78 ? biome.env.current : biome.env.current === 1 ? -1 : 1;
+    // Mostly with the current, which is the leg's own: in some stretches it runs the other way.
+    const current = biome.route[li].water.flip ? (-biome.env.current as 1 | -1) : biome.env.current;
+    const dir: 1 | -1 = r() < 0.78 ? current : current === 1 ? -1 : 1;
     const base = [range(r, 46, 80), range(r, 88, 140), range(r, 170, 250)][layer];
     // Things on the floor are seen from across it, and kept small.
     const len = (species.floor ? range(r, 34, 60) : base) * Math.sqrt(species.genome.size) * sizeScale;

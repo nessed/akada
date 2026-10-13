@@ -708,3 +708,36 @@ test('a nine-hour sitting keeps changing every hour, all the way down', () => {
   const trench = sightings.slice(3).reduce((a, b) => a + b, 0) / (N * 6);
   assert.ok(trench >= 0.7, `${trench.toFixed(2)} sightings an hour in the trench`);
 });
+
+test('each leg has its own water, and the first is the sitting\'s', () => {
+  let flips = 0;
+  let legs = 0;
+  for (let k = 0; k < 40; k++) {
+    const key = oceanKey('water', k);
+    const route = routeOf(key, false);
+    assert.deepEqual(route.map((l) => l.water), routeOf(key, false).map((l) => l.water));
+    assert.deepEqual(route[0].water, { flip: false, clarity: 1, snow: 1, glow: 1 });
+    for (const l of route.slice(1)) {
+      legs++;
+      if (l.water.flip) flips++;
+      assert.ok(l.water.clarity >= 0.75 && l.water.clarity <= 1.2);
+      assert.ok(l.water.snow >= 0.75 && l.water.snow <= 1.3);
+      assert.ok(l.water.glow >= 0.6 && l.water.glow <= 1.6);
+    }
+  }
+  // The current turns in some stretches, not most.
+  assert.ok(flips / legs > 0.2 && flips / legs < 0.5, `${flips} of ${legs} legs flipped`);
+  // And the animals in a flipped leg mostly swim the other way.
+  const biome = rollBiome(oceanKey('water', 3), courseKey('water'));
+  const flipped = biome.route.find((l) => l.water.flip && l.zone >= 2)!;
+  let withIt = 0;
+  let all = 0;
+  for (let t = flipped.from * 60 + 120; t < flipped.to * 60 - 10; t += 30) {
+    for (const v of visitorsAt(biome, t, VIEW)) {
+      if (v.species.floor || v.face != null || v.age > 0.05) continue;
+      all++;
+      if (v.dir === -biome.env.current) withIt++;
+    }
+  }
+  assert.ok(all > 10 && withIt / all > 0.6, `${withIt} of ${all} with the leg's current`);
+});

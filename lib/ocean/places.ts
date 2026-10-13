@@ -226,6 +226,30 @@ export interface Leg {
   first: boolean;
   /** Which side a one-sided wall is on. */
   side: -1 | 1;
+  /** Its own water (`waterOf`): each stretch of the dive is a little different to be in. */
+  water: LegWater;
+}
+
+/**
+ * The water of one leg, rolled for it: whether the current here runs the
+ * other way to the sitting's (so the animals mostly swim the other way),
+ * how clear it is, how much snow is in it against the place's own, and how
+ * brightly its plankton answers a hand. The first leg is the sitting's own.
+ */
+export interface LegWater {
+  flip: boolean;
+  /** Against the sitting's clarity, 0.75 (murkier) to 1.2 (clearer). */
+  clarity: number;
+  /** Against the place's snow. */
+  snow: number;
+  /** How brightly the plankton lights when touched, against the usual. */
+  glow: number;
+}
+
+function waterOf(key: string, i: number): LegWater {
+  if (i === 0) return { flip: false, clarity: 1, snow: 1, glow: 1 };
+  const r = mulberry32(hash32(key, 'route-water', i));
+  return { flip: r() < 0.35, clarity: 0.75 + 0.45 * r(), snow: 0.75 + 0.55 * r(), glow: 0.6 + 1 * r() };
 }
 
 /** Focus minutes at which a depth in metres is reached: `depthAt` turned round. */
@@ -285,6 +309,7 @@ export function routeOf(key: string, kelp: boolean): Leg[] {
       m,
       first: i === 0 || zoneOf(CUTS[i - 1]) !== zone,
       side: r() < 0.5 ? -1 : 1,
+      water: waterOf(key, i),
     });
     prev2 = prev;
     prev = place.id;
