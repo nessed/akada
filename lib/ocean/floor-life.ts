@@ -172,9 +172,9 @@ function nodules(f: FloorGround, r: Rand) {
   g.globalAlpha = 1;
 }
 
-function xeno(f: FloorGround, r: Rand) {
+function xeno(f: FloorGround, r: Rand, few = false) {
   const { g, px } = f;
-  const n = 9 + Math.floor(r() * 12);
+  const n = few ? 3 + Math.floor(r() * 4) : 9 + Math.floor(r() * 12);
   for (let i = 0; i < n; i++) {
     const { x, y, k } = spot(f, r, 1.2);
     const s = (10 + 16 * r()) * px * k;
@@ -286,9 +286,9 @@ function cucumber(f: FloorGround, x: number, y: number, k: number, dir: number, 
   inkLine(g, pts, true, { width: 0.7 * px, color: f.ink, alpha: pig ? 0.6 : 0.45, lost: 0.5, seed, min: 0.25 * px });
 }
 
-function flats(f: FloorGround, r: Rand) {
+function flats(f: FloorGround, r: Rand, few = false) {
   const { g, px } = f;
-  const tracks = 4 + Math.floor(r() * 4);
+  const tracks = few ? 2 + Math.floor(r() * 2) : 4 + Math.floor(r() * 4);
   for (let t = 0; t < tracks; t++) {
     // A track: a furrow wandering across the ooze, nearer as it goes.
     const { x, y, k } = spot(f, r, 0.9);
@@ -329,10 +329,39 @@ function flats(f: FloorGround, r: Rand) {
     if (r() < 0.75) cucumber(f, line[48], line[49], k, dir, r, (f.seed + t * 53) >>> 0);
   }
   // And a few lying about with no track to speak of.
-  const more = 2 + Math.floor(r() * 4);
+  const more = few ? 1 : 2 + Math.floor(r() * 4);
   for (let q = 0; q < more; q++) {
     const { x, y, k } = spot(f, r, 0.8);
     cucumber(f, x, y, k, r() < 0.5 ? -1 : 1, r, (f.seed + 900 + q) >>> 0);
+  }
+}
+
+/**
+ * The bottom of the sea: soft pale ooze, a few xenophyophores, a sea
+ * cucumber or two and their tracks, and the amphipods in little crowds
+ * picking over it, each a pale curl.
+ */
+function bottom(f: FloorGround, r: Rand) {
+  const { g, px } = f;
+  xeno(f, r, true);
+  flats(f, r, true);
+  const crowds = 3 + Math.floor(r() * 3);
+  for (let c = 0; c < crowds; c++) {
+    const { x, y, k } = spot(f, r, 1);
+    const n = 8 + Math.floor(r() * 14);
+    for (let i = 0; i < n; i++) {
+      const ax = x + (r() - 0.5) * 40 * px * k;
+      const ay = y + (r() - 0.5) * 6 * px * k;
+      const s = (2.2 + 1.6 * r()) * px * k;
+      const turn = r() < 0.5 ? -1 : 1;
+      // A curl: the back's arch, the tail tucked under.
+      const pts: number[] = [];
+      for (let q = 0; q <= 6; q++) {
+        const a = Math.PI * (0.15 + 0.9 * (q / 6));
+        pts.push(ax + turn * Math.cos(a) * s, ay - Math.sin(a) * s * 0.7);
+      }
+      inkLine(g, pts, false, { width: 1.1 * px * k, color: MAT_WHITE, alpha: 0.75, taper: [0.1, 0.4], seed: (f.seed + c * 131 + i) >>> 0, min: 0.3 * px });
+    }
   }
 }
 
@@ -346,5 +375,6 @@ export function drawFloorLife(f: FloorGround, dress: FloorDress) {
   else if (dress === 'nodules') nodules(f, r);
   else if (dress === 'xeno') xeno(f, r);
   else if (dress === 'flats') flats(f, r);
+  else if (dress === 'bottom') bottom(f, r);
   f.g.restore();
 }

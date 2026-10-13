@@ -421,9 +421,16 @@ test('a pool carries two fish at least and its zone\'s budget at most, every one
   for (let k = 0; k < 400; k++) {
     const course = `c${k % 37}`;
     const biome = rollBiome(oceanKey(course, 5000 + k * 104729), courseKey(course));
-    for (const pool of biome.pools) {
+    for (const [li, pool] of biome.pools.entries()) {
       const zone = pool[0].zone;
       const fish = pool.filter((sp) => sp.genome.form);
+      // The bottom of the sea is past the last fish: nothing there, and the
+      // others swimming in its place.
+      if (biome.route[li].place.fishless) {
+        assert.equal(fish.length, 0, 'a fish at the bottom of the sea');
+        assert.ok(pool.every((sp) => sp.genome.plan !== 'fish' && sp.genome.plan !== 'eel'));
+        continue;
+      }
       assert.ok(fish.length >= FISH_FLOOR, `${fish.length} fish in a zone ${zone} pool`);
       assert.ok(fish.length <= FISH_BUDGET[zone], `${fish.length} fish in a zone ${zone} pool, over its ${FISH_BUDGET[zone]}`);
       counts[zone] += fish.length;

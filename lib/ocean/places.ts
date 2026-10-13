@@ -48,7 +48,7 @@ export type PlaceId =
  * seep's mats, clams and tube worms; manganese nodules; xenophyophores, the
  * giant single cells; sea cucumbers and the tracks they leave.
  */
-export type FloorDress = 'seep' | 'nodules' | 'xeno' | 'flats';
+export type FloorDress = 'seep' | 'nodules' | 'xeno' | 'flats' | 'bottom';
 
 export interface Place {
   id: PlaceId;
@@ -74,6 +74,8 @@ export interface Place {
   narrow?: number;
   /** Its wall on the leg's side leans out over the water, undercut beneath. */
   overhang?: boolean;
+  /** Past the last fish: nothing with a backbone has been found living this deep. */
+  fishless?: boolean;
   /** A colour its water leans toward, and how far (kept small: the deep stays dark). */
   haze?: [string, number];
   /** Marine snow against the usual. */
@@ -187,11 +189,15 @@ export const PLACES: Record<PlaceId, Place> = {
     kit: [['glass', 2], ['crinoid', 2], ['whip', 1]],
     haze: ['#33302B', 0.12], snow: 1.1, fishForms: ['grenadier', 'snailfish', 'ethereal'],
   },
-  // The bottom of the deepest trench. Few sittings ever get here.
+  // The bottom of the deepest trench, nine hours and more down, and past
+  // the last fish: none has been seen below about 8,400 m. What lives here
+  // is the amphipods in their swarms, the sea cucumbers and the
+  // xenophyophores, between the walls at their narrowest. Few sittings ever
+  // get here.
   deep: {
-    id: 'deep', name: 'challenger deep', zone: 4, m0: 10500, m1: 11000, weight: 1, walls: 2, rocks: true,
-    kit: [['seapen', 1], ['brittlestar', 1]],
-    haze: ['#33302B', 0.14], snow: 2, fishForms: ['snailfish', 'ethereal'],
+    id: 'deep', name: 'challenger deep', zone: 4, m0: 10500, m1: 11000, weight: 1, walls: 2, rocks: true, narrow: 0.06,
+    floor: 'bottom', fishless: true, kit: [['seapen', 1], ['brittlestar', 1]],
+    haze: ['#33302B', 0.14], snow: 2, fishForms: [],
   },
 };
 
@@ -331,6 +337,8 @@ export function legAt(route: Leg[], focusSeconds: number): number {
 export function legMark(leg: Leg): string {
   const zone = ZONES[leg.zone].name;
   const m = `${leg.m.toLocaleString('en-US')} m`;
+  // The arrival: the bottom of the sea, said as such.
+  if (leg.place.id === 'deep') return `the bottom of the sea · ${leg.place.name} · ${m}`;
   if (leg.place.name === zone) return `${zone} · ${m}`;
   return leg.first ? `${zone} · ${leg.place.name} · ${m}` : `${leg.place.name} · ${m}`;
 }

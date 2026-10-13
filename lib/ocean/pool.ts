@@ -82,7 +82,8 @@ function slotOf(src: string, leg: Leg, i: number, regular: boolean): Slot {
   const r = mulberry32(seed);
   // Places on the floor: every fourth in the abyss, every third in the
   // trench, where the floor is most of what lives.
-  const ground = zone === 3 ? i % 4 === 0 : zone >= 4 && i % 3 === 0;
+  // (And at the very bottom every other place, where the floor is all there is.)
+  const ground = zone === 3 ? i % 4 === 0 : zone >= 4 && i % (leg.place.fishless ? 2 : 3) === 0;
   const z = Math.min(1, zoneMid(zone) + range(r, -0.05, 0.05));
   const plan = ground ? rollPlan(r, z, true) : rollPlan(r, z);
   return { i, seed, r, z, regular, ground, plan, form: null };
@@ -138,6 +139,13 @@ function kinds(forms: FishForm[], full: number): number {
 
 function chooseFish(slots: Slot[], leg: Leg, place: Place) {
   const zone = leg.zone;
+  if (place.fishless) {
+    // Past the last fish: what would have been one is an amphipod swarm or
+    // a swimming sea cucumber instead, turn about; an eel is a sea cucumber too.
+    let k = 0;
+    for (const s of slots) if (!s.ground && (s.plan === 'fish' || s.plan === 'eel')) s.plan = k++ % 2 ? 'cucumber' : 'crawler';
+    return;
+  }
   const budget = FISH_BUDGET[zone] ?? 4;
   const used = new Map<FishForm, number>();
   let fish = 0;
