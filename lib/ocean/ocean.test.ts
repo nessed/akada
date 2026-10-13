@@ -10,6 +10,7 @@ import { speciesName } from './names';
 import { hash32, mulberry32 } from './random';
 import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type EventKind } from './events';
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
+import { landmarkOf, landmarksInView } from './landmarks';
 import { outcropAtSlot, outcropsInView } from './outcrop';
 import { hourMark, legAt, legMark, minuteAt, PLACES, routeLine, routeOf } from './places';
 import { FISH_BUDGET, FISH_FLOOR, POOL_SIZE } from './pool';
@@ -561,7 +562,8 @@ test('places: the dive is cut at round depths, and every leg is somewhere that l
         assert.notEqual(leg.place.id, route[i - 1].place.id, 'the same place twice running');
         // Nor back to the one before it, wherever a zone has more to offer.
         if (i > 1 && route[i - 2].zone === leg.zone && leg.place.id !== 'deep') {
-          const can = Object.values(PLACES).filter((p) => p.zone === leg.zone && p.weight > 0 && leg.m >= p.m0 && leg.m < p.m1);
+          // (A landmark already passed is not on offer again.)
+          const can = Object.values(PLACES).filter((p) => p.zone === leg.zone && p.weight > 0 && leg.m >= p.m0 && leg.m < p.m1 && !(p.landmark && route.slice(0, i).some((l) => l.place.id === p.id)));
           if (can.length > 2) assert.notEqual(leg.place.id, route[i - 2].place.id, `back and forth at ${leg.m} m`);
         }
       }
@@ -777,6 +779,36 @@ test('the twilight\'s places: a canyon walled both sides but wider than the tren
   assert.ok(canyons >= 10, `only ${canyons} canyons`);
   assert.ok(layer / layerMin > 1.3 * (open / openMin), `the layer ${(layer / layerMin).toFixed(2)} a minute, elsewhere ${(open / openMin).toFixed(2)}`);
   assert.ok(PLACES.layer.lights && PLACES.layer.lights > 0 && !PLACES.canyon.lights);
+});
+
+test('landmarks: a wreck in the light and a brine pool at midnight, each passed once, mid-leg, with the rocks clear of it', () => {
+  const seen = { wreck: 0, brine: 0 };
+  for (let k = 0; k < 400; k++) {
+    const key = oceanKey('mark', k);
+    const route = routeOf(key, false);
+    const kinds = route.filter((l) => l.place.landmark).map((l) => l.place.id);
+    // Once a sitting at most.
+    assert.equal(new Set(kinds).size, kinds.length, kinds.join());
+    for (let i = 0; i < route.length; i++) {
+      const lm = landmarkOf(key, route, i);
+      assert.equal(!!lm, !!route[i].place.landmark);
+      if (!lm) continue;
+      seen[lm.kind]++;
+      const leg = route[i];
+      // Its middle crosses the middle of the page at the middle of its leg.
+      const mid = (leg.from + leg.to) / 2;
+      const at = landmarksInView(key, route, i, mid * 60).find((x) => x.landmark.id === lm.id);
+      assert.ok(at && Math.abs(at.top + lm.height / 2 - 0.5) < 1e-6, `${lm.kind} not mid-page mid-leg`);
+      // Off the page well before and after.
+      assert.ok(!landmarksInView(key, route, i, (leg.from - 6) * 60).some((x) => x.landmark.id === lm.id));
+      // No rock on its edge while it is on the page.
+      for (let t = (mid - 6) * 60; t <= (mid + 6) * 60; t += 20) {
+        if (!landmarksInView(key, route, legAt(route, t), t).some((x) => x.landmark.id === lm.id)) continue;
+        for (const { outcrop } of outcropsInView(key, false, t)) assert.notEqual(outcrop.edge, lm.edge, `a rock through the ${lm.kind}`);
+      }
+    }
+  }
+  assert.ok(seen.wreck > 20 && seen.brine > 100, JSON.stringify(seen));
 });
 
 test('each leg has its own water, and the first is the sitting\'s', () => {

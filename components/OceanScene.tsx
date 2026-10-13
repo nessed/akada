@@ -35,6 +35,8 @@ import { Sparkles } from '@/lib/ocean/sparkle';
 import { Wash } from '@/lib/ocean/wash';
 import { outcropsInView } from '@/lib/ocean/outcrop';
 import { drawOutcrops, OutcropCache } from '@/lib/ocean/outcrop-sprite';
+import { drawLandmarks, LandmarkCache } from '@/lib/ocean/landmark-draw';
+import { landmarksInView } from '@/lib/ocean/landmarks';
 import { drawDumbo, drawLure, drawWhaleFall } from '@/lib/ocean/sightings-deep';
 import { drawManOWar, drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/ocean/sightings-shallow';
 import { jellyForBlock } from '@/lib/ocean/lineage';
@@ -146,6 +148,7 @@ export default function OceanScene({
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const sprites = new SpriteCache();
     const outcrops = new OutcropCache();
+    const landmarks = new LandmarkCache();
     const walls = new WallCache();
     const wash = new Wash();
     const caustics = new Caustics();
@@ -306,6 +309,9 @@ export default function OceanScene({
       drawWalls(bctx, W, H, biome.route, biome.key, shown, walls, water.dark, px, L.clear);
       const rocks = outcropsInView(biome.key, biome.env.kelp, shown);
       drawOutcrops(bctx, W, H, rocks, outcrops, water, px, L.clear);
+      // A place's landmark, passed once: the wreck, the brine pool.
+      const marks = landmarksInView(biome.key, biome.route, li, shown);
+      if (marks.length) drawLandmarks(bctx, W, H, marks, landmarks, water.dark, px, L.clear, ambient, 1, reduced);
       const eelsMoving = eels.draw(bctx, W, H, rocks, ambient, now, px, water.dark, L.clear);
       if (L.pools?.length) {
         // An oval bleed of bare paper, the way a wash stops short of a corner.
@@ -408,6 +414,7 @@ export default function OceanScene({
         bctx.globalAlpha = Math.min(0.45, darkness * 0.55);
         drawWalls(bctx, W, H, biome.route, biome.key, shown, walls, water.dark, px, L.clear);
         bctx.globalAlpha = 1;
+        if (marks.length) drawLandmarks(bctx, W, H, marks, landmarks, water.dark, px, L.clear, ambient, Math.min(0.5, darkness * 0.6), reduced);
       }
       // What lies on the floor (a seep, nodules, xenophyophores, sea
       // cucumbers) stays findable over the dark, as the walls do.

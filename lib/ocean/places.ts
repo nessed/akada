@@ -18,6 +18,7 @@
  */
 
 import { ZONES } from './depth';
+import type { LandmarkKind } from './landmarks';
 import type { GrowthKind } from './outcrop';
 import { hash32, mulberry32, pickIndex } from './random';
 
@@ -25,6 +26,7 @@ export type PlaceId =
   | 'kelp'
   | 'reef'
   | 'blue'
+  | 'wreck'
   | 'twilight'
   | 'dropoff'
   | 'canyon'
@@ -32,6 +34,7 @@ export type PlaceId =
   | 'midnight'
   | 'mounds'
   | 'seamount'
+  | 'brine'
   | 'plain'
   | 'vents'
   | 'nodules'
@@ -82,6 +85,8 @@ export interface Place {
   crowd?: number;
   /** Its plankton answers a hand more brightly than the usual, on top of the leg's own. */
   glow?: number;
+  /** The one big thing it is known for, passed once in its leg (`landmarks.ts`). */
+  landmark?: LandmarkKind;
   /** Pinpricks of light hanging in its water, blinking on and off, how many against a full page's worth. */
   lights?: number;
   /** A colour its water leans toward, and how far (kept small: the deep stays dark). */
@@ -101,6 +106,13 @@ export const PLACES: Record<PlaceId, Place> = {
   kelp: { id: 'kelp', name: 'the kelp forest', zone: 0, m0: 0, m1: 200, weight: 0, walls: 0, rocks: true, snow: 1, fishForms: ['jack', 'sardine', 'barracuda', 'grouper'] },
   reef: { id: 'reef', name: 'the reef', zone: 0, m0: 0, m1: 200, weight: 3, walls: 0, rocks: true, snow: 1, fishForms: ['disc', 'puffer', 'trigger', 'grouper', 'trumpet', 'flatfish'] },
   blue: { id: 'blue', name: 'open water', zone: 0, m0: 0, m1: 200, weight: 1.2, walls: 0, rocks: false, snow: 0.7, fishForms: ['sardine', 'jack', 'sunfish', 'flying', 'swordfish'] },
+  // A wreck on the reef: a steel ship lying on her side on the slope, her
+  // plates and rails grown over with coral and fans, the big fish of the
+  // reef living in and around her.
+  wreck: {
+    id: 'wreck', name: 'the wreck', zone: 0, m0: 0, m1: 200, weight: 1.5, walls: 0, rocks: true, landmark: 'wreck',
+    snow: 1, fishForms: ['grouper', 'barracuda', 'jack', 'trumpet', 'disc'],
+  },
 
   twilight: { id: 'twilight', name: 'twilight', zone: 1, m0: 200, m1: 1000, weight: 2, walls: 0, rocks: true, snow: 1, fishForms: ['lantern', 'hatchet', 'bristlemouth', 'swallower'] },
   // A wall down one side that the reader sinks along, the reef's slope going
@@ -135,6 +147,16 @@ export const PLACES: Record<PlaceId, Place> = {
     id: 'mounds', name: 'the coral mounds', zone: 2, m0: 1000, m1: 3000, weight: 1.6, walls: 0, rocks: true,
     kit: [['branch', 4], ['glass', 2], ['crinoid', 1.5], ['brittlestar', 1]],
     snow: 1.2, fishForms: ['grenadier', 'fangtooth', 'viper', 'chimaera'],
+  },
+  // A brine pool: brine many times saltier than the sea, too heavy to mix
+  // with it, lying in a hollow of the slope as a lake lies on land, with a
+  // surface and a shore. Mussels crowd the shore, living off the methane in
+  // it; anything that swims into the brine dies. Real from 650 m to past
+  // 3,000 m. Passed on a ledge of the slope, its brine spilling over the lip.
+  brine: {
+    id: 'brine', name: 'the brine pool', zone: 2, m0: 1000, m1: 3300, weight: 1.3, walls: 0, rocks: true, landmark: 'brine',
+    kit: [['glass', 2], ['seapen', 1], ['brittlestar', 1]],
+    haze: ['#2E3236', 0.08], snow: 1, fishForms: ['grenadier', 'chimaera', 'viper', 'angler'],
   },
   // A seamount's flank down one side: sponge gardens and sea lilies.
   seamount: {
@@ -322,7 +344,8 @@ export function routeOf(key: string, kelp: boolean): Leg[] {
     let place: Place;
     if (i === 0 && kelp) place = PLACES.kelp;
     else {
-      const can = Object.values(PLACES).filter((p) => p.zone === zone && p.weight > 0 && m >= p.m0 && m < p.m1);
+      // A landmark is passed once a sitting: twice and it is not one.
+      const can = Object.values(PLACES).filter((p) => p.zone === zone && p.weight > 0 && m >= p.m0 && m < p.m1 && !(p.landmark && legs.some((l) => l.place.id === p.id)));
       // Never the place it just left, nor the one before that, if there is
       // anywhere else to be: so a long stretch never goes back and forth.
       const notPrev = can.filter((p) => p.id !== prev);

@@ -18,6 +18,7 @@
 
 import { depthAt } from './depth';
 import { kelpDescent } from './kelp';
+import { landmarkEdgeNear } from './landmarks';
 import { HUES } from './palette';
 import { legAt, routeOf, type Place, type PlaceId } from './places';
 import { chance, hash32, int, mulberry32, pickIndex, range, type Rand } from './random';
@@ -157,10 +158,13 @@ function roll(key: string, slot: number): Outcrop | null {
   const route = routeOf(key, false);
   const place = route[legAt(route, mid * 60)].place;
   if (!place.rocks) return null;
+  const rolled = chance(r, 0.5) ? -1 : 1;
+  // Clear of a landmark passing at the same time: the other edge.
+  const shy = landmarkEdgeNear(key, route, legAt(route, mid * 60), mid);
   const o: Outcrop = {
     id: `oc${hash32(key, 'outcrop', slot).toString(36)}-${slot}`,
     slot,
-    edge: chance(r, 0.5) ? -1 : 1,
+    edge: shy ? (-shy as -1 | 1) : rolled,
     reach: range(r, 0.14, 0.28),
     thick,
     zone,
