@@ -14,6 +14,7 @@ import { FLOOR_PLANS, FORMS, formsIn, rollGenome, rollPlan, settle, type FishFor
 import { speciesName } from './names';
 import type { Leg, Place } from './places';
 import { chance, hash32, int, mulberry32, range, weighted, type Rand } from './random';
+import { generationOf, isNewcomer, seasonOf } from './season';
 
 export interface Species {
   id: string;
@@ -37,6 +38,8 @@ export interface Species {
   blink: number;
   /** Whether it came from the course's sea (true) or this sitting's. */
   regular: boolean;
+  /** A regular new this week: the course's sea turns over one face a week. */
+  newcomer?: boolean;
 }
 
 /** Species to a pool. */
@@ -222,19 +225,29 @@ function chooseFish(slots: Slot[], leg: Leg, place: Place) {
  */
 export function composePool(src: { courseKey: string; sittingKey: string }, leg: Leg, place: Place): Species[] {
   const slots: Slot[] = [];
+  // The course's places turn over slowly: each has a generation six weeks
+  // long, staggered so one of them starts a new one each week. A regular is
+  // the same for every sitting of its six weeks, then someone else.
+  const season = seasonOf(src.sittingKey);
   for (let i = 0; i < POOL_SIZE; i++) {
     const regular = i % 2 === 0;
-    slots.push(slotOf(regular ? src.courseKey : src.sittingKey, leg, i, regular));
+    const gen = regular ? generationOf(season, i / 2) : null;
+    const from = !regular ? src.sittingKey : gen == null ? src.courseKey : `${src.courseKey}:g${gen}`;
+    slots.push(slotOf(from, leg, i, regular));
   }
   chooseFish(slots, leg, place);
-  const pool: Species[] = [];
+  // The regulars first, so how a second of a schooling kind is told from
+  // the first never hangs on the sitting's own animals.
+  const made: Species[] = new Array(slots.length);
   const first = new Map<FishForm, Genome>();
-  for (const s of slots) {
+  for (const s of [...slots.filter((x) => x.regular), ...slots.filter((x) => !x.regular)]) {
     const twin = s.form ? first.get(s.form) ?? null : null;
     const sp = speciesOf(s, leg, twin);
+    if (s.regular && isNewcomer(season, s.i / 2)) sp.newcomer = true;
     if (s.form && !twin) first.set(s.form, sp.genome);
-    pool.push(sp);
+    made[s.i] = sp;
   }
+  const pool = made;
   const order = pool
     .map((sp) => ({ sp, k: hash32(src.sittingKey, 'rank', sp.id) }))
     .sort((a, b) => a.k - b.k);

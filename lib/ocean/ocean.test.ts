@@ -16,6 +16,7 @@ import { FISH_BUDGET, FISH_FLOOR, POOL_SIZE } from './pool';
 import { wallReach } from './walls';
 import { drained } from './palette';
 import { diveRecap } from './recap';
+import { generationOf, seasonOf } from './season';
 import { populationAt, spawnAt, visitorsAt } from './schedule';
 import { BREAK_PACE } from '../wood/clock';
 
@@ -617,9 +618,11 @@ test('pools: one to a leg, turning over as the dive goes on, and a zone opens on
       assert.equal(sp.zone, biome.route[i].zone);
     }
   });
-  // A zone's first leg rolls the seeds its one pool always did.
+  // A zone's first leg rolls its seeds the zone's one pool always did, the
+  // course's from the generation each regular place is in.
+  const season = seasonOf(key);
   for (const leg of biome.route.filter((l) => l.first)) {
-    biome.pools[leg.index].forEach((sp, i) => assert.equal(sp.seed, hash32(i % 2 === 0 ? ck : key, 'species', leg.zone, i)));
+    biome.pools[leg.index].forEach((sp, i) => assert.equal(sp.seed, hash32(i % 2 === 0 ? `${ck}:g${generationOf(season, i / 2)}` : key, 'species', leg.zone, i)));
   }
   // The next leg in the same zone is new animals.
   for (let i = 1; i < biome.route.length; i++) {
@@ -779,4 +782,32 @@ test('a school parts round a hunter, low swimmers reach for the floor, and floor
   assert.ok(near / checked < 0.03, `${near} of ${checked} school members right on top of a hunter`);
   assert.ok(tracks > 0, 'nothing on the floor left a track');
   assert.ok(reach > 0, 'no low swimmer ever reached for the floor');
+});
+
+test('the sea follows the calendar: a spring bloom, and a course\'s regulars turning over a week at a time', async () => {
+  const { seasonSnow, seasonHaze, bloomAt, bloomBelow } = await import('./season');
+  const at = (iso: string) => oceanKey('cal', Date.parse(iso));
+  // The bloom: in the light in April, in the deep some weeks later, gone by autumn.
+  assert.ok(bloomAt(seasonOf(at('2026-04-15T10:00:00Z'))) > 0.9);
+  assert.ok(bloomAt(seasonOf(at('2026-10-15T10:00:00Z'))) < 0.05);
+  assert.ok(bloomBelow(seasonOf(at('2026-05-28T10:00:00Z'))) > bloomBelow(seasonOf(at('2026-04-01T10:00:00Z'))));
+  assert.ok(seasonSnow(seasonOf(at('2026-04-15T10:00:00Z')), 0.1) > 1.4);
+  assert.equal(seasonHaze(seasonOf(at('2026-10-15T10:00:00Z')), 0.1), undefined);
+  // Smooth down through the twilight: no step in the snow as a zone is crossed.
+  const s = seasonOf(at('2026-04-25T10:00:00Z'));
+  for (let z = 0; z < 1; z += 0.01) assert.ok(Math.abs(seasonSnow(s, z + 0.01) - seasonSnow(s, z)) < 0.05);
+  // A key with no time in it has no season, and nothing changes for it.
+  assert.equal(seasonOf('no-time-here'), null);
+  // Regulars: the same all week; the next week one place in each pool is new, the rest as they were.
+  const ck = courseKey('cal');
+  const regs = (iso: string) => rollBiome(at(iso), ck).pools.map((p) => p.filter((sp) => sp.regular).map((sp) => sp.id));
+  const mon = regs('2026-03-02T09:00:00Z');
+  assert.deepEqual(regs('2026-03-08T21:00:00Z'), mon);
+  const next = regs('2026-03-09T09:00:00Z');
+  mon.forEach((pool, i) => {
+    const changed = pool.filter((id, j) => id !== next[i][j]).length;
+    assert.equal(changed, 1, `leg ${i}: ${changed} regulars changed in a week`);
+  });
+  const fresh = rollBiome(at('2026-03-09T09:00:00Z'), ck).pools.map((p) => p.filter((sp) => sp.newcomer).length);
+  assert.ok(fresh.every((n) => n === 1));
 });

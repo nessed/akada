@@ -772,10 +772,28 @@ test('a long sitting reads long: more grows on the stone and the floor, fewer em
     const a = density(planOf(two, shape));
     const b = density(planOf(long, shape));
     assert.ok(b >= 2 * a, `${shape.width}x${shape.height}: ${b.toFixed(1)} things per S of stone at 4.5 h against ${a.toFixed(1)} at 2 h`);
-    // Empty stretches (no mark at all) fall as the sitting lengthens: never more of them on a page an hour longer, and at most 0.45 from three hours.
+    // Empty stretches (no mark at all) fall as the sitting lengthens, and
+    // at most 0.45 from three hours. Judged on the mean of several sittings
+    // of each length: two single sittings an hour apart overlap too much
+    // for one pair to say anything (which animals came decides it), and
+    // the rule is about length, not about who swam by.
     const plans = CASES.map((c) => ({ min: focusOf(c.segs) / 60, empty: emptyShare(planOf(c, shape)), name: c.name }));
     for (const p of plans) if (p.min >= 180) assert.ok(p.empty <= 0.45, `${p.name} ${shape.width}x${shape.height}: ${(p.empty * 100).toFixed(0)}% empty`);
-    for (const p of plans) for (const q of plans) if (q.min >= p.min + 60) assert.ok(q.empty <= p.empty + 0.02, `${q.name} is emptier (${q.empty.toFixed(2)}) than ${p.name} (${p.empty.toFixed(2)})`);
+    const lengths: [number, ['focus' | 'break', number][]][] = [
+      [25, [['focus', 25]]],
+      [90, [['focus', 45], ['break', 10], ['focus', 45]]],
+      [150, [['focus', 50], ['break', 10], ['focus', 50], ['break', 10], ['focus', 50]]],
+      [270, [['focus', 50], ['break', 10], ['focus', 50], ['break', 10], ['focus', 50], ['break', 30], ['focus', 60], ['break', 10], ['focus', 60]]],
+    ];
+    const means = lengths.map(([min, parts]) => {
+      let sum = 0;
+      for (let k = 0; k < 6; k++) {
+        const segs = sitting(new Date(Date.parse('2026-09-01T00:00:00Z') + k * 37 * 3600e3).toISOString(), parts);
+        sum += emptyShare(planOf({ name: `${min} min`, course: `c${k % 5}`, segs }, shape));
+      }
+      return { min, empty: sum / 6 };
+    });
+    for (const p of means) for (const q of means) if (q.min >= p.min + 60) assert.ok(q.empty <= p.empty + 0.02, `${shape.width}x${shape.height}: ${q.min} min is emptier (${q.empty.toFixed(2)}) than ${p.min} min (${p.empty.toFixed(2)})`);
   }
   // The trench deeper the longer: its walls start higher at 4.5 h than at 3.5 h.
   const t35 = planOf(CASES.find((c) => c.name.startsWith('3.5 h'))!, SHAPES[0]).trench!;
