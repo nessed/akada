@@ -342,7 +342,7 @@ test('colour drains with depth, the reds first', () => {
   assert.ok(sat(drained(blue, 0.4)) / sat(blue) > sat(drained(red, 0.4)) / sat(red));
 });
 
-const NO_CAUDAL = new Set<FishForm>(['grenadier', 'sunfish', 'cusk', 'snailfish', 'ethereal', 'eelpout', 'gulper', 'snipe', 'cutthroat', 'oarfish', 'chimaera']);
+const NO_CAUDAL = new Set<FishForm>(['grenadier', 'sunfish', 'cusk', 'snailfish', 'ethereal', 'eelpout', 'gulper', 'snipe', 'cutthroat', 'chimaera']);
 
 test('every form rolls and builds a body with real numbers in it, its own every time', () => {
   for (const form of FISH_FORMS) {
@@ -534,6 +534,11 @@ test('places: the dive is cut at round depths, and every leg is somewhere that l
       if (i > 0) {
         assert.ok(leg.from > route[i - 1].from);
         assert.notEqual(leg.place.id, route[i - 1].place.id, 'the same place twice running');
+        // Nor back to the one before it, wherever a zone has more to offer.
+        if (i > 1 && route[i - 2].zone === leg.zone && leg.place.id !== 'deep') {
+          const can = Object.values(PLACES).filter((p) => p.zone === leg.zone && p.weight > 0 && leg.m >= p.m0 && leg.m < p.m1);
+          if (can.length > 2) assert.notEqual(leg.place.id, route[i - 2].place.id, `back and forth at ${leg.m} m`);
+        }
       }
     }
     assert.equal(route[route.length - 1].place.id, 'deep');
@@ -542,7 +547,7 @@ test('places: the dive is cut at round depths, and every leg is somewhere that l
     assert.deepEqual(routeOf(key, true).slice(1).map((l) => l.place.id), route.slice(1).map((l) => l.place.id));
     assert.equal(legAt(route, 0), 0);
     assert.equal(route[legAt(route, 180 * 60)].m, 6000);
-    assert.equal(route[legAt(route, 180 * 60 - 1)].m, 5000);
+    assert.equal(route[legAt(route, 180 * 60 - 1)].m, 5500);
   }
 });
 
@@ -550,10 +555,11 @@ test('places: a long sitting keeps arriving somewhere new, and sittings do not a
   const ways = new Set<string>();
   for (let k = 0; k < 200; k++) {
     const route = routeOf(oceanKey('long', k), false);
-    // Three hours to seven: a new place every 42 minutes.
+    // Three hours to seven: a new place every 21 minutes, and at least
+    // four different ones, never going back and forth between two.
     const late = route.filter((l) => l.from >= 180 && l.from < 420);
-    assert.equal(late.length, 6);
-    assert.ok(new Set(late.map((l) => l.place.id)).size >= 2);
+    assert.equal(late.length, 12);
+    assert.ok(new Set(late.map((l) => l.place.id)).size >= 4, late.map((l) => l.place.id).join());
     ways.add(route.map((l) => l.place.id).join());
   }
   assert.ok(ways.size > 150, `only ${ways.size} routes in 200 sittings`);
@@ -618,7 +624,12 @@ test('walls: the trench is walled both sides from its top and closes in, and the
       let deep = 0;
       for (let min = 200; min < 600; min += 3) {
         const r = wallReach(route, key, side, world(min));
-        assert.ok(r > 0.04 && r < 0.34, `${r} at ${min} min`);
+        // An overhang leans further out over the water than a wall stands.
+        const leg = route[legAt(route, min * 60)];
+        const over = leg.place.overhang && leg.side === side;
+        assert.ok(r > 0.04 && r < (over ? 0.41 : 0.34), `${r} at ${min} min in ${leg.place.id}`);
+        // And between the two, the middle of the page is always open.
+        assert.ok(r + wallReach(route, key, side === 1 ? -1 : 1, world(min)) < 0.74, `the trench shut at ${min} min`);
         if (min < 260) shallow += r;
         if (min > 520) deep += r;
       }

@@ -8,6 +8,7 @@ import { depthAt } from '@/lib/ocean/depth';
 import {
   drawEye,
   drawFloor,
+  drawFloorLife,
   drawLeviathan,
   drawRules,
   drawShafts,
@@ -35,7 +36,7 @@ import { drawDumbo, drawLure, drawWhaleFall } from '@/lib/ocean/sightings-deep';
 import { drawManOWar, drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/ocean/sightings-shallow';
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { hazed, HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
-import { legAt, legMark } from '@/lib/ocean/places';
+import { floorLift, legAt, legMark } from '@/lib/ocean/places';
 import { hash32 } from '@/lib/ocean/random';
 import { swimAge, visitorsAt, type Swim } from '@/lib/ocean/schedule';
 import { SpriteCache } from '@/lib/ocean/sprites';
@@ -309,11 +310,15 @@ export default function OceanScene({
       const whole = Math.min(snow.back.length, Math.floor(flakes));
       drawSnow(bctx, W, H, snow.back.slice(0, whole), water.snow, ambient, biome.env.current, px, biome.env.visibility);
       if (whole < snow.back.length) drawSnow(bctx, W, H, snow.back.slice(whole, whole + 1), water.snow, ambient, biome.env.current, px, biome.env.visibility, flakes - whole);
-      // The floor: a vent field's own chimneys, or the sitting's; a new
-      // place's laid over the last one's as it eases in.
+      // The floor: a vent field's own chimneys, or the sitting's, and what
+      // else lies on it; a new place's laid over the last one's as it eases in.
       const ventsOf = (p: typeof leg.place) => p.vents ?? (biome.env.vents ? 2 : 0);
-      if (ease < 1 && ventsOf(prev.place) !== ventsOf(leg.place)) drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px, ventsOf(prev.place));
-      drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px, ventsOf(leg.place), ease < 1 && ventsOf(prev.place) !== ventsOf(leg.place) ? ease : 1);
+      const dressOf = (p: typeof leg.place) => p.floor ?? null;
+      const floorTurns = ease < 1 && (ventsOf(prev.place) !== ventsOf(leg.place) || dressOf(prev.place) !== dressOf(leg.place));
+      // A floor with something on it sits a little higher, easing up or down between places.
+      const lift = floorLift(prev.place) + (floorLift(leg.place) - floorLift(prev.place)) * ease;
+      if (floorTurns) drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px, ventsOf(prev.place), 1, dressOf(prev.place), lift);
+      drawFloor(bctx, W, H, depth, biome.env, water, shown, ambient, px, ventsOf(leg.place), floorTurns ? ease : 1, dressOf(leg.place), lift);
       const swim: Swim = { scene, segments: L.clock.segments ?? [] };
       const minute = Math.floor(shown / 60);
       if (minute !== fallMinute) {
@@ -372,10 +377,16 @@ export default function OceanScene({
         drawWalls(bctx, W, H, biome.route, biome.key, shown, walls, water.dark, px, L.clear);
         bctx.globalAlpha = 1;
       }
+      // What lies on the floor (a seep, nodules, xenophyophores, sea
+      // cucumbers) stays findable over the dark, as the walls do.
+      if (depth.zone >= 3) {
+        if (floorTurns) drawFloorLife(bctx, W, H, depth, biome.env, water, shown, px, ventsOf(prev.place), dressOf(prev.place), 0.85 * (1 - ease), lift);
+        drawFloorLife(bctx, W, H, depth, biome.env, water, shown, px, ventsOf(leg.place), dressOf(leg.place), 0.85 * (floorTurns ? ease : 1), lift);
+      }
       // Found things stay findable: the whale fall is drawn over the dark, faint.
       if (fall && fall.start <= shown && depth.zone >= 3) {
         const appear = Math.min(1, swimAge(shown, fall.start, swim) / fall.seconds);
-        drawWhaleFall(bctx, W, H, appear, fall.seed, px, ambient, water.dark, floorLine(depth, shown, H));
+        drawWhaleFall(bctx, W, H, appear, fall.seed, px, ambient, water.dark, floorLine(depth, shown, H, lift));
       }
       for (const { event, age } of events) {
         if (event.kind === 'storm') drawStorm(bctx, W, H, age, event.seed, px, ambient);

@@ -2652,46 +2652,6 @@ function formed(g: Genome, kit: Kit): number {
     return tailRays;
   }
 
-  if (form === 'oarfish') {
-    // An oarfish: a long silver ribbon, a fin the length of its back with a
-    // crest of long rays over its head, and the pelvic fins two long oars.
-    const F = frameOf((t) => {
-      const p = t < 0.9 ? 0.04 + 0.96 * Math.pow(t / 0.9, 0.6) : Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.9) / 0.12, 2) * 0.85));
-      return [-A * 0.5 * p, A * 0.5 * p];
-    }, (t) => Math.sin(t * Math.PI * 2.4 + g.segs!) * g.wave! * (1 - t * 0.7));
-    finAlong(kit, F, 0, 0.93, -1, (q) => A * 0.55 * Math.min(1, (1 - q) * 25 + 0.1) * (1 - q * 0.4), 0.12, 46);
-    hull(kit, F);
-    mark(F);
-    lateralLine(P, F, 0.04, 0.9, 0.68, false);
-    // The crest: long rays rising from the nape and streaming back, each with
-    // a scrap of fin at its tip.
-    const ph = vr(0, TAU);
-    for (let q = 0; q < 6; q++) {
-      const [x, y] = F.up(0.95 - q * 0.012);
-      const ray = hang(x, y + 0.3, A * (2.2 + q * 0.3) + vr(-1.5, 1.5), -Math.PI * (0.52 + q * 0.04), { wave: 0.05, freq: 0.2, ph: ph + q, curl: 0, drift: -0.9 }, 1.2);
-      P('barbel', ray);
-      const [rx, ry] = ray[ray.length - 1];
-      const [qx, qy] = ray[ray.length - 3];
-      P('finF', blob(rx, ry, 1.6, 0.6, Math.atan2(ry - qy, rx - qx), vr, 7), true);
-    }
-    // The oars: two long rays from under the throat, each ending in a blade.
-    const [bx, by] = F.dn(0.9);
-    for (let q = 0; q < 2; q++) {
-      const oar = hang(bx - q * 1.5, by - 0.3, A * (6 + q) + vr(-3, 3), Math.PI * (0.72 + q * 0.06), { wave: 0.04, freq: 0.12, ph: vr(0, TAU), curl: 0, drift: 0.35 }, 1.5);
-      P('barbel', oar);
-      const [ox, oy] = oar[oar.length - 1];
-      const [qx, qy] = oar[oar.length - 3];
-      P('finF', blob(ox, oy, 3.2, 1.4, Math.atan2(oy - qy, ox - qx), vr, 8), true);
-    }
-    const pc = F.at(0.88);
-    paddle(kit, [pc[0], pc[1] + pc[2] * 0.15], A * 0.8, A * 0.45, Math.PI * 0.85, 'finF', 5);
-    const [sx, sy, sw] = F.at(1);
-    cleft(P, [sx + 0.3, sy - sw * 0.05], [sx - A * 0.35, sy + sw * 0.18]);
-    const [ex, ey, ew] = F.at(0.955);
-    eyeAt(C, ex, ey - ew * 0.12, ew * 0.2);
-    return 0;
-  }
-
   if (form === 'swallower') {
     // A black swallower: slim and black, long jaws full of needles, and now
     // and then the sac of its belly stretched round a fish bigger than it.

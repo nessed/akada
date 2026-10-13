@@ -48,7 +48,7 @@ const SPEED: Record<Genome['plan'], number> = {
 const FORM_SPEED: Partial<Record<FishForm, number>> = {
   sunfish: 0.4, puffer: 0.55, disc: 0.7, barracuda: 1.3, barreleye: 0.45, hatchet: 0.6, snailfish: 0.5,
   grenadier: 0.6, cusk: 0.6, fangtooth: 0.7, angler: 0.6, gulper: 0.5, eelpout: 0.12, flatfish: 0.08, tripod: 0.05,
-  grouper: 0.55, trigger: 0.65, flying: 1.25, trumpet: 0.45, swordfish: 1.45, oarfish: 0.35, swallower: 0.6,
+  grouper: 0.55, trigger: 0.65, flying: 1.25, trumpet: 0.45, swordfish: 1.45, swallower: 0.6,
   snipe: 0.5, whalefish: 0.6, chimaera: 0.55, lizard: 0.06, cutthroat: 0.65, ethereal: 0.45,
 };
 

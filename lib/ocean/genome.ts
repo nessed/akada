@@ -47,7 +47,6 @@ export type FishForm =
   | 'bristlemouth'
   | 'viper'
   | 'dragon'
-  | 'oarfish'
   | 'swallower'
   | 'snipe'
   | 'fangtooth'
@@ -100,7 +99,6 @@ export const FORMS: Record<FishForm, FormSpec> = {
   bristlemouth: { zones: [1, 2], plan: 'fish', school: true, weight: 0.9 },
   viper: { zones: [1, 2], plan: 'fish', dark: true, weight: 0.7 },
   dragon: { zones: [1, 2], plan: 'fish', dark: true, weight: 0.7 },
-  oarfish: { zones: [1, 1], plan: 'fish', weight: 0.4 },
   swallower: { zones: [1, 2], plan: 'fish', dark: true, weight: 0.5 },
   snipe: { zones: [1, 2], plan: 'eel', weight: 0.4 },
   fangtooth: { zones: [2, 3], plan: 'fish', dark: true, weight: 0.8 },
@@ -683,25 +681,6 @@ function shapeForm(g: Genome, form: FishForm, r: Rand) {
       break;
     case 'angler':
       Object.assign(g, { blunt: Math.max(g.blunt!, 0.85) });
-      break;
-    case 'oarfish':
-      // An oarfish: a silver ribbon, a fin the length of its back and a crest
-      // of long rays on its head; the pelvic fins two long oars.
-      Object.assign(g, {
-        A: rr(5, 6.5),
-        size: rr(2.2, 3),
-        tail: 'none',
-        barbels: 0,
-        teeth: false,
-        clear: false,
-        lit: false,
-        photo: false,
-        eyeBig: true,
-        hue: silver(),
-        pattern: weighted<Pattern>(r, [['spots', 1], ['stripes', 0.6], ['none', 0.5]]),
-        patN: ri(10, 18),
-        wave: rr(2, 4),
-      });
       break;
     case 'swallower':
       // A black swallower: slim, long-jawed, and now and then a fish bigger

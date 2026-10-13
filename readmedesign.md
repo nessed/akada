@@ -1063,19 +1063,38 @@ only ever grows, it never runs backwards, and none of it touches progress.
 - **The dive passes places** (`lib/ocean/places.ts`). The zones say how
   deep; a place says what this stretch of the sea is. The dive is cut into
   legs at round depths (each zone's top, the twilight again at 500 m, the
-  midnight at 2,500, the abyss at 5,000, and the trench every 500 m, which
-  is a new place every 42 minutes past three hours), and each leg is one
-  real piece of the deep sea, rolled for the sitting from the ones that
-  live at that depth and never the one it just left: in the light the reef,
+  midnight at 2,500, the abyss every 500 m, and the trench every 250 m,
+  which is a new place about every 21 minutes past three hours), and each
+  leg is one real piece of the deep sea, rolled for the sitting from the
+  ones that live at that depth and never the one it just left nor the one
+  before that, so a long night never goes back and forth between two: in
+  the light the reef,
   the kelp forest or open water with no rock in it; in the twilight its
   open water or the drop-off, a wall down one side; in the midnight its
   open water, the cold-water coral mounds or a seamount's flank; in the
-  abyss the abyssal plain or a vent field (four black smokers, not the
-  sitting's two); and in the trench the trench wall, the rubble slope or
-  the hadal floor, until the last leg, which is always challenger deep. A
-  place has its own animals (a pool to a leg), its own rock growth, its
-  own walls or floor, and a haze and a weight of snow in its water, which
-  ease in over a minute and a half as it begins. Its haze is held within a
+  abyss the abyssal plain, a vent field (four black smokers, not the
+  sitting's two) or a nodule field; and in the trench the trench wall, the
+  rubble slope, the hadal floor, a cold seep, the sea cucumber flats, a
+  xenophyophore field, the narrows (the walls pinched in, the water darker)
+  or the overhang (one wall leaning out over the water, undercut beneath),
+  until the last leg, which is always challenger deep. A place has its own
+  animals (a pool to a leg), its own rock growth, its own walls or floor,
+  and a haze and a weight of snow in its water, which ease in over a
+  minute and a half as it begins.
+- **Some floors have something on them** (`lib/ocean/floor-life.ts`,
+  `Place.floor`), all of it real and all of it still, drawn once with the
+  floor: a cold seep's mats of bacteria, white with a little ochre, clam
+  beds along their edges and clumps of thin pale tube worms; the nodule
+  field's manganese nodules, black lumps half sunk in the ooze, thicker
+  toward the viewer; xenophyophores, single cells the size of a fist, balls
+  of crumpled lace and a few grown as plates; and on the flats, sea pigs
+  (plump, their stubby feet under them, their feelers up at the front) and
+  small glassy ones, with the furrows they leave across the ooze and the
+  coils along them. A floor with something on it sits a little higher up
+  the page, so there is room to see it, easing up and down as places
+  change; and what lies on it is laid over the dark as the walls are, so
+  it stays findable beyond the jelly's light. Prints keep their own floor
+  and do not carry it. Its haze is held within a
   few steps of the zone's colour: the deep stays dark, and a place is told
   by what is in it, not by a tint. A long sitting keeps arriving somewhere
   it has not been, and two long sittings do not go the same way.
@@ -1087,7 +1106,10 @@ only ever grows, it never runs backwards, and none of it touches progress.
   slides up with the rocks, grows in from the page's edge where its place
   begins and goes back into it where the place ends (unless the next place
   is walled there too, when it runs on), and its line steps out in ledges
-  and leans back under them, so it reads as broken rock, never a hem. It is
+  and leans back under them, so it reads as broken rock, never a hem. In
+  the narrows both walls stand further in, easing in and out at the ends
+  of the place; at the overhang the wall on one side twice runs out in a
+  lip far over the water and is hollowed back in under it. It is
   engraved as every rock is (`inkWall`), drawn in strips that share one
   seed and the wall's own coordinates, so nothing on it repeats and no join
   shows. In the dark it stays faintly seen beyond the jelly's light, the
@@ -1145,8 +1167,8 @@ only ever grows, it never runs backwards, and none of it touches progress.
   rounds off and its tail narrows to a wrist, and every fish has a tail fin
   at least a fifth of its body long, since a body that tapers to a point
   reads as a lemon. The only fish without one are the forms that truly have
-  none: the grenadier's rat tail, the chimaera's whip, the oarfish's ribbon,
-  the sunfish's clavus, and the soft ones (cusk-eel, the two snailfish,
+  none: the grenadier's rat tail, the chimaera's whip, the sunfish's clavus,
+  and the soft ones (cusk-eel, the two snailfish,
   eelpout, and the gulper, snipe eel and cutthroat on the eel's plan) whose
   fins run round the back end to meet in a point. A fish's mouth is a shut,
   level cleft with the corner turned down, never a smile, except where the
@@ -1157,9 +1179,8 @@ only ever grows, it never runs backwards, and none of it touches progress.
   one dorsal fin, no higher than a third of its depth and set well back from
   the snout; the other forms carry their own family's (the disc's and the
   sunfish's tall ones, the barracuda's two set far back, the grenadier's
-  tall first and ribbon second, the swordfish's one tall sickle, the
-  oarfish's one fin the length of its back), never two tall ones side by
-  side, which read as ears. A sea star has five arms at the least, a many-armed one's
+  tall first and ribbon second, the swordfish's one tall sickle), never
+  two tall ones side by side, which read as ears. A sea star has five arms at the least, a many-armed one's
   lying nearly straight. A fish with a lure is a dark hunter, never
   see-through: a globe-bodied angler with a jaw and needle teeth, a long
   dragonfish with its light on a chin barbel, or a viperfish; the fangtooth,
@@ -1233,9 +1254,6 @@ only ever grows, it never runs backwards, and none of it touches progress.
   - **swordfish**: the bill a flat blade a third of its length again, a tall
     sickle of a dorsal and long sickle pectorals, no pelvic fins, a great
     crescent tail on a keeled stalk.
-  - **oarfish**: a long silver ribbon, one fin the length of its back, a
-    crest of long rays streaming back from the nape with a scrap of fin at
-    each tip, and the pelvic fins two long oars, each ending in a blade.
   - **swallower**: slim and black, long jaws with needles along them, and in
     most species the belly a pale stretched sac hung under it with a fish
     curled up inside, bigger than the swallower.
@@ -1303,7 +1321,7 @@ only ever grows, it never runs backwards, and none of it touches progress.
   lizardfish or an eelpout, and in the trench only an eelpout, less often.
   Where only one kind could take a place (one eel form, one floor fish),
   it takes it less readily, so that one kind is not in every pool. A form
-  keeps its own pace: a mola and an oarfish barely move, a swordfish is the
+  keeps its own pace: a mola barely moves, a swordfish is the
   quickest thing in the water, a barracuda close behind.
 - **It fills as you sit.** A handful at the start, about thirty by the hour,
   about sixty by two, capped. Far animals are small, faint and slow, near
@@ -1366,8 +1384,7 @@ only ever grows, it never runs backwards, and none of it touches progress.
   grouper or a trumpetfish hovers, drifting on between long pauses; a
   grenadier swims head down, low over the floor, as the cusk-eel, the
   cutthroat, the chimaera and the snailfish keep low too (none of them comes
-  over to look at the jelly); a mola rolls slowly as it goes; an oarfish
-  rides head up, slanted, the fin along its back rippling; on the floor a
+  over to look at the jelly); a mola rolls slowly as it goes; on the floor a
   tripod fish stands on its stilts where it came down, facing the current,
   and never moves, a flatfish lies still and now and then shuffles on, a
   lizardfish lies in wait and twice lunges a little way, and an eelpout
