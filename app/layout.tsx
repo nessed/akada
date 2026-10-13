@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import { TimerProvider } from '@/lib/timer-context';
 import PreferencesBootstrap from '@/components/PreferencesBootstrap';
 import ClockSync from '@/components/ClockSync';
+import LiveSittingSync from '@/components/LiveSittingSync';
 import NoticeProvider from '@/components/Notice';
 import UndoProvider from '@/components/Undo';
 import ClaudeSheetProvider from '@/components/claude/ClaudeSheet';
@@ -167,6 +168,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SWRRoot>
           <TimerProvider>
             <TimerDocumentTitle />
+            {/* Puts the running sitting where the connector can read it. */}
+            <LiveSittingSync />
             {/* P and K reach the running clock from every screen. See the
                 component: they bind nothing unless a sitting is running. */}
             <TimerHotkeys />

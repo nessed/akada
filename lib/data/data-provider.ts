@@ -20,6 +20,7 @@ import type {
   TaskFilters,
   UserSettings,
 } from './types';
+import type { LiveSittingSnapshot } from '../live-sitting';
 
 export interface DataProvider {
   // Courses, always scoped to the active semester. Use getCoursesForSemester
@@ -150,6 +151,13 @@ export interface DataProvider {
    * project has not added the columns yet; it is never worth an error.
    */
   recordClock(clock: { timeZone: string; dayEndingHour: number }): Promise<void>;
+  /**
+   * Put the sitting on the clock where the connector can read it, or null
+   * once it is logged or thrown away (see lib/live-sitting.ts). Quiet the way
+   * recordClock is: nobody signed in, or a project without the column, is a
+   * no-op rather than an error.
+   */
+  recordLiveSitting(snapshot: LiveSittingSnapshot | null): Promise<void>;
 
   // Dev / debugging
   resetAll(): Promise<void>;

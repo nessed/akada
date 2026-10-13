@@ -12,7 +12,7 @@ export const GROUPS: { id: string; title: string; tools: Tool[] }[] = [
     tools: [
       { name: 'get_briefing', access: 'Reads', does: 'Where you stand today in one read: what is up next, why, and for how long, what is due, how ready each course is for what is coming, your week against your goals, and the loose ends worth sorting first.' },
       { name: 'find_course', access: 'Reads', does: 'Finds one of your courses in the current term by its code or name.' },
-      { name: 'get_overview', access: 'Reads', does: 'Your courses in dashboard order, how many tasks are open in each, and your recent study sessions.' },
+      { name: 'get_overview', access: 'Reads', does: 'Your courses in dashboard order, how many tasks are open in each, your recent study sessions, and the one on your timer.' },
       { name: 'get_tasks', access: 'Reads', does: 'The term’s tasks, narrowed to a course, a date range, a priority or a kind if asked, and sorted by due date, priority, newest or your own order.' },
       { name: 'get_reading_backlog', access: 'Reads', does: 'The reading you have not finished and how many hours it comes to at your pace.' },
       { name: 'create_tasks', access: 'Changes', does: 'Adds tasks to a course, with notes, steps, due dates, and whether each is a task, a reading or an exam.' },
@@ -28,6 +28,7 @@ export const GROUPS: { id: string; title: string; tools: Tool[] }[] = [
     id: 'time',
     title: 'Study time',
     tools: [
+      { name: 'get_current_session', access: 'Reads', does: 'The sitting on your timer right now, before it is logged: the course, focus and break so far, and what you wrote about each block.' },
       { name: 'list_study_sessions', access: 'Reads', does: 'Your logged sessions, newest first, for one course or between two dates.' },
       { name: 'get_weekly_stats', access: 'Reads', does: 'One week’s hours against your goal, break time, tasks closed and your weekly run.' },
       { name: 'get_focus_pattern', access: 'Reads', does: 'How your sittings are shaped: block lengths, breaks, and when in the day you work.' },

@@ -49,6 +49,12 @@ export interface BriefingInput {
   courses: Course[];
   tasks: Task[];
   sessions: Session[];
+  /**
+   * The sitting on the timer as the session it is about to become, or null.
+   * Counted in the week's and today's hours and nowhere else, the way Today
+   * folds it into the figures that count up but never into the pick.
+   */
+  live?: Session | null;
   recall: RecallReading;
   /** False when the project has nowhere to store recall answers yet. */
   recallStored: boolean;
@@ -158,7 +164,7 @@ const COMING_LIMIT = 5;
 
 const hoursOf = (seconds: number) => Math.round((seconds / 3600) * 10) / 10;
 
-export function readBriefing({ today, courses, tasks, sessions, recall, recallStored, weakPoints, quizzes }: BriefingInput): Briefing {
+export function readBriefing({ today, courses, tasks, sessions, live, recall, recallStored, weakPoints, quizzes }: BriefingInput): Briefing {
   const logged = sessions.filter((s) => isLoggableDuration(s.durationSeconds));
   const open = tasks.filter((t) => !t.completed);
   const overdue = open
@@ -247,7 +253,7 @@ export function readBriefing({ today, courses, tasks, sessions, recall, recallSt
   const lastStudied = new Map<string, string>();
   const weekSeconds = new Map<string, number>();
   let todaySeconds = 0;
-  for (const s of logged) {
+  for (const s of live && isLoggableDuration(live.durationSeconds) ? [...logged, live] : logged) {
     const seen = lastStudied.get(s.courseId);
     if (s.date <= today && (!seen || s.date > seen)) lastStudied.set(s.courseId, s.date);
     if (s.date >= week.from && s.date <= week.to) weekSeconds.set(s.courseId, (weekSeconds.get(s.courseId) ?? 0) + s.durationSeconds);

@@ -79,7 +79,8 @@ The connector provides tools for interacting with courses and tasks in your acti
 - `find_course`: Look up courses by code or title.
 - `get_tasks`: Read the active semester's tasks, optionally narrowed to one course, a due-date range, a priority or a kind, and sorted by due date, priority, newest, or the order the student arranged.
 - `delete_tasks`: Permanently delete tasks, for duplicates and mistakes.
-- `get_overview`: Read a snapshot of courses (in dashboard order), open-task counts, and recent study sessions (with their ids).
+- `get_overview`: Read a snapshot of courses (in dashboard order), open-task counts, recent study sessions (with their ids), and the sitting on the timer as `current_session`.
+- `get_current_session`: Read the sitting on the timer right now, before it is logged: course, task, focus and break so far, and the notes on its finished blocks.
 - `reorder_courses`: Change the order courses sit in on the dashboard, the same order dragging the cards sets.
 - `reorder_tasks`: Change the order one course's open tasks sit in, the same order dragging them on the course page sets.
 - `create_tasks`: Bulk-insert tasks into an active course, with notes, subtasks, and what each one is (task, reading or exam) and is worth.
@@ -420,6 +421,15 @@ The student sees them on the course page, grouped by section with a fixed toggle
 
 `semester_id` is filled by the `sessions_set_semester_id` trigger in
 `supabase/schema.sql`, exactly as the app's own `addSession` relies on.
+
+### 4a. `get_current_session`
+- **Title**: Read the sitting on the Akada timer
+- **Annotations**: `readOnlyHint: true`
+- **Parameters**: none.
+- **Where it comes from**: the timer lives in the browser, so the app writes a snapshot of the running sitting onto `user_settings.live_sitting` (jsonb) when it starts, is paused or resumed, a break starts or ends, a block's note is written, or it stops, and every ten minutes while it is open (`components/LiveSittingSync.tsx`, `lib/live-sitting.ts`). It writes null once the sitting is logged or discarded, and a device only ever clears what it wrote itself, so a phone opened with nothing on the clock never wipes the laptop's sitting. The snapshot carries when the stretch in progress started counting, so the server works the time out to the second rather than reporting the last write.
+- **Output**: `current_session`, null when nothing is on the clock, otherwise its `state` (`focus`, `break`, `paused`, or `stopped` when it waits on the log sheet), `course`, `task`, `date`, `started_at`, `focus_seconds`/`focus_minutes` and `break_seconds`/`break_minutes` (breaks never counted as focus), `current_stretch_seconds` and its target, `blocks_done`, `breaks_taken`, `block_notes`, `last_synced_at`, and `quiet`. `quiet` means the app has not written for 25 minutes: the page was likely shut, and the figures are as of `last_synced_at` rather than run on through hours nobody saw. A snapshot two days old is not reported at all.
+- `get_overview` and `get_briefing` carry the same reading as `current_session`, and `get_briefing` counts its focus in the week's and today's hours the way Today does (never in the pick). The sitting is not a session: the app logs it when the student finishes, so it must never be logged again through `log_study_session`.
+- Needs `supabase/migrations/20261013090000_add_live_sitting.sql` (or a re-run of `supabase/schema.sql`). Without the column the app's write is a quiet no-op and the tool reports nothing on the clock.
 
 ### 5a. `update_study_session`
 - **Title**: Fix a study session's note in Akada

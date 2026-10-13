@@ -499,6 +499,14 @@ alter table user_settings add column if not exists active_semester_id uuid;
 alter table user_settings add column if not exists time_zone       text     not null default '';
 alter table user_settings add column if not exists day_ending_hour smallint not null default 0;
 
+-- The sitting on the timer, before it is a session. The timer lives in the
+-- browser, so a sitting three hours in was invisible to the connector until
+-- it was logged. The app writes a snapshot here as the sitting changes shape
+-- (start, pause, break, stop) and every ten minutes while it is open, and
+-- null once it is logged or discarded (lib/live-sitting.ts). Overwritten in
+-- place, never a record: the session row is the record.
+alter table user_settings add column if not exists live_sitting jsonb;
+
 -- ============================================================
 -- 5b. PROGRESSION INSTRUMENTATION
 --

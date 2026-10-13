@@ -113,6 +113,10 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   files, so they work on iOS and offline.
 - **Why the timer stopped on its own** is `lib/timer-ended.ts` (`announceEnded`).
   Any new way for the clock to end or drop a sitting calls it.
+- **The running sitting on the server** (so the connector sees it before it
+  is logged) is written by `components/LiveSittingSync.tsx` onto
+  `user_settings.live_sitting`; the snapshot and its reading are
+  `lib/live-sitting.ts`, the tool `app/api/mcp/live-tool.ts`.
 - **Timer state and actions** (`pause`, `stop`, `cancel`, breaks) are in
   `lib/timer-context.tsx`; read them with `useTimerState()`.
 

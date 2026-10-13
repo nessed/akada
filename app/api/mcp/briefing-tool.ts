@@ -19,7 +19,9 @@ import { cleanAttempts, cleanQuestions, writtenTally } from '@/lib/quiz/format';
 import { readRecall } from '@/lib/recall';
 import { clampSessionSeconds, cleanRecovery, cleanScore, sanitizeSession } from '@/lib/session-safety';
 import { studentDay, type StudentDay } from '@/lib/student-day';
-import { mcpSupabase, readStudentSettings } from './_shared';
+import { liveSittingSession } from '@/lib/live-sitting';
+import { mcpSupabase, readStudentSettings, startRead } from './_shared';
+import { readCurrentSession } from './live-tool';
 import {
   isMissingTable,
   queryFailed as reportFailure,
@@ -485,6 +487,7 @@ export async function getBriefingTool(
     }
     const semesterId = settings.semesterId;
     const day = studentDay({ timeZone: settings.timeZone, dayEndingHour: settings.dayEndingHour });
+    const live = startRead(readCurrentSession(token, supabase, settings.liveSitting));
     const [coursesRead, tasksRead, sessionsRead, recallRead, weakRead, quizzesRead] = await Promise.all([
       supabase.from('courses').select('*').eq('user_id', token.userId).eq('semester_id', semesterId),
       supabase.from('tasks').select('*').eq('user_id', token.userId).eq('semester_id', semesterId),
@@ -507,6 +510,11 @@ export async function getBriefingTool(
       token.userId,
       ((sessionsRead.data ?? []) as Record<string, unknown>[]).map(toSession).filter((s) => inTerm.has(s.courseId)),
     );
+    // The sitting on the timer counts in the week's hours the way it does on
+    // Today, and only there (see lib/briefing.ts). A quiet one counts as of
+    // the app's last word.
+    const current = await live;
+    const liveRow = liveSittingSession(current?.reading ?? null);
     const recallRows = optionalRows('recall read', recallRead);
     const weakRows = optionalRows('weak points read', weakRead);
     const quizRows = optionalRows('quizzes read', quizzesRead);
@@ -523,12 +531,13 @@ export async function getBriefingTool(
       courses,
       tasks,
       sessions,
+      live: liveRow && inTerm.has(liveRow.courseId) ? liveRow : null,
       recall,
       recallStored: recallRows !== null,
       weakPoints: weakRows ? weakRows.map(toWeakPoint).filter((w) => inTerm.has(w.courseId)) : null,
       quizzes: quizRows ? quizRows.map(toQuiz).filter((q) => !q.courseId || inTerm.has(q.courseId)) : null,
     });
-    return result(formatBriefing(briefing, day, settings.dailyGoalHours));
+    return result({ ...formatBriefing(briefing, day, settings.dailyGoalHours), current_session: current?.current ?? null });
   } catch (cause) {
     return toolCrashed('get_briefing', cause);
   }

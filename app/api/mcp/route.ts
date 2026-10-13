@@ -55,6 +55,7 @@ import { registerNoteTools } from './notes-tools';
 import { registerQuizTools } from './quiz-tools';
 import { registerWeakPointTools } from './weak-point-tools';
 import { registerBriefingTool } from './briefing-tool';
+import { readCurrentSession, registerLiveTool } from './live-tool';
 import { SERVER_INSTRUCTIONS } from './instructions';
 import { registerPrompts } from './prompts';
 import { endListenAfterAcknowledgement, listenRequestId } from './listen';
@@ -2187,6 +2188,7 @@ export function createServer(token: AuthenticatedToken) {
 
   // First, so it is the first thing a client lists.
   registerBriefingTool(server, token);
+  registerLiveTool(server, token);
 
   server.registerTool(
     'find_course',
@@ -2343,15 +2345,17 @@ export function createServer(token: AuthenticatedToken) {
     'get_overview',
     {
       title: 'Read Akada study overview',
-      description: 'Read a compact, read-only snapshot of active-semester courses, open-task counts, and recent study sessions for the signed-in student. Courses come in the order the student keeps them on their dashboard, which reorder_courses changes. Each recent session carries its `id`, which is what update_study_session takes to fix its note.',
+      description: 'Read a compact, read-only snapshot of active-semester courses, open-task counts, and recent study sessions for the signed-in student, plus `current_session`: the sitting on the timer right now, not logged yet (see get_current_session), or null. Courses come in the order the student keeps them on their dashboard, which reorder_courses changes. Each recent session carries its `id`, which is what update_study_session takes to fix its note.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => {
       try {
-        const semesterId = await activeSemesterId(token);
-        if (!semesterId) return result({ courses: [], recent_sessions: [], message: 'No active semester is set in Akada.' });
         const supabase = mcpSupabase(token.supabaseAccessToken);
+        const settings = await readStudentSettings(token, supabase);
+        const semesterId = settings.semesterId;
+        const live = startRead(readCurrentSession(token, supabase, settings.liveSitting));
+        if (!semesterId) return result({ courses: [], recent_sessions: [], current_session: (await live)?.current ?? null, message: 'No active semester is set in Akada.' });
         const [{ data: courses, error: coursesError }, { data: tasks, error: tasksError }, { data: sessions, error: sessionsError }] = await Promise.all([
           // `*` so the dashboard order (sort_order, an additive column) is
           // read where it exists and simply absent where it does not.
@@ -2372,6 +2376,8 @@ export function createServer(token: AuthenticatedToken) {
         const courseById = new Map((courses ?? []).map((course) => [course.id, { id: course.id, code: course.code, name: course.name, weekly_goal_hours: course.weekly_goal_hours }]));
         const ordered = [...(courses ?? [])].sort((a, b) => compareCourseOrder(courseOrderKey(a), courseOrderKey(b)));
         return result({
+          // The sitting on the timer, not logged yet and so not in recent_sessions.
+          current_session: (await live)?.current ?? null,
           courses: ordered.map((course) => ({ id: course.id, code: course.code, name: course.name, weekly_study_goal_hours: Number(course.weekly_goal_hours), open_task_count: openByCourse.get(course.id) ?? 0 })),
           recent_sessions: (sessions ?? []).map((session) => {
             const practice = cleanScore(session.score, session.score_out_of);
