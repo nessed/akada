@@ -741,3 +741,35 @@ test('each leg has its own water, and the first is the sitting\'s', () => {
   }
   assert.ok(all > 10 && withIt / all > 0.6, `${withIt} of ${all} with the leg's current`);
 });
+
+test('a school parts round a hunter, low swimmers reach for the floor, and floor things leave a track', () => {
+  let near = 0;
+  let checked = 0;
+  let tracks = 0;
+  let reach = 0;
+  for (let k = 0; k < 40; k++) {
+    const biome = rollBiome(oceanKey('meet', k), courseKey('meet'));
+    for (const t0 of [8 * 60, 40 * 60, 200 * 60]) {
+      for (let t = t0; t < t0 + 600; t += 5) {
+        const vs = visitorsAt(biome, t, VIEW);
+        // Pure: the same moment twice is the same water.
+        if (t === t0) assert.deepEqual(vs, visitorsAt(biome, t, VIEW));
+        const hunters = vs.filter((v) => ['barracuda', 'swordfish', 'viper', 'dragon', 'angler', 'fangtooth', 'swallower', 'grouper'].includes(v.species.genome.form ?? '') || v.species.genome.plan === 'squid');
+        for (const v of vs) {
+          if (v.trail != null) tracks++;
+          if (v.tilt) reach++;
+          if (!v.key.includes('.')) continue;
+          for (const h of hunters) {
+            if (h.layer !== v.layer) continue;
+            checked++;
+            if (Math.hypot(v.x - h.x, v.y - h.y) < h.len * 0.45) near++;
+          }
+        }
+      }
+    }
+  }
+  assert.ok(checked > 50, `only ${checked} school members met a hunter`);
+  assert.ok(near / checked < 0.03, `${near} of ${checked} school members right on top of a hunter`);
+  assert.ok(tracks > 0, 'nothing on the floor left a track');
+  assert.ok(reach > 0, 'no low swimmer ever reached for the floor');
+});

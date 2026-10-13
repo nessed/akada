@@ -1411,6 +1411,17 @@ only ever grows, it never runs backwards, and none of it touches progress.
   and never moves, a flatfish lies still and now and then shuffles on, a
   lizardfish lies in wait and twice lunges a little way, and an eelpout
   barely stirs.
+- **They notice each other** (`interact` in `schedule.ts`), worked out from
+  where everyone is at that moment and nothing else, so it stays a pure
+  function of the second: a school in the way of a hunter (a barracuda, a
+  swordfish, a grouper, a viper or a dragonfish, an angler, a fangtooth, a
+  swallower, a squid) parts round it, the nearest turning tail, and closes
+  up behind it as it goes; a low swimmer (a snailfish, a cusk-eel, a
+  grenadier, a chimaera, a cutthroat) passing near an amphipod or a sea
+  cucumber on the floor dips toward it, nose down; a grenadier, a chimaera
+  or a cusk-eel nosing along the floor kicks up a low flat cloud of silt
+  now and then; and whatever crawls along the floor leaves a faint furrow
+  behind it, fading back toward where it set out.
 - **Kelp, where the light is.** About half of sittings start at the edge of
   a kelp forest (`lib/ocean/kelp.ts`, drawn by `kelp-draw.ts`): five to nine
   winding stalks at three depths, the far ones smaller, paler and hazier, on

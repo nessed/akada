@@ -9,6 +9,8 @@ import {
   drawEye,
   drawFloor,
   drawFloorLife,
+  drawSiltPuff,
+  drawTrail,
   drawLeviathan,
   drawRules,
   drawShafts,
@@ -426,6 +428,12 @@ export default function OceanScene({
               alpha *= 0.3;
             }
           }
+        }
+        // What lies on the floor leaves a track; what noses it, a puff.
+        if (v.trail != null || v.puff) {
+          const silt = mixHex(water.bottom, '#FFFFFF', 0.3);
+          drawTrail(ctx, v, px, alpha, silt);
+          drawSiltPuff(ctx, v, px, alpha, silt);
         }
         drawVisitor(ctx, sprite, v, px, ambient, alpha, strips);
       }
