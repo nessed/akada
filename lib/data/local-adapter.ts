@@ -712,4 +712,7 @@ export class LocalAdapter implements DataProvider {
 
   // No server to tell: the device already knows its own day.
   async recordClock(): Promise<void> {}
+
+  // Nothing off the device reads it here.
+  async recordLiveSitting(): Promise<void> {}
 }

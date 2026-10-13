@@ -156,6 +156,8 @@ export async function readStudentSettings(token: McpToken, supabase: ReturnType<
     dailyGoalHours: Number.isFinite(goal) && goal > 0 ? goal : null,
     timeZone: typeof row.time_zone === 'string' ? row.time_zone : '',
     dayEndingHour: Number(row.day_ending_hour ?? 0),
+    /** The sitting on the clock as the app last wrote it (lib/live-sitting.ts), unread. */
+    liveSitting: row.live_sitting ?? null,
   };
 }
 

@@ -39,6 +39,7 @@ import {
 } from '@/lib/session-safety';
 import { seasonLabel } from '@/lib/utils';
 import { cleanDayEndingHour, cleanTimeZone } from '@/lib/student-day';
+import type { LiveSittingSnapshot } from '@/lib/live-sitting';
 import { cleanChecks } from '@/lib/notes/checks';
 import { cleanReads } from '@/lib/notes/reads';
 import { cleanNoteMarkdown, cleanNoteTitle } from '@/lib/notes/limits';
@@ -1362,6 +1363,19 @@ export class SupabaseAdapter implements DataProvider {
     try {
       window.localStorage.setItem(CLOCK_KEY, key);
     } catch { /* nothing to remember it in; the next load writes it again */ }
+  }
+
+  async recordLiveSitting(snapshot: LiveSittingSnapshot | null): Promise<void> {
+    const { data: { session } } = await this.supabase.auth.getSession();
+    const uid = session?.user?.id;
+    if (!uid) return;
+    const { error } = await this.supabase.from('user_settings').upsert(
+      { user_id: uid, live_sitting: snapshot },
+      { onConflict: 'user_id' },
+    );
+    // A project that has not re-run schema.sql has no column for it, and the
+    // connector simply sees no sitting on the clock, as it always did.
+    if (error && !['PGRST204', '42703'].includes(error.code ?? '')) throw error;
   }
 
   // ---- Notes ----
