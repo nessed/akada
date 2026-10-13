@@ -12,10 +12,10 @@
 import { ZONES, zoneMid } from './depth';
 import { chance, int, mulberry32, range, weighted, type Rand } from './random';
 
-export type Plan = 'bell' | 'comb' | 'star' | 'chain' | 'fish' | 'eel' | 'ray' | 'squid' | 'crawler';
+export type Plan = 'bell' | 'comb' | 'star' | 'chain' | 'fish' | 'eel' | 'ray' | 'squid' | 'crawler' | 'cucumber';
 export const RADIAL_PLANS: Plan[] = ['bell', 'comb', 'star', 'chain'];
-/** The plans that live on the floor, not in the water. */
-export const FLOOR_PLANS: Plan[] = ['star', 'crawler'];
+/** The plans that live on the floor, not in the water (unless one swims: `Genome.swims`). */
+export const FLOOR_PLANS: Plan[] = ['star', 'crawler', 'cucumber'];
 
 export type TentacleStyle = 'straight' | 'wavy' | 'coiled' | 'beaded';
 export type Tail = 'fork' | 'round' | 'lunate' | 'filament' | 'fan' | 'none';
@@ -187,6 +187,12 @@ export interface Genome {
   clear: boolean;
   /** Which kind of fish, for a fish (and a gulper among the eels). */
   form?: FishForm;
+  /** A floor plan that has left the floor: a sea cucumber swimming, amphipods in a swarm. */
+  swims?: boolean;
+  /** A crawler of the trench: an amphipod, curled and pale. */
+  amphi?: boolean;
+  /** A sea cucumber's kind: a sea pig on its legs, a small glassy elpidiid, or the swimming one with its veil. */
+  cuke?: 'pig' | 'glassy' | 'veiled';
 
   // bell
   bw?: number;
@@ -252,8 +258,22 @@ export interface Genome {
 }
 
 /** Which plan the depth favours, when the caller has not chosen one. */
+/**
+ * Where the trench's animals begin on the generator's depth dial: a little
+ * above the zone's own top (0.96), since a pool rolls its species either
+ * side of its zone's middle, and the trench's lowest roll is 0.93.
+ */
+const TRENCH = 0.93;
+/** And the abyss, where the sea cucumbers begin to own the floor. */
+const ABYSS = 0.85;
+
 export function rollPlan(r: Rand, z: number, floor = false): Plan {
-  if (floor) return weighted(r, [['star', 1], ['crawler', 1.2]]);
+  if (floor) {
+    // Below the abyss's top the sea cucumbers are most of what lives on the
+    // floor; in the trench, the amphipods are the crowd.
+    if (z < ABYSS) return weighted(r, [['star', 1], ['crawler', 1.2]]);
+    return weighted<Plan>(r, [['star', 1], ['crawler', z >= TRENCH ? 1.6 : 1.2], ['cucumber', z >= TRENCH ? 1.8 : 1.3]]);
+  }
   if (r() < 0.26 + 0.24 * z) {
     return weighted<Plan>(r, [
       ['bell', 0.55],
@@ -261,11 +281,23 @@ export function rollPlan(r: Rand, z: number, floor = false): Plan {
       ['chain', 0.08 + 0.16 * z],
     ]);
   }
+  if (z >= TRENCH) {
+    // No skates and next to no squid below 6,000 m: amphipods swarming in
+    // the water instead, and now and then a sea cucumber swimming.
+    return weighted<Plan>(r, [
+      ['fish', 0.56 - 0.22 * z],
+      ['eel', 0.14 + 0.06 * z],
+      ['squid', 0.03],
+      ['crawler', 0.16],
+      ['cucumber', 0.1],
+    ]);
+  }
   return weighted<Plan>(r, [
     ['fish', 0.56 - 0.22 * z],
     ['eel', 0.14 + 0.06 * z],
-    ['ray', 0.12],
+    ['ray', z >= ABYSS ? 0.05 : 0.12],
     ['squid', 0.12 + 0.08 * z],
+    ...(z >= ABYSS ? ([['cucumber', 0.05]] as [Plan, number][]) : []),
   ]);
 }
 
@@ -332,7 +364,7 @@ export function rollGenome(seed: number, z: number, plan?: Plan, form?: FishForm
       float: chance(r, 0.7),
     });
   } else {
-    const A = { fish: rr(18, 40), eel: rr(4, 9), ray: rr(46, 72), squid: rr(16, 28), crawler: rr(12, 22) }[p];
+    const A = { fish: rr(18, 40), eel: rr(4, 9), ray: rr(46, 72), squid: rr(16, 28), crawler: rr(12, 22), cucumber: rr(26, 36) }[p];
     Object.assign(g, {
       A,
       skew: rr(0.55, 1.9),
@@ -377,9 +409,76 @@ export function rollGenome(seed: number, z: number, plan?: Plan, form?: FishForm
       wave: p === 'eel' ? rr(4, 12) : rr(0, 3),
     });
     g.photo = g.lit && chance(r, 0.8);
+    // The trench's own: its crawlers are amphipods, its sea cucumbers one
+    // of three kinds. On their own dice, so nothing rolled above moves.
+    const tr = mulberry32(seed * 4093 + 61);
+    if (p === 'crawler' && z >= TRENCH) shapeAmphipod(g, tr);
+    if (p === 'cucumber') shapeCucumber(g, tr, z);
     const fr = mulberry32(seed * 6151 + 29);
     const f = form === null && p !== 'fish' ? undefined : form ?? rollForm(fr, z, p);
     if (f) shapeForm(g, f, fr);
+  }
+  return g;
+}
+
+/** An amphipod: a curled, pale, many-legged crawler, the crowd of the trench. */
+function shapeAmphipod(g: Genome, r: Rand) {
+  Object.assign(g, {
+    amphi: true,
+    A: range(r, 20, 26),
+    segs: int(r, 9, 12),
+    legs: int(r, 6, 8),
+    antennae: range(r, 28, 50),
+    armor: true,
+    tail: 'fan',
+    lit: false,
+    photo: false,
+    clear: chance(r, 0.35),
+    hue: [3, 1, 8, 6][int(r, 0, 3)],
+    pattern: 'none',
+    eyes: chance(r, 0.4) ? 0 : 1,
+  });
+}
+
+/**
+ * A sea cucumber: a sea pig (plump, on stubby legs, feelers up at the front),
+ * a small glassy elpidiid, or the swimming one with a veil before it and a
+ * brim behind, pink glass with its gut showing.
+ */
+function shapeCucumber(g: Genome, r: Rand, z: number) {
+  const cuke = weighted<'pig' | 'glassy' | 'veiled'>(r, [['pig', z >= TRENCH ? 0.7 : 1.2], ['glassy', z >= TRENCH ? 1.2 : 0.5], ['veiled', 0.6]]);
+  Object.assign(g, {
+    cuke,
+    A: cuke === 'pig' ? range(r, 34, 42) : cuke === 'glassy' ? range(r, 32, 38) : range(r, 46, 54),
+    size: cuke === 'veiled' ? range(r, 0.9, 1.3) : range(r, 0.6, 1),
+    legs: cuke === 'pig' ? int(r, 5, 7) : cuke === 'glassy' ? int(r, 4, 6) : 0,
+    antennae: cuke === 'pig' ? int(r, 2, 4) : 0,
+    lit: cuke === 'veiled' && chance(r, 0.3),
+    photo: false,
+    clear: cuke !== 'pig',
+    hue: cuke === 'pig' ? [1, 9, 3][int(r, 0, 2)] : cuke === 'veiled' ? [1, 9][int(r, 0, 1)] : [2, 8, 4][int(r, 0, 2)],
+    pattern: 'none',
+    eyes: 0,
+    armor: false,
+    tail: 'none',
+    wave: range(r, 0.5, 1.5),
+  });
+}
+
+/**
+ * A floor plan's animal put where its pool put it: on the floor, or in the
+ * water. A sea cucumber in the water is the swimming one with its veil, and
+ * one on the floor never is; an amphipod in the water is one of a swarm.
+ */
+export function settle(g: Genome, ground: boolean): Genome {
+  if (g.plan === 'cucumber') {
+    // (Rolled as the swimmer, then put on the floor: a glassy one, with its legs.)
+    if (ground && g.cuke === 'veiled') Object.assign(g, { cuke: 'glassy', legs: 5, size: Math.min(g.size, 1) });
+    if (!ground && g.cuke !== 'veiled') g.cuke = 'veiled';
+    g.swims = !ground;
+    if (g.cuke === 'veiled') Object.assign(g, { legs: 0, antennae: 0, clear: true, size: Math.max(g.size, 0.9) });
+  } else if (g.plan === 'crawler') {
+    g.swims = !ground;
   }
   return g;
 }

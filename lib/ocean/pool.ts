@@ -10,7 +10,7 @@
  */
 
 import { zoneMid } from './depth';
-import { FLOOR_PLANS, FORMS, formsIn, rollGenome, rollPlan, type FishForm, type Genome } from './genome';
+import { FLOOR_PLANS, FORMS, formsIn, rollGenome, rollPlan, settle, type FishForm, type Genome } from './genome';
 import { speciesName } from './names';
 import type { Leg, Place } from './places';
 import { chance, hash32, int, mulberry32, range, weighted, type Rand } from './random';
@@ -42,8 +42,10 @@ export interface Species {
 /** Species to a pool. */
 export const POOL_SIZE = 12;
 const SPEED: Record<Genome['plan'], number> = {
-  fish: 1, eel: 0.7, ray: 0.8, squid: 1.1, bell: 0.35, comb: 0.3, chain: 0.25, star: 0.05, crawler: 0.1,
+  fish: 1, eel: 0.7, ray: 0.8, squid: 1.1, bell: 0.35, comb: 0.3, chain: 0.25, star: 0.05, crawler: 0.1, cucumber: 0.04,
 };
+/** A floor plan's pace when it has left the floor: a sea cucumber drifts, amphipods dart about. */
+const SWIM_SPEED: Partial<Record<Genome['plan'], number>> = { cucumber: 0.22, crawler: 0.75 };
 /** A form's own pace, against a jack's: a mola barely moves, a barracuda darts, a swordfish is the fastest thing in the sea. */
 const FORM_SPEED: Partial<Record<FishForm, number>> = {
   sunfish: 0.4, puffer: 0.55, disc: 0.7, barracuda: 1.3, barreleye: 0.45, hatchet: 0.6, snailfish: 0.5,
@@ -78,7 +80,9 @@ function slotOf(src: string, leg: Leg, i: number, regular: boolean): Slot {
   // A zone's first leg keeps the seeds of the zone's old single pool.
   const seed = leg.first ? hash32(src, 'species', zone, i) : hash32(src, 'species', zone, i, 'leg', leg.index);
   const r = mulberry32(seed);
-  const ground = zone >= 3 && i % 4 === 0;
+  // Places on the floor: every fourth in the abyss, every third in the
+  // trench, where the floor is most of what lives.
+  const ground = zone === 3 ? i % 4 === 0 : zone >= 4 && i % 3 === 0;
   const z = Math.min(1, zoneMid(zone) + range(r, -0.05, 0.05));
   const plan = ground ? rollPlan(r, z, true) : rollPlan(r, z);
   return { i, seed, r, z, regular, ground, plan, form: null };
@@ -87,7 +91,7 @@ function slotOf(src: string, leg: Leg, i: number, regular: boolean): Slot {
 function speciesOf(s: Slot, leg: Leg, twin: Genome | null): Species {
   const { seed, r, z, plan, form } = s;
   const zone = leg.zone;
-  const genome = rollGenome(seed, z, plan, form);
+  const genome = settle(rollGenome(seed, z, plan, form), s.ground);
   if (twin) {
     // A second of a schooling kind looks like another species of it: its
     // own colour and its own markings.
@@ -96,7 +100,8 @@ function speciesOf(s: Slot, leg: Leg, twin: Genome | null): Species {
     genome.pattern = marks.filter((m) => m !== twin.pattern)[seed % 3];
     genome.patN = Math.max(4, genome.patN ?? 6);
   }
-  const schooling = !!form && !!FORMS[form].school && chance(r, 0.6);
+  // Schools: the forms that school, and amphipods swarming in the water.
+  const schooling = (!!form && !!FORMS[form].school && chance(r, 0.6)) || (plan === 'crawler' && !!genome.swims && chance(r, 0.8));
   return {
     id: `${zone}:${seed}`,
     seed,
@@ -107,8 +112,8 @@ function speciesOf(s: Slot, leg: Leg, twin: Genome | null): Species {
     abundance: 1,
     school: schooling ? int(r, 6, 14) : 0,
     curious: (plan === 'fish' || plan === 'squid' || plan === 'ray') && !(form && (FORMS[form].floor || FORMS[form].low)) && chance(r, 0.18),
-    speed: (form ? FORM_SPEED[form] ?? 1 : SPEED[plan]) * range(r, 0.85, 1.15),
-    floor: FLOOR_PLANS.includes(plan) || (!!form && !!FORMS[form].floor),
+    speed: (form ? FORM_SPEED[form] ?? 1 : genome.swims ? SWIM_SPEED[plan] ?? 1 : SPEED[plan]) * range(r, 0.85, 1.15),
+    floor: (FLOOR_PLANS.includes(plan) && !genome.swims) || (!!form && !!FORMS[form].floor),
     blink: range(r, 1.4, 5),
     regular: s.regular,
   };

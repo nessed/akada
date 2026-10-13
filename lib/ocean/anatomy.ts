@@ -136,6 +136,8 @@ export function buildAnatomy(g: Genome, seed: number): Anatomy {
   else if (g.plan === 'comb') comb(g, k);
   else if (g.plan === 'star') star(g, k);
   else if (g.plan === 'chain') chain(g, k);
+  else if (g.plan === 'cucumber') tailRays = cucumber(g, k);
+  else if (g.plan === 'crawler' && g.amphi) tailRays = amphipod(g, k);
   else if (g.form && !PLAIN_FORMS.has(g.form)) tailRays = formed(g, k);
   else tailRays = bilateral(g, k);
 
@@ -3038,6 +3040,160 @@ function formed(g: Genome, kit: Kit): number {
     const [e2x, e2y, e2w] = F.at(0.84);
     eyeAt(C, e2x, e2y - e2w * 0.3, er * 0.92);
     return tailRays;
+  }
+  return 0;
+}
+
+/* ---- The trench's floor plans ---- */
+
+/**
+ * An amphipod, as the trench's crowd: a curled, laterally flat body of
+ * segments, the tail end bent down and under, the side plates hanging down
+ * along the front of the belly like scallops, thin jointed legs under them,
+ * two pairs of feelers forward and the forked uropods at the tail.
+ */
+function amphipod(g: Genome, kit: Kit): number {
+  const { P, C, vr } = kit;
+  const A = g.A!;
+  // The back's arch: the rear third curls down and under.
+  const curl = (t: number) => (t < 0.38 ? Math.pow((0.38 - t) / 0.38, 1.8) * A * 1.1 : 0);
+  const F = frameOf((t) => {
+    let p = 0.32 + 0.68 * Math.pow(Math.sin(Math.PI * Math.min(1, 0.12 + 0.95 * t)), 0.7);
+    if (t > 0.9) p *= 1 - Math.pow((t - 0.9) / 0.1, 2) * 0.45;
+    return [-A * 0.52 * p, A * 0.48 * p];
+  }, curl);
+  hull(kit, F);
+  // The segments: a seam across the back at each.
+  const n = g.segs!;
+  for (let q = 1; q < n; q++) {
+    const t = 0.04 + (q / n) * 0.84;
+    const [x, y, w] = F.at(t);
+    P('detail', [[x + 0.6, y - w * 0.46], [x - 0.4, y - w * 0.05], [x + 0.3, y + w * 0.35]]);
+  }
+  // The side plates: rounded flaps hanging from the front half of the belly.
+  const plates = 5;
+  for (let q = 0; q < plates; q++) {
+    const t = 0.5 + q * 0.085;
+    const [x, y, w] = F.at(t);
+    const top = y + w * 0.2;
+    const h = w * (0.55 + 0.1 * Math.sin(q));
+    const pw = 100 * 0.085 * 0.55;
+    const plate: Pt[] = [[x + pw, top], ...quad([x + pw, top + h * 0.6], [x, top + h * 1.15], [x - pw, top + h * 0.6], 6), [x - pw, top]];
+    P('finF', plate, true);
+    // A leg from under each: out, a knee, and down to a fine foot.
+    const back = q < 2 ? -1 : 1;
+    const knee: Pt = [x + back * A * 0.25 + vr(-1, 1), top + h + A * 0.35];
+    const foot: Pt = [knee[0] + back * A * 0.2, knee[1] + A * 0.45 + vr(-1, 1)];
+    P('legs', [[x, top + h * 0.8], knee, foot, [foot[0] + back * 1.2, foot[1] + 0.8]]);
+  }
+  // Two small legs under the curl, and the uropods forked at its tip.
+  for (let q = 0; q < 2; q++) {
+    const [x, y, w] = F.at(0.3 + q * 0.1);
+    P('legs', [[x, y + w * 0.4], [x - A * 0.15, y + w * 0.4 + A * 0.3], [x - A * 0.3, y + w * 0.4 + A * 0.45]]);
+  }
+  const [ux, uy] = F.spine[0];
+  for (const s of [-1, 1]) P('legs', [[ux, uy], [ux - A * 0.3, uy + s * A * 0.12 + A * 0.12], [ux - A * 0.55, uy + s * A * 0.22 + A * 0.2]]);
+  // The feelers: an upper pair long and swept back over the head, a lower shorter one forward.
+  const [hx, hy, hw] = F.at(0.97);
+  const ph = vr(0, TAU);
+  P('legs', hang(hx, hy - hw * 0.3, g.antennae!, -Math.PI * 0.18, { wave: 0.05, freq: 0.15, ph, curl: 0.4, drift: -0.5 }, 1.5));
+  P('legs', hang(hx, hy - hw * 0.1, g.antennae! * 0.7, -Math.PI * 0.05, { wave: 0.05, freq: 0.15, ph: ph + 1, curl: 0.3, drift: 0.3 }, 1.5));
+  if (g.clear) glass(kit, F, A, 0.2, 0.9);
+  if (g.eyes) {
+    // A kidney of an eye, low on the head.
+    const [ex, ey, ew] = F.at(0.9);
+    C('eye', ex, ey - ew * 0.05, A * 0.09, A * 0.14);
+  }
+  return 0;
+}
+
+/**
+ * A sea cucumber, side on. A sea pig: plump, higher at the front, its stubby
+ * tube feet under it in a row and its feelers up off the front of its back.
+ * A glassy elpidiid: low, see-through, its gut a dark loop in it, two pairs
+ * of small papillae. The swimming one: a soft bag of pink glass with a veil
+ * standing up and forward off its front and a brim behind, its gut showing.
+ */
+function cucumber(g: Genome, kit: Kit): number {
+  const { P, vr } = kit;
+  const A = g.A!;
+  const kind = g.cuke ?? 'pig';
+  const veiled = kind === 'veiled';
+  const F = frameOf((t) => {
+    // Front at t = 1: the pig blunt and high, the others rounder at both ends.
+    // Plump all round, a sausage more than a lens; the pig higher at the front.
+    // A superellipse along it: round, blunt ends, not a lens's points.
+    const e = Math.sqrt(Math.max(0, 1 - Math.pow(Math.abs(2 * (0.02 + 0.96 * t) - 1), 2.6)));
+    const up = Math.pow(e, 0.8) * (kind === 'pig' ? 0.78 + 0.32 * t : 1);
+    const dn = Math.pow(e, 0.9) * (kind === 'pig' ? 0.85 : 1);
+    return [-A * 0.55 * up, A * 0.45 * dn];
+  }, (t) => (veiled ? Math.sin(t * Math.PI + g.segs!) * g.wave! * 0.6 : 0));
+  if (veiled) {
+    // The veil: a hood of webbed papillae standing up and forward off the
+    // front, rays through it; behind, a smaller brim.
+    const [fx, fy] = F.up(0.86);
+    const [bx, by] = F.up(0.62);
+    const H = A * 1.25;
+    const tip: Pt = [fx + A * 0.55, fy - H];
+    const edge = cubic(tip, [fx + A * 0.9, fy - H * 0.55], [fx + A * 0.6, fy - H * 0.1], [fx + A * 0.3, fy + A * 0.05], 12);
+    const back = quad([bx, by], [bx + A * 0.05, by - H * 0.7], tip, 10);
+    P('fin', [...back, ...edge.slice(1), [fx, fy]], true);
+    fanRays(P, [fx - A * 0.05, fy + A * 0.05], [...back.slice(3), ...edge.slice(1, -2)], 9);
+    const [rx, ry] = F.up(0.12);
+    const brim = [[rx + A * 0.1, ry], ...quad([rx - A * 0.1, ry - A * 0.6], [rx - A * 0.55, ry - A * 0.4], [rx - A * 0.4, ry + A * 0.25], 8), [rx - A * 0.05, ry + A * 0.3]] as Pt[];
+    P('fin', brim, true);
+    fanRays(P, [rx, ry + A * 0.1], brim.slice(2, -1), 6);
+  }
+  hull(kit, F);
+  if (kind === 'pig' || kind === 'glassy') {
+    // The tube feet: stubby, a row under it, the near ones in front.
+    const n = g.legs!;
+    for (let q = 0; q < n; q++) {
+      const t = 0.12 + (q / Math.max(1, n - 1)) * 0.74;
+      const [x, y] = F.dn(t);
+      const len = A * (kind === 'pig' ? 0.26 : 0.18) * (0.85 + 0.3 * vr(0, 1));
+      const wd = A * (kind === 'pig' ? 0.09 : 0.06);
+      const lean = (t - 0.5) * 0.5;
+      // A cone, fat at the body and round at the foot.
+      const foot: Pt = [x + lean * len, y + len];
+      P('limb', [[x - wd, y - wd * 1.5], ...quad([x - wd * 0.8, y + len * 0.5], [foot[0] - wd * 0.6, foot[1] + wd * 0.3], [foot[0] + wd * 0.3, foot[1] + wd * 0.2], 4), [x + wd, y - wd * 1.5]], true);
+    }
+    // The papillae up off its back: a sea pig's long feelers at the front,
+    // an elpidiid's two small pairs.
+    const papillae = kind === 'pig' ? g.antennae! : 4;
+    for (let q = 0; q < papillae; q++) {
+      const t = kind === 'pig' ? 0.7 + q * 0.07 : 0.35 + q * 0.14;
+      const [x, y] = F.up(t);
+      const len = A * (kind === 'pig' ? 0.5 + 0.2 * vr(0, 1) : 0.2);
+      const wd = A * (kind === 'pig' ? 0.07 : 0.04);
+      // Up and curving forward, tapering to a soft tip.
+      const bend = kind === 'pig' ? 0.35 + q * 0.08 : 0.15;
+      const tipP: Pt = [x + bend * len, y - len];
+      const ctrl: Pt = [x - wd * 0.5, y - len * 0.7];
+      const left = quad([x - wd, y + 1], ctrl, [tipP[0] - wd * 0.15, tipP[1]], 6);
+      const right = quad([tipP[0] + wd * 0.25, tipP[1] + wd * 0.3], [ctrl[0] + wd * 1.6, ctrl[1] + wd], [x + wd, y + 1], 6);
+      P('fin', [...left, ...right], true);
+    }
+  }
+  // The mouth's ring of tentacles under the front.
+  const [mx, my] = F.dn(0.95);
+  for (let q = 0; q < 5; q++) P('detail', [[mx - 1, my - 1], [mx + 1 + q * 0.6, my + A * 0.08 + (q % 2) * A * 0.04]]);
+  // The gut: a dark loop through the glass ones; the pig's skin has a few wrinkles.
+  if (kind === 'pig') {
+    for (let q = 0; q < 4; q++) {
+      const [x, y, w] = F.at(0.25 + q * 0.15);
+      P('detail', [[x + 1.5, y - w * 0.4], [x - 0.5, y - w * 0.2], [x + 0.5, y - w * 0.02]]);
+    }
+  } else {
+    const loop: Pt[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const u = i / 24;
+      const [x, y, w] = F.at(0.15 + 0.7 * u);
+      loop.push([x, y + w * (0.05 + 0.18 * Math.sin(u * Math.PI * (veiled ? 3 : 2)))]);
+    }
+    P('guts', loop);
+    const [gx, gy, gw] = F.at(0.5);
+    P('gutFill', blob(gx, gy + gw * 0.08, A * 0.7, gw * 0.12, 0, vr, 10), true);
   }
   return 0;
 }

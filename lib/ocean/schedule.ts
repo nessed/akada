@@ -203,9 +203,20 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
       // A tripod fish stands where it came down, facing the current, and does
       // not move at all; a flatfish lies still and now and then shuffles on,
       // a lizardfish lies in wait and twice lunges a little way; an eelpout
-      // barely stirs.
+      // barely stirs, and a sea cucumber grazes along a mouthful at a time.
+      const cuke = species.genome.plan === 'cucumber';
       const way =
-        form === 'tripod' ? 0 : form === 'flatfish' ? shuffle(age, 3) * 0.06 : form === 'lizard' ? shuffle(age, 2) * 0.04 : form === 'eelpout' ? age * 0.03 : age * 0.18;
+        form === 'tripod'
+          ? 0
+          : form === 'flatfish'
+            ? shuffle(age, 3) * 0.06
+            : form === 'lizard'
+              ? shuffle(age, 2) * 0.04
+              : form === 'eelpout'
+                ? age * 0.03
+                : cuke
+                  ? shuffle(age, 5) * 0.05
+                  : age * 0.18;
       x = x0 + dir * way * view.width;
       y = view.height * range(r, 0.9, 0.96);
       // (Standing on its stilts: its feet on the floor, not its middle.)
