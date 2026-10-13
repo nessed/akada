@@ -62,6 +62,81 @@ export interface Visitor {
   phase: number;
   /** Which way it faces, -1 to 1, when that is not `dir`: 0 is edge-on, mid-turn. */
   face?: number;
+  /** Nose down (positive) or up, radians, when it is reaching for something. */
+  tilt?: number;
+  /** Where a thing on the floor set out from: the track it has left runs from here to it. */
+  trail?: number;
+  /** A puff of silt at its snout, 0 to 1, where it is nosing the floor. */
+  puff?: number;
+}
+
+/** What a school gives way to as it passes. */
+const HUNTERS = new Set<FishForm>(['barracuda', 'swordfish', 'viper', 'dragon', 'angler', 'fangtooth', 'swallower', 'grouper']);
+/** The low swimmers that feed off the floor. */
+const GRAZERS = new Set<FishForm>(['snailfish', 'ethereal', 'cusk', 'grenadier', 'chimaera', 'cutthroat']);
+/** The ones that nose into the silt as they go. */
+const NOSERS = new Set<FishForm>(['grenadier', 'chimaera', 'cusk']);
+
+/**
+ * The animals reacting to each other, worked out from where everyone is at
+ * this moment and nothing else, so it is as pure as the rest: a school in
+ * the way of a hunter parts round it and closes up behind; a low swimmer
+ * near something small on the floor dips its nose to it; a rattail nosing
+ * the floor kicks up silt.
+ */
+function interact(out: Visitor[], view: View, t: number) {
+  const hunters = out.filter((v) => {
+    const g = v.species.genome;
+    return (g.form && HUNTERS.has(g.form)) || g.plan === 'squid';
+  });
+  if (hunters.length) {
+    for (const v of out) {
+      // School members only: their keys are the slot's and the member's.
+      if (!v.key.includes('.')) continue;
+      for (const hu of hunters) {
+        if (hu.layer !== v.layer) continue;
+        const R = hu.len * 1.7;
+        const dx = v.x - hu.x;
+        const dy = v.y - hu.y;
+        const d = Math.hypot(dx, dy);
+        if (d >= R || d < 1e-6) continue;
+        const k = (1 - d / R) * (1 - d / R) * R * 0.75;
+        v.x += (dx / d) * k;
+        v.y += (dy / d) * k * 1.3;
+        // Close enough, it turns tail.
+        if (k > v.len * 0.4) v.face = dx > 0 ? 1 : -1;
+      }
+    }
+  }
+  const food = out.filter((v) => v.species.floor && (v.species.genome.plan === 'crawler' || v.species.genome.plan === 'cucumber'));
+  for (const v of out) {
+    const f = v.species.genome.form;
+    if (!f || !GRAZERS.has(f)) continue;
+    if (food.length) {
+      let best: Visitor | null = null;
+      let bd = Infinity;
+      for (const o of food) {
+        const d = Math.hypot(o.x - v.x, o.y - v.y);
+        if (d < bd) {
+          bd = d;
+          best = o;
+        }
+      }
+      const R = v.len * 2.2;
+      if (best && bd < R) {
+        // Down toward it, nose first, a little more the nearer it is.
+        const k = 1 - bd / R;
+        v.y += (best.y - best.len * 0.35 - v.y) * k * 0.5;
+        const ahead = (best.x - v.x) * v.dir > 0;
+        v.tilt = (ahead ? 0.35 : 0.12) * k;
+      }
+    }
+    if (NOSERS.has(f) && v.y > view.height * 0.8) {
+      // Nosing along the silt: a puff now and then where its snout goes in.
+      const near = Math.min(1, (v.y - view.height * 0.8) / (view.height * 0.08));
+      v.puff = near * Math.pow(Math.max(0, Math.sin(t * 0.7 + v.phase * 3)), 6);
+    }
+  }
 }
 
 /** A way across in `n` darts: still most of each stretch, then quick. Rises from 0 to 1. */
@@ -198,6 +273,7 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
     let y: number;
     let alpha = LAYER_ALPHA[layer];
     let face: number | undefined;
+    let trail: number | undefined;
     if (species.floor) {
       // Floor-dwellers keep to the bottom and only shuffle along it,
       // fading in and out rather than crossing the whole page.
@@ -221,6 +297,7 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
                   ? shuffle(age, 5) * 0.05
                   : age * 0.18;
       x = x0 + dir * way * view.width;
+      trail = x0;
       y = view.height * range(r, 0.9, 0.96);
       // (Standing on its stilts: its feet on the floor, not its middle.)
       if (form === 'tripod') y -= len * 0.46;
@@ -290,9 +367,10 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
         });
       }
     } else {
-      out.push({ key, species, layer, x, y, len, dir, age, alpha, phase, face });
+      out.push({ key, species, layer, x, y, len, dir, age, alpha, phase, face, trail });
     }
   }
+  interact(out, view, now);
   // Far first, near last, which is the order they are drawn in.
   out.sort((a, b) => a.layer - b.layer);
   return out;

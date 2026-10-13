@@ -811,6 +811,55 @@ export function drawFloorLife(
 }
 
 /**
+ * The track something on the floor has left behind it this crossing: a
+ * faint furrow in the silt from where it set out to where it is, fading
+ * back toward the start.
+ */
+export function drawTrail(ctx: CanvasRenderingContext2D, v: Visitor, px: number, alpha: number, silt: string) {
+  if (v.trail == null || alpha <= 0) return;
+  const x0 = v.trail * px;
+  const x1 = v.x * px;
+  if (Math.abs(x1 - x0) < 4 * px) return;
+  const y = (v.y + v.len * 0.22) * px;
+  const gr = ctx.createLinearGradient(x0, 0, x1, 0);
+  gr.addColorStop(0, `${silt}00`);
+  gr.addColorStop(1, `${silt}AA`);
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.4;
+  ctx.strokeStyle = gr;
+  ctx.lineWidth = Math.max(1, v.len * 0.06 * px);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x0, y);
+  // A furrow wanders a little, as a slow thing's does.
+  const n = 8;
+  for (let i = 1; i <= n; i++) {
+    const u = i / n;
+    ctx.lineTo(x0 + (x1 - x0) * u, y + Math.sin(u * 5 + v.phase) * v.len * 0.03 * px);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** A puff of silt where a fish nosing the floor has its snout in it. */
+export function drawSiltPuff(ctx: CanvasRenderingContext2D, v: Visitor, px: number, alpha: number, silt: string) {
+  if (!v.puff || v.puff < 0.02 || alpha <= 0) return;
+  const disc = blurDisc(silt);
+  if (!disc) return;
+  const face = v.face ?? v.dir;
+  const x = (v.x + face * v.len * 0.48) * px;
+  const y = (v.y + v.len * 0.2) * px;
+  // Low and flat, a little cloud rolling off the silt, never a ball.
+  const rad = v.len * (0.07 + 0.15 * v.puff) * px;
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.32 * v.puff;
+  ctx.drawImage(disc, x - rad * 1.3, y - rad * 0.45, rad * 2.6, rad * 0.9);
+  ctx.globalAlpha = alpha * 0.2 * v.puff;
+  ctx.drawImage(disc, x - rad * 0.5 - (v.face ?? v.dir) * rad * 0.6, y - rad * 0.8, rad * 1.4, rad * 0.8);
+  ctx.restore();
+}
+
+/**
  * One animal, placed. Swimmers are drawn in vertical strips, each nudged by
  * a wave that grows toward the tail, which is a fish swimming for the price
  * of a few image copies. Bells squeeze with their beat, rays flap, and
@@ -852,6 +901,8 @@ export function drawVisitor(
     // floor; a mola rolls slowly as it goes, its fins rowing it.
     if (g.form === 'grenadier') ctx.rotate(0.36);
     else if (g.form === 'sunfish') ctx.rotate(Math.sin(ambient * 0.35 + v.phase) * 0.2);
+    // Reaching for something on the floor, nose down.
+    if (v.tilt) ctx.rotate(v.tilt);
     if (g.plan === 'ray') {
       const flap = 1 + 0.1 * Math.sin(ambient * 2 + v.phase);
       ctx.scale(1, flap);
