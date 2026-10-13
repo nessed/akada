@@ -263,6 +263,76 @@ export function drawSnow(
   ctx.globalAlpha = 1;
 }
 
+const LIGHTS = 140;
+const glows = new Map<string, HTMLCanvasElement | null>();
+
+/** A soft glow, brightest in the middle and gone by its edge. */
+function glowDisc(color: string): HTMLCanvasElement | null {
+  if (glows.has(color)) return glows.get(color) ?? null;
+  const size = 48;
+  const c = scratch(size, size);
+  const g = c?.getContext('2d');
+  if (c && g) {
+    const n = parseInt(color.replace('#', '').slice(0, 6), 16);
+    const rgb = `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+    const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, `rgba(${rgb}, 1)`);
+    grad.addColorStop(0.25, `rgba(${rgb}, 0.45)`);
+    grad.addColorStop(1, `rgba(${rgb}, 0)`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, size, size);
+  }
+  glows.set(color, c);
+  return c;
+}
+
+/**
+ * Pinpricks of light hanging in the water, as in the scattering layer: the
+ * lanternfish and krill and little siphonophores of it, each lighting for a
+ * moment now and then on its own slow beat and going out again. They drift
+ * with the current at the snow's pace. `amount` is how many of a full
+ * page's worth are lit at all, 0 to 1, so a place's lights ease in.
+ */
+export function drawLights(ctx: CanvasRenderingContext2D, w: number, h: number, key: string, amount: number, ambient: number, current: number, px: number) {
+  if (amount <= 0.01) return;
+  const r = mulberry32(hash32(key, 'lights'));
+  const n = Math.round(LIGHTS * Math.min(1, amount));
+  ctx.save();
+  for (let i = 0; i < LIGHTS; i++) {
+    const x0 = r();
+    const y0 = r();
+    const v = 0.4 + 0.6 * r();
+    const period = 2.5 + 6 * r();
+    const phase = r() * period;
+    const size = (1.1 + 1.1 * r()) * px;
+    const hue = r() < 0.25;
+    if (i >= n) continue;
+    // On for a breath, up fast and away slowly, then dark for the rest of its beat.
+    const u = ((ambient + phase) % period) / period;
+    const on = u < 0.05 ? u / 0.05 : Math.exp(-(u - 0.05) * 18);
+    if (on < 0.03) continue;
+    const drift = (x0 + ambient * 0.0011 * v * current) % 1;
+    const x = (drift < 0 ? drift + 1 : drift) * w + Math.sin(ambient / 7 + i) * 3 * px;
+    const rise = (y0 - ambient * 0.002 * v) % 1;
+    const y = (rise < 0 ? rise + 1 : rise) * h;
+    const edge = Math.min(1, (y / h) * 6, ((h - y) / h) * 6);
+    const a = on * edge;
+    const colour = hue ? '#CFE9FF' : '#BFF3E6';
+    const halo = glowDisc(colour);
+    if (halo) {
+      const hr = size * 6;
+      ctx.globalAlpha = a * 0.35;
+      ctx.drawImage(halo, x - hr, y - hr, hr * 2, hr * 2);
+    }
+    ctx.fillStyle = colour;
+    ctx.globalAlpha = a * 0.9;
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 /** Where the floor's silt line sits, in device pixels: rising into view over
     the first minutes of the abyss, then staying. Below the page before then.
     `lift` raises it further, a share of the page, where a place has

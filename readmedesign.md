@@ -1062,15 +1062,23 @@ only ever grows, it never runs backwards, and none of it touches progress.
   "since", mono digits in the serif line: `since 14:20 · 1,240 m down`.
 - **The dive passes places** (`lib/ocean/places.ts`). The zones say how
   deep; a place says what this stretch of the sea is. The dive is cut into
-  legs at round depths (each zone's top, the twilight again at 500 m, the
-  midnight at 2,500, the abyss every 500 m, and the trench every 250 m,
-  which is a new place about every 21 minutes past three hours), and each
+  legs at round depths (each zone's top, the twilight again at 500 and
+  750 m, the midnight every 750 m, the abyss every 500 m, and the trench
+  every 250 m: a new place every eleven to fifteen minutes in the first two
+  hours, which every sitting passes through, and about every 21 minutes
+  past three), and each
   leg is one real piece of the deep sea, rolled for the sitting from the
   ones that live at that depth and never the one it just left nor the one
   before that, so a long night never goes back and forth between two: in
   the light the reef,
   the kelp forest or open water with no rock in it; in the twilight its
-  open water or the drop-off, a wall down one side; in the midnight its
+  open water, the drop-off (a wall down one side), the canyon (walls both
+  sides, further apart than the trench's, grown with fans and whips) or the
+  scattering layer (open water so thick with lanternfish and hatchetfish
+  that sonar takes it for the bottom: more animals than the minute would
+  hold, nearly all in schools, heavy snow, plankton quick to light, and
+  pinpricks of light hanging in it, each lighting for a breath on its own
+  slow beat); in the midnight its
   open water, the cold-water coral mounds or a seamount's flank; in the
   abyss the abyssal plain, a vent field (four black smokers, not the
   sitting's two) or a nodule field; and in the trench the trench wall, the

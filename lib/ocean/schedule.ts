@@ -190,8 +190,9 @@ export function areaScale(view: View): number {
  * the population sits near its target. It depends on the slot alone, never
  * on the moment it is read from, or the past would change as time went on.
  */
-function rateAt(slot: number, scale: number, members: number): number {
-  const target = populationAt(slot / 60) * scale;
+function rateAt(slot: number, scale: number, members: number, crowd = 1): number {
+  // A crowded place (the scattering layer) holds more than the minute would.
+  const target = populationAt(slot / 60) * scale * crowd;
   // Mean crossing time across the layers, and how many animals a set-off
   // brings on average in this leg (a school is one set-off, many fish).
   const meanLife = LIFE[0] * LAYER_ODDS[0] + LIFE[1] * LAYER_ODDS[1] + LIFE[2] * LAYER_ODDS[2];
@@ -224,8 +225,9 @@ function membersPerSpawn(pool: Species[]): number {
  */
 export function spawnAt(biome: Biome, slot: number): Species | null {
   const r = mulberry32(hash32(biome.key, 'slot', slot));
-  const pool = biome.pools[legAt(biome.route, slot)];
-  if (r() >= rateAt(slot, 1, membersPerSpawn(pool))) return null;
+  const li = legAt(biome.route, slot);
+  const pool = biome.pools[li];
+  if (r() >= rateAt(slot, 1, membersPerSpawn(pool), biome.route[li].place.crowd)) return null;
   return pool[pickIndex(r, pool.map((s) => s.abundance))];
 }
 
@@ -247,7 +249,7 @@ export function visitorsAt(biome: Biome, t: number, view: View, quality = 1, swi
     const r = mulberry32(hash32(biome.key, 'slot', slot));
     const li = legAt(biome.route, slot);
     const pool = biome.pools[li];
-    if (r() >= rateAt(slot, scale, membersPerSpawn(pool))) continue;
+    if (r() >= rateAt(slot, scale, membersPerSpawn(pool), biome.route[li].place.crowd)) continue;
     const species = pool[pickIndex(r, pool.map((s) => s.abundance))];
     const school = schoolOf(species);
     let layer = (species.floor ? 1 : pickIndex(r, LAYER_ODDS)) as Layer;

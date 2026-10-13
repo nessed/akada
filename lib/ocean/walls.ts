@@ -53,6 +53,8 @@ function walled(leg: Leg | undefined, side: -1 | 1): boolean {
 
 /** How far in a leg's wall stands, as a share of the page width, at a depth in metres. */
 function reachOf(leg: Leg, metres: number): number {
+  // A canyon in the twilight: both walls, further apart than the trench's.
+  if (leg.place.walls === 2 && leg.zone < 4) return 0.085;
   if (leg.place.walls === 2) {
     // The trench closes in as it deepens: a tenth of the page each side at
     // its top, a quarter and more at the bottom, the middle always left open.

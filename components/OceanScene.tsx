@@ -16,6 +16,7 @@ import {
   drawShafts,
   drawShimmer,
   drawSnow,
+  drawLights,
   drawStorm,
   drawSurface,
   drawVisitor,
@@ -334,10 +335,13 @@ export default function OceanScene({
       const mixW = (a: number, b: number) => a + (b - a) * ease;
       const flakes = 60 * mixW(prev.place.snow * prev.water.snow, leg.place.snow * leg.water.snow) * seasonSnow(season, depth.z);
       const clarity = Math.max(0.5, Math.min(1, biome.env.visibility * mixW(prev.water.clarity, leg.water.clarity)));
-      sparkles.glow = mixW(prev.water.glow, leg.water.glow);
+      sparkles.glow = mixW(prev.water.glow * (prev.place.glow ?? 1), leg.water.glow * (leg.place.glow ?? 1));
       const whole = Math.min(snow.back.length, Math.floor(flakes));
       drawSnow(bctx, W, H, snow.back.slice(0, whole), water.snow, ambient, biome.env.current, px, clarity);
       if (whole < snow.back.length) drawSnow(bctx, W, H, snow.back.slice(whole, whole + 1), water.snow, ambient, biome.env.current, px, clarity, flakes - whole);
+      // A place's own pinpricks of light, easing in and out with it.
+      const lit = mixW(prev.place.lights ?? 0, leg.place.lights ?? 0);
+      if (lit > 0 && !reduced) drawLights(bctx, W, H, biome.key, lit, ambient, biome.env.current, px);
       // The floor: a vent field's own chimneys, or the sitting's, and what
       // else lies on it; a new place's laid over the last one's as it eases in.
       const ventsOf = (p: typeof leg.place) => p.vents ?? (biome.env.vents ? 2 : 0);
