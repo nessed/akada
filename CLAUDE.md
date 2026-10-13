@@ -51,6 +51,18 @@ npm run dev
 Delete `.env.local` when done. The real production build is verified by the
 Vercel deployment on the PR — that's the check that proves a build works.
 
+After changing anything in the deep (`lib/ocean/`, `components/OceanScene.tsx`),
+also run the long-sitting soak, which CI does not:
+
+```
+npm run soak:ocean   # scripts/ocean-soak: nine hours of the real scene, headless
+```
+
+It steps the real scene through a nine-hour sitting in headless Chromium,
+reads the heap each hour and times frames at about real speed in each hour,
+and fails on a leak through the trench or a trench hour far slower than the
+light. It needs a Chromium: set `CHROMIUM_PATH` if Playwright can't find one.
+
 ## Design
 
 **Read [`readmedesign.md`](./readmedesign.md) before changing anything the
