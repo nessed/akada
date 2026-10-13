@@ -296,9 +296,13 @@ function flats(f: FloorGround, r: Rand, few = false) {
     const len = (90 + 160 * r()) * px * k;
     const ph = r() * 6.28;
     const line: number[] = [];
+    // Keeping its depth below the floor's line as it goes, so on a slope it
+    // runs along the slope and never across it.
+    const below = y - f.yAt(x);
     for (let q = 0; q <= 24; q++) {
       const u = q / 24;
-      line.push(x + dir * u * len, y + Math.sin(u * 5 + ph) * 4 * px * k + u * f.depth * 0.08);
+      const xx = x + dir * u * len;
+      line.push(xx, f.yAt(Math.max(0, Math.min(f.w, xx))) + below + Math.sin(u * 5 + ph) * 4 * px * k + u * f.depth * 0.08);
     }
     const s = smooth(line, false, 3);
     g.globalAlpha = 0.3;

@@ -127,11 +127,13 @@ function siltOf(dark: boolean): string {
  * and pick at them, and as they leave the fish is bones. `floorY` is the
  * floor's line, in device px.
  */
-export function drawFishFall(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, floorY: number): void {
+export function drawFishFall(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, floorY: number, at?: number): void {
   const env = envelope(age, 0.03, 0.08);
   if (env <= 0) return;
   const r = mulberry32(seed ^ 0xf15f);
-  const cx = w * (0.32 + 0.36 * r());
+  // Where it lands: its own roll, or where a picture has set it (`at`, device px).
+  const rolled = w * (0.32 + 0.36 * r());
+  const cx = at ?? rolled;
   const dir = r() < 0.5 ? -1 : 1;
   const S = Math.min(w, h) * 0.2;
   const rest = floorY - S * 0.06;
@@ -371,13 +373,15 @@ export function drawSupergiant(ctx: CanvasRenderingContext2D, w: number, h: numb
  * way they gather wherever there is food, milling slowly, two kinds among
  * them; then they drift off.
  */
-export function drawSnailfishGathering(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, floorY: number): void {
+export function drawSnailfishGathering(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, floorY: number, at?: number, size?: number): void {
   const env = envelope(age, 0.04, 0.06);
   if (env <= 0) return;
   const r = mulberry32(seed ^ 0x5a11);
-  const cx = w * (0.3 + 0.4 * r());
+  const rolled = w * (0.3 + 0.4 * r());
+  const cx = at ?? rolled;
   const n = 16 + Math.floor(r() * 12);
-  const unit = Math.min(w, h);
+  // How big a snailfish is: by the region, or by the page a picture gives (`size`, device px).
+  const unit = size ?? Math.min(w, h);
   const a = speciesFor('gather-a', seed, snailGenome);
   const b = speciesFor('gather-b', seed, snailGenome);
   ctx.save();
