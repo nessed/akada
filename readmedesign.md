@@ -1412,8 +1412,11 @@ only ever grows, it never runs backwards, and none of it touches progress.
   hand for six seconds, then go: with the zone's name as a zone is entered
   (`abyss · the vent field · 4,000 m`, or just `twilight · 200 m` where the
   place is the zone's own open water), and alone within one
-  (`the rubble slope · 7,000 m`). Only a crossing actually watched is
-  marked: a reload, a still or reduced motion never announces one.
+  (`the rubble slope · 7,000 m`). Each whole hour of focus is written the
+  same way, in words and metres (`four hours · 6,714 m`), so a long sitting
+  reads as a way travelled; one that lands while a place's name is up waits
+  until it has gone. Only a crossing actually watched is marked: a reload,
+  a still or reduced motion never announces one.
 - **The water answers a hand, without taking it.** In the dark, a tap
   lights a ring of plankton that spreads and dies away, and a finger dragged
   through the water leaves a wake of it (`lib/ocean/sparkle.ts`), the way
@@ -1690,8 +1693,11 @@ serif at 13px, lowercase, with a small ink drawing of the animal beside it:
 mono digits, the name is the binomial in italic. The animal is the rarest one
 that really swam by in the deepest water the session reached, read off the
 same rolls the timer drew from on a reference full screen, so it is the same
-on any device; the phrase is the rarest event, if there was one. No counts,
-no "new!", no praise. A recovered session (the clock ran on without the
+on any device; the phrase is the rarest event, if there was one. Under it,
+a step smaller, the way it went, if it went anywhere: `from the reef down
+past the cold seep to the hadal floor`, where it began, one place passed on
+the way (leaning toward the rarer, on the route's own dice) and where it
+ended. No counts, no "new!", no praise. A recovered session (the clock ran on without the
 reader) gets no recap: the ocean would be describing a dive nobody took.
 
 **In the block frame** the deep is laid on the page itself, a watercolour

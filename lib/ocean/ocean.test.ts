@@ -11,7 +11,7 @@ import { hash32, mulberry32 } from './random';
 import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type EventKind } from './events';
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
 import { outcropAtSlot, outcropsInView } from './outcrop';
-import { legAt, legMark, minuteAt, PLACES, routeOf } from './places';
+import { hourMark, legAt, legMark, minuteAt, PLACES, routeLine, routeOf } from './places';
 import { FISH_BUDGET, FISH_FLOOR, POOL_SIZE } from './pool';
 import { wallReach } from './walls';
 import { drained } from './palette';
@@ -810,4 +810,20 @@ test('the sea follows the calendar: a spring bloom, and a course\'s regulars tur
   });
   const fresh = rollBiome(at('2026-03-09T09:00:00Z'), ck).pools.map((p) => p.filter((sp) => sp.newcomer).length);
   assert.ok(fresh.every((n) => n === 1));
+});
+
+test('the long sitting in words: an hour in the margin, and the way it went on the sheet', () => {
+  assert.equal(hourMark(4, 6714.4), 'four hours · 6,714 m');
+  assert.equal(hourMark(1, 520), 'one hour · 520 m');
+  const route = routeOf(oceanKey('words', 7), false);
+  // A short dive that stayed in one place has no route to tell.
+  assert.equal(routeLine(route, 10 * 60), null);
+  const line = routeLine(route, 9 * 3600)!;
+  assert.ok(line.startsWith(`from ${route[0].place.name}`), line);
+  const last = route[legAt(route, 9 * 3600)].place.name;
+  assert.ok(line.endsWith(`to ${last}`), line);
+  assert.match(line, / down past /);
+  // And the recap carries it.
+  const recap = diveRecap(oceanKey('words', 7), courseKey('words'), 9 * 3600);
+  assert.equal(recap.route, line);
 });
