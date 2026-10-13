@@ -333,6 +333,37 @@ export function legAt(route: Leg[], focusSeconds: number): number {
   return i;
 }
 
+const HOURS = ['', 'one hour', 'two hours', 'three hours', 'four hours', 'five hours', 'six hours', 'seven hours', 'eight hours', 'nine hours', 'ten hours', 'eleven hours', 'twelve hours'];
+
+/** The line written in the margin as an hour of focus is reached: `four hours · 6,714 m`. */
+export function hourMark(hours: number, metres: number): string {
+  const said = HOURS[hours] ?? `${hours} hours`;
+  return `${said} · ${Math.round(metres).toLocaleString('en-US')} m`;
+}
+
+/**
+ * The way the dive went, in words, for the finish sheet: where it began, one
+ * place it passed on the way (rather a rare one), and where it ended. Only places actually passed, by focus time; null for a dive that
+ * stayed in one place.
+ */
+export function routeLine(route: Leg[], focusSeconds: number): string | null {
+  const passed: Leg[] = [];
+  for (const leg of route) {
+    if (leg.from * 60 > focusSeconds) break;
+    if (!passed.length || passed[passed.length - 1].place.id !== leg.place.id) passed.push(leg);
+  }
+  if (passed.length < 2) return null;
+  const first = passed[0].place;
+  const last = passed[passed.length - 1].place;
+  const between = passed.slice(1, -1).filter((l) => l.place.id !== first.id && l.place.id !== last.id);
+  if (!between.length) return `from ${first.name} to ${last.name}`;
+  // One place on the way, leaning toward the rarer ones (the less likely
+  // to be rolled), on dice of the route's own so it is not always the same.
+  const r = mulberry32(hash32('route-line', ...between.map((l) => l.index)));
+  const rare = between[pickIndex(r, between.map((l) => 1 / (l.place.weight * l.place.weight)))];
+  return `from ${first.name} down past ${rare.place.name} to ${last.name}`;
+}
+
 /** The line written in the margin as a leg begins: `abyss · the vent field · 4,000 m`. */
 export function legMark(leg: Leg): string {
   const zone = ZONES[leg.zone].name;

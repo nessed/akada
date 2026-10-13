@@ -38,7 +38,7 @@ import { drawDumbo, drawLure, drawWhaleFall } from '@/lib/ocean/sightings-deep';
 import { drawManOWar, drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/ocean/sightings-shallow';
 import { jellyForBlock } from '@/lib/ocean/lineage';
 import { hazed, HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
-import { floorLift, legAt, legMark } from '@/lib/ocean/places';
+import { floorLift, hourMark, legAt, legMark } from '@/lib/ocean/places';
 import { seasonHaze, seasonOf, seasonSnow } from '@/lib/ocean/season';
 import { hash32 } from '@/lib/ocean/random';
 import { swimAge, visitorsAt, type Swim } from '@/lib/ocean/schedule';
@@ -210,6 +210,10 @@ export default function OceanScene({
     let legSeen = -1;
     let crossedAt = -1e9;
     let crossedMark = '';
+    // Hours of focus, marked in the margin the same way; one that lands while
+    // a place's name is up waits until it has gone.
+    let hourSeen = -1;
+    let hourWaiting: string | null = null;
     let shimmerAt = -1e9;
 
     const fit = () => {
@@ -269,6 +273,18 @@ export default function OceanScene({
         crossedAt = ambient;
         crossedMark = legMark(leg);
         if (leg.first) shimmerAt = ambient;
+      }
+      const hour = Math.floor(shown / 3600);
+      if (hourSeen < 0 || L.still || reduced) hourSeen = hour;
+      else if (hour > hourSeen) {
+        hourSeen = hour;
+        hourWaiting = hourMark(hour, depth.meters);
+      }
+      // Its turn once nothing else is in the margin (a breath after a place's name has gone).
+      if (hourWaiting && ambient - crossedAt > 7) {
+        crossedAt = ambient;
+        crossedMark = hourWaiting;
+        hourWaiting = null;
       }
 
       // The far water: the wash, the light, the snow, the floor.

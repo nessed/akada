@@ -10,6 +10,7 @@
 import { rollBiome, type Species } from './biome';
 import { depthAt, type ZoneName } from './depth';
 import { EVENTS, eventsUpTo, type EventKind } from './events';
+import { routeLine } from './places';
 import { spawnAt } from './schedule';
 
 export interface DiveRecap {
@@ -19,6 +20,8 @@ export interface DiveRecap {
   notable: Species | null;
   /** The rarest event, if one happened. */
   event: EventKind | null;
+  /** The way it went, in words (`from the reef down past the cold seep to the hadal floor`), if it went anywhere. */
+  route: string | null;
 }
 
 export function diveRecap(sittingKey: string, courseKey: string, focusSeconds: number): DiveRecap {
@@ -41,5 +44,5 @@ export function diveRecap(sittingKey: string, courseKey: string, focusSeconds: n
   for (const e of eventsUpTo(biome, t)) {
     if (!event || EVENTS[e.kind].weight > EVENTS[event].weight) event = e.kind;
   }
-  return { meters: depth.meters, zone: depth.name, notable, event };
+  return { meters: depth.meters, zone: depth.name, notable, event, route: routeLine(biome.route, t) };
 }

@@ -49,16 +49,20 @@ export default function DiveRecap({
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
       {notable && <canvas ref={sketchRef} aria-hidden className="h-[36px] w-[56px] shrink-0" />}
-      <p className="m-0 font-serif text-[13px] leading-snug text-muted">
-        down to <span className="font-mono tabular-nums text-[12px]">{recap.meters.toLocaleString('en-US')} m</span>
-        {notable && (
-          <>
-            {' · met '}
-            <i className="text-ink-soft">{notable.name}</i>
-          </>
-        )}
-        {recap.event && <> · {EVENTS[recap.event].phrase}</>}
-      </p>
+      <div className="min-w-0">
+        <p className="m-0 font-serif text-[13px] leading-snug text-muted">
+          down to <span className="font-mono tabular-nums text-[12px]">{recap.meters.toLocaleString('en-US')} m</span>
+          {notable && (
+            <>
+              {' · met '}
+              <i className="text-ink-soft">{notable.name}</i>
+            </>
+          )}
+          {recap.event && <> · {EVENTS[recap.event].phrase}</>}
+        </p>
+        {/* The way it went, a step softer: where it began, the rarest place on the way, where it ended. */}
+        {recap.route && <p className="m-0 mt-0.5 font-serif text-[12px] leading-snug text-muted">{recap.route}</p>}
+      </div>
     </div>
   );
 }
