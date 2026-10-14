@@ -126,7 +126,8 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   what lies on a place's floor
   (a seep, nodules, xenophyophores, sea cucumbers) is
   `lib/ocean/floor-life.ts`; the sea's calendar (the spring bloom, the
-  regulars turning over a week at a time) is `lib/ocean/season.ts`; the
+  regulars turning over a week at a time) is `lib/ocean/season.ts`, and the
+  day's weather over it (bright, overcast, rain, a swell) `lib/ocean/weather.ts`; the
   trench's own sightings are `lib/ocean/sightings-hadal.ts`, and the first
   hours' (dolphins, a manta, a whale shark, a sperm whale, a vampire squid)
   `lib/ocean/sightings-early.ts`.

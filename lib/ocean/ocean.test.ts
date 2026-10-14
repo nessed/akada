@@ -12,6 +12,7 @@ import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type Event
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
 import { landmarkOf, landmarksInView } from './landmarks';
 import { vortexSpecies } from './vortex';
+import { weatherHaze, weatherOf, weatherOfDay, weatherReach } from './weather';
 import { outcropAtSlot, outcropsInView } from './outcrop';
 import { hourMark, legAt, legMark, minuteAt, PLACES, routeLine, routeOf } from './places';
 import { FISH_BUDGET, FISH_FLOOR, POOL_SIZE } from './pool';
@@ -864,6 +865,39 @@ test('the reef has rock on the page most of the time, and open water a great sch
     assert.equal(sp, vortexSpecies(biome.pools[0], biome.key));
   }
   assert.ok(PLACES.blue.vortex && !PLACES.blue.rocks && (PLACES.reef.rocky ?? 0) > 0.5);
+});
+
+test('the weather is the day\'s: every sitting that day under the same sky, in spells, and gone with the light', async () => {
+  const { tankScene } = await import('./tank');
+  const DAY = 86400000;
+  const kinds = new Map<string, number>();
+  let runs = 0;
+  let changes = 0;
+  for (let d = 19000; d < 20000; d++) {
+    const k = weatherOfDay(d);
+    kinds.set(k, (kinds.get(k) ?? 0) + 1);
+    if (d > 19000 && k !== weatherOfDay(d - 1)) changes++;
+    runs++;
+    // Two sittings of different courses that day, morning and night: one sky.
+    assert.equal(weatherOf(oceanKey('a', d * DAY + 3600000)).kind, k);
+    assert.equal(weatherOf(oceanKey('b', d * DAY + 80000000)).kind, k);
+  }
+  for (const kind of ['bright', 'clear', 'overcast', 'rain', 'swell']) assert.ok((kinds.get(kind) ?? 0) > 40, `${kind}: ${kinds.get(kind)} days in 1000`);
+  // In spells: a day is often the one before it again.
+  assert.ok(runs / Math.max(1, changes) > 1.6, `spells ${(runs / changes).toFixed(2)} days long`);
+  // A key with no time in it is a clear day.
+  assert.equal(weatherOf('v1:no-time').kind, 'clear');
+  // All of it at the surface, none past the light.
+  assert.equal(weatherReach(0), 1);
+  assert.equal(weatherReach(0.6), 0);
+  const grey = weatherOf(oceanKey('a', [...Array(400).keys()].map((i) => 19000 + i).find((d) => weatherOfDay(d) === 'rain')! * DAY));
+  assert.ok(weatherHaze(grey, 0) && !weatherHaze(grey, 0.7));
+  // The rain is heard in the light and not in the dark.
+  const rainy = rollBiome(oceanKey('rainy', [...Array(400).keys()].map((i) => 19000 + i).find((d) => weatherOfDay(d) === 'rain')! * DAY), courseKey('rainy'));
+  assert.ok(tankScene(rainy, 60).rain > 0.5);
+  assert.equal(tankScene(rainy, 60 * 60).rain, 0);
+  const dry = rollBiome(oceanKey('dry', [...Array(400).keys()].map((i) => 19000 + i).find((d) => weatherOfDay(d) === 'bright')! * DAY), courseKey('dry'));
+  assert.equal(tankScene(dry, 60).rain, 0);
 });
 
 test('each leg has its own water, and the first is the sitting\'s', () => {

@@ -142,12 +142,14 @@ export function drawShafts(
   env: Env,
   water: Water,
   ambient: number,
+  surge = 1,
 ) {
   shaftsNow = null;
   if (water.light <= 0.02) return;
   const set = shaftSet(w, h, env);
   if (!set) return;
-  const sway = Math.sin(ambient / 9) * w * 0.01;
+  // A swell running sets them swinging further, and quicker with it.
+  const sway = Math.sin(ambient / 9) * w * 0.01 + (surge > 1 ? Math.sin(ambient * 0.8) * w * 0.012 * (surge - 1) : 0);
   const skew = Math.sin(ambient / 7.3 + 2.1) * 0.018;
   // Pale water has little room above it for light to show in, so the
   // shafts are laid on heavier there.
@@ -236,14 +238,17 @@ export function drawSnow(
   px: number,
   scale = 1,
   fade = 1,
+  surge = 1,
 ) {
   ctx.fillStyle = color;
   const disc = blurDisc(color);
+  // A swell running: the whole water swinging back and forth together.
+  const swing = surge > 1 ? Math.sin(ambient * 0.8) * 14 * px * (surge - 1) : 0;
   for (const s of specks) {
     const rise = (s.y - ambient * 0.004 * s.v) % 1;
     const y = (rise < 0 ? rise + 1 : rise) * h;
     const drift = (s.x + ambient * 0.0015 * s.v * current) % 1;
-    const x = (drift < 0 ? drift + 1 : drift) * w + Math.sin(ambient / 5 + s.x * 20) * 4 * px;
+    const x = (drift < 0 ? drift + 1 : drift) * w + Math.sin(ambient / 5 + s.x * 20) * 4 * px + swing * (0.6 + 0.4 * s.v);
     const edge = Math.min(1, (y / h) * 6, ((h - y) / h) * 6);
     const caught = 1 + 1.8 * shaftLight(w, h, x, y);
     const rad = s.s * px * 0.5 * scale;
@@ -1054,6 +1059,7 @@ export function drawSurface(
   focusSeconds: number,
   ambient: number,
   px: number,
+  rain = 0,
 ) {
   const t = focusSeconds / 90;
   if (t >= 1) return;
@@ -1143,6 +1149,32 @@ export function drawSurface(
     ctx.beginPath();
     ctx.ellipse(gx, gy, (3 + r() * 6) * px, 0.7 * px, 0, 0, Math.PI * 2);
     ctx.fill();
+  }
+  // Rain on it: rings spreading where the drops land along the rim, each
+  // a pale ellipse widening and fading in a second, and the light dimpled.
+  if (rain > 0) {
+    ctx.lineWidth = 0.8 * px;
+    for (let i = 0; i < 40; i++) {
+      const r = mulberry32(hash32('rain', i));
+      const period = 0.9 + r() * 0.8;
+      const t = ((ambient + r() * period) % period) / period;
+      const n = Math.floor((ambient + r() * period) / period);
+      const rx = mulberry32(hash32('rain-at', i, n));
+      const x = rx() * w;
+      const y = waveAt(Math.round((x / w) * N)) + (2 + rx() * 6) * px;
+      const rad = (3 + 20 * t) * px;
+      // The ring in a little shadow, its near lip catching the light.
+      ctx.strokeStyle = 'rgb(60, 70, 74)';
+      ctx.globalAlpha = base * rain * 0.28 * (1 - t);
+      ctx.beginPath();
+      ctx.ellipse(x, y, rad, rad * 0.25, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgb(255, 252, 240)';
+      ctx.globalAlpha = base * rain * 0.6 * (1 - t);
+      ctx.beginPath();
+      ctx.ellipse(x, y + 1 * px, rad, rad * 0.25, 0, 0.15 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }

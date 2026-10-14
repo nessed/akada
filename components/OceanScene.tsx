@@ -44,6 +44,7 @@ import { jellyForBlock } from '@/lib/ocean/lineage';
 import { hazed, HUES, waterAt, type Ground, type Water } from '@/lib/ocean/palette';
 import { floorLift, hourMark, legAt, legMark } from '@/lib/ocean/places';
 import { seasonHaze, seasonOf, seasonSnow } from '@/lib/ocean/season';
+import { weatherHaze, weatherOf, weatherReach } from '@/lib/ocean/weather';
 import { hash32 } from '@/lib/ocean/random';
 import { swimAge, visitorsAt, type Swim } from '@/lib/ocean/schedule';
 import { drawFishFall, drawMudslide, drawSnailfishGathering, drawSupergiant } from '@/lib/ocean/sightings-hadal';
@@ -127,6 +128,7 @@ export default function OceanScene({
   const markRef = useRef<HTMLSpanElement | null>(null);
   const biome = useMemo(() => rollBiome(sittingKey, courseKey), [sittingKey, courseKey]);
   const season = useMemo(() => seasonOf(sittingKey), [sittingKey]);
+  const weather = useMemo(() => weatherOf(sittingKey), [sittingKey]);
   // Enough far snow for the thickest place's; a place draws as much of it as its water holds.
   const snow = useMemo(() => ({ back: rollSnow(sittingKey, 230), front: rollSnow(`${sittingKey}:front`, 10) }), [sittingKey]);
   const kelp = useMemo(() => (biome.env.kelp ? rollKelp(biome.key) : null), [biome]);
@@ -264,10 +266,12 @@ export default function OceanScene({
       const wk = `${depth.z.toFixed(3)}|${li}|${ease.toFixed(2)}|${L.ground}|${L.color}`;
       if (wk !== waterKey) {
         const base = waterAt(depth.z, L.ground, L.color);
-        // The place's haze, and over the light the season's: a spring bloom's green.
+        // The place's haze, and over the light the season's (a spring bloom's
+        // green) and the day's (an overcast or rainy day's grey).
         const bloom = seasonHaze(season, depth.z);
-        const was = hazed(hazed(base, prev.place.haze), bloom);
-        const now = hazed(hazed(base, leg.place.haze), bloom);
+        const sky = weatherHaze(weather, depth.z);
+        const was = hazed(hazed(hazed(base, prev.place.haze), bloom), sky);
+        const now = hazed(hazed(hazed(base, leg.place.haze), bloom), sky);
         water = { ...now, top: mixHex(was.top, now.top, ease), bottom: mixHex(was.bottom, now.bottom, ease) };
         waterKey = wk;
       }
@@ -335,8 +339,11 @@ export default function OceanScene({
           bctx.restore();
         }
       }
-      drawSurface(bctx, W, H, shown, ambient, px);
-      drawShafts(bctx, W, H, biome.env, water, ambient);
+      // The day's weather, as much of it as reaches this deep.
+      const reach = weatherReach(depth.z);
+      const surge = 1 + (weather.surge - 1) * reach;
+      drawSurface(bctx, W, H, shown, ambient, px, weather.rain);
+      drawShafts(bctx, W, H, biome.env, { ...water, light: water.light * (1 + (weather.shafts - 1) * reach) }, ambient, surge);
       // As much snow as the place's water holds, and the leg's own share of
       // it, the change eased in a speck at a time; and the leg's own
       // clarity, the specks finer where the water is clearer.
@@ -345,8 +352,8 @@ export default function OceanScene({
       const clarity = Math.max(0.5, Math.min(1, biome.env.visibility * mixW(prev.water.clarity, leg.water.clarity)));
       sparkles.glow = mixW(prev.water.glow * (prev.place.glow ?? 1), leg.water.glow * (leg.place.glow ?? 1));
       const whole = Math.min(snow.back.length, Math.floor(flakes));
-      drawSnow(bctx, W, H, snow.back.slice(0, whole), water.snow, ambient, biome.env.current, px, clarity);
-      if (whole < snow.back.length) drawSnow(bctx, W, H, snow.back.slice(whole, whole + 1), water.snow, ambient, biome.env.current, px, clarity, flakes - whole);
+      drawSnow(bctx, W, H, snow.back.slice(0, whole), water.snow, ambient, biome.env.current, px, clarity, 1, surge);
+      if (whole < snow.back.length) drawSnow(bctx, W, H, snow.back.slice(whole, whole + 1), water.snow, ambient, biome.env.current, px, clarity, flakes - whole, surge);
       // A place's own pinpricks of light, easing in and out with it.
       const lit = mixW(prev.place.lights ?? 0, leg.place.lights ?? 0);
       if (lit > 0 && !reduced) drawLights(bctx, W, H, biome.key, lit, ambient, biome.env.current, px);
@@ -487,9 +494,9 @@ export default function OceanScene({
       for (const { event, age } of events) {
         if (event.kind === 'eye') drawEye(fctx, front.width, front.height, age, event.seed, px, water.dark);
       }
-      drawSnow(fctx, front.width, front.height, snow.front, water.snow, ambient * 1.3, biome.env.current, px, 1.8);
+      drawSnow(fctx, front.width, front.height, snow.front, water.snow, ambient * 1.3, biome.env.current, px, 1.8, 1, surge);
       // Light off the surface, playing over everything in the shallows.
-      if (!reduced) caustics.draw(fctx, front.width, front.height, ambient, water.light, px, water.dark);
+      if (!reduced) caustics.draw(fctx, front.width, front.height, ambient, water.light * (1 + (weather.light - 1) * reach), px, water.dark);
       const sparking = sparkles.draw(fctx, now, px);
       transient = sparking || eelsMoving;
 
@@ -668,7 +675,7 @@ export default function OceanScene({
       unregister();
       unregisterFront();
     };
-  }, [biome, kelp, snow, season, sittingKey, jellyAt]);
+  }, [biome, kelp, snow, season, weather, sittingKey, jellyAt]);
 
   // Every render hands the loop the page's latest, and wakes it if it had
   // parked (a pause settling, a still): a resume, a break or the sheet coming
