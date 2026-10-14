@@ -68,6 +68,10 @@ function snailGenome(s: number): Genome {
   return rollGenome(s, 0.98, 'fish', 'snailfish');
 }
 
+function rattailGenome(s: number): Genome {
+  return rollGenome(s, 0.9, 'fish', 'grenadier');
+}
+
 /** The fish that falls: a mackerel's lines, silver, as bait falls. */
 function carcassGenome(s: number): Genome {
   const g = rollGenome(s, 0.1, 'fish', 'jack');
@@ -127,7 +131,7 @@ function siltOf(dark: boolean): string {
  * and pick at them, and as they leave the fish is bones. `floorY` is the
  * floor's line, in device px.
  */
-export function drawFishFall(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, floorY: number, at?: number): void {
+export function drawFishFall(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, floorY: number, at?: number, abyss = false): void {
   const env = envelope(age, 0.03, 0.08);
   if (env <= 0) return;
   const r = mulberry32(seed ^ 0xf15f);
@@ -240,8 +244,9 @@ export function drawFishFall(ctx: CanvasRenderingContext2D, w: number, h: number
   }
 
   // The snailfish: in low from the sides, hanging near, lunging at the
-  // amphipods now and then.
-  const snail = speciesFor('fall-snail', seed, snailGenome);
+  // amphipods now and then. (In the abyss, where there are no snailfish,
+  // rattails.)
+  const snail = abyss ? speciesFor('fall-rattail', seed, rattailGenome) : speciesFor('fall-snail', seed, snailGenome);
   const m = 4 + Math.floor(r() * 3);
   for (let i = 0; i < m; i++) {
     const ri = mulberry32(hash32(seed, 'snail', i));

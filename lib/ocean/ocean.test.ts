@@ -177,12 +177,12 @@ test('rare events keep their gap, stay in their zones, and are rare', () => {
     for (let i = 1; i < all.length; i++) assert.ok(all[i].start - all[i - 1].start >= 8 * 60, 'events too close');
     for (const e of all) assert.ok(EVENTS[e.kind].zones.includes(depthAt(Math.floor(e.start / 60) * 60).zone), `${e.kind} out of its zone`);
   }
-  // Above the trench, somewhere around a few in ten hours; never a parade.
-  // (The trench has its own roll and its own rate: see the next test.)
+  // Above the trench, about one an hour, never a parade. (The trench has
+  // its own roll and its own rate: see the next test.)
   const above = (k: number) => eventsUpTo(rollBiome(oceanKey('ev', k), courseKey('ev')), 180 * 60).length;
   let sum = 0;
   for (let k = 0; k < 60; k++) sum += above(k);
-  assert.ok(sum / 60 < 2, `${sum} events in 60 sittings' first three hours`);
+  assert.ok(sum / 60 > 2 && sum / 60 < 4, `${sum} events in 60 sittings' first three hours`);
   assert.ok(total > 0, 'no events at all in 240 hours');
 });
 
@@ -275,10 +275,11 @@ test('the trench has something happen about once an hour, and nothing earlier mo
 
 test('the later sightings all turn up, and the first roll never hears of them', () => {
   const seen = new Set<EventKind>();
-  for (let k = 0; k < 600 && seen.size < 14; k++) {
+  const later: EventKind[] = ['turtle', 'siphonophore', 'lure', 'dumbo', 'whalefall', 'manowar', 'fishfall', 'mudslide', 'supergiant', 'snailfish', 'dolphins', 'manta', 'whaleshark', 'spermwhale', 'vampire'];
+  for (let k = 0; k < 600 && later.some((kind) => !seen.has(kind)); k++) {
     for (const e of eventsUpTo(rollBiome(oceanKey('later', k), courseKey('later')), 7 * 3600)) seen.add(e.kind);
   }
-  for (const kind of ['turtle', 'siphonophore', 'lure', 'dumbo', 'whalefall', 'manowar', 'fishfall', 'mudslide', 'supergiant', 'snailfish'] as EventKind[]) assert.ok(seen.has(kind), `no ${kind} in 600 sittings`);
+  for (const kind of later) assert.ok(seen.has(kind), `no ${kind} in 600 sittings`);
   // Golden: a first-roll event that was there before the later roll existed is still there.
   const biome = rollBiome(oceanKey('gold', 1), courseKey('gold'));
   const first = eventsUpTo(biome, 4 * 3600).filter((e) => ['whale', 'storm', 'eye', 'leviathan'].includes(e.kind));
@@ -748,6 +749,23 @@ test('the first two hours arrive somewhere new every quarter hour, and every qua
   for (let q = 0; q < quarters; q++) assert.ok(fresh[q] / N >= 6, `minutes ${q * 15} to ${q * 15 + 15}: ${(fresh[q] / N).toFixed(1)} new species`);
 });
 
+test('the first three hours have a sighting about once an hour, and the new ones keep to their zones', () => {
+  const N = 80;
+  const hours = [0, 0, 0];
+  for (let k = 0; k < N; k++) {
+    const biome = rollBiome(oceanKey('early-sight', k), courseKey('early-sight'));
+    for (const e of eventsUpTo(biome, 3 * 3600)) {
+      hours[Math.floor(e.start / 3600)]++;
+      const zone = depthAt(Math.floor(e.start / 60) * 60).zone;
+      if (e.kind === 'dolphins') assert.equal(zone, 0);
+      if (e.kind === 'spermwhale') assert.equal(zone, 2);
+      // The abyss's floor sightings wait for its floor.
+      if (zone === 3 && (e.kind === 'fishfall' || e.kind === 'supergiant')) assert.ok(e.start >= 117 * 60);
+    }
+  }
+  for (let hr = 0; hr < 3; hr++) assert.ok(hours[hr] / N >= 0.75, `hour ${hr + 1}: ${(hours[hr] / N).toFixed(2)} sightings`);
+});
+
 test('the twilight\'s places: a canyon walled both sides but wider than the trench, and a scattering layer thick with life', () => {
   const world = (min: number) => kelpDescent(min * 60) + 0.6;
   let canyons = 0;
@@ -972,7 +990,9 @@ test('the tank hears the place: a seep fizzes, a vent field roars, a slide of si
       if (leg.place.floor === 'seep') seep++;
       if (leg.place.vents) vents++;
       // The light is quiet.
-      if (leg.zone < 3) assert.deepEqual(s, { fizz: 0, roar: 0, rumble: 0 });
+      if (leg.zone < 3) assert.deepEqual([s.fizz, s.roar, s.rumble], [0, 0, 0]);
+      // Nothing clicks but a sperm whale, and none outside the midnight.
+      if (leg.zone !== 2) assert.equal(s.clicks, 0);
     }
     for (const e of eventsUpTo(biome, 9 * 3600)) {
       if (e.kind !== 'mudslide') continue;

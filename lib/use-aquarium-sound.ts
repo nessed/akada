@@ -37,6 +37,9 @@ const readVolume = () => {
 const FIZZ = 0.018;
 const ROAR = 0.22;
 const RUMBLE = 0.32;
+/** A sperm whale's clicks: a knock a little more than once a second. */
+const CLICKS = 0.3;
+const CLICK_EVERY = 0.85;
 
 export function useAquariumSound() {
   const [on, setOn] = useState(false);
@@ -59,8 +62,8 @@ export function useAquariumSound() {
   /* Where the sitting is and what is happening there: a seep fizzes, a vent
      field roars low, a slide of silt rumbles while it passes. Each is a
      quiet layer of its own, faded in and out over seconds. */
-  const sceneRef = useRef<TankScene>({ fizz: 0, roar: 0, rumble: 0 });
-  const layersRef = useRef<{ fizz: GainNode; roar: GainNode; rumble: GainNode } | null>(null);
+  const sceneRef = useRef<TankScene>({ fizz: 0, roar: 0, rumble: 0, clicks: 0 });
+  const layersRef = useRef<{ fizz: GainNode; roar: GainNode; rumble: GainNode; clicks: GainNode } | null>(null);
   // A tank still fading out after being turned off, and how to close it now.
   const fadingRef = useRef<{ timer: number; close: () => void } | null>(null);
 
@@ -78,7 +81,7 @@ export function useAquariumSound() {
 
   const setScene = useCallback((next: TankScene) => {
     const was = sceneRef.current;
-    if (was.fizz === next.fizz && was.roar === next.roar && was.rumble === next.rumble) return;
+    if (was.fizz === next.fizz && was.roar === next.roar && was.rumble === next.rumble && was.clicks === next.clicks) return;
     sceneRef.current = next;
     const layers = layersRef.current;
     const context = contextRef.current;
@@ -87,6 +90,7 @@ export function useAquariumSound() {
     layers.roar.gain.setTargetAtTime(ROAR * next.roar, context.currentTime, 2.5);
     // A slide comes on quicker than it goes.
     layers.rumble.gain.setTargetAtTime(RUMBLE * next.rumble, context.currentTime, next.rumble > was.rumble ? 2 : 6);
+    layers.clicks.gain.setTargetAtTime(CLICKS * next.clicks, context.currentTime, 2);
   }, []);
 
   const setVolume = useCallback((v: number) => {
@@ -279,7 +283,25 @@ export function useAquariumSound() {
       const fizz = layer('bandpass', 1900, 1.4, FIZZ * scene.fizz);
       const roar = layer('lowpass', 95, 0.7, ROAR * scene.roar);
       const rumble = layer('lowpass', 55, 0.9, RUMBLE * scene.rumble);
-      layersRef.current = { fizz: fizz.g, roar: roar.g, rumble: rumble.g };
+      // The whale's clicks: one knock at the head of a short buffer, looped,
+      // so they come as evenly as a whale's do; muffled by the depth like
+      // everything else, which turns them to knocks.
+      const clickBuffer = context.createBuffer(1, Math.round(context.sampleRate * CLICK_EVERY), context.sampleRate);
+      const cd = clickBuffer.getChannelData(0);
+      const burst = Math.round(context.sampleRate * 0.012);
+      for (let i = 0; i < burst; i += 1) {
+        const t = i / context.sampleRate;
+        cd[i] = (Math.random() * 2 - 1) * Math.exp(-t / 0.0018) + Math.sin(2 * Math.PI * 900 * t) * Math.exp(-t / 0.004) * 0.6;
+      }
+      const clickSrc = context.createBufferSource();
+      clickSrc.buffer = clickBuffer;
+      clickSrc.loop = true;
+      const clickGain = context.createGain();
+      clickGain.gain.value = CLICKS * scene.clicks;
+      clickSrc.connect(clickGain);
+      clickGain.connect(master);
+      clickSrc.start();
+      layersRef.current = { fizz: fizz.g, roar: roar.g, rumble: rumble.g, clicks: clickGain };
 
       // Bubbles: a sine that climbs quickly in pitch as it rises, with a soft
       // edge on either side. Alone, or now and then a short string of them;
@@ -330,7 +352,7 @@ export function useAquariumSound() {
             // Already stopped.
           }
         }
-        for (const src of [bed, shimmer, fizz.src, roar.src, rumble.src]) {
+        for (const src of [bed, shimmer, fizz.src, roar.src, rumble.src, clickSrc]) {
           try {
             src.stop();
           } catch {

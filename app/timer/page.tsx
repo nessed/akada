@@ -229,7 +229,7 @@ export default function TimerPage() {
   const tankBiome = useMemo(() => (tankKey && timerCourseId ? rollBiome(tankKey, courseKey(timerCourseId)) : null), [tankKey, timerCourseId]);
   const tank = tankBiome ? tankScene(tankBiome, focusSeconds) : QUIET;
   const setAquariumScene = aquarium.setScene;
-  useEffect(() => setAquariumScene({ fizz: tank.fizz, roar: tank.roar, rumble: tank.rumble }), [setAquariumScene, tank.fizz, tank.roar, tank.rumble]);
+  useEffect(() => setAquariumScene({ fizz: tank.fizz, roar: tank.roar, rumble: tank.rumble, clicks: tank.clicks }), [setAquariumScene, tank.fizz, tank.roar, tank.rumble, tank.clicks]);
 
   const course = useMemo(
     () => (timerCourseId ? courses.find((c) => c.id === timerCourseId) ?? null : null),

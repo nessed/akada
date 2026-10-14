@@ -18,6 +18,7 @@
 import { mixHex } from '../../fan';
 import { buildJelly, drawJelly, jellyInk, type JellyShape } from '../../jelly';
 import { rollBiome, type Biome, type Species } from '../biome';
+import { depthAt } from '../depth';
 import { drawChimney, drawEye, drawLeviathan, drawPlume, drawStorm, drawVisitor, drawWhale } from '../draw';
 import { KELP_ROCK, rollKelp, type Kelp } from '../kelp';
 import { drawKelp } from '../kelp-draw';
@@ -2775,7 +2776,7 @@ function drawEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: Plac
       break;
     // The trench's own, set on the ground where the layout put them.
     case 'fishfall':
-      drawFishFall(ctx, w, h, e.age, e.seed, D, ambient, dark, (e.y - e.ry) * D, (e.x - e.rx) * D);
+      drawFishFall(ctx, w, h, e.age, e.seed, D, ambient, dark, (e.y - e.ry) * D, (e.x - e.rx) * D, depthAt(e.start).zone === 3);
       break;
     case 'supergiant':
       drawSupergiant(ctx, w, h, e.age, e.seed, D, ambient, dark, (e.y - e.ry) * D);
