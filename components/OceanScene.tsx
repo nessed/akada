@@ -37,6 +37,7 @@ import { outcropsInView } from '@/lib/ocean/outcrop';
 import { drawOutcrops, OutcropCache } from '@/lib/ocean/outcrop-sprite';
 import { drawLandmarks, LandmarkCache } from '@/lib/ocean/landmark-draw';
 import { landmarksInView } from '@/lib/ocean/landmarks';
+import { drawVortex, vortexSpecies } from '@/lib/ocean/vortex';
 import { drawDumbo, drawLure, drawWhaleFall } from '@/lib/ocean/sightings-deep';
 import { drawManOWar, drawOarfish, drawSiphonophore, drawTurtle } from '@/lib/ocean/sightings-shallow';
 import { jellyForBlock } from '@/lib/ocean/lineage';
@@ -370,6 +371,14 @@ export default function OceanScene({
       for (const { event, age } of events) {
         if (event.kind === 'whale') drawWhale(bctx, W, H, age, event.seed, biome.env.current, px, ambient, water.dark);
         else if (event.kind === 'leviathan') drawLeviathan(bctx, W, H, age, event.seed, biome.env.current, px, ambient);
+      }
+
+      // Open water's great school, turning in the far water the whole leg long.
+      if (leg.place.vortex || prev.place.vortex) {
+        const out = Number.isFinite(leg.to) ? Math.min(1, Math.max(0, (leg.to * 60 - shown) / 90)) : 1;
+        const amt = (leg.place.vortex ? ease * out : 0) + (prev !== leg && prev.place.vortex ? 1 - ease : 0);
+        const kind = vortexSpecies(biome.pools[leg.place.vortex ? li : li - 1] ?? [], biome.key);
+        if (amt > 0) drawVortex(bctx, W, H, biome.key, amt, ambient, px, (len) => sprites.get(kind, len, water.dark, px, override != null));
       }
 
       // The bloom: every finished block's jelly, hanging back in the water.

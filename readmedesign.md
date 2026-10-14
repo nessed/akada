@@ -1098,6 +1098,14 @@ only ever grows, it never runs backwards, and none of it touches progress.
   animals (a pool to a leg), its own rock growth, its own walls or floor,
   and a haze and a weight of snow in its water, which ease in over a
   minute and a half as it begins.
+- **Open water has its great school** (`lib/ocean/vortex.ts`): out where
+  there is no rock, two hundred fish of the place's own schooling kind (or
+  jacks of the sitting's own, where its pool has none) mill in a slow
+  cylinder off to one side, taller than it is wide and tilted toward the
+  reader so the ring of it reads, once round in a little over a minute, the
+  near side larger and darker and carried one way, the far side smaller and
+  fainter going back. It eases in over the first minute and a half and out
+  as the light ends.
 - **Two places have a landmark** (`lib/ocean/landmarks.ts`, inked by
   `landmark-draw.ts`), passed once, out from one edge of the page, its
   middle crossing the middle of the page at the middle of its leg, sliding
@@ -1516,7 +1524,11 @@ only ever grows, it never runs backwards, and none of it touches progress.
   about 3,000 m) among sponges, lilies and brittle stars; the seamount and
   the trench wall, sponges and sea lilies; the rubble slope, little but
   brittle stars. Reef colour never grows in the dark, whatever the place.
-  Open water has no rock at all. A sitting that started in kelp has no
+  The reef has more rock than anywhere: a second rock half a slot out of
+  step with the first, on dice of its own (so every rock the first rolled
+  stays where it was), off the first's edge, so there is rock and coral on
+  its page most of the time; the cold-water coral mounds get one too, less
+  often. Open water has no rock at all. A sitting that started in kelp has no
   coral in the sunlit water, since the two never grow in the same sea.
   Some rocks in the light and the twilight carry a patch of sand with a
   colony of garden eels standing up out of it, leaning into the current;

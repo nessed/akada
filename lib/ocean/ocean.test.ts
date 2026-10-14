@@ -11,6 +11,7 @@ import { hash32, mulberry32 } from './random';
 import { EVENTS, eventAtMinute, eventsAt, eventsUpTo, firstEventUpTo, type EventKind } from './events';
 import { kelpDescent, kelpInView, KELP_SURFACE, rollKelp } from './kelp';
 import { landmarkOf, landmarksInView } from './landmarks';
+import { vortexSpecies } from './vortex';
 import { outcropAtSlot, outcropsInView } from './outcrop';
 import { hourMark, legAt, legMark, minuteAt, PLACES, routeLine, routeOf } from './places';
 import { FISH_BUDGET, FISH_FLOOR, POOL_SIZE } from './pool';
@@ -809,6 +810,42 @@ test('landmarks: a wreck in the light and a brine pool at midnight, each passed 
     }
   }
   assert.ok(seen.wreck > 20 && seen.brine > 100, JSON.stringify(seen));
+});
+
+test('the reef has rock on the page most of the time, and open water a great school turning in it', () => {
+  let reefMin = 0;
+  let reefRock = 0;
+  let otherMin = 0;
+  let otherRock = 0;
+  for (let k = 0; k < 120; k++) {
+    const key = oceanKey('reefy', k);
+    const route = routeOf(key, false);
+    const lit = route[0].place.id;
+    if (lit !== 'reef' && lit !== 'wreck') continue;
+    for (let min = 2; min < 14; min += 0.5) {
+      const rocks = outcropsInView(key, false, min * 60);
+      if (lit === 'reef') {
+        reefMin++;
+        reefRock += rocks.length ? 1 : 0;
+      } else {
+        otherMin++;
+        otherRock += rocks.length ? 1 : 0;
+      }
+      // Two rocks on the page at once never come from the same edge in the same slot.
+      for (const a of rocks) for (const b of rocks) if (a !== b && a.outcrop.slot === b.outcrop.slot) assert.notEqual(a.outcrop.edge, b.outcrop.edge);
+    }
+  }
+  assert.ok(reefRock / reefMin > 0.75, `rock on the reef's page ${((100 * reefRock) / reefMin).toFixed(0)}% of the time`);
+  assert.ok(reefRock / reefMin > otherRock / otherMin, 'the reef no rockier than the wreck');
+  // The school is the place's own schooling fish, or jacks of the sitting's own where it has none.
+  for (let k = 0; k < 60; k++) {
+    const biome = rollBiome(oceanKey('blue', k), courseKey('blue'));
+    const sp = vortexSpecies(biome.pools[0], biome.key);
+    assert.equal(sp.genome.plan, 'fish');
+    assert.ok(sp.school > 0);
+    assert.equal(sp, vortexSpecies(biome.pools[0], biome.key));
+  }
+  assert.ok(PLACES.blue.vortex && !PLACES.blue.rocks && (PLACES.reef.rocky ?? 0) > 0.5);
 });
 
 test('each leg has its own water, and the first is the sitting\'s', () => {
