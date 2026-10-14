@@ -28,7 +28,12 @@ export type EventKind =
   | 'fishfall'
   | 'mudslide'
   | 'supergiant'
-  | 'snailfish';
+  | 'snailfish'
+  | 'dolphins'
+  | 'manta'
+  | 'whaleshark'
+  | 'spermwhale'
+  | 'vampire';
 
 interface Spec {
   zones: number[];
@@ -57,10 +62,17 @@ export const EVENTS: Record<EventKind, Spec> = {
   manowar: { zones: [0], perHour: 0.8, seconds: 50, phrase: "a Portuguese man o' war drifted over", weight: 250 },
   // The trench's own (`sightings-hadal.ts`), so a long night down there has
   // something happen most hours.
-  fishfall: { zones: [4], perHour: 0.3, seconds: 90, phrase: 'a dead fish fell, and the amphipods came for it', weight: 650 },
+  fishfall: { zones: [3, 4], perHour: 0.3, seconds: 90, phrase: 'a dead fish fell, and the amphipods came for it', weight: 650 },
   mudslide: { zones: [4], perHour: 0.2, seconds: 75, phrase: 'a slide of silt came down the wall', weight: 550 },
-  supergiant: { zones: [4], perHour: 0.15, seconds: 70, phrase: 'a supergiant amphipod walked by', weight: 600 },
+  supergiant: { zones: [3, 4], perHour: 0.15, seconds: 70, phrase: 'a supergiant amphipod walked by', weight: 600 },
   snailfish: { zones: [4], perHour: 0.2, seconds: 80, phrase: 'the snailfish gathered', weight: 500 },
+  // The first two hours' own (`sightings-early.ts`), so the water every
+  // sitting passes through has something happen about once an hour too.
+  dolphins: { zones: [0], perHour: 0.7, seconds: 40, phrase: 'a pod of dolphins went by', weight: 450 },
+  manta: { zones: [0, 1], perHour: 0.3, seconds: 45, phrase: 'a manta ray glided over', weight: 550 },
+  whaleshark: { zones: [0, 1], perHour: 0.15, seconds: 60, phrase: 'a whale shark, slow and spotted', weight: 750 },
+  spermwhale: { zones: [2], perHour: 0.25, seconds: 55, phrase: 'a sperm whale came down to hunt', weight: 850 },
+  vampire: { zones: [1, 2], perHour: 0.25, seconds: 40, phrase: 'a vampire squid turned itself inside out', weight: 650 },
 };
 const ORDER: EventKind[] = ['leviathan', 'eye', 'storm', 'whale'];
 /* The second roll, added after the first had been out in the world: its
@@ -81,6 +93,24 @@ const DEEPEST: [EventKind, number][] = [
   ['snailfish', EVENTS.snailfish.perHour],
   ['dumbo', 0.15],
 ];
+/* The fifth, for the first three hours, the same again: only in minutes
+   all four rolls before it left well alone. The light's, the twilight's and
+   the midnight's own, at their own rates in their own zones; and the
+   abyss's, from the trench's sightings that live there too (the
+   supergiant amphipod is found from 4,000 m, and fish fall everywhere),
+   once its floor is in view, with a second chance at the dumbo. */
+const EARLY: [EventKind, number, number[]][] = [
+  ['dolphins', EVENTS.dolphins.perHour, EVENTS.dolphins.zones],
+  ['manta', EVENTS.manta.perHour, EVENTS.manta.zones],
+  ['whaleshark', EVENTS.whaleshark.perHour, EVENTS.whaleshark.zones],
+  ['spermwhale', EVENTS.spermwhale.perHour, EVENTS.spermwhale.zones],
+  ['vampire', EVENTS.vampire.perHour, EVENTS.vampire.zones],
+  ['dumbo', 0.15, [3]],
+  ['supergiant', 0.15, [3]],
+  ['fishfall', 0.15, [3]],
+];
+/** The abyss's floor is all the way into view this far into it (`floorLine`). */
+const FLOOR_IN = 117;
 const GAP_MINUTES = 8;
 const MAX_SECONDS = 90;
 
@@ -116,6 +146,19 @@ function deepestAt(biome: Biome, minute: number): EventKind | null {
   return null;
 }
 
+function earlyAt(biome: Biome, minute: number): EventKind | null {
+  const zone = depthAt(minute * 60).zone;
+  if (zone === 3 && minute < FLOOR_IN) return null;
+  const u = hash32(biome.key, 'event-early', minute) / 4294967296;
+  let edge = 0;
+  for (const [kind, perHour, zones] of EARLY) {
+    if (!zones.includes(zone)) continue;
+    edge += perHour / 60;
+    if (u < edge) return kind;
+  }
+  return null;
+}
+
 function rollAt(biome: Biome, minute: number, salt: string, kinds: EventKind[]): EventKind | null {
   const zone = depthAt(minute * 60).zone;
   const u = hash32(biome.key, salt, minute) / 4294967296;
@@ -141,7 +184,7 @@ export interface OceanEvent {
 /** The event that begins in a given minute, if any. */
 export function eventAtMinute(biome: Biome, minute: number): OceanEvent | null {
   if (minute < 1) return null;
-  const kind = rawAt(biome, minute) ?? laterEventAt(biome, minute) ?? latestEventAt(biome, minute) ?? deepestEventAt(biome, minute);
+  const kind = rawAt(biome, minute) ?? laterEventAt(biome, minute) ?? latestEventAt(biome, minute) ?? deepestEventAt(biome, minute) ?? earlyEventAt(biome, minute);
   if (!kind) return null;
   // Raw hits, not kept ones, so the rule never needs to look further back.
   if (rawAt(biome, minute)) for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (rawAt(biome, m)) return null;
@@ -173,6 +216,15 @@ function deepestEventAt(biome: Biome, minute: number): EventKind | null {
   if (!kind) return null;
   for (let m = Math.max(1, minute - GAP_MINUTES); m <= minute + GAP_MINUTES; m++) if (rawAt(biome, m) || laterAt(biome, m) || latestAt(biome, m)) return null;
   for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (deepestAt(biome, m)) return null;
+  return kind;
+}
+
+/** The fifth roll's event, kept only with all four rolls before it quiet for the gap either side. */
+function earlyEventAt(biome: Biome, minute: number): EventKind | null {
+  const kind = earlyAt(biome, minute);
+  if (!kind) return null;
+  for (let m = Math.max(1, minute - GAP_MINUTES); m <= minute + GAP_MINUTES; m++) if (rawAt(biome, m) || laterAt(biome, m) || latestAt(biome, m) || deepestAt(biome, m)) return null;
+  for (let m = Math.max(1, minute - GAP_MINUTES); m < minute; m++) if (earlyAt(biome, m)) return null;
   return kind;
 }
 

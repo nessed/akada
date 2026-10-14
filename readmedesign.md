@@ -1674,6 +1674,44 @@ only ever grows, it never runs backwards, and none of it touches progress.
   on ground level enough under it and never in the cleft, tried smaller if
   it will not fit, and left out if it still will not. The slide of silt is
   left out, a passing cloud as the man o' war is a passing float.
+- **And a fifth, for the first three hours** (`lib/ocean/sightings-early.ts`),
+  landing only in minutes all four rolls before it left well alone. Every
+  sitting passes through this water, and before this roll it saw a
+  sighting about once in two hours; now it is about one an hour all the
+  way down, and a 25-minute sitting sees one about half the time. Each is a
+  natural-history plate, inked once a size to a sprite and only placed:
+  - **a pod of dolphins** (the light): four to seven common dolphins high
+    in the water, strung out and staggered, each rising and falling and
+    pitching with its kick; a dark cape dipping in a V under the dorsal
+    fin, the pale belly, a buff patch on the fore flank.
+  - **a manta ray** (the light and the twilight), seen from beneath as a
+    diver sees one: a broad diamond with the head forward of the wings'
+    roots, short rolled horns either side of the wide mouth, five gill
+    slits a side, a pale belly with the back's dark showing round its rim
+    and every manta's own spots; its wings beat slowly (eight inked frames
+    on the slow clock) and it banks a little as it goes.
+  - **a whale shark** (the light and the twilight): long, slow, a broad flat
+    head and a mouth across its front, dark above with pale spots in rows
+    and pale stripes across the back, the belly pale, ridges along the
+    flank, a tall dorsal and a small second one, its tail sweeping on its
+    own from the root, a remora or two under it.
+  - **a sperm whale** (the midnight), come down to hunt: head first and
+    slanting down across the dark, the square head a third of it, the long
+    pale lower jaw with its teeth, the small eye far back, wrinkled skin,
+    a hump and knuckles where a fin would be; its clicks go out ahead of it
+    a ring at a time, and the tank knocks with them, a little more than
+    once a second, muffled by the depth.
+  - **a vampire squid** (the twilight and the midnight): wine-dark, its
+    webbed arms spread like a cloak, a fin either side of its mantle like
+    an ear, the arm tips lit; a third of the way through it turns itself
+    inside out (the two poses taking over from each other softly), the
+    black spined inside of its cloak over everything, and lets go a cloud
+    of cold blue light that hangs and fades while it slips away.
+  - and the abyss's own, once its floor is in view: a fish fall (where the
+    rattails come for the amphipods, there being no snailfish there), a
+    supergiant amphipod, and a second chance at the dumbo.
+
+  A picture leaves these five out for now.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
   appears in the Sound menu and plays a tank heard from
   across a room: a low bed of water that swells slowly, a thin shimmer, the
@@ -1687,7 +1725,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   sitting the scene draws): at a cold seep a faint high fizz and many more,
   smaller bubbles; in the vent field a low roar, and a little of it on any
   floor with the sitting's own vents; while a slide of silt passes, a rumble
-  lower still that comes on in a few seconds and dies away slowly. It is
+  lower still that comes on in a few seconds and dies away slowly; while a
+  sperm whale hunts at midnight, its clicks, a knock a little more than once
+  a second, muffled by the depth to a carpenter's hammer far off. It is
   still a tank heard from across a room. It eases in over about a second and a half and out over a
   little more than one (`lib/audio-fade.ts`, a cosine curve that picks up from
   wherever the gain is, so a tap mid-fade turns around without a step).
