@@ -5,13 +5,15 @@
  * (and the sitting's own two vents a little, once there is a floor), a
  * slide of silt rumbles while it passes, swelling and dying away with it;
  * a sperm whale hunting at midnight knocks, a click a second, while it is
- * there.
+ * there; on a rainy day the rain hisses on the surface overhead, fading as
+ * the sitting sinks away from it.
  */
 
 import type { Biome } from './biome';
 import { depthAt } from './depth';
 import { eventsAt } from './events';
 import { legAt } from './places';
+import { weatherOf, weatherReach } from './weather';
 
 /** What the place and the moment add to the tank, each 0 (none) to 1. */
 export interface TankScene {
@@ -23,9 +25,11 @@ export interface TankScene {
   rumble: number;
   /** A sperm whale's clicks, knocking through the water while it hunts. */
   clicks: number;
+  /** Rain on the surface, heard from under it: gone as the light goes. */
+  rain: number;
 }
 
-export const QUIET: TankScene = { fizz: 0, roar: 0, rumble: 0, clicks: 0 };
+export const QUIET: TankScene = { fizz: 0, roar: 0, rumble: 0, clicks: 0, rain: 0 };
 
 export function tankScene(biome: Biome, focusSeconds: number): TankScene {
   const t = Math.max(0, focusSeconds);
@@ -42,5 +46,7 @@ export function tankScene(biome: Biome, focusSeconds: number): TankScene {
     // The whale's clicks come and go with it.
     if (event.kind === 'spermwhale') clicks = Math.round(Math.max(0, Math.min(1, age / 0.15, (1 - age) / 0.25)) * 10) / 10;
   }
-  return { fizz, roar, rumble, clicks };
+  // Rain on the day's surface, fading as the sitting sinks away from it.
+  const rain = Math.round(weatherOf(biome.key).rain * weatherReach(depthAt(t).z) * 10) / 10;
+  return { fizz, roar, rumble, clicks, rain };
 }

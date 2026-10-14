@@ -1137,6 +1137,19 @@ only ever grows, it never runs backwards, and none of it touches progress.
   nothing steps at a zone's edge. The timing is a northern sea's; nothing
   on the page names a season. (Sightings do not follow it: their rolls are
   fixed so no saved sitting's ever move.)
+- **The weather is the day's** (`lib/ocean/weather.ts`), read off the day
+  in the sitting's key like the season, so every sitting on one day is
+  under the same sky, and coming in spells (a day is often the one before
+  it again, two and a half days on average): bright (about three days in
+  ten: the light off the surface and the shafts stronger), clear, overcast
+  (one in five: the light off the surface and the shafts mostly gone, the
+  light water greyer, flat), rain (one in ten: greyer still, rings
+  spreading on the surface overhead in the first seconds, and in the tank
+  a soft high hiss of the rain on it, fading as the sitting sinks), or a
+  swell running (one in eight: the shallows surge, the snow swinging back
+  and forth together and the shafts swaying further). All of it eases out
+  with depth and is gone by the end of the light; nothing on the page names
+  it. A key with no time in it is a clear day.
 - **Each leg has its own water** (`Leg.water` in `places.ts`), rolled for
   it: in about a third of them the current runs the other way to the
   sitting's, so most of what swims there swims the other way; the water is
@@ -1727,7 +1740,9 @@ only ever grows, it never runs backwards, and none of it touches progress.
   floor with the sitting's own vents; while a slide of silt passes, a rumble
   lower still that comes on in a few seconds and dies away slowly; while a
   sperm whale hunts at midnight, its clicks, a knock a little more than once
-  a second, muffled by the depth to a carpenter's hammer far off. It is
+  a second, muffled by the depth to a carpenter's hammer far off; and on a
+  rainy day, while the light lasts, the rain on the surface overhead, a
+  soft high hiss. It is
   still a tank heard from across a room. It eases in over about a second and a half and out over a
   little more than one (`lib/audio-fade.ts`, a cosine curve that picks up from
   wherever the gain is, so a tap mid-fade turns around without a step).

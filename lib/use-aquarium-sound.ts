@@ -40,6 +40,8 @@ const RUMBLE = 0.32;
 /** A sperm whale's clicks: a knock a little more than once a second. */
 const CLICKS = 0.3;
 const CLICK_EVERY = 0.85;
+/** Rain on the surface overhead: a soft high hiss. */
+const RAIN = 0.05;
 
 export function useAquariumSound() {
   const [on, setOn] = useState(false);
@@ -62,8 +64,8 @@ export function useAquariumSound() {
   /* Where the sitting is and what is happening there: a seep fizzes, a vent
      field roars low, a slide of silt rumbles while it passes. Each is a
      quiet layer of its own, faded in and out over seconds. */
-  const sceneRef = useRef<TankScene>({ fizz: 0, roar: 0, rumble: 0, clicks: 0 });
-  const layersRef = useRef<{ fizz: GainNode; roar: GainNode; rumble: GainNode; clicks: GainNode } | null>(null);
+  const sceneRef = useRef<TankScene>({ fizz: 0, roar: 0, rumble: 0, clicks: 0, rain: 0 });
+  const layersRef = useRef<{ fizz: GainNode; roar: GainNode; rumble: GainNode; clicks: GainNode; rain: GainNode } | null>(null);
   // A tank still fading out after being turned off, and how to close it now.
   const fadingRef = useRef<{ timer: number; close: () => void } | null>(null);
 
@@ -81,7 +83,7 @@ export function useAquariumSound() {
 
   const setScene = useCallback((next: TankScene) => {
     const was = sceneRef.current;
-    if (was.fizz === next.fizz && was.roar === next.roar && was.rumble === next.rumble && was.clicks === next.clicks) return;
+    if (was.fizz === next.fizz && was.roar === next.roar && was.rumble === next.rumble && was.clicks === next.clicks && was.rain === next.rain) return;
     sceneRef.current = next;
     const layers = layersRef.current;
     const context = contextRef.current;
@@ -91,6 +93,7 @@ export function useAquariumSound() {
     // A slide comes on quicker than it goes.
     layers.rumble.gain.setTargetAtTime(RUMBLE * next.rumble, context.currentTime, next.rumble > was.rumble ? 2 : 6);
     layers.clicks.gain.setTargetAtTime(CLICKS * next.clicks, context.currentTime, 2);
+    layers.rain.gain.setTargetAtTime(RAIN * next.rain, context.currentTime, 4);
   }, []);
 
   const setVolume = useCallback((v: number) => {
@@ -301,7 +304,10 @@ export function useAquariumSound() {
       clickSrc.connect(clickGain);
       clickGain.connect(master);
       clickSrc.start();
-      layersRef.current = { fizz: fizz.g, roar: roar.g, rumble: rumble.g, clicks: clickGain };
+      // Rain on the surface, from under it: a soft hiss, high, the depth's
+      // filter taking it away as the sitting sinks.
+      const rain = layer('highpass', 2400, 0.5, RAIN * scene.rain);
+      layersRef.current = { fizz: fizz.g, roar: roar.g, rumble: rumble.g, clicks: clickGain, rain: rain.g };
 
       // Bubbles: a sine that climbs quickly in pitch as it rises, with a soft
       // edge on either side. Alone, or now and then a short string of them;
@@ -352,7 +358,7 @@ export function useAquariumSound() {
             // Already stopped.
           }
         }
-        for (const src of [bed, shimmer, fizz.src, roar.src, rumble.src, clickSrc]) {
+        for (const src of [bed, shimmer, fizz.src, roar.src, rumble.src, clickSrc, rain.src]) {
           try {
             src.stop();
           } catch {
