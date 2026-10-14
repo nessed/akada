@@ -32,6 +32,7 @@ import { hash32, mulberry32, type Rand } from '../random';
 import type { Visitor } from '../schedule';
 import { drawDumbo, drawLure, drawWhaleFall } from '../sightings-deep';
 import { drawFishFall, drawSnailfishGathering, drawSupergiant } from '../sightings-hadal';
+import { drawDolphins, drawManta, drawSpermWhale, drawVampire, drawWhaleShark } from '../sightings-early';
 import { drawOarfish, drawSiphonophore, drawTurtle } from '../sightings-shallow';
 import { SpriteCache, type Sprite } from '../sprites';
 import { Wash } from '../wash';
@@ -2773,6 +2774,22 @@ function drawEvent(ctx: CanvasRenderingContext2D, plan: Plan, c: Caches, e: Plac
       break;
     case 'whalefall':
       drawWhaleFall(ctx, w, h, 1, e.seed, D, ambient, dark, e.y * D, siltAt(plan, c, e.y));
+      break;
+    // The first hours' own, each set down whole at the middle of its region.
+    case 'dolphins':
+      drawDolphins(ctx, w, h, e.age, e.seed, D, ambient, dark, { x: w / 2, y: h / 2 });
+      break;
+    case 'manta':
+      drawManta(ctx, w, h, e.age, e.seed, D, ambient, dark, { x: w / 2, y: h / 2 });
+      break;
+    case 'whaleshark':
+      drawWhaleShark(ctx, w, h, e.age, e.seed, D, ambient, dark, { x: w / 2, y: h / 2 });
+      break;
+    case 'spermwhale':
+      drawSpermWhale(ctx, w, h, e.age, e.seed, D, ambient, dark, { x: w / 2, y: h / 2 });
+      break;
+    case 'vampire':
+      drawVampire(ctx, w, h, e.age, e.seed, D, ambient, dark, { x: w / 2, y: h / 2 });
       break;
     // The trench's own, set on the ground where the layout put them.
     case 'fishfall':

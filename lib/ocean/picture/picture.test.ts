@@ -16,6 +16,7 @@ import { ACROSS, BELL_APART, CAST_BY_WALL, emptyShare, HERO_FROM_WALL, RARE_BELL
 import { EVENTS } from '../events';
 import { rockShape } from '../outcrop-sprite';
 import { siphonophoreReach } from '../sightings-shallow';
+import { earlyFacing, type EarlyKind } from '../sightings-early';
 import { KELP_SHADE, kelpShadeAt } from './paint';
 
 /** A sitting from a start and a list of stretches in minutes. */
@@ -955,4 +956,32 @@ test('the trench\'s own sightings sit on the ground in a picture, never in the c
     }
   }
   assert.ok(seen.size >= 2, `only ${[...seen].join(', ') || 'none'} of the trench's sightings in four long pictures`);
+});
+
+test('the first hours\' own sightings are in a picture whole, inside its margin, clear of the hero, facing into the page', () => {
+  const seen = new Set<string>();
+  const found: [number, number, string][] = [
+    [1788246061000, 50, 'c1'],
+    [1788271322000, 80, 'c2'],
+    [1788296583000, 110, 'c3'],
+    [1788726020000, 30, 'c0'],
+    [1788801803000, 110, 'c3'],
+  ];
+  for (const [start, len, course] of found) {
+    const c = { name: `${len} min ${course}`, course, segs: sitting(new Date(start).toISOString(), [['focus', len]]) };
+    const plan = planOf(c, { width: 960, height: 600 });
+    const hero = plan.jellies[plan.jellies.length - 1];
+    for (const e of plan.events) {
+      if (!['dolphins', 'manta', 'whaleshark', 'spermwhale', 'vampire'].includes(e.kind)) continue;
+      seen.add(e.kind);
+      const b = e.box as Box;
+      assert.ok(b.x0 >= plan.w * MARGIN * 0.5 - 1e-6 && b.x1 <= plan.w * (1 - MARGIN * 0.5) + 1e-6, `${c.name}: the ${e.kind} off the side`);
+      assert.ok(b.y0 >= plan.h * 0.04 - 1e-6 && b.y1 <= plan.h * 0.96 + 1e-6, `${c.name}: the ${e.kind} off the top or foot`);
+      assert.ok(boxGap(b, hero.box) >= CLEAR - 1e-6, `${c.name}: the ${e.kind} in the hero's margin`);
+      // Set down at the middle of its region, facing toward the middle of the page.
+      assert.ok(Math.abs(e.x - (e.rx + e.rw / 2)) < 1e-6 && Math.abs(e.y - (e.ry + e.rh / 2)) < 1e-6, `${c.name}: the ${e.kind} off its point`);
+      if (e.kind !== 'vampire') assert.equal(earlyFacing(e.kind as EarlyKind, e.seed) * (e.mirror ? -1 : 1) > 0, e.x < plan.w / 2, `${c.name}: the ${e.kind} facing out of the page`);
+    }
+  }
+  assert.ok(seen.size >= 4, `only ${[...seen].join(', ') || 'none'} of the first hours' sightings in five pictures`);
 });
