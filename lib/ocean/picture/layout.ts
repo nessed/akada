@@ -21,6 +21,7 @@ import type { Species } from '../biome';
 import { depthAt, ZONES } from '../depth';
 import { schoolOf } from '../genome';
 import { EVENTS, type EventKind, type OceanEvent } from '../events';
+import { earlyFacing, earlyHull } from '../sightings-early';
 import { KELP_ROCK, rollKelp, type Kelp } from '../kelp';
 import { siphonophoreReach } from '../sightings-shallow';
 import { EYE_HULL } from '../draw';
@@ -2746,6 +2747,33 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
       const yy = clamp(y, h * 0.2, (o.floorY ?? h) - S * 1.2);
       return { ...base, age: 0.5, rx: want - w * startX, ry: yy - rh * baseY, rw: w, rh, x: want, y: yy, far: false, box: { x0: want - S * 1.1, x1: want + S * 1.1, y0: yy - S * 0.9, y1: yy + S * 0.75 } };
     }
+    case 'dolphins':
+    case 'manta':
+    case 'whaleshark':
+    case 'spermwhale':
+    case 'vampire': {
+      // The first hours' own (`sightings-early.ts`), each set down at a
+      // point of a region of its own, drawn there whole at its fullest:
+      // toward the side away from the way down, facing into the page, inside
+      // its margins, the pod high in the light. The region is narrower than
+      // the page for the big ones, so they are a picture's size.
+      const kind = e.kind;
+      const rw = Math.min(w, M * 1.4) * (kind === 'dolphins' ? 0.6 : kind === 'manta' ? 0.62 : kind === 'whaleshark' ? 0.7 : kind === 'spermwhale' ? 0.5 : 1);
+      const rh = h;
+      const hull = earlyHull(kind, rw, rh, sd);
+      const face: 1 | -1 = side > 0 ? -1 : 1;
+      const mirror = earlyFacing(kind, sd) !== face;
+      const hx0 = face > 0 ? hull.x0 : -hull.x1;
+      const hx1 = face > 0 ? hull.x1 : -hull.x0;
+      const lo = w * MARGIN - hx0;
+      const hi = w * (1 - MARGIN) - hx1;
+      const want = w * (side > 0 ? 0.64 : 0.36);
+      const cx = hi > lo ? clamp(want, lo, hi) : (lo + hi) / 2;
+      const top = h * (kind === 'dolphins' ? 0.16 : 0.12) - hull.y0;
+      const bottom = Math.min(h * (kind === 'dolphins' ? 0.42 : 0.86), (o.floorY ?? h) - CLEAR) - hull.y1;
+      const cy = bottom > top ? clamp(y, top, bottom) : (top + bottom) / 2;
+      return { ...base, age: kind === 'vampire' ? 0.46 : 0.5, rx: cx - rw / 2, ry: cy - rh / 2, rw, rh, mirror, x: cx, y: cy, far: false, box: { x0: cx + hx0, x1: cx + hx1, y0: cy + hull.y0, y1: cy + hull.y1 } };
+    }
     case 'fishfall':
     case 'supergiant':
     case 'snailfish': {
@@ -2816,6 +2844,18 @@ function placeEvent(e: OceanEvent, y: number, o: EventEnv): PlacedEvent | null {
 /** What a rare thing takes up on the page, for the ones that move: in units. */
 function eventHull(e: PlacedEvent, w: number): Box | null {
   switch (e.kind) {
+    case 'dolphins':
+    case 'manta':
+    case 'whaleshark':
+    case 'spermwhale':
+    case 'vampire': {
+      // Set down at the middle of its region, facing as its seed has it unless mirrored.
+      const hull = earlyHull(e.kind, e.rw, e.rh, e.seed);
+      const face = earlyFacing(e.kind, e.seed) * (e.mirror ? -1 : 1);
+      const cx = e.rx + e.rw / 2;
+      const cy = e.ry + e.rh / 2;
+      return face > 0 ? { x0: cx + hull.x0, x1: cx + hull.x1, y0: cy + hull.y0, y1: cy + hull.y1 } : { x0: cx - hull.x1, x1: cx - hull.x0, y0: cy + hull.y0, y1: cy + hull.y1 };
+    }
     case 'siphonophore': {
       // Where the colony reaches, as sightings-shallow.ts measures it in
       // its region (drawn mirrored when the region is), as far as the page.
@@ -2901,6 +2941,9 @@ export const WHALEFALL_LEVEL_TRENCH = 0.02;
 /** The most rare things one picture draws. */
 export const EVENTS_MAX = 2;
 
+/** The first hours' own sightings (`sightings-early.ts`), each set down whole at the middle of its region. */
+const EARLY_KINDS: EventKind[] = ['dolphins', 'manta', 'whaleshark', 'spermwhale', 'vampire'];
+
 /** The big rare things that must never touch the hero, each other or a rock. */
 const LONE: EventKind[] = ['lure', 'siphonophore', 'oarfish'];
 
@@ -2965,6 +3008,8 @@ function settleEvents(
     if (v.kind !== 'whalefall' && b.y0 < h * 0.04) return true;
     // (What swims in the open water is wholly on the page, inside its margin.)
     if ((v.kind === 'turtle' || v.kind === 'dumbo') && (b.x0 < w * MARGIN || b.x1 > w * (1 - MARGIN))) return true;
+    // And the first hours' own, whole on the page and off its foot.
+    if (EARLY_KINDS.includes(v.kind) && (b.x0 < w * MARGIN * 0.5 || b.x1 > w * (1 - MARGIN * 0.5) || b.y1 > h * 0.96)) return true;
     // The squid's eye low on the page, and never under the window.
     if (v.kind === 'eye' && (v.y < h * EYE_BAND[0] || v.y > h * EYE_BAND[1] || Math.abs(v.x - (e.winBox.x0 + e.winBox.x1) / 2) < w * 0.25)) return true;
     if (!onFloor(v.kind) && v.kind !== 'oarfish' && e.floorTop != null && b.y1 > e.floorTop) return true;

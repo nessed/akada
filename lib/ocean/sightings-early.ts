@@ -225,17 +225,21 @@ function paintDolphin(g: CanvasRenderingContext2D, L: number, dark: boolean, px:
   inkLine(g, [0.5 * L, 0.002 * L, 0.42 * L, 0.006 * L, 0.37 * L, 0.012 * L], false, { width: 0.6 * pw, color: ink, taper: [0.1, 0.4], seed: hash32(seed, 'mouth') });
 }
 
+function dolphinLength(w: number, h: number, px: number): number {
+  return Math.max(60 * px, Math.min(w * 0.13, h * 0.2, 190 * px));
+}
+
 /**
  * A pod crossing high in the light: four to seven, strung out and staggered,
  * each kicking and rising and falling on its own beat, the pod going by in
  * about forty seconds.
  */
-export function drawDolphins(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean) {
-  const env = envelope(age, 0.08, 0.08);
+export function drawDolphins(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, at?: { x: number; y: number }) {
+  const env = at ? 1 : envelope(age, 0.08, 0.08);
   if (env <= 0) return;
   const r = mulberry32(hash32(seed, 'pod'));
   const dir = seed & 1 ? 1 : -1;
-  const L = Math.max(60 * px, Math.min(w * 0.13, h * 0.2, 190 * px));
+  const L = dolphinLength(w, h, px);
   const n = 4 + Math.floor(r() * 4);
   const s = sprite(`dolphin|${seed}|${Math.round(L)}|${dark ? 1 : 0}|${px}`, L * 1.4, L * 0.42, L * 0.68, L * 0.22, (g) => paintDolphin(g, L, dark, px, seed));
   const lane = h * (0.14 + 0.16 * r());
@@ -247,13 +251,14 @@ export function drawDolphins(ctx: CanvasRenderingContext2D, w: number, h: number
     const ph = r() * 6.28;
     const far = r() < 0.35;
     const x0 = -L * 2 - back + age * travel;
-    const x = dir > 0 ? x0 : w - x0;
+    // Set down at a point (a picture's), the pod gathered round it.
+    const x = at ? at.x + dir * (1.6 * L - back) : dir > 0 ? x0 : w - x0;
     // Rising and falling through the water as dolphins do, and the kick's pitch.
     const wave = Math.sin(ambient * 0.9 + ph) * L * 0.25;
     const pitch = Math.cos(ambient * 0.9 + ph) * 0.12 + Math.sin(ambient * beat + ph) * 0.05;
     const k = far ? 0.72 : 1;
     ctx.save();
-    ctx.translate(x, lane + dy + wave);
+    ctx.translate(x, (at ? at.y : lane) + dy + wave);
     ctx.scale(k, k);
     place(ctx, s, 0, 0, pitch * dir, dir, env * (far ? 0.55 : 0.92));
     ctx.restore();
@@ -342,16 +347,20 @@ function paintManta(g: CanvasRenderingContext2D, S: number, flap: number, dark: 
   inkLine(g, [0.155 * S, -0.045 * S, 0.165 * S, 0, 0.155 * S, 0.045 * S], false, { width: 1 * pw, color: ink, seed: hash32(seed, 'mouth') });
 }
 
+function mantaSpan(w: number, h: number, px: number): number {
+  return Math.max(90 * px, Math.min(w * 0.3, h * 0.42, 420 * px));
+}
+
 /** A manta gliding over, beneath the reader's line of sight, wings beating slowly, banking a little as it goes. */
-export function drawManta(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean) {
-  const env = envelope(age, 0.12, 0.12);
+export function drawManta(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, at?: { x: number; y: number }) {
+  const env = at ? 1 : envelope(age, 0.12, 0.12);
   if (env <= 0) return;
   const dir = seed & 1 ? 1 : -1;
-  const S = Math.max(90 * px, Math.min(w * 0.3, h * 0.42, 420 * px));
+  const S = mantaSpan(w, h, px);
   const travel = w + S * 1.6;
   const x0 = -S * 0.8 + age * travel;
-  const x = dir > 0 ? x0 : w - x0;
-  const y = h * (0.28 + ((seed >>> 4) % 100) / 100 * 0.2) + Math.sin(age * Math.PI * 2) * h * 0.04;
+  const x = at ? at.x : dir > 0 ? x0 : w - x0;
+  const y = at ? at.y : h * (0.28 + ((seed >>> 4) % 100) / 100 * 0.2) + Math.sin(age * Math.PI * 2) * h * 0.04;
   // Eight inked frames of the beat, played on the slow clock.
   const beat = (Math.sin(ambient * 1.1 + (seed % 7)) + 1) / 2;
   const frame = Math.round(beat * 7);
@@ -488,16 +497,20 @@ function paintSharkTail(g: CanvasRenderingContext2D, L: number, dark: boolean, p
   inkLine(g, pts, true, { width: 1 * pw, color: ink, swell: 0.6, lost: 0.25, seed: hash32(seed, 'tail'), light });
 }
 
+function sharkLength(w: number, h: number, px: number): number {
+  return Math.max(160 * px, Math.min(w * 0.62, h * 0.95, 900 * px));
+}
+
 /** A whale shark going slowly by, its tail sweeping, across about a minute. */
-export function drawWhaleShark(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean) {
-  const env = envelope(age, 0.12, 0.12);
+export function drawWhaleShark(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, at?: { x: number; y: number }) {
+  const env = at ? 1 : envelope(age, 0.12, 0.12);
   if (env <= 0) return;
   const dir = seed & 1 ? 1 : -1;
-  const L = Math.max(160 * px, Math.min(w * 0.62, h * 0.95, 900 * px));
+  const L = sharkLength(w, h, px);
   const travel = w + L * 1.8;
   const x0 = -L * 0.75 + age * travel;
-  const x = dir > 0 ? x0 : w - x0;
-  const y = h * (0.42 + ((seed >>> 5) % 100) / 100 * 0.2) + Math.sin(ambient * 0.13 + (seed % 9)) * h * 0.01;
+  const x = at ? at.x : dir > 0 ? x0 : w - x0;
+  const y = at ? at.y : h * (0.42 + ((seed >>> 5) % 100) / 100 * 0.2) + Math.sin(ambient * 0.13 + (seed % 9)) * h * 0.01;
   const key = `${seed}|${Math.round(L)}|${dark ? 1 : 0}|${px}`;
   const body = sprite(`shark|${key}`, L * 1.06, L * 0.42, L * 0.53, L * 0.2, (g) => paintSharkBody(g, L, dark, px, seed));
   const tail = sprite(`shark-tail|${key}`, L * 0.22, L * 0.3, L * 0.19, L * 0.18, (g) => paintSharkTail(g, L, dark, px, seed));
@@ -590,21 +603,29 @@ function paintSperm(g: CanvasRenderingContext2D, L: number, dark: boolean, px: n
   g.fill();
 }
 
+function spermLength(w: number, h: number, px: number): number {
+  return Math.max(160 * px, Math.min(w * 0.55, h * 0.9, 820 * px));
+}
+
+function spermSlope(seed: number): number {
+  return 0.32 + (((seed >>> 3) % 100) / 100) * 0.12;
+}
+
 /**
  * A sperm whale come down to hunt: head first and slanting down across the
  * dark, its clicks going out ahead of it, a ring at a time.
  */
-export function drawSpermWhale(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean) {
-  const env = envelope(age, 0.15, 0.15);
+export function drawSpermWhale(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, at?: { x: number; y: number }) {
+  const env = at ? 1 : envelope(age, 0.15, 0.15);
   if (env <= 0) return;
   const dir = seed & 1 ? 1 : -1;
-  const L = Math.max(160 * px, Math.min(w * 0.55, h * 0.9, 820 * px));
+  const L = spermLength(w, h, px);
   // Down at a slant across the page.
-  const slope = 0.32 + (((seed >>> 3) % 100) / 100) * 0.12;
+  const slope = spermSlope(seed);
   const travel = w + L * 1.6;
   const x0 = -L * 0.7 + age * travel;
-  const x = dir > 0 ? x0 : w - x0;
-  const y = h * 0.1 + (x0 + L * 0.7) * Math.tan(slope) * 0.6 - L * 0.1;
+  const x = at ? at.x : dir > 0 ? x0 : w - x0;
+  const y = at ? at.y : h * 0.1 + (x0 + L * 0.7) * Math.tan(slope) * 0.6 - L * 0.1;
   const s = sprite(`sperm|${seed}|${Math.round(L)}|${dark ? 1 : 0}|${px}`, L * 1.36, L * 0.36, L * 0.68, L * 0.16, (g) => paintSperm(g, L, dark, px, seed));
   const a = env * 0.85;
   place(ctx, s, x, y, slope * dir, dir, a);
@@ -729,25 +750,31 @@ function paintVampire(g: CanvasRenderingContext2D, S: number, inside: number, da
 
 const GLOW = '#9FE8FF';
 
+function vampireSize(w: number, h: number, px: number): number {
+  return Math.max(80 * px, Math.min(w, h) * 0.2);
+}
+
 /**
  * A vampire squid: it drifts in with its cloak spread, turns itself inside
  * out (arms up over its mantle, the black spined inside of the cloak
  * showing), and as it does lets go a cloud of glowing mucus that hangs and
  * fades while it slips away, its arm tips lit.
  */
-export function drawVampire(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean) {
-  const env = envelope(age, 0.12, 0.12);
+export function drawVampire(ctx: CanvasRenderingContext2D, w: number, h: number, age: number, seed: number, px: number, ambient: number, dark: boolean, at?: { x: number; y: number }) {
+  const env = at ? 1 : envelope(age, 0.12, 0.12);
   if (env <= 0) return;
   const r = mulberry32(hash32(seed, 'vampire'));
-  const S = Math.max(80 * px, Math.min(w, h) * 0.2);
+  const S = vampireSize(w, h, px);
   const side = seed & 1 ? 1 : -1;
-  const cx = w * (0.5 + side * (0.18 + 0.1 * r()));
-  const cy = h * (0.35 + 0.25 * r());
+  const rx = 0.18 + 0.1 * r();
+  const ry = 0.35 + 0.25 * r();
+  const cx = at ? at.x : w * (0.5 + side * rx);
+  const cy = at ? at.y : h * ry;
   // In, the turn about a third of the way through, then away.
   const inside = smooth((age - 0.3) / 0.08) * (1 - smooth((age - 0.72) / 0.1));
   const away = smooth((age - 0.7) / 0.3);
-  const x = cx + side * (1 - smooth(age / 0.3)) * w * 0.15 - side * away * w * 0.1;
-  const y = cy + Math.sin(ambient * 0.5 + (seed % 7)) * S * 0.05 - away * h * 0.08;
+  const x = at ? cx : cx + side * (1 - smooth(age / 0.3)) * w * 0.15 - side * away * w * 0.1;
+  const y = at ? cy : cy + Math.sin(ambient * 0.5 + (seed % 7)) * S * 0.05 - away * h * 0.08;
   // The cloud first, behind: a hundred specks of cold light let go at the turn.
   const cloud = smooth((age - 0.36) / 0.1) * (1 - smooth((age - 0.55) / 0.45));
   if (cloud > 0) {
@@ -789,4 +816,49 @@ export function drawVampire(ctx: CanvasRenderingContext2D, w: number, h: number,
     }
     ctx.restore();
   }
+}
+
+/* ---- For a picture ---- */
+
+export type EarlyKind = 'dolphins' | 'manta' | 'whaleshark' | 'spermwhale' | 'vampire';
+
+/**
+ * What one of these covers when a picture sets it down at a point (`at`)
+ * of a region `w` by `h` (`px` 1: the picture's units), as offsets from
+ * that point, facing +x: so a layout can keep it clear of the rest.
+ */
+export function earlyHull(kind: EarlyKind, w: number, h: number, seed: number): { x0: number; x1: number; y0: number; y1: number } {
+  switch (kind) {
+    case 'dolphins': {
+      const L = dolphinLength(w, h, 1);
+      return { x0: -2.35 * L, x1: 2.35 * L, y0: -1.05 * L, y1: 1.05 * L };
+    }
+    case 'manta': {
+      const S = mantaSpan(w, h, 1);
+      return { x0: -0.7 * S, x1: 0.3 * S, y0: -0.56 * S, y1: 0.56 * S };
+    }
+    case 'whaleshark': {
+      const L = sharkLength(w, h, 1);
+      return { x0: -0.69 * L, x1: 0.53 * L, y0: -0.2 * L, y1: 0.2 * L };
+    }
+    case 'spermwhale': {
+      const L = spermLength(w, h, 1);
+      const a = spermSlope(seed);
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      // Its sprite, -0.68 L to 0.68 L along it and -0.16 L to 0.2 L across, turned down by its slope.
+      const xs = [-0.68, 0.68].flatMap((u) => [-0.16, 0.2].map((v) => u * L * c - v * L * s));
+      const ys = [-0.68, 0.68].flatMap((u) => [-0.16, 0.2].map((v) => u * L * s + v * L * c));
+      return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    }
+    case 'vampire': {
+      const S = vampireSize(w, h, 1);
+      return { x0: -0.8 * S, x1: 0.8 * S, y0: -0.5 * S, y1: 1 * S };
+    }
+  }
+}
+
+/** Which way one of these faces, +1 or -1, as its seed has it (the squid faces the reader). */
+export function earlyFacing(kind: EarlyKind, seed: number): 1 | -1 {
+  return kind === 'vampire' ? 1 : seed & 1 ? 1 : -1;
 }

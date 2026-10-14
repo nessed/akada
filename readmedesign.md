@@ -1724,7 +1724,14 @@ only ever grows, it never runs backwards, and none of it touches progress.
     rattails come for the amphipods, there being no snailfish there), a
     supergiant amphipod, and a second chance at the dumbo.
 
-  A picture leaves these five out for now.
+  A picture carries these five, each set down whole at its fullest (the
+  pod together, the manta mid-beat, the whale shark side on, the sperm
+  whale diving, the squid turned out in its cloud of light) at the middle
+  of a region of its own, narrower than the page for the big ones so they
+  are a picture's size: toward the side away from the way down, facing
+  into the page, inside the margins and off the page's foot, the pod high
+  in the light, and moved the least way to be clear of the hero, the rocks
+  and the other rare thing, or left out if it cannot be.
 - **Aquarium sounds.** Only while the deep is the chosen drawing, "The tank"
   appears in the Sound menu and plays a tank heard from
   across a room: a low bed of water that swells slowly, a thin shimmer, the
