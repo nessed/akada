@@ -87,6 +87,12 @@ interface TimerState {
   stretchStartedAt: number;
   /** Stretches already finished, oldest first. */
   segments: SessionSegment[];
+  /**
+   * How many times the sitting has been taken over from another device.
+   * Zero for one started here; the device holding the highest is the one
+   * holding the sitting (see `handoffVerdict` in lib/live-sitting.ts).
+   */
+  epoch: number;
 }
 
 interface PendingTimerLog {
@@ -117,7 +123,12 @@ interface PendingTimerLog {
     breakSeconds: number;
     segments: SessionSegment[];
   };
+  /** The sitting's id, so the database keeps one session for it however many sheets save it. */
+  sittingId?: string;
 }
+
+/** A sitting running on another device, in the shape `adopt` takes it. */
+export type AdoptableSitting = TimerState;
 
 interface TimerContextValue {
   /**
@@ -174,6 +185,14 @@ interface TimerContextValue {
   clearPendingLog: () => void;
   clearTimerState: () => void;
   stop: () => PendingTimerLog | null;
+  /**
+   * Take over a sitting running on another device, carrying on from where it
+   * is. Refused, false, while this device has a sitting of its own on the
+   * clock or on the log sheet.
+   */
+  adopt: (sitting: AdoptableSitting) => boolean;
+  /** Let go of the sitting because another device took it over. Nothing is logged here. */
+  handOff: (label: string) => void;
 }
 
 /** The fields that move every second while a sitting runs. */
@@ -426,6 +445,8 @@ function sanitizeActive(value: unknown): TimerState | null {
       ? Number(state.stretchStartedAt)
       : startedAt - Math.max(0, accumulatedMs),
     segments: sanitizeSegments(state.segments),
+    // Every sitting from before devices could hand one over was started here.
+    epoch: Number.isFinite(Number(state.epoch)) && Number(state.epoch) > 0 ? Math.floor(Number(state.epoch)) : 0,
     // A clock held before this was tracked reads its heartbeat as the moment
     // it was held. Close enough for every reader of it: the ceiling, the
     // "paused 12m" line, a break taken from it.
@@ -529,6 +550,7 @@ function sanitizePendingLog(value: unknown): PendingTimerLog | null {
         ? log.recoveryReason
         : undefined,
     quiet: sanitizeQuiet(log.quiet, durationSeconds),
+    ...(typeof log.sittingId === 'string' && log.sittingId.trim() ? { sittingId: log.sittingId } : {}),
   };
 }
 
@@ -780,6 +802,7 @@ function buildPendingLog(
     segments,
     recoveryReason,
     ...(quiet ? { quiet } : {}),
+    sittingId: safeState.sessionId,
   };
 }
 
@@ -1175,6 +1198,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       sittingStartedAt: now,
       stretchStartedAt: now,
       segments: [],
+      epoch: 0,
     };
     maybeRequestTimerNotificationPermission();
     // Every browser refuses to open an audio context outside a user gesture,
@@ -1463,6 +1487,36 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     savePendingLog(null);
   }, []);
 
+  const adopt = useCallback((sitting: AdoptableSitting) => {
+    const snapshot = loadActiveSnapshot();
+    if (activeRef.current || pendingLogRef.current || snapshot.active || snapshot.pendingLog) return false;
+    const next = sanitizeActive({ ...sitting, epoch: sitting.epoch + 1, lastInputAt: Date.now() });
+    if (!next) return false;
+    // The tap on Take over is the gesture the audio context wants.
+    primeChime();
+    if (next.phase === 'break' && !next.isPaused && next.breakSeconds != null && soundOn()) {
+      const left = next.breakSeconds - computeElapsed(next);
+      if (left > 0) scheduleChime('back', left);
+    }
+    breakNoticeRef.current = null;
+    activeRef.current = next;
+    setActive(next);
+    saveActive(next);
+    setElapsed(computeElapsed(next));
+    return true;
+  }, []);
+
+  const handOff = useCallback((label: string) => {
+    if (!activeRef.current) return;
+    cancelChime();
+    breakNoticeRef.current = null;
+    activeRef.current = null;
+    setActive(null);
+    saveActive(null);
+    setElapsed(0);
+    announceEnded(`Your ${label} took this session over. It carries on there.`);
+  }, []);
+
   const clearTimerState = useCallback(() => {
     cancelChime();
     breakNoticeRef.current = null;
@@ -1514,6 +1568,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       clearPendingLog,
       clearTimerState,
       stop,
+      adopt,
+      handOff,
     }),
     [
       hydrated,
@@ -1535,6 +1591,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       clearPendingLog,
       clearTimerState,
       stop,
+      adopt,
+      handOff,
     ],
   );
   const clock = useMemo<TimerClock>(

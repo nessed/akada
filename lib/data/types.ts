@@ -111,6 +111,13 @@ export interface Session {
    * the reader did not end is not a fact about how they study.
    */
   recovery?: SessionRecovery | null;
+  /**
+   * The timer's own id for the sitting this was logged from. Written, never
+   * read back: the database keeps one session per sitting id, so a sitting
+   * that was carried between devices (lib/live-sitting.ts) and stopped on
+   * both is logged once, whichever sheet saves second.
+   */
+  sittingId?: string;
 }
 
 /** See Session.recovery. */

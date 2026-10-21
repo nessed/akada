@@ -207,6 +207,7 @@ export default function PendingSessionLogSheet() {
         segments: chosen?.segments ?? pendingLog.segments,
         ...(recovery ? { recovery } : {}),
         ...(practice ? { score: practice.score, scoreOutOf: practice.outOf } : {}),
+        ...(pendingLog.sittingId ? { sittingId: pendingLog.sittingId } : {}),
       });
       // A score the database had nowhere to put: the sitting is saved and the
       // score is not, which is said once rather than left to vanish from the

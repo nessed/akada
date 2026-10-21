@@ -158,6 +158,12 @@ export interface DataProvider {
    * no-op rather than an error.
    */
   recordLiveSitting(snapshot: LiveSittingSnapshot | null): Promise<void>;
+  /**
+   * The snapshot as stored, unparsed, so another device can see a sitting
+   * running elsewhere and the device running it can tell it was taken over.
+   * Null for nobody signed in, nothing stored, or a read that failed.
+   */
+  readLiveSitting(): Promise<unknown>;
 
   // Dev / debugging
   resetAll(): Promise<void>;

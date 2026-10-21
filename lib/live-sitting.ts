@@ -21,6 +21,13 @@ import { clampSessionSeconds, sanitizeSegments } from './session-safety';
  *
  * Nothing here is a record. The session row the app writes at the end is the
  * record; this is overwritten in place and gone the moment that row exists.
+ *
+ * It is also how a sitting moves between devices. The snapshot names the
+ * device running it and an `epoch` that goes up by one each time a sitting is
+ * taken over. Another device that reads it can offer to take the sitting
+ * (`sittingFromSnapshot`), and the device that had it gives it up once it
+ * reads a newer epoch than its own (`handoffVerdict`). Only one device ever
+ * holds the sitting, so only one ever logs it.
  */
 
 /** How often an open sitting is written when nothing about it has changed. */
@@ -66,7 +73,20 @@ export interface LiveSittingSnapshot {
   /** Only for `stopped`: what the log sheet is holding. */
   focus_seconds?: number;
   break_seconds?: number;
+  /** When the clock was held, while it is. */
+  paused_at?: string | null;
+  /** The device holding the sitting (lib/device.ts), and what to call it. */
+  device?: string;
+  device_label?: string;
+  /** Up by one each time the sitting is taken over by another device. */
+  epoch?: number;
   written_at: string;
+}
+
+/** Who is writing: the device's id and name, from lib/device.ts. */
+export interface SittingDevice {
+  id: string;
+  label: string;
 }
 
 /** The timer's fields this reads. Structural, so the timer keeps its own type. */
@@ -84,6 +104,8 @@ export interface RunningSittingState {
   targetSeconds: number | null;
   breakSeconds: number | null;
   segments: SessionSegment[];
+  pausedAt?: number | null;
+  epoch?: number;
 }
 
 export interface StoppedSittingState {
@@ -99,7 +121,11 @@ function iso(ms: number): string {
   return new Date(ms).toISOString();
 }
 
-export function snapshotRunning(state: RunningSittingState, now: number): LiveSittingSnapshot {
+export function snapshotRunning(
+  state: RunningSittingState,
+  now: number,
+  device?: SittingDevice,
+): LiveSittingSnapshot {
   return {
     v: 1,
     id: state.sessionId,
@@ -115,11 +141,18 @@ export function snapshotRunning(state: RunningSittingState, now: number): LiveSi
     target_seconds: state.targetSeconds,
     break_target_seconds: state.breakSeconds,
     segments: state.segments,
+    paused_at: state.isPaused && state.pausedAt != null ? iso(state.pausedAt) : null,
+    ...(device ? { device: device.id, device_label: device.label } : {}),
+    epoch: state.epoch ?? 0,
     written_at: iso(now),
   };
 }
 
-export function snapshotStopped(log: StoppedSittingState, now: number): LiveSittingSnapshot {
+export function snapshotStopped(
+  log: StoppedSittingState,
+  now: number,
+  device?: SittingDevice,
+): LiveSittingSnapshot {
   const first = log.segments[0]?.startedAt;
   return {
     v: 1,
@@ -138,6 +171,7 @@ export function snapshotStopped(log: StoppedSittingState, now: number): LiveSitt
     segments: log.segments,
     focus_seconds: clampSessionSeconds(log.durationSeconds),
     break_seconds: clampSessionSeconds(log.breakSeconds),
+    ...(device ? { device: device.id, device_label: device.label } : {}),
     written_at: iso(now),
   };
 }
@@ -279,4 +313,106 @@ export function liveSittingSession(reading: LiveSittingReading | null): Session 
     focusSeconds: reading.focus_seconds,
     key: reading.id,
   });
+}
+
+/** A sitting running on another device, as this one could take it over. */
+export interface SittingElsewhere {
+  reading: LiveSittingReading;
+  /** What the device holding it calls itself: "phone", "laptop". */
+  label: string;
+  /** The timer's own state for it, ready to run here. */
+  state: RunningSittingState & {
+    startedDate: string;
+    lastSeenAt: number;
+    lastInputAt: number;
+    pausedAt: number | null;
+    epoch: number;
+  };
+}
+
+/**
+ * The stored snapshot as a sitting this device could take over, or null when
+ * there is nothing to take: no snapshot, one this device wrote itself, one
+ * stopped and waiting on its own device's log sheet, or one gone stale.
+ *
+ * A page shut on a running clock (quiet) is taken over held at its last
+ * word, for the same reason the connector reads it that way: counting the
+ * hours a laptop sat shut would be making them up. Pressing play is the
+ * reader saying they are back.
+ */
+export function sittingFromSnapshot(raw: unknown, now: number, me: string): SittingElsewhere | null {
+  const reading = readLiveSitting(raw, now);
+  if (!reading || reading.state === 'stopped') return null;
+  const row = raw as Record<string, unknown>;
+  const device = readString(row.device);
+  if (!device || device === me) return null;
+  const writtenAt = readTime(row.written_at) ?? now;
+  const phase = row.phase === 'break' ? 'break' : 'focus';
+  const startedAt = readTime(row.started_at) ?? writtenAt;
+  const stretchStartedAt = readTime(row.stretch_started_at) ?? startedAt;
+  const runningSince = readTime(row.running_since);
+  const stretchMs = clampSessionSeconds(row.stretch_seconds) * 1000;
+  const held = reading.state === 'paused' || runningSince == null || reading.quiet;
+  // Held: everything it counted so far, as of when it was held. Running: the
+  // same arithmetic the timer does, from when the stretch last started.
+  const accumulatedMs = reading.quiet && runningSince != null
+    ? stretchMs + Math.max(0, writtenAt - runningSince)
+    : stretchMs;
+  const target = (value: unknown) => {
+    const n = Number(value);
+    return value != null && Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  };
+  const epoch = Number(row.epoch);
+  return {
+    reading,
+    label: readString(row.device_label) ?? 'other device',
+    state: {
+      sessionId: reading.id,
+      courseId: reading.course_id,
+      taskId: reading.task_id,
+      startedDate: reading.date,
+      phase,
+      isPaused: held,
+      startedAt: held ? now : runningSince ?? now,
+      accumulatedMs: held ? accumulatedMs : stretchMs,
+      pausedAt: held ? (readTime(row.paused_at) ?? writtenAt) : null,
+      sittingStartedAt: startedAt,
+      stretchStartedAt,
+      targetSeconds: target(row.target_seconds),
+      breakSeconds: target(row.break_target_seconds),
+      segments: sanitizeSegments(row.segments),
+      lastSeenAt: now,
+      lastInputAt: now,
+      epoch: Number.isFinite(epoch) && epoch >= 0 ? Math.floor(epoch) : 0,
+    },
+  };
+}
+
+/**
+ * What a device holding a sitting does about what the server says.
+ *
+ * `yield`: the same sitting, held by another device at a later epoch, so it
+ * was taken over and this device lets it go. `reassert`: the same sitting
+ * under another device's name at an epoch no later than ours, which is a
+ * write of ours that crossed a takeover's in flight or a stale one, so ours
+ * goes up again and the other device yields on its next read. `none` otherwise: a
+ * different sitting, or one that is ours.
+ */
+export function handoffVerdict(
+  local: { sessionId: string; epoch?: number } | null,
+  raw: unknown,
+  me: string,
+): 'yield' | 'reassert' | 'none' {
+  if (!local || !raw || typeof raw !== 'object') return 'none';
+  const row = raw as Record<string, unknown>;
+  if (row.id !== local.sessionId) return 'none';
+  const device = readString(row.device);
+  if (!device || device === me) return 'none';
+  const theirs = Number(row.epoch);
+  const mine = local.epoch ?? 0;
+  if (!Number.isFinite(theirs) || theirs < mine) return 'reassert';
+  // Two devices that took the same sitting over at once share an epoch; the
+  // lower id keeps it, so they settle instead of taking turns forever.
+  if (theirs === mine && device > me) return 'reassert';
+  return 'yield';
 }

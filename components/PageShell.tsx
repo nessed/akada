@@ -2,6 +2,7 @@
 
 import BottomNav from './BottomNav';
 import ActiveTimerDock from './ActiveTimerDock';
+import ElsewhereDock from './ElsewhereDock';
 import PendingSessionLogSheet from './PendingSessionLogSheet';
 import DesktopRail from './DesktopRail';
 
@@ -53,6 +54,9 @@ export default function PageShell({ children, wide }: Props) {
           sitting runs the dock is the only clock, so there is never a second
           one to disagree with it. */}
       <ActiveTimerDock />
+      {/* Or, with nothing on this device's clock, a sitting running on
+          another of the reader's devices, to take over here. */}
+      <ElsewhereDock />
       <PendingSessionLogSheet />
       <BottomNav />
     </div>

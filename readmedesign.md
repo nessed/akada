@@ -2103,6 +2103,23 @@ tell it by.
   chapter. Unlike the other ways a sitting is closed for the reader, this one
   casts no doubt on the hours, so it is not written to the session as a
   recovery and the recap still draws.
+- **A session runs on one device at a time, and moves.** The running
+  session's snapshot on the server (`lib/live-sitting.ts`, written by
+  `LiveSittingSync`) names the device holding it. Every other device reads
+  it back every 20 seconds while in view and on every return to the page,
+  and with nothing on its own clock shows `ElsewhereDock` in the dock's lane:
+  the dock drawn in outline (a dashed border, the dot a ring, the time in
+  `ink-soft` with "on your laptop" beside it in serif italic), and one
+  button, **Take over**. Nothing on it pauses or finishes the session; it is
+  not this device's to stop. Take over carries the session on from where it
+  is, blocks, breaks and notes intact, and opens the timer. The device that
+  had it reads the takeover on its next look and lets go with a notice
+  ("Your phone took this session over. It carries on there."), then shows
+  the same outlined dock, so taking it back is the same tap. A page shut on
+  a running clock is taken over held at its last word, since the hours it
+  sat shut are not known to be study. Only the holding device logs, and the
+  database keeps one session per timer sitting (`sessions.sitting_id`) for
+  the rare case where both end up stopping it.
 
 ### One word for each thing
 Outside the Record, the app says **session** (never "sitting" or
