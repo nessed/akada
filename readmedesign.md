@@ -238,8 +238,9 @@ Two things follow from the rail. Settings is a **page**, on desktop and on a
 phone alike, because a modal reached from a permanent nav item is a screen
 pretending to be an interruption; the bar is on it, so a phone has a way back.
 Its section list is one flat list of seven, each named for what a reader
-comes looking for: **Goals** (the daily goal, when the day ends, and the
-week's goal as a row that goes to Courses, since it is only their sum),
+comes looking for: **Goals** (the daily goal, when the day ends, the
+week's goal as a row that goes to Courses, since it is only their sum, and
+whether reaching one is celebrated),
 **Timer** (break length, what the timer draws, the chime), **Courses**,
 **Term**, **Look & feel** (paper, accent, heading font, density, the sounds
 under a finger with their Listen row, and the Stats heatmap's weekends),
@@ -3483,6 +3484,52 @@ headers, the one screen that still looked like a settings panel.
   the next rung takes ("17 more hours for the 50h stamp"). Only the next rung
   is ever named. A stamp struck since the last visit comes down with
   `.stamp-down` and wears the `warn` "New" stamp.
+
+### Celebrations
+The app is quiet about progress everywhere a reader works, and it stays that
+way: Next Mark, the log sheet's lines and the Record all speak in facts, with
+no praise. But a goal met is a moment, and the reader asked for it to feel
+like one. So crossing one gets **one card, once** (`components/Celebrations.tsx`,
+read by `lib/celebrations.ts`):
+
+- **What counts.** The day's goal, the week's goal (the course goals added
+  up, the same sum Today draws its line at), a course's own weekly goal when
+  there is more than one course with a goal, the term's hours at the round
+  numbers Stats counts toward (1, 5, 10, 25, 50…), and a rung struck on any
+  of the Record's stamps (the hours ladder aside, since that is the same
+  hours under another name). All of it is read off the logged record, so a
+  card can never claim a goal the hours on Today do not show.
+- **When.** Never while a sitting runs or its log sheet is open: the card
+  lands just after Save, which is when the hours join the record. A session
+  logged by Log time, or by Claude while the app was closed, is met the next
+  time a working screen opens. Only on working screens, never sign-in,
+  onboarding or the documents.
+- **Once.** The device keeps which crossings it has celebrated
+  (`akada.celebrated.v1`, cleared on sign-out with the rest). A first visit
+  takes everything already true as seen, and an empty record is no baseline,
+  so nobody is handed a term's worth of stamps at once. A goal that comes
+  true without the record changing (the daily goal lowered under today's
+  hours) is noted, not celebrated: lowering the bar is not clearing it. When
+  one sitting crosses several, the largest leads (week, hours, stamp, course,
+  day) and the rest are listed under it, and of the hours only the highest
+  line crossed is said.
+- **What it looks like.** Made of the notebook, never a trophy, a badge or
+  glitter. A rubber stamp comes down (`.stamp-down`) with what was reached
+  ("Week done", "25 hours", "ECON 100 done"), double ruled in the course's
+  colour when the thing was one course's and in `warn` otherwise. Under it the
+  serif says it plainly ("The week's goal is in."), the figures follow in the
+  serif italic ("4h 30m of 3h"), and the hand writes one line in the margin
+  in Caveat ("take the evening off"), a few to each kind, picked by the
+  crossing so the same day always gets the same line. Scraps of paper torn
+  small in the pastels, the course's own colour doubled, fall past it
+  (`.scrap-fall`) and fade on the way down; under reduced motion there are
+  none. One button, **Back to it**; Esc, Enter or a click outside closes it.
+- **Sound.** The chime's glass struck up the chord and once at the octave
+  (`cheer` in `lib/chime.ts`), under the same switch as the timer's chime,
+  the other sound with something to announce.
+- **Off.** Settings › Goals, "Celebrate goals and milestones". Off, crossings
+  are still noted, so turning it back on does not bring up everything that
+  happened in between.
 
 ### Explained once
 The rule under the quiet. Every screen is written for someone on their

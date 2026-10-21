@@ -1024,6 +1024,36 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .stamp-down {
   animation: stamp-down 0.5s cubic-bezier(0.3, 0.7, 0.3, 1) both;
 }
+/* Scraps of paper falling past a celebration (components/Celebrations.tsx).
+   Each carries its own drift and spin; they fade out on the way down rather
+   than piling up at the foot of the screen. */
+@keyframes scrap-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -6vh, 0) rotate(0deg);
+  }
+  8% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift, 0px), 105vh, 0) rotate(var(--spin, 360deg));
+  }
+}
+.scrap-fall {
+  opacity: 0;
+  animation-name: scrap-fall;
+  animation-timing-function: cubic-bezier(0.35, 0.1, 0.6, 1);
+  animation-fill-mode: forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .celebration-scraps {
+    display: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .deal-in,
   .heat-in,

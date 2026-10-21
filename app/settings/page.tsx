@@ -61,7 +61,7 @@ const SECTIONS: { id: Section; label: string; standfirst: string }[] = [
   {
     id: 'goals',
     label: 'Goals',
-    standfirst: 'What a day and a week are measured against, and when your day ends.',
+    standfirst: 'What a day and a week are measured against, when your day ends, and what happens when you get there.',
   },
   {
     id: 'timer',
@@ -371,6 +371,15 @@ export default function SettingsPage() {
                     )}
                     <Chevron />
                   </button>
+                </SettingGroup>
+
+                <SettingGroup label="Reaching one">
+                  <SettingToggleRow
+                    label="Celebrate goals and milestones"
+                    sub="A stamp and a note when a day, a week or a course's goal is met, a round number of hours passed or a new stamp struck"
+                    value={prefs.celebrations}
+                    onChange={(v) => setPrefs({ celebrations: v })}
+                  />
                 </SettingGroup>
               </>
             )}

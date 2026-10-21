@@ -55,6 +55,12 @@ export interface Preferences {
   timerDrawing: TimerDrawing;
   hideWeekends: boolean;
   /**
+   * Whether a goal met or a milestone crossed is marked with a stamp, paper
+   * scraps and a note (components/Celebrations.tsx). Off, the crossing is
+   * still noted on the device, just not shown.
+   */
+  celebrations: boolean;
+  /**
    * Derived, never set directly: true exactly when the chosen paper is the
    * night tone. Kept on the record so anything that wants to know whether the
    * page is dark can ask without reasoning about tone names, and so the value
@@ -85,6 +91,7 @@ const DEFAULTS: Preferences = {
   breakMinutes: 5,
   timerDrawing: 'tree',
   hideWeekends: false,
+  celebrations: true,
   darkMode: true,
   dayEndingHour: 0,
   logNotesOpen: false,
@@ -121,6 +128,8 @@ function sanitizePreferences(value: unknown): Preferences {
     uiSounds: typeof parsed.uiSounds === 'boolean' ? parsed.uiSounds : DEFAULTS.uiSounds,
     hideWeekends:
       typeof parsed.hideWeekends === 'boolean' ? parsed.hideWeekends : DEFAULTS.hideWeekends,
+    celebrations:
+      typeof parsed.celebrations === 'boolean' ? parsed.celebrations : DEFAULTS.celebrations,
     breakMinutes: BREAK_MINUTE_VALUES.includes(Number(parsed.breakMinutes))
       ? Number(parsed.breakMinutes)
       : DEFAULTS.breakMinutes,
