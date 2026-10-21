@@ -10,7 +10,7 @@ function logicalNow(): Date {
 }
 
 /**
- * The hour, 0 to 9, the reader's day ends at, if they moved it past
+ * The hour, 0 to 11, the reader's day ends at, if they moved it past
  * midnight. Zero on the server, and whenever nothing sensible is stored.
  */
 export function dayEndingHour(): number {
@@ -18,7 +18,7 @@ export function dayEndingHour(): number {
   try {
     const stored = JSON.parse(window.localStorage.getItem('akada.preferences.v1') || '{}');
     const cutoff = Number(stored.dayEndingHour);
-    if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= 9) return cutoff;
+    if (Number.isFinite(cutoff) && cutoff > 0 && cutoff <= DAY_ENDING_HOUR_MAX) return cutoff;
   } catch { /* a normal calendar day is a safe fallback */ }
   return 0;
 }
@@ -63,7 +63,7 @@ export function logicalToday(): Date {
 
 /**
  * The instant the reader's day `iso` begins: midnight, or the hour they
- * moved the end of the day to. A day ending at 9am starts at 9am.
+ * moved the end of the day to. A day ending at 11am starts at 11am.
  */
 export function dayStartsAt(iso: string): number {
   const d = new Date(iso + 'T00:00:00');
@@ -324,6 +324,7 @@ export function resolveTint(color: string, storedTint?: string | null): string {
 import type { Session } from './data';
 import { clampSessionSeconds, isLoggableDuration } from './session-safety';
 import { isIsoDate } from './planner-safety';
+import { DAY_ENDING_HOUR_MAX } from './student-day';
 
 export function totalSeconds(sessions: Session[]): number {
   return sessions.reduce((acc, s) => acc + clampSessionSeconds(s.durationSeconds), 0);

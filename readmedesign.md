@@ -2534,11 +2534,23 @@ late, and a Notification goes out alongside, which is the only thing that
 reaches a phone in a pocket.
 
 Both the chime and the break length are the reader's to set, in Settings.
-`DayEndPicker` answers each hour in the margin, in `HandNote`, with a line
-of its own ("ambitious" at 4am); the hour is the only thing that changes it.
-`BreakLengthPicker` is written in `DayEndPicker`'s idiom: a sentence about
-their own habit, with the marks appearing only once the line is touched, so
-the panel stays a page of sentences until something is being changed.
+`DayEndPicker` ("My day ends at 4am", anywhere from midnight to 11am) keeps
+what the hour means under the sentence at all times, as a serif italic line
+about a real sitting ("Monday at 3:30am still counts to Sunday"). Touched, it
+opens onto the small hours as a strip from midnight to noon drawn the way
+Today's day ledger draws them: the hours that still belong to the day before
+in pencil (`ink-soft` at 45%), a dashed `ink-soft` line where the new day
+starts, mono hour marks under the edges. Tapping an hour moves the line there,
+and the arrow keys walk it. It answers each hour in the margin, in
+`HandNote`, with a line of its own ("ambitious" at 4am, "nearly noon" at 11);
+the hour is the only thing that changes it. It used to be a row of bare digits
+with nothing saying which side of the pick was which.
+`BreakLengthPicker` and `TimerDrawingPicker` are written in the same idiom: a
+sentence about the reader's own habit, with the marks appearing only once the
+line is touched, so the panel stays a page of sentences until something is
+being changed. Each line carries a quiet `.eyebrow` on its right, "Change"
+or "Done", because a sentence with no mark on it gave no sign it could be
+touched at all.
 
 ### Sounds under a finger
 A press makes a small sound, the way a pencil makes one on a desk. All of it is

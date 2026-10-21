@@ -45,6 +45,7 @@ export default function BreakLengthPicker({
           A block that ends{' '}
           <span className="hl-swipe text-ink">{breakLengthLabel(value)}</span>
         </span>
+        <span className="eyebrow">{open ? 'Done' : 'Change'}</span>
       </button>
 
       {open && (

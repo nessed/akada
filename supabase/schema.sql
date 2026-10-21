@@ -489,8 +489,8 @@ alter table user_settings add column if not exists avatar_url       text    not 
 alter table user_settings add column if not exists active_semester_id uuid;
 
 -- The student's clock, written by the app from their own device: the IANA
--- time zone the browser reports, and the hour (0 to 8) their day ends at from
--- Appearance > "when your day ends". Both otherwise live only in the browser,
+-- time zone the browser reports, and the hour (0 to 11) their day ends at from
+-- Settings > "Day ends at". Both otherwise live only in the browser,
 -- which left the connector's server working out "today" in UTC: a sitting
 -- logged at 1am in Lahore was dated the day before, and Monday morning read
 -- as last week. The connector reads these to date what it writes on the day
@@ -890,11 +890,11 @@ begin
   end if;
 end $$;
 
--- A day may end as late as 9am (Settings, "Day ends at"). The first
+-- A day may end as late as 11am (Settings, "Day ends at"). The first
 -- constraint above stays for databases that never saw this; it is replaced.
 alter table user_settings drop constraint if exists user_settings_day_ending_hour_range;
 alter table user_settings add constraint user_settings_day_ending_hour_range
-  check (day_ending_hour between 0 and 9);
+  check (day_ending_hour between 0 and 11);
 
 -- A recall prompt is a line, not a document (RECALL_PROMPT_MAX in
 -- lib/recall/constants.ts), a key is an id with a prefix, and the history is
