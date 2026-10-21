@@ -468,7 +468,9 @@ export async function addSessionOptimistic(
       const saved = await db.addSession(session);
       written = saved;
       const list = current ?? [];
-      return [saved, ...list.filter((s) => s.id !== optimistic.id)];
+      // A sitting already logged from another device comes back as that row,
+      // which may be in the list already.
+      return [saved, ...list.filter((s) => s.id !== optimistic.id && s.id !== saved.id)];
     },
     {
       optimisticData: (current: Session[] | undefined) => [

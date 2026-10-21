@@ -46,6 +46,7 @@ export default function TimerDrawingPicker({
         <span className="flex-1 font-serif text-[15px] text-ink">
           The timer draws <span className="hl-swipe text-ink">{chosen.word}</span>
         </span>
+        <span className="eyebrow">{open ? 'Done' : 'Change'}</span>
       </button>
 
       {open && (

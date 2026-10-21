@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { DAY_ENDING_HOUR_MAX } from './student-day';
 
 /**
  * The paper a reader chooses to work on. Four of these are daylight papers;
@@ -128,7 +129,7 @@ function sanitizePreferences(value: unknown): Preferences {
       : DEFAULTS.timerDrawing,
     darkMode: paperTone === 'night',
     dayEndingHour:
-      typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= 9
+      typeof parsed.dayEndingHour === 'number' && parsed.dayEndingHour >= 0 && parsed.dayEndingHour <= DAY_ENDING_HOUR_MAX
         ? Math.round(parsed.dayEndingHour)
         : DEFAULTS.dayEndingHour,
     logNotesOpen:

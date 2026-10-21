@@ -1,6 +1,7 @@
 import type { Course, Session, Task } from './data';
 import { clampSessionSeconds, isLoggableDuration } from './session-safety';
 import { isoDate, startOfWeek } from './utils';
+import { DAY_ENDING_HOUR_MAX } from './student-day';
 
 /**
  * The Stats page read through a lens: a stretch of time, set beside the
@@ -403,7 +404,7 @@ export interface Rhythm {
  * the fullest day of somebody who studies on Sunday nights.
  */
 export function readRhythm(sessions: Session[], window: Window, cutoff = 0): Rhythm {
-  const startHour = Math.max(0, Math.min(8, Math.round(cutoff)));
+  const startHour = Math.max(0, Math.min(DAY_ENDING_HOUR_MAX, Math.round(cutoff)));
   const shift = startHour * 3_600_000;
   const grid = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
   const byWeekday = new Array<number>(7).fill(0);

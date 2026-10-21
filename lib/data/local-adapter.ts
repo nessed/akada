@@ -715,4 +715,9 @@ export class LocalAdapter implements DataProvider {
 
   // Nothing off the device reads it here.
   async recordLiveSitting(): Promise<void> {}
+
+  // One device, so never a sitting anywhere else.
+  async readLiveSitting(): Promise<unknown> {
+    return null;
+  }
 }

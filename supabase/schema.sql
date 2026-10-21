@@ -199,6 +199,15 @@ begin
   end if;
 end $$;
 
+-- The timer's own id for the sitting a session was logged from. A sitting can
+-- move between devices (lib/live-sitting.ts); if it ever ends up stopped on
+-- both, the second save finds the first row here instead of writing the
+-- hours twice. Null for sittings logged by hand or through the connector,
+-- and for every row written before this.
+alter table sessions add column if not exists sitting_id text;
+create unique index if not exists sessions_user_sitting_id_key
+  on sessions (user_id, sitting_id) where sitting_id is not null;
+
 -- ============================================================
 -- 3a. SESSION SEGMENTS  (FK -> sessions)
 --
@@ -489,8 +498,8 @@ alter table user_settings add column if not exists avatar_url       text    not 
 alter table user_settings add column if not exists active_semester_id uuid;
 
 -- The student's clock, written by the app from their own device: the IANA
--- time zone the browser reports, and the hour (0 to 8) their day ends at from
--- Appearance > "when your day ends". Both otherwise live only in the browser,
+-- time zone the browser reports, and the hour (0 to 11) their day ends at from
+-- Settings > "Day ends at". Both otherwise live only in the browser,
 -- which left the connector's server working out "today" in UTC: a sitting
 -- logged at 1am in Lahore was dated the day before, and Monday morning read
 -- as last week. The connector reads these to date what it writes on the day
@@ -890,11 +899,11 @@ begin
   end if;
 end $$;
 
--- A day may end as late as 9am (Settings, "Day ends at"). The first
+-- A day may end as late as 11am (Settings, "Day ends at"). The first
 -- constraint above stays for databases that never saw this; it is replaced.
 alter table user_settings drop constraint if exists user_settings_day_ending_hour_range;
 alter table user_settings add constraint user_settings_day_ending_hour_range
-  check (day_ending_hour between 0 and 9);
+  check (day_ending_hour between 0 and 11);
 
 -- A recall prompt is a line, not a document (RECALL_PROMPT_MAX in
 -- lib/recall/constants.ts), a key is an id with a prefix, and the history is

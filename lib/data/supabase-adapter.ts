@@ -845,8 +845,19 @@ export class SupabaseAdapter implements DataProvider {
       // Named only on a sitting closed for the reader, for the same reason.
       ...(cleanRecovery(input.recovery) ? { recovery: cleanRecovery(input.recovery) } : {}),
     };
-    const insert = (values: Record<string, unknown>) =>
+    const sittingId = input.sittingId ? cleanText(input.sittingId, 80) : '';
+    const insertOnce = (values: Record<string, unknown>) =>
       this.supabase.from('sessions').insert(values).select().single();
+    // The timer's sitting id rides along on every insert, and a database
+    // without the column takes the sitting without it, as for the rest.
+    const insert = async (values: Record<string, unknown>) => {
+      if (!sittingId) return insertOnce(values);
+      const first = await insertOnce({ ...values, sitting_id: sittingId });
+      if (first.error && isMissingColumn(first.error) && first.error.message?.includes('sitting_id')) {
+        return insertOnce(values);
+      }
+      return first;
+    };
     // Same again for a practice score, named only when there is one.
     let { data, error } = await insert(
       practice ? { ...row, score: practice.score, score_out_of: practice.outOf } : row,
@@ -867,6 +878,17 @@ export class SupabaseAdapter implements DataProvider {
       void _dropped;
       ({ data, error } = await insert(practice ? { ...plain, score: practice.score, score_out_of: practice.outOf } : plain));
       if (error && practice && (isMissingColumn(error) || error.code === '23514')) ({ data, error } = await insert(plain));
+    }
+    // Already logged: the same sitting saved from another device's sheet.
+    // That row is the record, and handing it back closes this sheet as saved.
+    if (error && error.code === '23505' && sittingId) {
+      const { data: existing } = await this.supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', uid)
+        .eq('sitting_id', sittingId)
+        .maybeSingle();
+      if (existing) return rowToSession(existing as SessionRow);
     }
     if (error) throw error;
     const session = rowToSession(data as SessionRow);
@@ -1363,6 +1385,19 @@ export class SupabaseAdapter implements DataProvider {
     try {
       window.localStorage.setItem(CLOCK_KEY, key);
     } catch { /* nothing to remember it in; the next load writes it again */ }
+  }
+
+  async readLiveSitting(): Promise<unknown> {
+    const { data: { session } } = await this.supabase.auth.getSession();
+    const uid = session?.user?.id;
+    if (!uid) return null;
+    const { data, error } = await this.supabase
+      .from('user_settings')
+      .select('live_sitting')
+      .eq('user_id', uid)
+      .maybeSingle();
+    if (error) return null;
+    return (data as { live_sitting?: unknown } | null)?.live_sitting ?? null;
   }
 
   async recordLiveSitting(snapshot: LiveSittingSnapshot | null): Promise<void> {

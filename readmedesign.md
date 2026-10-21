@@ -2103,6 +2103,23 @@ tell it by.
   chapter. Unlike the other ways a sitting is closed for the reader, this one
   casts no doubt on the hours, so it is not written to the session as a
   recovery and the recap still draws.
+- **A session runs on one device at a time, and moves.** The running
+  session's snapshot on the server (`lib/live-sitting.ts`, written by
+  `LiveSittingSync`) names the device holding it. Every other device reads
+  it back every 20 seconds while in view and on every return to the page,
+  and with nothing on its own clock shows `ElsewhereDock` in the dock's lane:
+  the dock drawn in outline (a dashed border, the dot a ring, the time in
+  `ink-soft` with "on your laptop" beside it in serif italic), and one
+  button, **Take over**. Nothing on it pauses or finishes the session; it is
+  not this device's to stop. Take over carries the session on from where it
+  is, blocks, breaks and notes intact, and opens the timer. The device that
+  had it reads the takeover on its next look and lets go with a notice
+  ("Your phone took this session over. It carries on there."), then shows
+  the same outlined dock, so taking it back is the same tap. A page shut on
+  a running clock is taken over held at its last word, since the hours it
+  sat shut are not known to be study. Only the holding device logs, and the
+  database keeps one session per timer sitting (`sessions.sitting_id`) for
+  the rare case where both end up stopping it.
 
 ### One word for each thing
 Outside the Record, the app says **session** (never "sitting" or
@@ -2534,11 +2551,23 @@ late, and a Notification goes out alongside, which is the only thing that
 reaches a phone in a pocket.
 
 Both the chime and the break length are the reader's to set, in Settings.
-`DayEndPicker` answers each hour in the margin, in `HandNote`, with a line
-of its own ("ambitious" at 4am); the hour is the only thing that changes it.
-`BreakLengthPicker` is written in `DayEndPicker`'s idiom: a sentence about
-their own habit, with the marks appearing only once the line is touched, so
-the panel stays a page of sentences until something is being changed.
+`DayEndPicker` ("My day ends at 4am", anywhere from midnight to 11am) keeps
+what the hour means under the sentence at all times, as a serif italic line
+about a real sitting ("Monday at 3:30am still counts to Sunday"). Touched, it
+opens onto the small hours as a strip from midnight to noon drawn the way
+Today's day ledger draws them: the hours that still belong to the day before
+in pencil (`ink-soft` at 45%), a dashed `ink-soft` line where the new day
+starts, mono hour marks under the edges. Tapping an hour moves the line there,
+and the arrow keys walk it. It answers each hour in the margin, in
+`HandNote`, with a line of its own ("ambitious" at 4am, "nearly noon" at 11);
+the hour is the only thing that changes it. It used to be a row of bare digits
+with nothing saying which side of the pick was which.
+`BreakLengthPicker` and `TimerDrawingPicker` are written in the same idiom: a
+sentence about the reader's own habit, with the marks appearing only once the
+line is touched, so the panel stays a page of sentences until something is
+being changed. Each line carries a quiet `.eyebrow` on its right, "Change"
+or "Done", because a sentence with no mark on it gave no sign it could be
+touched at all.
 
 ### Sounds under a finger
 A press makes a small sound, the way a pencil makes one on a desk. All of it is
