@@ -133,6 +133,10 @@ Saves searching. If one of these moves, fix the line here in the same commit.
   `lib/ocean/sightings-early.ts`.
 - **Audio hooks** are `lib/use-*.ts` (`use-aquarium-sound`). Sounds are synthesised in Web Audio, not shipped as
   files, so they work on iOS and offline.
+- **Celebrations** (the card when a goal is met or a milestone crossed) are
+  `components/Celebrations.tsx`, mounted in the root layout; what counts as
+  reached, and the device's record of what was already celebrated, is
+  `lib/celebrations.ts`.
 - **Why the timer stopped on its own** is `lib/timer-ended.ts` (`announceEnded`).
   Any new way for the clock to end or drop a sitting calls it.
 - **The running sitting on the server** (so the connector sees it before it

@@ -258,9 +258,9 @@ function medianOf(values: number[]): number {
 /* The next line in the hour count                                      */
 /* ------------------------------------------------------------------ */
 
-const MILESTONES = [1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000];
+export const MILESTONES = [1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000];
 
-const MILESTONE_NAMES: Partial<Record<number, string>> = {
+export const MILESTONE_NAMES: Partial<Record<number, string>> = {
   1: 'the first hour',
   5: 'a working morning',
   10: 'double digits',

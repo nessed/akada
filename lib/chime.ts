@@ -23,8 +23,11 @@
  * reader out of their break has defeated the break.
  */
 
-/** `break` announces the rest; `back` announces the end of it. */
-export type ChimeKind = 'break' | 'back';
+/**
+ * `break` announces the rest; `back` announces the end of it; `cheer` is a
+ * goal or a milestone crossed (components/Celebrations.tsx).
+ */
+export type ChimeKind = 'break' | 'back' | 'cheer';
 
 /** Partials of the strike, as multiples of the root, and how loud each sits. */
 const PARTIALS: [number, number][] = [
@@ -37,6 +40,8 @@ const PARTIALS: [number, number][] = [
 const ROOTS: Record<ChimeKind, number[]> = {
   break: [587.33, 440.0],
   back: [523.25, 659.25, 783.99],
+  // The same glass, struck up the chord and once more at the octave.
+  cheer: [523.25, 659.25, 783.99, 1046.5],
 };
 
 const PEAK = 0.085;

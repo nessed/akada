@@ -11,6 +11,7 @@ import SWRRoot from '@/components/SWRRoot';
 import TimerDocumentTitle from '@/components/TimerDocumentTitle';
 import TimerHotkeys from '@/components/TimerHotkeys';
 import TimerEndedNotice from '@/components/TimerEndedNotice';
+import Celebrations from '@/components/Celebrations';
 import PaperDoodle from '@/components/notebook/PaperDoodle';
 import SmoothScroll from '@/components/SmoothScroll';
 import TapSounds from '@/components/TapSounds';
@@ -173,6 +174,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* P and K reach the running clock from every screen. See the
                 component: they bind nothing unless a sitting is running. */}
             <TimerHotkeys />
+            {/* A goal met or a milestone crossed, once the clock is stopped. */}
+            <Celebrations />
             <NoticeProvider>
               <TimerEndedNotice />
               <UndoProvider>
