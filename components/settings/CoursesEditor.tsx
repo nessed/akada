@@ -17,17 +17,18 @@ import {
 import { useTimerState } from '@/lib/timer-context';
 import WeeklyGoalSlider from '@/components/WeeklyGoalSlider';
 import { ButtonSpinner } from '@/components/LoadingIndicator';
-import BackButton from '@/components/BackButton';
 import ReorderList from '@/components/ReorderList';
 import HandCheck from '@/components/notebook/HandCheck';
 import {
   PANEL_RADIUS,
   FIELD_RADIUS,
-  SectionHeading,
+  SHEET_ACTION,
   SHEET_ACTION_PRIMARY,
-  SHEET_ACTION_QUIET,
-  VIEW_PADDING,
 } from './SettingsPrimitives';
+
+/** The quiet half of the pair, on paper rather than clear, since it floats
+    over the panels as the page scrolls. */
+const SHEET_ACTION_QUIET_ON_PAPER = `${SHEET_ACTION} border border-line-strong bg-paper text-ink-soft disabled:opacity-50`;
 
 interface DraftCourse {
   id: string;
@@ -49,12 +50,10 @@ interface DraftCourse {
  */
 export default function CoursesEditor({
   courses,
-  onBack,
   onSaved,
   onAddCourse,
 }: {
   courses: Course[];
-  onBack: () => void;
   onSaved: () => void;
   /** Leaves settings for the dashboard's add-course sheet. */
   onAddCourse: () => void;
@@ -81,8 +80,17 @@ export default function CoursesEditor({
   // courses (drafts removed via UI need their server-side delete) without
   // recomputing on every keystroke.
   const originalRef = useRef(original);
+  // Set by a save that went through, so the drafts are taken from what the
+  // server kept (codes cleaned, goals clamped) once it comes back, and the
+  // Save pair goes away. Only then: a revalidation in the middle of an edit
+  // must not wipe it.
+  const savedRef = useRef(false);
   useEffect(() => {
     originalRef.current = original;
+    if (savedRef.current) {
+      savedRef.current = false;
+      setDrafts(original);
+    }
   }, [original]);
 
   function update(i: number, patch: Partial<DraftCourse>) {
@@ -191,7 +199,10 @@ export default function CoursesEditor({
   }
 
   async function save() {
-    if (await persist()) onSaved();
+    if (await persist()) {
+      savedRef.current = true;
+      onSaved();
+    }
   }
 
   /**
@@ -272,16 +283,8 @@ export default function CoursesEditor({
   );
 
   return (
-    <div className={`${VIEW_PADDING} app-scroll animate-fade-in`}>
-      <BackButton onClick={onBack} />
-      <div className="flex items-baseline justify-between">
-        <SectionHeading>Courses</SectionHeading>
-        <span className="font-serif text-xs italic text-muted">
-          {drafts.length} {drafts.length === 1 ? 'course' : 'courses'}
-        </span>
-      </div>
-
-      <div className="mt-5 flex flex-col gap-[var(--density-gap)]">
+    <div>
+      <div className="flex flex-col gap-[var(--density-gap)]">
         {/* The dashboard's order, set from the list that shows the whole
             term at once. The grip is in the margin because every inch of the
             panel is already a field, and it rides Save with the rest. */}
@@ -326,14 +329,21 @@ export default function CoursesEditor({
         </p>
       )}
 
-      <div className="mt-[var(--density-section)] flex gap-2.5">
+      {/* Only there while something is unsaved, so the pair itself says
+          that there is. It sits on the page's foot as it scrolls, since the
+          edit that made it appear can be a long way up a term of courses. */}
+      {(dirty || saving) && (
+      <div className="sticky bottom-4 z-10 mt-[var(--density-section)] flex gap-2.5 animate-fade-in">
         <button
           type="button"
-          onClick={onBack}
+          onClick={() => {
+            setDrafts(original);
+            setError('');
+          }}
           disabled={saving}
-          className={SHEET_ACTION_QUIET}
+          className={SHEET_ACTION_QUIET_ON_PAPER}
         >
-          Cancel
+          Discard changes
         </button>
         <button
           type="button"
@@ -351,6 +361,7 @@ export default function CoursesEditor({
           )}
         </button>
       </div>
+      )}
     </div>
   );
 }

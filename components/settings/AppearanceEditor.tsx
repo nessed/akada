@@ -1,6 +1,5 @@
 'use client';
 
-import BackButton from '@/components/BackButton';
 import HandCheck from '@/components/notebook/HandCheck';
 import {
   PAPER_TONES,
@@ -10,12 +9,7 @@ import {
   type Preferences,
   type PrimaryAccent,
 } from '@/lib/preferences';
-import {
-  ChoiceCell,
-  SectionHeading,
-  VIEW_PADDING,
-  FIELD_RADIUS,
-} from './SettingsPrimitives';
+import { ChoiceCell, FIELD_RADIUS } from './SettingsPrimitives';
 
 /**
  * Appearance asks one question about colour, and the answer is which paper
@@ -49,9 +43,17 @@ const PRIMARY_OPTIONS: { v: PrimaryAccent; l: string; color: string }[] = [
   { v: 'green', l: 'Sage', color: 'var(--sage)' },
 ];
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  first,
+  children,
+}: {
+  label: string;
+  first?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="mt-[var(--density-section)]">
+    <div className={first ? '' : 'mt-[var(--density-section)]'}>
       <p className="eyebrow mb-2.5 ml-1">{label}</p>
       {children}
     </div>
@@ -70,18 +72,13 @@ function ChosenTick({ color = 'var(--ink)' }: { color?: string }) {
 export default function AppearanceEditor({
   prefs,
   setPrefs,
-  onBack,
 }: {
   prefs: Preferences;
   setPrefs: (patch: Partial<Preferences>) => void;
-  onBack: () => void;
 }) {
   return (
-    <div className={`${VIEW_PADDING} animate-fade-in`}>
-      <BackButton onClick={onBack} />
-      <SectionHeading>Appearance</SectionHeading>
-
-      <Field label="Paper">
+    <div>
+      <Field label="Paper" first>
         <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Paper">
           {PAPER_OPTIONS.map((option) => {
             const tone = PAPER_TONES[option.v];
@@ -133,8 +130,8 @@ export default function AppearanceEditor({
         </div>
       </Field>
 
-      <Field label="Primary">
-        <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Primary">
+      <Field label="Accent">
+        <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Accent">
           {PRIMARY_OPTIONS.map((option) => {
             const selected = prefs.primaryAccent === option.v;
             return (
@@ -163,8 +160,8 @@ export default function AppearanceEditor({
         </div>
       </Field>
 
-      <Field label="Heading">
-        <div className="flex gap-2" role="radiogroup" aria-label="Heading">
+      <Field label="Heading font">
+        <div className="flex gap-2" role="radiogroup" aria-label="Heading font">
           {FONT_OPTIONS.map((option) => {
             const selected = prefs.headingFont === option.v;
             return (
