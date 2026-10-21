@@ -12,16 +12,17 @@ import ConfirmSheet from './ConfirmSheet';
 import DatePicker from './DatePicker';
 import BackButton from './BackButton';
 import HandCheck from './notebook/HandCheck';
+import { SettingGroup, SettingRow } from './settings/SettingsPrimitives';
 
 /**
- * Settings → Semester. The active semester is what Dashboard, Tasks and
+ * Settings → Term. The active semester is what Dashboard, Tasks and
  * Timer write into; "Start new semester" switches that pointer, so the
  * courses you add right after belong to the new term instead of piling into
  * the old one. Past semesters stay reachable here, read-only, tap one to
  * see what was in it without risking logging today's session into it by
  * mistake.
  */
-export default function SemesterManager({ onBack }: { onBack: () => void }) {
+export default function SemesterManager() {
   const router = useRouter();
   const { semesters, isLoading } = useSemesters();
   const [starting, setStarting] = useState(false);
@@ -74,7 +75,7 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="px-[22px] pt-5 pb-10 app-scroll animate-fade-in">
+    <div className="animate-fade-in">
       <ConfirmSheet
         open={pendingDelete !== null}
         title={pendingDelete ? `Delete ${pendingDelete.label}?` : ''}
@@ -88,101 +89,71 @@ export default function SemesterManager({ onBack }: { onBack: () => void }) {
         }}
       />
 
-      <BackButton onClick={onBack} />
-      <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
-        Semester
-      </h3>
-      <p className="mt-1.5 mb-0 font-serif text-[13px] italic text-muted">
-        Where this term&apos;s work is kept.
-      </p>
+      {/* The same eyebrow-and-ruled-sheet rhythm as every other section of
+          Settings. It used to be a filled button, a red-bordered delete
+          straight under it and a card of its own radius, the one section
+          that looked like a different app. */}
+      <SettingGroup label="This term" first>
+        <div className="px-[18px] py-3.5 [&+*]:border-t [&+*]:border-line-soft">
+          {active ? (
+            <>
+              <p className="m-0 font-serif text-[16px] font-medium text-ink">{active.label}</p>
+              <p className="mt-0.5 mb-0 text-[11px] text-muted">
+                {active.startDate && active.endDate
+                  ? `${formatSemesterDate(active.startDate)} to ${formatSemesterDate(active.endDate)}`
+                  : 'No dates set'}
+              </p>
+            </>
+          ) : (
+            !isLoading && (
+              <p className="m-0 font-serif text-[13px] italic text-muted-soft">Not started yet.</p>
+            )
+          )}
+        </div>
+        <SettingRow
+          label="Start a new semester"
+          sub={
+            transitionNeedsCare
+              ? active?.endDate
+                ? `${active.label} runs through ${formatSemesterDate(active.endDate)}.`
+                : `${active?.label ?? 'This term'} has no end date to check against.`
+              : 'This term’s pages stay where they are.'
+          }
+          onClick={() => setStarting(true)}
+        />
+      </SettingGroup>
 
-      <div className="mt-5">
-        <p className="eyebrow ml-1 mb-2 text-muted">
-          Active
-        </p>
-        {active ? (
-          <div className="rounded-xl border border-line bg-paper px-4 py-3.5">
-            <p className="m-0 font-serif text-[16px] font-medium text-ink">{active.label}</p>
-            <p className="mt-0.5 mb-0 text-[12px] text-muted">
-              {active.startDate && active.endDate
-                ? `${active.startDate} → ${active.endDate}`
-                : 'No dates set'}
-            </p>
-          </div>
-        ) : (
-          !isLoading && (
-            <p className="font-serif text-[13px] italic text-muted-soft">Not started yet.</p>
-          )
-        )}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setStarting(true)}
-        className="mt-4 w-full min-h-[52px] rounded-2xl bg-primary text-primary-contrast text-[14px] font-medium tracking-[0.01em]"
-      >
-        Start new semester
-      </button>
-      <p className={`mt-2.5 mb-0 text-center font-serif text-[12px] italic ${transitionNeedsCare ? 'text-warn' : 'text-muted-soft'}`}>
-        {transitionNeedsCare
-          ? active?.endDate
-            ? `${active?.label ?? 'This term'} is scheduled through ${formatSemesterDate(active.endDate)}.`
-            : `${active?.label ?? 'This term'} has no end date to check against.`
-          : 'This term\'s pages stay where they are.'}
-      </p>
+      {past.length > 0 && (
+        <SettingGroup label="Past semesters">
+          {past.map((s) => (
+            <SettingRow
+              key={s.id}
+              label={s.label}
+              sub={
+                s.startDate && s.endDate
+                  ? `${formatSemesterDate(s.startDate)} to ${formatSemesterDate(s.endDate)}`
+                  : undefined
+              }
+              onClick={() => setViewingId(s.id)}
+            />
+          ))}
+        </SettingGroup>
+      )}
 
       {active && (
-        <button
-          type="button"
-          onClick={() => setPendingDelete(active)}
-          disabled={deletingId === active.id}
-          className="mt-4 w-full min-h-[44px] rounded-xl border border-priority/30 text-[13px] font-medium text-priority disabled:opacity-40"
-        >
-          {deletingId === active.id ? 'Deleting semester…' : 'Delete active semester'}
-        </button>
+        <SettingGroup label="Careful">
+          <SettingRow
+            label={deletingId === active.id ? 'Deleting…' : `Delete ${active.label}`}
+            sub="Its courses, tasks and sessions go with it"
+            tone="warn"
+            onClick={() => {
+              if (deletingId !== active.id) setPendingDelete(active);
+            }}
+          />
+        </SettingGroup>
       )}
 
       {error && <p role="alert" className="mt-3 text-[13px] text-priority font-serif italic">{error}</p>}
-
-      {past.length > 0 && (
-        <div className="mt-6">
-          <p className="eyebrow ml-1 mb-2 text-muted">
-            Past semesters
-          </p>
-          <div className="overflow-hidden rounded-xl border border-line bg-paper">
-            {past.map((s, i) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setViewingId(s.id)}
-                className={`flex w-full items-center justify-between gap-3 px-4 py-3.5 bg-transparent text-left cursor-pointer ${
-                  i < past.length - 1 ? 'border-b border-line' : ''
-                }`}
-              >
-                <div className="min-w-0">
-                  <p className="m-0 text-sm font-medium text-ink">{s.label}</p>
-                  {s.startDate && s.endDate && (
-                    <p className="mt-0.5 mb-0 text-[11px] text-muted">
-                      {s.startDate} → {s.endDate}
-                    </p>
-                  )}
-                </div>
-                <span className="text-muted-soft shrink-0" aria-hidden>
-                  <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M9 6l6 6-6 6"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -260,7 +231,7 @@ function StartSemesterForm({
   }
 
   return (
-    <div className="px-[22px] pt-5 pb-10 app-scroll animate-fade-in">
+    <div className="animate-fade-in">
       <ConfirmSheet
         open={confirmingStart}
         title="Begin a new term early?"
@@ -515,7 +486,7 @@ function SemesterArchive({
   }, [semester.id]);
 
   return (
-    <div className="px-[22px] pt-5 pb-10 app-scroll animate-fade-in">
+    <div className="animate-fade-in">
       <BackButton onClick={onBack} />
       <h3 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
         {semester.label}

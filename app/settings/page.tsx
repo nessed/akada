@@ -1,23 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import PageShell from '@/components/PageShell';
 import LoadingIndicator from '@/components/LoadingIndicator';
 import ConfirmSheet from '@/components/ConfirmSheet';
+import { ReaderAvatar } from '@/components/SettingsGlyph';
 import AppearanceEditor from '@/components/settings/AppearanceEditor';
 import CoursesEditor from '@/components/settings/CoursesEditor';
 import BreakLengthPicker from '@/components/settings/BreakLengthPicker';
 import TimerDrawingPicker from '@/components/settings/TimerDrawingPicker';
 import DayEndPicker from '@/components/settings/DayEndPicker';
 import SoundSampler from '@/components/settings/SoundSampler';
-import ProfileEditor from '@/components/settings/ProfileEditor';
 import SemesterManager from '@/components/SemesterManager';
 import {
+  Chevron,
+  PANEL_RADIUS,
   SettingGroup,
   SettingRow,
   SettingToggleRow,
-  StatMark,
 } from '@/components/settings/SettingsPrimitives';
 import { useNotice } from '@/components/Notice';
 import { createClient } from '@/lib/supabase';
@@ -39,39 +41,63 @@ import {
 /**
  * Settings as a page.
  *
- * On phone the bottom sheet is still the right shape: it comes up over what
- * you were doing and goes away again. A desktop screen has a rail with
- * Settings in it, and a modal reached from a permanent nav item is a screen
- * pretending to be an interruption, so the same panels get a page instead.
+ * Seven sections in one flat list, each named for the thing a reader comes
+ * looking for, and each opening the same way: its name, one line on what is
+ * in it, then the rows. It used to be eight sections under three group
+ * labels (Study, You, More) that sorted nothing: the day's end and a lifetime
+ * tally sat under Goals, the tap sounds under Timer, the privacy policy
+ * under Data, and Profile was a whole section holding one field with its own
+ * Cancel and Save. Every nested view also kept the "← Back" it had from the
+ * phone sheet, so half the sections sat indented under a button that went
+ * nowhere new.
+ *
+ * The chosen section is in the hash (`/settings#timer`), so anything that
+ * means one section can link straight to it.
  */
 
-type Section = 'profile' | 'term' | 'goals' | 'timer' | 'courses' | 'appearance' | 'claude' | 'data';
+type Section = 'goals' | 'timer' | 'courses' | 'term' | 'look' | 'claude' | 'account';
 
-const SECTION_GROUPS: { label: string; items: { id: Section; label: string }[] }[] = [
+const SECTIONS: { id: Section; label: string; standfirst: string }[] = [
   {
-    label: 'Study',
-    items: [
-      { id: 'goals', label: 'Goals' },
-      { id: 'timer', label: 'Timer' },
-      { id: 'term', label: 'Term' },
-      { id: 'courses', label: 'Courses' },
-    ],
+    id: 'goals',
+    label: 'Goals',
+    standfirst: 'What a day and a week are measured against, and when your day ends.',
   },
   {
-    label: 'You',
-    items: [
-      { id: 'profile', label: 'Profile' },
-      { id: 'appearance', label: 'Appearance' },
-    ],
+    id: 'timer',
+    label: 'Timer',
+    standfirst: 'How a sitting runs: the break after a block, the chime, and what grows while you work.',
   },
   {
-    label: 'More',
-    items: [
-      { id: 'claude', label: 'Claude' },
-      { id: 'data', label: 'Data' },
-    ],
+    id: 'courses',
+    label: 'Courses',
+    standfirst: 'Names, colours, order and each course’s weekly goal.',
+  },
+  {
+    id: 'term',
+    label: 'Term',
+    standfirst: 'The semester your courses, tasks and hours are filed under.',
+  },
+  {
+    id: 'look',
+    label: 'Look & feel',
+    standfirst: 'The paper, the type, how tight the page sits, and the sounds under your finger.',
+  },
+  {
+    id: 'claude',
+    label: 'Claude',
+    standfirst: 'Let Claude read your planner and write into it.',
+  },
+  {
+    id: 'account',
+    label: 'Account',
+    standfirst: 'Your name, signing out, and what is kept.',
   },
 ];
+
+function isSection(value: string): value is Section {
+  return SECTIONS.some((s) => s.id === value);
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -84,7 +110,6 @@ export default function SettingsPage() {
 
   const [section, setSection] = useState<Section>('goals');
   const [name, setName] = useState('');
-  const [savingName, setSavingName] = useState(false);
   const [dailyGoal, setDailyGoal] = useState(4);
   const [confirming, setConfirming] = useState<'reset' | 'signOut' | 'delete' | null>(null);
   const [email, setEmail] = useState('');
@@ -95,6 +120,26 @@ export default function SettingsPage() {
       setDailyGoal(settings.dailyGoalHours || 4);
     }
   }, [settings]);
+
+  /* The section follows the hash, so a link from Today can open the right
+     one. Read after mount rather than in the initial state, since the server
+     render has no hash to read. */
+  useEffect(() => {
+    const fromHash = () => {
+      const hash = window.location.hash.slice(1);
+      if (isSection(hash)) setSection(hash);
+    };
+    fromHash();
+    window.addEventListener('hashchange', fromHash);
+    return () => window.removeEventListener('hashchange', fromHash);
+  }, []);
+
+  function open(next: Section) {
+    setSection(next);
+    // replaceState rather than a push: moving between sections is not
+    // somewhere Back should step through one at a time.
+    window.history.replaceState(window.history.state, '', `#${next}`);
+  }
 
   /* The address is only ever shown, never edited here, so it is read once
      rather than held in a hook that would re-run on every preference change.
@@ -133,20 +178,26 @@ export default function SettingsPage() {
 
   const safeSessions = sessions.filter((s) => isLoggableDuration(s.durationSeconds));
   const totalHours = totalSeconds(safeSessions) / 3600;
-  const dayCount = new Set(safeSessions.map((s) => s.date)).size;
   const weeklyGoal = courses.reduce((a, c) => a + (c.weeklyGoalHours || 0), 0);
+  const savedName = settings?.displayName ?? '';
+  const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0];
 
+  /* The name saves when the field is left or Enter is pressed, the way the
+     rest of the page saves the moment something is chosen. An emptied field
+     goes back to the name it had rather than wiping it. */
   async function saveName() {
-    if (savingName) return;
-    setSavingName(true);
+    const next = name.trim();
+    if (!next) {
+      setName(savedName);
+      return;
+    }
+    if (next === savedName) return;
     try {
-      await updateUserSettingsOptimistic({ displayName: name.trim() });
+      await updateUserSettingsOptimistic({ displayName: next });
       notify('Saved.');
     } catch (error) {
       console.error('Failed to save settings:', error);
       notify('That did not save.');
-    } finally {
-      setSavingName(false);
     }
   }
 
@@ -228,119 +279,104 @@ export default function SettingsPage() {
       />
 
       <header className="mb-8">
-        <p className="m-0 mb-1.5 font-serif italic text-[13.5px] text-muted">
-          {name || 'Akada'}
-          {email && ` · ${email}`}
-        </p>
         <h1 className="m-0 font-serif text-[32px] font-medium leading-[1.05] tracking-[-0.025em] md:text-[36px]">
           Settings
         </h1>
       </header>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
         {/* The section list. A row of marks on a page rather than a tab bar:
             the chosen one carries a swipe of highlighter. */}
-        <nav className="flex flex-wrap gap-x-1 gap-y-1 lg:sticky lg:top-10 lg:flex-col lg:gap-0">
-          {SECTION_GROUPS.map((g, gi) => (
-            <div key={g.label} className="contents lg:flex lg:flex-col lg:gap-1">
-              <p className={`eyebrow m-0 hidden px-3 pb-1 lg:block ${gi === 0 ? '' : 'pt-5'}`}>
-                {g.label}
-              </p>
-              {g.items.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSection(s.id)}
-                  aria-current={section === s.id ? 'true' : undefined}
-                  className={`flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] transition-colors ${
-                    section === s.id
-                      ? 'font-medium text-ink'
-                      : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
-                  }`}
-                >
-                  <span className={section === s.id ? 'hl-swipe' : ''}>{s.label}</span>
-                </button>
-              ))}
-            </div>
+        <nav
+          aria-label="Settings sections"
+          className="flex flex-wrap gap-1 lg:sticky lg:top-10 lg:flex-col lg:gap-0.5"
+        >
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => open(s.id)}
+              aria-current={section === s.id ? 'true' : undefined}
+              className={`flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] transition-colors ${
+                section === s.id
+                  ? 'font-medium text-ink'
+                  : 'text-ink-soft hover:bg-bg-tint hover:text-ink'
+              }`}
+            >
+              <span className={section === s.id ? 'hl-swipe' : ''}>{s.label}</span>
+            </button>
           ))}
-          <button
-            type="button"
-            onClick={() => setConfirming('signOut')}
-            className="mt-2 flex h-10 items-center rounded-[10px] px-3 text-left text-[13px] text-warn transition-colors hover:bg-warnTint lg:mt-5"
-          >
-            Sign out
-          </button>
         </nav>
 
         <div className="min-w-0 max-w-[680px]">
-          {section === 'goals' && (
-            <>
-              <SettingGroup label="Goals" first>
-                <div className="px-[18px] py-4">
-                  <div className="flex items-baseline justify-between">
-                    <span className="block text-sm font-medium text-ink">Daily goal</span>
-                    <span className="font-mono text-[13px] tabular-nums text-ink">
-                      {dailyGoal}h
-                    </span>
+          <div key={current.id} className="animate-fade-in">
+            <h2 className="m-0 font-serif text-[22px] font-medium tracking-[-0.02em]">
+              {current.label}
+            </h2>
+            <p className="m-0 mt-1 mb-6 font-serif text-[13.5px] italic leading-snug text-muted">
+              {current.standfirst}
+            </p>
+
+            {section === 'goals' && (
+              <>
+                <SettingGroup label="Each day" first>
+                  <div className="px-[18px] py-4 [&+*]:border-t [&+*]:border-line-soft">
+                    <div className="flex items-baseline justify-between">
+                      <span className="block text-sm font-medium text-ink">Daily goal</span>
+                      <span className="font-mono text-[13px] tabular-nums text-ink">
+                        {dailyGoal}h
+                      </span>
+                    </div>
+                    <p className="m-0 mt-0.5 text-[11px] text-muted">
+                      What today&apos;s hours are drawn against on Today
+                    </p>
+                    <input
+                      type="range"
+                      min={1}
+                      max={12}
+                      step={1}
+                      value={dailyGoal}
+                      onChange={(e) => void saveDailyGoal(Number(e.target.value))}
+                      aria-label="Daily study goal in hours"
+                      className="pl-range mt-3 w-full"
+                    />
                   </div>
-                  <p className="m-0 mt-0.5 text-[11px] text-muted">
-                    What today&apos;s hours are drawn against on Today
-                  </p>
-                  <input
-                    type="range"
-                    min={1}
-                    max={12}
-                    step={1}
-                    value={dailyGoal}
-                    onChange={(e) => void saveDailyGoal(Number(e.target.value))}
-                    aria-label="Daily study goal in hours"
-                    className="pl-range mt-3 w-full"
+                  <DayEndPicker
+                    value={prefs.dayEndingHour}
+                    onChange={(v) => setPrefs({ dayEndingHour: v })}
                   />
-                </div>
+                </SettingGroup>
 
-                <div className="border-t border-line-soft px-[18px] py-3.5">
-                  <div className="flex items-baseline justify-between">
-                    <span className="block text-sm font-medium text-ink">Weekly goal</span>
-                    <span className="font-mono text-[13px] tabular-nums text-ink">
-                      {weeklyGoal || '—'}h
+                {/* Read-only here, because a week's goal is nothing but the
+                    courses' goals added up. The row goes to where they are set
+                    rather than leaving the reader to find it. */}
+                <SettingGroup label="Each week">
+                  <button
+                    type="button"
+                    onClick={() => open('courses')}
+                    className="flex w-full items-center gap-3 bg-transparent px-[18px] py-3.5 text-left"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-ink">Weekly goal</span>
+                      <span className="mt-0.5 block text-[11px] text-muted">
+                        Your course goals added up. Set them in Courses.
+                      </span>
                     </span>
-                  </div>
-                  <p className="m-0 mt-0.5 text-[11px] text-muted">
-                    The sum of the course goals. Change a course to change it.
-                  </p>
-                </div>
+                    {weeklyGoal > 0 ? (
+                      <span className="font-mono text-[13px] tabular-nums text-ink">
+                        {weeklyGoal}h
+                      </span>
+                    ) : (
+                      <span className="font-serif text-[13px] italic text-muted">none set</span>
+                    )}
+                    <Chevron />
+                  </button>
+                </SettingGroup>
+              </>
+            )}
 
-              </SettingGroup>
-
-              <SettingGroup label="Day ends at">
-                <DayEndPicker
-                  value={prefs.dayEndingHour}
-                  onChange={(v) => setPrefs({ dayEndingHour: v })}
-                />
-              </SettingGroup>
-
-              <SettingGroup label="So far">
-                <div className="grid grid-cols-3 gap-2 px-[18px] py-4 sm:flex sm:gap-8">
-                  <StatMark label="Hours" value={totalHours.toFixed(1)} />
-                  <StatMark label="Days" value={String(dayCount)} />
-                  <StatMark label="Sessions" value={String(safeSessions.length)} />
-                </div>
-              </SettingGroup>
-            </>
-          )}
-
-          {section === 'timer' && (
-            <>
-              {/* The timer's own two preferences. They lived only on the
-                  phone sheet, which left a desktop reader unable to turn the
-                  chime off or change how long a break runs. */}
-              <SettingGroup label="Timer" first>
-                <SettingToggleRow
-                  label="Chime on a block and a break"
-                  sub="A soft note when a block ends and when the rest is up"
-                  value={prefs.sessionSound}
-                  onChange={(v) => setPrefs({ sessionSound: v })}
-                />
+            {section === 'timer' && (
+              <SettingGroup label="A sitting" first>
                 <BreakLengthPicker
                   value={prefs.breakMinutes}
                   onChange={(breakMinutes) => setPrefs({ breakMinutes })}
@@ -349,108 +385,151 @@ export default function SettingsPage() {
                   value={prefs.timerDrawing}
                   onChange={(timerDrawing) => setPrefs({ timerDrawing })}
                 />
-              </SettingGroup>
-
-              {/* Apart from the chime above: that one announces something,
-                  these only answer a press, and a reader can want either
-                  without the other. */}
-              <SettingGroup label="Sound">
                 <SettingToggleRow
-                  label="Sounds under your finger"
-                  sub="Wood for a tap or a tick, paper for something put away"
-                  value={prefs.uiSounds}
-                  onChange={(v) => setPrefs({ uiSounds: v })}
+                  label="Chime on a block and a break"
+                  sub="A soft note when a block ends and when the rest is up"
+                  value={prefs.sessionSound}
+                  onChange={(v) => setPrefs({ sessionSound: v })}
                 />
-                <SoundSampler />
               </SettingGroup>
-            </>
-          )}
+            )}
 
-          {section === 'profile' && (
-            <ProfileEditor
-              settingsName={name}
-              displayName={settings?.displayName ?? ''}
-              updating={savingName}
-              onNameChange={setName}
-              onBack={() => setSection('goals')}
-              onSave={() => void saveName()}
-            />
-          )}
-
-          {section === 'term' && <SemesterManager onBack={() => setSection('goals')} />}
-
-          {section === 'courses' && (
-            <CoursesEditor
-              courses={courses}
-              onBack={() => setSection('goals')}
-              onSaved={() => void revalidateCourses()}
-              onAddCourse={() => router.push('/dashboard?add=course')}
-            />
-          )}
-
-          {section === 'appearance' && (
-            <>
-              <AppearanceEditor
-                prefs={prefs}
-                setPrefs={setPrefs}
-                onBack={() => setSection('goals')}
+            {section === 'courses' && (
+              <CoursesEditor
+                courses={courses}
+                onSaved={() => void revalidateCourses()}
+                onAddCourse={() => router.push('/dashboard?add=course')}
               />
-              {/* Its own group, because it is not a goal. It sat under Goals
-                  reading "Skip weekends in goals · Streak and weekly pace
-                  ignore Sat and Sun", which is not true of it and never was:
-                  `hideWeekends` is read in exactly one place, the Stats
-                  heatmap, and neither the run nor the weekly pace has ever
-                  looked at it. */}
-              <SettingGroup label="Stats">
-                <SettingToggleRow
-                  label="Hide weekends from the heatmap"
-                  sub="The grid on Stats drops Sat and Sun"
-                  value={prefs.hideWeekends}
-                  onChange={(v) => setPrefs({ hideWeekends: v })}
-                />
-              </SettingGroup>
-            </>
-          )}
+            )}
 
-          {section === 'claude' && (
-            <SettingGroup label="Akada in Claude" first>
-              <p className="m-0 px-[18px] py-4 font-serif text-[14px] leading-[1.6] text-ink-soft">
-                Connect Akada to Claude once and it can read your planner and write into
-                it. Hand it a course outline and every deadline goes in, ask it what to
-                start first, or have it quiz you on your recall.
-              </p>
-              <SettingRow label="How to connect it, and what to ask" href="/claude" />
-              <SettingRow label="Everything the connector can do" href="/docs" />
-              <SettingRow label="What happens to your data" href="/privacy#assistants" />
-            </SettingGroup>
-          )}
+            {section === 'term' && <SemesterManager />}
 
-          {section === 'data' && (
-            <>
-              <SettingGroup label="Data" first>
-                <SettingRow label="Export sessions as CSV" onClick={exportSessions} />
-                <SettingRow label="How Akada works" href="/guide" />
-                <SettingRow label="Privacy policy" href="/privacy" />
-                <SettingRow label="Terms" href="/terms" />
-                <SettingRow label="Contact" href={`mailto:${CONTACT_EMAIL}`} />
-              </SettingGroup>
+            {section === 'look' && (
+              <>
+                <AppearanceEditor prefs={prefs} setPrefs={setPrefs} />
 
-              <SettingGroup label="Careful">
-                <SettingRow
-                  label="Reset the planner"
-                  sub="Every semester, course, task and session"
-                  tone="warn"
-                  onClick={() => setConfirming('reset')}
-                />
-                <SettingRow
-                  label="Delete your account"
-                  sub="This cannot be undone"
-                  tone="warn"
-                  onClick={() => setConfirming('delete')}
-                />
+                {/* Apart from the timer's chime: that one announces
+                    something, these only answer a press, and a reader can
+                    want either without the other. */}
+                <SettingGroup label="Sound">
+                  <SettingToggleRow
+                    label="Sounds under your finger"
+                    sub="Wood for a tap or a tick, paper for something put away"
+                    value={prefs.uiSounds}
+                    onChange={(v) => setPrefs({ uiSounds: v })}
+                  />
+                  <SoundSampler />
+                </SettingGroup>
+
+                {/* `hideWeekends` is read in exactly one place, the Stats
+                    heatmap. It once sat under Goals claiming the streak and
+                    the weekly pace skipped weekends, which neither has ever
+                    done. */}
+                <SettingGroup label="Stats">
+                  <SettingToggleRow
+                    label="Hide weekends from the heatmap"
+                    sub="The grid on Stats drops Sat and Sun"
+                    value={prefs.hideWeekends}
+                    onChange={(v) => setPrefs({ hideWeekends: v })}
+                  />
+                </SettingGroup>
+              </>
+            )}
+
+            {section === 'claude' && (
+              <SettingGroup label="Akada in Claude" first>
+                <p className="m-0 px-[18px] py-4 font-serif text-[14px] leading-[1.6] text-ink-soft">
+                  Connect Akada to Claude once and it can read your planner and write into
+                  it. Hand it a course outline and every deadline goes in, ask it what to
+                  start first, or have it quiz you on your recall.
+                </p>
+                <SettingRow label="How to connect it, and what to ask" href="/claude" />
+                <SettingRow label="Everything the connector can do" href="/docs" />
+                <SettingRow label="What happens to your data" href="/privacy#assistants" />
               </SettingGroup>
-            </>
-          )}
+            )}
+
+            {section === 'account' && (
+              <>
+                <section className={`flex items-center gap-4 border border-line bg-paper px-[18px] py-4 ${PANEL_RADIUS}`}>
+                  <ReaderAvatar
+                    avatarUrl={settings?.avatarUrl ?? ''}
+                    displayName={name || savedName}
+                    size={44}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <label className="eyebrow mb-1 block" htmlFor="settings-display-name">
+                      Your name
+                    </label>
+                    <input
+                      id="settings-display-name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onBlur={() => void saveName()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                        if (e.key === 'Escape') {
+                          setName(savedName);
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      placeholder="What Today calls you"
+                      className="w-full rounded-none border-0 border-b border-line-strong bg-transparent px-0.5 py-1.5 font-serif text-[16px] text-ink outline-none focus:border-primary"
+                    />
+                    {email && (
+                      <p className="m-0 mt-1.5 truncate text-[11px] text-muted">{email}</p>
+                    )}
+                  </div>
+                </section>
+
+                <SettingGroup label="Your record">
+                  <SettingRow
+                    label="Export sessions as CSV"
+                    sub={`${safeSessions.length} ${
+                      safeSessions.length === 1 ? 'session' : 'sessions'
+                    }, ${totalHours.toFixed(1)}h in all`}
+                    onClick={exportSessions}
+                  />
+                </SettingGroup>
+
+                <SettingGroup label="This device">
+                  <SettingRow
+                    label="Sign out"
+                    sub="Only here. Your other devices stay signed in."
+                    onClick={() => setConfirming('signOut')}
+                  />
+                </SettingGroup>
+
+                <SettingGroup label="Careful">
+                  <SettingRow
+                    label="Reset the planner"
+                    sub="Every semester, course, task and session. The account stays."
+                    tone="warn"
+                    onClick={() => setConfirming('reset')}
+                  />
+                  <SettingRow
+                    label="Delete your account"
+                    sub="Everything, sign-in included. This cannot be undone."
+                    tone="warn"
+                    onClick={() => setConfirming('delete')}
+                  />
+                </SettingGroup>
+              </>
+            )}
+          </div>
+
+          {/* Not settings, so not a section: the way to the guide and the
+              small print, on every section's foot. */}
+          <p className="m-0 mt-12 flex flex-wrap gap-x-2 gap-y-1 font-serif text-[12.5px] italic text-muted">
+            <Link href="/guide" className="hover:text-ink">How Akada works</Link>
+            <span aria-hidden>·</span>
+            <Link href="/privacy" className="hover:text-ink">Privacy</Link>
+            <span aria-hidden>·</span>
+            <Link href="/terms" className="hover:text-ink">Terms</Link>
+            <span aria-hidden>·</span>
+            <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-ink">Contact</a>
+          </p>
         </div>
       </div>
     </PageShell>

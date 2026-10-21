@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import HandCheck from '@/components/notebook/HandCheck';
 
 /**
- * The pieces the settings sheet is built from.
+ * The pieces the settings page is built from.
  *
  * One rhythm for every section (an eyebrow, then a sheet of paper with ruled
  * rows), one radius for the panels and one for the fields and actions inside
@@ -20,17 +20,6 @@ export const FIELD_RADIUS = 'rounded-[10px]';
 /** The sheet action pair, per the button spec. */
 export const SHEET_ACTION = `flex-1 ${FIELD_RADIUS} py-3.5 text-sm font-medium`;
 export const SHEET_ACTION_PRIMARY = `${SHEET_ACTION} bg-primary text-primary-contrast disabled:opacity-40`;
-export const SHEET_ACTION_QUIET = `${SHEET_ACTION} border border-line-strong bg-transparent text-ink-soft disabled:opacity-50`;
-
-/** Every nested view opens on the same gutter and the same breathing room. */
-export const VIEW_PADDING =
-  'px-[var(--density-gutter)] pt-5 pb-[var(--density-section)]';
-
-export function SectionHeading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="m-0 font-serif text-[20px] font-medium tracking-[-0.02em]">{children}</h3>
-  );
-}
 
 export function SettingGroup({
   label,
@@ -39,7 +28,7 @@ export function SettingGroup({
 }: {
   label: string;
   children: ReactNode;
-  /** The first group after the profile card sets its own distance. */
+  /** The first group under a section's standfirst sets its own distance. */
   first?: boolean;
 }) {
   return (
@@ -81,7 +70,7 @@ function RowBody({
   );
 }
 
-function Chevron() {
+export function Chevron() {
   return (
     <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none" className="shrink-0 text-muted-soft">
       <path
@@ -171,18 +160,6 @@ export function SettingToggleRow({
         }
       />
     </button>
-  );
-}
-
-/** A number kept from the record, under its eyebrow. */
-export function StatMark({ label, value }: { label: string; value: string }) {
-  return (
-    <div className={`min-w-0 border border-line bg-paper px-3 py-2.5 ${FIELD_RADIUS}`}>
-      <p className="m-0 font-mono text-[15px] font-semibold tracking-[-0.01em] tabular-nums text-ink">
-        {value}
-      </p>
-      <p className="eyebrow mt-1 mb-0">{label}</p>
-    </div>
   );
 }
 

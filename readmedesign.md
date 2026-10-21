@@ -19,10 +19,10 @@ The color system is heavily curated to resemble premium paper, ink, and mild hig
 
 ### Core Foundation (Paper & Ink)
 The foundation is not one palette but four, the **paper tone** a reader picks
-in Appearance, plus the `Night` paper. **The app ships on `Night`**: a new
+in Settings › Look & feel, plus the `Night` paper. **The app ships on `Night`**: a new
 reader, or anyone whose stored record names no tone, lands on the dark page,
 and the manifest's `theme_color` is its ground. `Paper`, `Warm`, `Stone` and
-`White` are the daylight alternatives, one tap away in Appearance. Every value
+`White` are the daylight alternatives, one tap away in Look & feel. Every value
 below is the `Paper` tone, the reference the others are described against. The
 authority for all of them is `PAPER_TONES` in `lib/preferences.ts`; `Paper` is
 mirrored into `:root` in `globals.css` only as the no-script fallback, since
@@ -44,7 +44,7 @@ paint.
   `#8C8576`, `#B5AE99`. Instead of pure black, text relies on deep, warm
   charcoals, mimicking pen ink and reducing eye strain. `muted` carries every
   label and caption; `muted-soft` is for text that should barely register.
-- **Primary (`primary`)**: resolves to `ink`. The "Sage" option in Appearance
+- **Primary (`primary`)**: resolves to `ink`. The "Sage" accent in Look & feel
   swaps it for the sage pastel.
 
 ### The Pastel Highlighter Palette
@@ -85,7 +85,7 @@ They are warm clays, and that is the point, see "No Alarmist Indicators".
 ## 🖋️ Typography
 Typography in Akada blends modern readability with classic literary elegance.
 - **Sans-Serif (`Inter`)**: Used for the majority of the UI, providing clean, highly legible structure.
-- **Serif (`Fraunces`)**: Applied to headings, quotes, or focal points to give the application an elegant, editorial, and sophisticated character. It is the default; **Cormorant Garamond**, **Lora** and **Merriweather** are selectable in Appearance and swap in through `--font-serif`, so no component names a family.
+- **Serif (`Fraunces`)**: Applied to headings, quotes, or focal points to give the application an elegant, editorial, and sophisticated character. It is the default; **Cormorant Garamond**, **Lora** and **Merriweather** are selectable in Look & feel and swap in through `--font-serif`, so no component names a family.
 - **Monospace (`IBM Plex Mono`)**: Digits only, the timer face, hour counts, grades and anything tabular. It replaced JetBrains Mono, which is a code editor typeface and read like one on paper; Plex carries the same `0.600em` character advance, so the swap moved nothing. Its x-height is lower (`0.516em` against `0.550em`), which is why the handful of labels under 11px are set half a pixel larger than the face they replaced. Mono never sets prose.
 - **Handwriting (`Caveat`)**: Reserved for marginalia, the `HandNote` primitive and the `.font-hand` utility. Never for UI text.
 
@@ -205,7 +205,7 @@ is the whole screen, as it always was.
   sitting straight back to Today: a start button that started nothing.
 - **Settings** at the very foot, set like the screens. On the strip its icon
   becomes the reader's own face once there is one to show — the photo or
-  initials-on-peach circle from the Settings profile card, a small gear badge
+  initials-on-peach circle from the card at the top of Settings › Account, a small gear badge
   at its corner so the row still reads as Settings — and falls back to the
   plain gear with neither a name nor a photo set (`SettingsGlyph`). On a
   phone, Today's header carries the reader's own face at 32px
@@ -237,9 +237,26 @@ out in two columns pass `wide` to opt out of the phone measure.
 Two things follow from the rail. Settings is a **page**, on desktop and on a
 phone alike, because a modal reached from a permanent nav item is a screen
 pretending to be an interruption; the bar is on it, so a phone has a way back.
-Its section list is grouped **Study** (Goals, Timer, Term, Courses), **You**
-(Profile, Appearance) and **More** (Claude, Data), the group names as
-`.eyebrow` labels on desktop only; on a phone the list is one wrapped row.
+Its section list is one flat list of seven, each named for what a reader
+comes looking for: **Goals** (the daily goal, when the day ends, and the
+week's goal as a row that goes to Courses, since it is only their sum),
+**Timer** (break length, what the timer draws, the chime), **Courses**,
+**Term**, **Look & feel** (paper, accent, heading font, density, the sounds
+under a finger with their Listen row, and the Stats heatmap's weekends),
+**Claude**, and **Account** (name and photo, the CSV export, sign out, and
+the two Careful rows). Every section opens the same way: its name in the
+serif at 22px, one italic serif standfirst on what is in it, then
+eyebrow-labelled sheets of ruled rows (`SettingsPrimitives`). No section has
+a "← Back" or a Cancel of its own; Courses shows its Save pair only while
+there is something unsaved, held to the foot of the page as it scrolls. The
+guide and the small print are a serif line at the foot of every section,
+not a section. The chosen section is the hash (`/settings#timer`), so Today's
+"your day ends at" links to `#goals` and its weekly-goal nudge to `#courses`.
+On a phone the list is one wrapped row. It used to be eight sections under
+the labels Study, You and More that sorted nothing: the day's end and a
+lifetime tally under Goals, the tap sounds under Timer, the privacy policy
+under Data, a Profile section that was one field with its own Cancel and
+Save, and a "← Back" left on half of them from the phone sheet.
 And the
 `FloatingActionButton` is gone: "New task" lives in the page header, and a
 timer starts from the row it belongs to, through a popover that takes a
@@ -423,12 +440,12 @@ The page is separated by its own ruling instead, the way a ruled pad is:
   it happened, from its segments; one logged by hand counts in the figure and
   is not placed, and whatever time that leaves off the strip is named under
   it in a serif line ("2h 3m logged without a start time, so not on the
-  strip"), so the strip never silently under-draws the figure. With a day that ends after midnight (Settings, "day ends
+  strip"), so the strip never silently under-draws the figure. With a day that ends after midnight (Settings › Goals, "day ends
   at"), the strip also carries **the small hours before today began**: the
   day before's blocks that ran past midnight, at 45% in their course
   colours, left of a dashed `ink-soft` line where the day started, and a
   serif line under it ("4h 24m before 8am, counted to Sunday · your day ends
-  at 8am", the last part a link to Settings). They stay out of the day's
+  at 8am", the last part a link to Settings › Goals). They stay out of the day's
   figure, since they are not today's, but a reader who studied from four to
   seven used to open Today at nine and find no trace of it. The week is the week's hours against its goal, which is the
   course goals added up (there is no separate one to set), drawn as **a bar
@@ -2609,8 +2626,8 @@ button, link and switch the plain `tap`, so a new control is never silent. A
 control that wants something else says so with `data-sound` on itself or an
 ancestor (`data-sound="none"` for quiet); a handler that plays its own sound
 wins over both, because the listener's tap is deferred a turn and cleared by
-any `playSound` in between. Settings has its own toggle (apart from the
-chime's) and a "Listen" row to audition the palette.
+any `playSound` in between. Settings › Look & feel has its own toggle (apart from the
+chime's, which is under Timer) and a "Listen" row to audition the palette.
 
 ### Marks, not chips
 The app does not use pills. A capsule with a tinted fill is how software says
@@ -2924,7 +2941,7 @@ back button walks out the way you came in.
 - **The AI prompt** is a sheet holding the exact format rules. A reader copies
   it into their own chat with a summary, and pastes the answer back onto the
   page, which makes a note of it (one outer code fence is peeled off).
-- Paper tone and heading font come from Appearance. The reader only owns text
+- Paper tone and heading font come from Look & feel. The reader only owns text
   size and column width, in the `Aa` popover.
 
 #### Focus
@@ -3235,7 +3252,7 @@ that still looked like an admin panel.
 Stats used to be a page of totals: what happened, printed, and an Export CSV
 button in the masthead. Totals say what the term was; nothing on the page said
 what the next sitting would change, so there was nothing to come back for. The
-export is in Settings, where a spreadsheet is looked for, and the masthead
+export is in Settings › Account, where a spreadsheet is looked for, and the masthead
 carries the hours alone. Everything below is read off the logged sessions on
 every render (`lib/stats-reading.ts`) and nothing is stored.
 
@@ -3662,7 +3679,7 @@ Solid `bg-primary` fill belongs to the one primary action on a screen. A
 or an accent tick (see `SectionPicker`).
 
 ### Density
-`Cozy` / `Comfy` / `Compact` in Appearance set `--density-gutter`,
+`Cozy` / `Comfy` / `Compact` in Look & feel set `--density-gutter`,
 `--density-gap` and `--density-section` on `:root`. Anything that wants to
 breathe with the reader's choice should use those rather than a fixed px
 value. `Comfy` is the shipped middle at a 22px gutter.

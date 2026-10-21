@@ -414,7 +414,7 @@ function DayLedger({
         <p className="m-0 mt-2.5 font-serif text-[12.5px] italic leading-snug text-muted">
           <span className="font-mono not-italic tabular-nums text-ink-soft">{formatHM(carriedSeconds)}</span>{' '}
           before {cutoffLabel}, counted to {yesterdayName} ·{' '}
-          <Link href="/settings" className="text-muted underline decoration-line-strong underline-offset-2 hover:text-ink">
+          <Link href="/settings#goals" className="text-muted underline decoration-line-strong underline-offset-2 hover:text-ink">
             your day ends at {cutoffLabel}
           </Link>
         </p>
@@ -557,7 +557,7 @@ export function WeekHours({ courses, sessions }: { courses: Course[]; sessions: 
         </p>
       ) : (
         <Link
-          href="/settings"
+          href="/settings#courses"
           className="mt-3 inline-block font-serif text-[12.5px] italic text-muted no-underline transition-colors hover:text-ink"
         >
           Give your courses a weekly goal →
